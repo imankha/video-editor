@@ -172,9 +172,19 @@ def interpolate_crop(keyframes: List[Dict[str, Any]], time: float) -> Dict[str, 
     }
 
 
-def generate_crop_filter(keyframes: List[Dict[str, Any]], duration: float, fps: float = 30.0) -> str:
+def generate_crop_filter(keyframes: List[Dict[str, Any]], duration: float, fps: float = 30.0) -> Dict[str, Any]:
     """
     Generate FFmpeg crop filter with keyframe interpolation
+
+    Returns:
+        dict: Contains both filter string and structured parameters
+            {
+                'filter_string': str,  # Complete filter string for logging
+                'width_expr': str,     # Width expression
+                'height_expr': str,    # Height expression
+                'x_expr': str,         # X position expression
+                'y_expr': str          # Y position expression
+            }
     """
     if len(keyframes) == 0:
         raise ValueError("No keyframes provided")
@@ -182,7 +192,18 @@ def generate_crop_filter(keyframes: List[Dict[str, Any]], duration: float, fps: 
     # If only one keyframe, use static crop
     if len(keyframes) == 1:
         kf = keyframes[0]
-        return f"crop={int(kf['width'])}:{int(kf['height'])}:{int(kf['x'])}:{int(kf['y'])}"
+        w_expr = str(int(kf['width']))
+        h_expr = str(int(kf['height']))
+        x_expr = str(int(kf['x']))
+        y_expr = str(int(kf['y']))
+
+        return {
+            'filter_string': f"crop={w_expr}:{h_expr}:{x_expr}:{y_expr}",
+            'width_expr': w_expr,
+            'height_expr': h_expr,
+            'x_expr': x_expr,
+            'y_expr': y_expr
+        }
 
     # For multiple keyframes, we need to create an expression that changes over time
     # FFmpeg's crop filter supports expressions, but for smooth interpolation
@@ -247,7 +268,13 @@ def generate_crop_filter(keyframes: List[Dict[str, Any]], duration: float, fps: 
     w_expr = build_expression('w1', 'w2')
     h_expr = build_expression('h1', 'h2')
 
-    return f"crop=w={w_expr}:h={h_expr}:x={x_expr}:y={y_expr}"
+    return {
+        'filter_string': f"crop=w={w_expr}:h={h_expr}:x={x_expr}:y={y_expr}",
+        'width_expr': w_expr,
+        'height_expr': h_expr,
+        'x_expr': x_expr,
+        'y_expr': y_expr
+    }
 
 
 @app.post("/api/export/crop")
@@ -301,16 +328,18 @@ async def export_crop(
     # Sort keyframes by time
     keyframes_dict.sort(key=lambda k: k['time'])
 
-    # Generate crop filter
-    crop_filter = generate_crop_filter(keyframes_dict, duration, fps)
+    # Generate crop filter with structured parameters
+    crop_params = generate_crop_filter(keyframes_dict, duration, fps)
 
     # Process video with FFmpeg
     try:
         stream = ffmpeg.input(input_path)
-        stream = ffmpeg.filter(stream, 'crop', w=crop_filter.split('w=')[1].split(':')[0],
-                             h=crop_filter.split('h=')[1].split(':')[0],
-                             x=crop_filter.split('x=')[1].split(':')[0],
-                             y=crop_filter.split('y=')[1])
+        # Use structured parameters instead of fragile string parsing
+        stream = ffmpeg.filter(stream, 'crop',
+                             w=crop_params['width_expr'],
+                             h=crop_params['height_expr'],
+                             x=crop_params['x_expr'],
+                             y=crop_params['y_expr'])
         stream = ffmpeg.output(stream, output_path,
                              vcodec='libx264',
                              crf=23,

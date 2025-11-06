@@ -1,4 +1,5 @@
 import { Crop, Trash2 } from 'lucide-react';
+import { useCropContext } from '../contexts/CropContext';
 
 /**
  * CropLayer component - displays crop keyframes on the timeline
@@ -10,9 +11,10 @@ export default function CropLayer({
   currentTime,
   onKeyframeClick,
   onKeyframeDelete,
-  isActive,
-  isEndKeyframeExplicit = false
+  isActive
 }) {
+  // Get isEndKeyframeExplicit from context instead of props
+  const { isEndKeyframeExplicit } = useCropContext();
   if (keyframes.length === 0) {
     return null;
   }
