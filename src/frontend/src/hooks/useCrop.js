@@ -1,12 +1,11 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 /**
  * Custom hook for managing crop tool state and keyframes
- * Handles crop rectangle position, size, and keyframe interpolation
+ * Crop tool is ALWAYS active when video is loaded
  */
 export default function useCrop(videoMetadata) {
-  const [isCropActive, setIsCropActive] = useState(false);
-  const [aspectRatio, setAspectRatio] = useState('16:9'); // '16:9', '9:16', 'free'
+  const [aspectRatio, setAspectRatio] = useState('16:9'); // '16:9', '9:16'
   const [keyframes, setKeyframes] = useState([]);
 
   /**
@@ -18,27 +17,21 @@ export default function useCrop(videoMetadata) {
       return { x: 0, y: 0, width: 0, height: 0 };
     }
 
+    // Parse aspect ratio (e.g., "16:9" -> 16/9)
+    const [ratioW, ratioH] = targetAspectRatio.split(':').map(Number);
+    const ratio = ratioW / ratioH;
+    const videoRatio = videoWidth / videoHeight;
+
     let cropWidth, cropHeight;
 
-    if (targetAspectRatio === 'free') {
-      // Free aspect ratio - use full video dimensions
-      cropWidth = videoWidth;
+    if (videoRatio > ratio) {
+      // Video is wider - constrain by height
       cropHeight = videoHeight;
+      cropWidth = cropHeight * ratio;
     } else {
-      // Parse aspect ratio (e.g., "16:9" -> 16/9)
-      const [ratioW, ratioH] = targetAspectRatio.split(':').map(Number);
-      const ratio = ratioW / ratioH;
-      const videoRatio = videoWidth / videoHeight;
-
-      if (videoRatio > ratio) {
-        // Video is wider - constrain by height
-        cropHeight = videoHeight;
-        cropWidth = cropHeight * ratio;
-      } else {
-        // Video is taller - constrain by width
-        cropWidth = videoWidth;
-        cropHeight = cropWidth / ratio;
-      }
+      // Video is taller - constrain by width
+      cropWidth = videoWidth;
+      cropHeight = cropWidth / ratio;
     }
 
     // Center the crop rectangle
@@ -54,57 +47,29 @@ export default function useCrop(videoMetadata) {
   }, []);
 
   /**
-   * Activate the crop tool and add initial keyframe
+   * Auto-initialize keyframes when metadata loads
    */
-  const activateCropTool = useCallback(() => {
-    if (!videoMetadata?.videoWidth || !videoMetadata?.videoHeight) {
-      console.warn('Cannot activate crop tool: video metadata not available');
-      return;
-    }
-
-    console.log('Activating crop tool with metadata:', videoMetadata);
-    setIsCropActive(true);
-
-    // Create initial keyframe at time 0 using functional setState
-    setKeyframes(prev => {
-      if (prev.length > 0) {
-        console.log('Keyframes already exist:', prev);
-        return prev; // Already have keyframes
-      }
-
+  useEffect(() => {
+    if (videoMetadata?.videoWidth && videoMetadata?.videoHeight && keyframes.length === 0) {
       const defaultCrop = calculateDefaultCrop(
         videoMetadata.videoWidth,
         videoMetadata.videoHeight,
         aspectRatio
       );
 
-      console.log('Creating initial keyframe:', { time: 0, ...defaultCrop });
-      return [{
+      console.log('[useCrop] Auto-initializing keyframe at time=0:', defaultCrop);
+      setKeyframes([{
         time: 0,
         ...defaultCrop
-      }];
-    });
-  }, [videoMetadata, aspectRatio, calculateDefaultCrop]);
-
-  /**
-   * Deactivate the crop tool
-   */
-  const deactivateCropTool = useCallback(() => {
-    setIsCropActive(false);
-  }, []);
-
-  /**
-   * Remove all crop keyframes and deactivate
-   */
-  const clearCrop = useCallback(() => {
-    setKeyframes([]);
-    setIsCropActive(false);
-  }, []);
+      }]);
+    }
+  }, [videoMetadata, aspectRatio, keyframes.length, calculateDefaultCrop]);
 
   /**
    * Update aspect ratio and recalculate all keyframes
    */
   const updateAspectRatio = useCallback((newRatio) => {
+    console.log('[useCrop] Updating aspect ratio to:', newRatio);
     setAspectRatio(newRatio);
 
     // Recalculate all keyframes with new aspect ratio
@@ -120,6 +85,7 @@ export default function useCrop(videoMetadata) {
           ...newCrop
         };
       });
+      console.log('[useCrop] Updated keyframes for new aspect ratio:', updatedKeyframes);
       setKeyframes(updatedKeyframes);
     }
   }, [keyframes, videoMetadata, calculateDefaultCrop]);
@@ -128,6 +94,7 @@ export default function useCrop(videoMetadata) {
    * Add or update a keyframe at the specified time
    */
   const addOrUpdateKeyframe = useCallback((time, cropData) => {
+    console.log('[useCrop] Adding/updating keyframe at time', time, ':', cropData);
     setKeyframes(prev => {
       // Check if keyframe exists at this time (within 10ms tolerance)
       const existingIndex = prev.findIndex(kf => Math.abs(kf.time - time) < 0.01);
@@ -149,7 +116,15 @@ export default function useCrop(videoMetadata) {
    * Remove a keyframe at the specified time
    */
   const removeKeyframe = useCallback((time) => {
-    setKeyframes(prev => prev.filter(kf => Math.abs(kf.time - time) > 0.01));
+    console.log('[useCrop] Removing keyframe at time:', time);
+    setKeyframes(prev => {
+      // Don't allow removing the last keyframe
+      if (prev.length <= 1) {
+        console.log('[useCrop] Cannot remove last keyframe');
+        return prev;
+      }
+      return prev.filter(kf => Math.abs(kf.time - time) > 0.01);
+    });
   }, []);
 
   /**
@@ -218,14 +193,10 @@ export default function useCrop(videoMetadata) {
 
   return {
     // State
-    isCropActive,
     aspectRatio,
     keyframes,
 
     // Actions
-    activateCropTool,
-    deactivateCropTool,
-    clearCrop,
     updateAspectRatio,
     addOrUpdateKeyframe,
     removeKeyframe,

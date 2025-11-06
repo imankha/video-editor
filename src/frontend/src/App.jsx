@@ -32,14 +32,10 @@ function App() {
     handlers,
   } = useVideo();
 
-  // Crop hook
+  // Crop hook - always active when video loaded
   const {
-    isCropActive,
     aspectRatio,
     keyframes,
-    activateCropTool,
-    deactivateCropTool,
-    clearCrop,
     updateAspectRatio,
     addOrUpdateKeyframe,
     removeKeyframe,
@@ -65,14 +61,6 @@ function App() {
     setVideoFile(file);
     await loadVideo(file);
   };
-
-  // Auto-activate crop when video metadata loads
-  useEffect(() => {
-    if (metadata && !isCropActive) {
-      console.log('[App] Auto-activating crop tool, metadata:', metadata);
-      activateCropTool();
-    }
-  }, [metadata, isCropActive, activateCropTool]);
 
   // Debug: Log keyframes changes
   useEffect(() => {
