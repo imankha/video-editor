@@ -1,11 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useVideo } from './hooks/useVideo';
+import useCrop from './hooks/useCrop';
+import useZoom from './hooks/useZoom';
 import { VideoPlayer } from './components/VideoPlayer';
 import { Timeline } from './components/Timeline';
 import { Controls } from './components/Controls';
 import { FileUpload } from './components/FileUpload';
+import AspectRatioSelector from './components/AspectRatioSelector';
+import ZoomControls from './components/ZoomControls';
+import ExportButton from './components/ExportButton';
+import DebugInfo from './components/DebugInfo';
 
 function App() {
+  const [videoFile, setVideoFile] = useState(null);
+  const [currentCropState, setCurrentCropState] = useState(null);
+
   const {
     videoRef,
     videoUrl,
@@ -23,9 +32,86 @@ function App() {
     handlers,
   } = useVideo();
 
+  // Crop hook - always active when video loaded
+  const {
+    aspectRatio,
+    keyframes,
+    isEndKeyframeExplicit,
+    updateAspectRatio,
+    addOrUpdateKeyframe,
+    removeKeyframe,
+    interpolateCrop,
+    hasKeyframeAt,
+  } = useCrop(metadata);
+
+  // Zoom hook
+  const {
+    zoom,
+    panOffset,
+    isZoomed,
+    MIN_ZOOM,
+    MAX_ZOOM,
+    zoomIn,
+    zoomOut,
+    resetZoom,
+    zoomByWheel,
+    updatePan,
+  } = useZoom();
+
   const handleFileSelect = async (file) => {
+    setVideoFile(file);
     await loadVideo(file);
   };
+
+  // Debug: Log keyframes changes
+  useEffect(() => {
+    console.log('[App] Keyframes changed:', keyframes);
+  }, [keyframes]);
+
+  // Debug: Log currentCropState changes
+  useEffect(() => {
+    console.log('[App] Current crop state:', currentCropState);
+  }, [currentCropState]);
+
+  // Handle crop changes during drag/resize
+  const handleCropChange = (newCrop) => {
+    setCurrentCropState(newCrop);
+  };
+
+  // Handle crop complete (create keyframe)
+  const handleCropComplete = (cropData) => {
+    addOrUpdateKeyframe(currentTime, cropData, duration);
+  };
+
+  // Handle keyframe click (seek to keyframe time)
+  const handleKeyframeClick = (time) => {
+    seek(time);
+  };
+
+  // Handle keyframe delete (pass duration to removeKeyframe)
+  const handleKeyframeDelete = (time) => {
+    removeKeyframe(time, duration);
+  };
+
+  // Update current crop state when keyframes or time changes
+  useEffect(() => {
+    if (keyframes.length > 0) {
+      const interpolated = interpolateCrop(currentTime);
+      if (interpolated) {
+        setCurrentCropState(interpolated);
+      }
+    }
+  }, [currentTime, keyframes, interpolateCrop]);
+
+  // Initialize crop state when keyframes are first created
+  useEffect(() => {
+    if (keyframes.length > 0 && !currentCropState) {
+      const initialCrop = interpolateCrop(0);
+      if (initialCrop) {
+        setCurrentCropState(initialCrop);
+      }
+    }
+  }, [keyframes, currentCropState, interpolateCrop]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -76,12 +162,42 @@ function App() {
 
         {/* Main Editor Area */}
         <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
+          {/* Controls Bar */}
+          {videoUrl && (
+            <div className="mb-6 flex gap-4 items-center">
+              <AspectRatioSelector
+                aspectRatio={aspectRatio}
+                onAspectRatioChange={updateAspectRatio}
+              />
+              <div className="ml-auto">
+                <ZoomControls
+                  zoom={zoom}
+                  onZoomIn={zoomIn}
+                  onZoomOut={zoomOut}
+                  onResetZoom={resetZoom}
+                  minZoom={MIN_ZOOM}
+                  maxZoom={MAX_ZOOM}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Video Player */}
           <VideoPlayer
             videoRef={videoRef}
             videoUrl={videoUrl}
             handlers={handlers}
             onFileSelect={handleFileSelect}
+            videoMetadata={metadata}
+            showCropOverlay={!!videoUrl}
+            currentCrop={currentCropState}
+            aspectRatio={aspectRatio}
+            onCropChange={handleCropChange}
+            onCropComplete={handleCropComplete}
+            zoom={zoom}
+            panOffset={panOffset}
+            onZoomChange={zoomByWheel}
+            onPanChange={updatePan}
           />
 
           {/* Timeline */}
@@ -91,6 +207,11 @@ function App() {
                 currentTime={currentTime}
                 duration={duration}
                 onSeek={seek}
+                cropKeyframes={keyframes}
+                isCropActive={true}
+                isEndKeyframeExplicit={isEndKeyframeExplicit}
+                onCropKeyframeClick={handleKeyframeClick}
+                onCropKeyframeDelete={handleKeyframeDelete}
               />
             </div>
           )}
@@ -105,6 +226,17 @@ function App() {
                 onTogglePlay={togglePlay}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
+              />
+            </div>
+          )}
+
+          {/* Export Button */}
+          {videoUrl && (
+            <div className="mt-6">
+              <ExportButton
+                videoFile={videoFile}
+                cropKeyframes={keyframes}
+                disabled={!videoFile}
               />
             </div>
           )}
@@ -144,9 +276,12 @@ function App() {
 
         {/* Footer */}
         <div className="mt-8 text-center text-gray-500 text-sm">
-          <p>Phase 1: Foundation - Video Upload & Playback</p>
+          <p>Phase 2: Crop Tool with Keyframe Animation</p>
         </div>
       </div>
+
+      {/* Debug Info - Shows current branch and commit */}
+      <DebugInfo />
     </div>
   );
 }

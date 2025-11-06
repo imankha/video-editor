@@ -39,3 +39,6 @@ Thumbs.db
 
 # FFmpeg
 ffmpeg/
+
+# Auto-generated version info
+src/frontend/src/version.json
