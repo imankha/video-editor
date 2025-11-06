@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import CropOverlay from './CropOverlay';
 
 /**
  * VideoPlayer component - Displays the video element
@@ -7,8 +8,25 @@ import React, { useState } from 'react';
  * @param {string} props.videoUrl - Video source URL
  * @param {Object} props.handlers - Video element event handlers
  * @param {Function} props.onFileSelect - Callback for file upload via drag-and-drop
+ * @param {Object} props.videoMetadata - Video metadata (width, height, duration)
+ * @param {boolean} props.showCropOverlay - Whether to show crop overlay
+ * @param {Object} props.currentCrop - Current crop rectangle data
+ * @param {string} props.aspectRatio - Aspect ratio for crop
+ * @param {Function} props.onCropChange - Callback when crop changes
+ * @param {Function} props.onCropComplete - Callback when crop change is complete
  */
-export function VideoPlayer({ videoRef, videoUrl, handlers, onFileSelect }) {
+export function VideoPlayer({
+  videoRef,
+  videoUrl,
+  handlers,
+  onFileSelect,
+  videoMetadata,
+  showCropOverlay = false,
+  currentCrop,
+  aspectRatio,
+  onCropChange,
+  onCropComplete
+}) {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDragEnter = (e) => {
@@ -52,18 +70,32 @@ export function VideoPlayer({ videoRef, videoUrl, handlers, onFileSelect }) {
       onDrop={handleDrop}
     >
       {videoUrl ? (
-        <video
-          ref={videoRef}
-          src={videoUrl}
-          className="w-full h-[60vh] object-contain"
-          onTimeUpdate={handlers.onTimeUpdate}
-          onPlay={handlers.onPlay}
-          onPause={handlers.onPause}
-          onSeeking={handlers.onSeeking}
-          onSeeked={handlers.onSeeked}
-          onLoadedMetadata={handlers.onLoadedMetadata}
-          preload="metadata"
-        />
+        <div className="relative">
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            className="w-full h-[60vh] object-contain"
+            onTimeUpdate={handlers.onTimeUpdate}
+            onPlay={handlers.onPlay}
+            onPause={handlers.onPause}
+            onSeeking={handlers.onSeeking}
+            onSeeked={handlers.onSeeked}
+            onLoadedMetadata={handlers.onLoadedMetadata}
+            preload="metadata"
+          />
+
+          {/* Crop Overlay */}
+          {showCropOverlay && currentCrop && videoMetadata && (
+            <CropOverlay
+              videoRef={videoRef}
+              videoMetadata={videoMetadata}
+              currentCrop={currentCrop}
+              aspectRatio={aspectRatio}
+              onCropChange={onCropChange}
+              onCropComplete={onCropComplete}
+            />
+          )}
+        </div>
       ) : (
         <div
           className={`flex items-center justify-center h-[60vh] text-gray-400 transition-colors ${

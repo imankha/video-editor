@@ -1,5 +1,6 @@
 import React from 'react';
 import { formatTimeSimple } from '../utils/timeFormat';
+import CropLayer from './CropLayer';
 
 /**
  * Timeline component - Shows timeline with playhead and scrubber
@@ -7,8 +8,20 @@ import { formatTimeSimple } from '../utils/timeFormat';
  * @param {number} props.currentTime - Current video time
  * @param {number} props.duration - Total video duration
  * @param {Function} props.onSeek - Callback when user seeks
+ * @param {Array} props.cropKeyframes - Crop keyframes to display
+ * @param {boolean} props.isCropActive - Whether crop layer is active
+ * @param {Function} props.onCropKeyframeClick - Callback when crop keyframe is clicked
+ * @param {Function} props.onCropKeyframeDelete - Callback when crop keyframe is deleted
  */
-export function Timeline({ currentTime, duration, onSeek }) {
+export function Timeline({
+  currentTime,
+  duration,
+  onSeek,
+  cropKeyframes = [],
+  isCropActive = false,
+  onCropKeyframeClick,
+  onCropKeyframeDelete
+}) {
   const timelineRef = React.useRef(null);
   const [isDragging, setIsDragging] = React.useState(false);
   const [hoverTime, setHoverTime] = React.useState(null);
@@ -100,6 +113,20 @@ export function Timeline({ currentTime, duration, onSeek }) {
         <span>{formatTimeSimple(currentTime)}</span>
         <span>{formatTimeSimple(duration)}</span>
       </div>
+
+      {/* Crop Layer */}
+      {cropKeyframes.length > 0 && (
+        <div className="mt-2">
+          <CropLayer
+            keyframes={cropKeyframes}
+            duration={duration}
+            currentTime={currentTime}
+            isActive={isCropActive}
+            onKeyframeClick={onCropKeyframeClick}
+            onKeyframeDelete={onCropKeyframeDelete}
+          />
+        </div>
+      )}
     </div>
   );
 }

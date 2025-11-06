@@ -4,10 +4,6 @@ uvicorn[standard]==0.25.0 # ASGI server with hot reload
 python-multipart==0.0.6   # File upload support
 pydantic==2.5.0           # Data validation
 
-# Future Dependencies (uncomment when needed for video processing)
-# opencv-python==4.9.0      # Video frame manipulation
-# numpy==1.26.0             # Scientific computing
-# moviepy==1.0.3            # Video editing
-# ffmpeg-python==0.2.0      # FFmpeg Python bindings
-# pillow==10.1.0            # Image processing
-# aiofiles==23.2.1          # Async file operations
+# Video Processing Dependencies
+ffmpeg-python==0.2.0      # FFmpeg Python bindings
+aiofiles==23.2.1          # Async file operations

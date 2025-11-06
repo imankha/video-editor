@@ -1,11 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useVideo } from './hooks/useVideo';
+import useCrop from './hooks/useCrop';
 import { VideoPlayer } from './components/VideoPlayer';
 import { Timeline } from './components/Timeline';
 import { Controls } from './components/Controls';
 import { FileUpload } from './components/FileUpload';
+import CropControls from './components/CropControls';
+import ExportButton from './components/ExportButton';
 
 function App() {
+  const [videoFile, setVideoFile] = useState(null);
+  const [currentCropState, setCurrentCropState] = useState(null);
+
   const {
     videoRef,
     videoUrl,
@@ -23,9 +29,61 @@ function App() {
     handlers,
   } = useVideo();
 
+  // Crop hook
+  const {
+    isCropActive,
+    aspectRatio,
+    keyframes,
+    activateCropTool,
+    deactivateCropTool,
+    clearCrop,
+    updateAspectRatio,
+    addOrUpdateKeyframe,
+    removeKeyframe,
+    interpolateCrop,
+    hasKeyframeAt,
+  } = useCrop(metadata);
+
   const handleFileSelect = async (file) => {
+    setVideoFile(file);
     await loadVideo(file);
   };
+
+  // Handle crop tool toggle
+  const handleToggleCrop = () => {
+    if (isCropActive) {
+      deactivateCropTool();
+    } else {
+      activateCropTool();
+    }
+  };
+
+  // Handle crop changes during drag/resize
+  const handleCropChange = (newCrop) => {
+    setCurrentCropState(newCrop);
+  };
+
+  // Handle crop complete (create keyframe)
+  const handleCropComplete = (cropData) => {
+    if (isCropActive) {
+      addOrUpdateKeyframe(currentTime, cropData);
+    }
+  };
+
+  // Handle keyframe click (seek to keyframe time)
+  const handleKeyframeClick = (time) => {
+    seek(time);
+  };
+
+  // Update current crop state when time changes
+  useEffect(() => {
+    if (isCropActive && keyframes.length > 0) {
+      const interpolated = interpolateCrop(currentTime);
+      if (interpolated) {
+        setCurrentCropState(interpolated);
+      }
+    }
+  }, [currentTime, keyframes, isCropActive, interpolateCrop]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -76,12 +134,32 @@ function App() {
 
         {/* Main Editor Area */}
         <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
+          {/* Crop Controls */}
+          {videoUrl && (
+            <div className="mb-6">
+              <CropControls
+                isCropActive={isCropActive}
+                aspectRatio={aspectRatio}
+                onToggleCrop={handleToggleCrop}
+                onAspectRatioChange={updateAspectRatio}
+                onClearCrop={clearCrop}
+                hasKeyframes={keyframes.length > 0}
+              />
+            </div>
+          )}
+
           {/* Video Player */}
           <VideoPlayer
             videoRef={videoRef}
             videoUrl={videoUrl}
             handlers={handlers}
             onFileSelect={handleFileSelect}
+            videoMetadata={metadata}
+            showCropOverlay={isCropActive}
+            currentCrop={currentCropState}
+            aspectRatio={aspectRatio}
+            onCropChange={handleCropChange}
+            onCropComplete={handleCropComplete}
           />
 
           {/* Timeline */}
@@ -91,6 +169,10 @@ function App() {
                 currentTime={currentTime}
                 duration={duration}
                 onSeek={seek}
+                cropKeyframes={keyframes}
+                isCropActive={isCropActive}
+                onCropKeyframeClick={handleKeyframeClick}
+                onCropKeyframeDelete={removeKeyframe}
               />
             </div>
           )}
@@ -105,6 +187,17 @@ function App() {
                 onTogglePlay={togglePlay}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
+              />
+            </div>
+          )}
+
+          {/* Export Button */}
+          {videoUrl && (
+            <div className="mt-6">
+              <ExportButton
+                videoFile={videoFile}
+                cropKeyframes={keyframes}
+                disabled={!videoFile}
               />
             </div>
           )}
@@ -144,7 +237,7 @@ function App() {
 
         {/* Footer */}
         <div className="mt-8 text-center text-gray-500 text-sm">
-          <p>Phase 1: Foundation - Video Upload & Playback</p>
+          <p>Phase 2: Crop Tool with Keyframe Animation</p>
         </div>
       </div>
     </div>
