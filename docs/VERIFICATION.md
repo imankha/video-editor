@@ -218,7 +218,7 @@ lsof -i :8000
 
 **Solution:**
 ```bash
-cd backend
+cd src/backend
 source venv/bin/activate
 ./run.sh
 ```
@@ -242,7 +242,7 @@ lsof -i :5173
 
 **Solution:**
 ```bash
-cd frontend
+cd src/frontend
 npm run dev
 ```
 

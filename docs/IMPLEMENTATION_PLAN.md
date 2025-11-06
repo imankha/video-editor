@@ -733,9 +733,12 @@ class ExportService:
 **Frontend Setup:**
 
 ```bash
+# Create src directory
+mkdir -p src
+
 # Create frontend
-npm create vite@latest frontend -- --template react
-cd frontend
+npm create vite@latest src/frontend -- --template react
+cd src/frontend
 npm install
 
 # Install dependencies
@@ -769,9 +772,12 @@ export default {
 **Backend Setup:**
 
 ```bash
+# Create src directory
+mkdir -p src
+
 # Create backend
-mkdir backend
-cd backend
+mkdir src/backend
+cd src/backend
 
 # Create virtual environment
 python -m venv venv
@@ -829,7 +835,7 @@ if __name__ == "__main__":
 **Run Backend:**
 
 ```bash
-cd backend
+cd src/backend
 python -m app.main
 # or
 uvicorn app.main:app --reload

@@ -18,7 +18,7 @@ This is a simple "Hello World" application that demonstrates all technologies in
 
 ```bash
 # Navigate to backend directory
-cd backend
+cd src/backend
 
 # Create virtual environment
 python3 -m venv venv
@@ -41,7 +41,7 @@ Backend will be running at **http://localhost:8000**
 
 ```bash
 # Navigate to frontend directory
-cd frontend
+cd src/frontend
 
 # Install dependencies
 npm install
@@ -83,23 +83,24 @@ You should see:
 
 ```
 video-editor/
-├── backend/
-│   ├── app/
-│   │   ├── __init__.py
-│   │   └── main.py          # FastAPI app
-│   ├── requirements.txt      # Python dependencies
-│   └── run.sh               # Run script
-│
-└── frontend/
-    ├── src/
-    │   ├── App.jsx          # Main React component
-    │   ├── main.jsx         # Entry point
-    │   └── index.css        # Tailwind CSS
-    ├── index.html
-    ├── package.json         # Node dependencies
-    ├── vite.config.js       # Vite configuration
-    ├── tailwind.config.js   # Tailwind configuration
-    └── postcss.config.js    # PostCSS configuration
+└── src/
+    ├── backend/
+    │   ├── app/
+    │   │   ├── __init__.py
+    │   │   └── main.py          # FastAPI app
+    │   ├── requirements.txt      # Python dependencies
+    │   └── run.sh               # Run script
+    │
+    └── frontend/
+        ├── src/
+        │   ├── App.jsx          # Main React component
+        │   ├── main.jsx         # Entry point
+        │   └── index.css        # Tailwind CSS
+        ├── index.html
+        ├── package.json         # Node dependencies
+        ├── vite.config.js       # Vite configuration
+        ├── tailwind.config.js   # Tailwind configuration
+        └── postcss.config.js    # PostCSS configuration
 ```
 
 ## 🎨 Technologies Explained
@@ -153,7 +154,7 @@ video-editor/
 
 ### CORS Test
 
-The frontend (localhost:5173) talks to the backend (localhost:8000). This requires CORS to be configured, which we've done in `backend/app/main.py`:
+The frontend (localhost:5173) talks to the backend (localhost:8000). This requires CORS to be configured, which we've done in `src/backend/app/main.py`:
 
 ```python
 app.add_middleware(
@@ -168,8 +169,8 @@ app.add_middleware(
 Now that you have the basic stack working:
 
 1. **Explore the code**
-   - Read through `frontend/src/App.jsx`
-   - Read through `backend/app/main.py`
+   - Read through `src/frontend/src/App.jsx`
+   - Read through `src/backend/app/main.py`
    - Understand how they communicate
 
 2. **Try modifying it**
@@ -196,7 +197,7 @@ Now that you have the basic stack working:
 
 ### CORS errors in browser console
 - Make sure backend is running
-- Check that CORS origins match in `backend/app/main.py`
+- Check that CORS origins match in `src/backend/app/main.py`
 
 ### Can't see the success message
 - Open browser DevTools (F12) and check Console tab
@@ -208,7 +209,7 @@ Now that you have the basic stack working:
 ### Backend
 ```bash
 # Start backend
-cd backend
+cd src/backend
 source venv/bin/activate
 ./run.sh
 
@@ -222,7 +223,7 @@ source venv/bin/activate
 ### Frontend
 ```bash
 # Start frontend
-cd frontend
+cd src/frontend
 npm run dev
 
 # Build for production
