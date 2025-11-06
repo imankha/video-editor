@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useVideo } from './hooks/useVideo';
 import useCrop from './hooks/useCrop';
+import useZoom from './hooks/useZoom';
 import { VideoPlayer } from './components/VideoPlayer';
 import { Timeline } from './components/Timeline';
 import { Controls } from './components/Controls';
 import { FileUpload } from './components/FileUpload';
 import CropControls from './components/CropControls';
+import ZoomControls from './components/ZoomControls';
 import ExportButton from './components/ExportButton';
 
 function App() {
@@ -43,6 +45,20 @@ function App() {
     interpolateCrop,
     hasKeyframeAt,
   } = useCrop(metadata);
+
+  // Zoom hook
+  const {
+    zoom,
+    panOffset,
+    isZoomed,
+    MIN_ZOOM,
+    MAX_ZOOM,
+    zoomIn,
+    zoomOut,
+    resetZoom,
+    zoomByWheel,
+    updatePan,
+  } = useZoom();
 
   const handleFileSelect = async (file) => {
     setVideoFile(file);
@@ -136,15 +152,27 @@ function App() {
         <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
           {/* Crop Controls */}
           {videoUrl && (
-            <div className="mb-6">
-              <CropControls
-                isCropActive={isCropActive}
-                aspectRatio={aspectRatio}
-                onToggleCrop={handleToggleCrop}
-                onAspectRatioChange={updateAspectRatio}
-                onClearCrop={clearCrop}
-                hasKeyframes={keyframes.length > 0}
-              />
+            <div className="mb-6 flex gap-4">
+              <div className="flex-1">
+                <CropControls
+                  isCropActive={isCropActive}
+                  aspectRatio={aspectRatio}
+                  onToggleCrop={handleToggleCrop}
+                  onAspectRatioChange={updateAspectRatio}
+                  onClearCrop={clearCrop}
+                  hasKeyframes={keyframes.length > 0}
+                />
+              </div>
+              <div>
+                <ZoomControls
+                  zoom={zoom}
+                  onZoomIn={zoomIn}
+                  onZoomOut={zoomOut}
+                  onResetZoom={resetZoom}
+                  minZoom={MIN_ZOOM}
+                  maxZoom={MAX_ZOOM}
+                />
+              </div>
             </div>
           )}
 
@@ -160,6 +188,10 @@ function App() {
             aspectRatio={aspectRatio}
             onCropChange={handleCropChange}
             onCropComplete={handleCropComplete}
+            zoom={zoom}
+            panOffset={panOffset}
+            onZoomChange={zoomByWheel}
+            onPanChange={updatePan}
           />
 
           {/* Timeline */}

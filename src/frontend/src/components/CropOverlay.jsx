@@ -10,7 +10,9 @@ export default function CropOverlay({
   currentCrop,
   aspectRatio,
   onCropChange,
-  onCropComplete
+  onCropComplete,
+  zoom = 1,
+  panOffset = { x: 0, y: 0 }
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -23,7 +25,7 @@ export default function CropOverlay({
   const [videoDisplayRect, setVideoDisplayRect] = useState(null);
 
   /**
-   * Update video display dimensions when video size changes
+   * Update video display dimensions when video size changes or zoom/pan changes
    */
   useEffect(() => {
     if (!videoRef?.current) return;
@@ -32,33 +34,51 @@ export default function CropOverlay({
       const video = videoRef.current;
       const rect = video.getBoundingClientRect();
 
-      // Calculate the actual video display area (considering object-fit: contain)
+      // The video element's natural dimensions
       const videoAspect = videoMetadata.videoWidth / videoMetadata.videoHeight;
-      const containerAspect = rect.width / rect.height;
 
-      let displayWidth, displayHeight, offsetX, offsetY;
+      // Get the container (parent of video)
+      const container = video.closest('.video-container');
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const containerWidth = containerRect.width;
+      const containerHeight = containerRect.height;
+      const containerAspect = containerWidth / containerHeight;
+
+      let baseDisplayWidth, baseDisplayHeight;
 
       if (containerAspect > videoAspect) {
         // Container is wider - video is constrained by height
-        displayHeight = rect.height;
-        displayWidth = displayHeight * videoAspect;
-        offsetX = (rect.width - displayWidth) / 2;
-        offsetY = 0;
+        baseDisplayHeight = containerHeight;
+        baseDisplayWidth = baseDisplayHeight * videoAspect;
       } else {
         // Container is taller - video is constrained by width
-        displayWidth = rect.width;
-        displayHeight = displayWidth / videoAspect;
-        offsetX = 0;
-        offsetY = (rect.height - displayHeight) / 2;
+        baseDisplayWidth = containerWidth;
+        baseDisplayHeight = baseDisplayWidth / videoAspect;
       }
 
+      // Apply zoom to dimensions
+      const displayWidth = baseDisplayWidth * zoom;
+      const displayHeight = baseDisplayHeight * zoom;
+
+      // Calculate center position of container
+      const containerCenterX = containerRect.left + containerWidth / 2;
+      const containerCenterY = containerRect.top + containerHeight / 2;
+
+      // Calculate video position accounting for zoom and pan
+      const videoLeft = containerCenterX - (displayWidth / 2) + panOffset.x;
+      const videoTop = containerCenterY - (displayHeight / 2) + panOffset.y;
+
       setVideoDisplayRect({
-        left: rect.left + offsetX,
-        top: rect.top + offsetY,
+        left: videoLeft,
+        top: videoTop,
         width: displayWidth,
         height: displayHeight,
         scaleX: displayWidth / videoMetadata.videoWidth,
-        scaleY: displayHeight / videoMetadata.videoHeight
+        scaleY: displayHeight / videoMetadata.videoHeight,
+        zoom: zoom,
+        panOffset: panOffset
       });
     };
 
@@ -66,7 +86,7 @@ export default function CropOverlay({
     window.addEventListener('resize', updateVideoRect);
 
     return () => window.removeEventListener('resize', updateVideoRect);
-  }, [videoRef, videoMetadata]);
+  }, [videoRef, videoMetadata, zoom, panOffset]);
 
   /**
    * Convert video coordinates to screen coordinates

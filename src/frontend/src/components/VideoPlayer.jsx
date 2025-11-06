@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import CropOverlay from './CropOverlay';
 
 /**
- * VideoPlayer component - Displays the video element
+ * VideoPlayer component - Displays the video element with zoom and pan support
  * @param {Object} props
  * @param {React.RefObject} props.videoRef - Ref to video element
  * @param {string} props.videoUrl - Video source URL
@@ -14,6 +14,10 @@ import CropOverlay from './CropOverlay';
  * @param {string} props.aspectRatio - Aspect ratio for crop
  * @param {Function} props.onCropChange - Callback when crop changes
  * @param {Function} props.onCropComplete - Callback when crop change is complete
+ * @param {number} props.zoom - Zoom level (1 = 100%)
+ * @param {Object} props.panOffset - Pan offset {x, y}
+ * @param {Function} props.onZoomChange - Callback when zoom changes (wheel)
+ * @param {Function} props.onPanChange - Callback when pan changes (drag)
  */
 export function VideoPlayer({
   videoRef,
@@ -25,9 +29,16 @@ export function VideoPlayer({
   currentCrop,
   aspectRatio,
   onCropChange,
-  onCropComplete
+  onCropComplete,
+  zoom = 1,
+  panOffset = { x: 0, y: 0 },
+  onZoomChange,
+  onPanChange
 }) {
   const [isDragging, setIsDragging] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const containerRef = useRef(null);
 
   const handleDragEnter = (e) => {
     e.preventDefault();
@@ -61,28 +72,115 @@ export function VideoPlayer({
     }
   };
 
+  /**
+   * Handle mouse wheel for zoom
+   */
+  const handleWheel = useCallback((e) => {
+    if (!videoUrl || !onZoomChange) return;
+
+    e.preventDefault();
+
+    // Get mouse position relative to container
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Calculate focal point in container space
+    const focalPoint = {
+      x: mouseX - rect.width / 2,
+      y: mouseY - rect.height / 2
+    };
+
+    // Call zoom handler with delta and focal point
+    onZoomChange(e.deltaY, focalPoint);
+  }, [videoUrl, onZoomChange]);
+
+  /**
+   * Handle mouse down for panning
+   */
+  const handleMouseDown = useCallback((e) => {
+    // Only pan if zoomed and not clicking on crop overlay
+    if (zoom === 1 || showCropOverlay) return;
+
+    // Check if clicking on video (not controls)
+    if (e.target.tagName === 'VIDEO' || e.target.closest('.video-container')) {
+      e.preventDefault();
+      setIsPanning(true);
+      setPanStart({ x: e.clientX, y: e.clientY });
+    }
+  }, [zoom, showCropOverlay]);
+
+  /**
+   * Handle mouse move for panning
+   */
+  const handleMouseMove = useCallback((e) => {
+    if (!isPanning || !onPanChange) return;
+
+    const deltaX = e.clientX - panStart.x;
+    const deltaY = e.clientY - panStart.y;
+
+    onPanChange(deltaX, deltaY);
+    setPanStart({ x: e.clientX, y: e.clientY });
+  }, [isPanning, panStart, onPanChange]);
+
+  /**
+   * Handle mouse up for panning
+   */
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  // Attach global mouse handlers for panning
+  React.useEffect(() => {
+    if (isPanning) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isPanning, handleMouseMove, handleMouseUp]);
+
   return (
     <div
-      className="video-player-container bg-black rounded-lg overflow-hidden min-h-[60vh]"
+      ref={containerRef}
+      className="video-player-container bg-black rounded-lg overflow-hidden min-h-[60vh] relative"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      style={{ cursor: isPanning ? 'grabbing' : (zoom > 1 && !showCropOverlay ? 'grab' : 'default') }}
     >
       {videoUrl ? (
-        <div className="relative">
-          <video
-            ref={videoRef}
-            src={videoUrl}
-            className="w-full h-[60vh] object-contain"
-            onTimeUpdate={handlers.onTimeUpdate}
-            onPlay={handlers.onPlay}
-            onPause={handlers.onPause}
-            onSeeking={handlers.onSeeking}
-            onSeeked={handlers.onSeeked}
-            onLoadedMetadata={handlers.onLoadedMetadata}
-            preload="metadata"
-          />
+        <div className="relative video-container h-[60vh] overflow-hidden">
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{
+              transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+              transformOrigin: 'center center',
+              transition: isPanning ? 'none' : 'transform 0.1s ease-out'
+            }}
+          >
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              className="max-w-full max-h-full object-contain"
+              onTimeUpdate={handlers.onTimeUpdate}
+              onPlay={handlers.onPlay}
+              onPause={handlers.onPause}
+              onSeeking={handlers.onSeeking}
+              onSeeked={handlers.onSeeked}
+              onLoadedMetadata={handlers.onLoadedMetadata}
+              preload="metadata"
+              style={{ pointerEvents: 'none' }}
+            />
+          </div>
 
           {/* Crop Overlay */}
           {showCropOverlay && currentCrop && videoMetadata && (
@@ -93,6 +191,8 @@ export function VideoPlayer({
               aspectRatio={aspectRatio}
               onCropChange={onCropChange}
               onCropComplete={onCropComplete}
+              zoom={zoom}
+              panOffset={panOffset}
             />
           )}
         </div>
