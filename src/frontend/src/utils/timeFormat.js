@@ -26,20 +26,22 @@ export function formatTime(seconds) {
 }
 
 /**
- * Format seconds to MM:SS (simpler format)
+ * Format seconds to MM:SS.mmm (simpler format with milliseconds)
  * @param {number} seconds - Time in seconds
  * @returns {string} Formatted string
  */
 export function formatTimeSimple(seconds) {
   if (isNaN(seconds) || seconds < 0) {
-    return '0:00';
+    return '0:00.000';
   }
 
   const minutes = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
+  const millis = Math.floor((seconds % 1) * 1000);
   const ss = String(secs).padStart(2, '0');
+  const mmm = String(millis).padStart(3, '0');
 
-  return `${minutes}:${ss}`;
+  return `${minutes}:${ss}.${mmm}`;
 }
 
 /**
