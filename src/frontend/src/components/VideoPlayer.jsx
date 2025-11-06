@@ -45,7 +45,7 @@ export function VideoPlayer({ videoRef, videoUrl, handlers, onFileSelect }) {
 
   return (
     <div
-      className="video-player-container bg-black rounded-lg overflow-hidden"
+      className="video-player-container bg-black rounded-lg overflow-hidden min-h-[60vh]"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -55,7 +55,7 @@ export function VideoPlayer({ videoRef, videoUrl, handlers, onFileSelect }) {
         <video
           ref={videoRef}
           src={videoUrl}
-          className="w-full h-full max-h-[60vh] object-contain"
+          className="w-full h-[60vh] object-contain"
           onTimeUpdate={handlers.onTimeUpdate}
           onPlay={handlers.onPlay}
           onPause={handlers.onPause}
