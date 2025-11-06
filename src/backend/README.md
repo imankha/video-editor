@@ -28,6 +28,19 @@ sudo apt-get install ffmpeg
 
 ## Quick Setup
 
+### Windows (Simplest - Batch File)
+
+```cmd
+# Navigate to backend directory
+cd src\backend
+
+# Run setup script (works without admin rights)
+setup.bat
+
+# Start the server
+start.bat
+```
+
 ### Windows (PowerShell)
 
 ```powershell
@@ -37,8 +50,14 @@ cd src/backend
 # Run setup script
 .\setup.ps1
 
-# Start the server
-python -m uvicorn app.main:app --reload
+# Start the server (use direct path to avoid conflicts)
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+```
+
+**If you get PowerShell execution policy errors:**
+```powershell
+# Run PowerShell as Administrator and execute:
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
 ### Linux/macOS
@@ -132,6 +151,31 @@ RuntimeError: Form data requires "python-multipart" to be installed.
 
 # Linux/macOS:
 pip install python-multipart --force-reinstall
+```
+
+### Installing to Global Python Instead of Venv
+
+If you see errors like:
+```
+ERROR: Could not install packages due to an OSError: [WinError 2] The system cannot find the file specified: 'C:\\Python311\\Scripts\\...'
+```
+
+This means you're installing to the global Python instead of your virtual environment.
+
+**Solution:**
+```powershell
+# Always use the venv's pip directly
+.\.venv\Scripts\pip.exe install -r requirements.txt
+
+# Or use setup.bat which handles this automatically
+setup.bat
+```
+
+**Verify you're using the right Python:**
+```powershell
+# Check which Python is being used
+.\.venv\Scripts\python.exe -c "import sys; print(sys.executable)"
+# Should show path containing .venv
 ```
 
 ### FFmpeg not found
