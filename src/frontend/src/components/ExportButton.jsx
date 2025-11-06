@@ -77,7 +77,29 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
 
     } catch (err) {
       console.error('Export failed:', err);
-      setError(err.response?.data?.detail || 'Export failed. Please try again.');
+
+      // If response is a blob (error response), we need to convert it to text/JSON
+      if (err.response?.data instanceof Blob) {
+        try {
+          const errorText = await err.response.data.text();
+          const errorData = JSON.parse(errorText);
+          console.error('Error details:', errorData);
+
+          // In development, show detailed error
+          if (errorData.traceback) {
+            console.error('Traceback:', errorData.traceback.join('\n'));
+            setError(`${errorData.error}: ${errorData.message}\n\nCheck console for full stack trace.`);
+          } else {
+            setError(errorData.message || errorData.detail || 'Export failed');
+          }
+        } catch (parseError) {
+          console.error('Could not parse error response:', parseError);
+          setError('Export failed. Check console for details.');
+        }
+      } else {
+        setError(err.response?.data?.detail || err.message || 'Export failed. Please try again.');
+      }
+
       setIsExporting(false);
       setProgress(0);
     }
