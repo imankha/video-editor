@@ -70,9 +70,26 @@ export default function CropOverlay({
       const videoLeft = containerCenterX - (displayWidth / 2) + panOffset.x;
       const videoTop = containerCenterY - (displayHeight / 2) + panOffset.y;
 
+      // Calculate video position relative to container (not screen)
+      const videoOffsetX = (containerWidth - displayWidth) / 2 + panOffset.x;
+      const videoOffsetY = (containerHeight - displayHeight) / 2 + panOffset.y;
+
+      console.log('[CropOverlay] Video display rect:', {
+        containerWidth,
+        containerHeight,
+        displayWidth,
+        displayHeight,
+        videoOffsetX,
+        videoOffsetY,
+        zoom,
+        panOffset
+      });
+
       setVideoDisplayRect({
         left: videoLeft,
         top: videoTop,
+        offsetX: videoOffsetX,
+        offsetY: videoOffsetY,
         width: displayWidth,
         height: displayHeight,
         scaleX: displayWidth / videoMetadata.width,
@@ -89,28 +106,28 @@ export default function CropOverlay({
   }, [videoRef, videoMetadata, zoom, panOffset]);
 
   /**
-   * Convert video coordinates to screen coordinates
+   * Convert video coordinates to screen coordinates (relative to container)
    */
   const videoToScreen = useCallback((x, y, width, height) => {
     if (!videoDisplayRect) return { x: 0, y: 0, width: 0, height: 0 };
 
     return {
-      x: x * videoDisplayRect.scaleX,
-      y: y * videoDisplayRect.scaleY,
+      x: x * videoDisplayRect.scaleX + videoDisplayRect.offsetX,
+      y: y * videoDisplayRect.scaleY + videoDisplayRect.offsetY,
       width: width * videoDisplayRect.scaleX,
       height: height * videoDisplayRect.scaleY
     };
   }, [videoDisplayRect]);
 
   /**
-   * Convert screen coordinates to video coordinates
+   * Convert screen coordinates (relative to container) to video coordinates
    */
   const screenToVideo = useCallback((x, y, width, height) => {
     if (!videoDisplayRect) return { x: 0, y: 0, width: 0, height: 0 };
 
     return {
-      x: Math.round(x / videoDisplayRect.scaleX),
-      y: Math.round(y / videoDisplayRect.scaleY),
+      x: Math.round((x - videoDisplayRect.offsetX) / videoDisplayRect.scaleX),
+      y: Math.round((y - videoDisplayRect.offsetY) / videoDisplayRect.scaleY),
       width: Math.round(width / videoDisplayRect.scaleX),
       height: Math.round(height / videoDisplayRect.scaleY)
     };

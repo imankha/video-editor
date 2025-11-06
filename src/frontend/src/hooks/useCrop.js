@@ -48,20 +48,27 @@ export default function useCrop(videoMetadata) {
 
   /**
    * Auto-initialize keyframes when metadata loads
+   * Creates permanent keyframes at start (time=0) and end (time=duration)
    */
   useEffect(() => {
-    if (videoMetadata?.width && videoMetadata?.height && keyframes.length === 0) {
+    if (videoMetadata?.width && videoMetadata?.height && videoMetadata?.duration && keyframes.length === 0) {
       const defaultCrop = calculateDefaultCrop(
         videoMetadata.width,
         videoMetadata.height,
         aspectRatio
       );
 
-      console.log('[useCrop] Auto-initializing keyframe at time=0:', defaultCrop);
-      setKeyframes([{
-        time: 0,
-        ...defaultCrop
-      }]);
+      console.log('[useCrop] Auto-initializing permanent keyframes at time=0 and time=duration:', defaultCrop);
+      setKeyframes([
+        {
+          time: 0,
+          ...defaultCrop
+        },
+        {
+          time: videoMetadata.duration,
+          ...defaultCrop
+        }
+      ]);
     }
   }, [videoMetadata, aspectRatio, keyframes.length, calculateDefaultCrop]);
 
@@ -114,13 +121,25 @@ export default function useCrop(videoMetadata) {
 
   /**
    * Remove a keyframe at the specified time
+   * Cannot remove permanent keyframes at time=0 or time=duration
    */
-  const removeKeyframe = useCallback((time) => {
-    console.log('[useCrop] Removing keyframe at time:', time);
+  const removeKeyframe = useCallback((time, duration) => {
+    console.log('[useCrop] Attempting to remove keyframe at time:', time);
+
+    // Don't allow removing permanent start/end keyframes
+    if (Math.abs(time) < 0.01) {
+      console.log('[useCrop] Cannot remove permanent start keyframe (time=0)');
+      return;
+    }
+    if (duration && Math.abs(time - duration) < 0.01) {
+      console.log('[useCrop] Cannot remove permanent end keyframe (time=duration)');
+      return;
+    }
+
     setKeyframes(prev => {
-      // Don't allow removing the last keyframe
-      if (prev.length <= 1) {
-        console.log('[useCrop] Cannot remove last keyframe');
+      // Don't allow removing if it would leave less than 2 keyframes
+      if (prev.length <= 2) {
+        console.log('[useCrop] Cannot remove - must have at least 2 keyframes');
         return prev;
       }
       return prev.filter(kf => Math.abs(kf.time - time) > 0.01);

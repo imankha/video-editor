@@ -87,6 +87,11 @@ function App() {
     seek(time);
   };
 
+  // Handle keyframe delete (pass duration to removeKeyframe)
+  const handleKeyframeDelete = (time) => {
+    removeKeyframe(time, duration);
+  };
+
   // Update current crop state when keyframes or time changes
   useEffect(() => {
     if (keyframes.length > 0) {
@@ -204,7 +209,7 @@ function App() {
                 cropKeyframes={keyframes}
                 isCropActive={true}
                 onCropKeyframeClick={handleKeyframeClick}
-                onCropKeyframeDelete={removeKeyframe}
+                onCropKeyframeDelete={handleKeyframeDelete}
               />
             </div>
           )}

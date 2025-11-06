@@ -60,13 +60,15 @@ export default function CropLayer({
                 title={`Keyframe at ${keyframe.time.toFixed(3)}s`}
               />
 
-              {/* Delete button (shown on hover) */}
-              {keyframes.length > 1 && (
+              {/* Delete button (shown on hover, but not for permanent start/end keyframes) */}
+              {keyframes.length > 2 &&
+               Math.abs(keyframe.time) > 0.01 &&
+               Math.abs(keyframe.time - duration) > 0.01 && (
                 <button
                   className="absolute top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onKeyframeDelete(keyframe.time);
+                    onKeyframeDelete(keyframe.time, duration);
                   }}
                   title="Delete keyframe"
                 >
