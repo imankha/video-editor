@@ -7,6 +7,7 @@ import { useState, useCallback, useEffect } from 'react';
 export default function useCrop(videoMetadata) {
   const [aspectRatio, setAspectRatio] = useState('16:9'); // '16:9', '9:16'
   const [keyframes, setKeyframes] = useState([]);
+  const [isEndKeyframeExplicit, setIsEndKeyframeExplicit] = useState(false);
 
   /**
    * Calculate the default crop rectangle that fits within video bounds
@@ -49,6 +50,7 @@ export default function useCrop(videoMetadata) {
   /**
    * Auto-initialize keyframes when metadata loads
    * Creates permanent keyframes at start (time=0) and end (time=duration)
+   * End keyframe initially mirrors start until explicitly modified
    */
   useEffect(() => {
     if (videoMetadata?.width && videoMetadata?.height && videoMetadata?.duration && keyframes.length === 0) {
@@ -59,6 +61,11 @@ export default function useCrop(videoMetadata) {
       );
 
       console.log('[useCrop] Auto-initializing permanent keyframes at time=0 and time=duration:', defaultCrop);
+      console.log('[useCrop] End keyframe will mirror start until explicitly modified');
+
+      // Reset the explicit flag for new video
+      setIsEndKeyframeExplicit(false);
+
       setKeyframes([
         {
           time: 0,
@@ -74,6 +81,7 @@ export default function useCrop(videoMetadata) {
 
   /**
    * Update aspect ratio and recalculate all keyframes
+   * If end keyframe hasn't been explicitly set, both start and end get same values
    */
   const updateAspectRatio = useCallback((newRatio) => {
     console.log('[useCrop] Updating aspect ratio to:', newRatio);
@@ -81,43 +89,91 @@ export default function useCrop(videoMetadata) {
 
     // Recalculate all keyframes with new aspect ratio
     if (keyframes.length > 0 && videoMetadata?.width && videoMetadata?.height) {
+      // Get the new default crop for this aspect ratio
+      const newCrop = calculateDefaultCrop(
+        videoMetadata.width,
+        videoMetadata.height,
+        newRatio
+      );
+
       const updatedKeyframes = keyframes.map(kf => {
-        const newCrop = calculateDefaultCrop(
-          videoMetadata.width,
-          videoMetadata.height,
-          newRatio
-        );
+        // If end hasn't been explicitly set, use default for all keyframes
+        if (!isEndKeyframeExplicit) {
+          return {
+            time: kf.time,
+            ...newCrop
+          };
+        }
+
+        // If end has been explicitly set, only update non-end keyframes with default
+        // End keyframe keeps its custom position/size but updates to new aspect ratio
+        const isEnd = Math.abs(kf.time - videoMetadata.duration) < 0.01;
+        if (isEnd) {
+          // Preserve end keyframe's relative position but adjust to new aspect ratio
+          // For now, just recalculate - could be smarter about preserving position
+          return {
+            time: kf.time,
+            ...newCrop
+          };
+        }
+
         return {
           time: kf.time,
           ...newCrop
         };
       });
-      console.log('[useCrop] Updated keyframes for new aspect ratio:', updatedKeyframes);
+
+      console.log('[useCrop] Updated keyframes for new aspect ratio (isEndExplicit:', isEndKeyframeExplicit, '):', updatedKeyframes);
       setKeyframes(updatedKeyframes);
     }
-  }, [keyframes, videoMetadata, calculateDefaultCrop]);
+  }, [keyframes, videoMetadata, calculateDefaultCrop, isEndKeyframeExplicit]);
 
   /**
    * Add or update a keyframe at the specified time
+   * If updating start keyframe and end hasn't been explicitly set, end mirrors start
    */
-  const addOrUpdateKeyframe = useCallback((time, cropData) => {
+  const addOrUpdateKeyframe = useCallback((time, cropData, duration) => {
     console.log('[useCrop] Adding/updating keyframe at time', time, ':', cropData);
+
+    // Check if we're updating the end keyframe
+    const isEndKeyframe = duration && Math.abs(time - duration) < 0.01;
+    const isStartKeyframe = Math.abs(time) < 0.01;
+
+    if (isEndKeyframe) {
+      console.log('[useCrop] End keyframe explicitly set by user');
+      setIsEndKeyframeExplicit(true);
+    }
+
     setKeyframes(prev => {
       // Check if keyframe exists at this time (within 10ms tolerance)
       const existingIndex = prev.findIndex(kf => Math.abs(kf.time - time) < 0.01);
 
+      let updated;
       if (existingIndex >= 0) {
         // Update existing keyframe
-        const updated = [...prev];
+        updated = [...prev];
         updated[existingIndex] = { time, ...cropData };
-        return updated;
       } else {
         // Add new keyframe and sort by time
         const newKeyframes = [...prev, { time, ...cropData }];
-        return newKeyframes.sort((a, b) => a.time - b.time);
+        updated = newKeyframes.sort((a, b) => a.time - b.time);
       }
+
+      // If updating start keyframe and end hasn't been explicitly set, mirror to end
+      if (isStartKeyframe && !isEndKeyframeExplicit && duration) {
+        console.log('[useCrop] Mirroring start keyframe to end (end not yet explicit)');
+        const endKeyframeIndex = updated.findIndex(kf => Math.abs(kf.time - duration) < 0.01);
+        if (endKeyframeIndex >= 0) {
+          updated[endKeyframeIndex] = {
+            time: duration,
+            ...cropData
+          };
+        }
+      }
+
+      return updated;
     });
-  }, []);
+  }, [isEndKeyframeExplicit]);
 
   /**
    * Remove a keyframe at the specified time

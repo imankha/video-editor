@@ -79,7 +79,7 @@ function App() {
 
   // Handle crop complete (create keyframe)
   const handleCropComplete = (cropData) => {
-    addOrUpdateKeyframe(currentTime, cropData);
+    addOrUpdateKeyframe(currentTime, cropData, duration);
   };
 
   // Handle keyframe click (seek to keyframe time)
