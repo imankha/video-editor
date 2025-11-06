@@ -150,12 +150,12 @@ export default function useCrop(videoMetadata) {
 
       let updated;
       if (existingIndex >= 0) {
-        // Update existing keyframe
+        // Update existing keyframe - set time AFTER spreading to avoid overwrite
         updated = [...prev];
-        updated[existingIndex] = { time, ...cropData };
+        updated[existingIndex] = { ...cropData, time };
       } else {
         // Add new keyframe and sort by time
-        const newKeyframes = [...prev, { time, ...cropData }];
+        const newKeyframes = [...prev, { ...cropData, time }];
         updated = newKeyframes.sort((a, b) => a.time - b.time);
       }
 
@@ -164,9 +164,10 @@ export default function useCrop(videoMetadata) {
         console.log('[useCrop] Mirroring start keyframe to end (end not yet explicit)');
         const endKeyframeIndex = updated.findIndex(kf => Math.abs(kf.time - duration) < 0.01);
         if (endKeyframeIndex >= 0) {
+          // Set time AFTER spreading cropData to preserve the duration time
           updated[endKeyframeIndex] = {
-            time: duration,
-            ...cropData
+            ...cropData,
+            time: duration
           };
         }
       }
@@ -270,6 +271,7 @@ export default function useCrop(videoMetadata) {
     // State
     aspectRatio,
     keyframes,
+    isEndKeyframeExplicit,
 
     // Actions
     updateAspectRatio,

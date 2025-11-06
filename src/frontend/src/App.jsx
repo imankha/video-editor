@@ -36,6 +36,7 @@ function App() {
   const {
     aspectRatio,
     keyframes,
+    isEndKeyframeExplicit,
     updateAspectRatio,
     addOrUpdateKeyframe,
     removeKeyframe,
@@ -208,6 +209,7 @@ function App() {
                 onSeek={seek}
                 cropKeyframes={keyframes}
                 isCropActive={true}
+                isEndKeyframeExplicit={isEndKeyframeExplicit}
                 onCropKeyframeClick={handleKeyframeClick}
                 onCropKeyframeDelete={handleKeyframeDelete}
               />

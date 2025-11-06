@@ -10,6 +10,7 @@ import CropLayer from './CropLayer';
  * @param {Function} props.onSeek - Callback when user seeks
  * @param {Array} props.cropKeyframes - Crop keyframes to display
  * @param {boolean} props.isCropActive - Whether crop layer is active
+ * @param {boolean} props.isEndKeyframeExplicit - Whether end keyframe has been explicitly set
  * @param {Function} props.onCropKeyframeClick - Callback when crop keyframe is clicked
  * @param {Function} props.onCropKeyframeDelete - Callback when crop keyframe is deleted
  */
@@ -19,6 +20,7 @@ export function Timeline({
   onSeek,
   cropKeyframes = [],
   isCropActive = false,
+  isEndKeyframeExplicit = false,
   onCropKeyframeClick,
   onCropKeyframeDelete
 }) {
@@ -131,6 +133,7 @@ export function Timeline({
             duration={duration}
             currentTime={currentTime}
             isActive={isCropActive}
+            isEndKeyframeExplicit={isEndKeyframeExplicit}
             onKeyframeClick={onCropKeyframeClick}
             onKeyframeDelete={onCropKeyframeDelete}
           />

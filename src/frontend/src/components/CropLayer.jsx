@@ -10,7 +10,8 @@ export default function CropLayer({
   currentTime,
   onKeyframeClick,
   onKeyframeDelete,
-  isActive
+  isActive,
+  isEndKeyframeExplicit = false
 }) {
   if (keyframes.length === 0) {
     return null;
@@ -42,6 +43,15 @@ export default function CropLayer({
         {keyframes.map((keyframe, index) => {
           const position = timeToPixel(keyframe.time);
           const isAtCurrentTime = Math.abs(keyframe.time - currentTime) < 0.01;
+          const isStartKeyframe = Math.abs(keyframe.time) < 0.01;
+          const isEndKeyframe = Math.abs(keyframe.time - duration) < 0.01;
+          const isAtStartTime = Math.abs(currentTime) < 0.01;
+
+          // Highlight keyframe if:
+          // 1. At current time, OR
+          // 2. This is end keyframe, end hasn't been explicitly set, and we're at start time
+          const shouldHighlight = isAtCurrentTime ||
+                                  (isEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
 
           return (
             <div
@@ -52,12 +62,14 @@ export default function CropLayer({
               {/* Diamond keyframe indicator */}
               <div
                 className={`w-3 h-3 transform rotate-45 cursor-pointer transition-all ${
-                  isAtCurrentTime
+                  shouldHighlight
                     ? 'bg-yellow-400 scale-125'
                     : 'bg-blue-400 hover:bg-blue-300 hover:scale-110'
                 }`}
                 onClick={() => onKeyframeClick(keyframe.time)}
-                title={`Keyframe at ${keyframe.time.toFixed(3)}s`}
+                title={`Keyframe at ${keyframe.time.toFixed(3)}s${
+                  isEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
+                }`}
               />
 
               {/* Delete button (shown on hover, but not for permanent start/end keyframes) */}
