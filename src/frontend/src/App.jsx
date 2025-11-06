@@ -9,6 +9,7 @@ import { FileUpload } from './components/FileUpload';
 import CropControls from './components/CropControls';
 import ZoomControls from './components/ZoomControls';
 import ExportButton from './components/ExportButton';
+import DebugInfo from './components/DebugInfo';
 
 function App() {
   const [videoFile, setVideoFile] = useState(null);
@@ -272,6 +273,9 @@ function App() {
           <p>Phase 2: Crop Tool with Keyframe Animation</p>
         </div>
       </div>
+
+      {/* Debug Info - Shows current branch and commit */}
+      <DebugInfo />
     </div>
   );
 }
