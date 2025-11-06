@@ -41,27 +41,17 @@ export default function useZoom() {
   }, []);
 
   /**
-   * Zoom by mouse wheel (with focal point)
+   * Zoom by mouse wheel (center-based, no focal point)
    */
-  const zoomByWheel = useCallback((delta, focalPoint = null) => {
+  const zoomByWheel = useCallback((delta) => {
     const zoomFactor = delta > 0 ? 1.1 : 0.9;
 
     setZoom(prev => {
       const newZoom = Math.max(MIN_ZOOM, Math.min(prev * zoomFactor, MAX_ZOOM));
-
-      // If focal point provided, adjust pan to zoom towards that point
-      if (focalPoint && newZoom !== prev) {
-        setPanOffset(prevOffset => {
-          const zoomChange = newZoom / prev;
-          return {
-            x: focalPoint.x - (focalPoint.x - prevOffset.x) * zoomChange,
-            y: focalPoint.y - (focalPoint.y - prevOffset.y) * zoomChange
-          };
-        });
-      }
-
       return newZoom;
     });
+
+    // Always zoom to center - don't adjust pan offset
   }, []);
 
   /**

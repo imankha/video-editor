@@ -88,7 +88,7 @@ function App() {
     seek(time);
   };
 
-  // Update current crop state when time changes
+  // Update current crop state when keyframes or time changes
   useEffect(() => {
     if (keyframes.length > 0) {
       const interpolated = interpolateCrop(currentTime);
@@ -97,6 +97,16 @@ function App() {
       }
     }
   }, [currentTime, keyframes, interpolateCrop]);
+
+  // Initialize crop state when keyframes are first created
+  useEffect(() => {
+    if (keyframes.length > 0 && !currentCropState) {
+      const initialCrop = interpolateCrop(0);
+      if (initialCrop) {
+        setCurrentCropState(initialCrop);
+      }
+    }
+  }, [keyframes, currentCropState, interpolateCrop]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">

@@ -74,31 +74,23 @@ export function VideoPlayer({
   };
 
   /**
-   * Handle mouse wheel for zoom (only when focused)
+   * Handle mouse wheel for zoom (only when focused, center-based)
    */
   const handleWheel = useCallback((e) => {
     // Only zoom if player is focused and video is loaded
-    if (!videoUrl || !onZoomChange || !isFocused) return;
+    if (!videoUrl || !onZoomChange || !isFocused) {
+      // Not focused - let browser handle scrolling
+      return;
+    }
 
+    // Focused - prevent all default behavior and stop propagation
     e.preventDefault();
     e.stopPropagation();
 
-    // Get mouse position relative to container
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    // Calculate focal point in container space
-    const focalPoint = {
-      x: mouseX - rect.width / 2,
-      y: mouseY - rect.height / 2
-    };
-
     // Call zoom handler with NEGATIVE delta (reversed direction)
     // Scroll up (negative deltaY) = zoom in
-    onZoomChange(-e.deltaY, focalPoint);
+    // No focal point - always zoom to center
+    onZoomChange(-e.deltaY);
   }, [videoUrl, onZoomChange, isFocused]);
 
   /**
