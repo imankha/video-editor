@@ -48,9 +48,12 @@ ffmpeg -version
 ## Step 1: Initialize Frontend (React + Vite + Tailwind)
 
 ```bash
+# Create src directory if it doesn't exist
+mkdir -p src
+
 # Create frontend project
-npm create vite@latest frontend -- --template react
-cd frontend
+npm create vite@latest src/frontend -- --template react
+cd src/frontend
 
 # Install core dependencies
 npm install
@@ -111,11 +114,14 @@ Visit http://localhost:5173 - you should see the Vite + React welcome page.
 
 ```bash
 # Go back to project root
-cd ..
+cd ../..
+
+# Create src directory if it doesn't exist
+mkdir -p src
 
 # Create backend directory
-mkdir backend
-cd backend
+mkdir src/backend
+cd src/backend
 
 # Create virtual environment
 python -m venv venv
@@ -407,14 +413,14 @@ export default App;
 
 **Terminal 1 (Backend):**
 ```bash
-cd backend
+cd src/backend
 source venv/bin/activate
 uvicorn app.main:app --reload
 ```
 
 **Terminal 2 (Frontend):**
 ```bash
-cd frontend
+cd src/frontend
 npm run dev
 ```
 
@@ -698,7 +704,7 @@ ruff check app/                   # Lint code
 ```bash
 # Run both in parallel (install concurrently first)
 npm install -g concurrently
-concurrently "cd frontend && npm run dev" "cd backend && uvicorn app.main:app --reload"
+concurrently "cd src/frontend && npm run dev" "cd src/backend && uvicorn app.main:app --reload"
 ```
 
 ---

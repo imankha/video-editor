@@ -67,7 +67,7 @@ All project specifications and technical documentation are located in the [docs/
 
 ```bash
 # Navigate to backend directory
-cd backend
+cd src/backend
 
 # Create virtual environment
 python3 -m venv venv
@@ -89,7 +89,7 @@ pip install -r requirements.txt
 
 ```bash
 # Navigate to frontend directory
-cd frontend
+cd src/frontend
 
 # Install dependencies
 npm install
@@ -155,10 +155,11 @@ The specifications are written to minimize ambiguity and maximize implementation
 
 ## 📚 Additional Documentation
 
-- **[IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md)** - Complete development plan with FastAPI backend architecture
-- **[MILESTONES.md](./MILESTONES.md)** - Project milestones and timeline (5 weeks to production)
-- **[QUICK_START.md](./QUICK_START.md)** - Detailed setup guide
-- **[README_HELLO_WORLD.md](./README_HELLO_WORLD.md)** - Hello World demo details
+- **[IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md)** - Complete development plan with FastAPI backend architecture
+- **[MILESTONES.md](./docs/MILESTONES.md)** - Project milestones and timeline (5 weeks to production)
+- **[QUICK_START.md](./docs/QUICK_START.md)** - Detailed setup guide
+- **[README_HELLO_WORLD.md](./docs/README_HELLO_WORLD.md)** - Hello World demo details
+- **[VERIFICATION.md](./docs/VERIFICATION.md)** - Project verification guide
 
 ---
 
@@ -208,19 +209,21 @@ ffmpeg -version
 
 ```
 video-editor/
-├── frontend/              # React + Vite + Tailwind
-│   ├── src/
-│   │   ├── App.jsx       # Main component
-│   │   ├── main.jsx      # Entry point
-│   │   └── index.css     # Tailwind CSS
-│   └── package.json      # Dependencies
+├── src/
+│   ├── frontend/              # React + Vite + Tailwind
+│   │   ├── src/
+│   │   │   ├── App.jsx       # Main component
+│   │   │   ├── main.jsx      # Entry point
+│   │   │   └── index.css     # Tailwind CSS
+│   │   └── package.json      # Dependencies
+│   │
+│   └── backend/              # FastAPI + Python
+│       ├── app/
+│       │   └── main.py       # FastAPI application
+│       └── requirements.txt  # Python dependencies
 │
-├── backend/              # FastAPI + Python
-│   ├── app/
-│   │   └── main.py       # FastAPI application
-│   └── requirements.txt  # Python dependencies
-│
-└── docs/                 # Phase specifications
+├── docs/                     # Documentation & specifications
+└── scripts/                  # Utility scripts
 ```
 
 ---
