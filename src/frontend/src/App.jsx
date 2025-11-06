@@ -6,7 +6,7 @@ import { VideoPlayer } from './components/VideoPlayer';
 import { Timeline } from './components/Timeline';
 import { Controls } from './components/Controls';
 import { FileUpload } from './components/FileUpload';
-import CropControls from './components/CropControls';
+import AspectRatioSelector from './components/AspectRatioSelector';
 import ZoomControls from './components/ZoomControls';
 import ExportButton from './components/ExportButton';
 import DebugInfo from './components/DebugInfo';
@@ -66,14 +66,12 @@ function App() {
     await loadVideo(file);
   };
 
-  // Handle crop tool toggle
-  const handleToggleCrop = () => {
-    if (isCropActive) {
-      deactivateCropTool();
-    } else {
+  // Auto-activate crop when video metadata loads
+  useEffect(() => {
+    if (metadata && !isCropActive) {
       activateCropTool();
     }
-  };
+  }, [metadata, isCropActive, activateCropTool]);
 
   // Handle crop changes during drag/resize
   const handleCropChange = (newCrop) => {
@@ -82,9 +80,7 @@ function App() {
 
   // Handle crop complete (create keyframe)
   const handleCropComplete = (cropData) => {
-    if (isCropActive) {
-      addOrUpdateKeyframe(currentTime, cropData);
-    }
+    addOrUpdateKeyframe(currentTime, cropData);
   };
 
   // Handle keyframe click (seek to keyframe time)
@@ -94,13 +90,13 @@ function App() {
 
   // Update current crop state when time changes
   useEffect(() => {
-    if (isCropActive && keyframes.length > 0) {
+    if (keyframes.length > 0) {
       const interpolated = interpolateCrop(currentTime);
       if (interpolated) {
         setCurrentCropState(interpolated);
       }
     }
-  }, [currentTime, keyframes, isCropActive, interpolateCrop]);
+  }, [currentTime, keyframes, interpolateCrop]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -151,20 +147,14 @@ function App() {
 
         {/* Main Editor Area */}
         <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
-          {/* Crop Controls */}
+          {/* Controls Bar */}
           {videoUrl && (
-            <div className="mb-6 flex gap-4">
-              <div className="flex-1">
-                <CropControls
-                  isCropActive={isCropActive}
-                  aspectRatio={aspectRatio}
-                  onToggleCrop={handleToggleCrop}
-                  onAspectRatioChange={updateAspectRatio}
-                  onClearCrop={clearCrop}
-                  hasKeyframes={keyframes.length > 0}
-                />
-              </div>
-              <div>
+            <div className="mb-6 flex gap-4 items-center">
+              <AspectRatioSelector
+                aspectRatio={aspectRatio}
+                onAspectRatioChange={updateAspectRatio}
+              />
+              <div className="ml-auto">
                 <ZoomControls
                   zoom={zoom}
                   onZoomIn={zoomIn}
@@ -184,7 +174,7 @@ function App() {
             handlers={handlers}
             onFileSelect={handleFileSelect}
             videoMetadata={metadata}
-            showCropOverlay={isCropActive}
+            showCropOverlay={!!videoUrl}
             currentCrop={currentCropState}
             aspectRatio={aspectRatio}
             onCropChange={handleCropChange}
@@ -203,7 +193,7 @@ function App() {
                 duration={duration}
                 onSeek={seek}
                 cropKeyframes={keyframes}
-                isCropActive={isCropActive}
+                isCropActive={true}
                 onCropKeyframeClick={handleKeyframeClick}
                 onCropKeyframeDelete={removeKeyframe}
               />

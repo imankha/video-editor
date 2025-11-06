@@ -38,6 +38,7 @@ export function VideoPlayer({
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [isFocused, setIsFocused] = useState(false);
   const containerRef = useRef(null);
 
   const handleDragEnter = (e) => {
@@ -73,12 +74,14 @@ export function VideoPlayer({
   };
 
   /**
-   * Handle mouse wheel for zoom
+   * Handle mouse wheel for zoom (only when focused)
    */
   const handleWheel = useCallback((e) => {
-    if (!videoUrl || !onZoomChange) return;
+    // Only zoom if player is focused and video is loaded
+    if (!videoUrl || !onZoomChange || !isFocused) return;
 
     e.preventDefault();
+    e.stopPropagation();
 
     // Get mouse position relative to container
     const rect = containerRef.current?.getBoundingClientRect();
@@ -93,9 +96,10 @@ export function VideoPlayer({
       y: mouseY - rect.height / 2
     };
 
-    // Call zoom handler with delta and focal point
-    onZoomChange(e.deltaY, focalPoint);
-  }, [videoUrl, onZoomChange]);
+    // Call zoom handler with NEGATIVE delta (reversed direction)
+    // Scroll up (negative deltaY) = zoom in
+    onZoomChange(-e.deltaY, focalPoint);
+  }, [videoUrl, onZoomChange, isFocused]);
 
   /**
    * Handle mouse down for panning
@@ -148,13 +152,21 @@ export function VideoPlayer({
   return (
     <div
       ref={containerRef}
-      className="video-player-container bg-black rounded-lg overflow-hidden min-h-[60vh] relative"
+      tabIndex={0}
+      className={`video-player-container bg-black rounded-lg overflow-hidden min-h-[60vh] relative outline-none transition-shadow ${
+        isFocused ? 'ring-4 ring-blue-500/50' : ''
+      }`}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
+      onMouseDown={(e) => {
+        handleMouseDown(e);
+        containerRef.current?.focus();
+      }}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
       style={{ cursor: isPanning ? 'grabbing' : (zoom > 1 && !showCropOverlay ? 'grab' : 'default') }}
     >
       {videoUrl ? (
