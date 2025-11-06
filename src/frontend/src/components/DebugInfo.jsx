@@ -5,9 +5,15 @@ import versionInfo from '../version.json';
 /**
  * DebugInfo component - Shows git branch, commit, and build info
  * Useful for debugging and verifying the running version
+ * Only visible in development mode
  */
 export default function DebugInfo() {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Don't render in production
+  if (versionInfo.environment === 'production') {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-4 right-4 z-50">

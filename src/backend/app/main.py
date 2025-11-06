@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from datetime import datetime
 import ffmpeg
@@ -8,8 +8,14 @@ import json
 import os
 import tempfile
 import uuid
+import traceback
+import sys
 from pathlib import Path
 from typing import List, Dict, Any
+
+# Environment detection
+ENV = os.getenv("ENV", "development")  # "development" or "production"
+IS_DEV = ENV == "development"
 
 app = FastAPI(
     title="Video Editor API",
@@ -28,6 +34,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Custom exception handler for development mode
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """
+    Global exception handler that provides detailed errors in dev mode
+    and sanitized errors in production
+    """
+    if IS_DEV:
+        # Development: return full error details with stack trace
+        error_detail = {
+            "error": type(exc).__name__,
+            "message": str(exc),
+            "traceback": traceback.format_exception(type(exc), exc, exc.__traceback__),
+            "request_url": str(request.url),
+            "method": request.method
+        }
+        return JSONResponse(
+            status_code=500,
+            content=error_detail
+        )
+    else:
+        # Production: return sanitized error
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Internal Server Error",
+                "message": "An error occurred while processing your request"
+            }
+        )
+
 
 
 # Response model
@@ -221,97 +259,97 @@ async def export_crop(
     Export video with crop applied
     Accepts video file and crop keyframes, returns cropped video
     """
+    # Parse keyframes
     try:
-        # Parse keyframes
         keyframes_data = json.loads(keyframes_json)
-        keyframes = [CropKeyframe(**kf) for kf in keyframes_data]
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid keyframes JSON: {str(e)}")
 
-        if len(keyframes) == 0:
-            raise HTTPException(status_code=400, detail="No crop keyframes provided")
+    keyframes = [CropKeyframe(**kf) for kf in keyframes_data]
 
-        # Create temporary directory for processing
-        temp_dir = tempfile.mkdtemp()
-        input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex}{Path(video.filename).suffix}")
-        output_path = os.path.join(temp_dir, f"output_{uuid.uuid4().hex}.mp4")
+    if len(keyframes) == 0:
+        raise HTTPException(status_code=400, detail="No crop keyframes provided")
 
-        # Save uploaded file
-        with open(input_path, 'wb') as f:
-            content = await video.read()
-            f.write(content)
+    # Create temporary directory for processing
+    temp_dir = tempfile.mkdtemp()
+    input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex}{Path(video.filename).suffix}")
+    output_path = os.path.join(temp_dir, f"output_{uuid.uuid4().hex}.mp4")
 
-        # Get video info
-        probe = ffmpeg.probe(input_path)
-        video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
-        duration = float(probe['format']['duration'])
-        fps = eval(video_info['r_frame_rate'])  # e.g., "30/1" -> 30.0
+    # Save uploaded file
+    with open(input_path, 'wb') as f:
+        content = await video.read()
+        f.write(content)
 
-        # Convert keyframes to dict format
-        keyframes_dict = [
-            {
-                'time': kf.time,
-                'x': kf.x,
-                'y': kf.y,
-                'width': kf.width,
-                'height': kf.height
-            }
-            for kf in keyframes
-        ]
+    # Get video info
+    probe = ffmpeg.probe(input_path)
+    video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
+    duration = float(probe['format']['duration'])
+    fps = eval(video_info['r_frame_rate'])  # e.g., "30/1" -> 30.0
 
-        # Sort keyframes by time
-        keyframes_dict.sort(key=lambda k: k['time'])
+    # Convert keyframes to dict format
+    keyframes_dict = [
+        {
+            'time': kf.time,
+            'x': kf.x,
+            'y': kf.y,
+            'width': kf.width,
+            'height': kf.height
+        }
+        for kf in keyframes
+    ]
 
-        # Generate crop filter
-        crop_filter = generate_crop_filter(keyframes_dict, duration, fps)
+    # Sort keyframes by time
+    keyframes_dict.sort(key=lambda k: k['time'])
 
-        # Process video with FFmpeg
-        try:
-            stream = ffmpeg.input(input_path)
-            stream = ffmpeg.filter(stream, 'crop', w=crop_filter.split('w=')[1].split(':')[0],
-                                 h=crop_filter.split('h=')[1].split(':')[0],
-                                 x=crop_filter.split('x=')[1].split(':')[0],
-                                 y=crop_filter.split('y=')[1])
-            stream = ffmpeg.output(stream, output_path,
-                                 vcodec='libx264',
-                                 crf=23,
-                                 preset='medium',
-                                 acodec='aac',
-                                 audio_bitrate='192k')
-            ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
-        except ffmpeg.Error as e:
-            # If complex expressions don't work, fall back to simpler approach
-            # For videos with animated crops, we'll process frame by frame
-            # For now, use the average crop from all keyframes
-            avg_crop = {
-                'x': int(sum(kf['x'] for kf in keyframes_dict) / len(keyframes_dict)),
-                'y': int(sum(kf['y'] for kf in keyframes_dict) / len(keyframes_dict)),
-                'width': int(sum(kf['width'] for kf in keyframes_dict) / len(keyframes_dict)),
-                'height': int(sum(kf['height'] for kf in keyframes_dict) / len(keyframes_dict))
-            }
+    # Generate crop filter
+    crop_filter = generate_crop_filter(keyframes_dict, duration, fps)
 
-            stream = ffmpeg.input(input_path)
-            stream = ffmpeg.filter(stream, 'crop',
-                                 avg_crop['width'], avg_crop['height'],
-                                 avg_crop['x'], avg_crop['y'])
-            stream = ffmpeg.output(stream, output_path,
-                                 vcodec='libx264',
-                                 crf=23,
-                                 preset='medium',
-                                 acodec='aac',
-                                 audio_bitrate='192k')
-            ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
+    # Process video with FFmpeg
+    try:
+        stream = ffmpeg.input(input_path)
+        stream = ffmpeg.filter(stream, 'crop', w=crop_filter.split('w=')[1].split(':')[0],
+                             h=crop_filter.split('h=')[1].split(':')[0],
+                             x=crop_filter.split('x=')[1].split(':')[0],
+                             y=crop_filter.split('y=')[1])
+        stream = ffmpeg.output(stream, output_path,
+                             vcodec='libx264',
+                             crf=23,
+                             preset='medium',
+                             acodec='aac',
+                             audio_bitrate='192k')
+        ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
+    except ffmpeg.Error as e:
+        # If complex expressions don't work, fall back to simpler approach
+        # For videos with animated crops, we'll process frame by frame
+        # For now, use the average crop from all keyframes
+        print(f"[FFmpeg] Complex crop filter failed, falling back to average crop. Error: {e.stderr.decode()}")
 
-        # Return the cropped video file
-        return FileResponse(
-            output_path,
-            media_type='video/mp4',
-            filename=f"cropped_{video.filename}",
-            background=None  # Don't delete file immediately, let FileResponse handle it
-        )
+        avg_crop = {
+            'x': int(sum(kf['x'] for kf in keyframes_dict) / len(keyframes_dict)),
+            'y': int(sum(kf['y'] for kf in keyframes_dict) / len(keyframes_dict)),
+            'width': int(sum(kf['width'] for kf in keyframes_dict) / len(keyframes_dict)),
+            'height': int(sum(kf['height'] for kf in keyframes_dict) / len(keyframes_dict))
+        }
 
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid keyframes JSON")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        stream = ffmpeg.input(input_path)
+        stream = ffmpeg.filter(stream, 'crop',
+                             avg_crop['width'], avg_crop['height'],
+                             avg_crop['x'], avg_crop['y'])
+        stream = ffmpeg.output(stream, output_path,
+                             vcodec='libx264',
+                             crf=23,
+                             preset='medium',
+                             acodec='aac',
+                             audio_bitrate='192k')
+        ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
+
+    # Return the cropped video file
+    return FileResponse(
+        output_path,
+        media_type='video/mp4',
+        filename=f"cropped_{video.filename}",
+        background=None  # Don't delete file immediately, let FileResponse handle it
+    )
 
 
 if __name__ == "__main__":

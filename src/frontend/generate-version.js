@@ -26,12 +26,16 @@ const commit = execGit('git rev-parse --short HEAD');
 const commitFull = execGit('git rev-parse HEAD');
 const buildTime = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
 
+// Detect environment (production or development)
+const env = process.env.NODE_ENV || 'development';
+
 // Create version object
 const versionInfo = {
   branch,
   commit,
   commitFull,
-  buildTime
+  buildTime,
+  environment: env
 };
 
 // Write to src/version.json
