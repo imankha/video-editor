@@ -62,22 +62,29 @@ export default function useCrop(videoMetadata) {
       return;
     }
 
+    console.log('Activating crop tool with metadata:', videoMetadata);
     setIsCropActive(true);
 
-    // Create initial keyframe at time 0 if no keyframes exist
-    if (keyframes.length === 0) {
+    // Create initial keyframe at time 0 using functional setState
+    setKeyframes(prev => {
+      if (prev.length > 0) {
+        console.log('Keyframes already exist:', prev);
+        return prev; // Already have keyframes
+      }
+
       const defaultCrop = calculateDefaultCrop(
         videoMetadata.videoWidth,
         videoMetadata.videoHeight,
         aspectRatio
       );
 
-      setKeyframes([{
+      console.log('Creating initial keyframe:', { time: 0, ...defaultCrop });
+      return [{
         time: 0,
         ...defaultCrop
-      }]);
-    }
-  }, [videoMetadata, aspectRatio, keyframes.length, calculateDefaultCrop]);
+      }];
+    });
+  }, [videoMetadata, aspectRatio, calculateDefaultCrop]);
 
   /**
    * Deactivate the crop tool

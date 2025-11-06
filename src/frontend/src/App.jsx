@@ -69,9 +69,20 @@ function App() {
   // Auto-activate crop when video metadata loads
   useEffect(() => {
     if (metadata && !isCropActive) {
+      console.log('[App] Auto-activating crop tool, metadata:', metadata);
       activateCropTool();
     }
   }, [metadata, isCropActive, activateCropTool]);
+
+  // Debug: Log keyframes changes
+  useEffect(() => {
+    console.log('[App] Keyframes changed:', keyframes);
+  }, [keyframes]);
+
+  // Debug: Log currentCropState changes
+  useEffect(() => {
+    console.log('[App] Current crop state:', currentCropState);
+  }, [currentCropState]);
 
   // Handle crop changes during drag/resize
   const handleCropChange = (newCrop) => {

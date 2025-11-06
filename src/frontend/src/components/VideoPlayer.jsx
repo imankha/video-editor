@@ -41,6 +41,35 @@ export function VideoPlayer({
   const [isFocused, setIsFocused] = useState(false);
   const containerRef = useRef(null);
 
+  // Setup wheel event listener with passive: false to allow preventDefault
+  React.useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const wheelHandler = (e) => {
+      // Only zoom if player is focused and video is loaded
+      if (!videoUrl || !onZoomChange || !isFocused) {
+        // Not focused - let browser handle scrolling
+        return;
+      }
+
+      // Focused - prevent all default behavior and stop propagation
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Call zoom handler with NEGATIVE delta (reversed direction)
+      // Scroll up (negative deltaY) = zoom in
+      onZoomChange(-e.deltaY);
+    };
+
+    // Add listener with passive: false to allow preventDefault
+    container.addEventListener('wheel', wheelHandler, { passive: false });
+
+    return () => {
+      container.removeEventListener('wheel', wheelHandler);
+    };
+  }, [videoUrl, onZoomChange, isFocused]);
+
   const handleDragEnter = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -72,26 +101,6 @@ export function VideoPlayer({
       }
     }
   };
-
-  /**
-   * Handle mouse wheel for zoom (only when focused, center-based)
-   */
-  const handleWheel = useCallback((e) => {
-    // Only zoom if player is focused and video is loaded
-    if (!videoUrl || !onZoomChange || !isFocused) {
-      // Not focused - let browser handle scrolling
-      return;
-    }
-
-    // Focused - prevent all default behavior and stop propagation
-    e.preventDefault();
-    e.stopPropagation();
-
-    // Call zoom handler with NEGATIVE delta (reversed direction)
-    // Scroll up (negative deltaY) = zoom in
-    // No focal point - always zoom to center
-    onZoomChange(-e.deltaY);
-  }, [videoUrl, onZoomChange, isFocused]);
 
   /**
    * Handle mouse down for panning
@@ -152,7 +161,6 @@ export function VideoPlayer({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      onWheel={handleWheel}
       onMouseDown={(e) => {
         handleMouseDown(e);
         containerRef.current?.focus();
