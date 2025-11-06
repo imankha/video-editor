@@ -55,14 +55,84 @@ All project specifications and technical documentation are located in the [docs/
 - [07-PHASE-ENVIRONMENT-SETUP.md](docs/07-PHASE-ENVIRONMENT-SETUP.md) - Environment configuration
 - [08-PHASE-CROSS-PLATFORM.md](docs/08-PHASE-CROSS-PLATFORM.md) - Cross-platform testing
 
-## Getting Started
+## 🚀 Quick Start - Running the Application
 
-This project is being built from scratch. Phase 1 (Foundation) will establish the basic architecture and video playback system.
+### Prerequisites
 
-### Technology Stack (Planned)
-- Web-based application (HTML5/Canvas)
-- FFmpeg for video processing
-- State management architecture (TBD in Phase 1)
+- **Python 3.11+** - [Download](https://www.python.org/downloads/)
+- **Node.js 18+** - [Download](https://nodejs.org/)
+- **FFmpeg** (for future video processing) - [Install guide](#install-ffmpeg)
+
+### Step 1: Start the Backend
+
+```bash
+# Navigate to backend directory
+cd backend
+
+# Create virtual environment
+python3 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the server
+./run.sh
+# OR: uvicorn app.main:app --reload
+```
+
+**Backend will run at:** http://localhost:8000
+
+### Step 2: Start the Frontend (New Terminal)
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+```
+
+**Frontend will run at:** http://localhost:5173
+
+### Step 3: View the Application
+
+Open your browser to: **http://localhost:5173**
+
+You should see the Hello World demo with:
+- ✅ Beautiful gradient UI (Tailwind CSS)
+- ✅ Live connection to backend API
+- ✅ Real-time data display
+
+**Additional URLs:**
+- API Documentation: http://localhost:8000/docs
+- Backend API: http://localhost:8000/api/hello
+
+---
+
+## 🛠️ Technology Stack
+
+### Frontend
+- **React 18** - UI framework
+- **Vite** - Build tool with hot reload
+- **Tailwind CSS** - Utility-first styling
+- **Axios** - HTTP client for API calls
+
+### Backend
+- **FastAPI** - Modern Python web framework
+- **Python 3.11+** - Programming language
+- **Uvicorn** - ASGI server
+- **Pydantic** - Data validation
+
+### Coming Soon
+- **FFmpeg** - Video encoding/decoding
+- **OpenCV** - Video frame manipulation
+- **moviepy** - Video editing
 
 ## Development Philosophy
 
@@ -78,7 +148,95 @@ The specifications are written to minimize ambiguity and maximize implementation
 
 ## Current Phase
 
-**Phase 1: Foundation** - Not yet started
+**Status:** Hello World Demo Complete ✅
+**Next:** Phase 1 (Foundation) - Video upload and playback
+
+---
+
+## 📚 Additional Documentation
+
+- **[IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md)** - Complete development plan with FastAPI backend architecture
+- **[MILESTONES.md](./MILESTONES.md)** - Project milestones and timeline (5 weeks to production)
+- **[QUICK_START.md](./QUICK_START.md)** - Detailed setup guide
+- **[README_HELLO_WORLD.md](./README_HELLO_WORLD.md)** - Hello World demo details
+
+---
+
+## 🐛 Troubleshooting
+
+### Backend Issues
+
+**Problem:** `ModuleNotFoundError: No module named 'fastapi'`
+**Solution:** Make sure virtual environment is activated (you should see `(venv)` in terminal prompt), then run `pip install -r requirements.txt`
+
+**Problem:** Port 8000 already in use
+**Solution:** Kill the process: `lsof -ti:8000 | xargs kill -9` or use different port
+
+### Frontend Issues
+
+**Problem:** `Cannot find module 'vite'`
+**Solution:** Delete `node_modules` and reinstall: `rm -rf node_modules package-lock.json && npm install`
+
+**Problem:** CORS errors in browser console
+**Solution:** Ensure backend is running on port 8000 and check CORS settings in `backend/app/main.py`
+
+---
+
+## 📦 Install FFmpeg
+
+### macOS
+```bash
+brew install ffmpeg
+```
+
+### Ubuntu/Debian
+```bash
+sudo apt update && sudo apt install ffmpeg
+```
+
+### Windows
+Download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to PATH
+
+**Verify installation:**
+```bash
+ffmpeg -version
+```
+
+---
+
+## 🎯 Project Structure
+
+```
+video-editor/
+├── frontend/              # React + Vite + Tailwind
+│   ├── src/
+│   │   ├── App.jsx       # Main component
+│   │   ├── main.jsx      # Entry point
+│   │   └── index.css     # Tailwind CSS
+│   └── package.json      # Dependencies
+│
+├── backend/              # FastAPI + Python
+│   ├── app/
+│   │   └── main.py       # FastAPI application
+│   └── requirements.txt  # Python dependencies
+│
+└── docs/                 # Phase specifications
+```
+
+---
+
+## ✨ Success Checklist
+
+When everything is working:
+
+- [ ] Backend shows: `INFO: Application startup complete`
+- [ ] Frontend shows: `VITE v5.x.x ready in XXXms`
+- [ ] Browser displays http://localhost:5173
+- [ ] Green checkmark: "Hello from FastAPI + Python!"
+- [ ] No errors in browser console (F12)
+- [ ] API docs work: http://localhost:8000/docs
+
+---
 
 ## License
 
