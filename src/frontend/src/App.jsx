@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useVideo } from './hooks/useVideo';
 import useCrop from './hooks/useCrop';
 import useZoom from './hooks/useZoom';
@@ -10,10 +10,12 @@ import AspectRatioSelector from './components/AspectRatioSelector';
 import ZoomControls from './components/ZoomControls';
 import ExportButton from './components/ExportButton';
 import DebugInfo from './components/DebugInfo';
+import { CropProvider } from './contexts/CropContext';
 
 function App() {
   const [videoFile, setVideoFile] = useState(null);
-  const [currentCropState, setCurrentCropState] = useState(null);
+  // Temporary state for live drag/resize preview (null when not dragging)
+  const [dragCrop, setDragCrop] = useState(null);
 
   const {
     videoRef,
@@ -63,6 +65,30 @@ function App() {
     await loadVideo(file);
   };
 
+  // DERIVED STATE: Single source of truth
+  // - If dragging: show live preview (dragCrop)
+  // - Otherwise: interpolate from keyframes
+  // IMPORTANT: Extract only spatial properties (x, y, width, height) - no time!
+  const currentCropState = useMemo(() => {
+    let crop;
+    if (dragCrop) {
+      crop = dragCrop;
+    } else if (keyframes.length === 0) {
+      return null;
+    } else {
+      crop = interpolateCrop(currentTime);
+    }
+
+    // Strip time property - CropOverlay should only know about spatial coords
+    if (!crop) return null;
+    return {
+      x: crop.x,
+      y: crop.y,
+      width: crop.width,
+      height: crop.height
+    };
+  }, [dragCrop, keyframes, currentTime, interpolateCrop]);
+
   // Debug: Log keyframes changes
   useEffect(() => {
     console.log('[App] Keyframes changed:', keyframes);
@@ -73,14 +99,15 @@ function App() {
     console.log('[App] Current crop state:', currentCropState);
   }, [currentCropState]);
 
-  // Handle crop changes during drag/resize
+  // Handle crop changes during drag/resize (live preview)
   const handleCropChange = (newCrop) => {
-    setCurrentCropState(newCrop);
+    setDragCrop(newCrop);
   };
 
-  // Handle crop complete (create keyframe)
+  // Handle crop complete (create keyframe and clear drag state)
   const handleCropComplete = (cropData) => {
     addOrUpdateKeyframe(currentTime, cropData, duration);
+    setDragCrop(null); // Clear drag preview
   };
 
   // Handle keyframe click (seek to keyframe time)
@@ -93,25 +120,17 @@ function App() {
     removeKeyframe(time, duration);
   };
 
-  // Update current crop state when keyframes or time changes
-  useEffect(() => {
-    if (keyframes.length > 0) {
-      const interpolated = interpolateCrop(currentTime);
-      if (interpolated) {
-        setCurrentCropState(interpolated);
-      }
-    }
-  }, [currentTime, keyframes, interpolateCrop]);
-
-  // Initialize crop state when keyframes are first created
-  useEffect(() => {
-    if (keyframes.length > 0 && !currentCropState) {
-      const initialCrop = interpolateCrop(0);
-      if (initialCrop) {
-        setCurrentCropState(initialCrop);
-      }
-    }
-  }, [keyframes, currentCropState, interpolateCrop]);
+  // Prepare crop context value
+  const cropContextValue = useMemo(() => ({
+    keyframes,
+    isEndKeyframeExplicit,
+    aspectRatio,
+    updateAspectRatio,
+    addOrUpdateKeyframe,
+    removeKeyframe,
+    interpolateCrop,
+    hasKeyframeAt,
+  }), [keyframes, isEndKeyframeExplicit, aspectRatio, updateAspectRatio, addOrUpdateKeyframe, removeKeyframe, interpolateCrop, hasKeyframeAt]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -203,16 +222,17 @@ function App() {
           {/* Timeline */}
           {videoUrl && (
             <div className="mt-6">
-              <Timeline
-                currentTime={currentTime}
-                duration={duration}
-                onSeek={seek}
-                cropKeyframes={keyframes}
-                isCropActive={true}
-                isEndKeyframeExplicit={isEndKeyframeExplicit}
-                onCropKeyframeClick={handleKeyframeClick}
-                onCropKeyframeDelete={handleKeyframeDelete}
-              />
+              <CropProvider value={cropContextValue}>
+                <Timeline
+                  currentTime={currentTime}
+                  duration={duration}
+                  onSeek={seek}
+                  cropKeyframes={keyframes}
+                  isCropActive={true}
+                  onCropKeyframeClick={handleKeyframeClick}
+                  onCropKeyframeDelete={handleKeyframeDelete}
+                />
+              </CropProvider>
             </div>
           )}
 

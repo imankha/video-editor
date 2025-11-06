@@ -270,7 +270,14 @@ export default function CropOverlay({
   const handleMouseUp = useCallback(() => {
     if (isDragging || isResizing) {
       // Notify parent that crop change is complete (create keyframe)
-      onCropComplete(currentCrop);
+      // IMPORTANT: Only emit spatial properties (x, y, width, height)
+      // Do NOT include 'time' - that's managed at the App level
+      onCropComplete({
+        x: currentCrop.x,
+        y: currentCrop.y,
+        width: currentCrop.width,
+        height: currentCrop.height
+      });
     }
 
     setIsDragging(false);
