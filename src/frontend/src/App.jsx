@@ -81,6 +81,7 @@ function App() {
             videoRef={videoRef}
             videoUrl={videoUrl}
             handlers={handlers}
+            onFileSelect={handleFileSelect}
           />
 
           {/* Timeline */}
