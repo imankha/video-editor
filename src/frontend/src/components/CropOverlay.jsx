@@ -35,7 +35,7 @@ export default function CropOverlay({
       const rect = video.getBoundingClientRect();
 
       // The video element's natural dimensions
-      const videoAspect = videoMetadata.videoWidth / videoMetadata.videoHeight;
+      const videoAspect = videoMetadata.width / videoMetadata.height;
 
       // Get the container (parent of video)
       const container = video.closest('.video-container');
@@ -75,8 +75,8 @@ export default function CropOverlay({
         top: videoTop,
         width: displayWidth,
         height: displayHeight,
-        scaleX: displayWidth / videoMetadata.videoWidth,
-        scaleY: displayHeight / videoMetadata.videoHeight,
+        scaleX: displayWidth / videoMetadata.width,
+        scaleY: displayHeight / videoMetadata.height,
         zoom: zoom,
         panOffset: panOffset
       });
@@ -120,8 +120,8 @@ export default function CropOverlay({
    * Constrain crop rectangle to video bounds
    */
   const constrainCrop = useCallback((crop) => {
-    const maxWidth = videoMetadata.videoWidth;
-    const maxHeight = videoMetadata.videoHeight;
+    const maxWidth = videoMetadata.width;
+    const maxHeight = videoMetadata.height;
 
     return {
       x: Math.max(0, Math.min(crop.x, maxWidth - crop.width)),

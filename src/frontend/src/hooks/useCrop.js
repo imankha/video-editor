@@ -50,10 +50,10 @@ export default function useCrop(videoMetadata) {
    * Auto-initialize keyframes when metadata loads
    */
   useEffect(() => {
-    if (videoMetadata?.videoWidth && videoMetadata?.videoHeight && keyframes.length === 0) {
+    if (videoMetadata?.width && videoMetadata?.height && keyframes.length === 0) {
       const defaultCrop = calculateDefaultCrop(
-        videoMetadata.videoWidth,
-        videoMetadata.videoHeight,
+        videoMetadata.width,
+        videoMetadata.height,
         aspectRatio
       );
 
@@ -73,11 +73,11 @@ export default function useCrop(videoMetadata) {
     setAspectRatio(newRatio);
 
     // Recalculate all keyframes with new aspect ratio
-    if (keyframes.length > 0 && videoMetadata?.videoWidth && videoMetadata?.videoHeight) {
+    if (keyframes.length > 0 && videoMetadata?.width && videoMetadata?.height) {
       const updatedKeyframes = keyframes.map(kf => {
         const newCrop = calculateDefaultCrop(
-          videoMetadata.videoWidth,
-          videoMetadata.videoHeight,
+          videoMetadata.width,
+          videoMetadata.height,
           newRatio
         );
         return {

@@ -38,7 +38,6 @@ export function VideoPlayer({
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
-  const [isFocused, setIsFocused] = useState(false);
   const containerRef = useRef(null);
 
   // Setup wheel event listener with passive: false to allow preventDefault
@@ -47,13 +46,12 @@ export function VideoPlayer({
     if (!container) return;
 
     const wheelHandler = (e) => {
-      // Only zoom if player is focused and video is loaded
-      if (!videoUrl || !onZoomChange || !isFocused) {
-        // Not focused - let browser handle scrolling
+      // Only zoom if video is loaded and mouse is over the container
+      if (!videoUrl || !onZoomChange) {
         return;
       }
 
-      // Focused - prevent all default behavior and stop propagation
+      // Prevent default scrolling behavior
       e.preventDefault();
       e.stopPropagation();
 
@@ -68,7 +66,7 @@ export function VideoPlayer({
     return () => {
       container.removeEventListener('wheel', wheelHandler);
     };
-  }, [videoUrl, onZoomChange, isFocused]);
+  }, [videoUrl, onZoomChange]);
 
   const handleDragEnter = (e) => {
     e.preventDefault();
@@ -106,16 +104,16 @@ export function VideoPlayer({
    * Handle mouse down for panning
    */
   const handleMouseDown = useCallback((e) => {
-    // Only pan if zoomed and not clicking on crop overlay
-    if (zoom === 1 || showCropOverlay) return;
+    // Only pan if zoomed
+    if (zoom === 1) return;
 
-    // Check if clicking on video (not controls)
+    // Check if clicking on video (not controls or crop handles)
     if (e.target.tagName === 'VIDEO' || e.target.closest('.video-container')) {
       e.preventDefault();
       setIsPanning(true);
       setPanStart({ x: e.clientX, y: e.clientY });
     }
-  }, [zoom, showCropOverlay]);
+  }, [zoom]);
 
   /**
    * Handle mouse move for panning
@@ -153,21 +151,13 @@ export function VideoPlayer({
   return (
     <div
       ref={containerRef}
-      tabIndex={0}
-      className={`video-player-container bg-black rounded-lg overflow-hidden min-h-[60vh] relative outline-none transition-shadow ${
-        isFocused ? 'ring-4 ring-blue-500/50' : ''
-      }`}
+      className="video-player-container bg-black rounded-lg overflow-hidden min-h-[60vh] relative outline-none"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      onMouseDown={(e) => {
-        handleMouseDown(e);
-        containerRef.current?.focus();
-      }}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      style={{ cursor: isPanning ? 'grabbing' : (zoom > 1 && !showCropOverlay ? 'grab' : 'default') }}
+      onMouseDown={handleMouseDown}
+      style={{ cursor: isPanning ? 'grabbing' : (zoom > 1 ? 'grab' : 'default') }}
     >
       {videoUrl ? (
         <div className="relative video-container h-[60vh] overflow-hidden">
