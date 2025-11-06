@@ -120,16 +120,21 @@ export default function CropOverlay({
   }, [videoDisplayRect]);
 
   /**
+   * Round to 3 decimal places for precision
+   */
+  const round3 = (value) => Math.round(value * 1000) / 1000;
+
+  /**
    * Convert screen coordinates (relative to container) to video coordinates
    */
   const screenToVideo = useCallback((x, y, width, height) => {
     if (!videoDisplayRect) return { x: 0, y: 0, width: 0, height: 0 };
 
     return {
-      x: Math.round((x - videoDisplayRect.offsetX) / videoDisplayRect.scaleX),
-      y: Math.round((y - videoDisplayRect.offsetY) / videoDisplayRect.scaleY),
-      width: Math.round(width / videoDisplayRect.scaleX),
-      height: Math.round(height / videoDisplayRect.scaleY)
+      x: round3((x - videoDisplayRect.offsetX) / videoDisplayRect.scaleX),
+      y: round3((y - videoDisplayRect.offsetY) / videoDisplayRect.scaleY),
+      width: round3(width / videoDisplayRect.scaleX),
+      height: round3(height / videoDisplayRect.scaleY)
     };
   }, [videoDisplayRect]);
 
@@ -141,10 +146,10 @@ export default function CropOverlay({
     const maxHeight = videoMetadata.height;
 
     return {
-      x: Math.max(0, Math.min(crop.x, maxWidth - crop.width)),
-      y: Math.max(0, Math.min(crop.y, maxHeight - crop.height)),
-      width: Math.max(10, Math.min(crop.width, maxWidth)),
-      height: Math.max(10, Math.min(crop.height, maxHeight))
+      x: round3(Math.max(0, Math.min(crop.x, maxWidth - crop.width))),
+      y: round3(Math.max(0, Math.min(crop.y, maxHeight - crop.height))),
+      width: round3(Math.max(10, Math.min(crop.width, maxWidth))),
+      height: round3(Math.max(10, Math.min(crop.height, maxHeight)))
     };
   }, [videoMetadata]);
 
@@ -153,7 +158,7 @@ export default function CropOverlay({
    */
   const applyAspectRatio = useCallback((width, height, handle) => {
     if (aspectRatio === 'free') {
-      return { width, height };
+      return { width: round3(width), height: round3(height) };
     }
 
     const [ratioW, ratioH] = aspectRatio.split(':').map(Number);
@@ -176,7 +181,7 @@ export default function CropOverlay({
       }
     }
 
-    return { width, height };
+    return { width: round3(width), height: round3(height) };
   }, [aspectRatio]);
 
   /**
@@ -272,11 +277,12 @@ export default function CropOverlay({
       // Notify parent that crop change is complete (create keyframe)
       // IMPORTANT: Only emit spatial properties (x, y, width, height)
       // Do NOT include 'time' - that's managed at the App level
+      // Round to 3 decimal places to ensure sync with backend
       onCropComplete({
-        x: currentCrop.x,
-        y: currentCrop.y,
-        width: currentCrop.width,
-        height: currentCrop.height
+        x: round3(currentCrop.x),
+        y: round3(currentCrop.y),
+        width: round3(currentCrop.width),
+        height: round3(currentCrop.height)
       });
     }
 

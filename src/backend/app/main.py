@@ -121,10 +121,10 @@ async def get_status():
 # Crop Export Models
 class CropKeyframe(BaseModel):
     time: float
-    x: int
-    y: int
-    width: int
-    height: int
+    x: float
+    y: float
+    width: float
+    height: float
 
 
 class CropExportRequest(BaseModel):
