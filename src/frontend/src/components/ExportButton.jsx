@@ -21,6 +21,7 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
   const [error, setError] = useState(null);
   const pollIntervalRef = useRef(null);
   const exportIdRef = useRef(null);
+  const uploadCompleteRef = useRef(false);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -46,6 +47,9 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
         const response = await axios.get(`http://localhost:8000/api/export/progress/${exportId}`);
         const data = response.data;
 
+        console.log('[ExportButton] Polling update:', data);
+
+        // Always update from polling - this takes precedence over upload progress
         setProgress(Math.round(data.progress));
         setProgressMessage(data.message || '');
 
@@ -76,6 +80,7 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
     setProgress(0);
     setProgressMessage('Uploading...');
     setError(null);
+    uploadCompleteRef.current = false;
 
     // Generate unique export ID
     const exportId = generateExportId();
@@ -95,7 +100,7 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
       // Start polling for progress updates
       startProgressPolling(exportId);
 
-      // Send export request (no progress callbacks needed, polling handles it)
+      // Send export request
       const response = await axios.post(
         endpoint,
         formData,
@@ -105,12 +110,19 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
           },
           responseType: 'blob',
           onUploadProgress: (progressEvent) => {
-            // Only update progress if still in upload phase (not being polled yet)
-            const uploadPercent = Math.round(
-              (progressEvent.loaded * 5) / progressEvent.total
-            );
-            setProgress(uploadPercent);
-            setProgressMessage('Uploading video...');
+            // Only update during upload phase, don't override polling updates
+            if (!uploadCompleteRef.current) {
+              const uploadPercent = Math.round(
+                (progressEvent.loaded * 5) / progressEvent.total
+              );
+              setProgress(uploadPercent);
+              setProgressMessage('Uploading video...');
+
+              // Mark upload as complete when done
+              if (progressEvent.loaded === progressEvent.total) {
+                uploadCompleteRef.current = true;
+              }
+            }
           }
         }
       );
