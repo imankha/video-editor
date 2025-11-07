@@ -14,12 +14,26 @@ from pathlib import Path
 from typing import List, Dict, Any
 import logging
 
-# Import AI upscaler
-from app.ai_upscaler import AIVideoUpscaler
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# AI upscaler will be imported on-demand to avoid import errors
+# if dependencies aren't installed
+AIVideoUpscaler = None
+try:
+    from app.ai_upscaler import AIVideoUpscaler as _AIVideoUpscaler
+    AIVideoUpscaler = _AIVideoUpscaler
+    logger.info("AI upscaler module loaded successfully")
+except ImportError as e:
+    logger.warning("=" * 80)
+    logger.warning("AI upscaler dependencies not installed")
+    logger.warning("The /api/export/upscale endpoint will not work")
+    logger.warning("To enable AI upscaling, install dependencies:")
+    logger.warning("  cd src/backend")
+    logger.warning("  pip install -r requirements.txt")
+    logger.warning("=" * 80)
+    AIVideoUpscaler = None
 
 # Environment detection
 ENV = os.getenv("ENV", "development")  # "development" or "production"
@@ -459,6 +473,25 @@ async def export_with_ai_upscale(
             }
             for kf in keyframes
         ]
+
+        # Check if AI upscaler is available
+        if AIVideoUpscaler is None:
+            logger.error("=" * 80)
+            logger.error("❌ AI upscaling not available - dependencies not installed")
+            logger.error("=" * 80)
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "AI upscaling dependencies not installed",
+                    "message": "To enable AI upscaling, install the required dependencies:",
+                    "instructions": [
+                        "cd src/backend",
+                        "pip install -r requirements.txt",
+                        "# Restart the backend"
+                    ],
+                    "see_also": "INSTALL_AI_DEPENDENCIES.md for detailed instructions"
+                }
+            )
 
         # Initialize AI upscaler
         logger.info("=" * 80)
