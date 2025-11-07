@@ -7,3 +7,13 @@ pydantic==2.5.0           # Data validation
 # Video Processing Dependencies
 ffmpeg-python==0.2.0      # FFmpeg Python bindings
 aiofiles==23.2.1          # Async file operations
+
+# AI Upscaling Dependencies
+torch>=2.0.0              # PyTorch for deep learning
+torchvision>=0.15.0       # Computer vision utilities
+opencv-python>=4.8.0      # OpenCV for image/video processing
+numpy>=1.24.0             # Numerical computing
+basicsr>=1.4.2            # Basic SR (Super Resolution) framework
+realesrgan>=0.3.0         # Real-ESRGAN AI upscaling model
+wget>=3.2                 # Download model weights
+tqdm>=4.65.0              # Progress bars

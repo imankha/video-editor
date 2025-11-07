@@ -60,11 +60,19 @@ export function useVideo() {
   };
 
   /**
-   * Play video
+   * Play video - handles promise to prevent race conditions
    */
-  const play = () => {
+  const play = async () => {
     if (videoRef.current && videoUrl) {
-      videoRef.current.play();
+      try {
+        // video.play() returns a promise - must handle it
+        await videoRef.current.play();
+      } catch (error) {
+        // Ignore AbortError - happens when play() is interrupted by pause()
+        if (error.name !== 'AbortError') {
+          console.error('Video play error:', error);
+        }
+      }
     }
   };
 
@@ -78,13 +86,13 @@ export function useVideo() {
   };
 
   /**
-   * Toggle play/pause
+   * Toggle play/pause - async to handle play() promise
    */
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (isPlaying) {
       pause();
     } else {
-      play();
+      await play();
     }
   };
 
