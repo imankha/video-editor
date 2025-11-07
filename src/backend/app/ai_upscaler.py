@@ -110,20 +110,28 @@ class AIVideoUpscaler:
         """
         ratio = width / height
 
+        logger.info(f"Input dimensions: {width}x{height}, ratio: {ratio:.3f}")
+
         # 16:9 (horizontal) - target 4K (3840x2160)
         if 1.7 <= ratio <= 1.8:  # 16/9 ≈ 1.778
+            logger.info(f"✓ Detected 16:9 aspect ratio → Target: 4K (3840x2160)")
             return ('16:9', (3840, 2160))
 
         # 9:16 (vertical) - target 1080x1920
         elif 0.55 <= ratio <= 0.6:  # 9/16 ≈ 0.5625
+            logger.info(f"✓ Detected 9:16 aspect ratio → Target: 1080x1920 (vertical)")
             return ('9:16', (1080, 1920))
 
         # Other ratios - upscale proportionally to closest standard
         else:
-            if ratio > 1:  # Wider than tall - use 4K
-                return ('other', (3840, int(3840 / ratio)))
+            if ratio > 1:  # Wider than tall - use 4K width
+                target = (3840, int(3840 / ratio))
+                logger.info(f"✓ Custom wide ratio → Target: {target[0]}x{target[1]}")
+                return ('other', target)
             else:  # Taller than wide - use 1080 width
-                return ('other', (1080, int(1080 / ratio)))
+                target = (1080, int(1080 / ratio))
+                logger.info(f"✓ Custom tall ratio → Target: {target[0]}x{target[1]}")
+                return ('other', target)
 
     def enhance_frame_opencv(self, frame: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
         """
@@ -171,22 +179,33 @@ class AIVideoUpscaler:
             Enhanced frame at target size
         """
         if self.upsampler is not None:
-            # Calculate required scale factor
-            current_h, current_w = frame.shape[:2]
-            target_w, target_h = target_size
+            try:
+                # Calculate required scale factor
+                current_h, current_w = frame.shape[:2]
+                target_w, target_h = target_size
 
-            # Real-ESRGAN upscales by 4x by default
-            # We'll upscale first, then resize to exact target
-            with contextlib.redirect_stderr(open(os.devnull, 'w')):
-                # Upscale with AI (4x)
-                enhanced, _ = self.upsampler.enhance(frame, outscale=4)
+                logger.debug(f"Upscaling frame from {current_w}x{current_h} to {target_w}x{target_h}")
 
-            # Resize to exact target size if needed
-            if enhanced.shape[:2] != (target_h, target_w):
-                enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
+                # Real-ESRGAN upscales by 4x by default
+                # We'll upscale first, then resize to exact target
+                with contextlib.redirect_stderr(open(os.devnull, 'w')):
+                    # Upscale with AI (4x)
+                    enhanced, _ = self.upsampler.enhance(frame, outscale=4)
 
-            return enhanced
+                upscaled_h, upscaled_w = enhanced.shape[:2]
+                logger.debug(f"Real-ESRGAN upscaled to {upscaled_w}x{upscaled_h}")
+
+                # Resize to exact target size if needed
+                if enhanced.shape[:2] != (target_h, target_w):
+                    enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
+                    logger.debug(f"Resized to exact target: {target_w}x{target_h}")
+
+                return enhanced
+            except Exception as e:
+                logger.error(f"Real-ESRGAN failed: {e}. Falling back to OpenCV.")
+                return self.enhance_frame_opencv(frame, target_size)
         else:
+            logger.warning("Real-ESRGAN not available, using OpenCV fallback")
             # Fallback to OpenCV
             return self.enhance_frame_opencv(frame, target_size)
 
@@ -321,15 +340,23 @@ class AIVideoUpscaler:
         # Sort keyframes by time
         keyframes_sorted = sorted(keyframes, key=lambda k: k['time'])
 
+        logger.info("=" * 60)
+        logger.info("KEYFRAME ANALYSIS")
+        logger.info("=" * 60)
+        logger.info(f"Total keyframes: {len(keyframes_sorted)}")
+        for i, kf in enumerate(keyframes_sorted):
+            logger.info(f"  Keyframe {i+1}: t={kf['time']:.2f}s, crop={int(kf['width'])}x{int(kf['height'])} at ({int(kf['x'])}, {int(kf['y'])})")
+
         # Determine target resolution from first frame
         # Get crop at time 0 to determine aspect ratio
+        logger.info("=" * 60)
+        logger.info("RESOLUTION DETECTION")
+        logger.info("=" * 60)
         initial_crop = self.interpolate_crop(keyframes_sorted, 0)
         aspect_type, target_resolution = self.detect_aspect_ratio(
             int(initial_crop['width']),
             int(initial_crop['height'])
         )
-
-        logger.info(f"Detected aspect ratio: {aspect_type}, target resolution: {target_resolution}")
 
         # Create temp directory for frames
         temp_dir = tempfile.mkdtemp(prefix='upscale_')
@@ -337,7 +364,29 @@ class AIVideoUpscaler:
         frames_dir.mkdir(exist_ok=True)
 
         try:
+            # Log AI model status
+            logger.info("=" * 60)
+            logger.info("PROCESSING PIPELINE")
+            logger.info("=" * 60)
+            if self.upsampler is not None:
+                logger.info(f"✓ Using Real-ESRGAN AI model for upscaling")
+            else:
+                logger.warning(f"⚠ Real-ESRGAN not available - using OpenCV fallback (quality will be lower)")
+
+            # Test interpolation smoothness (log a few sample points)
+            logger.info("=" * 60)
+            logger.info("INTERPOLATION TEST (sample frames)")
+            logger.info("=" * 60)
+            test_frames = [0, int(total_frames * 0.25), int(total_frames * 0.5), int(total_frames * 0.75), total_frames - 1]
+            for test_idx in test_frames:
+                test_time = test_idx / original_fps
+                test_crop = self.interpolate_crop(keyframes_sorted, test_time)
+                logger.info(f"  Frame {test_idx} @ {test_time:.2f}s: crop={int(test_crop['width'])}x{int(test_crop['height'])} at ({int(test_crop['x'])}, {int(test_crop['y'])})")
+
             # Process each frame
+            logger.info("=" * 60)
+            logger.info("STARTING FRAME-BY-FRAME PROCESSING")
+            logger.info("=" * 60)
             for frame_idx in range(total_frames):
                 # Calculate time for this frame
                 time = frame_idx / original_fps
@@ -345,11 +394,27 @@ class AIVideoUpscaler:
                 # Get crop for this time (de-zoom step)
                 crop = self.interpolate_crop(keyframes_sorted, time)
 
+                # Log crop info for first and key frames
+                if frame_idx == 0 or frame_idx % 30 == 0:
+                    logger.info(f"Frame {frame_idx} @ {time:.2f}s: crop={int(crop['width'])}x{int(crop['height'])} at ({int(crop['x'])}, {int(crop['y'])})")
+
                 # Extract and crop frame
                 frame = self.extract_frame_with_crop(input_path, frame_idx, crop)
 
+                # Verify frame was cropped
+                cropped_h, cropped_w = frame.shape[:2]
+                if frame_idx == 0:
+                    logger.info(f"✓ De-zoomed frame size: {cropped_w}x{cropped_h}")
+
                 # AI upscale to target resolution
                 enhanced = self.enhance_frame_ai(frame, target_resolution)
+
+                # Verify upscaling worked
+                final_h, final_w = enhanced.shape[:2]
+                if frame_idx == 0:
+                    logger.info(f"✓ Final upscaled size: {final_w}x{final_h}")
+                    if (final_w, final_h) != target_resolution:
+                        logger.error(f"⚠ Size mismatch! Expected {target_resolution}, got ({final_w}, {final_h})")
 
                 # Save enhanced frame
                 frame_path = frames_dir / f"frame_{frame_idx:06d}.png"

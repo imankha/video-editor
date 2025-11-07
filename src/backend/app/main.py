@@ -461,11 +461,23 @@ async def export_with_ai_upscale(
         ]
 
         # Initialize AI upscaler
-        logger.info("Initializing AI upscaler...")
+        logger.info("=" * 80)
+        logger.info("INITIALIZING AI UPSCALER")
+        logger.info("=" * 80)
         upscaler = AIVideoUpscaler(device='cuda')
 
+        # Verify AI model is loaded
+        if upscaler.upsampler is None:
+            logger.error("⚠️ WARNING: Real-ESRGAN AI model failed to load!")
+            logger.error("The export will use OpenCV fallback (lower quality)")
+            logger.error("Check that dependencies are installed: pip install realesrgan basicsr")
+        else:
+            logger.info("✓ Real-ESRGAN AI model loaded successfully")
+
         # Process video with AI upscaling
-        logger.info("Starting AI upscale process with de-zoom...")
+        logger.info("=" * 80)
+        logger.info("STARTING AI UPSCALE PROCESS WITH DE-ZOOM")
+        logger.info("=" * 80)
 
         def progress_callback(current, total, message):
             """Log progress updates"""
@@ -480,7 +492,12 @@ async def export_with_ai_upscale(
             progress_callback=progress_callback
         )
 
-        logger.info(f"AI upscaling complete! Result: {result}")
+        logger.info("=" * 80)
+        logger.info(f"✓ AI UPSCALING COMPLETE!")
+        logger.info(f"Result: {result}")
+        logger.info(f"Output: {output_path}")
+        logger.info(f"File size: {os.path.getsize(output_path) / (1024*1024):.2f} MB")
+        logger.info("=" * 80)
 
         # Return the upscaled video file
         return FileResponse(
