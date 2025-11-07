@@ -5,7 +5,7 @@ import { useState, useCallback, useEffect } from 'react';
  * Crop tool is ALWAYS active when video is loaded
  */
 export default function useCrop(videoMetadata) {
-  const [aspectRatio, setAspectRatio] = useState('16:9'); // '16:9', '9:16'
+  const [aspectRatio, setAspectRatio] = useState('9:16'); // '16:9', '9:16'
   const [keyframes, setKeyframes] = useState([]);
   const [isEndKeyframeExplicit, setIsEndKeyframeExplicit] = useState(false);
 
