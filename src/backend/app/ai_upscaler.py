@@ -92,7 +92,26 @@ class AIVideoUpscaler:
             logger.info("Real-ESRGAN model loaded successfully!")
 
         except ImportError as e:
-            logger.warning(f"Real-ESRGAN not available: {e}. Using fallback OpenCV method.")
+            logger.error("=" * 80)
+            logger.error("❌ CRITICAL: Real-ESRGAN AI model failed to load!")
+            logger.error("=" * 80)
+            logger.error(f"Import error: {e}")
+            logger.error("")
+            logger.error("This means the AI upscaling will NOT work - only basic interpolation!")
+            logger.error("")
+            logger.error("To fix, install the dependencies:")
+            logger.error("  cd src/backend")
+            logger.error("  pip install torch torchvision")
+            logger.error("  pip install basicsr realesrgan")
+            logger.error("  # Then restart the backend")
+            logger.error("=" * 80)
+            self.upsampler = None
+        except Exception as e:
+            logger.error("=" * 80)
+            logger.error("❌ CRITICAL: Real-ESRGAN setup failed!")
+            logger.error("=" * 80)
+            logger.error(f"Error: {e}")
+            logger.error("=" * 80)
             self.upsampler = None
 
     def detect_aspect_ratio(self, width: int, height: int) -> Tuple[str, Tuple[int, int]]:
