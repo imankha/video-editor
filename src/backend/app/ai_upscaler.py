@@ -40,8 +40,19 @@ class AIVideoUpscaler:
             model_name: Model to use for upscaling
             device: 'cuda' for GPU or 'cpu' for CPU processing
         """
-        self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
-        logger.info(f"Using device: {self.device}")
+        # Detect available device
+        if device == 'cuda' and torch.cuda.is_available():
+            self.device = torch.device('cuda')
+            logger.info(f"Using device: cuda")
+            logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+            logger.info(f"CUDA version: {torch.version.cuda}")
+        else:
+            self.device = torch.device('cpu')
+            if device == 'cuda':
+                logger.warning("CUDA requested but not available. Falling back to CPU.")
+                logger.warning("For GPU acceleration, install PyTorch with CUDA support:")
+                logger.warning("  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118")
+            logger.info(f"Using device: cpu")
 
         self.model_name = model_name
         self.upsampler = None
@@ -52,6 +63,8 @@ class AIVideoUpscaler:
         try:
             from basicsr.archs.rrdbnet_arch import RRDBNet
             from realesrgan import RealESRGANer
+
+            logger.info(f"Initializing Real-ESRGAN model: {self.model_name}")
 
             # Model configuration
             if self.model_name == 'RealESRGAN_x4plus':
@@ -70,48 +83,85 @@ class AIVideoUpscaler:
             # Download weights if not present
             if not os.path.exists(model_path):
                 os.makedirs('weights', exist_ok=True)
-                logger.info("Downloading Real-ESRGAN weights...")
+                logger.info("Downloading Real-ESRGAN weights (this may take a few minutes)...")
                 import wget
                 wget.download(
                     'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth',
                     out='weights/'
                 )
+                logger.info("\nWeights downloaded successfully!")
 
-            # Initialize upsampler with tiling for memory efficiency
+            # Initialize upsampler optimized for maximum quality
+            logger.info(f"Loading model weights from {model_path}...")
+
+            # Determine optimal tile size based on device
+            # Larger tiles = better quality (fewer seams) but more VRAM
+            if self.device.type == 'cuda':
+                tile_size = 0  # 0 = no tiling (highest quality, requires more VRAM)
+                tile_pad = 0
+                logger.info("GPU detected: Using full-frame processing for maximum quality")
+            else:
+                tile_size = 512  # Tiling for CPU to manage memory
+                tile_pad = 10
+                logger.info("CPU mode: Using tiled processing")
+
             self.upsampler = RealESRGANer(
                 scale=4,
                 model_path=model_path,
                 dni_weight=None,
                 model=model,
-                tile=512,  # Process in 512x512 tiles to save GPU memory
-                tile_pad=10,
+                tile=tile_size,
+                tile_pad=tile_pad,
                 pre_pad=0,
-                half=True if self.device.type == 'cuda' else False,
+                half=True if self.device.type == 'cuda' else False,  # FP16 for speed on GPU
                 device=self.device
             )
-            logger.info("Real-ESRGAN model loaded successfully!")
+            logger.info("✓ Real-ESRGAN model loaded successfully!")
+            logger.info(f"Quality settings: tile_size={tile_size} (0=no tiling, best quality)")
 
         except ImportError as e:
             logger.error("=" * 80)
-            logger.error("❌ CRITICAL: Real-ESRGAN AI model failed to load!")
+            logger.error("❌ CRITICAL: Real-ESRGAN dependencies not installed!")
             logger.error("=" * 80)
             logger.error(f"Import error: {e}")
             logger.error("")
-            logger.error("This means the AI upscaling will NOT work - only basic interpolation!")
+            logger.error("The AI upscaling will NOT work - only OpenCV fallback will be used!")
             logger.error("")
             logger.error("To fix, install the dependencies:")
             logger.error("  cd src/backend")
-            logger.error("  pip install torch torchvision")
-            logger.error("  pip install basicsr realesrgan")
+            logger.error("  pip install -r requirements.txt")
             logger.error("  # Then restart the backend")
+            logger.error("")
+            logger.error("For GPU support, also install:")
+            logger.error("  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118")
             logger.error("=" * 80)
             self.upsampler = None
         except Exception as e:
+            error_msg = str(e).lower()
             logger.error("=" * 80)
             logger.error("❌ CRITICAL: Real-ESRGAN setup failed!")
             logger.error("=" * 80)
-            logger.error(f"Error: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {e}")
+            logger.error("")
+
+            # Check for specific known issues
+            if "numpy" in error_msg or "array" in error_msg:
+                logger.error("⚠ This looks like a NumPy version compatibility issue!")
+                logger.error("NumPy 2.x is not compatible with many AI packages.")
+                logger.error("")
+                logger.error("Solution:")
+                logger.error("  pip install 'numpy<2.0.0' --force-reinstall")
+                logger.error("  # Then restart the backend")
+            else:
+                logger.error("Possible causes:")
+                logger.error("  1. Incompatible package versions (try: pip install -r requirements.txt --upgrade)")
+                logger.error("  2. Missing model weights (check 'weights/' directory)")
+                logger.error("  3. Insufficient memory (try reducing tile size)")
+
             logger.error("=" * 80)
+            import traceback
+            logger.error(traceback.format_exc())
             self.upsampler = None
 
     def detect_aspect_ratio(self, width: int, height: int) -> Tuple[str, Tuple[int, int]]:
@@ -188,7 +238,7 @@ class AIVideoUpscaler:
 
     def enhance_frame_ai(self, frame: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
         """
-        Enhance a single frame using AI model
+        Enhance a single frame using Real-ESRGAN AI model (maximum quality)
 
         Args:
             frame: Input frame (BGR format)
@@ -196,37 +246,42 @@ class AIVideoUpscaler:
 
         Returns:
             Enhanced frame at target size
+
+        Raises:
+            RuntimeError: If Real-ESRGAN is not available
         """
-        if self.upsampler is not None:
-            try:
-                # Calculate required scale factor
-                current_h, current_w = frame.shape[:2]
-                target_w, target_h = target_size
+        if self.upsampler is None:
+            raise RuntimeError(
+                "Real-ESRGAN model not initialized. "
+                "AI upscaling requires proper model initialization. "
+                "Check server logs for setup errors."
+            )
 
-                logger.debug(f"Upscaling frame from {current_w}x{current_h} to {target_w}x{target_h}")
+        try:
+            # Calculate required scale factor
+            current_h, current_w = frame.shape[:2]
+            target_w, target_h = target_size
 
-                # Real-ESRGAN upscales by 4x by default
-                # We'll upscale first, then resize to exact target
-                with contextlib.redirect_stderr(open(os.devnull, 'w')):
-                    # Upscale with AI (4x)
-                    enhanced, _ = self.upsampler.enhance(frame, outscale=4)
+            logger.debug(f"AI upscaling frame from {current_w}x{current_h} to {target_w}x{target_h}")
 
-                upscaled_h, upscaled_w = enhanced.shape[:2]
-                logger.debug(f"Real-ESRGAN upscaled to {upscaled_w}x{upscaled_h}")
+            # Real-ESRGAN upscales by 4x by default
+            # We'll upscale first, then resize to exact target if needed
+            with contextlib.redirect_stderr(open(os.devnull, 'w')):
+                # Upscale with AI (4x) - maximum quality
+                enhanced, _ = self.upsampler.enhance(frame, outscale=4)
 
-                # Resize to exact target size if needed
-                if enhanced.shape[:2] != (target_h, target_w):
-                    enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
-                    logger.debug(f"Resized to exact target: {target_w}x{target_h}")
+            upscaled_h, upscaled_w = enhanced.shape[:2]
+            logger.debug(f"Real-ESRGAN upscaled to {upscaled_w}x{upscaled_h}")
 
-                return enhanced
-            except Exception as e:
-                logger.error(f"Real-ESRGAN failed: {e}. Falling back to OpenCV.")
-                return self.enhance_frame_opencv(frame, target_size)
-        else:
-            logger.warning("Real-ESRGAN not available, using OpenCV fallback")
-            # Fallback to OpenCV
-            return self.enhance_frame_opencv(frame, target_size)
+            # Resize to exact target size if needed (using highest quality interpolation)
+            if enhanced.shape[:2] != (target_h, target_w):
+                enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
+                logger.debug(f"Resized to exact target: {target_w}x{target_h}")
+
+            return enhanced
+        except Exception as e:
+            logger.error(f"Real-ESRGAN processing failed: {e}")
+            raise RuntimeError(f"AI upscaling failed: {e}")
 
     def extract_frame_with_crop(
         self,
@@ -383,14 +438,16 @@ class AIVideoUpscaler:
         frames_dir.mkdir(exist_ok=True)
 
         try:
-            # Log AI model status
+            # Verify AI model is ready (should have been checked earlier, but double-check)
+            if self.upsampler is None:
+                raise RuntimeError("Real-ESRGAN model not initialized - cannot proceed with AI upscaling")
+
             logger.info("=" * 60)
-            logger.info("PROCESSING PIPELINE")
+            logger.info("PROCESSING PIPELINE - MAXIMUM QUALITY MODE")
             logger.info("=" * 60)
-            if self.upsampler is not None:
-                logger.info(f"✓ Using Real-ESRGAN AI model for upscaling")
-            else:
-                logger.warning(f"⚠ Real-ESRGAN not available - using OpenCV fallback (quality will be lower)")
+            logger.info(f"✓ Real-ESRGAN AI model active")
+            logger.info(f"✓ Device: {self.device}")
+            logger.info(f"✓ Target resolution: {target_resolution[0]}x{target_resolution[1]}")
 
             # Test interpolation smoothness (log a few sample points)
             logger.info("=" * 60)

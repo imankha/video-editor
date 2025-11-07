@@ -1,3 +1,9 @@
+# PyTorch with CUDA 11.8 support (install FIRST before other dependencies)
+# Using extra index URL for CUDA wheels - avoids pulling in torchaudio
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch>=2.0.0,<2.5.0
+torchvision>=0.15.0,<0.20.0
+
 # Core Framework
 fastapi==0.108.0          # Modern Python web framework
 uvicorn[standard]==0.25.0 # ASGI server with hot reload
@@ -9,11 +15,13 @@ ffmpeg-python==0.2.0      # FFmpeg Python bindings
 aiofiles==23.2.1          # Async file operations
 
 # AI Upscaling Dependencies
-torch>=2.0.0              # PyTorch for deep learning
-torchvision>=0.15.0       # Computer vision utilities
-opencv-python>=4.8.0      # OpenCV for image/video processing
-numpy>=1.24.0             # Numerical computing
-basicsr>=1.4.2            # Basic SR (Super Resolution) framework
-realesrgan>=0.3.0         # Real-ESRGAN AI upscaling model
+# Version compatibility is critical: numpy 1.x is required by PyTorch/Real-ESRGAN
+numpy>=1.24.0,<2.0.0      # Numerical computing (MUST be 1.x for PyTorch compatibility)
+opencv-python>=4.8.0,<4.10.0  # OpenCV (pinned to 4.8-4.9 for numpy 1.x compatibility)
+pillow>=10.0.0            # Image processing library
+# Real-ESRGAN dependencies - install from source for latest compatibility fixes
+facexlib>=0.3.0           # Face detection and restoration (required by realesrgan)
+gfpgan>=1.3.8             # GAN for face restoration (required by realesrgan)
+git+https://github.com/XPixelGroup/BasicSR.git  # BasicSR from source (fixes torchvision compatibility)
+git+https://github.com/xinntao/Real-ESRGAN.git  # Real-ESRGAN AI upscaling (latest from source)
 wget>=3.2                 # Download model weights
-tqdm>=4.65.0              # Progress bars

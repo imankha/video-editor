@@ -14,12 +14,26 @@ from pathlib import Path
 from typing import List, Dict, Any
 import logging
 
-# Import AI upscaler
-from app.ai_upscaler import AIVideoUpscaler
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# AI upscaler will be imported on-demand to avoid import errors
+# if dependencies aren't installed
+AIVideoUpscaler = None
+try:
+    from app.ai_upscaler import AIVideoUpscaler as _AIVideoUpscaler
+    AIVideoUpscaler = _AIVideoUpscaler
+    logger.info("AI upscaler module loaded successfully")
+except ImportError as e:
+    logger.warning("=" * 80)
+    logger.warning("AI upscaler dependencies not installed")
+    logger.warning("The /api/export/upscale endpoint will not work")
+    logger.warning("To enable AI upscaling, install dependencies:")
+    logger.warning("  cd src/backend")
+    logger.warning("  pip install -r requirements.txt")
+    logger.warning("=" * 80)
+    AIVideoUpscaler = None
 
 # Environment detection
 ENV = os.getenv("ENV", "development")  # "development" or "production"
@@ -460,19 +474,55 @@ async def export_with_ai_upscale(
             for kf in keyframes
         ]
 
+        # Check if AI upscaler is available
+        if AIVideoUpscaler is None:
+            logger.error("=" * 80)
+            logger.error("❌ AI upscaling not available - dependencies not installed")
+            logger.error("=" * 80)
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "AI upscaling dependencies not installed",
+                    "message": "To enable AI upscaling, install the required dependencies:",
+                    "instructions": [
+                        "cd src/backend",
+                        "pip install -r requirements.txt",
+                        "# Restart the backend"
+                    ],
+                    "see_also": "INSTALL_AI_DEPENDENCIES.md for detailed instructions"
+                }
+            )
+
         # Initialize AI upscaler
         logger.info("=" * 80)
         logger.info("INITIALIZING AI UPSCALER")
         logger.info("=" * 80)
         upscaler = AIVideoUpscaler(device='cuda')
 
-        # Verify AI model is loaded
+        # Verify AI model is loaded - fail if not available (no low-quality fallback)
         if upscaler.upsampler is None:
-            logger.error("⚠️ WARNING: Real-ESRGAN AI model failed to load!")
-            logger.error("The export will use OpenCV fallback (lower quality)")
-            logger.error("Check that dependencies are installed: pip install realesrgan basicsr")
-        else:
-            logger.info("✓ Real-ESRGAN AI model loaded successfully")
+            logger.error("=" * 80)
+            logger.error("❌ CRITICAL: Real-ESRGAN AI model failed to load!")
+            logger.error("Cannot proceed with AI upscaling")
+            logger.error("=" * 80)
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "Real-ESRGAN model failed to load",
+                    "message": "AI upscaling requires Real-ESRGAN to be properly initialized.",
+                    "instructions": [
+                        "Check the server logs for detailed error messages",
+                        "Common fixes:",
+                        "  1. pip install 'numpy<2.0.0' --force-reinstall",
+                        "  2. pip install 'opencv-python>=4.8.0,<4.10.0' --force-reinstall",
+                        "  3. pip install -r requirements.txt",
+                        "  4. Restart the backend"
+                    ],
+                    "see_also": "INSTALL_AI_DEPENDENCIES.md"
+                }
+            )
+
+        logger.info("✓ Real-ESRGAN AI model loaded and ready for maximum quality upscaling")
 
         # Process video with AI upscaling
         logger.info("=" * 80)
