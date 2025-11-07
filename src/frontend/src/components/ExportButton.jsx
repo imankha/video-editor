@@ -4,12 +4,14 @@ import axios from 'axios';
 
 /**
  * ExportButton component - handles video export with crop applied
+ * Supports both standard crop export and AI upscaling with de-zoom
  * Automatically downloads the exported video
  */
 export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
+  const [useAIUpscale, setUseAIUpscale] = useState(false);
 
   const handleExport = async () => {
     if (!videoFile) {
@@ -32,9 +34,19 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
       formData.append('video', videoFile);
       formData.append('keyframes_json', JSON.stringify(cropKeyframes));
 
+      // Choose endpoint based on AI upscale option
+      const endpoint = useAIUpscale
+        ? 'http://localhost:8000/api/export/upscale'
+        : 'http://localhost:8000/api/export/crop';
+
+      // Add target_fps for AI upscale
+      if (useAIUpscale) {
+        formData.append('target_fps', '30');
+      }
+
       // Send export request
       const response = await axios.post(
-        'http://localhost:8000/api/export/crop',
+        endpoint,
         formData,
         {
           headers: {
@@ -61,7 +73,8 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `cropped_${videoFile.name || 'video.mp4'}`;
+      const prefix = useAIUpscale ? 'upscaled_' : 'cropped_';
+      link.download = `${prefix}${videoFile.name || 'video.mp4'}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -107,6 +120,25 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
 
   return (
     <div className="space-y-2">
+      {/* AI Upscale Option */}
+      <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={useAIUpscale}
+            onChange={(e) => setUseAIUpscale(e.target.checked)}
+            disabled={isExporting}
+            className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
+          />
+          <div className="flex-1">
+            <div className="text-sm font-medium text-white">AI Upscale Export</div>
+            <div className="text-xs text-gray-400">
+              De-zoom and upscale to 4K (16:9) or 1080x1920 (9:16)
+            </div>
+          </div>
+        </label>
+      </div>
+
       <button
         onClick={handleExport}
         disabled={disabled || isExporting || !videoFile}
@@ -119,12 +151,12 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
         {isExporting ? (
           <>
             <Loader className="animate-spin" size={18} />
-            Exporting... {progress}%
+            {useAIUpscale ? 'AI Upscaling...' : 'Exporting...'} {progress}%
           </>
         ) : (
           <>
             <Download size={18} />
-            {cropKeyframes?.length > 0 ? 'Export with Crop' : 'Export Video'}
+            {useAIUpscale ? 'Export with AI Upscale' : cropKeyframes?.length > 0 ? 'Export with Crop' : 'Export Video'}
           </>
         )}
       </button>

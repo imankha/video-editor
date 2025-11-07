@@ -12,6 +12,14 @@ import traceback
 import sys
 from pathlib import Path
 from typing import List, Dict, Any
+import logging
+
+# Import AI upscaler
+from app.ai_upscaler import AIVideoUpscaler
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Environment detection
 ENV = os.getenv("ENV", "development")  # "development" or "production"
@@ -391,6 +399,104 @@ async def export_crop(
         filename=f"cropped_{video.filename}",
         background=None  # Don't delete file immediately, let FileResponse handle it
     )
+
+
+@app.post("/api/export/upscale")
+async def export_with_ai_upscale(
+    video: UploadFile = File(...),
+    keyframes_json: str = Form(...),
+    target_fps: int = Form(30)
+):
+    """
+    Export video with AI upscaling and de-zoom
+
+    This endpoint:
+    1. Extracts frames with crop applied (de-zoom - removes digital zoom)
+    2. Detects aspect ratio and determines target resolution:
+       - 16:9 videos → 4K (3840x2160)
+       - 9:16 videos → 1080x1920
+    3. Upscales each frame using Real-ESRGAN AI model
+    4. Reassembles into final video
+
+    Args:
+        video: Video file to process
+        keyframes_json: JSON array of crop keyframes
+        target_fps: Output framerate (default 30)
+
+    Returns:
+        AI-upscaled video file
+    """
+    # Parse keyframes
+    try:
+        keyframes_data = json.loads(keyframes_json)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid keyframes JSON: {str(e)}")
+
+    keyframes = [CropKeyframe(**kf) for kf in keyframes_data]
+
+    if len(keyframes) == 0:
+        raise HTTPException(status_code=400, detail="No crop keyframes provided")
+
+    # Create temporary directory for processing
+    temp_dir = tempfile.mkdtemp()
+    input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex}{Path(video.filename).suffix}")
+    output_path = os.path.join(temp_dir, f"upscaled_{uuid.uuid4().hex}.mp4")
+
+    try:
+        # Save uploaded file
+        with open(input_path, 'wb') as f:
+            content = await video.read()
+            f.write(content)
+
+        # Convert keyframes to dict format
+        keyframes_dict = [
+            {
+                'time': kf.time,
+                'x': kf.x,
+                'y': kf.y,
+                'width': kf.width,
+                'height': kf.height
+            }
+            for kf in keyframes
+        ]
+
+        # Initialize AI upscaler
+        logger.info("Initializing AI upscaler...")
+        upscaler = AIVideoUpscaler(device='cuda')
+
+        # Process video with AI upscaling
+        logger.info("Starting AI upscale process with de-zoom...")
+
+        def progress_callback(current, total, message):
+            """Log progress updates"""
+            percent = (current / total) * 100
+            logger.info(f"Progress: {percent:.1f}% - {message}")
+
+        result = upscaler.process_video_with_upscale(
+            input_path=input_path,
+            output_path=output_path,
+            keyframes=keyframes_dict,
+            target_fps=target_fps,
+            progress_callback=progress_callback
+        )
+
+        logger.info(f"AI upscaling complete! Result: {result}")
+
+        # Return the upscaled video file
+        return FileResponse(
+            output_path,
+            media_type='video/mp4',
+            filename=f"upscaled_{video.filename}",
+            background=None
+        )
+
+    except Exception as e:
+        logger.error(f"AI upscaling failed: {str(e)}", exc_info=True)
+        # Clean up temp files on error
+        if os.path.exists(temp_dir):
+            import shutil
+            shutil.rmtree(temp_dir)
+        raise HTTPException(status_code=500, detail=f"AI upscaling failed: {str(e)}")
 
 
 if __name__ == "__main__":
