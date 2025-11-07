@@ -40,8 +40,19 @@ class AIVideoUpscaler:
             model_name: Model to use for upscaling
             device: 'cuda' for GPU or 'cpu' for CPU processing
         """
-        self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
-        logger.info(f"Using device: {self.device}")
+        # Detect available device
+        if device == 'cuda' and torch.cuda.is_available():
+            self.device = torch.device('cuda')
+            logger.info(f"Using device: cuda")
+            logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+            logger.info(f"CUDA version: {torch.version.cuda}")
+        else:
+            self.device = torch.device('cpu')
+            if device == 'cuda':
+                logger.warning("CUDA requested but not available. Falling back to CPU.")
+                logger.warning("For GPU acceleration, install PyTorch with CUDA support:")
+                logger.warning("  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118")
+            logger.info(f"Using device: cpu")
 
         self.model_name = model_name
         self.upsampler = None
@@ -52,6 +63,8 @@ class AIVideoUpscaler:
         try:
             from basicsr.archs.rrdbnet_arch import RRDBNet
             from realesrgan import RealESRGANer
+
+            logger.info(f"Initializing Real-ESRGAN model: {self.model_name}")
 
             # Model configuration
             if self.model_name == 'RealESRGAN_x4plus':
@@ -70,14 +83,16 @@ class AIVideoUpscaler:
             # Download weights if not present
             if not os.path.exists(model_path):
                 os.makedirs('weights', exist_ok=True)
-                logger.info("Downloading Real-ESRGAN weights...")
+                logger.info("Downloading Real-ESRGAN weights (this may take a few minutes)...")
                 import wget
                 wget.download(
                     'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth',
                     out='weights/'
                 )
+                logger.info("\nWeights downloaded successfully!")
 
             # Initialize upsampler with tiling for memory efficiency
+            logger.info(f"Loading model weights from {model_path}...")
             self.upsampler = RealESRGANer(
                 scale=4,
                 model_path=model_path,
@@ -89,29 +104,39 @@ class AIVideoUpscaler:
                 half=True if self.device.type == 'cuda' else False,
                 device=self.device
             )
-            logger.info("Real-ESRGAN model loaded successfully!")
+            logger.info("✓ Real-ESRGAN model loaded successfully!")
 
         except ImportError as e:
             logger.error("=" * 80)
-            logger.error("❌ CRITICAL: Real-ESRGAN AI model failed to load!")
+            logger.error("❌ CRITICAL: Real-ESRGAN dependencies not installed!")
             logger.error("=" * 80)
             logger.error(f"Import error: {e}")
             logger.error("")
-            logger.error("This means the AI upscaling will NOT work - only basic interpolation!")
+            logger.error("The AI upscaling will NOT work - only OpenCV fallback will be used!")
             logger.error("")
             logger.error("To fix, install the dependencies:")
             logger.error("  cd src/backend")
-            logger.error("  pip install torch torchvision")
-            logger.error("  pip install basicsr realesrgan")
+            logger.error("  pip install -r requirements.txt")
             logger.error("  # Then restart the backend")
+            logger.error("")
+            logger.error("For GPU support, also install:")
+            logger.error("  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118")
             logger.error("=" * 80)
             self.upsampler = None
         except Exception as e:
             logger.error("=" * 80)
             logger.error("❌ CRITICAL: Real-ESRGAN setup failed!")
             logger.error("=" * 80)
-            logger.error(f"Error: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {e}")
+            logger.error("")
+            logger.error("Possible causes:")
+            logger.error("  1. Incompatible package versions (try: pip install -r requirements.txt --upgrade)")
+            logger.error("  2. Missing model weights (check 'weights/' directory)")
+            logger.error("  3. Insufficient memory (try reducing tile size)")
             logger.error("=" * 80)
+            import traceback
+            logger.error(traceback.format_exc())
             self.upsampler = None
 
     def detect_aspect_ratio(self, width: int, height: int) -> Tuple[str, Tuple[int, int]]:
@@ -221,10 +246,14 @@ class AIVideoUpscaler:
 
                 return enhanced
             except Exception as e:
-                logger.error(f"Real-ESRGAN failed: {e}. Falling back to OpenCV.")
+                logger.error(f"Real-ESRGAN processing failed: {e}. Falling back to OpenCV.")
                 return self.enhance_frame_opencv(frame, target_size)
         else:
-            logger.warning("Real-ESRGAN not available, using OpenCV fallback")
+            # Only log this warning once at the start, not for every frame
+            if not hasattr(self, '_fallback_warning_shown'):
+                logger.warning("⚠ Real-ESRGAN not available - using OpenCV fallback (lower quality)")
+                logger.warning("Install dependencies to enable AI upscaling: pip install -r requirements.txt")
+                self._fallback_warning_shown = True
             # Fallback to OpenCV
             return self.enhance_frame_opencv(frame, target_size)
 

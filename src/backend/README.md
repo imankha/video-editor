@@ -105,6 +105,8 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+**Note:** For AI upscaling with GPU support, see [INSTALL_AI_DEPENDENCIES.md](INSTALL_AI_DEPENDENCIES.md) for detailed installation instructions.
+
 ### 3. Verify Installation
 
 ```bash
@@ -133,6 +135,13 @@ API documentation available at: `http://localhost:8000/docs`
 - `POST /api/export/crop` - Export video with crop applied
   - Form data: `video` (file), `keyframes_json` (string)
   - Returns: Cropped video file
+
+- `POST /api/export/upscale` - Export video with AI upscaling and de-zoom
+  - Form data: `video` (file), `keyframes_json` (string), `target_fps` (int, default: 30)
+  - Uses Real-ESRGAN AI model for high-quality upscaling
+  - Automatically detects aspect ratio and upscales to 4K (16:9) or 1080x1920 (9:16)
+  - Returns: AI-upscaled video file
+  - **Note:** Requires AI dependencies to be installed (see [INSTALL_AI_DEPENDENCIES.md](INSTALL_AI_DEPENDENCIES.md))
 
 ## Troubleshooting
 
@@ -184,6 +193,35 @@ If you see FFmpeg errors during export:
 1. Verify FFmpeg is installed: `ffmpeg -version`
 2. Make sure FFmpeg is in your PATH
 3. Restart your terminal/PowerShell after installing FFmpeg
+
+### AI Upscaling Issues
+
+**"Real-ESRGAN not available" warning:**
+
+This means the AI upscaling dependencies are not installed. The system will fall back to basic OpenCV upscaling (lower quality).
+
+**Solution:**
+```bash
+cd src/backend
+pip install -r requirements.txt
+```
+
+For detailed GPU setup and troubleshooting, see [INSTALL_AI_DEPENDENCIES.md](INSTALL_AI_DEPENDENCIES.md).
+
+**"Using device: cpu" when you have a GPU:**
+
+This means PyTorch doesn't detect your CUDA-enabled GPU.
+
+**Solution:**
+```bash
+# Check GPU is detected
+nvidia-smi
+
+# Reinstall PyTorch with CUDA support
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118 --force-reinstall
+```
+
+See [INSTALL_AI_DEPENDENCIES.md](INSTALL_AI_DEPENDENCIES.md) for detailed instructions.
 
 ### Port already in use
 
