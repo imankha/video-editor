@@ -10,16 +10,9 @@ This guide explains how to install the AI upscaling dependencies for the video e
 
 ## Quick Installation
 
-### Option 1: Install from requirements.txt (Recommended)
+**Important:** PyTorch must be installed separately with the correct CUDA version before installing other dependencies.
 
-```bash
-cd src/backend
-pip install -r requirements.txt
-```
-
-### Option 2: Manual Installation
-
-#### Step 1: Install PyTorch
+### Step 1: Install PyTorch with CUDA Support
 
 **For GPU (CUDA 11.8):**
 ```bash
@@ -36,13 +29,21 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 pip install torch torchvision
 ```
 
-#### Step 2: Install AI Upscaling Dependencies
+**Why install PyTorch separately?** Installing PyTorch from the CUDA-specific index prevents pip from auto-installing unnecessary dependencies like torchaudio, which isn't used by the video editor.
+
+### Step 2: Install Remaining Dependencies
 
 ```bash
-pip install opencv-python numpy pillow wget tqdm
-pip install facexlib gfpgan
-pip install git+https://github.com/xinntao/Real-ESRGAN.git
+cd src/backend
+pip install -r requirements.txt
 ```
+
+This will install:
+- NumPy (compatible version)
+- OpenCV
+- Pillow (image processing)
+- Real-ESRGAN and its dependencies (facexlib, gfpgan)
+- Other required packages
 
 ## Verifying Installation
 

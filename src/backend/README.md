@@ -97,15 +97,30 @@ source .venv/bin/activate
 
 ### 2. Install Dependencies
 
+**For AI upscaling (recommended):**
+
 ```bash
 # Upgrade pip
 python -m pip install --upgrade pip
 
-# Install requirements
+# Install PyTorch with CUDA support first (for GPU acceleration)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+
+# Then install other requirements
 pip install -r requirements.txt
 ```
 
-**Note:** For AI upscaling with GPU support, see [INSTALL_AI_DEPENDENCIES.md](INSTALL_AI_DEPENDENCIES.md) for detailed installation instructions.
+**For basic video editing only (no AI upscaling):**
+
+```bash
+# Upgrade pip
+python -m pip install --upgrade pip
+
+# Install only basic requirements
+pip install fastapi uvicorn python-multipart pydantic ffmpeg-python aiofiles
+```
+
+**Note:** For detailed AI setup, GPU troubleshooting, and other CUDA versions, see [INSTALL_AI_DEPENDENCIES.md](INSTALL_AI_DEPENDENCIES.md).
 
 ### 3. Verify Installation
 
