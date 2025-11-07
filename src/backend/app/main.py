@@ -599,9 +599,6 @@ async def export_with_ai_upscale(
         logger.info("STARTING AI UPSCALE PROCESS WITH DE-ZOOM")
         logger.info("=" * 80)
 
-        # Get the current event loop for sending WebSocket updates from sync context
-        loop = asyncio.get_event_loop()
-
         def progress_callback(current, total, message):
             """Update progress tracking, log, and send via WebSocket"""
             percent = (current / total) * 100
@@ -615,11 +612,16 @@ async def export_with_ai_upscale(
             export_progress[export_id] = progress_data
             logger.info(f"Progress: {percent:.1f}% - {message}")
 
-            # Send update via WebSocket from sync context
-            asyncio.run_coroutine_threadsafe(
-                manager.send_progress(export_id, progress_data),
-                loop
-            )
+            # Send update via WebSocket - create new task in background
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.run_coroutine_threadsafe(
+                        manager.send_progress(export_id, progress_data),
+                        loop
+                    )
+            except Exception as e:
+                logger.error(f"Failed to send WebSocket update: {e}")
 
         # Update progress - initializing
         init_data = {
@@ -630,7 +632,10 @@ async def export_with_ai_upscale(
         export_progress[export_id] = init_data
         await manager.send_progress(export_id, init_data)
 
-        result = upscaler.process_video_with_upscale(
+        # Run AI upscaling in a separate thread to not block the event loop
+        # This allows WebSocket messages to be sent while processing
+        result = await asyncio.to_thread(
+            upscaler.process_video_with_upscale,
             input_path=input_path,
             output_path=output_path,
             keyframes=keyframes_dict,
