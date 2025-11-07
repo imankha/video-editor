@@ -19,50 +19,57 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState(null);
-  const pollIntervalRef = useRef(null);
+  const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
 
-  // Cleanup polling on unmount
+  // Cleanup WebSocket on unmount
   useEffect(() => {
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
+      if (wsRef.current) {
+        wsRef.current.close();
       }
     };
   }, []);
 
   /**
-   * Poll the backend for export progress
+   * Connect to WebSocket for real-time progress updates
    */
-  const startProgressPolling = (exportId) => {
-    // Clear any existing polling
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
+  const connectWebSocket = (exportId) => {
+    // Close any existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
     }
 
-    // Poll every 500ms
-    pollIntervalRef.current = setInterval(async () => {
-      try {
-        const response = await axios.get(`http://localhost:8000/api/export/progress/${exportId}`);
-        const data = response.data;
+    const ws = new WebSocket(`ws://localhost:8000/ws/export/${exportId}`);
+    wsRef.current = ws;
 
-        console.log('[ExportButton] Polling update:', data);
+    ws.onopen = () => {
+      console.log('[ExportButton] WebSocket connected');
+    };
 
-        // Always update from polling - this takes precedence over upload progress
-        setProgress(Math.round(data.progress));
-        setProgressMessage(data.message || '');
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log('[ExportButton] Progress update:', data);
 
-        // Stop polling if complete or error
-        if (data.status === 'complete' || data.status === 'error') {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-      } catch (err) {
-        // If polling fails (e.g., 404), silently continue - the export might still be processing
-        console.warn('Progress polling error:', err.message);
+      // Update progress from WebSocket
+      setProgress(Math.round(data.progress));
+      setProgressMessage(data.message || '');
+
+      // Close connection if complete or error
+      if (data.status === 'complete' || data.status === 'error') {
+        ws.close();
       }
-    }, 500);
+    };
+
+    ws.onerror = (error) => {
+      console.error('[ExportButton] WebSocket error:', error);
+    };
+
+    ws.onclose = () => {
+      console.log('[ExportButton] WebSocket disconnected');
+      wsRef.current = null;
+    };
   };
 
   const handleExport = async () => {
@@ -97,8 +104,8 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
       // Always use AI upscale endpoint
       const endpoint = 'http://localhost:8000/api/export/upscale';
 
-      // Start polling for progress updates
-      startProgressPolling(exportId);
+      // Connect WebSocket for real-time progress updates
+      connectWebSocket(exportId);
 
       // Send export request
       const response = await axios.post(
@@ -140,10 +147,10 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
       // Clean up
       window.URL.revokeObjectURL(url);
 
-      // Stop polling
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
+      // Close WebSocket
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
       }
 
       setProgress(100);
@@ -157,10 +164,10 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
     } catch (err) {
       console.error('Export failed:', err);
 
-      // Stop polling on error
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
+      // Close WebSocket on error
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
       }
 
       // If response is a blob (error response), we need to convert it to text/JSON

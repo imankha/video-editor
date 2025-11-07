@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Any
 import logging
+import asyncio
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +39,32 @@ except ImportError as e:
 # Global progress tracking for exports
 # Format: {export_id: {"progress": 0-100, "message": "...", "status": "processing|complete|error"}}
 export_progress = {}
+
+# WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        # Store active connections by export_id
+        self.active_connections: Dict[str, WebSocket] = {}
+
+    async def connect(self, export_id: str, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections[export_id] = websocket
+        logger.info(f"WebSocket connected for export_id: {export_id}")
+
+    def disconnect(self, export_id: str):
+        if export_id in self.active_connections:
+            del self.active_connections[export_id]
+            logger.info(f"WebSocket disconnected for export_id: {export_id}")
+
+    async def send_progress(self, export_id: str, data: dict):
+        if export_id in self.active_connections:
+            try:
+                await self.active_connections[export_id].send_json(data)
+            except Exception as e:
+                logger.error(f"Error sending progress to {export_id}: {e}")
+                self.disconnect(export_id)
+
+manager = ConnectionManager()
 
 # Environment detection
 ENV = os.getenv("ENV", "development")  # "development" or "production"
@@ -147,12 +174,32 @@ async def get_status():
 @app.get("/api/export/progress/{export_id}")
 async def get_export_progress(export_id: str):
     """
-    Get the progress of an ongoing export operation
+    Get the progress of an ongoing export operation (legacy - use WebSocket instead)
     """
     if export_id not in export_progress:
         raise HTTPException(status_code=404, detail="Export ID not found")
 
     return export_progress[export_id]
+
+
+@app.websocket("/ws/export/{export_id}")
+async def websocket_export_progress(websocket: WebSocket, export_id: str):
+    """
+    WebSocket endpoint for real-time export progress updates
+    """
+    await manager.connect(export_id, websocket)
+    try:
+        # Keep connection alive and wait for messages
+        while True:
+            # Wait for any message from client (ping/pong)
+            try:
+                await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
+    except Exception as e:
+        logger.error(f"WebSocket error for {export_id}: {e}")
+    finally:
+        manager.disconnect(export_id)
 
 
 # Crop Export Models
@@ -552,24 +599,36 @@ async def export_with_ai_upscale(
         logger.info("STARTING AI UPSCALE PROCESS WITH DE-ZOOM")
         logger.info("=" * 80)
 
+        # Get the current event loop for sending WebSocket updates from sync context
+        loop = asyncio.get_event_loop()
+
         def progress_callback(current, total, message):
-            """Update progress tracking and log"""
+            """Update progress tracking, log, and send via WebSocket"""
             percent = (current / total) * 100
-            export_progress[export_id] = {
+            progress_data = {
                 "progress": percent,
                 "message": message,
                 "status": "processing",
                 "current": current,
                 "total": total
             }
+            export_progress[export_id] = progress_data
             logger.info(f"Progress: {percent:.1f}% - {message}")
 
+            # Send update via WebSocket from sync context
+            asyncio.run_coroutine_threadsafe(
+                manager.send_progress(export_id, progress_data),
+                loop
+            )
+
         # Update progress - initializing
-        export_progress[export_id] = {
+        init_data = {
             "progress": 5,
             "message": "Initializing AI upscaler...",
             "status": "processing"
         }
+        export_progress[export_id] = init_data
+        await manager.send_progress(export_id, init_data)
 
         result = upscaler.process_video_with_upscale(
             input_path=input_path,
@@ -587,11 +646,13 @@ async def export_with_ai_upscale(
         logger.info("=" * 80)
 
         # Update progress - complete
-        export_progress[export_id] = {
+        complete_data = {
             "progress": 100,
             "message": "Export complete!",
             "status": "complete"
         }
+        export_progress[export_id] = complete_data
+        await manager.send_progress(export_id, complete_data)
 
         # Return the upscaled video file
         return FileResponse(
@@ -605,11 +666,13 @@ async def export_with_ai_upscale(
         logger.error(f"AI upscaling failed: {str(e)}", exc_info=True)
 
         # Update progress - error
-        export_progress[export_id] = {
+        error_data = {
             "progress": 0,
             "message": f"Export failed: {str(e)}",
             "status": "error"
         }
+        export_progress[export_id] = error_data
+        await manager.send_progress(export_id, error_data)
 
         # Clean up temp files on error
         if os.path.exists(temp_dir):
