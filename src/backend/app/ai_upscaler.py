@@ -124,16 +124,28 @@ class AIVideoUpscaler:
             logger.error("=" * 80)
             self.upsampler = None
         except Exception as e:
+            error_msg = str(e).lower()
             logger.error("=" * 80)
             logger.error("❌ CRITICAL: Real-ESRGAN setup failed!")
             logger.error("=" * 80)
             logger.error(f"Error type: {type(e).__name__}")
             logger.error(f"Error message: {e}")
             logger.error("")
-            logger.error("Possible causes:")
-            logger.error("  1. Incompatible package versions (try: pip install -r requirements.txt --upgrade)")
-            logger.error("  2. Missing model weights (check 'weights/' directory)")
-            logger.error("  3. Insufficient memory (try reducing tile size)")
+
+            # Check for specific known issues
+            if "numpy" in error_msg or "array" in error_msg:
+                logger.error("⚠ This looks like a NumPy version compatibility issue!")
+                logger.error("NumPy 2.x is not compatible with many AI packages.")
+                logger.error("")
+                logger.error("Solution:")
+                logger.error("  pip install 'numpy<2.0.0' --force-reinstall")
+                logger.error("  # Then restart the backend")
+            else:
+                logger.error("Possible causes:")
+                logger.error("  1. Incompatible package versions (try: pip install -r requirements.txt --upgrade)")
+                logger.error("  2. Missing model weights (check 'weights/' directory)")
+                logger.error("  3. Insufficient memory (try reducing tile size)")
+
             logger.error("=" * 80)
             import traceback
             logger.error(traceback.format_exc())

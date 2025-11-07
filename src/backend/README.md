@@ -208,6 +208,16 @@ pip install -r requirements.txt
 
 For detailed GPU setup and troubleshooting, see [INSTALL_AI_DEPENDENCIES.md](INSTALL_AI_DEPENDENCIES.md).
 
+**"Numpy is not available" or NumPy compatibility error:**
+
+This means NumPy 2.x is installed, but AI packages require NumPy 1.x.
+
+**Solution:**
+```bash
+pip install 'numpy<2.0.0' --force-reinstall
+# Restart the backend
+```
+
 **"Using device: cpu" when you have a GPU:**
 
 This means PyTorch doesn't detect your CUDA-enabled GPU.

@@ -116,6 +116,25 @@ If GPU is not detected:
 
 ## Common Issues
 
+### Issue: "Numpy is not available" or NumPy 2.x compatibility error
+
+**Cause:** NumPy 2.x is installed, but PyTorch and AI packages were compiled against NumPy 1.x.
+
+**Error message you might see:**
+```
+A module that was compiled using NumPy 1.x cannot be run in NumPy 2.2.6 as it may crash.
+```
+or
+```
+Error: Numpy is not available
+```
+
+**Solution:** Downgrade to NumPy 1.x:
+```bash
+pip install 'numpy<2.0.0' --force-reinstall
+# Restart the backend
+```
+
 ### Issue: "No module named 'torchvision.transforms.functional_tensor'"
 
 **Cause:** Version incompatibility between torchvision and basicsr/realesrgan.
