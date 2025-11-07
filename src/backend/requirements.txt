@@ -1,3 +1,9 @@
+# PyTorch with CUDA 11.8 support (install FIRST before other dependencies)
+# Using extra index URL for CUDA wheels - avoids pulling in torchaudio
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch>=2.0.0,<2.5.0
+torchvision>=0.15.0,<0.20.0
+
 # Core Framework
 fastapi==0.108.0          # Modern Python web framework
 uvicorn[standard]==0.25.0 # ASGI server with hot reload
@@ -11,10 +17,6 @@ aiofiles==23.2.1          # Async file operations
 # AI Upscaling Dependencies
 # Version compatibility is critical: numpy 1.x is required by PyTorch/Real-ESRGAN
 numpy>=1.24.0,<2.0.0      # Numerical computing (MUST be 1.x for PyTorch compatibility)
-# Note: Install PyTorch separately with CUDA support to avoid pulling in torchaudio
-# For CUDA 11.8: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-# For CUDA 12.1: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-# For CPU only: pip install torch torchvision
 opencv-python>=4.8.0,<4.10.0  # OpenCV (pinned to 4.8-4.9 for numpy 1.x compatibility)
 pillow>=10.0.0            # Image processing library
 # Real-ESRGAN and its dependencies
