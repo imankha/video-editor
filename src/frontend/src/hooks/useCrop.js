@@ -204,6 +204,11 @@ export default function useCrop(videoMetadata) {
   }, []);
 
   /**
+   * Round to 3 decimal places for precision
+   */
+  const round3 = (value) => Math.round(value * 1000) / 1000;
+
+  /**
    * Interpolate crop values between keyframes for a given time
    */
   const interpolateCrop = useCallback((time) => {
@@ -241,15 +246,16 @@ export default function useCrop(videoMetadata) {
     }
 
     // Linear interpolation between keyframes
+    // Round to 3 decimal places to maintain precision
     const duration = afterKf.time - beforeKf.time;
     const progress = (time - beforeKf.time) / duration;
 
     return {
       time,
-      x: beforeKf.x + (afterKf.x - beforeKf.x) * progress,
-      y: beforeKf.y + (afterKf.y - beforeKf.y) * progress,
-      width: beforeKf.width + (afterKf.width - beforeKf.width) * progress,
-      height: beforeKf.height + (afterKf.height - beforeKf.height) * progress
+      x: round3(beforeKf.x + (afterKf.x - beforeKf.x) * progress),
+      y: round3(beforeKf.y + (afterKf.y - beforeKf.y) * progress),
+      width: round3(beforeKf.width + (afterKf.width - beforeKf.width) * progress),
+      height: round3(beforeKf.height + (afterKf.height - beforeKf.height) * progress)
     };
   }, [keyframes]);
 
