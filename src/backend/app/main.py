@@ -192,10 +192,11 @@ def generate_crop_filter(keyframes: List[Dict[str, Any]], duration: float, fps: 
     # If only one keyframe, use static crop
     if len(keyframes) == 1:
         kf = keyframes[0]
-        w_expr = str(int(kf['width']))
-        h_expr = str(int(kf['height']))
-        x_expr = str(int(kf['x']))
-        y_expr = str(int(kf['y']))
+        # Use float values with 3 decimal precision
+        w_expr = str(round(kf['width'], 3))
+        h_expr = str(round(kf['height'], 3))
+        x_expr = str(round(kf['x'], 3))
+        y_expr = str(round(kf['y'], 3))
 
         return {
             'filter_string': f"crop={w_expr}:{h_expr}:{x_expr}:{y_expr}",
@@ -242,12 +243,22 @@ def generate_crop_filter(keyframes: List[Dict[str, Any]], duration: float, fps: 
 
     def build_expression(param1_values, param2_values):
         """Build nested if expression for parameter interpolation"""
-        expr = f"{int(keyframes[-1][param1_values])}"  # Default to last keyframe
+        # Map expression parameter names to actual keyframe keys
+        param_map = {
+            'x1': 'x', 'x2': 'x',
+            'y1': 'y', 'y2': 'y',
+            'w1': 'width', 'w2': 'width',
+            'h1': 'height', 'h2': 'height'
+        }
+
+        # Get the actual keyframe key for default value
+        kf_key = param_map.get(param1_values, param1_values)
+        expr = f"{round(keyframes[-1][kf_key], 3)}"  # Default to last keyframe
 
         for i in range(len(crop_expressions) - 1, -1, -1):
             seg = crop_expressions[i]
             t1, t2 = seg['start'], seg['end']
-            v1, v2 = seg[param1_values], seg[param2_values]
+            v1, v2 = round(seg[param1_values], 3), round(seg[param2_values], 3)
 
             # Linear interpolation: v1 + (v2 - v1) * (t - t1) / (t2 - t1)
             duration_seg = t2 - t1
@@ -259,7 +270,8 @@ def generate_crop_filter(keyframes: List[Dict[str, Any]], duration: float, fps: 
             expr = f"if(gte(t,{t1})*lt(t,{t2}),{interp},{expr})"
 
         # Handle before first keyframe
-        expr = f"if(lt(t,{keyframes[0]['time']}),{int(keyframes[0][param1_values])},{expr})"
+        kf_key_first = param_map.get(param1_values, param1_values)
+        expr = f"if(lt(t,{keyframes[0]['time']}),{round(keyframes[0][kf_key_first], 3)},{expr})"
 
         return expr
 
@@ -354,10 +366,10 @@ async def export_crop(
         print(f"[FFmpeg] Complex crop filter failed, falling back to average crop. Error: {e.stderr.decode()}")
 
         avg_crop = {
-            'x': int(sum(kf['x'] for kf in keyframes_dict) / len(keyframes_dict)),
-            'y': int(sum(kf['y'] for kf in keyframes_dict) / len(keyframes_dict)),
-            'width': int(sum(kf['width'] for kf in keyframes_dict) / len(keyframes_dict)),
-            'height': int(sum(kf['height'] for kf in keyframes_dict) / len(keyframes_dict))
+            'x': round(sum(kf['x'] for kf in keyframes_dict) / len(keyframes_dict), 3),
+            'y': round(sum(kf['y'] for kf in keyframes_dict) / len(keyframes_dict), 3),
+            'width': round(sum(kf['width'] for kf in keyframes_dict) / len(keyframes_dict), 3),
+            'height': round(sum(kf['height'] for kf in keyframes_dict) / len(keyframes_dict), 3)
         }
 
         stream = ffmpeg.input(input_path)
