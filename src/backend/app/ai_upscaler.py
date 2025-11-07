@@ -91,20 +91,33 @@ class AIVideoUpscaler:
                 )
                 logger.info("\nWeights downloaded successfully!")
 
-            # Initialize upsampler with tiling for memory efficiency
+            # Initialize upsampler optimized for maximum quality
             logger.info(f"Loading model weights from {model_path}...")
+
+            # Determine optimal tile size based on device
+            # Larger tiles = better quality (fewer seams) but more VRAM
+            if self.device.type == 'cuda':
+                tile_size = 0  # 0 = no tiling (highest quality, requires more VRAM)
+                tile_pad = 0
+                logger.info("GPU detected: Using full-frame processing for maximum quality")
+            else:
+                tile_size = 512  # Tiling for CPU to manage memory
+                tile_pad = 10
+                logger.info("CPU mode: Using tiled processing")
+
             self.upsampler = RealESRGANer(
                 scale=4,
                 model_path=model_path,
                 dni_weight=None,
                 model=model,
-                tile=512,  # Process in 512x512 tiles to save GPU memory
-                tile_pad=10,
+                tile=tile_size,
+                tile_pad=tile_pad,
                 pre_pad=0,
-                half=True if self.device.type == 'cuda' else False,
+                half=True if self.device.type == 'cuda' else False,  # FP16 for speed on GPU
                 device=self.device
             )
             logger.info("✓ Real-ESRGAN model loaded successfully!")
+            logger.info(f"Quality settings: tile_size={tile_size} (0=no tiling, best quality)")
 
         except ImportError as e:
             logger.error("=" * 80)
@@ -225,7 +238,7 @@ class AIVideoUpscaler:
 
     def enhance_frame_ai(self, frame: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
         """
-        Enhance a single frame using AI model
+        Enhance a single frame using Real-ESRGAN AI model (maximum quality)
 
         Args:
             frame: Input frame (BGR format)
@@ -233,41 +246,42 @@ class AIVideoUpscaler:
 
         Returns:
             Enhanced frame at target size
+
+        Raises:
+            RuntimeError: If Real-ESRGAN is not available
         """
-        if self.upsampler is not None:
-            try:
-                # Calculate required scale factor
-                current_h, current_w = frame.shape[:2]
-                target_w, target_h = target_size
+        if self.upsampler is None:
+            raise RuntimeError(
+                "Real-ESRGAN model not initialized. "
+                "AI upscaling requires proper model initialization. "
+                "Check server logs for setup errors."
+            )
 
-                logger.debug(f"Upscaling frame from {current_w}x{current_h} to {target_w}x{target_h}")
+        try:
+            # Calculate required scale factor
+            current_h, current_w = frame.shape[:2]
+            target_w, target_h = target_size
 
-                # Real-ESRGAN upscales by 4x by default
-                # We'll upscale first, then resize to exact target
-                with contextlib.redirect_stderr(open(os.devnull, 'w')):
-                    # Upscale with AI (4x)
-                    enhanced, _ = self.upsampler.enhance(frame, outscale=4)
+            logger.debug(f"AI upscaling frame from {current_w}x{current_h} to {target_w}x{target_h}")
 
-                upscaled_h, upscaled_w = enhanced.shape[:2]
-                logger.debug(f"Real-ESRGAN upscaled to {upscaled_w}x{upscaled_h}")
+            # Real-ESRGAN upscales by 4x by default
+            # We'll upscale first, then resize to exact target if needed
+            with contextlib.redirect_stderr(open(os.devnull, 'w')):
+                # Upscale with AI (4x) - maximum quality
+                enhanced, _ = self.upsampler.enhance(frame, outscale=4)
 
-                # Resize to exact target size if needed
-                if enhanced.shape[:2] != (target_h, target_w):
-                    enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
-                    logger.debug(f"Resized to exact target: {target_w}x{target_h}")
+            upscaled_h, upscaled_w = enhanced.shape[:2]
+            logger.debug(f"Real-ESRGAN upscaled to {upscaled_w}x{upscaled_h}")
 
-                return enhanced
-            except Exception as e:
-                logger.error(f"Real-ESRGAN processing failed: {e}. Falling back to OpenCV.")
-                return self.enhance_frame_opencv(frame, target_size)
-        else:
-            # Only log this warning once at the start, not for every frame
-            if not hasattr(self, '_fallback_warning_shown'):
-                logger.warning("⚠ Real-ESRGAN not available - using OpenCV fallback (lower quality)")
-                logger.warning("Install dependencies to enable AI upscaling: pip install -r requirements.txt")
-                self._fallback_warning_shown = True
-            # Fallback to OpenCV
-            return self.enhance_frame_opencv(frame, target_size)
+            # Resize to exact target size if needed (using highest quality interpolation)
+            if enhanced.shape[:2] != (target_h, target_w):
+                enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
+                logger.debug(f"Resized to exact target: {target_w}x{target_h}")
+
+            return enhanced
+        except Exception as e:
+            logger.error(f"Real-ESRGAN processing failed: {e}")
+            raise RuntimeError(f"AI upscaling failed: {e}")
 
     def extract_frame_with_crop(
         self,
@@ -424,14 +438,16 @@ class AIVideoUpscaler:
         frames_dir.mkdir(exist_ok=True)
 
         try:
-            # Log AI model status
+            # Verify AI model is ready (should have been checked earlier, but double-check)
+            if self.upsampler is None:
+                raise RuntimeError("Real-ESRGAN model not initialized - cannot proceed with AI upscaling")
+
             logger.info("=" * 60)
-            logger.info("PROCESSING PIPELINE")
+            logger.info("PROCESSING PIPELINE - MAXIMUM QUALITY MODE")
             logger.info("=" * 60)
-            if self.upsampler is not None:
-                logger.info(f"✓ Using Real-ESRGAN AI model for upscaling")
-            else:
-                logger.warning(f"⚠ Real-ESRGAN not available - using OpenCV fallback (quality will be lower)")
+            logger.info(f"✓ Real-ESRGAN AI model active")
+            logger.info(f"✓ Device: {self.device}")
+            logger.info(f"✓ Target resolution: {target_resolution[0]}x{target_resolution[1]}")
 
             # Test interpolation smoothness (log a few sample points)
             logger.info("=" * 60)

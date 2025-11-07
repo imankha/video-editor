@@ -499,13 +499,30 @@ async def export_with_ai_upscale(
         logger.info("=" * 80)
         upscaler = AIVideoUpscaler(device='cuda')
 
-        # Verify AI model is loaded
+        # Verify AI model is loaded - fail if not available (no low-quality fallback)
         if upscaler.upsampler is None:
-            logger.error("⚠️ WARNING: Real-ESRGAN AI model failed to load!")
-            logger.error("The export will use OpenCV fallback (lower quality)")
-            logger.error("Check that dependencies are installed: pip install realesrgan basicsr")
-        else:
-            logger.info("✓ Real-ESRGAN AI model loaded successfully")
+            logger.error("=" * 80)
+            logger.error("❌ CRITICAL: Real-ESRGAN AI model failed to load!")
+            logger.error("Cannot proceed with AI upscaling")
+            logger.error("=" * 80)
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "Real-ESRGAN model failed to load",
+                    "message": "AI upscaling requires Real-ESRGAN to be properly initialized.",
+                    "instructions": [
+                        "Check the server logs for detailed error messages",
+                        "Common fixes:",
+                        "  1. pip install 'numpy<2.0.0' --force-reinstall",
+                        "  2. pip install 'opencv-python>=4.8.0,<4.10.0' --force-reinstall",
+                        "  3. pip install -r requirements.txt",
+                        "  4. Restart the backend"
+                    ],
+                    "see_also": "INSTALL_AI_DEPENDENCIES.md"
+                }
+            )
+
+        logger.info("✓ Real-ESRGAN AI model loaded and ready for maximum quality upscaling")
 
         # Process video with AI upscaling
         logger.info("=" * 80)
