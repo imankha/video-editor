@@ -31,9 +31,8 @@ export default function CropLayer({
   return (
     <div className={`relative bg-gray-800 border-t border-gray-700 h-12 ${isActive ? 'ring-2 ring-blue-500' : ''}`}>
       {/* Layer label */}
-      <div className="absolute left-0 top-0 h-full flex items-center px-3 bg-gray-900 border-r border-gray-700 w-32">
-        <Crop size={14} className="text-blue-400 mr-2" />
-        <span className="text-xs text-gray-300 font-medium">Crop Layer</span>
+      <div className="absolute left-0 top-0 h-full flex items-center justify-center bg-gray-900 border-r border-gray-700 w-32">
+        <Crop size={18} className="text-blue-400" />
       </div>
 
       {/* Keyframes track */}

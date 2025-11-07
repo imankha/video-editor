@@ -1,6 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Download, Loader } from 'lucide-react';
 import axios from 'axios';
+
+/**
+ * Generate a unique ID for tracking export progress
+ */
+function generateExportId() {
+  return 'export_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+}
 
 /**
  * ExportButton component - handles video export with AI upscaling
@@ -10,7 +17,49 @@ import axios from 'axios';
 export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState(null);
+  const pollIntervalRef = useRef(null);
+  const exportIdRef = useRef(null);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
+
+  /**
+   * Poll the backend for export progress
+   */
+  const startProgressPolling = (exportId) => {
+    // Clear any existing polling
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+    }
+
+    // Poll every 500ms
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await axios.get(`http://localhost:8000/api/export/progress/${exportId}`);
+        const data = response.data;
+
+        setProgress(Math.round(data.progress));
+        setProgressMessage(data.message || '');
+
+        // Stop polling if complete or error
+        if (data.status === 'complete' || data.status === 'error') {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      } catch (err) {
+        // If polling fails (e.g., 404), silently continue - the export might still be processing
+        console.warn('Progress polling error:', err.message);
+      }
+    }, 500);
+  };
 
   const handleExport = async () => {
     if (!videoFile) {
@@ -25,7 +74,12 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
 
     setIsExporting(true);
     setProgress(0);
+    setProgressMessage('Uploading...');
     setError(null);
+
+    // Generate unique export ID
+    const exportId = generateExportId();
+    exportIdRef.current = exportId;
 
     try {
       // Prepare form data
@@ -33,11 +87,15 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
       formData.append('video', videoFile);
       formData.append('keyframes_json', JSON.stringify(cropKeyframes));
       formData.append('target_fps', '30');
+      formData.append('export_id', exportId);
 
       // Always use AI upscale endpoint
       const endpoint = 'http://localhost:8000/api/export/upscale';
 
-      // Send export request
+      // Start polling for progress updates
+      startProgressPolling(exportId);
+
+      // Send export request (no progress callbacks needed, polling handles it)
       const response = await axios.post(
         endpoint,
         formData,
@@ -47,16 +105,12 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
           },
           responseType: 'blob',
           onUploadProgress: (progressEvent) => {
-            const percentCompleted = Math.round(
-              (progressEvent.loaded * 50) / progressEvent.total
+            // Only update progress if still in upload phase (not being polled yet)
+            const uploadPercent = Math.round(
+              (progressEvent.loaded * 5) / progressEvent.total
             );
-            setProgress(percentCompleted);
-          },
-          onDownloadProgress: (progressEvent) => {
-            const percentCompleted = Math.round(
-              50 + (progressEvent.loaded * 50) / (progressEvent.total || progressEvent.loaded)
-            );
-            setProgress(percentCompleted);
+            setProgress(uploadPercent);
+            setProgressMessage('Uploading video...');
           }
         }
       );
@@ -74,14 +128,28 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
       // Clean up
       window.URL.revokeObjectURL(url);
 
+      // Stop polling
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+
       setProgress(100);
+      setProgressMessage('Export complete!');
       setTimeout(() => {
         setIsExporting(false);
         setProgress(0);
+        setProgressMessage('');
       }, 2000);
 
     } catch (err) {
       console.error('Export failed:', err);
+
+      // Stop polling on error
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
 
       // If response is a blob (error response), we need to convert it to text/JSON
       if (err.response?.data instanceof Blob) {
@@ -107,6 +175,7 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
 
       setIsExporting(false);
       setProgress(0);
+      setProgressMessage('');
     }
   };
 
@@ -129,10 +198,17 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
         }`}
       >
         {isExporting ? (
-          <>
-            <Loader className="animate-spin" size={18} />
-            AI Upscaling... {progress}%
-          </>
+          <div className="flex flex-col items-center gap-1 w-full">
+            <div className="flex items-center gap-2">
+              <Loader className="animate-spin" size={18} />
+              <span>AI Upscaling... {progress}%</span>
+            </div>
+            {progressMessage && (
+              <div className="text-xs opacity-80">
+                {progressMessage}
+              </div>
+            )}
+          </div>
         ) : (
           <>
             <Download size={18} />

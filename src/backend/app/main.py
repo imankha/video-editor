@@ -35,6 +35,10 @@ except ImportError as e:
     logger.warning("=" * 80)
     AIVideoUpscaler = None
 
+# Global progress tracking for exports
+# Format: {export_id: {"progress": 0-100, "message": "...", "status": "processing|complete|error"}}
+export_progress = {}
+
 # Environment detection
 ENV = os.getenv("ENV", "development")  # "development" or "production"
 IS_DEV = ENV == "development"
@@ -138,6 +142,17 @@ async def get_status():
         "service": "video-editor-api",
         "timestamp": datetime.now().isoformat()
     }
+
+
+@app.get("/api/export/progress/{export_id}")
+async def get_export_progress(export_id: str):
+    """
+    Get the progress of an ongoing export operation
+    """
+    if export_id not in export_progress:
+        raise HTTPException(status_code=404, detail="Export ID not found")
+
+    return export_progress[export_id]
 
 
 # Crop Export Models
@@ -419,7 +434,8 @@ async def export_crop(
 async def export_with_ai_upscale(
     video: UploadFile = File(...),
     keyframes_json: str = Form(...),
-    target_fps: int = Form(30)
+    target_fps: int = Form(30),
+    export_id: str = Form(...)
 ):
     """
     Export video with AI upscaling and de-zoom
@@ -436,10 +452,17 @@ async def export_with_ai_upscale(
         video: Video file to process
         keyframes_json: JSON array of crop keyframes
         target_fps: Output framerate (default 30)
+        export_id: Unique ID for tracking export progress
 
     Returns:
         AI-upscaled video file
     """
+    # Initialize progress tracking
+    export_progress[export_id] = {
+        "progress": 0,
+        "message": "Starting export...",
+        "status": "processing"
+    }
     # Parse keyframes
     try:
         keyframes_data = json.loads(keyframes_json)
@@ -530,9 +553,23 @@ async def export_with_ai_upscale(
         logger.info("=" * 80)
 
         def progress_callback(current, total, message):
-            """Log progress updates"""
+            """Update progress tracking and log"""
             percent = (current / total) * 100
+            export_progress[export_id] = {
+                "progress": percent,
+                "message": message,
+                "status": "processing",
+                "current": current,
+                "total": total
+            }
             logger.info(f"Progress: {percent:.1f}% - {message}")
+
+        # Update progress - initializing
+        export_progress[export_id] = {
+            "progress": 5,
+            "message": "Initializing AI upscaler...",
+            "status": "processing"
+        }
 
         result = upscaler.process_video_with_upscale(
             input_path=input_path,
@@ -549,6 +586,13 @@ async def export_with_ai_upscale(
         logger.info(f"File size: {os.path.getsize(output_path) / (1024*1024):.2f} MB")
         logger.info("=" * 80)
 
+        # Update progress - complete
+        export_progress[export_id] = {
+            "progress": 100,
+            "message": "Export complete!",
+            "status": "complete"
+        }
+
         # Return the upscaled video file
         return FileResponse(
             output_path,
@@ -559,6 +603,14 @@ async def export_with_ai_upscale(
 
     except Exception as e:
         logger.error(f"AI upscaling failed: {str(e)}", exc_info=True)
+
+        # Update progress - error
+        export_progress[export_id] = {
+            "progress": 0,
+            "message": f"Export failed: {str(e)}",
+            "status": "error"
+        }
+
         # Clean up temp files on error
         if os.path.exists(temp_dir):
             import shutil

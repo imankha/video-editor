@@ -1,4 +1,5 @@
 import React from 'react';
+import { Film } from 'lucide-react';
 import { formatTimeSimple } from '../utils/timeFormat';
 import CropLayer from './CropLayer';
 
@@ -76,66 +77,72 @@ export function Timeline({
 
   return (
     <div className="timeline-container py-4">
-      {/* Video Timeline Layer */}
-      <div className="relative bg-gray-800 h-12 rounded-lg">
-        {/* Layer label */}
-        <div className="absolute left-0 top-0 h-full flex items-center px-3 bg-gray-900 border-r border-gray-700 w-32 rounded-l-lg">
-          <span className="text-xs text-gray-300 font-medium">Video</span>
-        </div>
-
-        {/* Timeline track */}
-        <div
-          ref={timelineRef}
-          className="absolute left-32 right-0 top-0 h-full bg-gray-700 rounded-r-lg cursor-pointer select-none"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-        >
-          {/* Progress bar */}
-          <div
-            className="absolute top-0 left-0 h-full bg-blue-600 rounded-r-lg transition-all pointer-events-none"
-            style={{ width: `${progress}%` }}
-          />
-
-          {/* Playhead */}
-          <div
-            className="absolute top-0 w-1 h-full bg-white shadow-lg pointer-events-none"
-            style={{ left: `${progress}%` }}
-          >
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full" />
-          </div>
-
-          {/* Hover tooltip */}
-          {hoverTime !== null && !isDragging && (
-            <div
-              className="absolute -top-8 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded pointer-events-none"
-              style={{ left: `${hoverX}px` }}
-            >
-              {formatTimeSimple(hoverTime)}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Time labels */}
-      <div className="flex justify-between mt-2 text-xs text-gray-400">
+      {/* Time labels - moved above video layer */}
+      <div className="flex justify-between mb-2 text-xs text-gray-400 pl-32">
         <span>{formatTimeSimple(currentTime)}</span>
         <span>{formatTimeSimple(duration)}</span>
       </div>
 
-      {/* Crop Layer */}
-      {cropKeyframes.length > 0 && (
-        <div className="mt-2">
-          <CropLayer
-            keyframes={cropKeyframes}
-            duration={duration}
-            currentTime={currentTime}
-            isActive={isCropActive}
-            onKeyframeClick={onCropKeyframeClick}
-            onKeyframeDelete={onCropKeyframeDelete}
-          />
+      {/* Timeline layers container with unified playhead */}
+      <div className="relative">
+        {/* Video Timeline Layer */}
+        <div className="relative bg-gray-800 h-12 rounded-lg">
+          {/* Layer label */}
+          <div className="absolute left-0 top-0 h-full flex items-center justify-center bg-gray-900 border-r border-gray-700 w-32 rounded-l-lg">
+            <Film size={18} className="text-blue-400" />
+          </div>
+
+          {/* Timeline track */}
+          <div
+            ref={timelineRef}
+            className="absolute left-32 right-0 top-0 h-full bg-gray-700 rounded-r-lg cursor-pointer select-none"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+          >
+            {/* Progress bar */}
+            <div
+              className="absolute top-0 left-0 h-full bg-blue-600 rounded-r-lg transition-all pointer-events-none"
+              style={{ width: `${progress}%` }}
+            />
+
+            {/* Hover tooltip */}
+            {hoverTime !== null && !isDragging && (
+              <div
+                className="absolute -top-8 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded pointer-events-none"
+                style={{ left: `${hoverX}px` }}
+              >
+                {formatTimeSimple(hoverTime)}
+              </div>
+            )}
+          </div>
         </div>
-      )}
+
+        {/* Crop Layer */}
+        {cropKeyframes.length > 0 && (
+          <div className="mt-1">
+            <CropLayer
+              keyframes={cropKeyframes}
+              duration={duration}
+              currentTime={currentTime}
+              isActive={isCropActive}
+              onKeyframeClick={onCropKeyframeClick}
+              onKeyframeDelete={onCropKeyframeDelete}
+            />
+          </div>
+        )}
+
+        {/* Unified Playhead - extends through all layers */}
+        <div
+          className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none"
+          style={{
+            left: `calc(8rem + ${progress}%)`,  // 8rem = w-32 (label width) + progress
+            height: cropKeyframes.length > 0 ? 'calc(100% - 0.25rem)' : '3rem'  // Extend through all layers
+          }}
+        >
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full" />
+        </div>
+      </div>
     </div>
   );
 }
