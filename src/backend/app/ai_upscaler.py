@@ -914,45 +914,15 @@ class AIVideoUpscaler:
             str(output_path)
         ])
 
-                # Monitor progress
-                last_frame = 0
-                for line in process.stderr:
-                    frame_num = parse_ffmpeg_progress(line, total_frames)
-                    if frame_num > 0 and frame_num != last_frame:
-                        last_frame = frame_num
-                        if progress_callback and total_frames > 0:
-                            progress_callback(
-                                frame_num,
-                                total_frames,
-                                f"Encoding video (FAST): {frame_num}/{total_frames} frames",
-                                phase='ffmpeg_encode'
-                            )
-
-                process.wait()
-                if process.returncode != 0:
-                    stderr_output = process.stderr.read() if process.stderr else ""
-                    raise RuntimeError(f"FFmpeg encoding failed: {stderr_output}")
-
-                ffmpeg_encode_end = datetime.now()
-                ffmpeg_encode_duration = (ffmpeg_encode_end - ffmpeg_encode_start).total_seconds()
-                logger.info("=" * 60)
-                logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE END - {ffmpeg_encode_end.isoformat()}")
-                logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE DURATION - {ffmpeg_encode_duration:.2f} seconds")
-                logger.info("Single-pass encoding complete!")
-                logger.info("=" * 60)
-            except Exception as e:
-                logger.error(f"FFmpeg encoding failed: {e}")
-                raise RuntimeError(f"Video encoding failed: {e}")
-
-        else:  # QUALITY MODE
-            # QUALITY MODE: H.265, two-pass, veryslow preset, CRF 10
-            logger.info(f"Encoding video with QUALITY settings (H.265, 2-pass, veryslow preset, CRF 10) at {fps} fps...")
-            logger.info("=" * 60)
-
-            # Pass 1 - Analysis
-            ffmpeg_pass1_start = datetime.now()
-            logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 START - {ffmpeg_pass1_start.isoformat()}")
-            logger.info("Starting pass 1 - analyzing video...")
+        try:
+            result = subprocess.run(
+                cmd_pass2,
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            ffmpeg_pass2_end = datetime.now()
+            ffmpeg_pass2_duration = (ffmpeg_pass2_end - ffmpeg_pass2_start).total_seconds()
             logger.info("=" * 60)
             logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE END - {ffmpeg_pass2_end.isoformat()}")
             logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE DURATION - {ffmpeg_pass2_duration:.2f} seconds")
