@@ -117,10 +117,11 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
           },
           responseType: 'blob',
           onUploadProgress: (progressEvent) => {
-            // Only update during upload phase, don't override polling updates
+            // Only update during upload phase, don't override WebSocket updates
             if (!uploadCompleteRef.current) {
+              // Scale upload to 0-10% (leaving 10-100% for AI processing)
               const uploadPercent = Math.round(
-                (progressEvent.loaded * 5) / progressEvent.total
+                (progressEvent.loaded * 10) / progressEvent.total
               );
               setProgress(uploadPercent);
               setProgressMessage('Uploading video...');

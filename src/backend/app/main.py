@@ -604,16 +604,20 @@ async def export_with_ai_upscale(
 
         def progress_callback(current, total, message):
             """Update progress tracking, log, and send via WebSocket"""
-            percent = (current / total) * 100
+            # Scale progress: 0-100% frame processing → 10-100% overall progress
+            # This prevents progress from going backward after initialization (10%)
+            frame_percent = (current / total) * 100
+            overall_percent = 10 + (frame_percent * 0.9)  # Scale to 10-100% range
+
             progress_data = {
-                "progress": percent,
+                "progress": overall_percent,
                 "message": message,
                 "status": "processing",
                 "current": current,
                 "total": total
             }
             export_progress[export_id] = progress_data
-            logger.info(f"Progress: {percent:.1f}% - {message}")
+            logger.info(f"Progress: {overall_percent:.1f}% - {message}")
 
             # Send update via WebSocket using the captured event loop
             try:
@@ -624,9 +628,9 @@ async def export_with_ai_upscale(
             except Exception as e:
                 logger.error(f"Failed to send WebSocket update: {e}")
 
-        # Update progress - initializing
+        # Update progress - initializing (10% to leave room for upload at 0-5%)
         init_data = {
-            "progress": 5,
+            "progress": 10,
             "message": "Initializing AI upscaler...",
             "status": "processing"
         }
