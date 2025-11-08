@@ -1,9 +1,9 @@
-import { Scissors, Trash2, X, Gauge } from 'lucide-react';
+import { Split, Trash2, X, Gauge } from 'lucide-react';
 import { useState } from 'react';
 
 /**
- * SegmentLayer component - displays video segments with speed control
- * Shows vertical lines for segment boundaries and allows trimming/speed changes
+ * SegmentLayer component - displays video segments with speed control and trimming
+ * Shows vertical lines for segment boundaries and allows speed adjustments
  */
 export default function SegmentLayer({
   segments,
@@ -36,10 +36,10 @@ export default function SegmentLayer({
   };
 
   /**
-   * Handle click on timeline track (background)
+   * Handle double-click on timeline track (background) to add boundary
    */
-  const handleTrackClick = (e) => {
-    // Only handle clicks on the track itself (not on segments or boundaries)
+  const handleTrackDoubleClick = (e) => {
+    // Only handle double-clicks on the track itself (not on segments or boundaries)
     if (e.target.classList.contains('segment-track')) {
       const rect = e.currentTarget.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
@@ -76,9 +76,10 @@ export default function SegmentLayer({
 
   /**
    * Handle trim (toggle) for selected segment
+   * Only allow trimming if there are at least 2 segments
    */
   const handleTrim = () => {
-    if (selectedSegment && (selectedSegment.isFirst || selectedSegment.isLast)) {
+    if (selectedSegment && (selectedSegment.isFirst || selectedSegment.isLast) && segments.length >= 2) {
       onSegmentTrim(selectedSegment.index);
       setSelectedSegment({ ...selectedSegment, isTrimmed: !selectedSegment.isTrimmed });
     }
@@ -88,13 +89,13 @@ export default function SegmentLayer({
     <div className={`relative bg-gray-800 border-t border-gray-700 h-12 ${isActive ? 'ring-2 ring-blue-500' : ''}`}>
       {/* Layer label */}
       <div className="absolute left-0 top-0 h-full flex items-center justify-center bg-gray-900 border-r border-gray-700 w-32">
-        <Scissors size={18} className="text-purple-400" />
+        <Split size={18} className="text-purple-400" />
       </div>
 
       {/* Segments track */}
       <div
         className="segment-track absolute left-32 right-0 top-0 h-full cursor-pointer"
-        onClick={handleTrackClick}
+        onDoubleClick={handleTrackDoubleClick}
       >
         {/* Background track */}
         <div className="absolute inset-0 bg-purple-900 bg-opacity-20 segment-track" />
@@ -147,8 +148,8 @@ export default function SegmentLayer({
                   className="absolute top-14 left-1/2 transform -translate-x-1/2 bg-gray-900 border border-gray-700 rounded shadow-lg p-2 flex gap-2 z-10"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {/* Trash button (only for first or last segment) */}
-                  {(segment.isFirst || segment.isLast) && (
+                  {/* Trash button (only for first or last segment, and only if there are at least 2 segments) */}
+                  {(segment.isFirst || segment.isLast) && segments.length >= 2 && (
                     <button
                       className={`p-2 rounded transition-colors ${
                         segment.isTrimmed
