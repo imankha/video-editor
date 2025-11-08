@@ -48,20 +48,35 @@ export function useSegments() {
    * Add a segment boundary at the given time
    */
   const addBoundary = useCallback((time) => {
-    if (!duration) return;
+    console.log('[useSegments] addBoundary called with time:', time);
+    console.log('[useSegments] Current duration:', duration);
+    console.log('[useSegments] Current boundaries:', boundaries);
+
+    if (!duration) {
+      console.log('[useSegments] No duration set, ignoring');
+      return;
+    }
 
     setBoundaries(prev => {
       // Check if boundary already exists (within 10ms tolerance)
       const exists = prev.some(b => Math.abs(b - time) < 0.01);
-      if (exists) return prev;
+      if (exists) {
+        console.log('[useSegments] Boundary already exists at this time');
+        return prev;
+      }
 
       // Don't add at start or end
-      if (time < 0.01 || Math.abs(time - duration) < 0.01) return prev;
+      if (time < 0.01 || Math.abs(time - duration) < 0.01) {
+        console.log('[useSegments] Cannot add boundary at start or end');
+        return prev;
+      }
 
       // Add and sort
-      return [...prev, time].sort((a, b) => a - b);
+      const newBoundaries = [...prev, time].sort((a, b) => a - b);
+      console.log('[useSegments] New boundaries:', newBoundaries);
+      return newBoundaries;
     });
-  }, [duration]);
+  }, [duration, boundaries]);
 
   /**
    * Remove a segment boundary at the given time

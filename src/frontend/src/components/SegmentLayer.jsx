@@ -15,6 +15,8 @@ export default function SegmentLayer({
   onSegmentTrim,
   isActive
 }) {
+  console.log('[SegmentLayer] Render with boundaries:', boundaries, 'segments:', segments.length);
+
   if (!duration) return null;
 
   /**
@@ -36,13 +38,19 @@ export default function SegmentLayer({
    * Handle click to add boundary
    */
   const handleTrackClick = (e) => {
+    console.log('[SegmentLayer] Click detected on:', e.target.className);
+
     // Check if click is on the track background (not on segment or buttons)
     if (e.target.classList.contains('segment-track') || e.target.classList.contains('segment-bg')) {
       const rect = e.currentTarget.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const percentX = (clickX / rect.width) * 100;
       const time = pixelToTime(percentX);
+
+      console.log('[SegmentLayer] Adding boundary at time:', time, 'seconds');
       onAddBoundary(time);
+    } else {
+      console.log('[SegmentLayer] Click ignored - target does not have segment-track or segment-bg class');
     }
   };
 
@@ -200,8 +208,15 @@ export default function SegmentLayer({
           const isEnd = Math.abs(time - duration) < 0.01;
           const isAtCurrentTime = Math.abs(time - currentTime) < 0.01;
 
+          console.log('[SegmentLayer] Rendering boundary:', time, 'isStart:', isStart, 'isEnd:', isEnd);
+
           // Don't show start and end boundaries
-          if (isStart || isEnd) return null;
+          if (isStart || isEnd) {
+            console.log('[SegmentLayer] Skipping start/end boundary at:', time);
+            return null;
+          }
+
+          console.log('[SegmentLayer] Drawing vertical line at:', position, '%');
 
           return (
             <div
