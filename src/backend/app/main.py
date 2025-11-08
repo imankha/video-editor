@@ -514,7 +514,7 @@ async def export_crop(
                              y=crop_params['y_expr'])
         stream = ffmpeg.output(stream, output_path,
                              vcodec='libx265',
-                             crf=15,
+                             crf=10,
                              preset='slower',
                              **{'x265-params': 'aq-mode=3:aq-strength=1.0:deblock=-1,-1'},
                              acodec='aac',
@@ -539,7 +539,7 @@ async def export_crop(
                              avg_crop['x'], avg_crop['y'])
         stream = ffmpeg.output(stream, output_path,
                              vcodec='libx265',
-                             crf=15,
+                             crf=10,
                              preset='slower',
                              **{'x265-params': 'aq-mode=3:aq-strength=1.0:deblock=-1,-1'},
                              acodec='aac',
