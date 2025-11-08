@@ -14,6 +14,8 @@ import contextlib
 from typing import List, Dict, Any, Tuple, Optional
 import tempfile
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 # Configure logging
 logging.getLogger('basicsr').setLevel(logging.CRITICAL)
@@ -32,20 +34,41 @@ class AIVideoUpscaler:
     - Target resolution based on aspect ratio
     """
 
-    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda'):
+    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True):
         """
         Initialize the AI upscaler
 
         Args:
             model_name: Model to use for upscaling
             device: 'cuda' for GPU or 'cpu' for CPU processing
+            enable_multi_gpu: Enable multi-GPU parallel processing (default: True)
         """
-        # Detect available device
+        # Detect available GPUs
+        self.num_gpus = 0
+        self.enable_multi_gpu = enable_multi_gpu
+
         if device == 'cuda' and torch.cuda.is_available():
+            self.num_gpus = torch.cuda.device_count()
             self.device = torch.device('cuda')
-            logger.info(f"Using device: cuda")
-            logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+
+            logger.info("=" * 60)
+            logger.info("GPU DETECTION")
+            logger.info("=" * 60)
+            logger.info(f"CUDA available: Yes")
             logger.info(f"CUDA version: {torch.version.cuda}")
+            logger.info(f"Number of GPUs detected: {self.num_gpus}")
+
+            for i in range(self.num_gpus):
+                gpu_name = torch.cuda.get_device_name(i)
+                logger.info(f"  GPU {i}: {gpu_name}")
+
+            if self.num_gpus > 1 and enable_multi_gpu:
+                logger.info(f"✓ Multi-GPU mode ENABLED - will use all {self.num_gpus} GPUs in parallel")
+            elif self.num_gpus > 1 and not enable_multi_gpu:
+                logger.info(f"Multi-GPU mode DISABLED - will use only GPU 0")
+            else:
+                logger.info(f"Single GPU mode - using GPU 0")
+            logger.info("=" * 60)
         else:
             self.device = torch.device('cpu')
             if device == 'cuda':
@@ -56,6 +79,9 @@ class AIVideoUpscaler:
 
         self.model_name = model_name
         self.upsampler = None
+        self.upsamplers = {}  # Dictionary to store upsampler for each GPU
+        self.progress_lock = threading.Lock()  # Thread-safe progress tracking
+
         self.setup_model()
 
     def setup_model(self):
@@ -105,6 +131,7 @@ class AIVideoUpscaler:
                 tile_pad = 10
                 logger.info("CPU mode: Using tiled processing")
 
+            # Create upsampler for primary device (backward compatibility)
             self.upsampler = RealESRGANer(
                 scale=4,
                 model_path=model_path,
@@ -116,6 +143,35 @@ class AIVideoUpscaler:
                 half=True if self.device.type == 'cuda' else False,  # FP16 for speed on GPU
                 device=self.device
             )
+
+            # Create separate upsampler instances for each GPU if multi-GPU enabled
+            if self.num_gpus > 1 and self.enable_multi_gpu:
+                logger.info(f"Initializing Real-ESRGAN models for {self.num_gpus} GPUs...")
+                for gpu_id in range(self.num_gpus):
+                    # Create a new model instance for each GPU
+                    gpu_model = RRDBNet(
+                        num_in_ch=3,
+                        num_out_ch=3,
+                        num_feat=64,
+                        num_block=23,
+                        num_grow_ch=32,
+                        scale=4
+                    )
+
+                    gpu_device = torch.device(f'cuda:{gpu_id}')
+                    self.upsamplers[gpu_id] = RealESRGANer(
+                        scale=4,
+                        model_path=model_path,
+                        dni_weight=None,
+                        model=gpu_model,
+                        tile=tile_size,
+                        tile_pad=tile_pad,
+                        pre_pad=0,
+                        half=True,
+                        device=gpu_device
+                    )
+                    logger.info(f"  ✓ GPU {gpu_id} model loaded")
+
             logger.info("✓ Real-ESRGAN model loaded successfully!")
             logger.info(f"Quality settings: tile_size={tile_size} (0=no tiling, best quality)")
 
@@ -282,6 +338,70 @@ class AIVideoUpscaler:
         except Exception as e:
             logger.error(f"Real-ESRGAN processing failed: {e}")
             raise RuntimeError(f"AI upscaling failed: {e}")
+
+    def get_upsampler_for_gpu(self, gpu_id: int):
+        """
+        Get the upsampler instance for a specific GPU
+
+        Args:
+            gpu_id: GPU device ID
+
+        Returns:
+            RealESRGANer instance for the specified GPU
+        """
+        if self.num_gpus > 1 and self.enable_multi_gpu and gpu_id in self.upsamplers:
+            return self.upsamplers[gpu_id]
+        return self.upsampler
+
+    def process_single_frame(
+        self,
+        frame_data: Tuple[int, str, Dict, Tuple[int, int], int, float]
+    ) -> Tuple[int, np.ndarray, bool]:
+        """
+        Process a single frame with AI upscaling on a specific GPU
+
+        Args:
+            frame_data: Tuple of (frame_idx, input_path, crop, target_resolution, gpu_id, time)
+
+        Returns:
+            Tuple of (frame_idx, enhanced_frame, success)
+        """
+        frame_idx, input_path, crop, target_resolution, gpu_id, time = frame_data
+
+        try:
+            # Extract and crop frame
+            frame = self.extract_frame_with_crop(input_path, frame_idx, crop)
+
+            # Get the appropriate upsampler for this GPU
+            upsampler = self.get_upsampler_for_gpu(gpu_id)
+
+            # AI upscale using the specific GPU's upsampler
+            if upsampler is None:
+                raise RuntimeError("Real-ESRGAN model not initialized")
+
+            # Calculate required scale factor
+            current_h, current_w = frame.shape[:2]
+            target_w, target_h = target_resolution
+
+            # Real-ESRGAN upscales by 4x by default
+            with contextlib.redirect_stderr(open(os.devnull, 'w')):
+                enhanced, _ = upsampler.enhance(frame, outscale=4)
+
+            upscaled_h, upscaled_w = enhanced.shape[:2]
+
+            # Resize to exact target size if needed
+            if enhanced.shape[:2] != (target_h, target_w):
+                enhanced = cv2.resize(enhanced, target_resolution, interpolation=cv2.INTER_LANCZOS4)
+
+            # Log occasional progress
+            if frame_idx % 30 == 0:
+                logger.info(f"GPU {gpu_id}: Processed frame {frame_idx} @ {time:.2f}s")
+
+            return (frame_idx, enhanced, True)
+
+        except Exception as e:
+            logger.error(f"GPU {gpu_id}: Failed to process frame {frame_idx}: {e}")
+            return (frame_idx, None, False)
 
     def extract_frame_with_crop(
         self,
@@ -459,50 +579,145 @@ class AIVideoUpscaler:
                 test_crop = self.interpolate_crop(keyframes_sorted, test_time)
                 logger.info(f"  Frame {test_idx} @ {test_time:.2f}s: crop={int(test_crop['width'])}x{int(test_crop['height'])} at ({int(test_crop['x'])}, {int(test_crop['y'])})")
 
-            # Process each frame
+            # Process frames - use multi-GPU if available, otherwise sequential
             logger.info("=" * 60)
-            logger.info("STARTING FRAME-BY-FRAME PROCESSING")
+            logger.info("STARTING FRAME PROCESSING")
             logger.info("=" * 60)
-            for frame_idx in range(total_frames):
-                # Calculate time for this frame
-                time = frame_idx / original_fps
 
-                # Get crop for this time (de-zoom step)
+            # Determine processing mode and worker count
+            use_multi_gpu = self.num_gpus > 1 and self.enable_multi_gpu and torch.cuda.is_available()
+            num_workers = self.num_gpus if use_multi_gpu else 1
+
+            if use_multi_gpu:
+                logger.info(f"✓ Multi-GPU parallel processing with {num_workers} workers")
+                logger.info(f"  Frames will be distributed across {self.num_gpus} GPUs")
+            else:
+                logger.info(f"Sequential processing on single device")
+
+            logger.info("=" * 60)
+
+            # Prepare frame processing tasks
+            frame_tasks = []
+            for frame_idx in range(total_frames):
+                time = frame_idx / original_fps
                 crop = self.interpolate_crop(keyframes_sorted, time)
 
-                # Log crop info for first and key frames
-                if frame_idx == 0 or frame_idx % 30 == 0:
-                    logger.info(f"Frame {frame_idx} @ {time:.2f}s: crop={int(crop['width'])}x{int(crop['height'])} at ({int(crop['x'])}, {int(crop['y'])})")
+                # Assign GPU in round-robin fashion
+                gpu_id = frame_idx % num_workers if use_multi_gpu else 0
 
-                # Extract and crop frame
-                frame = self.extract_frame_with_crop(input_path, frame_idx, crop)
+                frame_tasks.append((frame_idx, input_path, crop, target_resolution, gpu_id, time))
 
-                # Verify frame was cropped
-                cropped_h, cropped_w = frame.shape[:2]
-                if frame_idx == 0:
-                    logger.info(f"✓ De-zoomed frame size: {cropped_w}x{cropped_h}")
+            # Track progress
+            completed_frames = 0
+            failed_frames = []
 
-                # AI upscale to target resolution
-                enhanced = self.enhance_frame_ai(frame, target_resolution)
+            if use_multi_gpu:
+                # Multi-GPU parallel processing with ThreadPoolExecutor
+                logger.info(f"Submitting {total_frames} frames to {num_workers} GPU workers...")
 
-                # Verify upscaling worked
-                final_h, final_w = enhanced.shape[:2]
-                if frame_idx == 0:
-                    logger.info(f"✓ Final upscaled size: {final_w}x{final_h}")
-                    if (final_w, final_h) != target_resolution:
-                        logger.error(f"⚠ Size mismatch! Expected {target_resolution}, got ({final_w}, {final_h})")
+                with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                    # Submit all tasks
+                    future_to_frame = {
+                        executor.submit(self.process_single_frame, task): task[0]
+                        for task in frame_tasks
+                    }
 
-                # Save enhanced frame
-                frame_path = frames_dir / f"frame_{frame_idx:06d}.png"
-                cv2.imwrite(str(frame_path), enhanced)
+                    # Process completed frames as they finish
+                    for future in as_completed(future_to_frame):
+                        frame_idx = future_to_frame[future]
 
-                # Progress callback
-                if progress_callback:
-                    progress_callback(frame_idx + 1, total_frames, f"Upscaling frame {frame_idx + 1}/{total_frames}")
+                        try:
+                            result_idx, enhanced, success = future.result()
 
-                # Periodic GPU cleanup
-                if frame_idx % 10 == 0 and torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+                            if success and enhanced is not None:
+                                # Save enhanced frame
+                                frame_path = frames_dir / f"frame_{result_idx:06d}.png"
+                                cv2.imwrite(str(frame_path), enhanced)
+
+                                # Verify first frame
+                                if result_idx == 0:
+                                    final_h, final_w = enhanced.shape[:2]
+                                    logger.info(f"✓ First frame upscaled: {final_w}x{final_h}")
+
+                                # Thread-safe progress update
+                                with self.progress_lock:
+                                    completed_frames += 1
+
+                                    if progress_callback:
+                                        progress_callback(
+                                            completed_frames,
+                                            total_frames,
+                                            f"Upscaling frame {completed_frames}/{total_frames} (Multi-GPU)"
+                                        )
+                            else:
+                                failed_frames.append(result_idx)
+                                logger.error(f"Frame {result_idx} processing failed")
+
+                        except Exception as e:
+                            logger.error(f"Error processing frame {frame_idx}: {e}")
+                            failed_frames.append(frame_idx)
+
+                    # Cleanup GPU memory after batch
+                    if torch.cuda.is_available():
+                        for gpu_id in range(self.num_gpus):
+                            with torch.cuda.device(gpu_id):
+                                torch.cuda.empty_cache()
+
+            else:
+                # Sequential processing (single GPU or CPU)
+                logger.info(f"Processing {total_frames} frames sequentially...")
+
+                for frame_idx in range(total_frames):
+                    time = frame_idx / original_fps
+                    crop = self.interpolate_crop(keyframes_sorted, time)
+
+                    # Log crop info for first and key frames
+                    if frame_idx == 0 or frame_idx % 30 == 0:
+                        logger.info(f"Frame {frame_idx} @ {time:.2f}s: crop={int(crop['width'])}x{int(crop['height'])} at ({int(crop['x'])}, {int(crop['y'])})")
+
+                    try:
+                        # Extract and crop frame
+                        frame = self.extract_frame_with_crop(input_path, frame_idx, crop)
+
+                        # Verify frame was cropped
+                        cropped_h, cropped_w = frame.shape[:2]
+                        if frame_idx == 0:
+                            logger.info(f"✓ De-zoomed frame size: {cropped_w}x{cropped_h}")
+
+                        # AI upscale to target resolution
+                        enhanced = self.enhance_frame_ai(frame, target_resolution)
+
+                        # Verify upscaling worked
+                        final_h, final_w = enhanced.shape[:2]
+                        if frame_idx == 0:
+                            logger.info(f"✓ Final upscaled size: {final_w}x{final_h}")
+                            if (final_w, final_h) != target_resolution:
+                                logger.error(f"⚠ Size mismatch! Expected {target_resolution}, got ({final_w}, {final_h})")
+
+                        # Save enhanced frame
+                        frame_path = frames_dir / f"frame_{frame_idx:06d}.png"
+                        cv2.imwrite(str(frame_path), enhanced)
+
+                        completed_frames += 1
+
+                        # Progress callback
+                        if progress_callback:
+                            progress_callback(completed_frames, total_frames, f"Upscaling frame {completed_frames}/{total_frames}")
+
+                        # Periodic GPU cleanup
+                        if frame_idx % 10 == 0 and torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+
+                    except Exception as e:
+                        logger.error(f"Failed to process frame {frame_idx}: {e}")
+                        failed_frames.append(frame_idx)
+
+            # Report any failures
+            if failed_frames:
+                logger.error(f"⚠ {len(failed_frames)} frames failed to process: {failed_frames}")
+                raise RuntimeError(f"{len(failed_frames)} frames failed processing")
+
+            logger.info(f"✓ Successfully processed {completed_frames}/{total_frames} frames")
 
             # Reassemble video with FFmpeg
             self.create_video_from_frames(frames_dir, output_path, target_fps)
