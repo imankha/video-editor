@@ -661,7 +661,7 @@ async def export_with_ai_upscale(
         logger.info("=" * 80)
         logger.info("INITIALIZING AI UPSCALER")
         logger.info("=" * 80)
-        upscaler = AIVideoUpscaler(device='cuda')
+        upscaler = AIVideoUpscaler(device='cuda', export_mode=export_mode)
 
         # Verify AI model is loaded - fail if not available (no low-quality fallback)
         if upscaler.upsampler is None:

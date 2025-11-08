@@ -204,8 +204,12 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
     <div className="space-y-2">
       {/* Info about AI upscaling */}
       <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-800/50">
-        <div className="text-xs text-blue-300">
+        <div className="text-xs text-blue-300 mb-2">
           ✨ AI upscaling to 4K (16:9) or 1080x1920 (9:16) with de-zoom
+        </div>
+        <div className="text-xs text-gray-400 space-y-1">
+          <div><strong>Fast:</strong> H.264, 1-pass, medium preset - 2-3x faster</div>
+          <div><strong>Quality:</strong> H.265, 2-pass, veryslow preset - best quality</div>
         </div>
       </div>
 

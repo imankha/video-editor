@@ -35,7 +35,7 @@ class AIVideoUpscaler:
     - Target resolution based on aspect ratio
     """
 
-    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True):
+    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality'):
         """
         Initialize the AI upscaler
 
@@ -43,10 +43,12 @@ class AIVideoUpscaler:
             model_name: Model to use for upscaling
             device: 'cuda' for GPU or 'cpu' for CPU processing
             enable_multi_gpu: Enable multi-GPU parallel processing (default: True)
+            export_mode: Export mode - "fast" or "quality" (default "quality")
         """
         # Detect available GPUs
         self.num_gpus = 0
         self.enable_multi_gpu = enable_multi_gpu
+        self.export_mode = export_mode
 
         if device == 'cuda' and torch.cuda.is_available():
             self.num_gpus = torch.cuda.device_count()
@@ -121,12 +123,17 @@ class AIVideoUpscaler:
             # Initialize upsampler optimized for maximum quality
             logger.info(f"Loading model weights from {model_path}...")
 
-            # Determine optimal tile size based on device
+            # Determine optimal tile size based on device and export mode
             # Larger tiles = better quality (fewer seams) but more VRAM
             if self.device.type == 'cuda':
-                tile_size = 0  # 0 = no tiling (highest quality, requires more VRAM)
-                tile_pad = 0
-                logger.info("GPU detected: Using full-frame processing for maximum quality")
+                if self.export_mode == 'fast':
+                    tile_size = 512  # Tiling for faster processing
+                    tile_pad = 10
+                    logger.info("GPU detected: Using tiled processing (512x512) for FAST mode")
+                else:
+                    tile_size = 0  # 0 = no tiling (highest quality, requires more VRAM)
+                    tile_pad = 0
+                    logger.info("GPU detected: Using full-frame processing for maximum quality")
             else:
                 tile_size = 512  # Tiling for CPU to manage memory
                 tile_pad = 10
@@ -144,6 +151,10 @@ class AIVideoUpscaler:
                 half=True if self.device.type == 'cuda' else False,  # FP16 for speed on GPU
                 device=self.device
             )
+
+            # Store tile configuration
+            self.tile_size = tile_size
+            self.tile_pad = tile_pad
 
             # Create separate upsampler instances for each GPU if multi-GPU enabled
             if self.num_gpus > 1 and self.enable_multi_gpu:
@@ -295,7 +306,7 @@ class AIVideoUpscaler:
 
     def enhance_frame_ai(self, frame: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
         """
-        Enhance a single frame using Real-ESRGAN AI model (maximum quality)
+        Enhance a single frame using Real-ESRGAN AI model
 
         Args:
             frame: Input frame (BGR format)
@@ -321,15 +332,15 @@ class AIVideoUpscaler:
 
             logger.debug(f"AI upscaling frame from {current_w}x{current_h} to {target_w}x{target_h}")
 
-            # Denoise before upscaling to prevent noise amplification
-            if self.device.type == 'cuda':
+            # Denoise before upscaling to prevent noise amplification (QUALITY mode only)
+            if self.device.type == 'cuda' and self.export_mode == 'quality':
                 # Light denoising preserves details
                 frame = cv2.bilateralFilter(frame, d=5, sigmaColor=10, sigmaSpace=10)
 
             # Real-ESRGAN upscales by 4x by default
             # We'll upscale first, then resize to exact target if needed
             with contextlib.redirect_stderr(open(os.devnull, 'w')):
-                # Upscale with AI (4x) - maximum quality
+                # Upscale with AI (4x)
                 enhanced, _ = self.upsampler.enhance(frame, outscale=4)
 
             upscaled_h, upscaled_w = enhanced.shape[:2]
@@ -340,8 +351,8 @@ class AIVideoUpscaler:
                 enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
                 logger.debug(f"Resized to exact target: {target_w}x{target_h}")
 
-            # Sharpen upscaled output for better perceived quality
-            if self.device.type == 'cuda':
+            # Sharpen upscaled output for better perceived quality (QUALITY mode only)
+            if self.device.type == 'cuda' and self.export_mode == 'quality':
                 # Gaussian blur for unsharp mask
                 gaussian = cv2.GaussianBlur(enhanced, (0, 0), 2.0)
                 # Unsharp mask: original + (original - blurred) * amount
@@ -398,9 +409,9 @@ class AIVideoUpscaler:
             current_h, current_w = frame.shape[:2]
             target_w, target_h = target_resolution
 
-            # Denoise before upscaling to prevent noise amplification
+            # Denoise before upscaling to prevent noise amplification (QUALITY mode only)
             gpu_device = torch.device(f'cuda:{gpu_id}') if gpu_id >= 0 else self.device
-            if gpu_device.type == 'cuda':
+            if gpu_device.type == 'cuda' and self.export_mode == 'quality':
                 # Light denoising preserves details
                 frame = cv2.bilateralFilter(frame, d=5, sigmaColor=10, sigmaSpace=10)
 
@@ -414,8 +425,8 @@ class AIVideoUpscaler:
             if enhanced.shape[:2] != (target_h, target_w):
                 enhanced = cv2.resize(enhanced, target_resolution, interpolation=cv2.INTER_LANCZOS4)
 
-            # Sharpen upscaled output for better perceived quality
-            if gpu_device.type == 'cuda':
+            # Sharpen upscaled output for better perceived quality (QUALITY mode only)
+            if gpu_device.type == 'cuda' and self.export_mode == 'quality':
                 # Gaussian blur for unsharp mask
                 gaussian = cv2.GaussianBlur(enhanced, (0, 0), 2.0)
                 # Unsharp mask: original + (original - blurred) * amount
@@ -802,15 +813,17 @@ class AIVideoUpscaler:
 
         # Set encoding parameters based on export mode
         if export_mode == "fast":
+            codec = "libx264"  # H.264 - faster encoding
             preset = "medium"
             crf = "15"
-            logger.info(f"Encoding video with FAST settings (1-pass, medium preset, CRF {crf}) at {fps} fps...")
+            logger.info(f"Encoding video with FAST settings (H.264, 1-pass, medium preset, CRF {crf}) at {fps} fps...")
         else:
+            codec = "libx265"  # H.265 - better compression
             preset = "veryslow"
             crf = "10"
-            logger.info(f"Encoding video with QUALITY settings (2-pass, veryslow preset, CRF {crf}) at {fps} fps...")
+            logger.info(f"Encoding video with QUALITY settings (H.265, 2-pass, veryslow preset, CRF {crf}) at {fps} fps...")
 
-        # Pass 1 - Analysis (only for quality mode)
+        # Pass 1 - Analysis (only for quality mode with H.265)
         if export_mode == "quality":
             ffmpeg_pass1_start = datetime.now()
             logger.info("=" * 60)
@@ -823,7 +836,7 @@ class AIVideoUpscaler:
                 '-i', frames_pattern,
                 '-i', input_video_path,
                 '-map', '0:v', '-map', '1:a?',
-                '-c:v', 'libx265',
+                '-c:v', codec,
                 '-preset', preset,
                 '-crf', crf,
                 '-x265-params', 'pass=1:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6',
@@ -861,22 +874,35 @@ class AIVideoUpscaler:
 
         if export_mode == "quality":
             logger.info("Starting pass 2 - encoding video...")
-            x265_params = 'pass=2:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6'
         else:
             logger.info("Starting single-pass encoding...")
-            x265_params = 'aq-mode=3:aq-strength=1.0:deblock=-1,-1'
 
         logger.info("=" * 60)
+
+        # Build FFmpeg command based on codec
         cmd_pass2 = [
             'ffmpeg', '-y',
             '-framerate', str(fps),
             '-i', frames_pattern,
             '-i', input_video_path,
             '-map', '0:v', '-map', '1:a?',
-            '-c:v', 'libx265',
+            '-c:v', codec,
             '-preset', preset,
-            '-crf', crf,
-            '-x265-params', x265_params,
+            '-crf', crf
+        ]
+
+        # Add codec-specific parameters
+        if codec == 'libx265':
+            # H.265 specific parameters
+            if export_mode == "quality":
+                x265_params = 'pass=2:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6'
+            else:
+                x265_params = 'aq-mode=3:aq-strength=1.0:deblock=-1,-1'
+            cmd_pass2.extend(['-x265-params', x265_params])
+        # libx264 uses default parameters (no special params needed for fast mode)
+
+        # Add common parameters
+        cmd_pass2.extend([
             '-c:a', 'aac', '-b:a', '256k',
             '-pix_fmt', 'yuv420p',
             '-colorspace', 'bt709',
@@ -885,7 +911,7 @@ class AIVideoUpscaler:
             '-color_range', 'tv',
             '-movflags', '+faststart',
             str(output_path)
-        ]
+        ])
 
         try:
             result = subprocess.run(
