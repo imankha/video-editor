@@ -599,6 +599,9 @@ async def export_with_ai_upscale(
         logger.info("STARTING AI UPSCALE PROCESS WITH DE-ZOOM")
         logger.info("=" * 80)
 
+        # Capture the event loop BEFORE entering the thread
+        loop = asyncio.get_running_loop()
+
         def progress_callback(current, total, message):
             """Update progress tracking, log, and send via WebSocket"""
             percent = (current / total) * 100
@@ -612,14 +615,12 @@ async def export_with_ai_upscale(
             export_progress[export_id] = progress_data
             logger.info(f"Progress: {percent:.1f}% - {message}")
 
-            # Send update via WebSocket - create new task in background
+            # Send update via WebSocket using the captured event loop
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.run_coroutine_threadsafe(
-                        manager.send_progress(export_id, progress_data),
-                        loop
-                    )
+                asyncio.run_coroutine_threadsafe(
+                    manager.send_progress(export_id, progress_data),
+                    loop
+                )
             except Exception as e:
                 logger.error(f"Failed to send WebSocket update: {e}")
 
