@@ -773,7 +773,7 @@ class AIVideoUpscaler:
             logger.info("=" * 60)
 
             # Reassemble video with FFmpeg
-            self.create_video_from_frames(frames_dir, output_path, target_fps, input_path, export_mode)
+            self.create_video_from_frames(frames_dir, output_path, target_fps, input_path, export_mode, progress_callback)
 
             return {
                 'success': True,
@@ -792,13 +792,31 @@ class AIVideoUpscaler:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
+    def parse_ffmpeg_progress(self, line: str) -> Optional[int]:
+        """
+        Parse FFmpeg progress output to extract current frame number
+
+        Args:
+            line: Line from FFmpeg stderr output
+
+        Returns:
+            Frame number if found, None otherwise
+        """
+        import re
+        # FFmpeg outputs progress lines like: "frame=  126 fps= 38 q=-1.0 ..."
+        match = re.search(r'frame=\s*(\d+)', line)
+        if match:
+            return int(match.group(1))
+        return None
+
     def create_video_from_frames(
         self,
         frames_dir: Path,
         output_path: str,
         fps: int,
         input_video_path: str,
-        export_mode: str = "quality"
+        export_mode: str = "quality",
+        progress_callback=None
     ):
         """
         Create video from enhanced frames using FFmpeg encoding
@@ -809,8 +827,14 @@ class AIVideoUpscaler:
             fps: Output framerate
             input_video_path: Path to input video (for audio)
             export_mode: Export mode - "fast" (1-pass) or "quality" (2-pass)
+            progress_callback: Optional callback(current, total, message, phase)
         """
         frames_pattern = str(frames_dir / "frame_%06d.png")
+
+        # Count total frames for progress tracking
+        frame_files = list(frames_dir.glob("frame_*.png"))
+        total_frames = len(frame_files)
+        logger.info(f"Total frames to encode: {total_frames}")
 
         # Set encoding parameters based on export mode
         if export_mode == "fast":
@@ -847,12 +871,41 @@ class AIVideoUpscaler:
             ]
 
             try:
-                result = subprocess.run(
+                # Use Popen to read stderr in real-time for progress monitoring
+                process = subprocess.Popen(
                     cmd_pass1,
-                    check=True,
-                    capture_output=True,
-                    text=True
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    universal_newlines=True
                 )
+
+                # Read stderr line by line to track progress
+                last_frame = 0
+                for line in process.stderr:
+                    # Parse frame number from FFmpeg output
+                    frame_num = self.parse_ffmpeg_progress(line)
+                    if frame_num is not None and frame_num > last_frame:
+                        last_frame = frame_num
+                        # Send progress callback
+                        if progress_callback:
+                            progress_callback(
+                                frame_num,
+                                total_frames,
+                                f"Pass 1: Analyzing frame {frame_num}/{total_frames}",
+                                phase='ffmpeg_pass1'
+                            )
+
+                # Wait for process to complete
+                process.wait()
+
+                if process.returncode != 0:
+                    # Read any remaining output for error reporting
+                    _, stderr = process.communicate()
+                    logger.error(f"FFmpeg pass 1 failed with return code {process.returncode}")
+                    raise RuntimeError(f"Video encoding pass 1 failed: {stderr}")
+
                 ffmpeg_pass1_end = datetime.now()
                 ffmpeg_pass1_duration = (ffmpeg_pass1_end - ffmpeg_pass1_start).total_seconds()
                 logger.info("=" * 60)
@@ -863,6 +916,9 @@ class AIVideoUpscaler:
             except subprocess.CalledProcessError as e:
                 logger.error(f"FFmpeg pass 1 failed: {e.stderr}")
                 raise RuntimeError(f"Video encoding pass 1 failed: {e.stderr}")
+            except Exception as e:
+                logger.error(f"FFmpeg pass 1 failed: {e}")
+                raise RuntimeError(f"Video encoding pass 1 failed: {e}")
         else:
             logger.info("=" * 60)
             logger.info("Skipping pass 1 for FAST mode - using single-pass encoding")
@@ -915,12 +971,45 @@ class AIVideoUpscaler:
         ])
 
         try:
-            result = subprocess.run(
+            # Use Popen to read stderr in real-time for progress monitoring
+            process = subprocess.Popen(
                 cmd_pass2,
-                check=True,
-                capture_output=True,
-                text=True
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
             )
+
+            # Read stderr line by line to track progress
+            last_frame = 0
+            for line in process.stderr:
+                # Parse frame number from FFmpeg output
+                frame_num = self.parse_ffmpeg_progress(line)
+                if frame_num is not None and frame_num > last_frame:
+                    last_frame = frame_num
+                    # Send progress callback
+                    if progress_callback:
+                        if export_mode == "quality":
+                            message = f"Pass 2: Encoding frame {frame_num}/{total_frames}"
+                        else:
+                            message = f"Encoding frame {frame_num}/{total_frames}"
+                        progress_callback(
+                            frame_num,
+                            total_frames,
+                            message,
+                            phase='ffmpeg_encode'
+                        )
+
+            # Wait for process to complete
+            process.wait()
+
+            if process.returncode != 0:
+                # Read any remaining output for error reporting
+                _, stderr = process.communicate()
+                logger.error(f"FFmpeg encoding failed with return code {process.returncode}")
+                raise RuntimeError(f"Video encoding failed: {stderr}")
+
             ffmpeg_pass2_end = datetime.now()
             ffmpeg_pass2_duration = (ffmpeg_pass2_end - ffmpeg_pass2_start).total_seconds()
             logger.info("=" * 60)
@@ -934,3 +1023,6 @@ class AIVideoUpscaler:
         except subprocess.CalledProcessError as e:
             logger.error(f"FFmpeg encoding failed: {e.stderr}")
             raise RuntimeError(f"Video encoding failed: {e.stderr}")
+        except Exception as e:
+            logger.error(f"FFmpeg encoding failed: {e}")
+            raise RuntimeError(f"Video encoding failed: {e}")
