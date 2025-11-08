@@ -72,7 +72,7 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
     };
   };
 
-  const handleExport = async () => {
+  const handleExport = async (exportMode = 'quality') => {
     if (!videoFile) {
       setError('No video file loaded');
       return;
@@ -100,6 +100,7 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
       formData.append('keyframes_json', JSON.stringify(cropKeyframes));
       formData.append('target_fps', '30');
       formData.append('export_id', exportId);
+      formData.append('export_mode', exportMode);
 
       // Always use AI upscale endpoint
       const endpoint = 'http://localhost:8000/api/export/upscale';
@@ -208,34 +209,71 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
         </div>
       </div>
 
-      <button
-        onClick={handleExport}
-        disabled={disabled || isExporting || !videoFile}
-        className={`w-full px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-          disabled || isExporting || !videoFile
-            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-            : 'bg-green-600 hover:bg-green-700 text-white'
-        }`}
-      >
-        {isExporting ? (
-          <div className="flex flex-col items-center gap-1 w-full">
-            <div className="flex items-center gap-2">
-              <Loader className="animate-spin" size={18} />
-              <span>AI Upscaling... {progress}%</span>
+      {/* Export mode buttons */}
+      <div className="grid grid-cols-2 gap-2">
+        {/* Fast Export Button */}
+        <button
+          onClick={() => handleExport('fast')}
+          disabled={disabled || isExporting || !videoFile}
+          className={`px-4 py-3 rounded-lg font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
+            disabled || isExporting || !videoFile
+              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              : 'bg-orange-600 hover:bg-orange-700 text-white'
+          }`}
+        >
+          {isExporting ? (
+            <div className="flex flex-col items-center gap-1">
+              <Loader className="animate-spin" size={16} />
+              <span className="text-xs">Exporting...</span>
             </div>
-            {progressMessage && (
-              <div className="text-xs opacity-80">
-                {progressMessage}
-              </div>
-            )}
+          ) : (
+            <>
+              <Download size={16} />
+              <span className="text-sm">Fast Export</span>
+              <span className="text-xs opacity-70">Medium quality</span>
+            </>
+          )}
+        </button>
+
+        {/* Quality Export Button */}
+        <button
+          onClick={() => handleExport('quality')}
+          disabled={disabled || isExporting || !videoFile}
+          className={`px-4 py-3 rounded-lg font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
+            disabled || isExporting || !videoFile
+              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              : 'bg-green-600 hover:bg-green-700 text-white'
+          }`}
+        >
+          {isExporting ? (
+            <div className="flex flex-col items-center gap-1">
+              <Loader className="animate-spin" size={16} />
+              <span className="text-xs">Exporting...</span>
+            </div>
+          ) : (
+            <>
+              <Download size={16} />
+              <span className="text-sm">Quality Export</span>
+              <span className="text-xs opacity-70">Best quality</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Progress display when exporting */}
+      {isExporting && (
+        <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
+          <div className="flex items-center gap-2 mb-2">
+            <Loader className="animate-spin" size={18} />
+            <span className="font-medium">AI Upscaling... {progress}%</span>
           </div>
-        ) : (
-          <>
-            <Download size={18} />
-            Export Video (AI Enhanced)
-          </>
-        )}
-      </button>
+          {progressMessage && (
+            <div className="text-xs opacity-80 mb-2">
+              {progressMessage}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Progress bar */}
       {isExporting && (

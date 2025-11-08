@@ -16,8 +16,12 @@ import logging
 import asyncio
 import subprocess
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging with timestamps
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 # AI upscaler will be imported on-demand to avoid import errors
@@ -570,7 +574,8 @@ async def export_with_ai_upscale(
     video: UploadFile = File(...),
     keyframes_json: str = Form(...),
     target_fps: int = Form(30),
-    export_id: str = Form(...)
+    export_id: str = Form(...),
+    export_mode: str = Form("quality")
 ):
     """
     Export video with AI upscaling and de-zoom
@@ -588,6 +593,7 @@ async def export_with_ai_upscale(
         keyframes_json: JSON array of crop keyframes
         target_fps: Output framerate (default 30)
         export_id: Unique ID for tracking export progress
+        export_mode: Export mode - "fast" or "quality" (default "quality")
 
     Returns:
         AI-upscaled video file
@@ -737,6 +743,7 @@ async def export_with_ai_upscale(
             output_path=output_path,
             keyframes=keyframes_dict,
             target_fps=target_fps,
+            export_mode=export_mode,
             progress_callback=progress_callback
         )
 
