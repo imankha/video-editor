@@ -717,6 +717,10 @@ async def export_with_ai_upscale(
                 logger.error(f"Failed to send WebSocket update: {e}")
 
         # Update progress - initializing (10% to leave room for upload at 0-5%)
+        init_timestamp = datetime.now()
+        logger.info("=" * 80)
+        logger.info(f"[EXPORT_PHASE] INITIALIZATION START - {init_timestamp.isoformat()}")
+        logger.info("=" * 80)
         init_data = {
             "progress": 10,
             "message": "Initializing AI upscaler...",
@@ -736,7 +740,11 @@ async def export_with_ai_upscale(
             progress_callback=progress_callback
         )
 
+        complete_timestamp = datetime.now()
+        total_duration = (complete_timestamp - init_timestamp).total_seconds()
         logger.info("=" * 80)
+        logger.info(f"[EXPORT_PHASE] EXPORT COMPLETE - {complete_timestamp.isoformat()}")
+        logger.info(f"[EXPORT_PHASE] TOTAL_DURATION - {total_duration:.2f} seconds ({total_duration/60:.2f} minutes)")
         logger.info(f"✓ AI UPSCALING COMPLETE!")
         logger.info(f"Result: {result}")
         logger.info(f"Output: {output_path}")

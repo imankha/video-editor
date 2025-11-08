@@ -16,6 +16,7 @@ import tempfile
 import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+from datetime import datetime
 
 # Configure logging
 logging.getLogger('basicsr').setLevel(logging.CRITICAL)
@@ -609,7 +610,9 @@ class AIVideoUpscaler:
                 logger.info(f"  Frame {test_idx} @ {test_time:.2f}s: crop={int(test_crop['width'])}x{int(test_crop['height'])} at ({int(test_crop['x'])}, {int(test_crop['y'])})")
 
             # Process frames - use multi-GPU if available, otherwise sequential
+            ai_upscale_start = datetime.now()
             logger.info("=" * 60)
+            logger.info(f"[EXPORT_PHASE] AI_UPSCALE START - {ai_upscale_start.isoformat()}")
             logger.info("STARTING FRAME PROCESSING")
             logger.info("=" * 60)
 
@@ -746,7 +749,13 @@ class AIVideoUpscaler:
                 logger.error(f"⚠ {len(failed_frames)} frames failed to process: {failed_frames}")
                 raise RuntimeError(f"{len(failed_frames)} frames failed processing")
 
+            ai_upscale_end = datetime.now()
+            ai_upscale_duration = (ai_upscale_end - ai_upscale_start).total_seconds()
+            logger.info("=" * 60)
+            logger.info(f"[EXPORT_PHASE] AI_UPSCALE END - {ai_upscale_end.isoformat()}")
+            logger.info(f"[EXPORT_PHASE] AI_UPSCALE DURATION - {ai_upscale_duration:.2f} seconds")
             logger.info(f"✓ Successfully processed {completed_frames}/{total_frames} frames")
+            logger.info("=" * 60)
 
             # Reassemble video with FFmpeg
             self.create_video_from_frames(frames_dir, output_path, target_fps, input_path)
@@ -789,7 +798,11 @@ class AIVideoUpscaler:
         logger.info(f"Encoding video with two-pass FFmpeg at {fps} fps...")
 
         # Pass 1 - Analysis
+        ffmpeg_pass1_start = datetime.now()
+        logger.info("=" * 60)
+        logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 START - {ffmpeg_pass1_start.isoformat()}")
         logger.info("Starting pass 1 - analyzing video...")
+        logger.info("=" * 60)
         cmd_pass1 = [
             'ffmpeg', '-y',
             '-framerate', str(fps),
@@ -812,13 +825,23 @@ class AIVideoUpscaler:
                 capture_output=True,
                 text=True
             )
+            ffmpeg_pass1_end = datetime.now()
+            ffmpeg_pass1_duration = (ffmpeg_pass1_end - ffmpeg_pass1_start).total_seconds()
+            logger.info("=" * 60)
+            logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 END - {ffmpeg_pass1_end.isoformat()}")
+            logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 DURATION - {ffmpeg_pass1_duration:.2f} seconds")
             logger.info("Pass 1 complete!")
+            logger.info("=" * 60)
         except subprocess.CalledProcessError as e:
             logger.error(f"FFmpeg pass 1 failed: {e.stderr}")
             raise RuntimeError(f"Video encoding pass 1 failed: {e.stderr}")
 
         # Pass 2 - Encode
+        ffmpeg_pass2_start = datetime.now()
+        logger.info("=" * 60)
+        logger.info(f"[EXPORT_PHASE] FFMPEG_PASS2 START - {ffmpeg_pass2_start.isoformat()}")
         logger.info("Starting pass 2 - encoding video...")
+        logger.info("=" * 60)
         cmd_pass2 = [
             'ffmpeg', '-y',
             '-framerate', str(fps),
@@ -846,7 +869,13 @@ class AIVideoUpscaler:
                 capture_output=True,
                 text=True
             )
+            ffmpeg_pass2_end = datetime.now()
+            ffmpeg_pass2_duration = (ffmpeg_pass2_end - ffmpeg_pass2_start).total_seconds()
+            logger.info("=" * 60)
+            logger.info(f"[EXPORT_PHASE] FFMPEG_PASS2 END - {ffmpeg_pass2_end.isoformat()}")
+            logger.info(f"[EXPORT_PHASE] FFMPEG_PASS2 DURATION - {ffmpeg_pass2_duration:.2f} seconds")
             logger.info("Pass 2 complete! Video encoding finished.")
+            logger.info("=" * 60)
         except subprocess.CalledProcessError as e:
             logger.error(f"FFmpeg pass 2 failed: {e.stderr}")
             raise RuntimeError(f"Video encoding pass 2 failed: {e.stderr}")
