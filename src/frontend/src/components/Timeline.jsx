@@ -2,6 +2,7 @@ import React from 'react';
 import { Film } from 'lucide-react';
 import { formatTimeSimple } from '../utils/timeFormat';
 import CropLayer from './CropLayer';
+import SegmentLayer from './SegmentLayer';
 
 /**
  * Timeline component - Shows timeline with playhead and scrubber
@@ -13,6 +14,13 @@ import CropLayer from './CropLayer';
  * @param {boolean} props.isCropActive - Whether crop layer is active
  * @param {Function} props.onCropKeyframeClick - Callback when crop keyframe is clicked
  * @param {Function} props.onCropKeyframeDelete - Callback when crop keyframe is deleted
+ * @param {Array} props.segments - Segments to display
+ * @param {Array} props.segmentBoundaries - Segment boundaries
+ * @param {boolean} props.isSegmentActive - Whether segment layer is active
+ * @param {Function} props.onAddSegmentBoundary - Callback when adding segment boundary
+ * @param {Function} props.onRemoveSegmentBoundary - Callback when removing segment boundary
+ * @param {Function} props.onSegmentSpeedChange - Callback when segment speed changes
+ * @param {Function} props.onSegmentTrim - Callback when segment is trimmed
  */
 export function Timeline({
   currentTime,
@@ -21,7 +29,14 @@ export function Timeline({
   cropKeyframes = [],
   isCropActive = false,
   onCropKeyframeClick,
-  onCropKeyframeDelete
+  onCropKeyframeDelete,
+  segments = [],
+  segmentBoundaries = [],
+  isSegmentActive = false,
+  onAddSegmentBoundary,
+  onRemoveSegmentBoundary,
+  onSegmentSpeedChange,
+  onSegmentTrim
 }) {
   const timelineRef = React.useRef(null);
   const [isDragging, setIsDragging] = React.useState(false);
@@ -132,12 +147,29 @@ export function Timeline({
           </div>
         )}
 
+        {/* Segment Layer */}
+        {segments.length > 0 && (
+          <div className="mt-1">
+            <SegmentLayer
+              segments={segments}
+              boundaries={segmentBoundaries}
+              duration={duration}
+              currentTime={currentTime}
+              isActive={isSegmentActive}
+              onAddBoundary={onAddSegmentBoundary}
+              onRemoveBoundary={onRemoveSegmentBoundary}
+              onSegmentSpeedChange={onSegmentSpeedChange}
+              onSegmentTrim={onSegmentTrim}
+            />
+          </div>
+        )}
+
         {/* Unified Playhead - extends through all layers */}
         <div
           className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none left-32"
           style={{
             left: `calc(8rem + (100% - 8rem) * ${progress / 100})`,  // 8rem label + progress% of remaining width
-            height: cropKeyframes.length > 0 ? 'calc(100% - 0.25rem)' : '3rem'  // Extend through all layers
+            height: (cropKeyframes.length > 0 || segments.length > 0) ? 'calc(100% - 0.25rem)' : '3rem'  // Extend through all layers
           }}
         >
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full" />

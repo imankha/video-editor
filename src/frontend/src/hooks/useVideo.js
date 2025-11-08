@@ -4,9 +4,10 @@ import { validateVideoFile } from '../utils/fileValidation';
 
 /**
  * Custom hook for managing video state and playback
+ * @param {Function} getSegmentAtTime - Optional function to get segment info at a given time
  * @returns {Object} Video state and control functions
  */
-export function useVideo() {
+export function useVideo(getSegmentAtTime = null) {
   const videoRef = useRef(null);
   const [videoFile, setVideoFile] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
@@ -161,6 +162,31 @@ export function useVideo() {
       setDuration(videoRef.current.duration);
     }
   };
+
+  // Adjust playback rate based on current segment speed
+  useEffect(() => {
+    if (!videoRef.current || !getSegmentAtTime) return;
+
+    const segment = getSegmentAtTime(currentTime);
+    if (segment) {
+      // Set playback rate based on segment speed
+      videoRef.current.playbackRate = segment.speed;
+
+      // If playing and in a trimmed segment, skip to the next non-trimmed segment
+      if (isPlaying && segment.isTrimmed) {
+        // Find next non-trimmed segment
+        if (segment.end < duration) {
+          seek(segment.end + 0.01); // Skip to just after this segment
+        } else {
+          // End of video
+          pause();
+        }
+      }
+    } else {
+      // No segment info, use normal playback
+      videoRef.current.playbackRate = 1;
+    }
+  }, [currentTime, getSegmentAtTime, isPlaying, duration]);
 
   // Cleanup on unmount
   useEffect(() => {

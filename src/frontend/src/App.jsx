@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useVideo } from './hooks/useVideo';
 import useCrop from './hooks/useCrop';
 import useZoom from './hooks/useZoom';
+import { useSegments } from './hooks/useSegments';
 import { VideoPlayer } from './components/VideoPlayer';
 import { Timeline } from './components/Timeline';
 import { Controls } from './components/Controls';
@@ -16,6 +17,21 @@ function App() {
   const [videoFile, setVideoFile] = useState(null);
   // Temporary state for live drag/resize preview (null when not dragging)
   const [dragCrop, setDragCrop] = useState(null);
+
+  // Segments hook (defined early so we can pass getSegmentAtTime to useVideo)
+  const {
+    boundaries: segmentBoundaries,
+    segments,
+    initializeWithDuration: initializeSegments,
+    reset: resetSegments,
+    addBoundary: addSegmentBoundary,
+    removeBoundary: removeSegmentBoundary,
+    setSegmentSpeed,
+    toggleTrimSegment,
+    getSegmentAtTime,
+    getExportData: getSegmentExportData,
+    isTimeVisible,
+  } = useSegments();
 
   const {
     videoRef,
@@ -32,7 +48,7 @@ function App() {
     stepForward,
     stepBackward,
     handlers,
-  } = useVideo();
+  } = useVideo(getSegmentAtTime);
 
   // Crop hook - always active when video loaded
   const {
@@ -64,6 +80,13 @@ function App() {
     setVideoFile(file);
     await loadVideo(file);
   };
+
+  // Initialize segments when video duration is available
+  useEffect(() => {
+    if (duration && duration > 0) {
+      initializeSegments(duration);
+    }
+  }, [duration, initializeSegments]);
 
   // DERIVED STATE: Single source of truth
   // - If dragging: show live preview (dragCrop)
@@ -231,6 +254,13 @@ function App() {
                   isCropActive={true}
                   onCropKeyframeClick={handleKeyframeClick}
                   onCropKeyframeDelete={handleKeyframeDelete}
+                  segments={segments}
+                  segmentBoundaries={segmentBoundaries}
+                  isSegmentActive={true}
+                  onAddSegmentBoundary={addSegmentBoundary}
+                  onRemoveSegmentBoundary={removeSegmentBoundary}
+                  onSegmentSpeedChange={setSegmentSpeed}
+                  onSegmentTrim={toggleTrimSegment}
                 />
               </CropProvider>
             </div>
@@ -256,6 +286,7 @@ function App() {
               <ExportButton
                 videoFile={videoFile}
                 cropKeyframes={keyframes}
+                segmentData={getSegmentExportData()}
                 disabled={!videoFile}
               />
             </div>

@@ -14,7 +14,7 @@ function generateExportId() {
  * Always uses AI upscaling with de-zoom for best quality
  * Automatically downloads the exported video
  */
-export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
+export default function ExportButton({ videoFile, cropKeyframes, segmentData, disabled }) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
@@ -101,6 +101,11 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
       formData.append('target_fps', '30');
       formData.append('export_id', exportId);
       formData.append('export_mode', exportMode);
+
+      // Add segment data if available (only if speed changes or trimming exist)
+      if (segmentData) {
+        formData.append('segment_data_json', JSON.stringify(segmentData));
+      }
 
       // Always use AI upscale endpoint
       const endpoint = 'http://localhost:8000/api/export/upscale';
