@@ -1,4 +1,4 @@
-import { Split, Trash2 } from 'lucide-react';
+import { Split, Trash2, RotateCcw } from 'lucide-react';
 
 /**
  * SegmentLayer component - displays video segments with speed control and trimming
@@ -72,7 +72,7 @@ export default function SegmentLayer({
   };
 
   return (
-    <div className={`relative bg-gray-800 border-t border-gray-700 ${isActive ? 'ring-2 ring-blue-500' : ''}`} style={{ minHeight: '60px', paddingBottom: '8px' }}>
+    <div className={`relative bg-gray-800 border-t border-gray-700 overflow-visible ${isActive ? 'ring-2 ring-blue-500' : ''}`} style={{ minHeight: '60px', paddingBottom: '8px' }}>
       {/* Layer label */}
       <div className="absolute left-0 top-0 h-12 flex items-center justify-center bg-gray-900 border-r border-gray-700 w-32">
         <Split size={18} className="text-purple-400" />
@@ -80,7 +80,7 @@ export default function SegmentLayer({
 
       {/* Segments track */}
       <div
-        className="segment-track absolute left-32 right-0 top-0 h-12 cursor-pointer"
+        className="segment-track absolute left-32 right-0 top-0 h-12 cursor-pointer overflow-visible"
         onClick={handleTrackClick}
       >
         {/* Background track */}
@@ -95,8 +95,8 @@ export default function SegmentLayer({
           </div>
         )}
 
-        {/* Render segments */}
-        {segments.map((segment) => {
+        {/* Render active (non-trimmed) segments */}
+        {segments.filter(s => !s.isTrimmed).map((segment) => {
           const startPos = timeToPixel(segment.start);
           const endPos = timeToPixel(segment.end);
           const width = endPos - startPos;
@@ -112,27 +112,14 @@ export default function SegmentLayer({
             >
               {/* Segment background */}
               <div
-                className={`h-12 transition-all ${
-                  segment.isTrimmed
-                    ? 'bg-red-900 bg-opacity-40'
-                    : 'hover:bg-purple-700 hover:bg-opacity-30'
-                }`}
-                title={`Segment ${segment.index + 1}: ${segment.speed}x${segment.isTrimmed ? ' (trimmed)' : ''}`}
+                className="h-12 transition-all hover:bg-purple-700 hover:bg-opacity-30"
+                title={`Segment ${segment.index + 1}: ${segment.speed}x`}
               >
                 {/* Speed indicator (show if speed != 1) */}
-                {segment.speed !== 1 && !segment.isTrimmed && (
+                {segment.speed !== 1 && (
                   <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
                     <div className="bg-purple-600 text-white text-xs px-2 py-0.5 rounded font-semibold">
                       {segment.speed}x
-                    </div>
-                  </div>
-                )}
-
-                {/* Trimmed indicator */}
-                {segment.isTrimmed && (
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-                    <div className="bg-red-600 text-white text-xs px-2 py-0.5 rounded font-semibold">
-                      TRIMMED
                     </div>
                   </div>
                 )}
@@ -143,62 +130,97 @@ export default function SegmentLayer({
                 {/* Trash button (only for first or last segment, and only if there are at least 2 segments) */}
                 {(segment.isFirst || segment.isLast) && segments.length >= 2 && (
                   <button
-                    className={`p-1.5 rounded transition-colors ${
-                      segment.isTrimmed
-                        ? 'bg-green-600 hover:bg-green-700 text-white'
-                        : 'bg-red-600 hover:bg-red-700 text-white'
-                    }`}
+                    className="p-1.5 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleTrim(segment.index);
                     }}
-                    title={segment.isTrimmed ? 'Restore segment' : 'Trim segment'}
+                    title="Trim segment"
                   >
                     <Trash2 size={12} />
                   </button>
                 )}
 
                 {/* Speed buttons (only show speeds that aren't current) */}
-                {!segment.isTrimmed && (
-                  <>
-                    {segment.speed !== 0.5 && (
-                      <button
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSpeedChange(segment.index, 0.5);
-                        }}
-                        title="Set speed to 0.5x"
-                      >
-                        0.5x
-                      </button>
-                    )}
-                    {segment.speed !== 1 && (
-                      <button
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSpeedChange(segment.index, 1);
-                        }}
-                        title="Set speed to 1x (normal)"
-                      >
-                        1x
-                      </button>
-                    )}
-                    {segment.speed !== 2 && (
-                      <button
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSpeedChange(segment.index, 2);
-                        }}
-                        title="Set speed to 2x"
-                      >
-                        2x
-                      </button>
-                    )}
-                  </>
-                )}
+                <>
+                  {segment.speed !== 0.5 && (
+                    <button
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSpeedChange(segment.index, 0.5);
+                      }}
+                      title="Set speed to 0.5x"
+                    >
+                      0.5x
+                    </button>
+                  )}
+                  {segment.speed !== 1 && (
+                    <button
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSpeedChange(segment.index, 1);
+                      }}
+                      title="Set speed to 1x (normal)"
+                    >
+                      1x
+                    </button>
+                  )}
+                  {segment.speed !== 2 && (
+                    <button
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSpeedChange(segment.index, 2);
+                      }}
+                      title="Set speed to 2x"
+                    >
+                      2x
+                    </button>
+                  )}
+                </>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Render trimmed segments as collapsed indicators outside timeline */}
+        {segments.filter(s => s.isTrimmed).map((segment) => {
+          const segmentDuration = segment.end - segment.start;
+          // Position trimmed segments outside the playable timeline
+          // First segment: place to the left (negative position)
+          // Last segment: place to the right (beyond 100%)
+          const collapsedWidth = 50; // px - wide enough to click
+          const position = segment.isFirst ? '-60px' : 'calc(100% + 10px)';
+
+          return (
+            <div
+              key={`trimmed-${segment.index}`}
+              className="absolute top-0 h-12"
+              style={{
+                [segment.isFirst ? 'right' : 'left']: position,
+                width: `${collapsedWidth}px`
+              }}
+            >
+              {/* Trimmed indicator strip */}
+              <div className="h-12 bg-gray-700 bg-opacity-60 border-2 border-dashed border-gray-500 rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-600 transition-all">
+                <div className="text-gray-300 text-[10px] font-semibold">TRIM</div>
+                <div className="text-gray-400 text-[9px]">{segmentDuration.toFixed(1)}s</div>
+              </div>
+
+              {/* Restore button below */}
+              <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 z-10">
+                <button
+                  className="p-1.5 rounded transition-colors bg-green-600 hover:bg-green-700 text-white"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTrim(segment.index);
+                  }}
+                  title="Restore trimmed segment"
+                >
+                  <RotateCcw size={12} />
+                </button>
               </div>
             </div>
           );
