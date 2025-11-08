@@ -696,19 +696,49 @@ async def export_with_ai_upscale(
         # Capture the event loop BEFORE entering the thread
         loop = asyncio.get_running_loop()
 
-        def progress_callback(current, total, message):
-            """Update progress tracking, log, and send via WebSocket"""
-            # Scale progress: 0-100% frame processing → 10-100% overall progress
-            # This prevents progress from going backward after initialization (10%)
-            frame_percent = (current / total) * 100
-            overall_percent = 10 + (frame_percent * 0.9)  # Scale to 10-100% range
+        # Define progress allocations based on export mode (from empirical timing data)
+        # FAST: AI=95.2%, Encode=4.8%
+        # QUALITY: AI=18.5%, Pass1=52.8%, Pass2=28.7%
+        if export_mode == "FAST":
+            progress_ranges = {
+                'ai_upscale': (10, 95),      # 85% of progress bar
+                'ffmpeg_encode': (95, 100)    # 5% of progress bar
+            }
+        else:  # QUALITY
+            progress_ranges = {
+                'ai_upscale': (10, 28),       # 18% of progress bar (18.5% of time)
+                'ffmpeg_pass1': (28, 81),     # 53% of progress bar (52.8% of time)
+                'ffmpeg_encode': (81, 100)    # 19% of progress bar (28.7% of time)
+            }
+
+        def progress_callback(current, total, message, phase='ai_upscale'):
+            """
+            Update progress tracking with phase-aware calculations
+
+            Args:
+                current: Current item number in this phase
+                total: Total items in this phase
+                message: Progress message
+                phase: Current phase - 'ai_upscale', 'ffmpeg_pass1', or 'ffmpeg_encode'
+            """
+            # Get progress range for this phase
+            if phase not in progress_ranges:
+                logger.warning(f"Unknown phase: {phase}, defaulting to ai_upscale")
+                phase = 'ai_upscale'
+
+            start_percent, end_percent = progress_ranges[phase]
+
+            # Calculate progress within this phase
+            phase_progress = (current / total) if total > 0 else 0
+            overall_percent = start_percent + (phase_progress * (end_percent - start_percent))
 
             progress_data = {
                 "progress": overall_percent,
                 "message": message,
                 "status": "processing",
                 "current": current,
-                "total": total
+                "total": total,
+                "phase": phase
             }
             export_progress[export_id] = progress_data
             logger.info(f"Progress: {overall_percent:.1f}% - {message}")
