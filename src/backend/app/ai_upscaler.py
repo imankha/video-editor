@@ -769,7 +769,7 @@ class AIVideoUpscaler:
             '-map', '0:v', '-map', '1:a?',
             '-c:v', 'libx265',
             '-preset', 'slower',
-            '-crf', '15',
+            '-crf', '11',  # Near-lossless quality
             '-x265-params', 'pass=1:vbv-maxrate=15000:vbv-bufsize=30000',
             '-an',  # No audio in pass 1
             '-f', 'null',
@@ -798,7 +798,7 @@ class AIVideoUpscaler:
             '-map', '0:v', '-map', '1:a?',
             '-c:v', 'libx265',
             '-preset', 'slower',
-            '-crf', '15',
+            '-crf', '11',  # Near-lossless quality
             '-x265-params', 'pass=2:vbv-maxrate=15000:vbv-bufsize=30000',
             '-c:a', 'aac', '-b:a', '256k',
             '-pix_fmt', 'yuv420p',

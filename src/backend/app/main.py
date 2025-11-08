@@ -514,7 +514,7 @@ async def export_crop(
                              y=crop_params['y_expr'])
         stream = ffmpeg.output(stream, output_path,
                              vcodec='libx264',
-                             crf=23,
+                             crf=11,
                              preset='medium',
                              acodec='aac',
                              audio_bitrate='192k')
@@ -538,7 +538,7 @@ async def export_crop(
                              avg_crop['x'], avg_crop['y'])
         stream = ffmpeg.output(stream, output_path,
                              vcodec='libx264',
-                             crf=23,
+                             crf=11,
                              preset='medium',
                              acodec='aac',
                              audio_bitrate='192k')
