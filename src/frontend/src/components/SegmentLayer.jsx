@@ -36,17 +36,14 @@ export default function SegmentLayer({
   };
 
   /**
-   * Handle double-click on timeline track (background) to add boundary
+   * Handle double-click to add boundary
    */
-  const handleTrackDoubleClick = (e) => {
-    // Only handle double-clicks on the track itself (not on segments or boundaries)
-    if (e.target.classList.contains('segment-track')) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const percentX = (clickX / rect.width) * 100;
-      const time = pixelToTime(percentX);
-      onAddBoundary(time);
-    }
+  const handleDoubleClick = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentX = (clickX / rect.width) * 100;
+    const time = pixelToTime(percentX);
+    onAddBoundary(time);
   };
 
   /**
@@ -95,10 +92,13 @@ export default function SegmentLayer({
       {/* Segments track */}
       <div
         className="segment-track absolute left-32 right-0 top-0 h-full cursor-pointer"
-        onDoubleClick={handleTrackDoubleClick}
+        onDoubleClick={handleDoubleClick}
       >
         {/* Background track */}
-        <div className="absolute inset-0 bg-purple-900 bg-opacity-20 segment-track" />
+        <div
+          className="absolute inset-0 bg-purple-900 bg-opacity-20 segment-track"
+          onDoubleClick={handleDoubleClick}
+        />
 
         {/* Render segments */}
         {segments.map((segment) => {
@@ -122,6 +122,7 @@ export default function SegmentLayer({
                 width: `${width}%`
               }}
               onClick={(e) => handleSegmentClick(segment, e)}
+              onDoubleClick={handleDoubleClick}
               title={`Segment ${segment.index + 1}: ${segment.speed}x${segment.isTrimmed ? ' (trimmed)' : ''}`}
             >
               {/* Speed indicator (show if speed != 1) */}
