@@ -320,6 +320,11 @@ class AIVideoUpscaler:
 
             logger.debug(f"AI upscaling frame from {current_w}x{current_h} to {target_w}x{target_h}")
 
+            # Denoise before upscaling to prevent noise amplification
+            if self.device.type == 'cuda':
+                # Light denoising preserves details
+                frame = cv2.bilateralFilter(frame, d=5, sigmaColor=10, sigmaSpace=10)
+
             # Real-ESRGAN upscales by 4x by default
             # We'll upscale first, then resize to exact target if needed
             with contextlib.redirect_stderr(open(os.devnull, 'w')):
@@ -382,6 +387,12 @@ class AIVideoUpscaler:
             # Calculate required scale factor
             current_h, current_w = frame.shape[:2]
             target_w, target_h = target_resolution
+
+            # Denoise before upscaling to prevent noise amplification
+            gpu_device = torch.device(f'cuda:{gpu_id}') if gpu_id >= 0 else self.device
+            if gpu_device.type == 'cuda':
+                # Light denoising preserves details
+                frame = cv2.bilateralFilter(frame, d=5, sigmaColor=10, sigmaSpace=10)
 
             # Real-ESRGAN upscales by 4x by default
             with contextlib.redirect_stderr(open(os.devnull, 'w')):
