@@ -39,19 +39,22 @@ export default function SegmentLayer({
    */
   const handleTrackClick = (e) => {
     console.log('[SegmentLayer] Click detected on:', e.target.className);
+    console.log('[SegmentLayer] Click target tag:', e.target.tagName);
 
-    // Check if click is on the track background (not on segment or buttons)
-    if (e.target.classList.contains('segment-track') || e.target.classList.contains('segment-bg')) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const percentX = (clickX / rect.width) * 100;
-      const time = pixelToTime(percentX);
-
-      console.log('[SegmentLayer] Adding boundary at time:', time, 'seconds');
-      onAddBoundary(time);
-    } else {
-      console.log('[SegmentLayer] Click ignored - target does not have segment-track or segment-bg class');
+    // Don't add boundary if clicking on a button
+    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+      console.log('[SegmentLayer] Click ignored - clicked on a button');
+      return;
     }
+
+    // Calculate position from currentTarget (the track container)
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentX = (clickX / rect.width) * 100;
+    const time = pixelToTime(percentX);
+
+    console.log('[SegmentLayer] Adding boundary at time:', time, 'seconds');
+    onAddBoundary(time);
   };
 
   /**
