@@ -35,7 +35,7 @@ class AIVideoUpscaler:
     - Target resolution based on aspect ratio
     """
 
-    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True):
+    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality'):
         """
         Initialize the AI upscaler
 
@@ -43,10 +43,12 @@ class AIVideoUpscaler:
             model_name: Model to use for upscaling
             device: 'cuda' for GPU or 'cpu' for CPU processing
             enable_multi_gpu: Enable multi-GPU parallel processing (default: True)
+            export_mode: Export mode - "fast" or "quality" (default "quality")
         """
         # Detect available GPUs
         self.num_gpus = 0
         self.enable_multi_gpu = enable_multi_gpu
+        self.export_mode = export_mode
 
         if device == 'cuda' and torch.cuda.is_available():
             self.num_gpus = torch.cuda.device_count()
@@ -121,12 +123,17 @@ class AIVideoUpscaler:
             # Initialize upsampler optimized for maximum quality
             logger.info(f"Loading model weights from {model_path}...")
 
-            # Determine optimal tile size based on device
+            # Determine optimal tile size based on device and export mode
             # Larger tiles = better quality (fewer seams) but more VRAM
             if self.device.type == 'cuda':
-                tile_size = 0  # 0 = no tiling (highest quality, requires more VRAM)
-                tile_pad = 0
-                logger.info("GPU detected: Using full-frame processing for maximum quality")
+                if self.export_mode == 'fast':
+                    tile_size = 512  # Tiling for faster processing
+                    tile_pad = 10
+                    logger.info("GPU detected: Using tiled processing (512x512) for FAST mode")
+                else:
+                    tile_size = 0  # 0 = no tiling (highest quality, requires more VRAM)
+                    tile_pad = 0
+                    logger.info("GPU detected: Using full-frame processing for maximum quality")
             else:
                 tile_size = 512  # Tiling for CPU to manage memory
                 tile_pad = 10
@@ -144,6 +151,10 @@ class AIVideoUpscaler:
                 half=True if self.device.type == 'cuda' else False,  # FP16 for speed on GPU
                 device=self.device
             )
+
+            # Store tile configuration
+            self.tile_size = tile_size
+            self.tile_pad = tile_pad
 
             # Create separate upsampler instances for each GPU if multi-GPU enabled
             if self.num_gpus > 1 and self.enable_multi_gpu:
@@ -295,7 +306,7 @@ class AIVideoUpscaler:
 
     def enhance_frame_ai(self, frame: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
         """
-        Enhance a single frame using Real-ESRGAN AI model (maximum quality)
+        Enhance a single frame using Real-ESRGAN AI model
 
         Args:
             frame: Input frame (BGR format)
@@ -321,15 +332,15 @@ class AIVideoUpscaler:
 
             logger.debug(f"AI upscaling frame from {current_w}x{current_h} to {target_w}x{target_h}")
 
-            # Denoise before upscaling to prevent noise amplification
-            if self.device.type == 'cuda':
+            # Denoise before upscaling to prevent noise amplification (QUALITY mode only)
+            if self.device.type == 'cuda' and self.export_mode == 'quality':
                 # Light denoising preserves details
                 frame = cv2.bilateralFilter(frame, d=5, sigmaColor=10, sigmaSpace=10)
 
             # Real-ESRGAN upscales by 4x by default
             # We'll upscale first, then resize to exact target if needed
             with contextlib.redirect_stderr(open(os.devnull, 'w')):
-                # Upscale with AI (4x) - maximum quality
+                # Upscale with AI (4x)
                 enhanced, _ = self.upsampler.enhance(frame, outscale=4)
 
             upscaled_h, upscaled_w = enhanced.shape[:2]
@@ -340,8 +351,8 @@ class AIVideoUpscaler:
                 enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
                 logger.debug(f"Resized to exact target: {target_w}x{target_h}")
 
-            # Sharpen upscaled output for better perceived quality
-            if self.device.type == 'cuda':
+            # Sharpen upscaled output for better perceived quality (QUALITY mode only)
+            if self.device.type == 'cuda' and self.export_mode == 'quality':
                 # Gaussian blur for unsharp mask
                 gaussian = cv2.GaussianBlur(enhanced, (0, 0), 2.0)
                 # Unsharp mask: original + (original - blurred) * amount
@@ -398,9 +409,9 @@ class AIVideoUpscaler:
             current_h, current_w = frame.shape[:2]
             target_w, target_h = target_resolution
 
-            # Denoise before upscaling to prevent noise amplification
+            # Denoise before upscaling to prevent noise amplification (QUALITY mode only)
             gpu_device = torch.device(f'cuda:{gpu_id}') if gpu_id >= 0 else self.device
-            if gpu_device.type == 'cuda':
+            if gpu_device.type == 'cuda' and self.export_mode == 'quality':
                 # Light denoising preserves details
                 frame = cv2.bilateralFilter(frame, d=5, sigmaColor=10, sigmaSpace=10)
 
@@ -414,8 +425,8 @@ class AIVideoUpscaler:
             if enhanced.shape[:2] != (target_h, target_w):
                 enhanced = cv2.resize(enhanced, target_resolution, interpolation=cv2.INTER_LANCZOS4)
 
-            # Sharpen upscaled output for better perceived quality
-            if gpu_device.type == 'cuda':
+            # Sharpen upscaled output for better perceived quality (QUALITY mode only)
+            if gpu_device.type == 'cuda' and self.export_mode == 'quality':
                 # Gaussian blur for unsharp mask
                 gaussian = cv2.GaussianBlur(enhanced, (0, 0), 2.0)
                 # Unsharp mask: original + (original - blurred) * amount
@@ -537,8 +548,8 @@ class AIVideoUpscaler:
         output_path: str,
         keyframes: List[Dict[str, Any]],
         target_fps: int = 30,
-        progress_callback=None,
-        export_mode: str = "QUALITY"
+        export_mode: str = "quality",
+        progress_callback=None
     ) -> Dict[str, Any]:
         """
         Process video with de-zoom and AI upscaling
@@ -548,8 +559,8 @@ class AIVideoUpscaler:
             output_path: Path to output video
             keyframes: List of crop keyframes
             target_fps: Output framerate
-            progress_callback: Optional callback(current, total, message, phase)
-            export_mode: Export quality - "FAST" (H.264, 1-pass) or "QUALITY" (H.265, 2-pass)
+            export_mode: Export mode - "fast" or "quality" (default "quality")
+            progress_callback: Optional callback(current, total, message)
 
         Returns:
             Dict with processing results
@@ -562,7 +573,7 @@ class AIVideoUpscaler:
         cap.release()
 
         logger.info(f"Processing {total_frames} frames @ {original_fps} fps")
-        logger.info(f"Export mode: {export_mode}")
+        logger.info(f"Export mode: {export_mode.upper()}")
 
         # Sort keyframes by time
         keyframes_sorted = sorted(keyframes, key=lambda k: k['time'])
@@ -762,15 +773,7 @@ class AIVideoUpscaler:
             logger.info("=" * 60)
 
             # Reassemble video with FFmpeg
-            self.create_video_from_frames(
-                frames_dir,
-                output_path,
-                target_fps,
-                input_path,
-                export_mode=export_mode,
-                progress_callback=progress_callback,
-                total_frames=total_frames
-            )
+            self.create_video_from_frames(frames_dir, output_path, target_fps, input_path, export_mode)
 
             return {
                 'success': True,
@@ -795,9 +798,7 @@ class AIVideoUpscaler:
         output_path: str,
         fps: int,
         input_video_path: str,
-        export_mode: str = "QUALITY",
-        progress_callback=None,
-        total_frames: int = 0
+        export_mode: str = "quality"
     ):
         """
         Create video from enhanced frames using FFmpeg encoding
@@ -807,77 +808,111 @@ class AIVideoUpscaler:
             output_path: Output video path
             fps: Output framerate
             input_video_path: Path to input video (for audio)
-            export_mode: "FAST" (H.264, 1-pass) or "QUALITY" (H.265, 2-pass)
-            progress_callback: Optional callback(current, total, message, phase)
-            total_frames: Total number of frames (for progress reporting)
+            export_mode: Export mode - "fast" (1-pass) or "quality" (2-pass)
         """
         frames_pattern = str(frames_dir / "frame_%06d.png")
 
-        def parse_ffmpeg_progress(line: str, total_frames: int) -> int:
-            """
-            Parse FFmpeg progress output to extract current frame number
+        # Set encoding parameters based on export mode
+        if export_mode == "fast":
+            codec = "libx264"  # H.264 - faster encoding
+            preset = "medium"
+            crf = "15"
+            logger.info(f"Encoding video with FAST settings (H.264, 1-pass, medium preset, CRF {crf}) at {fps} fps...")
+        else:
+            codec = "libx265"  # H.265 - better compression
+            preset = "veryslow"
+            crf = "10"
+            logger.info(f"Encoding video with QUALITY settings (H.265, 2-pass, veryslow preset, CRF {crf}) at {fps} fps...")
 
-            Args:
-                line: Line from FFmpeg stderr output
-                total_frames: Total frames to encode
-
-            Returns:
-                Current frame number, or -1 if not found
-            """
-            # FFmpeg outputs: frame=  123 fps= 45 q=28.0 size=    1024kB time=00:00:04.10 bitrate=2048.0kbits/s speed=1.5x
-            if 'frame=' in line:
-                try:
-                    # Extract frame number
-                    parts = line.split('frame=')
-                    if len(parts) > 1:
-                        frame_str = parts[1].split()[0].strip()
-                        return int(frame_str)
-                except (ValueError, IndexError):
-                    pass
-            return -1
-
-        if export_mode == "FAST":
-            # FAST MODE: H.264, single-pass, medium preset, CRF 15
-            logger.info(f"Encoding video with FAST settings (H.264, 1-pass, medium preset, CRF 15) at {fps} fps...")
+        # Pass 1 - Analysis (only for quality mode with H.265)
+        if export_mode == "quality":
+            ffmpeg_pass1_start = datetime.now()
             logger.info("=" * 60)
-            logger.info("Skipping pass 1 for FAST mode - using single-pass encoding")
+            logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 START - {ffmpeg_pass1_start.isoformat()}")
+            logger.info("Starting pass 1 - analyzing video...")
             logger.info("=" * 60)
-
-            # Single-pass encode
-            ffmpeg_encode_start = datetime.now()
-            logger.info("=" * 60)
-            logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE START - {ffmpeg_encode_start.isoformat()}")
-            logger.info("Starting single-pass encoding...")
-            logger.info("=" * 60)
-
-            cmd = [
+            cmd_pass1 = [
                 'ffmpeg', '-y',
                 '-framerate', str(fps),
                 '-i', frames_pattern,
                 '-i', input_video_path,
                 '-map', '0:v', '-map', '1:a?',
-                '-c:v', 'libx264',
-                '-preset', 'medium',
-                '-crf', '15',
-                '-c:a', 'aac', '-b:a', '256k',
-                '-pix_fmt', 'yuv420p',
-                '-colorspace', 'bt709',
-                '-color_primaries', 'bt709',
-                '-color_trc', 'bt709',
-                '-color_range', 'tv',
-                '-movflags', '+faststart',
-                '-progress', 'pipe:2',  # Output progress to stderr
-                str(output_path)
+                '-c:v', codec,
+                '-preset', preset,
+                '-crf', crf,
+                '-x265-params', 'pass=1:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6',
+                '-an',  # No audio in pass 1
+                '-f', 'null',
+                '/dev/null' if os.name != 'nt' else 'NUL'
             ]
 
             try:
-                process = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    bufsize=1
+                result = subprocess.run(
+                    cmd_pass1,
+                    check=True,
+                    capture_output=True,
+                    text=True
                 )
+                ffmpeg_pass1_end = datetime.now()
+                ffmpeg_pass1_duration = (ffmpeg_pass1_end - ffmpeg_pass1_start).total_seconds()
+                logger.info("=" * 60)
+                logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 END - {ffmpeg_pass1_end.isoformat()}")
+                logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 DURATION - {ffmpeg_pass1_duration:.2f} seconds")
+                logger.info("Pass 1 complete!")
+                logger.info("=" * 60)
+            except subprocess.CalledProcessError as e:
+                logger.error(f"FFmpeg pass 1 failed: {e.stderr}")
+                raise RuntimeError(f"Video encoding pass 1 failed: {e.stderr}")
+        else:
+            logger.info("=" * 60)
+            logger.info("Skipping pass 1 for FAST mode - using single-pass encoding")
+            logger.info("=" * 60)
+
+        # Pass 2 - Encode (or single-pass for fast mode)
+        ffmpeg_pass2_start = datetime.now()
+        logger.info("=" * 60)
+        logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE START - {ffmpeg_pass2_start.isoformat()}")
+
+        if export_mode == "quality":
+            logger.info("Starting pass 2 - encoding video...")
+        else:
+            logger.info("Starting single-pass encoding...")
+
+        logger.info("=" * 60)
+
+        # Build FFmpeg command based on codec
+        cmd_pass2 = [
+            'ffmpeg', '-y',
+            '-framerate', str(fps),
+            '-i', frames_pattern,
+            '-i', input_video_path,
+            '-map', '0:v', '-map', '1:a?',
+            '-c:v', codec,
+            '-preset', preset,
+            '-crf', crf
+        ]
+
+        # Add codec-specific parameters
+        if codec == 'libx265':
+            # H.265 specific parameters
+            if export_mode == "quality":
+                x265_params = 'pass=2:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6'
+            else:
+                x265_params = 'aq-mode=3:aq-strength=1.0:deblock=-1,-1'
+            cmd_pass2.extend(['-x265-params', x265_params])
+        # libx264 uses default parameters (no special params needed for fast mode)
+
+        # Add common parameters
+        cmd_pass2.extend([
+            '-c:a', 'aac', '-b:a', '256k',
+            '-pix_fmt', 'yuv420p',
+            '-colorspace', 'bt709',
+            '-color_primaries', 'bt709',
+            '-color_trc', 'bt709',
+            '-color_range', 'tv',
+            '-movflags', '+faststart',
+            str(output_path)
+        ])
 
                 # Monitor progress
                 last_frame = 0
@@ -919,123 +954,13 @@ class AIVideoUpscaler:
             logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 START - {ffmpeg_pass1_start.isoformat()}")
             logger.info("Starting pass 1 - analyzing video...")
             logger.info("=" * 60)
-            cmd_pass1 = [
-                'ffmpeg', '-y',
-                '-framerate', str(fps),
-                '-i', frames_pattern,
-                '-i', input_video_path,
-                '-map', '0:v', '-map', '1:a?',
-                '-c:v', 'libx265',
-                '-preset', 'veryslow',
-                '-crf', '10',
-                '-x265-params', 'pass=1:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6',
-                '-an',  # No audio in pass 1
-                '-progress', 'pipe:2',  # Output progress to stderr
-                '-f', 'null',
-                '/dev/null' if os.name != 'nt' else 'NUL'
-            ]
-
-            try:
-                process = subprocess.Popen(
-                    cmd_pass1,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    bufsize=1
-                )
-
-                # Monitor progress for pass 1
-                last_frame = 0
-                for line in process.stderr:
-                    frame_num = parse_ffmpeg_progress(line, total_frames)
-                    if frame_num > 0 and frame_num != last_frame:
-                        last_frame = frame_num
-                        if progress_callback and total_frames > 0:
-                            progress_callback(
-                                frame_num,
-                                total_frames,
-                                f"Analyzing video (pass 1): {frame_num}/{total_frames} frames",
-                                phase='ffmpeg_pass1'
-                            )
-
-                process.wait()
-                if process.returncode != 0:
-                    stderr_output = process.stderr.read() if process.stderr else ""
-                    raise RuntimeError(f"FFmpeg pass 1 failed: {stderr_output}")
-
-                ffmpeg_pass1_end = datetime.now()
-                ffmpeg_pass1_duration = (ffmpeg_pass1_end - ffmpeg_pass1_start).total_seconds()
-                logger.info("=" * 60)
-                logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 END - {ffmpeg_pass1_end.isoformat()}")
-                logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 DURATION - {ffmpeg_pass1_duration:.2f} seconds")
-                logger.info("Pass 1 complete!")
-                logger.info("=" * 60)
-            except Exception as e:
-                logger.error(f"FFmpeg pass 1 failed: {e}")
-                raise RuntimeError(f"Video encoding pass 1 failed: {e}")
-
-            # Pass 2 - Encode
-            ffmpeg_pass2_start = datetime.now()
-            logger.info("=" * 60)
-            logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE START - {ffmpeg_pass2_start.isoformat()}")
-            logger.info("Starting pass 2 - encoding video...")
-            logger.info("=" * 60)
-            cmd_pass2 = [
-                'ffmpeg', '-y',
-                '-framerate', str(fps),
-                '-i', frames_pattern,
-                '-i', input_video_path,
-                '-map', '0:v', '-map', '1:a?',
-                '-c:v', 'libx265',
-                '-preset', 'veryslow',
-                '-crf', '10',
-                '-x265-params', 'pass=2:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6',
-                '-c:a', 'aac', '-b:a', '256k',
-                '-pix_fmt', 'yuv420p',
-                '-colorspace', 'bt709',
-                '-color_primaries', 'bt709',
-                '-color_trc', 'bt709',
-                '-color_range', 'tv',
-                '-movflags', '+faststart',
-                '-progress', 'pipe:2',  # Output progress to stderr
-                str(output_path)
-            ]
-
-            try:
-                process = subprocess.Popen(
-                    cmd_pass2,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    bufsize=1
-                )
-
-                # Monitor progress for pass 2
-                last_frame = 0
-                for line in process.stderr:
-                    frame_num = parse_ffmpeg_progress(line, total_frames)
-                    if frame_num > 0 and frame_num != last_frame:
-                        last_frame = frame_num
-                        if progress_callback and total_frames > 0:
-                            progress_callback(
-                                frame_num,
-                                total_frames,
-                                f"Encoding video (pass 2): {frame_num}/{total_frames} frames",
-                                phase='ffmpeg_encode'
-                            )
-
-                process.wait()
-                if process.returncode != 0:
-                    stderr_output = process.stderr.read() if process.stderr else ""
-                    raise RuntimeError(f"FFmpeg pass 2 failed: {stderr_output}")
-
-                ffmpeg_pass2_end = datetime.now()
-                ffmpeg_pass2_duration = (ffmpeg_pass2_end - ffmpeg_pass2_start).total_seconds()
-                logger.info("=" * 60)
-                logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE END - {ffmpeg_pass2_end.isoformat()}")
-                logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE DURATION - {ffmpeg_pass2_duration:.2f} seconds")
+            logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE END - {ffmpeg_pass2_end.isoformat()}")
+            logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE DURATION - {ffmpeg_pass2_duration:.2f} seconds")
+            if export_mode == "quality":
                 logger.info("Pass 2 complete! Video encoding finished.")
-                logger.info("=" * 60)
-            except Exception as e:
-                logger.error(f"FFmpeg pass 2 failed: {e}")
-                raise RuntimeError(f"Video encoding pass 2 failed: {e}")
+            else:
+                logger.info("Single-pass encoding complete!")
+            logger.info("=" * 60)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"FFmpeg encoding failed: {e.stderr}")
+            raise RuntimeError(f"Video encoding failed: {e.stderr}")

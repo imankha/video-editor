@@ -16,8 +16,12 @@ import logging
 import asyncio
 import subprocess
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging with timestamps
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 # AI upscaler will be imported on-demand to avoid import errors
@@ -571,7 +575,7 @@ async def export_with_ai_upscale(
     keyframes_json: str = Form(...),
     target_fps: int = Form(30),
     export_id: str = Form(...),
-    export_mode: str = Form("QUALITY")
+    export_mode: str = Form("quality")
 ):
     """
     Export video with AI upscaling and de-zoom
@@ -589,9 +593,7 @@ async def export_with_ai_upscale(
         keyframes_json: JSON array of crop keyframes
         target_fps: Output framerate (default 30)
         export_id: Unique ID for tracking export progress
-        export_mode: Export quality mode - "FAST" or "QUALITY" (default "QUALITY")
-                     FAST: H.264, 1-pass, medium preset (~2.5min for 5s video)
-                     QUALITY: H.265, 2-pass, veryslow preset (~13min for 5s video)
+        export_mode: Export mode - "fast" or "quality" (default "quality")
 
     Returns:
         AI-upscaled video file
@@ -659,7 +661,7 @@ async def export_with_ai_upscale(
         logger.info("=" * 80)
         logger.info("INITIALIZING AI UPSCALER")
         logger.info("=" * 80)
-        upscaler = AIVideoUpscaler(device='cuda')
+        upscaler = AIVideoUpscaler(device='cuda', export_mode=export_mode)
 
         # Verify AI model is loaded - fail if not available (no low-quality fallback)
         if upscaler.upsampler is None:
@@ -771,8 +773,8 @@ async def export_with_ai_upscale(
             output_path=output_path,
             keyframes=keyframes_dict,
             target_fps=target_fps,
-            progress_callback=progress_callback,
-            export_mode=export_mode
+            export_mode=export_mode,
+            progress_callback=progress_callback
         )
 
         complete_timestamp = datetime.now()
