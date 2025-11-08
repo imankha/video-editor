@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 import logging
 import asyncio
+import subprocess
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -87,6 +88,81 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def get_git_version_info():
+    """Get git commit hash and branch name for logging"""
+    try:
+        # Get current commit hash
+        commit_hash = subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            stderr=subprocess.DEVNULL,
+            text=True
+        ).strip()
+
+        # Get short commit hash
+        short_hash = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            stderr=subprocess.DEVNULL,
+            text=True
+        ).strip()
+
+        # Get current branch name
+        branch = subprocess.check_output(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            stderr=subprocess.DEVNULL,
+            text=True
+        ).strip()
+
+        # Get commit date
+        commit_date = subprocess.check_output(
+            ['git', 'log', '-1', '--format=%cd', '--date=iso'],
+            stderr=subprocess.DEVNULL,
+            text=True
+        ).strip()
+
+        # Check if there are uncommitted changes
+        dirty = subprocess.call(
+            ['git', 'diff-index', '--quiet', 'HEAD', '--'],
+            stderr=subprocess.DEVNULL
+        ) != 0
+
+        return {
+            'commit': commit_hash,
+            'short_commit': short_hash,
+            'branch': branch,
+            'commit_date': commit_date,
+            'dirty': dirty
+        }
+    except Exception as e:
+        logger.warning(f"Could not retrieve git version info: {e}")
+        return None
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Log version information on startup"""
+    logger.info("=" * 80)
+    logger.info("VIDEO EDITOR BACKEND STARTING")
+    logger.info("=" * 80)
+
+    # Log git version info
+    git_info = get_git_version_info()
+    if git_info:
+        logger.info("Git Version Information:")
+        logger.info(f"  Branch: {git_info['branch']}")
+        logger.info(f"  Commit: {git_info['short_commit']} ({git_info['commit'][:12]}...)")
+        logger.info(f"  Date: {git_info['commit_date']}")
+        if git_info['dirty']:
+            logger.warning("  Status: DIRTY (uncommitted changes present)")
+        else:
+            logger.info("  Status: Clean")
+    else:
+        logger.info("Git version info not available (not a git repository or git not installed)")
+
+    logger.info(f"Environment: {ENV}")
+    logger.info(f"Python version: {sys.version.split()[0]}")
+    logger.info("=" * 80)
 
 
 # Custom exception handler for development mode
