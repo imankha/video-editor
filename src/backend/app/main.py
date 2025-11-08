@@ -513,11 +513,12 @@ async def export_crop(
                              x=crop_params['x_expr'],
                              y=crop_params['y_expr'])
         stream = ffmpeg.output(stream, output_path,
-                             vcodec='libx264',
-                             crf=11,
-                             preset='medium',
+                             vcodec='libx265',
+                             crf=10,
+                             preset='veryslow',
+                             **{'x265-params': 'aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6'},
                              acodec='aac',
-                             audio_bitrate='192k')
+                             audio_bitrate='256k')
         ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
     except ffmpeg.Error as e:
         # If complex expressions don't work, fall back to simpler approach
@@ -537,11 +538,12 @@ async def export_crop(
                              avg_crop['width'], avg_crop['height'],
                              avg_crop['x'], avg_crop['y'])
         stream = ffmpeg.output(stream, output_path,
-                             vcodec='libx264',
-                             crf=11,
-                             preset='medium',
+                             vcodec='libx265',
+                             crf=10,
+                             preset='veryslow',
+                             **{'x265-params': 'aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6'},
                              acodec='aac',
-                             audio_bitrate='192k')
+                             audio_bitrate='256k')
         ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
 
     # Return the cropped video file
