@@ -720,7 +720,7 @@ class AIVideoUpscaler:
             logger.info(f"✓ Successfully processed {completed_frames}/{total_frames} frames")
 
             # Reassemble video with FFmpeg
-            self.create_video_from_frames(frames_dir, output_path, target_fps)
+            self.create_video_from_frames(frames_dir, output_path, target_fps, input_path)
 
             return {
                 'success': True,
@@ -743,42 +743,77 @@ class AIVideoUpscaler:
         self,
         frames_dir: Path,
         output_path: str,
-        fps: int
+        fps: int,
+        input_video_path: str
     ):
         """
-        Create video from enhanced frames using FFmpeg
+        Create video from enhanced frames using two-pass FFmpeg encoding
 
         Args:
             frames_dir: Directory containing frames
             output_path: Output video path
             fps: Output framerate
+            input_video_path: Path to input video (for audio)
         """
         frames_pattern = str(frames_dir / "frame_%06d.png")
 
-        logger.info(f"Encoding video with FFmpeg at {fps} fps...")
+        logger.info(f"Encoding video with two-pass FFmpeg at {fps} fps...")
 
-        cmd = [
-            'ffmpeg',
-            '-y',  # Overwrite output
+        # Pass 1 - Analysis
+        logger.info("Starting pass 1 - analyzing video...")
+        cmd_pass1 = [
+            'ffmpeg', '-y',
             '-framerate', str(fps),
             '-i', frames_pattern,
-            '-c:v', 'libx264',
-            '-preset', 'medium',
-            '-crf', '18',  # High quality
+            '-i', input_video_path,
+            '-map', '0:v', '-map', '1:a?',
+            '-c:v', 'libx265',
+            '-preset', 'slower',
+            '-crf', '15',
+            '-x265-params', 'pass=1',
+            '-an',  # No audio in pass 1
+            '-f', 'null',
+            '/dev/null' if os.name != 'nt' else 'NUL'
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd_pass1,
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            logger.info("Pass 1 complete!")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"FFmpeg pass 1 failed: {e.stderr}")
+            raise RuntimeError(f"Video encoding pass 1 failed: {e.stderr}")
+
+        # Pass 2 - Encode
+        logger.info("Starting pass 2 - encoding video...")
+        cmd_pass2 = [
+            'ffmpeg', '-y',
+            '-framerate', str(fps),
+            '-i', frames_pattern,
+            '-i', input_video_path,
+            '-map', '0:v', '-map', '1:a?',
+            '-c:v', 'libx265',
+            '-preset', 'slower',
+            '-crf', '15',
+            '-x265-params', 'pass=2',
+            '-c:a', 'aac', '-b:a', '256k',
             '-pix_fmt', 'yuv420p',
             '-movflags', '+faststart',
-            '-max_muxing_queue_size', '9999',
             str(output_path)
         ]
 
         try:
             result = subprocess.run(
-                cmd,
+                cmd_pass2,
                 check=True,
                 capture_output=True,
                 text=True
             )
-            logger.info("Video encoding complete!")
+            logger.info("Pass 2 complete! Video encoding finished.")
         except subprocess.CalledProcessError as e:
-            logger.error(f"FFmpeg encoding failed: {e.stderr}")
-            raise RuntimeError(f"Video encoding failed: {e.stderr}")
+            logger.error(f"FFmpeg pass 2 failed: {e.stderr}")
+            raise RuntimeError(f"Video encoding pass 2 failed: {e.stderr}")

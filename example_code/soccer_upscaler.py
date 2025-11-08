@@ -222,7 +222,7 @@ class SoccerVideoUpscaler:
             print("🎬 Reassembling video with FFmpeg...")
 
             try:
-                self.create_video_from_frames(enhanced_dir, output_path, target_fps)
+                self.create_video_from_frames(enhanced_dir, output_path, target_fps, str(input_path))
                 print(f"✅ Video saved to: {output_path}")
 
                 # Only cleanup if encoding succeeded
