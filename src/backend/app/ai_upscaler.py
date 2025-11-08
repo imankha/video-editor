@@ -269,8 +269,8 @@ class AIVideoUpscaler:
         Returns:
             Enhanced frame
         """
-        # Upscale using cubic interpolation
-        upscaled = cv2.resize(frame, target_size, interpolation=cv2.INTER_CUBIC)
+        # Upscale using Lanczos4 interpolation (highest quality)
+        upscaled = cv2.resize(frame, target_size, interpolation=cv2.INTER_LANCZOS4)
 
         # Apply enhancement filters
         # Denoise
