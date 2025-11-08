@@ -339,6 +339,15 @@ class AIVideoUpscaler:
                 enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
                 logger.debug(f"Resized to exact target: {target_w}x{target_h}")
 
+            # Sharpen upscaled output for better perceived quality
+            if self.device.type == 'cuda':
+                # Gaussian blur for unsharp mask
+                gaussian = cv2.GaussianBlur(enhanced, (0, 0), 2.0)
+                # Unsharp mask: original + (original - blurred) * amount
+                enhanced = cv2.addWeighted(enhanced, 1.5, gaussian, -0.5, 0)
+                # Clip values to valid range
+                enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
+
             return enhanced
         except Exception as e:
             logger.error(f"Real-ESRGAN processing failed: {e}")
@@ -403,6 +412,15 @@ class AIVideoUpscaler:
             # Resize to exact target size if needed
             if enhanced.shape[:2] != (target_h, target_w):
                 enhanced = cv2.resize(enhanced, target_resolution, interpolation=cv2.INTER_LANCZOS4)
+
+            # Sharpen upscaled output for better perceived quality
+            if gpu_device.type == 'cuda':
+                # Gaussian blur for unsharp mask
+                gaussian = cv2.GaussianBlur(enhanced, (0, 0), 2.0)
+                # Unsharp mask: original + (original - blurred) * amount
+                enhanced = cv2.addWeighted(enhanced, 1.5, gaussian, -0.5, 0)
+                # Clip values to valid range
+                enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
 
             # Log occasional progress
             if frame_idx % 30 == 0:
