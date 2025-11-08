@@ -515,8 +515,8 @@ async def export_crop(
         stream = ffmpeg.output(stream, output_path,
                              vcodec='libx265',
                              crf=10,
-                             preset='slower',
-                             **{'x265-params': 'aq-mode=3:aq-strength=1.0:deblock=-1,-1'},
+                             preset='veryslow',
+                             **{'x265-params': 'aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6'},
                              acodec='aac',
                              audio_bitrate='256k')
         ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
@@ -540,8 +540,8 @@ async def export_crop(
         stream = ffmpeg.output(stream, output_path,
                              vcodec='libx265',
                              crf=10,
-                             preset='slower',
-                             **{'x265-params': 'aq-mode=3:aq-strength=1.0:deblock=-1,-1'},
+                             preset='veryslow',
+                             **{'x265-params': 'aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6'},
                              acodec='aac',
                              audio_bitrate='256k')
         ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)

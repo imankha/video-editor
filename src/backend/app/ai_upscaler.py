@@ -797,9 +797,9 @@ class AIVideoUpscaler:
             '-i', input_video_path,
             '-map', '0:v', '-map', '1:a?',
             '-c:v', 'libx265',
-            '-preset', 'slower',
+            '-preset', 'veryslow',
             '-crf', '10',
-            '-x265-params', 'pass=1:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1',
+            '-x265-params', 'pass=1:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6',
             '-an',  # No audio in pass 1
             '-f', 'null',
             '/dev/null' if os.name != 'nt' else 'NUL'
@@ -826,9 +826,9 @@ class AIVideoUpscaler:
             '-i', input_video_path,
             '-map', '0:v', '-map', '1:a?',
             '-c:v', 'libx265',
-            '-preset', 'slower',
+            '-preset', 'veryslow',
             '-crf', '10',
-            '-x265-params', 'pass=2:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1',
+            '-x265-params', 'pass=2:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6',
             '-c:a', 'aac', '-b:a', '256k',
             '-pix_fmt', 'yuv420p',
             '-movflags', '+faststart',
