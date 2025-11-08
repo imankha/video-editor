@@ -1,6 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Download, Loader } from 'lucide-react';
 import axios from 'axios';
+
+/**
+ * Generate a unique ID for tracking export progress
+ */
+function generateExportId() {
+  return 'export_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+}
 
 /**
  * ExportButton component - handles video export with AI upscaling
@@ -10,7 +17,60 @@ import axios from 'axios';
 export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState(null);
+  const wsRef = useRef(null);
+  const exportIdRef = useRef(null);
+  const uploadCompleteRef = useRef(false);
+
+  // Cleanup WebSocket on unmount
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
+  /**
+   * Connect to WebSocket for real-time progress updates
+   */
+  const connectWebSocket = (exportId) => {
+    // Close any existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
+    const ws = new WebSocket(`ws://localhost:8000/ws/export/${exportId}`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('[ExportButton] WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log('[ExportButton] Progress update:', data);
+
+      // Update progress from WebSocket
+      setProgress(Math.round(data.progress));
+      setProgressMessage(data.message || '');
+
+      // Close connection if complete or error
+      if (data.status === 'complete' || data.status === 'error') {
+        ws.close();
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('[ExportButton] WebSocket error:', error);
+    };
+
+    ws.onclose = () => {
+      console.log('[ExportButton] WebSocket disconnected');
+      wsRef.current = null;
+    };
+  };
 
   const handleExport = async () => {
     if (!videoFile) {
@@ -25,7 +85,13 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
 
     setIsExporting(true);
     setProgress(0);
+    setProgressMessage('Uploading...');
     setError(null);
+    uploadCompleteRef.current = false;
+
+    // Generate unique export ID
+    const exportId = generateExportId();
+    exportIdRef.current = exportId;
 
     try {
       // Prepare form data
@@ -33,9 +99,13 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
       formData.append('video', videoFile);
       formData.append('keyframes_json', JSON.stringify(cropKeyframes));
       formData.append('target_fps', '30');
+      formData.append('export_id', exportId);
 
       // Always use AI upscale endpoint
       const endpoint = 'http://localhost:8000/api/export/upscale';
+
+      // Connect WebSocket for real-time progress updates
+      connectWebSocket(exportId);
 
       // Send export request
       const response = await axios.post(
@@ -47,16 +117,20 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
           },
           responseType: 'blob',
           onUploadProgress: (progressEvent) => {
-            const percentCompleted = Math.round(
-              (progressEvent.loaded * 50) / progressEvent.total
-            );
-            setProgress(percentCompleted);
-          },
-          onDownloadProgress: (progressEvent) => {
-            const percentCompleted = Math.round(
-              50 + (progressEvent.loaded * 50) / (progressEvent.total || progressEvent.loaded)
-            );
-            setProgress(percentCompleted);
+            // Only update during upload phase, don't override WebSocket updates
+            if (!uploadCompleteRef.current) {
+              // Scale upload to 0-10% (leaving 10-100% for AI processing)
+              const uploadPercent = Math.round(
+                (progressEvent.loaded * 10) / progressEvent.total
+              );
+              setProgress(uploadPercent);
+              setProgressMessage('Uploading video...');
+
+              // Mark upload as complete when done
+              if (progressEvent.loaded === progressEvent.total) {
+                uploadCompleteRef.current = true;
+              }
+            }
           }
         }
       );
@@ -74,14 +148,28 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
       // Clean up
       window.URL.revokeObjectURL(url);
 
+      // Close WebSocket
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
       setProgress(100);
+      setProgressMessage('Export complete!');
       setTimeout(() => {
         setIsExporting(false);
         setProgress(0);
+        setProgressMessage('');
       }, 2000);
 
     } catch (err) {
       console.error('Export failed:', err);
+
+      // Close WebSocket on error
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
 
       // If response is a blob (error response), we need to convert it to text/JSON
       if (err.response?.data instanceof Blob) {
@@ -107,6 +195,7 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
 
       setIsExporting(false);
       setProgress(0);
+      setProgressMessage('');
     }
   };
 
@@ -129,10 +218,17 @@ export default function ExportButton({ videoFile, cropKeyframes, disabled }) {
         }`}
       >
         {isExporting ? (
-          <>
-            <Loader className="animate-spin" size={18} />
-            AI Upscaling... {progress}%
-          </>
+          <div className="flex flex-col items-center gap-1 w-full">
+            <div className="flex items-center gap-2">
+              <Loader className="animate-spin" size={18} />
+              <span>AI Upscaling... {progress}%</span>
+            </div>
+            {progressMessage && (
+              <div className="text-xs opacity-80">
+                {progressMessage}
+              </div>
+            )}
+          </div>
         ) : (
           <>
             <Download size={18} />

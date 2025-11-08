@@ -139,7 +139,7 @@ function App() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-4xl font-bold text-white mb-2">
-              🎬 Video Editor
+              🎬 Highlight Reel Builder
             </h1>
             <p className="text-gray-400">
               Upload a video to get started

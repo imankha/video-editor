@@ -74,17 +74,6 @@ export default function CropOverlay({
       const videoOffsetX = (containerWidth - displayWidth) / 2 + panOffset.x;
       const videoOffsetY = (containerHeight - displayHeight) / 2 + panOffset.y;
 
-      console.log('[CropOverlay] Video display rect:', {
-        containerWidth,
-        containerHeight,
-        displayWidth,
-        displayHeight,
-        videoOffsetX,
-        videoOffsetY,
-        zoom,
-        panOffset
-      });
-
       setVideoDisplayRect({
         left: videoLeft,
         top: videoTop,
