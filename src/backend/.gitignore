@@ -23,3 +23,7 @@ Thumbs.db
 storage/
 *.log
 weights/
+
+# FFmpeg/x265 two-pass encoding temporary files
+x265_2pass.log*
+ffmpeg2pass-*.log
