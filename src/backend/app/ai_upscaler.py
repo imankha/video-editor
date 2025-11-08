@@ -831,6 +831,10 @@ class AIVideoUpscaler:
             '-x265-params', 'pass=2:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6',
             '-c:a', 'aac', '-b:a', '256k',
             '-pix_fmt', 'yuv420p',
+            '-colorspace', 'bt709',
+            '-color_primaries', 'bt709',
+            '-color_trc', 'bt709',
+            '-color_range', 'tv',
             '-movflags', '+faststart',
             str(output_path)
         ]
