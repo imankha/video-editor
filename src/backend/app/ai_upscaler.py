@@ -801,7 +801,7 @@ class AIVideoUpscaler:
             '-crf', '11',  # Near-lossless quality
             '-x265-params', 'pass=2:vbv-maxrate=80000:vbv-bufsize=160000',
             '-c:a', 'aac', '-b:a', '256k',
-            '-pix_fmt', 'yuv444p',  # Full chroma for near-lossless quality
+            '-pix_fmt', 'yuv420p',
             '-movflags', '+faststart',
             str(output_path)
         ]
