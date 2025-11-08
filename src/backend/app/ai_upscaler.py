@@ -537,7 +537,8 @@ class AIVideoUpscaler:
         output_path: str,
         keyframes: List[Dict[str, Any]],
         target_fps: int = 30,
-        progress_callback=None
+        progress_callback=None,
+        export_mode: str = "QUALITY"
     ) -> Dict[str, Any]:
         """
         Process video with de-zoom and AI upscaling
@@ -547,7 +548,8 @@ class AIVideoUpscaler:
             output_path: Path to output video
             keyframes: List of crop keyframes
             target_fps: Output framerate
-            progress_callback: Optional callback(current, total, message)
+            progress_callback: Optional callback(current, total, message, phase)
+            export_mode: Export quality - "FAST" (H.264, 1-pass) or "QUALITY" (H.265, 2-pass)
 
         Returns:
             Dict with processing results
@@ -560,6 +562,7 @@ class AIVideoUpscaler:
         cap.release()
 
         logger.info(f"Processing {total_frames} frames @ {original_fps} fps")
+        logger.info(f"Export mode: {export_mode}")
 
         # Sort keyframes by time
         keyframes_sorted = sorted(keyframes, key=lambda k: k['time'])
@@ -679,7 +682,8 @@ class AIVideoUpscaler:
                                         progress_callback(
                                             completed_frames,
                                             total_frames,
-                                            f"Upscaling frame {completed_frames}/{total_frames} (Multi-GPU)"
+                                            f"Upscaling frame {completed_frames}/{total_frames} (Multi-GPU)",
+                                            phase='ai_upscale'
                                         )
                             else:
                                 failed_frames.append(result_idx)
@@ -734,7 +738,7 @@ class AIVideoUpscaler:
 
                         # Progress callback
                         if progress_callback:
-                            progress_callback(completed_frames, total_frames, f"Upscaling frame {completed_frames}/{total_frames}")
+                            progress_callback(completed_frames, total_frames, f"Upscaling frame {completed_frames}/{total_frames}", phase='ai_upscale')
 
                         # Periodic GPU cleanup
                         if frame_idx % 10 == 0 and torch.cuda.is_available():
@@ -758,7 +762,15 @@ class AIVideoUpscaler:
             logger.info("=" * 60)
 
             # Reassemble video with FFmpeg
-            self.create_video_from_frames(frames_dir, output_path, target_fps, input_path)
+            self.create_video_from_frames(
+                frames_dir,
+                output_path,
+                target_fps,
+                input_path,
+                export_mode=export_mode,
+                progress_callback=progress_callback,
+                total_frames=total_frames
+            )
 
             return {
                 'success': True,
@@ -782,100 +794,248 @@ class AIVideoUpscaler:
         frames_dir: Path,
         output_path: str,
         fps: int,
-        input_video_path: str
+        input_video_path: str,
+        export_mode: str = "QUALITY",
+        progress_callback=None,
+        total_frames: int = 0
     ):
         """
-        Create video from enhanced frames using two-pass FFmpeg encoding
+        Create video from enhanced frames using FFmpeg encoding
 
         Args:
             frames_dir: Directory containing frames
             output_path: Output video path
             fps: Output framerate
             input_video_path: Path to input video (for audio)
+            export_mode: "FAST" (H.264, 1-pass) or "QUALITY" (H.265, 2-pass)
+            progress_callback: Optional callback(current, total, message, phase)
+            total_frames: Total number of frames (for progress reporting)
         """
         frames_pattern = str(frames_dir / "frame_%06d.png")
 
-        logger.info(f"Encoding video with two-pass FFmpeg at {fps} fps...")
+        def parse_ffmpeg_progress(line: str, total_frames: int) -> int:
+            """
+            Parse FFmpeg progress output to extract current frame number
 
-        # Pass 1 - Analysis
-        ffmpeg_pass1_start = datetime.now()
-        logger.info("=" * 60)
-        logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 START - {ffmpeg_pass1_start.isoformat()}")
-        logger.info("Starting pass 1 - analyzing video...")
-        logger.info("=" * 60)
-        cmd_pass1 = [
-            'ffmpeg', '-y',
-            '-framerate', str(fps),
-            '-i', frames_pattern,
-            '-i', input_video_path,
-            '-map', '0:v', '-map', '1:a?',
-            '-c:v', 'libx265',
-            '-preset', 'veryslow',
-            '-crf', '10',
-            '-x265-params', 'pass=1:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6',
-            '-an',  # No audio in pass 1
-            '-f', 'null',
-            '/dev/null' if os.name != 'nt' else 'NUL'
-        ]
+            Args:
+                line: Line from FFmpeg stderr output
+                total_frames: Total frames to encode
 
-        try:
-            result = subprocess.run(
-                cmd_pass1,
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            ffmpeg_pass1_end = datetime.now()
-            ffmpeg_pass1_duration = (ffmpeg_pass1_end - ffmpeg_pass1_start).total_seconds()
-            logger.info("=" * 60)
-            logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 END - {ffmpeg_pass1_end.isoformat()}")
-            logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 DURATION - {ffmpeg_pass1_duration:.2f} seconds")
-            logger.info("Pass 1 complete!")
-            logger.info("=" * 60)
-        except subprocess.CalledProcessError as e:
-            logger.error(f"FFmpeg pass 1 failed: {e.stderr}")
-            raise RuntimeError(f"Video encoding pass 1 failed: {e.stderr}")
+            Returns:
+                Current frame number, or -1 if not found
+            """
+            # FFmpeg outputs: frame=  123 fps= 45 q=28.0 size=    1024kB time=00:00:04.10 bitrate=2048.0kbits/s speed=1.5x
+            if 'frame=' in line:
+                try:
+                    # Extract frame number
+                    parts = line.split('frame=')
+                    if len(parts) > 1:
+                        frame_str = parts[1].split()[0].strip()
+                        return int(frame_str)
+                except (ValueError, IndexError):
+                    pass
+            return -1
 
-        # Pass 2 - Encode
-        ffmpeg_pass2_start = datetime.now()
-        logger.info("=" * 60)
-        logger.info(f"[EXPORT_PHASE] FFMPEG_PASS2 START - {ffmpeg_pass2_start.isoformat()}")
-        logger.info("Starting pass 2 - encoding video...")
-        logger.info("=" * 60)
-        cmd_pass2 = [
-            'ffmpeg', '-y',
-            '-framerate', str(fps),
-            '-i', frames_pattern,
-            '-i', input_video_path,
-            '-map', '0:v', '-map', '1:a?',
-            '-c:v', 'libx265',
-            '-preset', 'veryslow',
-            '-crf', '10',
-            '-x265-params', 'pass=2:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6',
-            '-c:a', 'aac', '-b:a', '256k',
-            '-pix_fmt', 'yuv420p',
-            '-colorspace', 'bt709',
-            '-color_primaries', 'bt709',
-            '-color_trc', 'bt709',
-            '-color_range', 'tv',
-            '-movflags', '+faststart',
-            str(output_path)
-        ]
+        if export_mode == "FAST":
+            # FAST MODE: H.264, single-pass, medium preset, CRF 15
+            logger.info(f"Encoding video with FAST settings (H.264, 1-pass, medium preset, CRF 15) at {fps} fps...")
+            logger.info("=" * 60)
+            logger.info("Skipping pass 1 for FAST mode - using single-pass encoding")
+            logger.info("=" * 60)
 
-        try:
-            result = subprocess.run(
-                cmd_pass2,
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            ffmpeg_pass2_end = datetime.now()
-            ffmpeg_pass2_duration = (ffmpeg_pass2_end - ffmpeg_pass2_start).total_seconds()
+            # Single-pass encode
+            ffmpeg_encode_start = datetime.now()
             logger.info("=" * 60)
-            logger.info(f"[EXPORT_PHASE] FFMPEG_PASS2 END - {ffmpeg_pass2_end.isoformat()}")
-            logger.info(f"[EXPORT_PHASE] FFMPEG_PASS2 DURATION - {ffmpeg_pass2_duration:.2f} seconds")
-            logger.info("Pass 2 complete! Video encoding finished.")
+            logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE START - {ffmpeg_encode_start.isoformat()}")
+            logger.info("Starting single-pass encoding...")
             logger.info("=" * 60)
-        except subprocess.CalledProcessError as e:
-            logger.error(f"FFmpeg pass 2 failed: {e.stderr}")
-            raise RuntimeError(f"Video encoding pass 2 failed: {e.stderr}")
+
+            cmd = [
+                'ffmpeg', '-y',
+                '-framerate', str(fps),
+                '-i', frames_pattern,
+                '-i', input_video_path,
+                '-map', '0:v', '-map', '1:a?',
+                '-c:v', 'libx264',
+                '-preset', 'medium',
+                '-crf', '15',
+                '-c:a', 'aac', '-b:a', '256k',
+                '-pix_fmt', 'yuv420p',
+                '-colorspace', 'bt709',
+                '-color_primaries', 'bt709',
+                '-color_trc', 'bt709',
+                '-color_range', 'tv',
+                '-movflags', '+faststart',
+                '-progress', 'pipe:2',  # Output progress to stderr
+                str(output_path)
+            ]
+
+            try:
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1
+                )
+
+                # Monitor progress
+                last_frame = 0
+                for line in process.stderr:
+                    frame_num = parse_ffmpeg_progress(line, total_frames)
+                    if frame_num > 0 and frame_num != last_frame:
+                        last_frame = frame_num
+                        if progress_callback and total_frames > 0:
+                            progress_callback(
+                                frame_num,
+                                total_frames,
+                                f"Encoding video (FAST): {frame_num}/{total_frames} frames",
+                                phase='ffmpeg_encode'
+                            )
+
+                process.wait()
+                if process.returncode != 0:
+                    stderr_output = process.stderr.read() if process.stderr else ""
+                    raise RuntimeError(f"FFmpeg encoding failed: {stderr_output}")
+
+                ffmpeg_encode_end = datetime.now()
+                ffmpeg_encode_duration = (ffmpeg_encode_end - ffmpeg_encode_start).total_seconds()
+                logger.info("=" * 60)
+                logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE END - {ffmpeg_encode_end.isoformat()}")
+                logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE DURATION - {ffmpeg_encode_duration:.2f} seconds")
+                logger.info("Single-pass encoding complete!")
+                logger.info("=" * 60)
+            except Exception as e:
+                logger.error(f"FFmpeg encoding failed: {e}")
+                raise RuntimeError(f"Video encoding failed: {e}")
+
+        else:  # QUALITY MODE
+            # QUALITY MODE: H.265, two-pass, veryslow preset, CRF 10
+            logger.info(f"Encoding video with QUALITY settings (H.265, 2-pass, veryslow preset, CRF 10) at {fps} fps...")
+            logger.info("=" * 60)
+
+            # Pass 1 - Analysis
+            ffmpeg_pass1_start = datetime.now()
+            logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 START - {ffmpeg_pass1_start.isoformat()}")
+            logger.info("Starting pass 1 - analyzing video...")
+            logger.info("=" * 60)
+            cmd_pass1 = [
+                'ffmpeg', '-y',
+                '-framerate', str(fps),
+                '-i', frames_pattern,
+                '-i', input_video_path,
+                '-map', '0:v', '-map', '1:a?',
+                '-c:v', 'libx265',
+                '-preset', 'veryslow',
+                '-crf', '10',
+                '-x265-params', 'pass=1:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6',
+                '-an',  # No audio in pass 1
+                '-progress', 'pipe:2',  # Output progress to stderr
+                '-f', 'null',
+                '/dev/null' if os.name != 'nt' else 'NUL'
+            ]
+
+            try:
+                process = subprocess.Popen(
+                    cmd_pass1,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1
+                )
+
+                # Monitor progress for pass 1
+                last_frame = 0
+                for line in process.stderr:
+                    frame_num = parse_ffmpeg_progress(line, total_frames)
+                    if frame_num > 0 and frame_num != last_frame:
+                        last_frame = frame_num
+                        if progress_callback and total_frames > 0:
+                            progress_callback(
+                                frame_num,
+                                total_frames,
+                                f"Analyzing video (pass 1): {frame_num}/{total_frames} frames",
+                                phase='ffmpeg_pass1'
+                            )
+
+                process.wait()
+                if process.returncode != 0:
+                    stderr_output = process.stderr.read() if process.stderr else ""
+                    raise RuntimeError(f"FFmpeg pass 1 failed: {stderr_output}")
+
+                ffmpeg_pass1_end = datetime.now()
+                ffmpeg_pass1_duration = (ffmpeg_pass1_end - ffmpeg_pass1_start).total_seconds()
+                logger.info("=" * 60)
+                logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 END - {ffmpeg_pass1_end.isoformat()}")
+                logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 DURATION - {ffmpeg_pass1_duration:.2f} seconds")
+                logger.info("Pass 1 complete!")
+                logger.info("=" * 60)
+            except Exception as e:
+                logger.error(f"FFmpeg pass 1 failed: {e}")
+                raise RuntimeError(f"Video encoding pass 1 failed: {e}")
+
+            # Pass 2 - Encode
+            ffmpeg_pass2_start = datetime.now()
+            logger.info("=" * 60)
+            logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE START - {ffmpeg_pass2_start.isoformat()}")
+            logger.info("Starting pass 2 - encoding video...")
+            logger.info("=" * 60)
+            cmd_pass2 = [
+                'ffmpeg', '-y',
+                '-framerate', str(fps),
+                '-i', frames_pattern,
+                '-i', input_video_path,
+                '-map', '0:v', '-map', '1:a?',
+                '-c:v', 'libx265',
+                '-preset', 'veryslow',
+                '-crf', '10',
+                '-x265-params', 'pass=2:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6',
+                '-c:a', 'aac', '-b:a', '256k',
+                '-pix_fmt', 'yuv420p',
+                '-colorspace', 'bt709',
+                '-color_primaries', 'bt709',
+                '-color_trc', 'bt709',
+                '-color_range', 'tv',
+                '-movflags', '+faststart',
+                '-progress', 'pipe:2',  # Output progress to stderr
+                str(output_path)
+            ]
+
+            try:
+                process = subprocess.Popen(
+                    cmd_pass2,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1
+                )
+
+                # Monitor progress for pass 2
+                last_frame = 0
+                for line in process.stderr:
+                    frame_num = parse_ffmpeg_progress(line, total_frames)
+                    if frame_num > 0 and frame_num != last_frame:
+                        last_frame = frame_num
+                        if progress_callback and total_frames > 0:
+                            progress_callback(
+                                frame_num,
+                                total_frames,
+                                f"Encoding video (pass 2): {frame_num}/{total_frames} frames",
+                                phase='ffmpeg_encode'
+                            )
+
+                process.wait()
+                if process.returncode != 0:
+                    stderr_output = process.stderr.read() if process.stderr else ""
+                    raise RuntimeError(f"FFmpeg pass 2 failed: {stderr_output}")
+
+                ffmpeg_pass2_end = datetime.now()
+                ffmpeg_pass2_duration = (ffmpeg_pass2_end - ffmpeg_pass2_start).total_seconds()
+                logger.info("=" * 60)
+                logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE END - {ffmpeg_pass2_end.isoformat()}")
+                logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE DURATION - {ffmpeg_pass2_duration:.2f} seconds")
+                logger.info("Pass 2 complete! Video encoding finished.")
+                logger.info("=" * 60)
+            except Exception as e:
+                logger.error(f"FFmpeg pass 2 failed: {e}")
+                raise RuntimeError(f"Video encoding pass 2 failed: {e}")
