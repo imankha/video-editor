@@ -269,8 +269,8 @@ class AIVideoUpscaler:
         Returns:
             Enhanced frame
         """
-        # Upscale using cubic interpolation
-        upscaled = cv2.resize(frame, target_size, interpolation=cv2.INTER_CUBIC)
+        # Upscale using Lanczos4 interpolation (highest quality)
+        upscaled = cv2.resize(frame, target_size, interpolation=cv2.INTER_LANCZOS4)
 
         # Apply enhancement filters
         # Denoise
@@ -770,7 +770,7 @@ class AIVideoUpscaler:
             '-c:v', 'libx265',
             '-preset', 'slower',
             '-crf', '15',
-            '-x265-params', 'pass=1',
+            '-x265-params', 'pass=1:vbv-maxrate=15000:vbv-bufsize=30000',
             '-an',  # No audio in pass 1
             '-f', 'null',
             '/dev/null' if os.name != 'nt' else 'NUL'
@@ -799,7 +799,7 @@ class AIVideoUpscaler:
             '-c:v', 'libx265',
             '-preset', 'slower',
             '-crf', '15',
-            '-x265-params', 'pass=2',
+            '-x265-params', 'pass=2:vbv-maxrate=15000:vbv-bufsize=30000',
             '-c:a', 'aac', '-b:a', '256k',
             '-pix_fmt', 'yuv420p',
             '-movflags', '+faststart',
