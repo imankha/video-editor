@@ -131,6 +131,16 @@ export function useVideo(getSegmentAtTime = null) {
     }
   };
 
+  /**
+   * Restart video - resets playhead to beginning
+   */
+  const restart = () => {
+    if (videoRef.current && videoUrl) {
+      pause();
+      seek(0);
+    }
+  };
+
   // Video element event handlers
   const handleTimeUpdate = () => {
     if (videoRef.current && !isSeeking) {
@@ -220,6 +230,7 @@ export function useVideo(getSegmentAtTime = null) {
     seek,
     stepForward,
     stepBackward,
+    restart,
 
     // Event handlers for video element
     handlers: {
