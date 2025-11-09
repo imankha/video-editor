@@ -127,16 +127,9 @@ export function Timeline({
       {/* Time labels - shows visual duration (after speed/trim adjustments) */}
       <div className="flex justify-between mb-2 text-xs text-gray-400 pl-32">
         <span>{formatTimeSimple(visualCurrentTime)}</span>
-        <div className="flex gap-2 items-center">
-          {trimmedDuration > 0 && (
-            <span className="text-red-400" title="Trimmed duration">
-              -{formatTimeSimple(trimmedDuration)}
-            </span>
-          )}
-          <span title={visualDuration !== duration ? `Source: ${formatTimeSimple(duration)}` : undefined}>
-            {formatTimeSimple(displayDuration)}
-          </span>
-        </div>
+        <span title={visualDuration !== duration ? `Source: ${formatTimeSimple(duration)}` : undefined}>
+          {formatTimeSimple(displayDuration)}
+        </span>
       </div>
 
       {/* Timeline layers container with unified playhead */}
