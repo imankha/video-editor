@@ -315,7 +315,7 @@ export default function SegmentLayer({
 
               {/* Delete button for boundary */}
               <button
-                className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1"
+                className="absolute bottom-full mb-1 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1"
                 onClick={(e) => {
                   e.stopPropagation();
                   onRemoveBoundary(time);
