@@ -118,12 +118,28 @@ export function useSegments() {
    * Toggle trim status for a segment (only works for first or last segment)
    */
   const toggleTrimSegment = useCallback((segmentIndex) => {
-    const numSegments = boundaries.length - 1;
-
-    // Only allow trimming first or last segment
-    if (segmentIndex !== 0 && segmentIndex !== numSegments - 1) return;
-
     setTrimmedSegments(prev => {
+      const currentTrimmed = new Set(prev);
+
+      // Find first and last non-trimmed segments
+      const numSegments = boundaries.length - 1;
+      let firstNonTrimmed = -1;
+      let lastNonTrimmed = -1;
+
+      for (let i = 0; i < numSegments; i++) {
+        if (!currentTrimmed.has(i)) {
+          if (firstNonTrimmed === -1) firstNonTrimmed = i;
+          lastNonTrimmed = i;
+        }
+      }
+
+      // Only allow trimming/restoring segments at the edges of visible segments
+      const isAtEdge = segmentIndex === firstNonTrimmed || segmentIndex === lastNonTrimmed;
+      const isCurrentlyTrimmed = currentTrimmed.has(segmentIndex);
+
+      // Allow if: (1) restoring a trimmed segment, OR (2) trimming an edge segment
+      if (!isCurrentlyTrimmed && !isAtEdge) return prev;
+
       const newSet = new Set(prev);
       if (newSet.has(segmentIndex)) {
         newSet.delete(segmentIndex);
@@ -155,12 +171,26 @@ export function useSegments() {
         end,
         speed,
         isTrimmed,
-        isFirst: i === 0,
-        isLast: i === boundaries.length - 2,
+        isFirst: false, // Will be set below
+        isLast: false,  // Will be set below
         actualDuration,
         visualDuration
       });
     }
+
+    // Calculate isFirst and isLast based on non-trimmed segments
+    // Find first non-trimmed segment
+    const firstNonTrimmedIndex = result.findIndex(s => !s.isTrimmed);
+    if (firstNonTrimmedIndex !== -1) {
+      result[firstNonTrimmedIndex].isFirst = true;
+    }
+
+    // Find last non-trimmed segment
+    const lastNonTrimmedIndex = result.length - 1 - [...result].reverse().findIndex(s => !s.isTrimmed);
+    if (lastNonTrimmedIndex !== -1 && lastNonTrimmedIndex < result.length) {
+      result[lastNonTrimmedIndex].isLast = true;
+    }
+
     return result;
   }, [boundaries, segmentSpeeds, trimmedSegments]);
 
