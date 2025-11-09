@@ -549,7 +549,8 @@ class AIVideoUpscaler:
         keyframes: List[Dict[str, Any]],
         target_fps: int = 30,
         export_mode: str = "quality",
-        progress_callback=None
+        progress_callback=None,
+        segment_data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Process video with de-zoom and AI upscaling
@@ -561,6 +562,10 @@ class AIVideoUpscaler:
             target_fps: Output framerate
             export_mode: Export mode - "fast" or "quality" (default "quality")
             progress_callback: Optional callback(current, total, message)
+            segment_data: Optional segment speed/trim data containing:
+                - segments: List of {start, end, speed} for speed adjustments
+                  (speed = 0.5 requires AI frame interpolation)
+                - trim_start, trim_end: Trim points
 
         Returns:
             Dict with processing results
@@ -584,6 +589,25 @@ class AIVideoUpscaler:
         logger.info(f"Total keyframes: {len(keyframes_sorted)}")
         for i, kf in enumerate(keyframes_sorted):
             logger.info(f"  Keyframe {i+1}: t={kf['time']:.2f}s, crop={int(kf['width'])}x{int(kf['height'])} at ({int(kf['x'])}, {int(kf['y'])})")
+
+        # Log segment data if provided
+        if segment_data:
+            logger.info("=" * 60)
+            logger.info("SEGMENT SPEED/TRIM ANALYSIS")
+            logger.info("=" * 60)
+            if 'segments' in segment_data:
+                logger.info(f"Speed-adjusted segments: {len(segment_data['segments'])}")
+                for seg in segment_data['segments']:
+                    speed = seg['speed']
+                    logger.info(f"  {seg['start']:.2f}s - {seg['end']:.2f}s: {speed}x speed")
+                    if speed == 0.5:
+                        logger.info(f"    → Will generate AI interpolated frames (2x frame count)")
+            if 'trim_start' in segment_data or 'trim_end' in segment_data:
+                trim_start = segment_data.get('trim_start', 0)
+                trim_end = segment_data.get('trim_end', duration)
+                logger.info(f"Trim range: {trim_start:.2f}s to {trim_end:.2f}s")
+        else:
+            logger.info("No segment speed/trim data provided - using normal playback speed")
 
         # Determine target resolution from first frame
         # Get crop at time 0 to determine aspect ratio
@@ -773,7 +797,7 @@ class AIVideoUpscaler:
             logger.info("=" * 60)
 
             # Reassemble video with FFmpeg
-            self.create_video_from_frames(frames_dir, output_path, target_fps, input_path, export_mode, progress_callback)
+            self.create_video_from_frames(frames_dir, output_path, target_fps, input_path, export_mode, progress_callback, segment_data)
 
             return {
                 'success': True,
@@ -816,10 +840,12 @@ class AIVideoUpscaler:
         fps: int,
         input_video_path: str,
         export_mode: str = "quality",
-        progress_callback=None
+        progress_callback=None,
+        segment_data: Optional[Dict[str, Any]] = None
     ):
         """
         Create video from enhanced frames using FFmpeg encoding
+        Applies segment speed changes (with AI frame interpolation for 0.5x) and trimming
 
         Args:
             frames_dir: Directory containing frames
@@ -828,13 +854,103 @@ class AIVideoUpscaler:
             input_video_path: Path to input video (for audio)
             export_mode: Export mode - "fast" (1-pass) or "quality" (2-pass)
             progress_callback: Optional callback(current, total, message, phase)
+            segment_data: Optional segment speed/trim data for applying speed changes
         """
         frames_pattern = str(frames_dir / "frame_%06d.png")
 
         # Count total frames for progress tracking
         frame_files = list(frames_dir.glob("frame_*.png"))
-        total_frames = len(frame_files)
-        logger.info(f"Total frames to encode: {total_frames}")
+        input_frame_count = len(frame_files)
+        logger.info(f"Total input frames: {input_frame_count}")
+
+        # Build FFmpeg complex filter for segment speed changes
+        filter_complex = None
+        expected_output_frames = input_frame_count
+        trim_filter = None
+
+        if segment_data:
+            logger.info("=" * 60)
+            logger.info("APPLYING SEGMENT SPEED/TRIM PROCESSING")
+            logger.info("=" * 60)
+
+            # Get original FPS from input video
+            cap = cv2.VideoCapture(input_video_path)
+            original_fps = cap.get(cv2.CAP_PROP_FPS)
+            cap.release()
+
+            segments = segment_data.get('segments', [])
+            trim_start = segment_data.get('trim_start', 0)
+            trim_end = segment_data.get('trim_end')
+
+            if segments:
+                # Build complex filtergraph for segment-based speed changes
+                filter_parts = []
+                output_labels = []
+                expected_output_frames = 0
+
+                for i, seg in enumerate(segments):
+                    start_time = seg['start']
+                    end_time = seg['end']
+                    speed = seg['speed']
+
+                    # Calculate input frames for this segment
+                    segment_duration = end_time - start_time
+                    segment_input_frames = int(segment_duration * original_fps)
+
+                    if speed == 0.5:
+                        # For 0.5x speed: trim segment, apply minterpolate to double frames
+                        logger.info(f"Segment {i}: {start_time:.2f}s-{end_time:.2f}s @ 0.5x speed")
+                        logger.info(f"  → Input frames: {segment_input_frames}, Output frames (2x): {segment_input_frames * 2}")
+                        logger.info(f"  → Using minterpolate with motion compensation")
+
+                        # Trim, reset PTS, interpolate to double FPS
+                        filter_parts.append(
+                            f"[0:v]trim=start={start_time}:end={end_time},setpts=PTS-STARTPTS,"
+                            f"minterpolate=fps={fps*2}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none,"
+                            f"setpts=PTS*2[v{i}]"
+                        )
+                        expected_output_frames += segment_input_frames * 2
+                        output_labels.append(f"[v{i}]")
+                    else:
+                        # For other speeds or normal: trim and optionally adjust PTS
+                        logger.info(f"Segment {i}: {start_time:.2f}s-{end_time:.2f}s @ {speed}x speed")
+                        logger.info(f"  → Frames: {segment_input_frames}")
+
+                        filter_parts.append(
+                            f"[0:v]trim=start={start_time}:end={end_time},setpts=PTS-STARTPTS[v{i}]"
+                        )
+                        expected_output_frames += segment_input_frames
+                        output_labels.append(f"[v{i}]")
+
+                # Concatenate all segments
+                concat_inputs = ''.join(output_labels)
+                filter_complex = ';'.join(filter_parts) + f';{concat_inputs}concat=n={len(segments)}:v=1:a=0[outv]'
+
+                logger.info(f"Expected output frames: {expected_output_frames}")
+                logger.info(f"Filter complex: {filter_complex}")
+
+            # Handle trim (apply after segment processing if no segments)
+            if trim_start > 0 or trim_end:
+                if not filter_complex:
+                    # Simple trim without segments
+                    if trim_end:
+                        trim_filter = f"trim=start={trim_start}:end={trim_end},setpts=PTS-STARTPTS"
+                        logger.info(f"Applying trim: {trim_start:.2f}s to {trim_end:.2f}s")
+                    else:
+                        trim_filter = f"trim=start={trim_start},setpts=PTS-STARTPTS"
+                        logger.info(f"Trimming start at {trim_start:.2f}s")
+
+                    # Recalculate expected frames for trim
+                    cap = cv2.VideoCapture(input_video_path)
+                    original_fps = cap.get(cv2.CAP_PROP_FPS)
+                    total_duration = cap.get(cv2.CAP_PROP_FRAME_COUNT) / original_fps
+                    cap.release()
+
+                    actual_end = trim_end if trim_end else total_duration
+                    trimmed_duration = actual_end - trim_start
+                    expected_output_frames = int(trimmed_duration * original_fps)
+
+        logger.info(f"Expected output frame count: {expected_output_frames}")
 
         # Set encoding parameters based on export mode
         if export_mode == "fast":
@@ -859,8 +975,18 @@ class AIVideoUpscaler:
                 'ffmpeg', '-y',
                 '-framerate', str(fps),
                 '-i', frames_pattern,
-                '-i', input_video_path,
-                '-map', '0:v', '-map', '1:a?',
+                '-i', input_video_path
+            ]
+
+            # Add filter_complex for segment processing or simple trim filter
+            if filter_complex:
+                cmd_pass1.extend(['-filter_complex', filter_complex, '-map', '[outv]', '-map', '1:a?'])
+            elif trim_filter:
+                cmd_pass1.extend(['-vf', trim_filter, '-map', '0:v', '-map', '1:a?'])
+            else:
+                cmd_pass1.extend(['-map', '0:v', '-map', '1:a?'])
+
+            cmd_pass1.extend([
                 '-c:v', codec,
                 '-preset', preset,
                 '-crf', crf,
@@ -868,7 +994,7 @@ class AIVideoUpscaler:
                 '-an',  # No audio in pass 1
                 '-f', 'null',
                 '/dev/null' if os.name != 'nt' else 'NUL'
-            ]
+            ])
 
             try:
                 # Use Popen to read stderr in real-time for progress monitoring
@@ -892,8 +1018,8 @@ class AIVideoUpscaler:
                         if progress_callback:
                             progress_callback(
                                 frame_num,
-                                total_frames,
-                                f"Pass 1: Analyzing frame {frame_num}/{total_frames}",
+                                expected_output_frames,
+                                f"Pass 1: Analyzing frame {frame_num}/{expected_output_frames}",
                                 phase='ffmpeg_pass1'
                             )
 
@@ -941,12 +1067,22 @@ class AIVideoUpscaler:
             'ffmpeg', '-y',
             '-framerate', str(fps),
             '-i', frames_pattern,
-            '-i', input_video_path,
-            '-map', '0:v', '-map', '1:a?',
+            '-i', input_video_path
+        ]
+
+        # Add filter_complex for segment processing or simple trim filter
+        if filter_complex:
+            cmd_pass2.extend(['-filter_complex', filter_complex, '-map', '[outv]', '-map', '1:a?'])
+        elif trim_filter:
+            cmd_pass2.extend(['-vf', trim_filter, '-map', '0:v', '-map', '1:a?'])
+        else:
+            cmd_pass2.extend(['-map', '0:v', '-map', '1:a?'])
+
+        cmd_pass2.extend([
             '-c:v', codec,
             '-preset', preset,
             '-crf', crf
-        ]
+        ])
 
         # Add codec-specific parameters
         if codec == 'libx265':
@@ -991,12 +1127,12 @@ class AIVideoUpscaler:
                     # Send progress callback
                     if progress_callback:
                         if export_mode == "quality":
-                            message = f"Pass 2: Encoding frame {frame_num}/{total_frames}"
+                            message = f"Pass 2: Encoding frame {frame_num}/{expected_output_frames}"
                         else:
-                            message = f"Encoding frame {frame_num}/{total_frames}"
+                            message = f"Encoding frame {frame_num}/{expected_output_frames}"
                         progress_callback(
                             frame_num,
-                            total_frames,
+                            expected_output_frames,
                             message,
                             phase='ffmpeg_encode'
                         )

@@ -2,26 +2,53 @@ import React from 'react';
 import { Film } from 'lucide-react';
 import { formatTimeSimple } from '../utils/timeFormat';
 import CropLayer from './CropLayer';
+import SegmentLayer from './SegmentLayer';
 
 /**
  * Timeline component - Shows timeline with playhead and scrubber
  * @param {Object} props
  * @param {number} props.currentTime - Current video time
- * @param {number} props.duration - Total video duration
+ * @param {number} props.duration - Total source video duration
+ * @param {number} props.visualDuration - Effective duration after speed/trim changes
+ * @param {number} props.sourceDuration - Original video duration
+ * @param {number} props.trimmedDuration - Total trimmed time
  * @param {Function} props.onSeek - Callback when user seeks
  * @param {Array} props.cropKeyframes - Crop keyframes to display
  * @param {boolean} props.isCropActive - Whether crop layer is active
  * @param {Function} props.onCropKeyframeClick - Callback when crop keyframe is clicked
  * @param {Function} props.onCropKeyframeDelete - Callback when crop keyframe is deleted
+ * @param {Array} props.segments - Segments to display
+ * @param {Array} props.segmentBoundaries - Segment boundaries
+ * @param {Array} props.segmentVisualLayout - Pre-calculated segment visual positions
+ * @param {boolean} props.isSegmentActive - Whether segment layer is active
+ * @param {Function} props.onAddSegmentBoundary - Callback when adding segment boundary
+ * @param {Function} props.onRemoveSegmentBoundary - Callback when removing segment boundary
+ * @param {Function} props.onSegmentSpeedChange - Callback when segment speed changes
+ * @param {Function} props.onSegmentTrim - Callback when segment is trimmed
+ * @param {Function} props.sourceTimeToVisualTime - Convert source time to visual time
+ * @param {Function} props.visualTimeToSourceTime - Convert visual time to source time
  */
 export function Timeline({
   currentTime,
   duration,
+  visualDuration,
+  sourceDuration,
+  trimmedDuration,
   onSeek,
   cropKeyframes = [],
   isCropActive = false,
   onCropKeyframeClick,
-  onCropKeyframeDelete
+  onCropKeyframeDelete,
+  segments = [],
+  segmentBoundaries = [],
+  segmentVisualLayout = [],
+  isSegmentActive = false,
+  onAddSegmentBoundary,
+  onRemoveSegmentBoundary,
+  onSegmentSpeedChange,
+  onSegmentTrim,
+  sourceTimeToVisualTime = (t) => t,
+  visualTimeToSourceTime = (t) => t
 }) {
   const timelineRef = React.useRef(null);
   const [isDragging, setIsDragging] = React.useState(false);
@@ -32,8 +59,15 @@ export function Timeline({
     if (!timelineRef.current) return 0;
     const rect = timelineRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-    const time = (x / rect.width) * duration;
-    return Math.max(0, Math.min(time, duration));
+
+    // Calculate visual time from position (timeline displays visual duration)
+    const effectiveDuration = visualDuration || duration;
+    const visualTime = (x / rect.width) * effectiveDuration;
+
+    // Convert visual time to source time for seeking
+    const sourceTime = visualTimeToSourceTime(visualTime);
+
+    return Math.max(0, Math.min(sourceTime, duration));
   };
 
   const handleMouseDown = (e) => {
@@ -47,13 +81,18 @@ export function Timeline({
 
     const rect = timelineRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-    const time = getTimeFromPosition(e.clientX);
+
+    // Calculate visual time for display
+    const effectiveDuration = visualDuration || duration;
+    const visualTime = (x / rect.width) * effectiveDuration;
 
     setHoverX(x);
-    setHoverTime(time);
+    setHoverTime(visualTime); // Store visual time for display
 
     if (isDragging) {
-      onSeek(time);
+      // Get source time for seeking
+      const sourceTime = getTimeFromPosition(e.clientX);
+      onSeek(sourceTime);
     }
   };
 
@@ -73,14 +112,24 @@ export function Timeline({
     }
   }, [isDragging]);
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  // Convert current source time to visual time for correct playhead positioning
+  const visualCurrentTime = sourceTimeToVisualTime(currentTime);
+
+  // Calculate progress using visual time and visual duration
+  const effectiveDuration = visualDuration || duration;
+  const progress = effectiveDuration > 0 ? (visualCurrentTime / effectiveDuration) * 100 : 0;
+
+  // Use visual duration for display (if segments exist), otherwise use source duration
+  const displayDuration = visualDuration || duration;
 
   return (
     <div className="timeline-container py-4">
-      {/* Time labels - moved above video layer */}
+      {/* Time labels - shows visual duration (after speed/trim adjustments) */}
       <div className="flex justify-between mb-2 text-xs text-gray-400 pl-32">
-        <span>{formatTimeSimple(currentTime)}</span>
-        <span>{formatTimeSimple(duration)}</span>
+        <span>{formatTimeSimple(visualCurrentTime)}</span>
+        <span title={visualDuration !== duration ? `Source: ${formatTimeSimple(duration)}` : undefined}>
+          {formatTimeSimple(displayDuration)}
+        </span>
       </div>
 
       {/* Timeline layers container with unified playhead */}
@@ -124,10 +173,33 @@ export function Timeline({
             <CropLayer
               keyframes={cropKeyframes}
               duration={duration}
+              visualDuration={visualDuration}
               currentTime={currentTime}
               isActive={isCropActive}
               onKeyframeClick={onCropKeyframeClick}
               onKeyframeDelete={onCropKeyframeDelete}
+              sourceTimeToVisualTime={sourceTimeToVisualTime}
+            />
+          </div>
+        )}
+
+        {/* Segment Layer */}
+        {segments.length > 0 && (
+          <div className="mt-1">
+            <SegmentLayer
+              segments={segments}
+              boundaries={segmentBoundaries}
+              duration={duration}
+              visualDuration={visualDuration}
+              currentTime={currentTime}
+              isActive={isSegmentActive}
+              segmentVisualLayout={segmentVisualLayout}
+              onAddBoundary={onAddSegmentBoundary}
+              onRemoveBoundary={onRemoveSegmentBoundary}
+              onSegmentSpeedChange={onSegmentSpeedChange}
+              onSegmentTrim={onSegmentTrim}
+              sourceTimeToVisualTime={sourceTimeToVisualTime}
+              visualTimeToSourceTime={visualTimeToSourceTime}
             />
           </div>
         )}
@@ -137,7 +209,7 @@ export function Timeline({
           className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none left-32"
           style={{
             left: `calc(8rem + (100% - 8rem) * ${progress / 100})`,  // 8rem label + progress% of remaining width
-            height: cropKeyframes.length > 0 ? 'calc(100% - 0.25rem)' : '3rem'  // Extend through all layers
+            height: (cropKeyframes.length > 0 || segments.length > 0) ? 'calc(100% - 0.25rem)' : '3rem'  // Extend through all layers
           }}
         >
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full" />

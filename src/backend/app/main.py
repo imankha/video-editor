@@ -575,7 +575,8 @@ async def export_with_ai_upscale(
     keyframes_json: str = Form(...),
     target_fps: int = Form(30),
     export_id: str = Form(...),
-    export_mode: str = Form("quality")
+    export_mode: str = Form("quality"),
+    segment_data_json: str = Form(None)
 ):
     """
     Export video with AI upscaling and de-zoom
@@ -614,6 +615,21 @@ async def export_with_ai_upscale(
 
     if len(keyframes) == 0:
         raise HTTPException(status_code=400, detail="No crop keyframes provided")
+
+    # Parse segment data (speed/trim) if provided
+    segment_data = None
+    if segment_data_json:
+        try:
+            segment_data = json.loads(segment_data_json)
+            logger.info("=" * 80)
+            logger.info("SEGMENT DATA RECEIVED FROM CLIENT")
+            logger.info("=" * 80)
+            logger.info(json.dumps(segment_data, indent=2))
+            logger.info("=" * 80)
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid segment data JSON: {str(e)}")
+    else:
+        logger.info("No segment data provided - processing without speed/trim adjustments")
 
     # Create temporary directory for processing
     temp_dir = tempfile.mkdtemp()
@@ -774,7 +790,8 @@ async def export_with_ai_upscale(
             keyframes=keyframes_dict,
             target_fps=target_fps,
             export_mode=export_mode,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            segment_data=segment_data
         )
 
         complete_timestamp = datetime.now()
