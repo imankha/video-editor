@@ -190,6 +190,7 @@ export function Timeline({
               segments={segments}
               boundaries={segmentBoundaries}
               duration={duration}
+              visualDuration={visualDuration}
               currentTime={currentTime}
               isActive={isSegmentActive}
               segmentVisualLayout={segmentVisualLayout}
@@ -197,6 +198,8 @@ export function Timeline({
               onRemoveBoundary={onRemoveSegmentBoundary}
               onSegmentSpeedChange={onSegmentSpeedChange}
               onSegmentTrim={onSegmentTrim}
+              sourceTimeToVisualTime={sourceTimeToVisualTime}
+              visualTimeToSourceTime={visualTimeToSourceTime}
             />
           </div>
         )}

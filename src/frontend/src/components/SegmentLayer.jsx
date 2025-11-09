@@ -9,13 +9,16 @@ export default function SegmentLayer({
   segments,
   boundaries,
   duration,
+  visualDuration,
   currentTime,
   onAddBoundary,
   onRemoveBoundary,
   onSegmentSpeedChange,
   onSegmentTrim,
   isActive,
-  segmentVisualLayout = [] // Pre-calculated visual positions from hook
+  segmentVisualLayout = [], // Pre-calculated visual positions from hook
+  sourceTimeToVisualTime = (t) => t, // Convert source time to visual time
+  visualTimeToSourceTime = (t) => t  // Convert visual time to source time
 }) {
   const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(null);
 
@@ -24,18 +27,26 @@ export default function SegmentLayer({
   if (!duration) return null;
 
   /**
-   * Convert time to pixel position on timeline
+   * Convert source time to visual pixel position on timeline
    */
-  const timeToPixel = (time) => {
-    if (!duration) return 0;
-    return (time / duration) * 100;
+  const sourceTimeToPixel = (sourceTime) => {
+    const effectiveDuration = visualDuration || duration;
+    if (!effectiveDuration) return 0;
+
+    // Convert source time to visual time, then to pixel percentage
+    const visualTime = sourceTimeToVisualTime(sourceTime);
+    return (visualTime / effectiveDuration) * 100;
   };
 
   /**
-   * Convert pixel position to time
+   * Convert pixel position to source time (for adding boundaries)
    */
   const pixelToTime = (pixelPercent) => {
-    return (pixelPercent / 100) * duration;
+    const effectiveDuration = visualDuration || duration;
+    // Convert pixel to visual time
+    const visualTime = (pixelPercent / 100) * effectiveDuration;
+    // Convert visual time back to source time
+    return visualTimeToSourceTime(visualTime);
   };
 
   /**
@@ -277,7 +288,7 @@ export default function SegmentLayer({
 
         {/* Render segment boundaries (vertical lines) */}
         {boundaries.map((time, index) => {
-          const position = timeToPixel(time);
+          const position = sourceTimeToPixel(time);
           const isStart = Math.abs(time) < 0.01;
           const isEnd = Math.abs(time - duration) < 0.01;
           const isAtCurrentTime = Math.abs(time - currentTime) < 0.01;
