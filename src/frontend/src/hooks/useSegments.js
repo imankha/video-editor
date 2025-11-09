@@ -135,25 +135,78 @@ export function useSegments() {
   }, [boundaries]);
 
   /**
-   * Get all segments with their properties
+   * Get all segments with their properties (DERIVED STATE)
    */
   const segments = useMemo(() => {
     if (boundaries.length < 2) return [];
 
     const result = [];
     for (let i = 0; i < boundaries.length - 1; i++) {
+      const start = boundaries[i];
+      const end = boundaries[i + 1];
+      const speed = segmentSpeeds[i] || 1;
+      const isTrimmed = trimmedSegments.has(i);
+      const actualDuration = end - start;
+      const visualDuration = actualDuration / speed;
+
       result.push({
         index: i,
-        start: boundaries[i],
-        end: boundaries[i + 1],
-        speed: segmentSpeeds[i] || 1,
-        isTrimmed: trimmedSegments.has(i),
+        start,
+        end,
+        speed,
+        isTrimmed,
         isFirst: i === 0,
-        isLast: i === boundaries.length - 2
+        isLast: i === boundaries.length - 2,
+        actualDuration,
+        visualDuration
       });
     }
     return result;
   }, [boundaries, segmentSpeeds, trimmedSegments]);
+
+  /**
+   * Calculate the visual (effective) duration after all segment modifications (DERIVED STATE)
+   * This is what the user will actually see/experience
+   */
+  const visualDuration = useMemo(() => {
+    return segments
+      .filter(s => !s.isTrimmed)
+      .reduce((sum, s) => sum + s.visualDuration, 0);
+  }, [segments]);
+
+  /**
+   * Calculate total trimmed duration (DERIVED STATE)
+   */
+  const trimmedDuration = useMemo(() => {
+    return segments
+      .filter(s => s.isTrimmed)
+      .reduce((sum, s) => sum + s.actualDuration, 0);
+  }, [segments]);
+
+  /**
+   * Calculate segment visual positions for rendering (DERIVED STATE)
+   * Returns array of {segment, visualStart%, visualWidth%}
+   */
+  const segmentVisualLayout = useMemo(() => {
+    if (visualDuration === 0) return [];
+
+    let cumulativeVisualPosition = 0;
+
+    return segments
+      .filter(s => !s.isTrimmed)
+      .map(segment => {
+        const visualWidthPercent = (segment.visualDuration / visualDuration) * 100;
+        const visualStartPercent = cumulativeVisualPosition;
+
+        cumulativeVisualPosition += visualWidthPercent;
+
+        return {
+          segment,
+          visualStartPercent,
+          visualWidthPercent
+        };
+      });
+  }, [segments, visualDuration]);
 
   /**
    * Get the current segment and speed at a given time
@@ -250,15 +303,25 @@ export function useSegments() {
   }, [getSegmentAtTime]);
 
   return {
+    // Raw state
     boundaries,
     segments,
-    duration,
+    sourceDuration: duration, // Original video duration
+
+    // Derived state (auto-updates when segments change)
+    visualDuration,      // Effective duration after speed/trim
+    trimmedDuration,     // Total trimmed time
+    segmentVisualLayout, // Pre-calculated visual positions
+
+    // Actions
     initializeWithDuration,
     reset,
     addBoundary,
     removeBoundary,
     setSegmentSpeed,
     toggleTrimSegment,
+
+    // Queries
     getSegmentAtTime,
     getExportData,
     isTimeVisible

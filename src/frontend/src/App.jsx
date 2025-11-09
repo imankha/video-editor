@@ -22,6 +22,10 @@ function App() {
   const {
     boundaries: segmentBoundaries,
     segments,
+    sourceDuration,
+    visualDuration,
+    trimmedDuration,
+    segmentVisualLayout,
     initializeWithDuration: initializeSegments,
     reset: resetSegments,
     addBoundary: addSegmentBoundary,
@@ -249,6 +253,9 @@ function App() {
                 <Timeline
                   currentTime={currentTime}
                   duration={duration}
+                  visualDuration={visualDuration || duration}
+                  sourceDuration={sourceDuration || duration}
+                  trimmedDuration={trimmedDuration || 0}
                   onSeek={seek}
                   cropKeyframes={keyframes}
                   isCropActive={true}
@@ -256,6 +263,7 @@ function App() {
                   onCropKeyframeDelete={handleKeyframeDelete}
                   segments={segments}
                   segmentBoundaries={segmentBoundaries}
+                  segmentVisualLayout={segmentVisualLayout}
                   isSegmentActive={true}
                   onAddSegmentBoundary={addSegmentBoundary}
                   onRemoveSegmentBoundary={removeSegmentBoundary}

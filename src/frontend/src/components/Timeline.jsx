@@ -8,7 +8,10 @@ import SegmentLayer from './SegmentLayer';
  * Timeline component - Shows timeline with playhead and scrubber
  * @param {Object} props
  * @param {number} props.currentTime - Current video time
- * @param {number} props.duration - Total video duration
+ * @param {number} props.duration - Total source video duration
+ * @param {number} props.visualDuration - Effective duration after speed/trim changes
+ * @param {number} props.sourceDuration - Original video duration
+ * @param {number} props.trimmedDuration - Total trimmed time
  * @param {Function} props.onSeek - Callback when user seeks
  * @param {Array} props.cropKeyframes - Crop keyframes to display
  * @param {boolean} props.isCropActive - Whether crop layer is active
@@ -16,6 +19,7 @@ import SegmentLayer from './SegmentLayer';
  * @param {Function} props.onCropKeyframeDelete - Callback when crop keyframe is deleted
  * @param {Array} props.segments - Segments to display
  * @param {Array} props.segmentBoundaries - Segment boundaries
+ * @param {Array} props.segmentVisualLayout - Pre-calculated segment visual positions
  * @param {boolean} props.isSegmentActive - Whether segment layer is active
  * @param {Function} props.onAddSegmentBoundary - Callback when adding segment boundary
  * @param {Function} props.onRemoveSegmentBoundary - Callback when removing segment boundary
@@ -25,6 +29,9 @@ import SegmentLayer from './SegmentLayer';
 export function Timeline({
   currentTime,
   duration,
+  visualDuration,
+  sourceDuration,
+  trimmedDuration,
   onSeek,
   cropKeyframes = [],
   isCropActive = false,
@@ -32,6 +39,7 @@ export function Timeline({
   onCropKeyframeDelete,
   segments = [],
   segmentBoundaries = [],
+  segmentVisualLayout = [],
   isSegmentActive = false,
   onAddSegmentBoundary,
   onRemoveSegmentBoundary,
@@ -90,12 +98,24 @@ export function Timeline({
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  // Use visual duration for display (if segments exist), otherwise use source duration
+  const displayDuration = visualDuration || duration;
+
   return (
     <div className="timeline-container py-4">
-      {/* Time labels - moved above video layer */}
+      {/* Time labels - shows visual duration (after speed/trim adjustments) */}
       <div className="flex justify-between mb-2 text-xs text-gray-400 pl-32">
         <span>{formatTimeSimple(currentTime)}</span>
-        <span>{formatTimeSimple(duration)}</span>
+        <div className="flex gap-2 items-center">
+          {trimmedDuration > 0 && (
+            <span className="text-red-400" title="Trimmed duration">
+              -{formatTimeSimple(trimmedDuration)}
+            </span>
+          )}
+          <span title={visualDuration !== duration ? `Source: ${formatTimeSimple(duration)}` : undefined}>
+            {formatTimeSimple(displayDuration)}
+          </span>
+        </div>
       </div>
 
       {/* Timeline layers container with unified playhead */}
@@ -156,6 +176,7 @@ export function Timeline({
               duration={duration}
               currentTime={currentTime}
               isActive={isSegmentActive}
+              segmentVisualLayout={segmentVisualLayout}
               onAddBoundary={onAddSegmentBoundary}
               onRemoveBoundary={onRemoveSegmentBoundary}
               onSegmentSpeedChange={onSegmentSpeedChange}

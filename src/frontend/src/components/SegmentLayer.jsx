@@ -13,9 +13,10 @@ export default function SegmentLayer({
   onRemoveBoundary,
   onSegmentSpeedChange,
   onSegmentTrim,
-  isActive
+  isActive,
+  segmentVisualLayout = [] // Pre-calculated visual positions from hook
 }) {
-  console.log('[SegmentLayer] Render with boundaries:', boundaries, 'segments:', segments.length);
+  console.log('[SegmentLayer] Render - segments:', segments.length, 'visualLayout:', segmentVisualLayout.length);
 
   if (!duration) return null;
 
@@ -95,109 +96,89 @@ export default function SegmentLayer({
           </div>
         )}
 
-        {/* Render active (non-trimmed) segments */}
-        {(() => {
-          let visualPosition = 0; // Track cumulative visual position as percentage
+        {/* Render active (non-trimmed) segments - using pre-calculated visual layout */}
+        {segmentVisualLayout.map(({ segment, visualStartPercent, visualWidthPercent }) => (
+          <div
+            key={segment.index}
+            className="absolute top-0"
+            style={{
+              left: `${visualStartPercent}%`,
+              width: `${visualWidthPercent}%`
+            }}
+          >
+            {/* Segment background */}
+            <div
+              className="h-12 transition-all hover:bg-purple-700 hover:bg-opacity-30"
+              title={`Segment ${segment.index + 1}: ${segment.speed}x (${segment.actualDuration.toFixed(1)}s → ${segment.visualDuration.toFixed(1)}s)`}
+            >
+              {/* Speed indicator (show if speed != 1) */}
+              {segment.speed !== 1 && (
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                  <div className="bg-purple-600 text-white text-xs px-2 py-0.5 rounded font-semibold">
+                    {segment.speed}x
+                  </div>
+                </div>
+              )}
+            </div>
 
-          return segments.filter(s => !s.isTrimmed).map((segment) => {
-            const actualDuration = segment.end - segment.start;
-            const visualDuration = actualDuration / segment.speed; // Slower = longer, faster = shorter
-
-            // Calculate visual width as percentage of total timeline
-            // We need to know the total visual duration first
-            const totalVisualDuration = segments
-              .filter(s => !s.isTrimmed)
-              .reduce((sum, s) => sum + ((s.end - s.start) / s.speed), 0);
-
-            const visualWidthPercent = (visualDuration / totalVisualDuration) * 100;
-            const currentVisualPosition = visualPosition;
-
-            visualPosition += visualWidthPercent; // Update for next segment
-
-            return (
-              <div
-                key={segment.index}
-                className="absolute top-0"
-                style={{
-                  left: `${currentVisualPosition}%`,
-                  width: `${visualWidthPercent}%`
-                }}
-              >
-                {/* Segment background */}
-                <div
-                  className="h-12 transition-all hover:bg-purple-700 hover:bg-opacity-30"
-                  title={`Segment ${segment.index + 1}: ${segment.speed}x (${actualDuration.toFixed(1)}s → ${visualDuration.toFixed(1)}s)`}
+            {/* Segment controls - always visible below the segment */}
+            <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 flex gap-1 z-10">
+              {/* Trash button (only for first or last segment, and only if there are at least 2 segments) */}
+              {(segment.isFirst || segment.isLast) && segments.length >= 2 && (
+                <button
+                  className="p-1.5 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTrim(segment.index);
+                  }}
+                  title="Trim segment"
                 >
-                  {/* Speed indicator (show if speed != 1) */}
-                  {segment.speed !== 1 && (
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-                      <div className="bg-purple-600 text-white text-xs px-2 py-0.5 rounded font-semibold">
-                        {segment.speed}x
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  <Trash2 size={12} />
+                </button>
+              )}
 
-                {/* Segment controls - always visible below the segment */}
-                <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 flex gap-1 z-10">
-                  {/* Trash button (only for first or last segment, and only if there are at least 2 segments) */}
-                  {(segment.isFirst || segment.isLast) && segments.length >= 2 && (
-                    <button
-                      className="p-1.5 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleTrim(segment.index);
-                      }}
-                      title="Trim segment"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  )}
-
-                  {/* Speed buttons (only show speeds that aren't current) */}
-                  <>
-                    {segment.speed !== 0.5 && (
-                      <button
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSpeedChange(segment.index, 0.5);
-                        }}
-                        title="Set speed to 0.5x"
-                      >
-                        0.5x
-                      </button>
-                    )}
-                    {segment.speed !== 1 && (
-                      <button
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSpeedChange(segment.index, 1);
-                        }}
-                        title="Set speed to 1x (normal)"
-                      >
-                        1x
-                      </button>
-                    )}
-                    {segment.speed !== 1.5 && (
-                      <button
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSpeedChange(segment.index, 1.5);
-                        }}
-                        title="Set speed to 1.5x"
-                      >
-                        1.5x
-                      </button>
-                    )}
-                  </>
-                </div>
-              </div>
-            );
-          });
-        })()}
+              {/* Speed buttons (only show speeds that aren't current) */}
+              <>
+                {segment.speed !== 0.5 && (
+                  <button
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSpeedChange(segment.index, 0.5);
+                    }}
+                    title="Set speed to 0.5x"
+                  >
+                    0.5x
+                  </button>
+                )}
+                {segment.speed !== 1 && (
+                  <button
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSpeedChange(segment.index, 1);
+                    }}
+                    title="Set speed to 1x (normal)"
+                  >
+                    1x
+                  </button>
+                )}
+                {segment.speed !== 1.5 && (
+                  <button
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSpeedChange(segment.index, 1.5);
+                    }}
+                    title="Set speed to 1.5x"
+                  >
+                    1.5x
+                  </button>
+                )}
+              </>
+            </div>
+          </div>
+        ))}
 
         {/* Render trimmed segments as collapsed indicators outside timeline */}
         {(() => {
