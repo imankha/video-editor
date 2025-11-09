@@ -1,4 +1,5 @@
 import { Split, Trash2, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
 
 /**
  * SegmentLayer component - displays video segments with speed control and trimming
@@ -16,6 +17,8 @@ export default function SegmentLayer({
   isActive,
   segmentVisualLayout = [] // Pre-calculated visual positions from hook
 }) {
+  const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(null);
+
   console.log('[SegmentLayer] Render - segments:', segments.length, 'visualLayout:', segmentVisualLayout.length);
 
   if (!duration) return null;
@@ -108,7 +111,7 @@ export default function SegmentLayer({
           >
             {/* Segment background */}
             <div
-              className="h-12"
+              className={`h-12 transition-all ${hoveredSegmentIndex === segment.index ? 'bg-purple-500 bg-opacity-30' : ''}`}
               title={`Segment ${segment.index + 1}: ${segment.speed}x (${segment.actualDuration.toFixed(1)}s → ${segment.visualDuration.toFixed(1)}s)`}
             >
               {/* Speed indicator (show if speed != 1) */}
@@ -122,7 +125,11 @@ export default function SegmentLayer({
             </div>
 
             {/* Segment controls - always visible below the segment */}
-            <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 flex gap-1 z-10">
+            <div
+              className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 flex gap-1 z-10"
+              onMouseEnter={() => setHoveredSegmentIndex(segment.index)}
+              onMouseLeave={() => setHoveredSegmentIndex(null)}
+            >
               {/* Trash button (only for first or last segment, and only if there are at least 2 segments) */}
               {(segment.isFirst || segment.isLast) && segments.length >= 2 && (
                 <button
