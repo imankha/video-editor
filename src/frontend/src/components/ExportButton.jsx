@@ -104,7 +104,12 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
 
       // Add segment data if available (only if speed changes or trimming exist)
       if (segmentData) {
+        console.log('=== EXPORT: Sending segment data to backend ===');
+        console.log(JSON.stringify(segmentData, null, 2));
+        console.log('==============================================');
         formData.append('segment_data_json', JSON.stringify(segmentData));
+      } else {
+        console.log('=== EXPORT: No segment data to send ===');
       }
 
       // Always use AI upscale endpoint

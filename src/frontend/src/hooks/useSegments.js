@@ -301,19 +301,25 @@ export function useSegments() {
       result.trim_end = endTime;
     }
 
-    // Add segment speed data (only for segments with speed != 1)
+    // Add segment speed data
+    // IMPORTANT: If we have any speed changes, we must send ALL segments (including normal ones)
+    // because FFmpeg needs to concat them together in the correct order
     if (hasSpeedChanges) {
       const speedSegments = [];
 
       for (let i = 0; i < boundaries.length - 1; i++) {
-        const speed = segmentSpeeds[i];
-        if (speed && speed !== 1 && !trimmedSegments.has(i)) {
-          speedSegments.push({
-            start: boundaries[i],
-            end: boundaries[i + 1],
-            speed: speed
-          });
+        // Skip trimmed segments
+        if (trimmedSegments.has(i)) {
+          continue;
         }
+
+        // Include ALL non-trimmed segments, with their speed (default to 1 if not set)
+        const speed = segmentSpeeds[i] || 1;
+        speedSegments.push({
+          start: boundaries[i],
+          end: boundaries[i + 1],
+          speed: speed
+        });
       }
 
       if (speedSegments.length > 0) {

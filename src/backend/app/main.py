@@ -621,9 +621,15 @@ async def export_with_ai_upscale(
     if segment_data_json:
         try:
             segment_data = json.loads(segment_data_json)
-            logger.info(f"Segment data received: {segment_data}")
+            logger.info("=" * 80)
+            logger.info("SEGMENT DATA RECEIVED FROM CLIENT")
+            logger.info("=" * 80)
+            logger.info(json.dumps(segment_data, indent=2))
+            logger.info("=" * 80)
         except json.JSONDecodeError as e:
             raise HTTPException(status_code=400, detail=f"Invalid segment data JSON: {str(e)}")
+    else:
+        logger.info("No segment data provided - processing without speed/trim adjustments")
 
     # Create temporary directory for processing
     temp_dir = tempfile.mkdtemp()
