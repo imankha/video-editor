@@ -599,9 +599,9 @@ async def export_with_ai_upscale(
     Returns:
         AI-upscaled video file
     """
-    # Initialize progress tracking
+    # Initialize progress tracking (10% to match upload completion)
     export_progress[export_id] = {
-        "progress": 0,
+        "progress": 10,
         "message": "Starting export...",
         "status": "processing"
     }
@@ -713,18 +713,20 @@ async def export_with_ai_upscale(
         loop = asyncio.get_running_loop()
 
         # Define progress allocations based on export mode (from empirical timing data)
+        # Upload: 0-10% (handled by frontend)
+        # Backend: 10-100% (handled here)
         # FAST: AI=95.2%, Encode=4.8%
         # QUALITY: AI=18.5%, Pass1=52.8%, Pass2=28.7%
         if export_mode == "FAST":
             progress_ranges = {
-                'ai_upscale': (0, 85),      # 85% of progress bar
-                'ffmpeg_encode': (85, 100)    # 15% of progress bar
+                'ai_upscale': (10, 95),      # 85% of progress bar
+                'ffmpeg_encode': (95, 100)    # 5% of progress bar
             }
         else:  # QUALITY
             progress_ranges = {
-                'ai_upscale': (0, 18),       # 18% of progress bar (18.5% of time)
-                'ffmpeg_pass1': (18, 71),     # 53% of progress bar (52.8% of time)
-                'ffmpeg_encode': (71, 100)    # 29% of progress bar (28.7% of time)
+                'ai_upscale': (10, 28),       # 18% of progress bar (18.5% of time)
+                'ffmpeg_pass1': (28, 81),     # 53% of progress bar (52.8% of time)
+                'ffmpeg_encode': (81, 100)    # 19% of progress bar (28.7% of time)
             }
 
         def progress_callback(current, total, message, phase='ai_upscale'):
@@ -768,13 +770,13 @@ async def export_with_ai_upscale(
             except Exception as e:
                 logger.error(f"Failed to send WebSocket update: {e}")
 
-        # Update progress - initializing
+        # Update progress - initializing (10% to match upload completion)
         init_timestamp = datetime.now()
         logger.info("=" * 80)
         logger.info(f"[EXPORT_PHASE] INITIALIZATION START - {init_timestamp.isoformat()}")
         logger.info("=" * 80)
         init_data = {
-            "progress": 0,
+            "progress": 10,
             "message": "Initializing AI upscaler...",
             "status": "processing"
         }
