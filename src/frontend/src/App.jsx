@@ -128,6 +128,26 @@ function App() {
     console.log('[App] Current crop state:', currentCropState);
   }, [currentCropState]);
 
+  // Keyboard handler: Space bar toggles play/pause
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      // Only handle spacebar if video is loaded
+      if (event.code === 'Space' && videoUrl) {
+        // Prevent default spacebar behavior (page scroll)
+        event.preventDefault();
+        togglePlay();
+      }
+    };
+
+    // Add event listener
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Cleanup on unmount
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [videoUrl, togglePlay]);
+
   // Handle crop changes during drag/resize (live preview)
   const handleCropChange = (newCrop) => {
     setDragCrop(newCrop);
