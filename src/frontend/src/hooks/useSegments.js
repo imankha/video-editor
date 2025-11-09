@@ -302,6 +302,78 @@ export function useSegments() {
     return segment ? !segment.isTrimmed : true;
   }, [getSegmentAtTime]);
 
+  /**
+   * Convert source time to visual time (accounts for speed changes)
+   * @param {number} sourceTime - Time in the original video
+   * @returns {number} - Visual time after speed adjustments
+   */
+  const sourceTimeToVisualTime = useCallback((sourceTime) => {
+    if (boundaries.length < 2) return sourceTime;
+
+    let visualTime = 0;
+
+    for (let i = 0; i < boundaries.length - 1; i++) {
+      const segmentStart = boundaries[i];
+      const segmentEnd = boundaries[i + 1];
+      const speed = segmentSpeeds[i] || 1;
+      const isTrimmed = trimmedSegments.has(i);
+
+      // Skip trimmed segments
+      if (isTrimmed) continue;
+
+      if (sourceTime <= segmentStart) {
+        // Before this segment
+        break;
+      } else if (sourceTime >= segmentEnd) {
+        // After this segment - add its full visual duration
+        visualTime += (segmentEnd - segmentStart) / speed;
+      } else {
+        // Within this segment
+        const timeInSegment = sourceTime - segmentStart;
+        visualTime += timeInSegment / speed;
+        break;
+      }
+    }
+
+    return visualTime;
+  }, [boundaries, segmentSpeeds, trimmedSegments]);
+
+  /**
+   * Convert visual time to source time (inverse of sourceTimeToVisualTime)
+   * @param {number} visualTime - Visual time after speed adjustments
+   * @returns {number} - Time in the original video
+   */
+  const visualTimeToSourceTime = useCallback((visualTime) => {
+    if (boundaries.length < 2) return visualTime;
+
+    let remainingVisualTime = visualTime;
+
+    for (let i = 0; i < boundaries.length - 1; i++) {
+      const segmentStart = boundaries[i];
+      const segmentEnd = boundaries[i + 1];
+      const speed = segmentSpeeds[i] || 1;
+      const isTrimmed = trimmedSegments.has(i);
+
+      // Skip trimmed segments
+      if (isTrimmed) continue;
+
+      const segmentActualDuration = segmentEnd - segmentStart;
+      const segmentVisualDuration = segmentActualDuration / speed;
+
+      if (remainingVisualTime <= segmentVisualDuration) {
+        // Time is within this segment
+        const sourceTimeInSegment = remainingVisualTime * speed;
+        return segmentStart + sourceTimeInSegment;
+      } else {
+        // Time is beyond this segment
+        remainingVisualTime -= segmentVisualDuration;
+      }
+    }
+
+    // If we've gone through all segments, return the end
+    return boundaries[boundaries.length - 1];
+  }, [boundaries, segmentSpeeds, trimmedSegments]);
+
   return {
     // Raw state
     boundaries,
@@ -324,6 +396,8 @@ export function useSegments() {
     // Queries
     getSegmentAtTime,
     getExportData,
-    isTimeVisible
+    isTimeVisible,
+    sourceTimeToVisualTime,
+    visualTimeToSourceTime
   };
 }

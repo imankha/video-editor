@@ -35,6 +35,8 @@ function App() {
     getSegmentAtTime,
     getExportData: getSegmentExportData,
     isTimeVisible,
+    sourceTimeToVisualTime,
+    visualTimeToSourceTime,
   } = useSegments();
 
   const {
@@ -269,6 +271,8 @@ function App() {
                   onRemoveSegmentBoundary={removeSegmentBoundary}
                   onSegmentSpeedChange={setSegmentSpeed}
                   onSegmentTrim={toggleTrimSegment}
+                  sourceTimeToVisualTime={sourceTimeToVisualTime}
+                  visualTimeToSourceTime={visualTimeToSourceTime}
                 />
               </CropProvider>
             </div>

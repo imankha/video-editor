@@ -25,6 +25,8 @@ import SegmentLayer from './SegmentLayer';
  * @param {Function} props.onRemoveSegmentBoundary - Callback when removing segment boundary
  * @param {Function} props.onSegmentSpeedChange - Callback when segment speed changes
  * @param {Function} props.onSegmentTrim - Callback when segment is trimmed
+ * @param {Function} props.sourceTimeToVisualTime - Convert source time to visual time
+ * @param {Function} props.visualTimeToSourceTime - Convert visual time to source time
  */
 export function Timeline({
   currentTime,
@@ -44,7 +46,9 @@ export function Timeline({
   onAddSegmentBoundary,
   onRemoveSegmentBoundary,
   onSegmentSpeedChange,
-  onSegmentTrim
+  onSegmentTrim,
+  sourceTimeToVisualTime = (t) => t,
+  visualTimeToSourceTime = (t) => t
 }) {
   const timelineRef = React.useRef(null);
   const [isDragging, setIsDragging] = React.useState(false);
@@ -159,10 +163,12 @@ export function Timeline({
             <CropLayer
               keyframes={cropKeyframes}
               duration={duration}
+              visualDuration={visualDuration}
               currentTime={currentTime}
               isActive={isCropActive}
               onKeyframeClick={onCropKeyframeClick}
               onKeyframeDelete={onCropKeyframeDelete}
+              sourceTimeToVisualTime={sourceTimeToVisualTime}
             />
           </div>
         )}

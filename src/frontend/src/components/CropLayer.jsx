@@ -8,10 +8,12 @@ import { useCropContext } from '../contexts/CropContext';
 export default function CropLayer({
   keyframes,
   duration,
+  visualDuration,
   currentTime,
   onKeyframeClick,
   onKeyframeDelete,
-  isActive
+  isActive,
+  sourceTimeToVisualTime = (t) => t
 }) {
   // Get isEndKeyframeExplicit from context instead of props
   const { isEndKeyframeExplicit } = useCropContext();
@@ -19,13 +21,17 @@ export default function CropLayer({
     return null;
   }
 
+  // Use visual duration if provided, otherwise fall back to source duration
+  const timelineDuration = visualDuration || duration;
+
   /**
-   * Convert time to pixel position on timeline
+   * Convert source time to visual pixel position on timeline
    */
-  const timeToPixel = (time) => {
-    if (!duration) return 0;
-    // Timeline width is 100%, so we return percentage
-    return (time / duration) * 100;
+  const sourceTimeToPixel = (sourceTime) => {
+    if (!timelineDuration) return 0;
+    // Convert source time to visual time, then to percentage
+    const visualTime = sourceTimeToVisualTime(sourceTime);
+    return (visualTime / timelineDuration) * 100;
   };
 
   return (
@@ -42,7 +48,8 @@ export default function CropLayer({
 
         {/* Keyframe indicators */}
         {keyframes.map((keyframe, index) => {
-          const position = timeToPixel(keyframe.time);
+          // Convert keyframe source time to visual position
+          const position = sourceTimeToPixel(keyframe.time);
           const isAtCurrentTime = Math.abs(keyframe.time - currentTime) < 0.01;
           const isStartKeyframe = Math.abs(keyframe.time) < 0.01;
           const isEndKeyframe = Math.abs(keyframe.time - duration) < 0.01;
