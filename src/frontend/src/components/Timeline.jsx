@@ -59,8 +59,15 @@ export function Timeline({
     if (!timelineRef.current) return 0;
     const rect = timelineRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-    const time = (x / rect.width) * duration;
-    return Math.max(0, Math.min(time, duration));
+
+    // Calculate visual time from position (timeline displays visual duration)
+    const effectiveDuration = visualDuration || duration;
+    const visualTime = (x / rect.width) * effectiveDuration;
+
+    // Convert visual time to source time for seeking
+    const sourceTime = visualTimeToSourceTime(visualTime);
+
+    return Math.max(0, Math.min(sourceTime, duration));
   };
 
   const handleMouseDown = (e) => {
@@ -74,13 +81,18 @@ export function Timeline({
 
     const rect = timelineRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-    const time = getTimeFromPosition(e.clientX);
+
+    // Calculate visual time for display
+    const effectiveDuration = visualDuration || duration;
+    const visualTime = (x / rect.width) * effectiveDuration;
 
     setHoverX(x);
-    setHoverTime(time);
+    setHoverTime(visualTime); // Store visual time for display
 
     if (isDragging) {
-      onSeek(time);
+      // Get source time for seeking
+      const sourceTime = getTimeFromPosition(e.clientX);
+      onSeek(sourceTime);
     }
   };
 
@@ -100,7 +112,12 @@ export function Timeline({
     }
   }, [isDragging]);
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  // Convert current source time to visual time for correct playhead positioning
+  const visualCurrentTime = sourceTimeToVisualTime(currentTime);
+
+  // Calculate progress using visual time and visual duration
+  const effectiveDuration = visualDuration || duration;
+  const progress = effectiveDuration > 0 ? (visualCurrentTime / effectiveDuration) * 100 : 0;
 
   // Use visual duration for display (if segments exist), otherwise use source duration
   const displayDuration = visualDuration || duration;
@@ -109,7 +126,7 @@ export function Timeline({
     <div className="timeline-container py-4">
       {/* Time labels - shows visual duration (after speed/trim adjustments) */}
       <div className="flex justify-between mb-2 text-xs text-gray-400 pl-32">
-        <span>{formatTimeSimple(currentTime)}</span>
+        <span>{formatTimeSimple(visualCurrentTime)}</span>
         <div className="flex gap-2 items-center">
           {trimmedDuration > 0 && (
             <span className="text-red-400" title="Trimmed duration">
