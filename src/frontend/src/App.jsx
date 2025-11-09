@@ -53,6 +53,7 @@ function App() {
     seek,
     stepForward,
     stepBackward,
+    restart,
     handlers,
   } = useVideo(getSegmentAtTime);
 
@@ -308,6 +309,7 @@ function App() {
                 onTogglePlay={togglePlay}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
+                onRestart={restart}
               />
             </div>
           )}
