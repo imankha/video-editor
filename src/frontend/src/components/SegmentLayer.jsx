@@ -108,7 +108,7 @@ export default function SegmentLayer({
           >
             {/* Segment background */}
             <div
-              className="h-12 transition-all hover:bg-purple-700 hover:bg-opacity-30"
+              className="h-12"
               title={`Segment ${segment.index + 1}: ${segment.speed}x (${segment.actualDuration.toFixed(1)}s → ${segment.visualDuration.toFixed(1)}s)`}
             >
               {/* Speed indicator (show if speed != 1) */}
@@ -161,18 +161,6 @@ export default function SegmentLayer({
                     title="Set speed to 1x (normal)"
                   >
                     1x
-                  </button>
-                )}
-                {segment.speed !== 1.5 && (
-                  <button
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSpeedChange(segment.index, 1.5);
-                    }}
-                    title="Set speed to 1.5x"
-                  >
-                    1.5x
                   </button>
                 )}
               </>
