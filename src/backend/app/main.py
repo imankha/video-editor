@@ -599,9 +599,9 @@ async def export_with_ai_upscale(
     Returns:
         AI-upscaled video file
     """
-    # Initialize progress tracking
+    # Initialize progress tracking (10% to match upload completion)
     export_progress[export_id] = {
-        "progress": 0,
+        "progress": 10,
         "message": "Starting export...",
         "status": "processing"
     }
@@ -713,6 +713,8 @@ async def export_with_ai_upscale(
         loop = asyncio.get_running_loop()
 
         # Define progress allocations based on export mode (from empirical timing data)
+        # Upload: 0-10% (handled by frontend)
+        # Backend: 10-100% (handled here)
         # FAST: AI=95.2%, Encode=4.8%
         # QUALITY: AI=18.5%, Pass1=52.8%, Pass2=28.7%
         if export_mode == "FAST":
@@ -768,7 +770,7 @@ async def export_with_ai_upscale(
             except Exception as e:
                 logger.error(f"Failed to send WebSocket update: {e}")
 
-        # Update progress - initializing (10% to leave room for upload at 0-5%)
+        # Update progress - initializing (10% to match upload completion)
         init_timestamp = datetime.now()
         logger.info("=" * 80)
         logger.info(f"[EXPORT_PHASE] INITIALIZATION START - {init_timestamp.isoformat()}")
