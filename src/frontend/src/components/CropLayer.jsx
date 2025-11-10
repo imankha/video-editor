@@ -68,10 +68,10 @@ export default function CropLayer({
               className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 group"
               style={{ left: `${position}%` }}
             >
-              {/* Copy button (shown on hover, above keyframe) - z-20 to appear above all UI */}
+              {/* Copy button (shown on hover, above keyframe) - z-50 to appear above all UI including playhead */}
               {onKeyframeCopy && (
                 <button
-                  className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1 z-20"
+                  className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1 z-50"
                   onClick={(e) => {
                     e.stopPropagation();
                     onKeyframeCopy(keyframe.time);
