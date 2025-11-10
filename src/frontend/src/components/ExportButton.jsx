@@ -21,6 +21,7 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
   const [error, setError] = useState(null);
   const [exportQuality, setExportQuality] = useState('quality'); // 'fast' or 'quality'
   const [includeAudio, setIncludeAudio] = useState(true); // true or false
+  const [targetFps, setTargetFps] = useState(30); // 24, 30, or 60
   const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
@@ -100,7 +101,7 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
       const formData = new FormData();
       formData.append('video', videoFile);
       formData.append('keyframes_json', JSON.stringify(cropKeyframes));
-      formData.append('target_fps', '30');
+      formData.append('target_fps', String(targetFps));
       formData.append('export_id', exportId);
       formData.append('export_mode', exportQuality);
       formData.append('include_audio', includeAudio ? 'true' : 'false');
@@ -242,7 +243,7 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
             onClick={() => setExportQuality(exportQuality === 'fast' ? 'quality' : 'fast')}
             disabled={isExporting}
             className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-              exportQuality === 'quality' ? 'bg-green-600' : 'bg-orange-600'
+              exportQuality === 'quality' ? 'bg-blue-600' : 'bg-gray-600'
             } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
             role="switch"
             aria-checked={exportQuality === 'quality'}
@@ -254,6 +255,27 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
               }`}
             />
           </button>
+        </div>
+
+        {/* Frame Rate Selector */}
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-gray-200">Frame Rate</span>
+            <span className="text-xs text-gray-400">
+              Output video frame rate
+            </span>
+          </div>
+          <select
+            value={targetFps}
+            onChange={(e) => setTargetFps(Number(e.target.value))}
+            disabled={isExporting}
+            className="bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Select frame rate"
+          >
+            <option value={24}>24 fps (Film)</option>
+            <option value={30}>30 fps (Standard)</option>
+            <option value={60}>60 fps (Smooth)</option>
+          </select>
         </div>
 
         {/* Audio Toggle */}
@@ -290,7 +312,7 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
         className={`w-full px-6 py-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
           disabled || isExporting || !videoFile
             ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-            : 'bg-green-600 hover:bg-green-700 text-white'
+            : 'bg-blue-600 hover:bg-blue-700 text-white'
         }`}
       >
         {isExporting ? (
