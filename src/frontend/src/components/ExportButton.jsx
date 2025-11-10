@@ -257,25 +257,30 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
           </button>
         </div>
 
-        {/* Frame Rate Selector */}
+        {/* Frame Rate Toggle */}
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-sm font-medium text-gray-200">Frame Rate</span>
             <span className="text-xs text-gray-400">
-              Output video frame rate
+              {targetFps === 30 ? '30 fps - standard' : '60 fps - smooth motion'}
             </span>
           </div>
-          <select
-            value={targetFps}
-            onChange={(e) => setTargetFps(Number(e.target.value))}
+          <button
+            onClick={() => setTargetFps(targetFps === 30 ? 60 : 30)}
             disabled={isExporting}
-            className="bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Select frame rate"
+            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+              targetFps === 60 ? 'bg-blue-600' : 'bg-gray-600'
+            } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            role="switch"
+            aria-checked={targetFps === 60}
+            aria-label="Toggle frame rate"
           >
-            <option value={24}>24 fps (Film)</option>
-            <option value={30}>30 fps (Standard)</option>
-            <option value={60}>60 fps (Smooth)</option>
-          </select>
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                targetFps === 60 ? 'translate-x-8' : 'translate-x-1'
+              }`}
+            />
+          </button>
         </div>
 
         {/* Audio Toggle */}
