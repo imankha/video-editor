@@ -83,3 +83,23 @@ export function getFramerate(videoElement) {
   // True framerate detection would require frame counting or metadata parsing
   return 30;
 }
+
+/**
+ * Convert time (seconds) to frame number
+ * @param {number} time - Time in seconds
+ * @param {number} framerate - Video framerate
+ * @returns {number} Frame number (integer)
+ */
+export function timeToFrame(time, framerate = 30) {
+  return Math.round(time * framerate);
+}
+
+/**
+ * Convert frame number to time (seconds)
+ * @param {number} frame - Frame number
+ * @param {number} framerate - Video framerate
+ * @returns {number} Time in seconds
+ */
+export function frameToTime(frame, framerate = 30) {
+  return frame / framerate;
+}

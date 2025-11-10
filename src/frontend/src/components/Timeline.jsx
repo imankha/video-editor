@@ -14,6 +14,7 @@ import SegmentLayer from './SegmentLayer';
  * @param {number} props.trimmedDuration - Total trimmed time
  * @param {Function} props.onSeek - Callback when user seeks
  * @param {Array} props.cropKeyframes - Crop keyframes to display
+ * @param {number} props.framerate - Video framerate for frame-based crop keyframes
  * @param {boolean} props.isCropActive - Whether crop layer is active
  * @param {Function} props.onCropKeyframeClick - Callback when crop keyframe is clicked
  * @param {Function} props.onCropKeyframeDelete - Callback when crop keyframe is deleted
@@ -38,6 +39,7 @@ export function Timeline({
   trimmedDuration,
   onSeek,
   cropKeyframes = [],
+  framerate = 30,
   isCropActive = false,
   onCropKeyframeClick,
   onCropKeyframeDelete,
@@ -179,6 +181,7 @@ export function Timeline({
               duration={duration}
               visualDuration={visualDuration}
               currentTime={currentTime}
+              framerate={framerate}
               isActive={isCropActive}
               onKeyframeClick={onCropKeyframeClick}
               onKeyframeDelete={onCropKeyframeDelete}

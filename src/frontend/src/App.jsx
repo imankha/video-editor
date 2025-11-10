@@ -63,6 +63,7 @@ function App() {
     keyframes,
     isEndKeyframeExplicit,
     copiedCrop,
+    framerate,
     updateAspectRatio,
     addOrUpdateKeyframe,
     removeKeyframe,
@@ -70,6 +71,7 @@ function App() {
     pasteCropKeyframe,
     interpolateCrop,
     hasKeyframeAt,
+    getKeyframesForExport,
   } = useCrop(metadata);
 
   // Zoom hook
@@ -336,6 +338,7 @@ function App() {
                   trimmedDuration={trimmedDuration || 0}
                   onSeek={seek}
                   cropKeyframes={keyframes}
+                  framerate={framerate}
                   isCropActive={true}
                   onCropKeyframeClick={handleKeyframeClick}
                   onCropKeyframeDelete={handleKeyframeDelete}
@@ -376,7 +379,7 @@ function App() {
             <div className="mt-6">
               <ExportButton
                 videoFile={videoFile}
-                cropKeyframes={keyframes}
+                cropKeyframes={getKeyframesForExport()}
                 segmentData={getSegmentExportData()}
                 disabled={!videoFile}
               />
