@@ -141,8 +141,8 @@ export default function SegmentLayer({
               onMouseEnter={() => setHoveredSegmentIndex(segment.index)}
               onMouseLeave={() => setHoveredSegmentIndex(null)}
             >
-              {/* Trash button (only for first or last segment, and only if there are at least 2 segments) */}
-              {(segment.isFirst || segment.isLast) && segments.length >= 2 && (
+              {/* Trash button (only for first or last segment, and only if there are at least 2 non-trimmed segments) */}
+              {(segment.isFirst || segment.isLast) && segments.filter(s => !s.isTrimmed).length >= 2 && (
                 <button
                   className="p-1.5 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
                   onClick={(e) => {
