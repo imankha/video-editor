@@ -17,6 +17,8 @@ import SegmentLayer from './SegmentLayer';
  * @param {boolean} props.isCropActive - Whether crop layer is active
  * @param {Function} props.onCropKeyframeClick - Callback when crop keyframe is clicked
  * @param {Function} props.onCropKeyframeDelete - Callback when crop keyframe is deleted
+ * @param {Function} props.onCropKeyframeCopy - Callback when crop keyframe is copied
+ * @param {Function} props.onCropKeyframePaste - Callback when crop is pasted at a time
  * @param {Array} props.segments - Segments to display
  * @param {Array} props.segmentBoundaries - Segment boundaries
  * @param {Array} props.segmentVisualLayout - Pre-calculated segment visual positions
@@ -39,6 +41,8 @@ export function Timeline({
   isCropActive = false,
   onCropKeyframeClick,
   onCropKeyframeDelete,
+  onCropKeyframeCopy,
+  onCropKeyframePaste,
   segments = [],
   segmentBoundaries = [],
   segmentVisualLayout = [],
@@ -178,7 +182,10 @@ export function Timeline({
               isActive={isCropActive}
               onKeyframeClick={onCropKeyframeClick}
               onKeyframeDelete={onCropKeyframeDelete}
+              onKeyframeCopy={onCropKeyframeCopy}
+              onKeyframePaste={onCropKeyframePaste}
               sourceTimeToVisualTime={sourceTimeToVisualTime}
+              visualTimeToSourceTime={visualTimeToSourceTime}
             />
           </div>
         )}
@@ -206,7 +213,7 @@ export function Timeline({
 
         {/* Unified Playhead - extends through all layers */}
         <div
-          className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none left-32"
+          className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none left-32 z-10"
           style={{
             left: `calc(8rem + (100% - 8rem) * ${progress / 100})`,  // 8rem label + progress% of remaining width
             height: (cropKeyframes.length > 0 || segments.length > 0) ? 'calc(100% - 0.25rem)' : '3rem'  // Extend through all layers

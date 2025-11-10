@@ -62,9 +62,12 @@ function App() {
     aspectRatio,
     keyframes,
     isEndKeyframeExplicit,
+    copiedCrop,
     updateAspectRatio,
     addOrUpdateKeyframe,
     removeKeyframe,
+    copyCropKeyframe,
+    pasteCropKeyframe,
     interpolateCrop,
     hasKeyframeAt,
   } = useCrop(metadata);
@@ -129,6 +132,21 @@ function App() {
     console.log('[App] Current crop state:', currentCropState);
   }, [currentCropState]);
 
+  // Handler functions for copy/paste (defined BEFORE useEffect to avoid initialization errors)
+  const handleCopyCrop = (time = currentTime) => {
+    if (videoUrl) {
+      copyCropKeyframe(time);
+    }
+  };
+
+  const handlePasteCrop = (time = currentTime) => {
+    if (videoUrl && copiedCrop) {
+      pasteCropKeyframe(time, duration);
+      // Move playhead to the pasted keyframe location
+      seek(time);
+    }
+  };
+
   // Keyboard handler: Space bar toggles play/pause
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -148,6 +166,40 @@ function App() {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [videoUrl, togglePlay]);
+
+  // Keyboard handler: Ctrl-C/Cmd-C copies crop, Ctrl-V/Cmd-V pastes crop
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      // Only handle if video is loaded
+      if (!videoUrl) return;
+
+      // Check for Ctrl-C or Cmd-C (Mac)
+      if ((event.ctrlKey || event.metaKey) && event.code === 'KeyC') {
+        // Only prevent default if no text is selected (to allow normal browser copy)
+        if (window.getSelection().toString().length === 0) {
+          event.preventDefault();
+          handleCopyCrop();
+        }
+      }
+
+      // Check for Ctrl-V or Cmd-V (Mac)
+      if ((event.ctrlKey || event.metaKey) && event.code === 'KeyV') {
+        // Only prevent default if we have crop data to paste
+        if (copiedCrop) {
+          event.preventDefault();
+          handlePasteCrop();
+        }
+      }
+    };
+
+    // Add event listener
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Cleanup on unmount
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [videoUrl, currentTime, duration, copiedCrop, copyCropKeyframe, pasteCropKeyframe]);
 
   // Handle crop changes during drag/resize (live preview)
   const handleCropChange = (newCrop) => {
@@ -175,12 +227,15 @@ function App() {
     keyframes,
     isEndKeyframeExplicit,
     aspectRatio,
+    copiedCrop,
     updateAspectRatio,
     addOrUpdateKeyframe,
     removeKeyframe,
+    copyCropKeyframe,
+    pasteCropKeyframe,
     interpolateCrop,
     hasKeyframeAt,
-  }), [keyframes, isEndKeyframeExplicit, aspectRatio, updateAspectRatio, addOrUpdateKeyframe, removeKeyframe, interpolateCrop, hasKeyframeAt]);
+  }), [keyframes, isEndKeyframeExplicit, aspectRatio, copiedCrop, updateAspectRatio, addOrUpdateKeyframe, removeKeyframe, copyCropKeyframe, pasteCropKeyframe, interpolateCrop, hasKeyframeAt]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -284,6 +339,8 @@ function App() {
                   isCropActive={true}
                   onCropKeyframeClick={handleKeyframeClick}
                   onCropKeyframeDelete={handleKeyframeDelete}
+                  onCropKeyframeCopy={handleCopyCrop}
+                  onCropKeyframePaste={handlePasteCrop}
                   segments={segments}
                   segmentBoundaries={segmentBoundaries}
                   segmentVisualLayout={segmentVisualLayout}

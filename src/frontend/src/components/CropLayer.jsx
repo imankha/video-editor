@@ -1,4 +1,4 @@
-import { Crop, Trash2 } from 'lucide-react';
+import { Crop, Trash2, Copy } from 'lucide-react';
 import { useCropContext } from '../contexts/CropContext';
 
 /**
@@ -12,11 +12,14 @@ export default function CropLayer({
   currentTime,
   onKeyframeClick,
   onKeyframeDelete,
+  onKeyframeCopy,
+  onKeyframePaste,
   isActive,
-  sourceTimeToVisualTime = (t) => t
+  sourceTimeToVisualTime = (t) => t,
+  visualTimeToSourceTime = (t) => t
 }) {
-  // Get isEndKeyframeExplicit from context instead of props
-  const { isEndKeyframeExplicit } = useCropContext();
+  // Get isEndKeyframeExplicit and copiedCrop from context
+  const { isEndKeyframeExplicit, copiedCrop } = useCropContext();
   if (keyframes.length === 0) {
     return null;
   }
@@ -34,15 +37,47 @@ export default function CropLayer({
     return (visualTime / timelineDuration) * 100;
   };
 
+  /**
+   * Handle click on keyframes track to paste crop at clicked time
+   */
+  const handleTrackClick = (e) => {
+    // Only paste if we have copied crop and paste handler
+    if (!copiedCrop || !onKeyframePaste) return;
+
+    // Don't paste if clicking on a button or keyframe diamond
+    if (e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.classList.contains('rotate-45')) {
+      return;
+    }
+
+    // Calculate time from click position
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentX = (clickX / rect.width) * 100;
+
+    // Convert percentage to visual time
+    const visualTime = (percentX / 100) * timelineDuration;
+    // Convert visual time to source time
+    const sourceTime = visualTimeToSourceTime(visualTime);
+
+    // Clamp to valid range
+    const time = Math.max(0, Math.min(sourceTime, duration));
+
+    console.log('[CropLayer] Paste crop at time:', time);
+    onKeyframePaste(time);
+  };
+
   return (
-    <div className={`relative bg-gray-800 border-t border-gray-700 h-12 ${isActive ? 'ring-2 ring-blue-500' : ''}`}>
+    <div className={`relative bg-gray-800 border-t border-gray-700 h-12 z-20 ${isActive ? 'ring-2 ring-blue-500' : ''}`}>
       {/* Layer label */}
       <div className="absolute left-0 top-0 h-full flex items-center justify-center bg-gray-900 border-r border-gray-700 w-32">
         <Crop size={18} className="text-blue-400" />
       </div>
 
       {/* Keyframes track */}
-      <div className="absolute left-32 right-0 top-0 h-full">
+      <div
+        className={`absolute left-32 right-0 top-0 h-full ${copiedCrop ? 'cursor-copy' : ''}`}
+        onClick={handleTrackClick}
+      >
         {/* Background track */}
         <div className="absolute inset-0 bg-blue-900 bg-opacity-20" />
 
@@ -67,6 +102,20 @@ export default function CropLayer({
               className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 group"
               style={{ left: `${position}%` }}
             >
+              {/* Copy button (shown on hover, above keyframe) - z-50 to appear above all UI including playhead */}
+              {onKeyframeCopy && (
+                <button
+                  className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1 z-50"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onKeyframeCopy(keyframe.time);
+                  }}
+                  title="Copy keyframe"
+                >
+                  <Copy size={10} />
+                </button>
+              )}
+
               {/* Diamond keyframe indicator */}
               <div
                 className={`w-3 h-3 transform rotate-45 cursor-pointer transition-all ${
