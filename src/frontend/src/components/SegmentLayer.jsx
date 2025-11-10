@@ -87,20 +87,20 @@ export default function SegmentLayer({
   };
 
   return (
-    <div className="relative bg-gray-800 border-t border-gray-700 overflow-visible" style={{ minHeight: '60px', paddingBottom: '8px' }}>
+    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-b-lg" style={{ minHeight: '60px', paddingBottom: '8px' }}>
       {/* Layer label */}
-      <div className="absolute left-0 top-0 h-12 flex items-center justify-center bg-gray-900 border-r border-gray-700 w-32">
-        <Split size={18} className="text-blue-400" />
+      <div className="absolute left-0 top-0 h-12 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 w-32 rounded-bl-lg">
+        <Split size={18} className="text-purple-400" />
       </div>
 
       {/* Segments track */}
       <div
-        className="segment-track absolute left-32 right-0 top-0 h-12 cursor-pointer overflow-visible"
+        className="segment-track absolute left-32 right-0 top-0 h-12 cursor-pointer overflow-visible rounded-br-lg"
         onClick={handleTrackClick}
       >
         {/* Background track */}
         <div
-          className="absolute inset-0 bg-purple-900 bg-opacity-20 segment-bg"
+          className="absolute inset-0 bg-purple-900 bg-opacity-20 segment-bg rounded-br-lg"
         />
 
         {/* Placeholder text when no segments */}

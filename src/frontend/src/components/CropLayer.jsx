@@ -75,19 +75,19 @@ export default function CropLayer({
   };
 
   return (
-    <div className="relative bg-gray-800 border-t border-gray-700 h-12 z-20">
+    <div className="relative bg-gray-800/95 border-t border-gray-700/50 h-12 z-20 rounded-b-lg">
       {/* Layer label */}
-      <div className="absolute left-0 top-0 h-full flex items-center justify-center bg-gray-900 border-r border-gray-700 w-32">
-        <Crop size={18} className="text-blue-400" />
+      <div className="absolute left-0 top-0 h-full flex items-center justify-center bg-gray-900 border-r border-gray-700/50 w-32 rounded-bl-lg">
+        <Crop size={18} className="text-yellow-400" />
       </div>
 
       {/* Keyframes track */}
       <div
-        className={`absolute left-32 right-0 top-0 h-full ${copiedCrop ? 'cursor-copy' : ''}`}
+        className={`absolute left-32 right-0 top-0 h-full rounded-br-lg ${copiedCrop ? 'cursor-copy' : ''}`}
         onClick={handleTrackClick}
       >
         {/* Background track */}
-        <div className="absolute inset-0 bg-blue-900 bg-opacity-20" />
+        <div className="absolute inset-0 bg-blue-900 bg-opacity-20 rounded-br-lg" />
 
         {/* Keyframe indicators */}
         {keyframes.map((keyframe, index) => {
