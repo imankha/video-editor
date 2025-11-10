@@ -87,7 +87,7 @@ export default function SegmentLayer({
   };
 
   return (
-    <div className={`relative bg-gray-800 border-t border-gray-700 overflow-visible ${isActive ? 'ring-2 ring-blue-500' : ''}`} style={{ minHeight: '60px', paddingBottom: '8px' }}>
+    <div className="relative bg-gray-800 border-t border-gray-700 overflow-visible" style={{ minHeight: '60px', paddingBottom: '8px' }}>
       {/* Layer label */}
       <div className="absolute left-0 top-0 h-12 flex items-center justify-center bg-gray-900 border-r border-gray-700 w-32">
         <Split size={18} className="text-blue-400" />
