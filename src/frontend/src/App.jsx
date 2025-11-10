@@ -246,10 +246,10 @@ function App() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-4xl font-bold text-white mb-2">
-              🎬 Highlight Reel Builder
+              Player Highlighter
             </h1>
             <p className="text-gray-400">
-              Upload a video to get started
+              Highlight your player by zooming in, slowing down, and leveraging AI upscaling
             </p>
           </div>
           <FileUpload onFileSelect={handleFileSelect} isLoading={isLoading} />
@@ -273,6 +273,12 @@ function App() {
                   <span className="text-gray-400">Resolution:</span>{' '}
                   {metadata.width}x{metadata.height}
                 </span>
+                {metadata.framerate && (
+                  <span>
+                    <span className="text-gray-400">Framerate:</span>{' '}
+                    {metadata.framerate} fps
+                  </span>
+                )}
                 <span>
                   <span className="text-gray-400">Format:</span>{' '}
                   {metadata.format.toUpperCase()}
@@ -394,21 +400,31 @@ function App() {
               <h2 className="text-xl font-semibold text-white mb-4">
                 Getting Started
               </h2>
-              <div className="grid md:grid-cols-3 gap-4 text-sm">
+              <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4 text-sm">
                 <div className="bg-white/5 rounded-lg p-4">
                   <div className="text-2xl mb-2">📤</div>
                   <h3 className="font-semibold text-white mb-1">1. Upload</h3>
-                  <p>Click "Upload Video" to select a video file (MP4, MOV, WebM)</p>
+                  <p>Upload your game footage to get started</p>
                 </div>
                 <div className="bg-white/5 rounded-lg p-4">
-                  <div className="text-2xl mb-2">▶️</div>
-                  <h3 className="font-semibold text-white mb-1">2. Play</h3>
-                  <p>Use the play/pause button to control playback</p>
+                  <div className="text-2xl mb-2">✂️</div>
+                  <h3 className="font-semibold text-white mb-1">2. Trim</h3>
+                  <p>Cut out the boring parts and keep only the action</p>
                 </div>
                 <div className="bg-white/5 rounded-lg p-4">
-                  <div className="text-2xl mb-2">⏱️</div>
-                  <h3 className="font-semibold text-white mb-1">3. Scrub</h3>
-                  <p>Click or drag the timeline to navigate through your video</p>
+                  <div className="text-2xl mb-2">🎯</div>
+                  <h3 className="font-semibold text-white mb-1">3. Zoom</h3>
+                  <p>Follow your player with dynamic crop keyframes</p>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="text-2xl mb-2">🐌</div>
+                  <h3 className="font-semibold text-white mb-1">4. Slow-Mo</h3>
+                  <p>Create slow motion segments for key moments</p>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="text-2xl mb-2">🚀</div>
+                  <h3 className="font-semibold text-white mb-1">5. Export</h3>
+                  <p>Play the video to make sure it's perfect and hit export to leverage AI Upscale</p>
                 </div>
               </div>
               <div className="mt-6 text-xs text-gray-500">
@@ -419,10 +435,6 @@ function App() {
           </div>
         )}
 
-        {/* Footer */}
-        <div className="mt-8 text-center text-gray-500 text-sm">
-          <p>Phase 2: Crop Tool with Keyframe Animation</p>
-        </div>
       </div>
 
       {/* Debug Info - Shows current branch and commit */}

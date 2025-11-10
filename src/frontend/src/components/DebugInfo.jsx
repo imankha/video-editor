@@ -35,6 +35,13 @@ export default function DebugInfo() {
 
           <div className="space-y-2 text-xs font-mono">
             <div className="flex justify-between gap-4">
+              <span className="text-gray-400">Phase:</span>
+              <span className="text-purple-400 text-right">
+                Phase 2: Crop Tool with Keyframe Animation
+              </span>
+            </div>
+
+            <div className="flex justify-between gap-4">
               <span className="text-gray-400">Branch:</span>
               <span className="text-green-400 text-right break-all">
                 {versionInfo.branch}
