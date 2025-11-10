@@ -139,9 +139,9 @@ function App() {
     }
   };
 
-  const handlePasteCrop = () => {
+  const handlePasteCrop = (time = currentTime) => {
     if (videoUrl && copiedCrop) {
-      pasteCropKeyframe(currentTime, duration);
+      pasteCropKeyframe(time, duration);
     }
   };
 
@@ -340,6 +340,7 @@ function App() {
                   onCropKeyframeClick={handleKeyframeClick}
                   onCropKeyframeDelete={handleKeyframeDelete}
                   onCropKeyframeCopy={handleCopyCrop}
+                  onCropKeyframePaste={handlePasteCrop}
                   segments={segments}
                   segmentBoundaries={segmentBoundaries}
                   segmentVisualLayout={segmentVisualLayout}

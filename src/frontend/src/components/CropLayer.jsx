@@ -13,11 +13,13 @@ export default function CropLayer({
   onKeyframeClick,
   onKeyframeDelete,
   onKeyframeCopy,
+  onKeyframePaste,
   isActive,
-  sourceTimeToVisualTime = (t) => t
+  sourceTimeToVisualTime = (t) => t,
+  visualTimeToSourceTime = (t) => t
 }) {
-  // Get isEndKeyframeExplicit from context instead of props
-  const { isEndKeyframeExplicit } = useCropContext();
+  // Get isEndKeyframeExplicit and copiedCrop from context
+  const { isEndKeyframeExplicit, copiedCrop } = useCropContext();
   if (keyframes.length === 0) {
     return null;
   }
@@ -35,6 +37,35 @@ export default function CropLayer({
     return (visualTime / timelineDuration) * 100;
   };
 
+  /**
+   * Handle click on keyframes track to paste crop at clicked time
+   */
+  const handleTrackClick = (e) => {
+    // Only paste if we have copied crop and paste handler
+    if (!copiedCrop || !onKeyframePaste) return;
+
+    // Don't paste if clicking on a button or keyframe diamond
+    if (e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.classList.contains('rotate-45')) {
+      return;
+    }
+
+    // Calculate time from click position
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentX = (clickX / rect.width) * 100;
+
+    // Convert percentage to visual time
+    const visualTime = (percentX / 100) * timelineDuration;
+    // Convert visual time to source time
+    const sourceTime = visualTimeToSourceTime(visualTime);
+
+    // Clamp to valid range
+    const time = Math.max(0, Math.min(sourceTime, duration));
+
+    console.log('[CropLayer] Paste crop at time:', time);
+    onKeyframePaste(time);
+  };
+
   return (
     <div className={`relative bg-gray-800 border-t border-gray-700 h-12 z-20 ${isActive ? 'ring-2 ring-blue-500' : ''}`}>
       {/* Layer label */}
@@ -43,7 +74,10 @@ export default function CropLayer({
       </div>
 
       {/* Keyframes track */}
-      <div className="absolute left-32 right-0 top-0 h-full">
+      <div
+        className={`absolute left-32 right-0 top-0 h-full ${copiedCrop ? 'cursor-copy' : ''}`}
+        onClick={handleTrackClick}
+      >
         {/* Background track */}
         <div className="absolute inset-0 bg-blue-900 bg-opacity-20" />
 
