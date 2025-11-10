@@ -550,7 +550,8 @@ class AIVideoUpscaler:
         target_fps: int = 30,
         export_mode: str = "quality",
         progress_callback=None,
-        segment_data: Optional[Dict[str, Any]] = None
+        segment_data: Optional[Dict[str, Any]] = None,
+        include_audio: bool = True
     ) -> Dict[str, Any]:
         """
         Process video with de-zoom and AI upscaling
@@ -566,6 +567,7 @@ class AIVideoUpscaler:
                 - segments: List of {start, end, speed} for speed adjustments
                   (speed = 0.5 requires AI frame interpolation)
                 - trim_start, trim_end: Trim points
+            include_audio: Include audio in export (default True)
 
         Returns:
             Dict with processing results
@@ -797,7 +799,7 @@ class AIVideoUpscaler:
             logger.info("=" * 60)
 
             # Reassemble video with FFmpeg
-            self.create_video_from_frames(frames_dir, output_path, target_fps, input_path, export_mode, progress_callback, segment_data)
+            self.create_video_from_frames(frames_dir, output_path, target_fps, input_path, export_mode, progress_callback, segment_data, include_audio)
 
             return {
                 'success': True,
@@ -841,7 +843,8 @@ class AIVideoUpscaler:
         input_video_path: str,
         export_mode: str = "quality",
         progress_callback=None,
-        segment_data: Optional[Dict[str, Any]] = None
+        segment_data: Optional[Dict[str, Any]] = None,
+        include_audio: bool = True
     ):
         """
         Create video from enhanced frames using FFmpeg encoding
@@ -855,6 +858,7 @@ class AIVideoUpscaler:
             export_mode: Export mode - "fast" (1-pass) or "quality" (2-pass)
             progress_callback: Optional callback(current, total, message, phase)
             segment_data: Optional segment speed/trim data for applying speed changes
+            include_audio: Include audio in export (default True)
         """
         frames_pattern = str(frames_dir / "frame_%06d.png")
 
@@ -1072,11 +1076,17 @@ class AIVideoUpscaler:
 
         # Add filter_complex for segment processing or simple trim filter
         if filter_complex:
-            cmd_pass2.extend(['-filter_complex', filter_complex, '-map', '[outv]', '-map', '1:a?'])
+            cmd_pass2.extend(['-filter_complex', filter_complex, '-map', '[outv]'])
+            if include_audio:
+                cmd_pass2.extend(['-map', '1:a?'])
         elif trim_filter:
-            cmd_pass2.extend(['-vf', trim_filter, '-map', '0:v', '-map', '1:a?'])
+            cmd_pass2.extend(['-vf', trim_filter, '-map', '0:v'])
+            if include_audio:
+                cmd_pass2.extend(['-map', '1:a?'])
         else:
-            cmd_pass2.extend(['-map', '0:v', '-map', '1:a?'])
+            cmd_pass2.extend(['-map', '0:v'])
+            if include_audio:
+                cmd_pass2.extend(['-map', '1:a?'])
 
         cmd_pass2.extend([
             '-c:v', codec,
@@ -1094,9 +1104,14 @@ class AIVideoUpscaler:
             cmd_pass2.extend(['-x265-params', x265_params])
         # libx264 uses default parameters (no special params needed for fast mode)
 
+        # Add audio encoding parameters if audio is included
+        if include_audio:
+            cmd_pass2.extend(['-c:a', 'aac', '-b:a', '256k'])
+        else:
+            cmd_pass2.extend(['-an'])  # No audio
+
         # Add common parameters
         cmd_pass2.extend([
-            '-c:a', 'aac', '-b:a', '256k',
             '-pix_fmt', 'yuv420p',
             '-colorspace', 'bt709',
             '-color_primaries', 'bt709',

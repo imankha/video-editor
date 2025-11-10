@@ -19,6 +19,9 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState(null);
+  const [exportQuality, setExportQuality] = useState('quality'); // 'fast' or 'quality'
+  const [includeAudio, setIncludeAudio] = useState(true); // true or false
+  const [targetFps, setTargetFps] = useState(30); // 24, 30, or 60
   const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
@@ -72,7 +75,7 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
     };
   };
 
-  const handleExport = async (exportMode = 'quality') => {
+  const handleExport = async () => {
     if (!videoFile) {
       setError('No video file loaded');
       return;
@@ -98,9 +101,10 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
       const formData = new FormData();
       formData.append('video', videoFile);
       formData.append('keyframes_json', JSON.stringify(cropKeyframes));
-      formData.append('target_fps', '30');
+      formData.append('target_fps', String(targetFps));
       formData.append('export_id', exportId);
-      formData.append('export_mode', exportMode);
+      formData.append('export_mode', exportQuality);
+      formData.append('include_audio', includeAudio ? 'true' : 'false');
 
       // Add segment data if available (only if speed changes or trimming exist)
       if (segmentData) {
@@ -211,7 +215,7 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {/* Info about AI upscaling */}
       <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-800/50">
         <div className="text-xs text-blue-300 mb-2">
@@ -223,56 +227,111 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
         </div>
       </div>
 
-      {/* Export mode buttons */}
-      <div className="grid grid-cols-2 gap-2">
-        {/* Fast Export Button */}
-        <button
-          onClick={() => handleExport('fast')}
-          disabled={disabled || isExporting || !videoFile}
-          className={`px-4 py-3 rounded-lg font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
-            disabled || isExporting || !videoFile
-              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-              : 'bg-orange-600 hover:bg-orange-700 text-white'
-          }`}
-        >
-          {isExporting ? (
-            <div className="flex flex-col items-center gap-1">
-              <Loader className="animate-spin" size={16} />
-              <span className="text-xs">Exporting...</span>
-            </div>
-          ) : (
-            <>
-              <Download size={16} />
-              <span className="text-sm">Fast Export</span>
-              <span className="text-xs opacity-70">Medium quality</span>
-            </>
-          )}
-        </button>
+      {/* Export Settings */}
+      <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
+        <div className="text-sm font-medium text-gray-300 mb-3">Export Settings</div>
 
-        {/* Quality Export Button */}
-        <button
-          onClick={() => handleExport('quality')}
-          disabled={disabled || isExporting || !videoFile}
-          className={`px-4 py-3 rounded-lg font-medium transition-colors flex flex-col items-center justify-center gap-1 ${
-            disabled || isExporting || !videoFile
-              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-              : 'bg-green-600 hover:bg-green-700 text-white'
-          }`}
-        >
-          {isExporting ? (
-            <div className="flex flex-col items-center gap-1">
-              <Loader className="animate-spin" size={16} />
-              <span className="text-xs">Exporting...</span>
-            </div>
-          ) : (
-            <>
-              <Download size={16} />
-              <span className="text-sm">Quality Export</span>
-              <span className="text-xs opacity-70">Best quality</span>
-            </>
-          )}
-        </button>
+        {/* Quality Toggle */}
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-gray-200">Quality</span>
+            <span className="text-xs text-gray-400">
+              {exportQuality === 'fast' ? 'H.264, 1-pass - faster' : 'H.265, 2-pass - best quality'}
+            </span>
+          </div>
+          <button
+            onClick={() => setExportQuality(exportQuality === 'fast' ? 'quality' : 'fast')}
+            disabled={isExporting}
+            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+              exportQuality === 'quality' ? 'bg-blue-600' : 'bg-gray-600'
+            } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            role="switch"
+            aria-checked={exportQuality === 'quality'}
+            aria-label="Toggle export quality"
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                exportQuality === 'quality' ? 'translate-x-8' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Frame Rate Toggle */}
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-gray-200">Frame Rate</span>
+            <span className="text-xs text-gray-400">
+              {targetFps === 30 ? '30 fps - standard' : '60 fps - smooth motion'}
+            </span>
+          </div>
+          <button
+            onClick={() => setTargetFps(targetFps === 30 ? 60 : 30)}
+            disabled={isExporting}
+            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+              targetFps === 60 ? 'bg-blue-600' : 'bg-gray-600'
+            } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            role="switch"
+            aria-checked={targetFps === 60}
+            aria-label="Toggle frame rate"
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                targetFps === 60 ? 'translate-x-8' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Audio Toggle */}
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-gray-200">Audio</span>
+            <span className="text-xs text-gray-400">
+              {includeAudio ? 'Include audio in export' : 'Export video only'}
+            </span>
+          </div>
+          <button
+            onClick={() => setIncludeAudio(!includeAudio)}
+            disabled={isExporting}
+            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+              includeAudio ? 'bg-blue-600' : 'bg-gray-600'
+            } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            role="switch"
+            aria-checked={includeAudio}
+            aria-label="Toggle audio"
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                includeAudio ? 'translate-x-8' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
       </div>
+
+      {/* Single Export Button */}
+      <button
+        onClick={handleExport}
+        disabled={disabled || isExporting || !videoFile}
+        className={`w-full px-6 py-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+          disabled || isExporting || !videoFile
+            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+            : 'bg-blue-600 hover:bg-blue-700 text-white'
+        }`}
+      >
+        {isExporting ? (
+          <>
+            <Loader className="animate-spin" size={20} />
+            <span>Exporting...</span>
+          </>
+        ) : (
+          <>
+            <Download size={20} />
+            <span>Export Video</span>
+          </>
+        )}
+      </button>
 
       {/* Progress display when exporting */}
       {isExporting && (
