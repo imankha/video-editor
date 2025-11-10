@@ -249,7 +249,7 @@ function App() {
               Player Highlighter
             </h1>
             <p className="text-gray-400">
-              Highlight your Player by zooming in, slowing down, and leveraging AI upscaling
+              Highlight your player by zooming in, slowing down, and leveraging AI upscaling
             </p>
           </div>
           <FileUpload onFileSelect={handleFileSelect} isLoading={isLoading} />
