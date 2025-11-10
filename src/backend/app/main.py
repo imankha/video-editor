@@ -576,7 +576,8 @@ async def export_with_ai_upscale(
     target_fps: int = Form(30),
     export_id: str = Form(...),
     export_mode: str = Form("quality"),
-    segment_data_json: str = Form(None)
+    segment_data_json: str = Form(None),
+    include_audio: str = Form("true")
 ):
     """
     Export video with AI upscaling and de-zoom
@@ -595,6 +596,7 @@ async def export_with_ai_upscale(
         target_fps: Output framerate (default 30)
         export_id: Unique ID for tracking export progress
         export_mode: Export mode - "fast" or "quality" (default "quality")
+        include_audio: Include audio in export - "true" or "false" (default "true")
 
     Returns:
         AI-upscaled video file
@@ -605,6 +607,10 @@ async def export_with_ai_upscale(
         "message": "Starting export...",
         "status": "processing"
     }
+    # Parse include_audio parameter
+    include_audio_bool = include_audio.lower() == "true"
+    logger.info(f"Audio setting: {'Include audio' if include_audio_bool else 'Video only'}")
+
     # Parse keyframes
     try:
         keyframes_data = json.loads(keyframes_json)
@@ -793,7 +799,8 @@ async def export_with_ai_upscale(
             target_fps=target_fps,
             export_mode=export_mode,
             progress_callback=progress_callback,
-            segment_data=segment_data
+            segment_data=segment_data,
+            include_audio=include_audio_bool
         )
 
         complete_timestamp = datetime.now()
