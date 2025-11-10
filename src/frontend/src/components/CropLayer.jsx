@@ -1,4 +1,4 @@
-import { Crop, Trash2 } from 'lucide-react';
+import { Crop, Trash2, Copy } from 'lucide-react';
 import { useCropContext } from '../contexts/CropContext';
 
 /**
@@ -12,6 +12,7 @@ export default function CropLayer({
   currentTime,
   onKeyframeClick,
   onKeyframeDelete,
+  onKeyframeCopy,
   isActive,
   sourceTimeToVisualTime = (t) => t
 }) {
@@ -67,6 +68,20 @@ export default function CropLayer({
               className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 group"
               style={{ left: `${position}%` }}
             >
+              {/* Copy button (shown on hover, above keyframe) - z-20 to appear above all UI */}
+              {onKeyframeCopy && (
+                <button
+                  className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1 z-20"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onKeyframeCopy(keyframe.time);
+                  }}
+                  title="Copy keyframe"
+                >
+                  <Copy size={10} />
+                </button>
+              )}
+
               {/* Diamond keyframe indicator */}
               <div
                 className={`w-3 h-3 transform rotate-45 cursor-pointer transition-all ${

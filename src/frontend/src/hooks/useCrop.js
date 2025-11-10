@@ -8,6 +8,7 @@ export default function useCrop(videoMetadata) {
   const [aspectRatio, setAspectRatio] = useState('9:16'); // '16:9', '9:16'
   const [keyframes, setKeyframes] = useState([]);
   const [isEndKeyframeExplicit, setIsEndKeyframeExplicit] = useState(false);
+  const [copiedCrop, setCopiedCrop] = useState(null); // Stores copied crop data (x, y, width, height)
 
   /**
    * Calculate the default crop rectangle that fits within video bounds
@@ -273,16 +274,60 @@ export default function useCrop(videoMetadata) {
     return keyframes.find(kf => Math.abs(kf.time - time) < 0.01);
   }, [keyframes]);
 
+  /**
+   * Copy the crop keyframe at the specified time
+   * Stores only spatial properties (x, y, width, height) - NOT time
+   */
+  const copyCropKeyframe = useCallback((time) => {
+    const keyframe = getKeyframeAt(time);
+    if (!keyframe) {
+      // If no keyframe at this exact time, interpolate the crop at current time
+      const interpolated = interpolateCrop(time);
+      if (interpolated) {
+        const { x, y, width, height } = interpolated;
+        setCopiedCrop({ x, y, width, height });
+        console.log('[useCrop] Copied interpolated crop at time', time, ':', { x, y, width, height });
+        return true;
+      }
+      console.log('[useCrop] No crop data to copy at time', time);
+      return false;
+    }
+
+    // Copy only spatial properties, not time
+    const { x, y, width, height } = keyframe;
+    setCopiedCrop({ x, y, width, height });
+    console.log('[useCrop] Copied crop keyframe at time', time, ':', { x, y, width, height });
+    return true;
+  }, [getKeyframeAt, interpolateCrop]);
+
+  /**
+   * Paste the copied crop data at the specified time
+   * Creates or updates a keyframe at the given time with the copied dimensions
+   */
+  const pasteCropKeyframe = useCallback((time, duration) => {
+    if (!copiedCrop) {
+      console.log('[useCrop] No crop data to paste');
+      return false;
+    }
+
+    console.log('[useCrop] Pasting crop at time', time, ':', copiedCrop);
+    addOrUpdateKeyframe(time, copiedCrop, duration);
+    return true;
+  }, [copiedCrop, addOrUpdateKeyframe]);
+
   return {
     // State
     aspectRatio,
     keyframes,
     isEndKeyframeExplicit,
+    copiedCrop,
 
     // Actions
     updateAspectRatio,
     addOrUpdateKeyframe,
     removeKeyframe,
+    copyCropKeyframe,
+    pasteCropKeyframe,
 
     // Queries
     interpolateCrop,

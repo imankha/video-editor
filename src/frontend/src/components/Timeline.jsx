@@ -17,6 +17,7 @@ import SegmentLayer from './SegmentLayer';
  * @param {boolean} props.isCropActive - Whether crop layer is active
  * @param {Function} props.onCropKeyframeClick - Callback when crop keyframe is clicked
  * @param {Function} props.onCropKeyframeDelete - Callback when crop keyframe is deleted
+ * @param {Function} props.onCropKeyframeCopy - Callback when crop keyframe is copied
  * @param {Array} props.segments - Segments to display
  * @param {Array} props.segmentBoundaries - Segment boundaries
  * @param {Array} props.segmentVisualLayout - Pre-calculated segment visual positions
@@ -39,6 +40,7 @@ export function Timeline({
   isCropActive = false,
   onCropKeyframeClick,
   onCropKeyframeDelete,
+  onCropKeyframeCopy,
   segments = [],
   segmentBoundaries = [],
   segmentVisualLayout = [],
@@ -178,6 +180,7 @@ export function Timeline({
               isActive={isCropActive}
               onKeyframeClick={onCropKeyframeClick}
               onKeyframeDelete={onCropKeyframeDelete}
+              onKeyframeCopy={onCropKeyframeCopy}
               sourceTimeToVisualTime={sourceTimeToVisualTime}
             />
           </div>
