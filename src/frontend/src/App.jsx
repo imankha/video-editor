@@ -292,8 +292,6 @@ function App() {
               <AspectRatioSelector
                 aspectRatio={aspectRatio}
                 onAspectRatioChange={updateAspectRatio}
-                copiedCrop={copiedCrop}
-                onPasteCrop={handlePasteCrop}
               />
               <div className="ml-auto">
                 <ZoomControls
