@@ -262,7 +262,7 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
           <div className="flex flex-col">
             <span className="text-sm font-medium text-gray-200">Frame Rate</span>
             <span className="text-xs text-gray-400">
-              {targetFps === 30 ? '30 fps - standard' : '60 fps - smooth motion'}
+              {targetFps === 30 ? '30 fps - standard' : '60 fps - AI interpolated smooth motion'}
             </span>
           </div>
           <button
