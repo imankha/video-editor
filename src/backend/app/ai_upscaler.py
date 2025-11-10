@@ -867,20 +867,43 @@ class AIVideoUpscaler:
         input_frame_count = len(frame_files)
         logger.info(f"Total input frames: {input_frame_count}")
 
+        # Get original FPS from input video (needed for frame interpolation and segment processing)
+        cap = cv2.VideoCapture(input_video_path)
+        original_fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
+
+        # Detect if frame interpolation is needed (target FPS > source FPS)
+        # Use tolerance to handle floating-point comparisons (e.g., 29.97 vs 30)
+        fps_tolerance = 0.5
+        needs_interpolation = fps > (original_fps + fps_tolerance)
+        interpolation_ratio = fps / original_fps if needs_interpolation else 1.0
+
+        if needs_interpolation:
+            logger.info("=" * 60)
+            logger.info("AI FRAME INTERPOLATION REQUIRED")
+            logger.info("=" * 60)
+            logger.info(f"Source FPS: {original_fps}")
+            logger.info(f"Target FPS: {fps}")
+            logger.info(f"Interpolation ratio: {interpolation_ratio:.2f}x")
+            logger.info(f"Using minterpolate with motion compensation for smooth {fps}fps output")
+            logger.info("=" * 60)
+        elif fps < original_fps:
+            logger.info(f"Downsampling from {original_fps}fps to {fps}fps (no interpolation needed)")
+        else:
+            logger.info(f"Source and target FPS match ({original_fps}fps → {fps}fps, no interpolation needed)")
+
         # Build FFmpeg complex filter for segment speed changes
         filter_complex = None
         expected_output_frames = input_frame_count
         trim_filter = None
 
+        # Determine input framerate for FFmpeg (use original FPS to maintain correct timing)
+        input_framerate = original_fps
+
         if segment_data:
             logger.info("=" * 60)
             logger.info("APPLYING SEGMENT SPEED/TRIM PROCESSING")
             logger.info("=" * 60)
-
-            # Get original FPS from input video
-            cap = cv2.VideoCapture(input_video_path)
-            original_fps = cap.get(cv2.CAP_PROP_FPS)
-            cap.release()
 
             segments = segment_data.get('segments', [])
             trim_start = segment_data.get('trim_start', 0)
@@ -928,7 +951,19 @@ class AIVideoUpscaler:
 
                 # Concatenate all segments
                 concat_inputs = ''.join(output_labels)
-                filter_complex = ';'.join(filter_parts) + f';{concat_inputs}concat=n={len(segments)}:v=1:a=0[outv]'
+                concat_filter = f'{concat_inputs}concat=n={len(segments)}:v=1:a=0'
+
+                # Apply frame interpolation after concatenation if needed
+                if needs_interpolation:
+                    logger.info("=" * 60)
+                    logger.info("APPLYING FRAME INTERPOLATION AFTER SEGMENT PROCESSING")
+                    logger.info("=" * 60)
+                    logger.info(f"Interpolating concatenated segments from {original_fps}fps to {fps}fps")
+                    filter_complex = ';'.join(filter_parts) + f';{concat_filter}[concat];[concat]minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none[outv]'
+                    expected_output_frames = int(expected_output_frames * interpolation_ratio)
+                    logger.info(f"Expected output frames after interpolation: {expected_output_frames}")
+                else:
+                    filter_complex = ';'.join(filter_parts) + f';{concat_filter}[outv]'
 
                 logger.info(f"Expected output frames: {expected_output_frames}")
                 logger.info(f"Filter complex: {filter_complex}")
@@ -945,14 +980,37 @@ class AIVideoUpscaler:
                         logger.info(f"Trimming start at {trim_start:.2f}s")
 
                     # Recalculate expected frames for trim
-                    cap = cv2.VideoCapture(input_video_path)
-                    original_fps = cap.get(cv2.CAP_PROP_FPS)
-                    total_duration = cap.get(cv2.CAP_PROP_FRAME_COUNT) / original_fps
-                    cap.release()
-
+                    total_duration = input_frame_count / original_fps
                     actual_end = trim_end if trim_end else total_duration
                     trimmed_duration = actual_end - trim_start
                     expected_output_frames = int(trimmed_duration * original_fps)
+
+        # Apply frame interpolation if needed (when target FPS > source FPS and no segment processing)
+        if needs_interpolation and not filter_complex and not trim_filter:
+            # Add minterpolate filter for frame interpolation
+            logger.info("=" * 60)
+            logger.info("APPLYING FRAME INTERPOLATION FILTER")
+            logger.info("=" * 60)
+            logger.info(f"Interpolating {input_frame_count} frames @ {original_fps}fps → {int(input_frame_count * interpolation_ratio)} frames @ {fps}fps")
+
+            # Create video filter with minterpolate
+            trim_filter = f"minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none"
+            expected_output_frames = int(input_frame_count * interpolation_ratio)
+
+            logger.info(f"Motion interpolation filter: {trim_filter}")
+            logger.info("=" * 60)
+        elif needs_interpolation and trim_filter:
+            # Append minterpolate to existing trim filter
+            logger.info("=" * 60)
+            logger.info("APPLYING FRAME INTERPOLATION WITH TRIM")
+            logger.info("=" * 60)
+            logger.info(f"Combining trim and interpolation filters")
+
+            trim_filter = f"{trim_filter},minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none"
+            expected_output_frames = int(expected_output_frames * interpolation_ratio)
+
+            logger.info(f"Combined filter: {trim_filter}")
+            logger.info("=" * 60)
 
         logger.info(f"Expected output frame count: {expected_output_frames}")
 
@@ -977,7 +1035,7 @@ class AIVideoUpscaler:
             logger.info("=" * 60)
             cmd_pass1 = [
                 'ffmpeg', '-y',
-                '-framerate', str(fps),
+                '-framerate', str(input_framerate),
                 '-i', frames_pattern,
                 '-i', input_video_path
             ]
@@ -1069,7 +1127,7 @@ class AIVideoUpscaler:
         # Build FFmpeg command based on codec
         cmd_pass2 = [
             'ffmpeg', '-y',
-            '-framerate', str(fps),
+            '-framerate', str(input_framerate),
             '-i', frames_pattern,
             '-i', input_video_path
         ]
