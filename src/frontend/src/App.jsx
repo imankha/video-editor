@@ -142,6 +142,8 @@ function App() {
   const handlePasteCrop = (time = currentTime) => {
     if (videoUrl && copiedCrop) {
       pasteCropKeyframe(time, duration);
+      // Move playhead to the pasted keyframe location
+      seek(time);
     }
   };
 
