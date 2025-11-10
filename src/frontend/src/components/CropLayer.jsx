@@ -1,9 +1,13 @@
 import { Crop, Trash2, Copy } from 'lucide-react';
 import { useCropContext } from '../contexts/CropContext';
+import { frameToTime } from '../utils/videoUtils';
 
 /**
  * CropLayer component - displays crop keyframes on the timeline
  * Shows diamond indicators for each keyframe
+ *
+ * ARCHITECTURE: Keyframes are stored with frame numbers, not time.
+ * We convert frame -> source time -> visual time for display.
  */
 export default function CropLayer({
   keyframes,
@@ -16,7 +20,8 @@ export default function CropLayer({
   onKeyframePaste,
   isActive,
   sourceTimeToVisualTime = (t) => t,
-  visualTimeToSourceTime = (t) => t
+  visualTimeToSourceTime = (t) => t,
+  framerate = 30
 }) {
   // Get isEndKeyframeExplicit and copiedCrop from context
   const { isEndKeyframeExplicit, copiedCrop } = useCropContext();
@@ -28,10 +33,13 @@ export default function CropLayer({
   const timelineDuration = visualDuration || duration;
 
   /**
-   * Convert source time to visual pixel position on timeline
+   * Convert frame number to visual pixel position on timeline
+   * Frame -> Source Time -> Visual Time -> Percentage
    */
-  const sourceTimeToPixel = (sourceTime) => {
+  const frameToPixel = (frame) => {
     if (!timelineDuration) return 0;
+    // Convert frame to source time
+    const sourceTime = frameToTime(frame, framerate);
     // Convert source time to visual time, then to percentage
     const visualTime = sourceTimeToVisualTime(sourceTime);
     return (visualTime / timelineDuration) * 100;
@@ -83,11 +91,13 @@ export default function CropLayer({
 
         {/* Keyframe indicators */}
         {keyframes.map((keyframe, index) => {
-          // Convert keyframe source time to visual position
-          const position = sourceTimeToPixel(keyframe.time);
-          const isAtCurrentTime = Math.abs(keyframe.time - currentTime) < 0.01;
-          const isStartKeyframe = Math.abs(keyframe.time) < 0.01;
-          const isEndKeyframe = Math.abs(keyframe.time - duration) < 0.01;
+          // Convert keyframe frame number to visual position
+          const position = frameToPixel(keyframe.frame);
+          const keyframeTime = frameToTime(keyframe.frame, framerate);
+          const isAtCurrentTime = Math.abs(keyframeTime - currentTime) < 0.01;
+          const isStartKeyframe = keyframe.frame === 0;
+          const totalFrames = Math.round(duration * framerate);
+          const isEndKeyframe = keyframe.frame === totalFrames;
           const isAtStartTime = Math.abs(currentTime) < 0.01;
 
           // Highlight keyframe if:
@@ -108,7 +118,7 @@ export default function CropLayer({
                   className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1 z-50"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onKeyframeCopy(keyframe.time);
+                    onKeyframeCopy(keyframeTime);
                   }}
                   title="Copy keyframe"
                 >
@@ -123,21 +133,21 @@ export default function CropLayer({
                     ? 'bg-yellow-400 scale-125'
                     : 'bg-blue-400 hover:bg-blue-300 hover:scale-110'
                 }`}
-                onClick={() => onKeyframeClick(keyframe.time)}
-                title={`Keyframe at ${keyframe.time.toFixed(3)}s${
+                onClick={() => onKeyframeClick(keyframeTime)}
+                title={`Keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
                   isEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
                 }`}
               />
 
               {/* Delete button (shown on hover, but not for permanent start/end keyframes) */}
               {keyframes.length > 2 &&
-               Math.abs(keyframe.time) > 0.01 &&
-               Math.abs(keyframe.time - duration) > 0.01 && (
+               !isStartKeyframe &&
+               !isEndKeyframe && (
                 <button
                   className="absolute top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onKeyframeDelete(keyframe.time, duration);
+                    onKeyframeDelete(keyframeTime, duration);
                   }}
                   title="Delete keyframe"
                 >

@@ -1,14 +1,20 @@
 import { useState, useCallback, useEffect } from 'react';
+import { timeToFrame, frameToTime } from '../utils/videoUtils';
 
 /**
  * Custom hook for managing crop tool state and keyframes
  * Crop tool is ALWAYS active when video is loaded
+ *
+ * ARCHITECTURE: Keyframes are tied to FRAME NUMBERS, not time.
+ * This ensures that crop positions follow the actual video frames,
+ * regardless of any speed changes applied via segments.
  */
 export default function useCrop(videoMetadata) {
   const [aspectRatio, setAspectRatio] = useState('9:16'); // '16:9', '9:16'
   const [keyframes, setKeyframes] = useState([]);
   const [isEndKeyframeExplicit, setIsEndKeyframeExplicit] = useState(false);
   const [copiedCrop, setCopiedCrop] = useState(null); // Stores copied crop data (x, y, width, height)
+  const [framerate] = useState(30); // Default framerate - TODO: extract from video
 
   /**
    * Calculate the default crop rectangle that fits within video bounds
@@ -50,7 +56,7 @@ export default function useCrop(videoMetadata) {
 
   /**
    * Auto-initialize keyframes when metadata loads
-   * Creates permanent keyframes at start (time=0) and end (time=duration)
+   * Creates permanent keyframes at start (frame=0) and end (frame=totalFrames)
    * End keyframe initially mirrors start until explicitly modified
    */
   useEffect(() => {
@@ -61,7 +67,9 @@ export default function useCrop(videoMetadata) {
         aspectRatio
       );
 
-      console.log('[useCrop] Auto-initializing permanent keyframes at time=0 and time=duration:', defaultCrop);
+      const totalFrames = timeToFrame(videoMetadata.duration, framerate);
+
+      console.log('[useCrop] Auto-initializing permanent keyframes at frame=0 and frame=' + totalFrames, defaultCrop);
       console.log('[useCrop] End keyframe will mirror start until explicitly modified');
 
       // Reset the explicit flag for new video
@@ -69,16 +77,16 @@ export default function useCrop(videoMetadata) {
 
       setKeyframes([
         {
-          time: 0,
+          frame: 0,
           ...defaultCrop
         },
         {
-          time: videoMetadata.duration,
+          frame: totalFrames,
           ...defaultCrop
         }
       ]);
     }
-  }, [videoMetadata, aspectRatio, keyframes.length, calculateDefaultCrop]);
+  }, [videoMetadata, aspectRatio, keyframes.length, calculateDefaultCrop, framerate]);
 
   /**
    * Update aspect ratio and recalculate all keyframes
@@ -97,29 +105,31 @@ export default function useCrop(videoMetadata) {
         newRatio
       );
 
+      const totalFrames = timeToFrame(videoMetadata.duration, framerate);
+
       const updatedKeyframes = keyframes.map(kf => {
         // If end hasn't been explicitly set, use default for all keyframes
         if (!isEndKeyframeExplicit) {
           return {
-            time: kf.time,
+            frame: kf.frame,
             ...newCrop
           };
         }
 
         // If end has been explicitly set, only update non-end keyframes with default
         // End keyframe keeps its custom position/size but updates to new aspect ratio
-        const isEnd = Math.abs(kf.time - videoMetadata.duration) < 0.01;
+        const isEnd = kf.frame === totalFrames;
         if (isEnd) {
           // Preserve end keyframe's relative position but adjust to new aspect ratio
           // For now, just recalculate - could be smarter about preserving position
           return {
-            time: kf.time,
+            frame: kf.frame,
             ...newCrop
           };
         }
 
         return {
-          time: kf.time,
+          frame: kf.frame,
           ...newCrop
         };
       });
@@ -127,18 +137,22 @@ export default function useCrop(videoMetadata) {
       console.log('[useCrop] Updated keyframes for new aspect ratio (isEndExplicit:', isEndKeyframeExplicit, '):', updatedKeyframes);
       setKeyframes(updatedKeyframes);
     }
-  }, [keyframes, videoMetadata, calculateDefaultCrop, isEndKeyframeExplicit]);
+  }, [keyframes, videoMetadata, calculateDefaultCrop, isEndKeyframeExplicit, framerate]);
 
   /**
    * Add or update a keyframe at the specified time
    * If updating start keyframe and end hasn't been explicitly set, end mirrors start
+   * NOTE: This accepts time for API compatibility but converts to frames internally
    */
   const addOrUpdateKeyframe = useCallback((time, cropData, duration) => {
-    console.log('[useCrop] Adding/updating keyframe at time', time, ':', cropData);
+    const frame = timeToFrame(time, framerate);
+    const totalFrames = duration ? timeToFrame(duration, framerate) : null;
+
+    console.log('[useCrop] Adding/updating keyframe at time', time, '(frame', frame + '):', cropData);
 
     // Check if we're updating the end keyframe
-    const isEndKeyframe = duration && Math.abs(time - duration) < 0.01;
-    const isStartKeyframe = Math.abs(time) < 0.01;
+    const isEndKeyframe = totalFrames !== null && frame === totalFrames;
+    const isStartKeyframe = frame === 0;
 
     if (isEndKeyframe) {
       console.log('[useCrop] End keyframe explicitly set by user');
@@ -146,51 +160,55 @@ export default function useCrop(videoMetadata) {
     }
 
     setKeyframes(prev => {
-      // Check if keyframe exists at this time (within 10ms tolerance)
-      const existingIndex = prev.findIndex(kf => Math.abs(kf.time - time) < 0.01);
+      // Check if keyframe exists at this frame
+      const existingIndex = prev.findIndex(kf => kf.frame === frame);
 
       let updated;
       if (existingIndex >= 0) {
-        // Update existing keyframe - set time AFTER spreading to avoid overwrite
+        // Update existing keyframe - set frame AFTER spreading to avoid overwrite
         updated = [...prev];
-        updated[existingIndex] = { ...cropData, time };
+        updated[existingIndex] = { ...cropData, frame };
       } else {
-        // Add new keyframe and sort by time
-        const newKeyframes = [...prev, { ...cropData, time }];
-        updated = newKeyframes.sort((a, b) => a.time - b.time);
+        // Add new keyframe and sort by frame
+        const newKeyframes = [...prev, { ...cropData, frame }];
+        updated = newKeyframes.sort((a, b) => a.frame - b.frame);
       }
 
       // If updating start keyframe and end hasn't been explicitly set, mirror to end
-      if (isStartKeyframe && !isEndKeyframeExplicit && duration) {
+      if (isStartKeyframe && !isEndKeyframeExplicit && totalFrames !== null) {
         console.log('[useCrop] Mirroring start keyframe to end (end not yet explicit)');
-        const endKeyframeIndex = updated.findIndex(kf => Math.abs(kf.time - duration) < 0.01);
+        const endKeyframeIndex = updated.findIndex(kf => kf.frame === totalFrames);
         if (endKeyframeIndex >= 0) {
-          // Set time AFTER spreading cropData to preserve the duration time
+          // Set frame AFTER spreading cropData to preserve the totalFrames
           updated[endKeyframeIndex] = {
             ...cropData,
-            time: duration
+            frame: totalFrames
           };
         }
       }
 
       return updated;
     });
-  }, [isEndKeyframeExplicit]);
+  }, [isEndKeyframeExplicit, framerate]);
 
   /**
    * Remove a keyframe at the specified time
-   * Cannot remove permanent keyframes at time=0 or time=duration
+   * Cannot remove permanent keyframes at frame=0 or frame=totalFrames
+   * NOTE: This accepts time for API compatibility but converts to frames internally
    */
   const removeKeyframe = useCallback((time, duration) => {
-    console.log('[useCrop] Attempting to remove keyframe at time:', time);
+    const frame = timeToFrame(time, framerate);
+    const totalFrames = duration ? timeToFrame(duration, framerate) : null;
+
+    console.log('[useCrop] Attempting to remove keyframe at time:', time, '(frame', frame + ')');
 
     // Don't allow removing permanent start/end keyframes
-    if (Math.abs(time) < 0.01) {
-      console.log('[useCrop] Cannot remove permanent start keyframe (time=0)');
+    if (frame === 0) {
+      console.log('[useCrop] Cannot remove permanent start keyframe (frame=0)');
       return;
     }
-    if (duration && Math.abs(time - duration) < 0.01) {
-      console.log('[useCrop] Cannot remove permanent end keyframe (time=duration)');
+    if (totalFrames !== null && frame === totalFrames) {
+      console.log('[useCrop] Cannot remove permanent end keyframe (frame=totalFrames)');
       return;
     }
 
@@ -200,9 +218,9 @@ export default function useCrop(videoMetadata) {
         console.log('[useCrop] Cannot remove - must have at least 2 keyframes');
         return prev;
       }
-      return prev.filter(kf => Math.abs(kf.time - time) > 0.01);
+      return prev.filter(kf => kf.frame !== frame);
     });
-  }, []);
+  }, [framerate]);
 
   /**
    * Round to 3 decimal places for precision
@@ -211,15 +229,18 @@ export default function useCrop(videoMetadata) {
 
   /**
    * Interpolate crop values between keyframes for a given time
+   * NOTE: This accepts time for API compatibility but converts to frames internally
    */
   const interpolateCrop = useCallback((time) => {
     if (keyframes.length === 0) {
       return null;
     }
 
+    const frame = timeToFrame(time, framerate);
+
     // If only one keyframe, return it
     if (keyframes.length === 1) {
-      return keyframes[0];
+      return { ...keyframes[0], time };
     }
 
     // Find surrounding keyframes
@@ -227,10 +248,10 @@ export default function useCrop(videoMetadata) {
     let afterKf = null;
 
     for (let i = 0; i < keyframes.length; i++) {
-      if (keyframes[i].time <= time) {
+      if (keyframes[i].frame <= frame) {
         beforeKf = keyframes[i];
       }
-      if (keyframes[i].time > time && !afterKf) {
+      if (keyframes[i].frame > frame && !afterKf) {
         afterKf = keyframes[i];
         break;
       }
@@ -238,41 +259,46 @@ export default function useCrop(videoMetadata) {
 
     // If before first keyframe, return first
     if (!beforeKf) {
-      return keyframes[0];
+      return { ...keyframes[0], time };
     }
 
     // If after last keyframe, return last
     if (!afterKf) {
-      return beforeKf;
+      return { ...beforeKf, time };
     }
 
-    // Linear interpolation between keyframes
+    // Linear interpolation between keyframes (based on frames)
     // Round to 3 decimal places to maintain precision
-    const duration = afterKf.time - beforeKf.time;
-    const progress = (time - beforeKf.time) / duration;
+    const frameDuration = afterKf.frame - beforeKf.frame;
+    const progress = (frame - beforeKf.frame) / frameDuration;
 
     return {
       time,
+      frame,
       x: round3(beforeKf.x + (afterKf.x - beforeKf.x) * progress),
       y: round3(beforeKf.y + (afterKf.y - beforeKf.y) * progress),
       width: round3(beforeKf.width + (afterKf.width - beforeKf.width) * progress),
       height: round3(beforeKf.height + (afterKf.height - beforeKf.height) * progress)
     };
-  }, [keyframes]);
+  }, [keyframes, framerate]);
 
   /**
    * Check if a keyframe exists at the specified time
+   * NOTE: This accepts time for API compatibility but converts to frames internally
    */
   const hasKeyframeAt = useCallback((time) => {
-    return keyframes.some(kf => Math.abs(kf.time - time) < 0.01);
-  }, [keyframes]);
+    const frame = timeToFrame(time, framerate);
+    return keyframes.some(kf => kf.frame === frame);
+  }, [keyframes, framerate]);
 
   /**
    * Get keyframe at specific time (if exists)
+   * NOTE: This accepts time for API compatibility but converts to frames internally
    */
   const getKeyframeAt = useCallback((time) => {
-    return keyframes.find(kf => Math.abs(kf.time - time) < 0.01);
-  }, [keyframes]);
+    const frame = timeToFrame(time, framerate);
+    return keyframes.find(kf => kf.frame === frame);
+  }, [keyframes, framerate]);
 
   /**
    * Copy the crop keyframe at the specified time
@@ -315,12 +341,27 @@ export default function useCrop(videoMetadata) {
     return true;
   }, [copiedCrop, addOrUpdateKeyframe]);
 
+  /**
+   * Get keyframes in time-based format for export
+   * Converts frame numbers to time for backend compatibility
+   */
+  const getKeyframesForExport = useCallback(() => {
+    return keyframes.map(kf => ({
+      time: frameToTime(kf.frame, framerate),
+      x: kf.x,
+      y: kf.y,
+      width: kf.width,
+      height: kf.height
+    }));
+  }, [keyframes, framerate]);
+
   return {
     // State
     aspectRatio,
     keyframes,
     isEndKeyframeExplicit,
     copiedCrop,
+    framerate,
 
     // Actions
     updateAspectRatio,
@@ -333,6 +374,7 @@ export default function useCrop(videoMetadata) {
     interpolateCrop,
     hasKeyframeAt,
     getKeyframeAt,
-    calculateDefaultCrop
+    calculateDefaultCrop,
+    getKeyframesForExport
   };
 }
