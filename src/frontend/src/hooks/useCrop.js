@@ -355,6 +355,16 @@ export default function useCrop(videoMetadata) {
     }));
   }, [keyframes, framerate]);
 
+  /**
+   * Reset all crop state (for when loading a new video)
+   */
+  const reset = useCallback(() => {
+    console.log('[useCrop] Resetting crop state');
+    setKeyframes([]);
+    setIsEndKeyframeExplicit(false);
+    setCopiedCrop(null);
+  }, []);
+
   return {
     // State
     aspectRatio,
@@ -369,6 +379,7 @@ export default function useCrop(videoMetadata) {
     removeKeyframe,
     copyCropKeyframe,
     pasteCropKeyframe,
+    reset,
 
     // Queries
     interpolateCrop,
