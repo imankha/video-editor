@@ -86,8 +86,8 @@ export default function CropLayer({
         {/* Background track */}
         <div className="absolute inset-0 bg-blue-900 bg-opacity-20 rounded-br-lg" />
 
-        {/* Placeholder text when no keyframes */}
-        {keyframes.length === 0 && (
+        {/* Placeholder text when no explicit keyframes (only auto-created start/end) */}
+        {keyframes.length === 2 && !isEndKeyframeExplicit && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <span className="text-gray-400 text-sm">Set Crop Keyframes to animate crop window</span>
           </div>
