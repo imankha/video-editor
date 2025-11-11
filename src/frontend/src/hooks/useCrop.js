@@ -58,35 +58,44 @@ export default function useCrop(videoMetadata) {
    * Auto-initialize keyframes when metadata loads
    * Creates permanent keyframes at start (frame=0) and end (frame=totalFrames)
    * End keyframe initially mirrors start until explicitly modified
+   * Also reinitializes if keyframes are stale (end frame doesn't match current video duration)
    */
   useEffect(() => {
-    if (videoMetadata?.width && videoMetadata?.height && videoMetadata?.duration && keyframes.length === 0) {
-      const defaultCrop = calculateDefaultCrop(
-        videoMetadata.width,
-        videoMetadata.height,
-        aspectRatio
-      );
-
+    if (videoMetadata?.width && videoMetadata?.height && videoMetadata?.duration) {
       const totalFrames = timeToFrame(videoMetadata.duration, framerate);
 
-      console.log('[useCrop] Auto-initializing permanent keyframes at frame=0 and frame=' + totalFrames, defaultCrop);
-      console.log('[useCrop] End keyframe will mirror start until explicitly modified');
+      // Check if we need to initialize:
+      // 1. No keyframes exist, OR
+      // 2. Keyframes are stale (last keyframe's frame doesn't match current video's total frames)
+      const needsInit = keyframes.length === 0 ||
+                        (keyframes.length > 0 && keyframes[keyframes.length - 1].frame !== totalFrames);
 
-      // Reset the explicit flag for new video
-      setIsEndKeyframeExplicit(false);
+      if (needsInit) {
+        const defaultCrop = calculateDefaultCrop(
+          videoMetadata.width,
+          videoMetadata.height,
+          aspectRatio
+        );
 
-      setKeyframes([
-        {
-          frame: 0,
-          ...defaultCrop
-        },
-        {
-          frame: totalFrames,
-          ...defaultCrop
-        }
-      ]);
+        console.log('[useCrop] Auto-initializing permanent keyframes at frame=0 and frame=' + totalFrames, defaultCrop);
+        console.log('[useCrop] End keyframe will mirror start until explicitly modified');
+
+        // Reset the explicit flag for new video
+        setIsEndKeyframeExplicit(false);
+
+        setKeyframes([
+          {
+            frame: 0,
+            ...defaultCrop
+          },
+          {
+            frame: totalFrames,
+            ...defaultCrop
+          }
+        ]);
+      }
     }
-  }, [videoMetadata, aspectRatio, keyframes.length, calculateDefaultCrop, framerate]);
+  }, [videoMetadata, aspectRatio, keyframes, calculateDefaultCrop, framerate]);
 
   /**
    * Update aspect ratio and recalculate all keyframes
@@ -355,6 +364,16 @@ export default function useCrop(videoMetadata) {
     }));
   }, [keyframes, framerate]);
 
+  /**
+   * Reset all crop state (for when loading a new video)
+   */
+  const reset = useCallback(() => {
+    console.log('[useCrop] Resetting crop state');
+    setKeyframes([]);
+    setIsEndKeyframeExplicit(false);
+    setCopiedCrop(null);
+  }, []);
+
   return {
     // State
     aspectRatio,
@@ -369,6 +388,7 @@ export default function useCrop(videoMetadata) {
     removeKeyframe,
     copyCropKeyframe,
     pasteCropKeyframe,
+    reset,
 
     // Queries
     interpolateCrop,

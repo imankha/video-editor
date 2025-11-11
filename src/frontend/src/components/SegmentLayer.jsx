@@ -106,7 +106,7 @@ export default function SegmentLayer({
         {/* Placeholder text when no segments */}
         {segments.length === 1 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-gray-400 text-sm">Click to create Segments</span>
+            <span className="text-gray-400 text-sm">Split Segments to trim or control speed</span>
           </div>
         )}
 

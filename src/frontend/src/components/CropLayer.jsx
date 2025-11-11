@@ -25,9 +25,6 @@ export default function CropLayer({
 }) {
   // Get isEndKeyframeExplicit and copiedCrop from context
   const { isEndKeyframeExplicit, copiedCrop } = useCropContext();
-  if (keyframes.length === 0) {
-    return null;
-  }
 
   // Use visual duration if provided, otherwise fall back to source duration
   const timelineDuration = visualDuration || duration;
@@ -88,6 +85,13 @@ export default function CropLayer({
       >
         {/* Background track */}
         <div className="absolute inset-0 bg-blue-900 bg-opacity-20 rounded-br-lg" />
+
+        {/* Placeholder text when no explicit keyframes (only auto-created start/end) */}
+        {keyframes.length === 2 && !isEndKeyframeExplicit && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="text-gray-400 text-sm">Set Crop Keyframes to animate crop window</span>
+          </div>
+        )}
 
         {/* Keyframe indicators */}
         {keyframes.map((keyframe, index) => {

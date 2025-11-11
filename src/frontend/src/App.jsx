@@ -72,6 +72,7 @@ function App() {
     interpolateCrop,
     hasKeyframeAt,
     getKeyframesForExport,
+    reset: resetCrop,
   } = useCrop(metadata);
 
   // Zoom hook
@@ -89,6 +90,9 @@ function App() {
   } = useZoom();
 
   const handleFileSelect = async (file) => {
+    // Reset all state before loading new video
+    resetSegments();
+    resetCrop();
     setVideoFile(file);
     await loadVideo(file);
   };
