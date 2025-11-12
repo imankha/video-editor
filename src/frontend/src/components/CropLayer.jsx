@@ -143,12 +143,12 @@ export default function CropLayer({
                 }`}
               />
 
-              {/* Delete button (shown on hover, but not for permanent start/end keyframes) */}
+              {/* Delete button (shown on hover, but not for permanent start/end keyframes) - z-50 to appear above all UI including playhead */}
               {keyframes.length > 2 &&
                !isStartKeyframe &&
                !isEndKeyframe && (
                 <button
-                  className="absolute top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1"
+                  className="absolute top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1 z-50"
                   onClick={(e) => {
                     e.stopPropagation();
                     onKeyframeDelete(keyframeTime, duration);
