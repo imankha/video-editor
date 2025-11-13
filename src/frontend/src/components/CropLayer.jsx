@@ -113,7 +113,7 @@ export default function CropLayer({
           return (
             <div
               key={index}
-              className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 group"
+              className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 group z-50"
               style={{ left: `${position}%` }}
             >
               {/* Copy button (shown on hover, above keyframe) - z-50 to appear above all UI including playhead */}
@@ -132,10 +132,10 @@ export default function CropLayer({
 
               {/* Diamond keyframe indicator */}
               <div
-                className={`w-3 h-3 transform rotate-45 cursor-pointer transition-all ${
+                className={`w-3 h-3 transform rotate-45 cursor-pointer transition-colors ${
                   shouldHighlight
                     ? 'bg-yellow-400 scale-125'
-                    : 'bg-blue-400 hover:bg-blue-300 hover:scale-110'
+                    : 'bg-blue-400 hover:bg-blue-300'
                 }`}
                 onClick={() => onKeyframeClick(keyframeTime)}
                 title={`Keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
