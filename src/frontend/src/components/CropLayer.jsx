@@ -72,7 +72,7 @@ export default function CropLayer({
   };
 
   return (
-    <div className="relative bg-gray-800/95 border-t border-gray-700/50 h-12 z-50 rounded-b-lg">
+    <div className="relative bg-gray-800/95 border-t border-gray-700/50 h-12 rounded-b-lg">
       {/* Layer label */}
       <div className="absolute left-0 top-0 h-full flex items-center justify-center bg-gray-900 border-r border-gray-700/50 w-32 rounded-bl-lg">
         <Crop size={18} className="text-yellow-400" />
@@ -84,7 +84,7 @@ export default function CropLayer({
         onClick={handleTrackClick}
       >
         {/* Background track */}
-        <div className="absolute inset-0 bg-blue-900 bg-opacity-20 rounded-br-lg z-10" />
+        <div className="absolute inset-0 bg-blue-900 bg-opacity-20 rounded-br-lg" />
 
         {/* Placeholder text when no explicit keyframes (only auto-created start/end) */}
         {keyframes.length === 2 && !isEndKeyframeExplicit && (

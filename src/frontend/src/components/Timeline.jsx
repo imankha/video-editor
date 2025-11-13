@@ -173,8 +173,19 @@ export function Timeline({
           </div>
         </div>
 
+        {/* Unified Playhead - extends through all layers - rendered BEFORE layers so they paint on top */}
+        <div
+          className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none left-32"
+          style={{
+            left: `calc(8rem + (100% - 8rem) * ${progress / 100})`,  // 8rem label + progress% of remaining width
+            height: segments.length > 0 ? 'calc(100% - 0.25rem)' : 'calc(6rem - 0.25rem)'  // Extend through video + crop layers, or all layers if segments exist
+          }}
+        >
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full" />
+        </div>
+
         {/* Crop Layer */}
-        <div className="mt-1 relative z-50">
+        <div className="mt-1">
           <CropLayer
             keyframes={cropKeyframes}
             duration={duration}
@@ -193,7 +204,7 @@ export function Timeline({
 
         {/* Segment Layer */}
         {segments.length > 0 && (
-          <div className="mt-1 relative z-50">
+          <div className="mt-1">
             <SegmentLayer
               segments={segments}
               boundaries={segmentBoundaries}
@@ -211,17 +222,6 @@ export function Timeline({
             />
           </div>
         )}
-
-        {/* Unified Playhead - extends through all layers */}
-        <div
-          className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none left-32 z-10"
-          style={{
-            left: `calc(8rem + (100% - 8rem) * ${progress / 100})`,  // 8rem label + progress% of remaining width
-            height: segments.length > 0 ? 'calc(100% - 0.25rem)' : 'calc(6rem - 0.25rem)'  // Extend through video + crop layers, or all layers if segments exist
-          }}
-        >
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full" />
-        </div>
       </div>
     </div>
   );
