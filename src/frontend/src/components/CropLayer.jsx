@@ -117,7 +117,7 @@ export default function CropLayer({
               style={{ left: `${position}%` }}
             >
               {/* Invisible hit area that keeps buttons visible when moving mouse between elements */}
-              <div className="absolute -top-8 -bottom-6 -left-4 -right-4 pointer-events-none" />
+              <div className="absolute -top-8 -bottom-6 -left-4 -right-4" />
 
               {/* Copy button (shown on hover, above keyframe) - z-50 to appear above all UI including playhead */}
               {onKeyframeCopy && (
