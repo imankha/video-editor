@@ -214,7 +214,7 @@ export function Timeline({
 
         {/* Unified Playhead - extends through all layers */}
         <div
-          className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none left-32 z-30"
+          className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none left-32 z-10"
           style={{
             left: `calc(8rem + (100% - 8rem) * ${progress / 100})`,  // 8rem label + progress% of remaining width
             height: segments.length > 0 ? 'calc(100% - 0.25rem)' : 'calc(6rem - 0.25rem)'  // Extend through video + crop layers, or all layers if segments exist
