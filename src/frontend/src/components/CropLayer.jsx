@@ -113,7 +113,7 @@ export default function CropLayer({
           return (
             <div
               key={index}
-              className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 group z-50"
+              className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 group z-50 pt-8 pb-6 px-4"
               style={{ left: `${position}%` }}
             >
               {/* Copy button (shown on hover, above keyframe) - z-50 to appear above all UI including playhead */}
