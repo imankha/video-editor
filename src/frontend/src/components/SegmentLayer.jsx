@@ -100,7 +100,7 @@ export default function SegmentLayer({
       >
         {/* Background track */}
         <div
-          className="absolute inset-0 bg-purple-900 bg-opacity-20 segment-bg rounded-br-lg"
+          className="absolute inset-0 bg-purple-900 bg-opacity-20 segment-bg rounded-br-lg z-10"
         />
 
         {/* Placeholder text when no segments */}

@@ -174,7 +174,7 @@ export function Timeline({
         </div>
 
         {/* Crop Layer */}
-        <div className="mt-1">
+        <div className="mt-1 relative z-50">
           <CropLayer
             keyframes={cropKeyframes}
             duration={duration}
@@ -193,7 +193,7 @@ export function Timeline({
 
         {/* Segment Layer */}
         {segments.length > 0 && (
-          <div className="mt-1">
+          <div className="mt-1 relative z-50">
             <SegmentLayer
               segments={segments}
               boundaries={segmentBoundaries}
