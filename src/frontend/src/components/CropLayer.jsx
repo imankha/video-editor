@@ -84,7 +84,7 @@ export default function CropLayer({
         onClick={handleTrackClick}
       >
         {/* Background track */}
-        <div className="absolute inset-0 bg-blue-900 bg-opacity-40 rounded-br-lg" />
+        <div className="absolute inset-0 bg-blue-900 bg-opacity-10 rounded-br-lg" />
 
         {/* Placeholder text when no explicit keyframes (only auto-created start/end) */}
         {keyframes.length === 2 && !isEndKeyframeExplicit && (
