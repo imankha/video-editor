@@ -26,6 +26,7 @@ function App() {
     visualDuration,
     trimmedDuration,
     segmentVisualLayout,
+    framerate: segmentFramerate,
     initializeWithDuration: initializeSegments,
     reset: resetSegments,
     addBoundary: addSegmentBoundary,
@@ -37,6 +38,8 @@ function App() {
     isTimeVisible,
     sourceTimeToVisualTime,
     visualTimeToSourceTime,
+    createFrameRangeKey,
+    isSegmentTrimmed,
   } = useSegments();
 
   const {
@@ -67,10 +70,12 @@ function App() {
     updateAspectRatio,
     addOrUpdateKeyframe,
     removeKeyframe,
+    deleteKeyframesInRange,
     copyCropKeyframe,
     pasteCropKeyframe,
     interpolateCrop,
     hasKeyframeAt,
+    getCropDataAtTime,
     getKeyframesForExport,
     reset: resetCrop,
   } = useCrop(metadata);
@@ -151,6 +156,83 @@ function App() {
       // Move playhead to the pasted keyframe location
       seek(time);
     }
+  };
+
+  /**
+   * Coordinated segment trim handler
+   * This function ensures keyframes are properly managed when trimming segments:
+   * 1. Deletes all keyframes in the trimmed region
+   * 2. Updates the boundary keyframe with crop data from the furthest keyframe in the trimmed region
+   * 3. Toggles the segment trim state
+   */
+  const handleTrimSegment = (segmentIndex) => {
+    if (!duration || segmentIndex < 0 || segmentIndex >= segments.length) return;
+
+    const segment = segments[segmentIndex];
+    const isCurrentlyTrimmed = segment.isTrimmed;
+
+    console.log('[App] handleTrimSegment - segment:', segment, 'isCurrentlyTrimmed:', isCurrentlyTrimmed);
+
+    if (!isCurrentlyTrimmed) {
+      // We're about to trim this segment
+
+      // Step 1: Find the furthest keyframe in the trimmed region to preserve its crop data
+      let boundaryTime;
+      let furthestKeyframeInTrimmedRegion = null;
+
+      if (segment.isLast) {
+        // Trimming from the end
+        boundaryTime = segment.start;
+
+        // Find the furthest keyframe before or at the segment end
+        for (let i = keyframes.length - 1; i >= 0; i--) {
+          const kfTime = keyframes[i].frame / framerate;
+          if (kfTime >= segment.start && kfTime <= segment.end) {
+            furthestKeyframeInTrimmedRegion = keyframes[i];
+            break;
+          }
+        }
+      } else if (segment.isFirst) {
+        // Trimming from the start
+        boundaryTime = segment.end;
+
+        // Find the furthest keyframe after or at the segment start
+        for (let i = 0; i < keyframes.length; i++) {
+          const kfTime = keyframes[i].frame / framerate;
+          if (kfTime >= segment.start && kfTime <= segment.end) {
+            furthestKeyframeInTrimmedRegion = keyframes[i];
+          }
+        }
+      }
+
+      // Step 2: If we found a keyframe in the trimmed region, get its crop data
+      // Otherwise, interpolate at the furthest point in the trimmed region
+      let cropDataToPreserve = null;
+      if (furthestKeyframeInTrimmedRegion) {
+        const kfTime = furthestKeyframeInTrimmedRegion.frame / framerate;
+        cropDataToPreserve = getCropDataAtTime(kfTime);
+        console.log('[App] Preserving crop from keyframe at:', kfTime, 'data:', cropDataToPreserve);
+      } else {
+        // No keyframe in trimmed region, interpolate at the far edge
+        const edgeTime = segment.isLast ? segment.end : segment.start;
+        cropDataToPreserve = getCropDataAtTime(edgeTime);
+        console.log('[App] No keyframe in trimmed region, interpolating at:', edgeTime, 'data:', cropDataToPreserve);
+      }
+
+      // Step 3: Delete keyframes in the trimmed range
+      console.log('[App] Deleting keyframes in range:', segment.start, '-', segment.end);
+      deleteKeyframesInRange(segment.start, segment.end);
+
+      // Step 4: Update the boundary keyframe with the preserved crop data
+      if (cropDataToPreserve && boundaryTime !== undefined) {
+        console.log('[App] Updating boundary keyframe at:', boundaryTime, 'with data:', cropDataToPreserve);
+        addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration);
+      }
+    }
+
+    // Step 5: Toggle the trim state (this works for both trimming and restoring)
+    console.log('[App] Toggling trim state for segment:', segmentIndex);
+    toggleTrimSegment(segmentIndex);
   };
 
   // Keyboard handler: Space bar toggles play/pause
@@ -242,6 +324,37 @@ function App() {
     interpolateCrop,
     hasKeyframeAt,
   }), [keyframes, isEndKeyframeExplicit, aspectRatio, copiedCrop, updateAspectRatio, addOrUpdateKeyframe, removeKeyframe, copyCropKeyframe, pasteCropKeyframe, interpolateCrop, hasKeyframeAt]);
+
+  /**
+   * Get filtered keyframes for export
+   * Filters out keyframes that are outside the trimmed boundaries
+   */
+  const getFilteredKeyframesForExport = useMemo(() => {
+    const allKeyframes = getKeyframesForExport();
+    const segmentData = getSegmentExportData();
+
+    // If no trimming, return all keyframes
+    if (!segmentData || (!segmentData.trim_start && !segmentData.trim_end)) {
+      return allKeyframes;
+    }
+
+    const trimStart = segmentData.trim_start || 0;
+    const trimEnd = segmentData.trim_end || duration || Infinity;
+
+    // Filter keyframes to only include those within the trim bounds
+    const filtered = allKeyframes.filter(kf => {
+      return kf.time >= trimStart && kf.time <= trimEnd;
+    });
+
+    console.log('[App] Filtered keyframes for export:', {
+      original: allKeyframes.length,
+      filtered: filtered.length,
+      trimStart,
+      trimEnd
+    });
+
+    return filtered;
+  }, [getKeyframesForExport, getSegmentExportData, duration]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -361,7 +474,7 @@ function App() {
                   onAddSegmentBoundary={addSegmentBoundary}
                   onRemoveSegmentBoundary={removeSegmentBoundary}
                   onSegmentSpeedChange={setSegmentSpeed}
-                  onSegmentTrim={toggleTrimSegment}
+                  onSegmentTrim={handleTrimSegment}
                   sourceTimeToVisualTime={sourceTimeToVisualTime}
                   visualTimeToSourceTime={visualTimeToSourceTime}
                 />
@@ -389,7 +502,7 @@ function App() {
             <div className="mt-6">
               <ExportButton
                 videoFile={videoFile}
-                cropKeyframes={getKeyframesForExport()}
+                cropKeyframes={getFilteredKeyframesForExport}
                 segmentData={getSegmentExportData()}
                 disabled={!videoFile}
               />
