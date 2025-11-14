@@ -38,6 +38,10 @@ export function useSegments() {
   // Framerate for frame calculations (matches useCrop)
   const [framerate] = useState(30);
 
+  // Lock to prevent re-entrant calls to detrim functions
+  // This is critical because React can invoke handlers multiple times
+  const detrimLockRef = useState({ isLocked: false })[0];
+
   /**
    * DERIVED: Compute all boundaries from userSplits + duration
    * Boundaries always include [0, ...userSplits, duration]
@@ -300,46 +304,57 @@ export function useSegments() {
   const detrimStart = useCallback(() => {
     console.log('[useSegments] detrimStart called');
 
-    // Use flushSync to batch both state updates atomically
-    // This forces React to apply both state updates synchronously before any re-render
-    flushSync(() => {
-      // Access current state synchronously using functional updater
-      let rangeToRestore = null;
-      let shouldUpdate = false;
+    // CRITICAL: Prevent re-entrant calls using a lock
+    if (detrimLockRef.isLocked) {
+      console.log('[useSegments] detrimStart blocked - operation already in progress');
+      return;
+    }
 
-      // First, find what we need to restore
-      setTrimHistory(prev => {
-        console.log('[useSegments] detrimStart - current history:', JSON.stringify(prev));
-        const lastStartIndex = prev.findLastIndex(op => op.type === 'start');
-        if (lastStartIndex === -1) {
-          console.log('[useSegments] detrimStart aborted - no start operations in history');
-          return prev;
+    detrimLockRef.isLocked = true;
+    try {
+      // Use flushSync to batch both state updates atomically
+      // This forces React to apply both state updates synchronously before any re-render
+      flushSync(() => {
+        // Access current state synchronously using functional updater
+        let rangeToRestore = null;
+        let shouldUpdate = false;
+
+        // First, find what we need to restore
+        setTrimHistory(prev => {
+          console.log('[useSegments] detrimStart - current history:', JSON.stringify(prev));
+          const lastStartIndex = prev.findLastIndex(op => op.type === 'start');
+          if (lastStartIndex === -1) {
+            console.log('[useSegments] detrimStart aborted - no start operations in history');
+            return prev;
+          }
+
+          const lastStartOp = prev[lastStartIndex];
+          console.log('[useSegments] De-trimming start, operation:', JSON.stringify(lastStartOp));
+          console.log('[useSegments] Restoring to:', JSON.stringify(lastStartOp.previousRange));
+
+          // Capture the range we need to restore
+          rangeToRestore = lastStartOp.previousRange;
+          shouldUpdate = true;
+
+          // Remove this operation from history
+          const newHistory = prev.filter((_, i) => i !== lastStartIndex);
+          console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
+          return newHistory;
+        });
+
+        // Now update trim range if we found something to restore
+        // This happens in the same synchronous batch due to flushSync
+        if (shouldUpdate) {
+          console.log('[useSegments] Updating trimRange to:', JSON.stringify(rangeToRestore));
+          setTrimRange(rangeToRestore);
+        } else {
+          console.log('[useSegments] NOT updating trimRange - no operation found');
         }
-
-        const lastStartOp = prev[lastStartIndex];
-        console.log('[useSegments] De-trimming start, operation:', JSON.stringify(lastStartOp));
-        console.log('[useSegments] Restoring to:', JSON.stringify(lastStartOp.previousRange));
-
-        // Capture the range we need to restore
-        rangeToRestore = lastStartOp.previousRange;
-        shouldUpdate = true;
-
-        // Remove this operation from history
-        const newHistory = prev.filter((_, i) => i !== lastStartIndex);
-        console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
-        return newHistory;
       });
-
-      // Now update trim range if we found something to restore
-      // This happens in the same synchronous batch due to flushSync
-      if (shouldUpdate) {
-        console.log('[useSegments] Updating trimRange to:', JSON.stringify(rangeToRestore));
-        setTrimRange(rangeToRestore);
-      } else {
-        console.log('[useSegments] NOT updating trimRange - no operation found');
-      }
-    });
-    console.log('[useSegments] detrimStart completed');
+      console.log('[useSegments] detrimStart completed');
+    } finally {
+      detrimLockRef.isLocked = false;
+    }
   }, []);
 
   /**
@@ -352,46 +367,57 @@ export function useSegments() {
   const detrimEnd = useCallback(() => {
     console.log('[useSegments] detrimEnd called');
 
-    // Use flushSync to batch both state updates atomically
-    // This forces React to apply both state updates synchronously before any re-render
-    flushSync(() => {
-      // Access current state synchronously using functional updater
-      let rangeToRestore = null;
-      let shouldUpdate = false;
+    // CRITICAL: Prevent re-entrant calls using a lock
+    if (detrimLockRef.isLocked) {
+      console.log('[useSegments] detrimEnd blocked - operation already in progress');
+      return;
+    }
 
-      // First, find what we need to restore
-      setTrimHistory(prev => {
-        console.log('[useSegments] detrimEnd - current history:', JSON.stringify(prev));
-        const lastEndIndex = prev.findLastIndex(op => op.type === 'end');
-        if (lastEndIndex === -1) {
-          console.log('[useSegments] detrimEnd aborted - no end operations in history');
-          return prev;
+    detrimLockRef.isLocked = true;
+    try {
+      // Use flushSync to batch both state updates atomically
+      // This forces React to apply both state updates synchronously before any re-render
+      flushSync(() => {
+        // Access current state synchronously using functional updater
+        let rangeToRestore = null;
+        let shouldUpdate = false;
+
+        // First, find what we need to restore
+        setTrimHistory(prev => {
+          console.log('[useSegments] detrimEnd - current history:', JSON.stringify(prev));
+          const lastEndIndex = prev.findLastIndex(op => op.type === 'end');
+          if (lastEndIndex === -1) {
+            console.log('[useSegments] detrimEnd aborted - no end operations in history');
+            return prev;
+          }
+
+          const lastEndOp = prev[lastEndIndex];
+          console.log('[useSegments] De-trimming end, operation:', JSON.stringify(lastEndOp));
+          console.log('[useSegments] Restoring to:', JSON.stringify(lastEndOp.previousRange));
+
+          // Capture the range we need to restore
+          rangeToRestore = lastEndOp.previousRange;
+          shouldUpdate = true;
+
+          // Remove this operation from history
+          const newHistory = prev.filter((_, i) => i !== lastEndIndex);
+          console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
+          return newHistory;
+        });
+
+        // Now update trim range if we found something to restore
+        // This happens in the same synchronous batch due to flushSync
+        if (shouldUpdate) {
+          console.log('[useSegments] Updating trimRange to:', JSON.stringify(rangeToRestore));
+          setTrimRange(rangeToRestore);
+        } else {
+          console.log('[useSegments] NOT updating trimRange - no operation found');
         }
-
-        const lastEndOp = prev[lastEndIndex];
-        console.log('[useSegments] De-trimming end, operation:', JSON.stringify(lastEndOp));
-        console.log('[useSegments] Restoring to:', JSON.stringify(lastEndOp.previousRange));
-
-        // Capture the range we need to restore
-        rangeToRestore = lastEndOp.previousRange;
-        shouldUpdate = true;
-
-        // Remove this operation from history
-        const newHistory = prev.filter((_, i) => i !== lastEndIndex);
-        console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
-        return newHistory;
       });
-
-      // Now update trim range if we found something to restore
-      // This happens in the same synchronous batch due to flushSync
-      if (shouldUpdate) {
-        console.log('[useSegments] Updating trimRange to:', JSON.stringify(rangeToRestore));
-        setTrimRange(rangeToRestore);
-      } else {
-        console.log('[useSegments] NOT updating trimRange - no operation found');
-      }
-    });
-    console.log('[useSegments] detrimEnd completed');
+      console.log('[useSegments] detrimEnd completed');
+    } finally {
+      detrimLockRef.isLocked = false;
+    }
   }, []);
 
   /**
