@@ -4,26 +4,32 @@ import { timeToFrame, frameToTime } from '../utils/videoUtils';
 /**
  * Hook to manage video segments with speed control and trimming
  *
- * ARCHITECTURE: Uses frame-based identifiers for stability
- * - Boundaries are stored as times (seconds) for easy display/editing
- * - Trimmed segments are identified by frame ranges (e.g., "0-450")
- * - This avoids index shifting bugs when boundaries are added/removed
- * - Frame numbers are integers, avoiding floating-point comparison issues
+ * REFACTORED ARCHITECTURE (Option 1 + 4):
+ * - Separates user splits from trim boundaries for clarity
+ * - userSplits: User-created divisions (never includes 0 or duration)
+ * - trimRange: Explicit trim boundaries {start, end} or null
+ * - Includes invariant checks to catch bugs early
  *
- * Segments are defined by boundaries (vertical lines at specific times).
- * Each segment between boundaries can have a speed (0.5x, 1x, 2x).
- * Segments at the start or end can be trimmed (hidden).
+ * BENEFITS:
+ * - Clear separation of concerns (splits vs. trims)
+ * - No ghost keyframes when deleting user splits
+ * - Easy to reset trim state (trimRange = null)
+ * - Simpler mental model: "split the video, then trim the result"
  */
 export function useSegments() {
-  // Array of boundary times (always includes 0 and will include duration when set)
-  const [boundaries, setBoundaries] = useState([0]);
+  // User-created split points (never includes 0 or duration)
+  const [userSplits, setUserSplits] = useState([]);
+
+  // Trim range: {start: number, end: number} or null
+  // start/end are times in seconds representing the visible portion
+  const [trimRange, setTrimRange] = useState(null);
+
+  // Trim history: stack of previous trim operations for de-trim functionality
+  // Each entry: {type: 'start'|'end', time: number, previousRange: {start, end}|null}
+  const [trimHistory, setTrimHistory] = useState([]);
 
   // Map of segment index to speed (default is 1, only store if different)
   const [segmentSpeeds, setSegmentSpeeds] = useState({});
-
-  // Set of frame range keys for trimmed segments (e.g., "0-450", "900-1200")
-  // Using frame ranges instead of indices prevents bugs when boundaries shift
-  const [trimmedSegments, setTrimmedSegments] = useState(new Set());
 
   // Duration of the video (set when video loads)
   const [duration, setDuration] = useState(null);
@@ -32,8 +38,18 @@ export function useSegments() {
   const [framerate] = useState(30);
 
   /**
+   * DERIVED: Compute all boundaries from userSplits + duration
+   * Boundaries always include [0, ...userSplits, duration]
+   */
+  const boundaries = useMemo(() => {
+    if (!duration) return [0];
+    return [0, ...userSplits, duration].sort((a, b) => a - b);
+  }, [userSplits, duration]);
+
+  /**
    * Helper: Create a frame range key from time boundaries
    * Returns string like "0-450" for segment from 0s to 15s @ 30fps
+   * (Kept for backward compatibility with external code)
    */
   const createFrameRangeKey = useCallback((startTime, endTime) => {
     const startFrame = timeToFrame(startTime, framerate);
@@ -45,31 +61,28 @@ export function useSegments() {
    * Helper: Check if a segment (by time range) is trimmed
    */
   const isSegmentTrimmed = useCallback((startTime, endTime) => {
-    const key = createFrameRangeKey(startTime, endTime);
-    return trimmedSegments.has(key);
-  }, [trimmedSegments, createFrameRangeKey]);
+    if (!trimRange) return false;
+
+    // A segment is trimmed if it's completely outside the trim range
+    return endTime <= trimRange.start || startTime >= trimRange.end;
+  }, [trimRange]);
 
   /**
    * Initialize segments with video duration
    */
   const initializeWithDuration = useCallback((videoDuration) => {
     setDuration(videoDuration);
-    // Ensure we have end boundary
-    setBoundaries(prev => {
-      if (prev.length === 1 && prev[0] === 0) {
-        return [0, videoDuration];
-      }
-      return prev;
-    });
+    // No need to set boundaries - they're derived from userSplits + duration
   }, []);
 
   /**
    * Reset all segments
    */
   const reset = useCallback(() => {
-    setBoundaries([0]);
+    setUserSplits([]);
+    setTrimRange(null);
+    setTrimHistory([]);
     setSegmentSpeeds({});
-    setTrimmedSegments(new Set());
     setDuration(null);
   }, []);
 
@@ -79,50 +92,83 @@ export function useSegments() {
   const addBoundary = useCallback((time) => {
     console.log('[useSegments] addBoundary called with time:', time);
     console.log('[useSegments] Current duration:', duration);
-    console.log('[useSegments] Current boundaries:', boundaries);
+    console.log('[useSegments] Current userSplits:', userSplits);
 
     if (!duration) {
       console.log('[useSegments] No duration set, ignoring');
       return;
     }
 
-    setBoundaries(prev => {
-      // Check if boundary already exists (within 10ms tolerance)
-      const exists = prev.some(b => Math.abs(b - time) < 0.01);
+    setUserSplits(prev => {
+      // Check if split already exists (within 10ms tolerance)
+      const exists = prev.some(s => Math.abs(s - time) < 0.01);
       if (exists) {
-        console.log('[useSegments] Boundary already exists at this time');
+        console.log('[useSegments] Split already exists at this time');
         return prev;
       }
 
-      // Don't add at start or end
+      // Don't add at start or end (these are implicit boundaries)
       if (time < 0.01 || Math.abs(time - duration) < 0.01) {
-        console.log('[useSegments] Cannot add boundary at start or end');
+        console.log('[useSegments] Cannot add split at start or end');
         return prev;
       }
 
       // Add and sort
-      const newBoundaries = [...prev, time].sort((a, b) => a - b);
-      console.log('[useSegments] New boundaries:', newBoundaries);
-      return newBoundaries;
+      const newSplits = [...prev, time].sort((a, b) => a - b);
+      console.log('[useSegments] New userSplits:', newSplits);
+
+      // INVARIANT: All splits must be within (0, duration)
+      if (process.env.NODE_ENV === 'development') {
+        const invalid = newSplits.filter(s => s <= 0 || s >= duration);
+        if (invalid.length > 0) {
+          console.error('⚠️ INVARIANT VIOLATION: User splits outside valid range:', invalid);
+        }
+      }
+
+      return newSplits;
     });
-  }, [duration, boundaries]);
+  }, [duration, userSplits]);
 
   /**
    * Remove a segment boundary at the given time
+   * NOTE: This only removes user splits, never affects trim boundaries
+   * BUG FIX: Auto-clears trimRange if deleted boundary is referenced
    */
   const removeBoundary = useCallback((time) => {
     if (!duration) return;
 
-    setBoundaries(prev => {
-      // Can't remove start or end boundaries
-      if (time < 0.01 || Math.abs(time - duration) < 0.01) return prev;
+    // Can't remove start or end (they're implicit, not in userSplits)
+    if (time < 0.01 || Math.abs(time - duration) < 0.01) {
+      console.log('[useSegments] Cannot remove start/end boundary (implicit)');
+      return;
+    }
 
-      // Must keep at least 2 boundaries (start and end)
-      if (prev.length <= 2) return prev;
+    // Check if this boundary is referenced by trimRange
+    const isTrimBoundary = trimRange && (
+      Math.abs(trimRange.start - time) < 0.01 ||
+      Math.abs(trimRange.end - time) < 0.01
+    );
 
-      return prev.filter(b => Math.abs(b - time) > 0.01);
+    if (isTrimBoundary) {
+      console.log('[useSegments] Deleted boundary is referenced by trimRange - clearing trim state');
+      setTrimRange(null);
+      setTrimHistory([]); // BUG FIX: Also clear history when trimRange is cleared
+    }
+
+    setUserSplits(prev => {
+      const newSplits = prev.filter(s => Math.abs(s - time) > 0.01);
+
+      // INVARIANT: Warn if this removal leaves no change
+      if (process.env.NODE_ENV === 'development') {
+        if (newSplits.length === prev.length) {
+          console.warn('⚠️ INVARIANT WARNING: removeBoundary had no effect - boundary not found at time:', time);
+        }
+      }
+
+      console.log('[useSegments] Removed user split at:', time, 'remaining:', newSplits);
+      return newSplits;
     });
-  }, [duration]);
+  }, [duration, trimRange]);
 
   /**
    * Set speed for a segment (identified by index)
@@ -144,8 +190,107 @@ export function useSegments() {
   }, []);
 
   /**
+   * Trim from the start: sets trim range to [time, end]
+   * Pushes operation to history for de-trim functionality
+   */
+  const trimStart = useCallback((time) => {
+    setTrimRange(prev => {
+      // Record this operation in history
+      setTrimHistory(history => [...history, {
+        type: 'start',
+        time,
+        previousRange: prev
+      }]);
+
+      return {
+        start: time,
+        end: prev?.end || duration
+      };
+    });
+    console.log('[useSegments] Trimmed start to:', time);
+  }, [duration]);
+
+  /**
+   * Trim from the end: sets trim range to [start, time]
+   * Pushes operation to history for de-trim functionality
+   */
+  const trimEnd = useCallback((time) => {
+    setTrimRange(prev => {
+      // Record this operation in history
+      setTrimHistory(history => [...history, {
+        type: 'end',
+        time,
+        previousRange: prev
+      }]);
+
+      return {
+        start: prev?.start || 0,
+        end: time
+      };
+    });
+    console.log('[useSegments] Trimmed end to:', time);
+  }, []);
+
+  /**
+   * Restore trim range (remove trimming) and clear history
+   */
+  const clearTrim = useCallback(() => {
+    setTrimRange(null);
+    setTrimHistory([]);
+    console.log('[useSegments] Cleared all trim state');
+  }, []);
+
+  /**
+   * De-trim (undo last trim operation from start)
+   * Pops from history and restores previous trim range
+   */
+  const detrimStart = useCallback(() => {
+    setTrimHistory(prev => {
+      // Find last 'start' trim operation
+      const lastStartIndex = prev.findLastIndex(op => op.type === 'start');
+      if (lastStartIndex === -1) {
+        console.log('[useSegments] No start trim to undo');
+        return prev;
+      }
+
+      const lastStartOp = prev[lastStartIndex];
+      console.log('[useSegments] De-trimming start, restoring to:', lastStartOp.previousRange);
+
+      // Restore previous trim range
+      setTrimRange(lastStartOp.previousRange);
+
+      // Remove this operation from history
+      return prev.filter((_, i) => i !== lastStartIndex);
+    });
+  }, []);
+
+  /**
+   * De-trim (undo last trim operation from end)
+   * Pops from history and restores previous trim range
+   */
+  const detrimEnd = useCallback(() => {
+    setTrimHistory(prev => {
+      // Find last 'end' trim operation
+      const lastEndIndex = prev.findLastIndex(op => op.type === 'end');
+      if (lastEndIndex === -1) {
+        console.log('[useSegments] No end trim to undo');
+        return prev;
+      }
+
+      const lastEndOp = prev[lastEndIndex];
+      console.log('[useSegments] De-trimming end, restoring to:', lastEndOp.previousRange);
+
+      // Restore previous trim range
+      setTrimRange(lastEndOp.previousRange);
+
+      // Remove this operation from history
+      return prev.filter((_, i) => i !== lastEndIndex);
+    });
+  }, []);
+
+  /**
    * Toggle trim status for a segment (only works for first or last segment)
-   * Uses frame-based range keys for stable identification
+   * This is the main trim operation called from UI
    */
   const toggleTrimSegment = useCallback((segmentIndex) => {
     if (boundaries.length < 2) return;
@@ -153,51 +298,50 @@ export function useSegments() {
     const numSegments = boundaries.length - 1;
     if (segmentIndex < 0 || segmentIndex >= numSegments) return;
 
-    // Get the time range for this segment
     const segmentStart = boundaries[segmentIndex];
     const segmentEnd = boundaries[segmentIndex + 1];
-    const segmentKey = createFrameRangeKey(segmentStart, segmentEnd);
+    const isTrimmed = isSegmentTrimmed(segmentStart, segmentEnd);
 
-    setTrimmedSegments(prev => {
-      const currentTrimmed = new Set(prev);
+    // Determine first and last non-trimmed segments
+    let firstNonTrimmedIndex = -1;
+    let lastNonTrimmedIndex = -1;
 
-      // Find first and last non-trimmed segments
-      let firstNonTrimmed = -1;
-      let lastNonTrimmed = -1;
-
-      for (let i = 0; i < numSegments; i++) {
-        const start = boundaries[i];
-        const end = boundaries[i + 1];
-        const key = createFrameRangeKey(start, end);
-
-        if (!currentTrimmed.has(key)) {
-          if (firstNonTrimmed === -1) firstNonTrimmed = i;
-          lastNonTrimmed = i;
-        }
+    for (let i = 0; i < numSegments; i++) {
+      const start = boundaries[i];
+      const end = boundaries[i + 1];
+      if (!isSegmentTrimmed(start, end)) {
+        if (firstNonTrimmedIndex === -1) firstNonTrimmedIndex = i;
+        lastNonTrimmedIndex = i;
       }
+    }
 
-      // Only allow trimming/restoring segments at the edges of visible segments
-      const isAtEdge = segmentIndex === firstNonTrimmed || segmentIndex === lastNonTrimmed;
-      const isCurrentlyTrimmed = currentTrimmed.has(segmentKey);
+    // Only allow trimming/restoring segments at the edges
+    const isAtEdge = segmentIndex === firstNonTrimmedIndex || segmentIndex === lastNonTrimmedIndex;
 
-      // Allow if: (1) restoring a trimmed segment, OR (2) trimming an edge segment
-      if (!isCurrentlyTrimmed && !isAtEdge) return prev;
+    // Allow if: (1) restoring a trimmed segment, OR (2) trimming an edge segment
+    if (!isTrimmed && !isAtEdge) {
+      console.log('[useSegments] Cannot trim middle segment');
+      return;
+    }
 
-      const newSet = new Set(prev);
-      if (newSet.has(segmentKey)) {
-        console.log('[useSegments] Restoring segment', segmentIndex, 'with key:', segmentKey);
-        newSet.delete(segmentKey);
-      } else {
-        console.log('[useSegments] Trimming segment', segmentIndex, 'with key:', segmentKey);
-        newSet.add(segmentKey);
+    if (isTrimmed) {
+      // Restore: clear trim range
+      console.log('[useSegments] Restoring segment', segmentIndex);
+      clearTrim();
+    } else {
+      // Trim: set trim range based on which edge
+      if (segmentIndex === firstNonTrimmedIndex) {
+        console.log('[useSegments] Trimming first segment', segmentIndex, 'from start to:', segmentEnd);
+        trimStart(segmentEnd);
+      } else if (segmentIndex === lastNonTrimmedIndex) {
+        console.log('[useSegments] Trimming last segment', segmentIndex, 'from end to:', segmentStart);
+        trimEnd(segmentStart);
       }
-      return newSet;
-    });
-  }, [boundaries, createFrameRangeKey]);
+    }
+  }, [boundaries, isSegmentTrimmed, trimStart, trimEnd, clearTrim]);
 
   /**
    * Get all segments with their properties (DERIVED STATE)
-   * Uses frame-based keys to check trim status
    */
   const segments = useMemo(() => {
     if (boundaries.length < 2) return [];
@@ -207,10 +351,10 @@ export function useSegments() {
       const start = boundaries[i];
       const end = boundaries[i + 1];
       const speed = segmentSpeeds[i] || 1;
-      const frameKey = createFrameRangeKey(start, end);
-      const isTrimmed = trimmedSegments.has(frameKey);
+      const isTrimmed = isSegmentTrimmed(start, end);
       const actualDuration = end - start;
       const visualDuration = actualDuration / speed;
+      const frameKey = createFrameRangeKey(start, end); // For backward compatibility
 
       result.push({
         index: i,
@@ -218,7 +362,7 @@ export function useSegments() {
         end,
         speed,
         isTrimmed,
-        frameKey, // Include for debugging/reference
+        frameKey, // For debugging/backward compatibility
         isFirst: false, // Will be set below
         isLast: false,  // Will be set below
         actualDuration,
@@ -227,24 +371,29 @@ export function useSegments() {
     }
 
     // Calculate isFirst and isLast based on non-trimmed segments
-    // Find first non-trimmed segment
     const firstNonTrimmedIndex = result.findIndex(s => !s.isTrimmed);
     if (firstNonTrimmedIndex !== -1) {
       result[firstNonTrimmedIndex].isFirst = true;
     }
 
-    // Find last non-trimmed segment
     const lastNonTrimmedIndex = result.length - 1 - [...result].reverse().findIndex(s => !s.isTrimmed);
     if (lastNonTrimmedIndex !== -1 && lastNonTrimmedIndex < result.length) {
       result[lastNonTrimmedIndex].isLast = true;
     }
 
+    // INVARIANT: Check for impossible states
+    if (process.env.NODE_ENV === 'development') {
+      const allTrimmed = result.every(s => s.isTrimmed);
+      if (allTrimmed && result.length > 0) {
+        console.error('⚠️ INVARIANT VIOLATION: All segments are trimmed - this should not be possible');
+      }
+    }
+
     return result;
-  }, [boundaries, segmentSpeeds, trimmedSegments, createFrameRangeKey]);
+  }, [boundaries, segmentSpeeds, isSegmentTrimmed, createFrameRangeKey]);
 
   /**
    * Calculate the visual (effective) duration after all segment modifications (DERIVED STATE)
-   * This is what the user will actually see/experience
    */
   const visualDuration = useMemo(() => {
     return segments
@@ -263,7 +412,6 @@ export function useSegments() {
 
   /**
    * Calculate segment visual positions for rendering (DERIVED STATE)
-   * Returns array of {segment, visualStart%, visualWidth%}
    */
   const segmentVisualLayout = useMemo(() => {
     if (visualDuration === 0) return [];
@@ -288,48 +436,44 @@ export function useSegments() {
 
   /**
    * Get the current segment and speed at a given time
-   * Uses frame-based keys to check trim status
    */
   const getSegmentAtTime = useCallback((time) => {
     for (let i = 0; i < boundaries.length - 1; i++) {
       if (time >= boundaries[i] && time < boundaries[i + 1]) {
         const start = boundaries[i];
         const end = boundaries[i + 1];
-        const frameKey = createFrameRangeKey(start, end);
         return {
           index: i,
           start,
           end,
           speed: segmentSpeeds[i] || 1,
-          isTrimmed: trimmedSegments.has(frameKey)
+          isTrimmed: isSegmentTrimmed(start, end)
         };
       }
     }
+
     // Handle case where time is exactly at the end
     if (boundaries.length >= 2 && Math.abs(time - boundaries[boundaries.length - 1]) < 0.01) {
       const i = boundaries.length - 2;
       const start = boundaries[i];
       const end = boundaries[i + 1];
-      const frameKey = createFrameRangeKey(start, end);
       return {
         index: i,
         start,
         end,
         speed: segmentSpeeds[i] || 1,
-        isTrimmed: trimmedSegments.has(frameKey)
+        isTrimmed: isSegmentTrimmed(start, end)
       };
     }
     return null;
-  }, [boundaries, segmentSpeeds, trimmedSegments, createFrameRangeKey]);
+  }, [boundaries, segmentSpeeds, isSegmentTrimmed]);
 
   /**
    * Get export data for segments (only include if speed changes exist)
-   * Uses frame-based keys to check trim status
    */
   const getExportData = useCallback(() => {
-    // Check if we have any non-default speeds
     const hasSpeedChanges = Object.keys(segmentSpeeds).length > 0;
-    const hasTrimming = trimmedSegments.size > 0;
+    const hasTrimming = trimRange !== null;
 
     if (!hasSpeedChanges && !hasTrimming) {
       return null; // No segment data to export
@@ -339,47 +483,23 @@ export function useSegments() {
 
     // Add trim data if any
     if (hasTrimming) {
-      let startTime = 0;
-      let endTime = duration;
-
-      // Check if first segment is trimmed (using frame-based key)
-      if (boundaries.length >= 2) {
-        const firstSegmentKey = createFrameRangeKey(boundaries[0], boundaries[1]);
-        if (trimmedSegments.has(firstSegmentKey)) {
-          startTime = boundaries[1];
-        }
-      }
-
-      // Check if last segment is trimmed (using frame-based key)
-      if (boundaries.length >= 2) {
-        const lastIndex = boundaries.length - 2;
-        const lastSegmentKey = createFrameRangeKey(boundaries[lastIndex], boundaries[lastIndex + 1]);
-        if (trimmedSegments.has(lastSegmentKey)) {
-          endTime = boundaries[lastIndex];
-        }
-      }
-
-      result.trim_start = startTime;
-      result.trim_end = endTime;
+      result.trim_start = trimRange.start;
+      result.trim_end = trimRange.end;
     }
 
     // Add segment speed data
-    // IMPORTANT: If we have any speed changes, we must send ALL segments (including normal ones)
-    // because FFmpeg needs to concat them together in the correct order
     if (hasSpeedChanges) {
       const speedSegments = [];
 
       for (let i = 0; i < boundaries.length - 1; i++) {
         const start = boundaries[i];
         const end = boundaries[i + 1];
-        const frameKey = createFrameRangeKey(start, end);
 
-        // Skip trimmed segments (using frame-based key)
-        if (trimmedSegments.has(frameKey)) {
+        // Skip trimmed segments
+        if (isSegmentTrimmed(start, end)) {
           continue;
         }
 
-        // Include ALL non-trimmed segments, with their speed (default to 1 if not set)
         const speed = segmentSpeeds[i] || 1;
         speedSegments.push({
           start,
@@ -394,7 +514,7 @@ export function useSegments() {
     }
 
     return Object.keys(result).length > 0 ? result : null;
-  }, [boundaries, segmentSpeeds, trimmedSegments, duration, createFrameRangeKey]);
+  }, [boundaries, segmentSpeeds, trimRange, isSegmentTrimmed]);
 
   /**
    * Check if a time should be visible (not in trimmed segment)
@@ -405,10 +525,7 @@ export function useSegments() {
   }, [getSegmentAtTime]);
 
   /**
-   * Convert source time to visual time (accounts for speed changes)
-   * Uses frame-based keys to check trim status
-   * @param {number} sourceTime - Time in the original video
-   * @returns {number} - Visual time after speed adjustments
+   * Convert source time to visual time (accounts for speed changes and trimming)
    */
   const sourceTimeToVisualTime = useCallback((sourceTime) => {
     if (boundaries.length < 2) return sourceTime;
@@ -419,20 +536,16 @@ export function useSegments() {
       const segmentStart = boundaries[i];
       const segmentEnd = boundaries[i + 1];
       const speed = segmentSpeeds[i] || 1;
-      const frameKey = createFrameRangeKey(segmentStart, segmentEnd);
-      const isTrimmed = trimmedSegments.has(frameKey);
+      const isTrimmed = isSegmentTrimmed(segmentStart, segmentEnd);
 
       // Skip trimmed segments
       if (isTrimmed) continue;
 
       if (sourceTime <= segmentStart) {
-        // Before this segment
         break;
       } else if (sourceTime >= segmentEnd) {
-        // After this segment - add its full visual duration
         visualTime += (segmentEnd - segmentStart) / speed;
       } else {
-        // Within this segment
         const timeInSegment = sourceTime - segmentStart;
         visualTime += timeInSegment / speed;
         break;
@@ -440,13 +553,10 @@ export function useSegments() {
     }
 
     return visualTime;
-  }, [boundaries, segmentSpeeds, trimmedSegments, createFrameRangeKey]);
+  }, [boundaries, segmentSpeeds, isSegmentTrimmed]);
 
   /**
    * Convert visual time to source time (inverse of sourceTimeToVisualTime)
-   * Uses frame-based keys to check trim status
-   * @param {number} visualTime - Visual time after speed adjustments
-   * @returns {number} - Time in the original video
    */
   const visualTimeToSourceTime = useCallback((visualTime) => {
     if (boundaries.length < 2) return visualTime;
@@ -457,8 +567,7 @@ export function useSegments() {
       const segmentStart = boundaries[i];
       const segmentEnd = boundaries[i + 1];
       const speed = segmentSpeeds[i] || 1;
-      const frameKey = createFrameRangeKey(segmentStart, segmentEnd);
-      const isTrimmed = trimmedSegments.has(frameKey);
+      const isTrimmed = isSegmentTrimmed(segmentStart, segmentEnd);
 
       // Skip trimmed segments
       if (isTrimmed) continue;
@@ -467,38 +576,43 @@ export function useSegments() {
       const segmentVisualDuration = segmentActualDuration / speed;
 
       if (remainingVisualTime <= segmentVisualDuration) {
-        // Time is within this segment
         const sourceTimeInSegment = remainingVisualTime * speed;
         return segmentStart + sourceTimeInSegment;
       } else {
-        // Time is beyond this segment
         remainingVisualTime -= segmentVisualDuration;
       }
     }
 
-    // If we've gone through all segments, return the end
     return boundaries[boundaries.length - 1];
-  }, [boundaries, segmentSpeeds, trimmedSegments, createFrameRangeKey]);
+  }, [boundaries, segmentSpeeds, isSegmentTrimmed]);
 
   return {
     // Raw state
-    boundaries,
+    boundaries,          // DERIVED from userSplits + duration
+    userSplits,          // NEW: User-created splits (explicit)
+    trimRange,           // NEW: Explicit trim range
+    trimHistory,         // NEW: Trim history for de-trim functionality
     segments,
-    sourceDuration: duration, // Original video duration
-    framerate,                 // Frame rate for frame-based calculations
+    sourceDuration: duration,
+    framerate,
 
-    // Derived state (auto-updates when segments change)
-    visualDuration,      // Effective duration after speed/trim
-    trimmedDuration,     // Total trimmed time
-    segmentVisualLayout, // Pre-calculated visual positions
+    // Derived state
+    visualDuration,
+    trimmedDuration,
+    segmentVisualLayout,
 
     // Actions
     initializeWithDuration,
     reset,
-    addBoundary,
-    removeBoundary,
+    addBoundary,         // Adds to userSplits
+    removeBoundary,      // Removes from userSplits (auto-clears trimRange if needed)
     setSegmentSpeed,
-    toggleTrimSegment,
+    toggleTrimSegment,   // Main trim operation
+    trimStart,           // Explicit trim from start (pushes to history)
+    trimEnd,             // Explicit trim from end (pushes to history)
+    clearTrim,           // Clear all trim state and history
+    detrimStart,         // NEW: Undo last start trim (pop from history)
+    detrimEnd,           // NEW: Undo last end trim (pop from history)
 
     // Queries
     getSegmentAtTime,
@@ -507,7 +621,7 @@ export function useSegments() {
     sourceTimeToVisualTime,
     visualTimeToSourceTime,
 
-    // Helpers (for coordinated operations with crop)
+    // Helpers (for backward compatibility)
     createFrameRangeKey,
     isSegmentTrimmed
   };
