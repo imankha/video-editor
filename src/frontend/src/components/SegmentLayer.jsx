@@ -290,7 +290,7 @@ export default function SegmentLayer({
             <div
               key={index}
               className="absolute top-0 h-full cursor-pointer group z-20"
-              style={{ left: `${position}%`, width: '6px', marginLeft: '-3px' }}
+              style={{ left: `${position}%`, width: '16px', marginLeft: '-8px' }}
               title={`Boundary at ${time.toFixed(2)}s`}
             >
               {/* Thin visual line centered in hit area */}
@@ -298,14 +298,14 @@ export default function SegmentLayer({
 
               {/* Delete button for boundary */}
               <button
-                className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1"
+                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5"
                 onClick={(e) => {
                   e.stopPropagation();
                   onRemoveBoundary(time);
                 }}
                 title="Delete boundary"
               >
-                <Trash2 size={10} />
+                <Trash2 size={12} />
               </button>
             </div>
           );
