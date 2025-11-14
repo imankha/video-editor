@@ -128,19 +128,55 @@ export default function CropOverlay({
   }, [videoDisplayRect]);
 
   /**
-   * Constrain crop rectangle to video bounds
+   * Constrain crop rectangle to video bounds while maintaining aspect ratio
    */
   const constrainCrop = useCallback((crop) => {
     const maxWidth = videoMetadata.width;
     const maxHeight = videoMetadata.height;
 
+    let constrainedCrop = { ...crop };
+
+    // First, ensure dimensions don't exceed video bounds
+    if (aspectRatio !== 'free') {
+      // Parse aspect ratio
+      const [ratioW, ratioH] = aspectRatio.split(':').map(Number);
+      const ratio = ratioW / ratioH;
+
+      // If crop exceeds bounds, scale it down while maintaining aspect ratio
+      if (constrainedCrop.width > maxWidth || constrainedCrop.height > maxHeight) {
+        // Calculate scale factor needed to fit within bounds
+        const scaleX = maxWidth / constrainedCrop.width;
+        const scaleY = maxHeight / constrainedCrop.height;
+        const scale = Math.min(scaleX, scaleY);
+
+        // Scale down proportionally
+        constrainedCrop.width = constrainedCrop.width * scale;
+        constrainedCrop.height = constrainedCrop.height * scale;
+
+        // Ensure aspect ratio is maintained (due to rounding)
+        constrainedCrop.height = constrainedCrop.width / ratio;
+      }
+    } else {
+      // Free aspect ratio - constrain dimensions independently
+      constrainedCrop.width = Math.max(10, Math.min(constrainedCrop.width, maxWidth));
+      constrainedCrop.height = Math.max(10, Math.min(constrainedCrop.height, maxHeight));
+    }
+
+    // Ensure minimum size
+    constrainedCrop.width = Math.max(10, constrainedCrop.width);
+    constrainedCrop.height = Math.max(10, constrainedCrop.height);
+
+    // Constrain position to keep crop within video bounds
+    constrainedCrop.x = Math.max(0, Math.min(constrainedCrop.x, maxWidth - constrainedCrop.width));
+    constrainedCrop.y = Math.max(0, Math.min(constrainedCrop.y, maxHeight - constrainedCrop.height));
+
     return {
-      x: round3(Math.max(0, Math.min(crop.x, maxWidth - crop.width))),
-      y: round3(Math.max(0, Math.min(crop.y, maxHeight - crop.height))),
-      width: round3(Math.max(10, Math.min(crop.width, maxWidth))),
-      height: round3(Math.max(10, Math.min(crop.height, maxHeight)))
+      x: round3(constrainedCrop.x),
+      y: round3(constrainedCrop.y),
+      width: round3(constrainedCrop.width),
+      height: round3(constrainedCrop.height)
     };
-  }, [videoMetadata]);
+  }, [videoMetadata, aspectRatio]);
 
   /**
    * Apply aspect ratio constraint to dimensions
