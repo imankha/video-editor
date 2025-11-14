@@ -525,6 +525,41 @@ export function useSegments() {
   }, [getSegmentAtTime]);
 
   /**
+   * Clamp a time to the visible (non-trimmed) range
+   * This is the single source of truth for valid playback positions.
+   *
+   * ARCHITECTURE: By centralizing trim boundary validation here, we make it
+   * structurally impossible to seek to trimmed frames anywhere in the app.
+   *
+   * @param {number} time - Desired time position
+   * @returns {number} - Nearest valid (visible) time position
+   */
+  const clampToVisibleRange = useCallback((time) => {
+    // If no duration set, no clamping possible
+    if (!duration) return time;
+
+    // First clamp to overall video boundaries
+    let clampedTime = Math.max(0, Math.min(time, duration));
+
+    // If no trim range, we're done
+    if (!trimRange) return clampedTime;
+
+    // Clamp to trim range boundaries
+    // If time is before visible range, snap to start
+    if (clampedTime < trimRange.start) {
+      return trimRange.start;
+    }
+
+    // If time is after visible range, snap to end
+    if (clampedTime > trimRange.end) {
+      return trimRange.end;
+    }
+
+    // Time is within visible range
+    return clampedTime;
+  }, [trimRange, duration]);
+
+  /**
    * Convert source time to visual time (accounts for speed changes and trimming)
    */
   const sourceTimeToVisualTime = useCallback((sourceTime) => {
@@ -618,6 +653,7 @@ export function useSegments() {
     getSegmentAtTime,
     getExportData,
     isTimeVisible,
+    clampToVisibleRange,  // NEW: Single source of truth for valid playback positions
     sourceTimeToVisualTime,
     visualTimeToSourceTime,
 
