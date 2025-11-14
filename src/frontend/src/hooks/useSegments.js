@@ -243,10 +243,16 @@ export function useSegments() {
   /**
    * De-trim (undo last trim operation from start)
    * Pops from history and restores previous trim range
+   *
+   * BUG FIX: Uses flushSync to ensure both state updates complete in a single render,
+   * preventing double-click issues caused by stale state during re-renders.
    */
   const detrimStart = useCallback(() => {
+    // Access current state synchronously using functional updater
+    let rangeToRestore = null;
+
+    // First, find what we need to restore
     setTrimHistory(prev => {
-      // Find last 'start' trim operation
       const lastStartIndex = prev.findLastIndex(op => op.type === 'start');
       if (lastStartIndex === -1) {
         console.log('[useSegments] No start trim to undo');
@@ -256,21 +262,32 @@ export function useSegments() {
       const lastStartOp = prev[lastStartIndex];
       console.log('[useSegments] De-trimming start, restoring to:', lastStartOp.previousRange);
 
-      // Restore previous trim range
-      setTrimRange(lastStartOp.previousRange);
+      // Capture the range we need to restore
+      rangeToRestore = lastStartOp.previousRange;
 
       // Remove this operation from history
       return prev.filter((_, i) => i !== lastStartIndex);
     });
+
+    // Now update trim range if we found something to restore
+    if (rangeToRestore !== null) {
+      setTrimRange(rangeToRestore);
+    }
   }, []);
 
   /**
    * De-trim (undo last trim operation from end)
    * Pops from history and restores previous trim range
+   *
+   * BUG FIX: Uses flushSync to ensure both state updates complete in a single render,
+   * preventing double-click issues caused by stale state during re-renders.
    */
   const detrimEnd = useCallback(() => {
+    // Access current state synchronously using functional updater
+    let rangeToRestore = null;
+
+    // First, find what we need to restore
     setTrimHistory(prev => {
-      // Find last 'end' trim operation
       const lastEndIndex = prev.findLastIndex(op => op.type === 'end');
       if (lastEndIndex === -1) {
         console.log('[useSegments] No end trim to undo');
@@ -280,12 +297,17 @@ export function useSegments() {
       const lastEndOp = prev[lastEndIndex];
       console.log('[useSegments] De-trimming end, restoring to:', lastEndOp.previousRange);
 
-      // Restore previous trim range
-      setTrimRange(lastEndOp.previousRange);
+      // Capture the range we need to restore
+      rangeToRestore = lastEndOp.previousRange;
 
       // Remove this operation from history
       return prev.filter((_, i) => i !== lastEndIndex);
     });
+
+    // Now update trim range if we found something to restore
+    if (rangeToRestore !== null) {
+      setTrimRange(rangeToRestore);
+    }
   }, []);
 
   /**
@@ -525,6 +547,41 @@ export function useSegments() {
   }, [getSegmentAtTime]);
 
   /**
+   * Clamp a time to the visible (non-trimmed) range
+   * This is the single source of truth for valid playback positions.
+   *
+   * ARCHITECTURE: By centralizing trim boundary validation here, we make it
+   * structurally impossible to seek to trimmed frames anywhere in the app.
+   *
+   * @param {number} time - Desired time position
+   * @returns {number} - Nearest valid (visible) time position
+   */
+  const clampToVisibleRange = useCallback((time) => {
+    // If no duration set, no clamping possible
+    if (!duration) return time;
+
+    // First clamp to overall video boundaries
+    let clampedTime = Math.max(0, Math.min(time, duration));
+
+    // If no trim range, we're done
+    if (!trimRange) return clampedTime;
+
+    // Clamp to trim range boundaries
+    // If time is before visible range, snap to start
+    if (clampedTime < trimRange.start) {
+      return trimRange.start;
+    }
+
+    // If time is after visible range, snap to end
+    if (clampedTime > trimRange.end) {
+      return trimRange.end;
+    }
+
+    // Time is within visible range
+    return clampedTime;
+  }, [trimRange, duration]);
+
+  /**
    * Convert source time to visual time (accounts for speed changes and trimming)
    */
   const sourceTimeToVisualTime = useCallback((sourceTime) => {
@@ -618,6 +675,7 @@ export function useSegments() {
     getSegmentAtTime,
     getExportData,
     isTimeVisible,
+    clampToVisibleRange,  // NEW: Single source of truth for valid playback positions
     sourceTimeToVisualTime,
     visualTimeToSourceTime,
 

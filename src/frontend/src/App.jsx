@@ -18,7 +18,7 @@ function App() {
   // Temporary state for live drag/resize preview (null when not dragging)
   const [dragCrop, setDragCrop] = useState(null);
 
-  // Segments hook (defined early so we can pass getSegmentAtTime to useVideo)
+  // Segments hook (defined early so we can pass getSegmentAtTime and clampToVisibleRange to useVideo)
   const {
     boundaries: segmentBoundaries,
     segments,
@@ -38,6 +38,7 @@ function App() {
     getSegmentAtTime,
     getExportData: getSegmentExportData,
     isTimeVisible,
+    clampToVisibleRange,  // NEW: Single source of truth for valid playback positions
     sourceTimeToVisualTime,
     visualTimeToSourceTime,
     createFrameRangeKey,
@@ -62,7 +63,7 @@ function App() {
     stepBackward,
     restart,
     handlers,
-  } = useVideo(getSegmentAtTime);
+  } = useVideo(getSegmentAtTime, clampToVisibleRange);
 
   // Crop hook - always active when video loaded
   const {

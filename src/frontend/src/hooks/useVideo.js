@@ -5,9 +5,10 @@ import { validateVideoFile } from '../utils/fileValidation';
 /**
  * Custom hook for managing video state and playback
  * @param {Function} getSegmentAtTime - Optional function to get segment info at a given time
+ * @param {Function} clampToVisibleRange - Optional function to clamp time to visible (non-trimmed) range
  * @returns {Object} Video state and control functions
  */
-export function useVideo(getSegmentAtTime = null) {
+export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const videoRef = useRef(null);
   const [videoFile, setVideoFile] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
@@ -100,10 +101,17 @@ export function useVideo(getSegmentAtTime = null) {
   /**
    * Seek to specific time
    * @param {number} time - Target time in seconds
+   *
+   * ARCHITECTURE: All seeks go through clampToVisibleRange to prevent
+   * seeking to trimmed frames. This is the single validation point.
    */
   const seek = (time) => {
     if (videoRef.current && videoUrl) {
-      videoRef.current.currentTime = Math.max(0, Math.min(time, duration));
+      // Use centralized validation to prevent seeking to trimmed frames
+      const validTime = clampToVisibleRange
+        ? clampToVisibleRange(time)
+        : Math.max(0, Math.min(time, duration));
+      videoRef.current.currentTime = validTime;
     }
   };
 
@@ -132,11 +140,12 @@ export function useVideo(getSegmentAtTime = null) {
   };
 
   /**
-   * Restart video - resets playhead to beginning
+   * Restart video - resets playhead to beginning (or first visible frame if start is trimmed)
    */
   const restart = () => {
     if (videoRef.current && videoUrl) {
       pause();
+      // seek(0) will automatically clamp to first visible frame if start is trimmed
       seek(0);
     }
   };
@@ -174,6 +183,9 @@ export function useVideo(getSegmentAtTime = null) {
   };
 
   // Adjust playback rate based on current segment speed
+  // ARCHITECTURE: We need BOTH proactive and reactive validation:
+  // - Proactive (clampToVisibleRange): Prevents manual seeks to trimmed frames
+  // - Reactive (below): Stops playback when naturally hitting trim boundaries
   useEffect(() => {
     if (!videoRef.current || !getSegmentAtTime) return;
 
@@ -182,21 +194,21 @@ export function useVideo(getSegmentAtTime = null) {
       // Set playback rate based on segment speed
       videoRef.current.playbackRate = segment.speed;
 
-      // If playing and in a trimmed segment, skip to the next non-trimmed segment
+      // If playing and in a trimmed segment, pause at the boundary
+      // This handles continuous playback reaching the end of visible content
       if (isPlaying && segment.isTrimmed) {
-        // Find next non-trimmed segment
-        if (segment.end < duration) {
-          seek(segment.end + 0.01); // Skip to just after this segment
-        } else {
-          // End of video
-          pause();
+        pause();
+        // Use clampToVisibleRange to find the correct boundary
+        // This will automatically put us at the right edge of visible content
+        if (clampToVisibleRange) {
+          seek(clampToVisibleRange(currentTime));
         }
       }
     } else {
       // No segment info, use normal playback
       videoRef.current.playbackRate = 1;
     }
-  }, [currentTime, getSegmentAtTime, isPlaying, duration]);
+  }, [currentTime, getSegmentAtTime, isPlaying, clampToVisibleRange]);
 
   // Cleanup on unmount
   useEffect(() => {
