@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { timeToFrame, frameToTime } from '../utils/videoUtils';
 
@@ -40,7 +40,8 @@ export function useSegments() {
 
   // Lock to prevent re-entrant calls to detrim functions
   // This is critical because React can invoke handlers multiple times
-  const detrimLockRef = useState({ isLocked: false })[0];
+  // MUST use useRef (not useState) so the same object persists across renders
+  const detrimLockRef = useRef({ isLocked: false });
 
   /**
    * DERIVED: Compute all boundaries from userSplits + duration
@@ -305,12 +306,12 @@ export function useSegments() {
     console.log('[useSegments] detrimStart called');
 
     // CRITICAL: Prevent re-entrant calls using a lock
-    if (detrimLockRef.isLocked) {
+    if (detrimLockRef.current.isLocked) {
       console.log('[useSegments] detrimStart blocked - operation already in progress');
       return;
     }
 
-    detrimLockRef.isLocked = true;
+    detrimLockRef.current.isLocked = true;
     try {
       // Use flushSync to batch both state updates atomically
       // This forces React to apply both state updates synchronously before any re-render
@@ -353,7 +354,7 @@ export function useSegments() {
       });
       console.log('[useSegments] detrimStart completed');
     } finally {
-      detrimLockRef.isLocked = false;
+      detrimLockRef.current.isLocked = false;
     }
   }, []);
 
@@ -368,12 +369,12 @@ export function useSegments() {
     console.log('[useSegments] detrimEnd called');
 
     // CRITICAL: Prevent re-entrant calls using a lock
-    if (detrimLockRef.isLocked) {
+    if (detrimLockRef.current.isLocked) {
       console.log('[useSegments] detrimEnd blocked - operation already in progress');
       return;
     }
 
-    detrimLockRef.isLocked = true;
+    detrimLockRef.current.isLocked = true;
     try {
       // Use flushSync to batch both state updates atomically
       // This forces React to apply both state updates synchronously before any re-render
@@ -416,7 +417,7 @@ export function useSegments() {
       });
       console.log('[useSegments] detrimEnd completed');
     } finally {
-      detrimLockRef.isLocked = false;
+      detrimLockRef.current.isLocked = false;
     }
   }, []);
 
