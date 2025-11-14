@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useVideo } from './hooks/useVideo';
 import useCrop from './hooks/useCrop';
 import useZoom from './hooks/useZoom';
@@ -28,6 +28,7 @@ function App() {
     segmentVisualLayout,
     framerate: segmentFramerate,
     trimRange,  // NEW: Watch for trim range changes
+    trimHistory,  // NEW: Trim history for de-trim buttons
     initializeWithDuration: initializeSegments,
     reset: resetSegments,
     addBoundary: addSegmentBoundary,
@@ -41,6 +42,8 @@ function App() {
     visualTimeToSourceTime,
     createFrameRangeKey,
     isSegmentTrimmed,
+    detrimStart,  // NEW: De-trim from start
+    detrimEnd,  // NEW: De-trim from end
   } = useSegments();
 
   const {
@@ -146,11 +149,15 @@ function App() {
   }, [currentCropState]);
 
   // BUG FIX: Auto-cleanup trim keyframes when trimRange is cleared
+  // Use ref to track previous value to avoid cleanup on initial mount
+  const prevTrimRangeRef = useRef(undefined);
   useEffect(() => {
-    if (trimRange === null) {
+    // Only cleanup if transitioning from non-null to null (not on initial mount)
+    if (prevTrimRangeRef.current !== undefined && prevTrimRangeRef.current !== null && trimRange === null) {
       console.log('[App] trimRange cleared - cleaning up trim keyframes');
       cleanupTrimKeyframes();
     }
+    prevTrimRangeRef.current = trimRange;
   }, [trimRange, cleanupTrimKeyframes]);
 
   // Handler functions for copy/paste (defined BEFORE useEffect to avoid initialization errors)
@@ -513,6 +520,10 @@ function App() {
                   onRemoveSegmentBoundary={removeSegmentBoundary}
                   onSegmentSpeedChange={setSegmentSpeed}
                   onSegmentTrim={handleTrimSegment}
+                  trimRange={trimRange}
+                  trimHistory={trimHistory}
+                  onDetrimStart={detrimStart}
+                  onDetrimEnd={detrimEnd}
                   sourceTimeToVisualTime={sourceTimeToVisualTime}
                   visualTimeToSourceTime={visualTimeToSourceTime}
                 />

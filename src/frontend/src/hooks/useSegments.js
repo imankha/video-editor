@@ -152,6 +152,7 @@ export function useSegments() {
     if (isTrimBoundary) {
       console.log('[useSegments] Deleted boundary is referenced by trimRange - clearing trim state');
       setTrimRange(null);
+      setTrimHistory([]); // BUG FIX: Also clear history when trimRange is cleared
     }
 
     setUserSplits(prev => {

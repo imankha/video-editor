@@ -28,6 +28,10 @@ import SegmentLayer from './SegmentLayer';
  * @param {Function} props.onRemoveSegmentBoundary - Callback when removing segment boundary
  * @param {Function} props.onSegmentSpeedChange - Callback when segment speed changes
  * @param {Function} props.onSegmentTrim - Callback when segment is trimmed
+ * @param {Object|null} props.trimRange - Current trim range {start, end} or null
+ * @param {Array} props.trimHistory - Trim history for de-trim functionality
+ * @param {Function} props.onDetrimStart - Callback to undo last start trim
+ * @param {Function} props.onDetrimEnd - Callback to undo last end trim
  * @param {Function} props.sourceTimeToVisualTime - Convert source time to visual time
  * @param {Function} props.visualTimeToSourceTime - Convert visual time to source time
  */
@@ -48,6 +52,10 @@ export function Timeline({
   segments = [],
   segmentBoundaries = [],
   segmentVisualLayout = [],
+  trimRange = null,
+  trimHistory = [],
+  onDetrimStart,
+  onDetrimEnd,
   isSegmentActive = false,
   onAddSegmentBoundary,
   onRemoveSegmentBoundary,
@@ -217,6 +225,10 @@ export function Timeline({
               onRemoveBoundary={onRemoveSegmentBoundary}
               onSegmentSpeedChange={onSegmentSpeedChange}
               onSegmentTrim={onSegmentTrim}
+              trimRange={trimRange}
+              trimHistory={trimHistory}
+              onDetrimStart={onDetrimStart}
+              onDetrimEnd={onDetrimEnd}
               sourceTimeToVisualTime={sourceTimeToVisualTime}
               visualTimeToSourceTime={visualTimeToSourceTime}
             />
