@@ -299,6 +299,20 @@ export function useSegments() {
    */
   const detrimStart = useCallback(() => {
     console.log('[useSegments] detrimStart called');
+
+    // CRITICAL: Check if there's actually something to undo BEFORE doing anything
+    // This prevents double-invocations from emptying the history
+    let hasOperationToUndo = false;
+    setTrimHistory(prev => {
+      hasOperationToUndo = prev.findLastIndex(op => op.type === 'start') !== -1;
+      return prev; // Don't modify yet, just check
+    });
+
+    if (!hasOperationToUndo) {
+      console.log('[useSegments] detrimStart aborted - no start operations in history');
+      return;
+    }
+
     // Use flushSync to batch both state updates atomically
     // This forces React to apply both state updates synchronously before any re-render
     flushSync(() => {
@@ -350,6 +364,20 @@ export function useSegments() {
    */
   const detrimEnd = useCallback(() => {
     console.log('[useSegments] detrimEnd called');
+
+    // CRITICAL: Check if there's actually something to undo BEFORE doing anything
+    // This prevents double-invocations from emptying the history
+    let hasOperationToUndo = false;
+    setTrimHistory(prev => {
+      hasOperationToUndo = prev.findLastIndex(op => op.type === 'end') !== -1;
+      return prev; // Don't modify yet, just check
+    });
+
+    if (!hasOperationToUndo) {
+      console.log('[useSegments] detrimEnd aborted - no end operations in history');
+      return;
+    }
+
     // Use flushSync to batch both state updates atomically
     // This forces React to apply both state updates synchronously before any re-render
     flushSync(() => {
