@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import { timeToFrame, frameToTime } from '../utils/videoUtils';
 
 /**
@@ -248,31 +249,38 @@ export function useSegments() {
    * preventing double-click issues caused by stale state during re-renders.
    */
   const detrimStart = useCallback(() => {
-    // Access current state synchronously using functional updater
-    let rangeToRestore = null;
+    // Use flushSync to batch both state updates atomically
+    // This forces React to apply both state updates synchronously before any re-render
+    flushSync(() => {
+      // Access current state synchronously using functional updater
+      let rangeToRestore = null;
+      let shouldUpdate = false;
 
-    // First, find what we need to restore
-    setTrimHistory(prev => {
-      const lastStartIndex = prev.findLastIndex(op => op.type === 'start');
-      if (lastStartIndex === -1) {
-        console.log('[useSegments] No start trim to undo');
-        return prev;
+      // First, find what we need to restore
+      setTrimHistory(prev => {
+        const lastStartIndex = prev.findLastIndex(op => op.type === 'start');
+        if (lastStartIndex === -1) {
+          console.log('[useSegments] No start trim to undo');
+          return prev;
+        }
+
+        const lastStartOp = prev[lastStartIndex];
+        console.log('[useSegments] De-trimming start, restoring to:', lastStartOp.previousRange);
+
+        // Capture the range we need to restore
+        rangeToRestore = lastStartOp.previousRange;
+        shouldUpdate = true;
+
+        // Remove this operation from history
+        return prev.filter((_, i) => i !== lastStartIndex);
+      });
+
+      // Now update trim range if we found something to restore
+      // This happens in the same synchronous batch due to flushSync
+      if (shouldUpdate) {
+        setTrimRange(rangeToRestore);
       }
-
-      const lastStartOp = prev[lastStartIndex];
-      console.log('[useSegments] De-trimming start, restoring to:', lastStartOp.previousRange);
-
-      // Capture the range we need to restore
-      rangeToRestore = lastStartOp.previousRange;
-
-      // Remove this operation from history
-      return prev.filter((_, i) => i !== lastStartIndex);
     });
-
-    // Now update trim range if we found something to restore
-    if (rangeToRestore !== null) {
-      setTrimRange(rangeToRestore);
-    }
   }, []);
 
   /**
@@ -283,31 +291,38 @@ export function useSegments() {
    * preventing double-click issues caused by stale state during re-renders.
    */
   const detrimEnd = useCallback(() => {
-    // Access current state synchronously using functional updater
-    let rangeToRestore = null;
+    // Use flushSync to batch both state updates atomically
+    // This forces React to apply both state updates synchronously before any re-render
+    flushSync(() => {
+      // Access current state synchronously using functional updater
+      let rangeToRestore = null;
+      let shouldUpdate = false;
 
-    // First, find what we need to restore
-    setTrimHistory(prev => {
-      const lastEndIndex = prev.findLastIndex(op => op.type === 'end');
-      if (lastEndIndex === -1) {
-        console.log('[useSegments] No end trim to undo');
-        return prev;
+      // First, find what we need to restore
+      setTrimHistory(prev => {
+        const lastEndIndex = prev.findLastIndex(op => op.type === 'end');
+        if (lastEndIndex === -1) {
+          console.log('[useSegments] No end trim to undo');
+          return prev;
+        }
+
+        const lastEndOp = prev[lastEndIndex];
+        console.log('[useSegments] De-trimming end, restoring to:', lastEndOp.previousRange);
+
+        // Capture the range we need to restore
+        rangeToRestore = lastEndOp.previousRange;
+        shouldUpdate = true;
+
+        // Remove this operation from history
+        return prev.filter((_, i) => i !== lastEndIndex);
+      });
+
+      // Now update trim range if we found something to restore
+      // This happens in the same synchronous batch due to flushSync
+      if (shouldUpdate) {
+        setTrimRange(rangeToRestore);
       }
-
-      const lastEndOp = prev[lastEndIndex];
-      console.log('[useSegments] De-trimming end, restoring to:', lastEndOp.previousRange);
-
-      // Capture the range we need to restore
-      rangeToRestore = lastEndOp.previousRange;
-
-      // Remove this operation from history
-      return prev.filter((_, i) => i !== lastEndIndex);
     });
-
-    // Now update trim range if we found something to restore
-    if (rangeToRestore !== null) {
-      setTrimRange(rangeToRestore);
-    }
   }, []);
 
   /**
