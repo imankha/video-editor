@@ -193,52 +193,73 @@ export function useSegments() {
   /**
    * Trim from the start: sets trim range to [time, end]
    * Pushes operation to history for de-trim functionality
+   * Uses flushSync to prevent duplicate operations from rapid clicking
    */
   const trimStart = useCallback((time) => {
-    setTrimRange(prev => {
-      // Record this operation in history
-      setTrimHistory(history => [...history, {
-        type: 'start',
-        time,
-        previousRange: prev
-      }]);
+    flushSync(() => {
+      setTrimRange(prev => {
+        // Prevent duplicate operations - if already trimmed to this exact position, ignore
+        if (prev && Math.abs(prev.start - time) < 0.01) {
+          console.log('[useSegments] Ignoring duplicate trimStart at:', time);
+          return prev;
+        }
 
-      return {
-        start: time,
-        end: prev?.end || duration
-      };
+        // Record this operation in history
+        setTrimHistory(history => [...history, {
+          type: 'start',
+          time,
+          previousRange: prev
+        }]);
+
+        return {
+          start: time,
+          end: prev?.end || duration
+        };
+      });
+      console.log('[useSegments] Trimmed start to:', time);
     });
-    console.log('[useSegments] Trimmed start to:', time);
   }, [duration]);
 
   /**
    * Trim from the end: sets trim range to [start, time]
    * Pushes operation to history for de-trim functionality
+   * Uses flushSync to prevent duplicate operations from rapid clicking
    */
   const trimEnd = useCallback((time) => {
-    setTrimRange(prev => {
-      // Record this operation in history
-      setTrimHistory(history => [...history, {
-        type: 'end',
-        time,
-        previousRange: prev
-      }]);
+    flushSync(() => {
+      setTrimRange(prev => {
+        // Prevent duplicate operations - if already trimmed to this exact position, ignore
+        if (prev && Math.abs(prev.end - time) < 0.01) {
+          console.log('[useSegments] Ignoring duplicate trimEnd at:', time);
+          return prev;
+        }
 
-      return {
-        start: prev?.start || 0,
-        end: time
-      };
+        // Record this operation in history
+        setTrimHistory(history => [...history, {
+          type: 'end',
+          time,
+          previousRange: prev
+        }]);
+
+        return {
+          start: prev?.start || 0,
+          end: time
+        };
+      });
+      console.log('[useSegments] Trimmed end to:', time);
     });
-    console.log('[useSegments] Trimmed end to:', time);
   }, []);
 
   /**
    * Restore trim range (remove trimming) and clear history
+   * Uses flushSync for immediate, atomic state updates
    */
   const clearTrim = useCallback(() => {
-    setTrimRange(null);
-    setTrimHistory([]);
-    console.log('[useSegments] Cleared all trim state');
+    flushSync(() => {
+      setTrimRange(null);
+      setTrimHistory([]);
+      console.log('[useSegments] Cleared all trim state');
+    });
   }, []);
 
   /**
