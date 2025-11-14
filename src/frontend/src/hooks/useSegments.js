@@ -24,6 +24,10 @@ export function useSegments() {
   // start/end are times in seconds representing the visible portion
   const [trimRange, setTrimRange] = useState(null);
 
+  // Trim history: stack of previous trim operations for de-trim functionality
+  // Each entry: {type: 'start'|'end', time: number, previousRange: {start, end}|null}
+  const [trimHistory, setTrimHistory] = useState([]);
+
   // Map of segment index to speed (default is 1, only store if different)
   const [segmentSpeeds, setSegmentSpeeds] = useState({});
 
@@ -77,6 +81,7 @@ export function useSegments() {
   const reset = useCallback(() => {
     setUserSplits([]);
     setTrimRange(null);
+    setTrimHistory([]);
     setSegmentSpeeds({});
     setDuration(null);
   }, []);
@@ -127,6 +132,7 @@ export function useSegments() {
   /**
    * Remove a segment boundary at the given time
    * NOTE: This only removes user splits, never affects trim boundaries
+   * BUG FIX: Auto-clears trimRange if deleted boundary is referenced
    */
   const removeBoundary = useCallback((time) => {
     if (!duration) return;
@@ -135,6 +141,17 @@ export function useSegments() {
     if (time < 0.01 || Math.abs(time - duration) < 0.01) {
       console.log('[useSegments] Cannot remove start/end boundary (implicit)');
       return;
+    }
+
+    // Check if this boundary is referenced by trimRange
+    const isTrimBoundary = trimRange && (
+      Math.abs(trimRange.start - time) < 0.01 ||
+      Math.abs(trimRange.end - time) < 0.01
+    );
+
+    if (isTrimBoundary) {
+      console.log('[useSegments] Deleted boundary is referenced by trimRange - clearing trim state');
+      setTrimRange(null);
     }
 
     setUserSplits(prev => {
@@ -150,7 +167,7 @@ export function useSegments() {
       console.log('[useSegments] Removed user split at:', time, 'remaining:', newSplits);
       return newSplits;
     });
-  }, [duration]);
+  }, [duration, trimRange]);
 
   /**
    * Set speed for a segment (identified by index)
@@ -173,32 +190,101 @@ export function useSegments() {
 
   /**
    * Trim from the start: sets trim range to [time, end]
+   * Pushes operation to history for de-trim functionality
    */
   const trimStart = useCallback((time) => {
-    setTrimRange(prev => ({
-      start: time,
-      end: prev?.end || duration
-    }));
+    setTrimRange(prev => {
+      // Record this operation in history
+      setTrimHistory(history => [...history, {
+        type: 'start',
+        time,
+        previousRange: prev
+      }]);
+
+      return {
+        start: time,
+        end: prev?.end || duration
+      };
+    });
     console.log('[useSegments] Trimmed start to:', time);
   }, [duration]);
 
   /**
    * Trim from the end: sets trim range to [start, time]
+   * Pushes operation to history for de-trim functionality
    */
   const trimEnd = useCallback((time) => {
-    setTrimRange(prev => ({
-      start: prev?.start || 0,
-      end: time
-    }));
+    setTrimRange(prev => {
+      // Record this operation in history
+      setTrimHistory(history => [...history, {
+        type: 'end',
+        time,
+        previousRange: prev
+      }]);
+
+      return {
+        start: prev?.start || 0,
+        end: time
+      };
+    });
     console.log('[useSegments] Trimmed end to:', time);
   }, []);
 
   /**
-   * Restore trim range (remove trimming)
+   * Restore trim range (remove trimming) and clear history
    */
   const clearTrim = useCallback(() => {
     setTrimRange(null);
+    setTrimHistory([]);
     console.log('[useSegments] Cleared all trim state');
+  }, []);
+
+  /**
+   * De-trim (undo last trim operation from start)
+   * Pops from history and restores previous trim range
+   */
+  const detrimStart = useCallback(() => {
+    setTrimHistory(prev => {
+      // Find last 'start' trim operation
+      const lastStartIndex = prev.findLastIndex(op => op.type === 'start');
+      if (lastStartIndex === -1) {
+        console.log('[useSegments] No start trim to undo');
+        return prev;
+      }
+
+      const lastStartOp = prev[lastStartIndex];
+      console.log('[useSegments] De-trimming start, restoring to:', lastStartOp.previousRange);
+
+      // Restore previous trim range
+      setTrimRange(lastStartOp.previousRange);
+
+      // Remove this operation from history
+      return prev.filter((_, i) => i !== lastStartIndex);
+    });
+  }, []);
+
+  /**
+   * De-trim (undo last trim operation from end)
+   * Pops from history and restores previous trim range
+   */
+  const detrimEnd = useCallback(() => {
+    setTrimHistory(prev => {
+      // Find last 'end' trim operation
+      const lastEndIndex = prev.findLastIndex(op => op.type === 'end');
+      if (lastEndIndex === -1) {
+        console.log('[useSegments] No end trim to undo');
+        return prev;
+      }
+
+      const lastEndOp = prev[lastEndIndex];
+      console.log('[useSegments] De-trimming end, restoring to:', lastEndOp.previousRange);
+
+      // Restore previous trim range
+      setTrimRange(lastEndOp.previousRange);
+
+      // Remove this operation from history
+      return prev.filter((_, i) => i !== lastEndIndex);
+    });
   }, []);
 
   /**
@@ -504,6 +590,7 @@ export function useSegments() {
     boundaries,          // DERIVED from userSplits + duration
     userSplits,          // NEW: User-created splits (explicit)
     trimRange,           // NEW: Explicit trim range
+    trimHistory,         // NEW: Trim history for de-trim functionality
     segments,
     sourceDuration: duration,
     framerate,
@@ -517,12 +604,14 @@ export function useSegments() {
     initializeWithDuration,
     reset,
     addBoundary,         // Adds to userSplits
-    removeBoundary,      // Removes from userSplits (never affects trim!)
+    removeBoundary,      // Removes from userSplits (auto-clears trimRange if needed)
     setSegmentSpeed,
     toggleTrimSegment,   // Main trim operation
-    trimStart,           // NEW: Explicit trim operations
-    trimEnd,
-    clearTrim,
+    trimStart,           // Explicit trim from start (pushes to history)
+    trimEnd,             // Explicit trim from end (pushes to history)
+    clearTrim,           // Clear all trim state and history
+    detrimStart,         // NEW: Undo last start trim (pop from history)
+    detrimEnd,           // NEW: Undo last end trim (pop from history)
 
     // Queries
     getSegmentAtTime,

@@ -27,6 +27,7 @@ function App() {
     trimmedDuration,
     segmentVisualLayout,
     framerate: segmentFramerate,
+    trimRange,  // NEW: Watch for trim range changes
     initializeWithDuration: initializeSegments,
     reset: resetSegments,
     addBoundary: addSegmentBoundary,
@@ -144,6 +145,14 @@ function App() {
     console.log('[App] Current crop state:', currentCropState);
   }, [currentCropState]);
 
+  // BUG FIX: Auto-cleanup trim keyframes when trimRange is cleared
+  useEffect(() => {
+    if (trimRange === null) {
+      console.log('[App] trimRange cleared - cleaning up trim keyframes');
+      cleanupTrimKeyframes();
+    }
+  }, [trimRange, cleanupTrimKeyframes]);
+
   // Handler functions for copy/paste (defined BEFORE useEffect to avoid initialization errors)
   const handleCopyCrop = (time = currentTime) => {
     if (videoUrl) {
@@ -238,11 +247,8 @@ function App() {
         // Mark this keyframe as 'trim' origin so it can be cleaned up later
         addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration, 'trim');
       }
-    } else {
-      // We're restoring a trimmed segment - clean up trim-related keyframes
-      console.log('[App] Restoring segment - cleaning up trim keyframes');
-      cleanupTrimKeyframes();
     }
+    // Note: Cleanup of trim keyframes is now automatic via useEffect watching trimRange
 
     // Step 5: Toggle the trim state (this works for both trimming and restoring)
     console.log('[App] Toggling trim state for segment:', segmentIndex);
