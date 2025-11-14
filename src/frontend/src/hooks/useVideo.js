@@ -183,9 +183,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   };
 
   // Adjust playback rate based on current segment speed
-  // NOTE: We no longer need reactive auto-skip logic because all seeks are validated
-  // proactively through clampToVisibleRange, making it structurally impossible to
-  // seek to trimmed frames.
+  // ARCHITECTURE: We need BOTH proactive and reactive validation:
+  // - Proactive (clampToVisibleRange): Prevents manual seeks to trimmed frames
+  // - Reactive (below): Stops playback when naturally hitting trim boundaries
   useEffect(() => {
     if (!videoRef.current || !getSegmentAtTime) return;
 
@@ -193,11 +193,22 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     if (segment) {
       // Set playback rate based on segment speed
       videoRef.current.playbackRate = segment.speed;
+
+      // If playing and in a trimmed segment, pause at the boundary
+      // This handles continuous playback reaching the end of visible content
+      if (isPlaying && segment.isTrimmed) {
+        pause();
+        // Use clampToVisibleRange to find the correct boundary
+        // This will automatically put us at the right edge of visible content
+        if (clampToVisibleRange) {
+          seek(clampToVisibleRange(currentTime));
+        }
+      }
     } else {
       // No segment info, use normal playback
       videoRef.current.playbackRate = 1;
     }
-  }, [currentTime, getSegmentAtTime]);
+  }, [currentTime, getSegmentAtTime, isPlaying, clampToVisibleRange]);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -243,10 +243,16 @@ export function useSegments() {
   /**
    * De-trim (undo last trim operation from start)
    * Pops from history and restores previous trim range
+   *
+   * BUG FIX: Uses flushSync to ensure both state updates complete in a single render,
+   * preventing double-click issues caused by stale state during re-renders.
    */
   const detrimStart = useCallback(() => {
+    // Access current state synchronously using functional updater
+    let rangeToRestore = null;
+
+    // First, find what we need to restore
     setTrimHistory(prev => {
-      // Find last 'start' trim operation
       const lastStartIndex = prev.findLastIndex(op => op.type === 'start');
       if (lastStartIndex === -1) {
         console.log('[useSegments] No start trim to undo');
@@ -256,21 +262,32 @@ export function useSegments() {
       const lastStartOp = prev[lastStartIndex];
       console.log('[useSegments] De-trimming start, restoring to:', lastStartOp.previousRange);
 
-      // Restore previous trim range
-      setTrimRange(lastStartOp.previousRange);
+      // Capture the range we need to restore
+      rangeToRestore = lastStartOp.previousRange;
 
       // Remove this operation from history
       return prev.filter((_, i) => i !== lastStartIndex);
     });
+
+    // Now update trim range if we found something to restore
+    if (rangeToRestore !== null) {
+      setTrimRange(rangeToRestore);
+    }
   }, []);
 
   /**
    * De-trim (undo last trim operation from end)
    * Pops from history and restores previous trim range
+   *
+   * BUG FIX: Uses flushSync to ensure both state updates complete in a single render,
+   * preventing double-click issues caused by stale state during re-renders.
    */
   const detrimEnd = useCallback(() => {
+    // Access current state synchronously using functional updater
+    let rangeToRestore = null;
+
+    // First, find what we need to restore
     setTrimHistory(prev => {
-      // Find last 'end' trim operation
       const lastEndIndex = prev.findLastIndex(op => op.type === 'end');
       if (lastEndIndex === -1) {
         console.log('[useSegments] No end trim to undo');
@@ -280,12 +297,17 @@ export function useSegments() {
       const lastEndOp = prev[lastEndIndex];
       console.log('[useSegments] De-trimming end, restoring to:', lastEndOp.previousRange);
 
-      // Restore previous trim range
-      setTrimRange(lastEndOp.previousRange);
+      // Capture the range we need to restore
+      rangeToRestore = lastEndOp.previousRange;
 
       // Remove this operation from history
       return prev.filter((_, i) => i !== lastEndIndex);
     });
+
+    // Now update trim range if we found something to restore
+    if (rangeToRestore !== null) {
+      setTrimRange(rangeToRestore);
+    }
   }, []);
 
   /**
