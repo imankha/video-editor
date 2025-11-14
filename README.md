@@ -57,57 +57,72 @@ All project specifications and technical documentation are located in the [docs/
 
 ## 🚀 Quick Start - Running the Application
 
-### Prerequisites
+### Windows Users - One-Click Startup! ⚡
+
+From the project root directory:
+
+```batch
+start-dev.bat
+```
+
+That's it! This automatically starts both servers in separate windows.
+
+**See [DEVELOPMENT.md](DEVELOPMENT.md) for complete Windows development guide.**
+
+---
+
+### Manual Setup (All Platforms)
+
+#### Prerequisites
 
 - **Python 3.11+** - [Download](https://www.python.org/downloads/)
 - **Node.js 18+** - [Download](https://nodejs.org/)
 - **FFmpeg** (for future video processing) - [Install guide](#install-ffmpeg)
 
-### Step 1: Start the Backend
+#### Step 1: Start the Backend
 
+**Windows:**
+```batch
+cd src\backend
+start.bat
+```
+
+**macOS/Linux:**
 ```bash
-# Navigate to backend directory
 cd src/backend
-
-# Create virtual environment
 python3 -m venv venv
-
-# Activate virtual environment
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate
 pip install -r requirements.txt
-
-# Run the server
-./run.sh
-# OR: uvicorn app.main:app --reload
+uvicorn app.main:app --reload
 ```
 
 **Backend will run at:** http://localhost:8000
 
-### Step 2: Start the Frontend (New Terminal)
+#### Step 2: Start the Frontend (New Terminal)
 
+**Windows:**
+```batch
+cd src\frontend
+start.bat
+```
+
+**macOS/Linux:**
 ```bash
-# Navigate to frontend directory
 cd src/frontend
-
-# Install dependencies
 npm install
-
-# Run development server
 npm run dev
 ```
 
 **Frontend will run at:** http://localhost:5173
 
-### Step 3: View the Application
+#### Step 3: View the Application
 
 Open your browser to: **http://localhost:5173**
 
-You should see the Hello World demo with:
+You should see the video editor with:
 - ✅ Beautiful gradient UI (Tailwind CSS)
 - ✅ Live connection to backend API
-- ✅ Real-time data display
+- ✅ Video upload and processing capabilities
 
 **Additional URLs:**
 - API Documentation: http://localhost:8000/docs
