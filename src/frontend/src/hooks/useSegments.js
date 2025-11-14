@@ -194,29 +194,38 @@ export function useSegments() {
    * Trim from the start: sets trim range to [time, end]
    * Pushes operation to history for de-trim functionality
    * Uses flushSync to prevent duplicate operations from rapid clicking
+   * FIXED: Updates both states at the same level to avoid nested state update anti-pattern
    */
   const trimStart = useCallback((time) => {
     flushSync(() => {
+      let prevRange = null;
+      let shouldUpdate = true;
+
+      // First, capture the current trim range and check for duplicates
       setTrimRange(prev => {
         // Prevent duplicate operations - if already trimmed to this exact position, ignore
         if (prev && Math.abs(prev.start - time) < 0.01) {
           console.log('[useSegments] Ignoring duplicate trimStart at:', time);
+          shouldUpdate = false;
           return prev;
         }
 
-        // Record this operation in history
-        setTrimHistory(history => [...history, {
-          type: 'start',
-          time,
-          previousRange: prev
-        }]);
-
+        prevRange = prev;
         return {
           start: time,
           end: prev?.end || duration
         };
       });
-      console.log('[useSegments] Trimmed start to:', time);
+
+      // Then, update history if this wasn't a duplicate
+      if (shouldUpdate) {
+        setTrimHistory(history => [...history, {
+          type: 'start',
+          time,
+          previousRange: prevRange
+        }]);
+        console.log('[useSegments] Trimmed start to:', time);
+      }
     });
   }, [duration]);
 
@@ -224,29 +233,38 @@ export function useSegments() {
    * Trim from the end: sets trim range to [start, time]
    * Pushes operation to history for de-trim functionality
    * Uses flushSync to prevent duplicate operations from rapid clicking
+   * FIXED: Updates both states at the same level to avoid nested state update anti-pattern
    */
   const trimEnd = useCallback((time) => {
     flushSync(() => {
+      let prevRange = null;
+      let shouldUpdate = true;
+
+      // First, capture the current trim range and check for duplicates
       setTrimRange(prev => {
         // Prevent duplicate operations - if already trimmed to this exact position, ignore
         if (prev && Math.abs(prev.end - time) < 0.01) {
           console.log('[useSegments] Ignoring duplicate trimEnd at:', time);
+          shouldUpdate = false;
           return prev;
         }
 
-        // Record this operation in history
-        setTrimHistory(history => [...history, {
-          type: 'end',
-          time,
-          previousRange: prev
-        }]);
-
+        prevRange = prev;
         return {
           start: prev?.start || 0,
           end: time
         };
       });
-      console.log('[useSegments] Trimmed end to:', time);
+
+      // Then, update history if this wasn't a duplicate
+      if (shouldUpdate) {
+        setTrimHistory(history => [...history, {
+          type: 'end',
+          time,
+          previousRange: prevRange
+        }]);
+        console.log('[useSegments] Trimmed end to:', time);
+      }
     });
   }, []);
 
