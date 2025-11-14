@@ -197,12 +197,14 @@ export function useSegments() {
    * FIXED: Updates both states at the same level to avoid nested state update anti-pattern
    */
   const trimStart = useCallback((time) => {
+    console.log('[useSegments] trimStart called with time:', time);
     flushSync(() => {
       let prevRange = null;
       let shouldUpdate = true;
 
       // First, capture the current trim range and check for duplicates
       setTrimRange(prev => {
+        console.log('[useSegments] trimStart - current trimRange:', JSON.stringify(prev));
         // Prevent duplicate operations - if already trimmed to this exact position, ignore
         if (prev && Math.abs(prev.start - time) < 0.01) {
           console.log('[useSegments] Ignoring duplicate trimStart at:', time);
@@ -211,22 +213,30 @@ export function useSegments() {
         }
 
         prevRange = prev;
-        return {
+        const newRange = {
           start: time,
           end: prev?.end || duration
         };
+        console.log('[useSegments] Setting trimRange to:', JSON.stringify(newRange));
+        return newRange;
       });
 
       // Then, update history if this wasn't a duplicate
       if (shouldUpdate) {
-        setTrimHistory(history => [...history, {
-          type: 'start',
-          time,
-          previousRange: prevRange
-        }]);
-        console.log('[useSegments] Trimmed start to:', time);
+        setTrimHistory(history => {
+          console.log('[useSegments] trimStart - current history:', JSON.stringify(history));
+          const newHistory = [...history, {
+            type: 'start',
+            time,
+            previousRange: prevRange
+          }];
+          console.log('[useSegments] trimStart - new history:', JSON.stringify(newHistory));
+          return newHistory;
+        });
+        console.log('[useSegments] Trimmed start to:', time, 'previousRange was:', JSON.stringify(prevRange));
       }
     });
+    console.log('[useSegments] trimStart completed');
   }, [duration]);
 
   /**
@@ -288,6 +298,7 @@ export function useSegments() {
    * preventing double-click issues caused by stale state during re-renders.
    */
   const detrimStart = useCallback(() => {
+    console.log('[useSegments] detrimStart called');
     // Use flushSync to batch both state updates atomically
     // This forces React to apply both state updates synchronously before any re-render
     flushSync(() => {
@@ -297,29 +308,37 @@ export function useSegments() {
 
       // First, find what we need to restore
       setTrimHistory(prev => {
+        console.log('[useSegments] detrimStart - current history:', JSON.stringify(prev));
         const lastStartIndex = prev.findLastIndex(op => op.type === 'start');
         if (lastStartIndex === -1) {
-          console.log('[useSegments] No start trim to undo');
+          console.log('[useSegments] No start trim to undo - history empty or no start operations');
           return prev;
         }
 
         const lastStartOp = prev[lastStartIndex];
-        console.log('[useSegments] De-trimming start, restoring to:', lastStartOp.previousRange);
+        console.log('[useSegments] De-trimming start, operation:', JSON.stringify(lastStartOp));
+        console.log('[useSegments] Restoring to:', JSON.stringify(lastStartOp.previousRange));
 
         // Capture the range we need to restore
         rangeToRestore = lastStartOp.previousRange;
         shouldUpdate = true;
 
         // Remove this operation from history
-        return prev.filter((_, i) => i !== lastStartIndex);
+        const newHistory = prev.filter((_, i) => i !== lastStartIndex);
+        console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
+        return newHistory;
       });
 
       // Now update trim range if we found something to restore
       // This happens in the same synchronous batch due to flushSync
       if (shouldUpdate) {
+        console.log('[useSegments] Updating trimRange to:', JSON.stringify(rangeToRestore));
         setTrimRange(rangeToRestore);
+      } else {
+        console.log('[useSegments] NOT updating trimRange - no operation found');
       }
     });
+    console.log('[useSegments] detrimStart completed');
   }, []);
 
   /**
@@ -369,6 +388,7 @@ export function useSegments() {
    * This is the main trim operation called from UI
    */
   const toggleTrimSegment = useCallback((segmentIndex) => {
+    console.log('[useSegments] toggleTrimSegment called with index:', segmentIndex);
     if (boundaries.length < 2) return;
 
     const numSegments = boundaries.length - 1;
@@ -377,6 +397,7 @@ export function useSegments() {
     const segmentStart = boundaries[segmentIndex];
     const segmentEnd = boundaries[segmentIndex + 1];
     const isTrimmed = isSegmentTrimmed(segmentStart, segmentEnd);
+    console.log('[useSegments] Segment', segmentIndex, 'range:', segmentStart, '-', segmentEnd, 'isTrimmed:', isTrimmed);
 
     // Determine first and last non-trimmed segments
     let firstNonTrimmedIndex = -1;
