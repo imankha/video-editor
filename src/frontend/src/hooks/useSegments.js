@@ -349,6 +349,7 @@ export function useSegments() {
    * preventing double-click issues caused by stale state during re-renders.
    */
   const detrimEnd = useCallback(() => {
+    console.log('[useSegments] detrimEnd called');
     // Use flushSync to batch both state updates atomically
     // This forces React to apply both state updates synchronously before any re-render
     flushSync(() => {
@@ -358,29 +359,37 @@ export function useSegments() {
 
       // First, find what we need to restore
       setTrimHistory(prev => {
+        console.log('[useSegments] detrimEnd - current history:', JSON.stringify(prev));
         const lastEndIndex = prev.findLastIndex(op => op.type === 'end');
         if (lastEndIndex === -1) {
-          console.log('[useSegments] No end trim to undo');
+          console.log('[useSegments] No end trim to undo - history empty or no end operations');
           return prev;
         }
 
         const lastEndOp = prev[lastEndIndex];
-        console.log('[useSegments] De-trimming end, restoring to:', lastEndOp.previousRange);
+        console.log('[useSegments] De-trimming end, operation:', JSON.stringify(lastEndOp));
+        console.log('[useSegments] Restoring to:', JSON.stringify(lastEndOp.previousRange));
 
         // Capture the range we need to restore
         rangeToRestore = lastEndOp.previousRange;
         shouldUpdate = true;
 
         // Remove this operation from history
-        return prev.filter((_, i) => i !== lastEndIndex);
+        const newHistory = prev.filter((_, i) => i !== lastEndIndex);
+        console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
+        return newHistory;
       });
 
       // Now update trim range if we found something to restore
       // This happens in the same synchronous batch due to flushSync
       if (shouldUpdate) {
+        console.log('[useSegments] Updating trimRange to:', JSON.stringify(rangeToRestore));
         setTrimRange(rangeToRestore);
+      } else {
+        console.log('[useSegments] NOT updating trimRange - no operation found');
       }
     });
+    console.log('[useSegments] detrimEnd completed');
   }, []);
 
   /**
