@@ -221,7 +221,7 @@ function App() {
 
       // Step 3: Delete keyframes in the trimmed range
       console.log('[App] Deleting keyframes in range:', segment.start, '-', segment.end);
-      deleteKeyframesInRange(segment.start, segment.end);
+      deleteKeyframesInRange(segment.start, segment.end, duration);
 
       // Step 4: Update the boundary keyframe with the preserved crop data
       if (cropDataToPreserve && boundaryTime !== undefined) {

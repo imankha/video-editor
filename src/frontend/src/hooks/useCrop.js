@@ -369,11 +369,13 @@ export default function useCrop(videoMetadata) {
    * Used when trimming segments - removes keyframes that will be cut from the video
    * NOTE: Does not delete permanent start/end keyframes
    */
-  const deleteKeyframesInRange = useCallback((startTime, endTime) => {
+  const deleteKeyframesInRange = useCallback((startTime, endTime, videoDuration) => {
     const startFrame = timeToFrame(startTime, framerate);
     const endFrame = timeToFrame(endTime, framerate);
+    const totalFrames = videoDuration ? timeToFrame(videoDuration, framerate) : null;
 
     console.log('[useCrop] Deleting keyframes in range:', startTime, '-', endTime, '(frames', startFrame, '-', endFrame + ')');
+    console.log('[useCrop] Video duration:', videoDuration, 'totalFrames:', totalFrames);
 
     setKeyframes(prev => {
       const filtered = prev.filter(kf => {
@@ -382,21 +384,24 @@ export default function useCrop(videoMetadata) {
           return true;
         }
 
-        // Always keep permanent start/end keyframes
+        // Always keep permanent start keyframe
         if (kf.frame === 0) {
           console.log('[useCrop] Keeping permanent start keyframe (frame=0)');
           return true;
         }
 
-        // For end keyframe, we need to check against video duration
-        // This is tricky since we don't have duration here
-        // The caller should handle end keyframe repositioning separately
+        // Always keep permanent end keyframe
+        if (totalFrames !== null && kf.frame === totalFrames) {
+          console.log('[useCrop] Keeping permanent end keyframe (frame=' + totalFrames + ')');
+          return true;
+        }
 
-        return false; // Delete this keyframe
+        // Delete this keyframe (it's in the trimmed range and not permanent)
+        return false;
       });
 
       const deletedCount = prev.length - filtered.length;
-      console.log('[useCrop] Deleted', deletedCount, 'keyframe(s)');
+      console.log('[useCrop] Deleted', deletedCount, 'keyframe(s), kept', filtered.length, 'keyframe(s)');
 
       return filtered;
     });
