@@ -71,6 +71,7 @@ function App() {
     addOrUpdateKeyframe,
     removeKeyframe,
     deleteKeyframesInRange,
+    cleanupTrimKeyframes,  // NEW: Clean up trim-related keyframes
     copyCropKeyframe,
     pasteCropKeyframe,
     interpolateCrop,
@@ -173,6 +174,14 @@ function App() {
 
     console.log('[App] handleTrimSegment - segment:', segment, 'isCurrentlyTrimmed:', isCurrentlyTrimmed);
 
+    // INVARIANT: Can only trim edge segments
+    if (process.env.NODE_ENV === 'development') {
+      if (!isCurrentlyTrimmed && !segment.isFirst && !segment.isLast) {
+        console.error('⚠️ INVARIANT VIOLATION: Attempting to trim non-edge segment:', segmentIndex);
+        return;
+      }
+    }
+
     if (!isCurrentlyTrimmed) {
       // We're about to trim this segment
 
@@ -226,13 +235,36 @@ function App() {
       // Step 4: Update the boundary keyframe with the preserved crop data
       if (cropDataToPreserve && boundaryTime !== undefined) {
         console.log('[App] Updating boundary keyframe at:', boundaryTime, 'with data:', cropDataToPreserve);
-        addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration);
+        // Mark this keyframe as 'trim' origin so it can be cleaned up later
+        addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration, 'trim');
       }
+    } else {
+      // We're restoring a trimmed segment - clean up trim-related keyframes
+      console.log('[App] Restoring segment - cleaning up trim keyframes');
+      cleanupTrimKeyframes();
     }
 
     // Step 5: Toggle the trim state (this works for both trimming and restoring)
     console.log('[App] Toggling trim state for segment:', segmentIndex);
     toggleTrimSegment(segmentIndex);
+
+    // INVARIANT: After trim operation, verify keyframe count is reasonable
+    if (process.env.NODE_ENV === 'development') {
+      setTimeout(() => {
+        if (!isCurrentlyTrimmed) {
+          // After trimming, we should have created a boundary keyframe
+          const boundaryTime = segment.isLast ? segment.start : segment.end;
+          const boundaryFrame = Math.round(boundaryTime * framerate);
+          const boundaryKeyframe = keyframes.find(kf => kf.frame === boundaryFrame);
+
+          if (!boundaryKeyframe) {
+            console.warn('⚠️ INVARIANT WARNING: Expected boundary keyframe at frame', boundaryFrame, 'after trim operation');
+          } else if (boundaryKeyframe.origin !== 'trim') {
+            console.warn('⚠️ INVARIANT WARNING: Boundary keyframe has wrong origin:', boundaryKeyframe.origin, 'expected: trim');
+          }
+        }
+      }, 100); // Delay to allow state updates to complete
+    }
   };
 
   // Keyboard handler: Space bar toggles play/pause

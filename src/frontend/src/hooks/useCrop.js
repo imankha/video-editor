@@ -5,9 +5,15 @@ import { timeToFrame, frameToTime } from '../utils/videoUtils';
  * Custom hook for managing crop tool state and keyframes
  * Crop tool is ALWAYS active when video is loaded
  *
- * ARCHITECTURE: Keyframes are tied to FRAME NUMBERS, not time.
- * This ensures that crop positions follow the actual video frames,
- * regardless of any speed changes applied via segments.
+ * REFACTORED ARCHITECTURE:
+ * - Keyframes are tied to FRAME NUMBERS, not time
+ * - Each keyframe has an 'origin' field: 'permanent', 'user', or 'trim'
+ * - This enables proper lifecycle management and cleanup
+ *
+ * ORIGIN TYPES:
+ * - 'permanent': Start (frame=0) and end (frame=totalFrames) keyframes
+ * - 'user': User-created keyframes via drag/edit operations
+ * - 'trim': Auto-created keyframes when trimming segments
  */
 export default function useCrop(videoMetadata) {
   const [aspectRatio, setAspectRatio] = useState('9:16'); // '16:9', '9:16'
@@ -86,10 +92,12 @@ export default function useCrop(videoMetadata) {
         setKeyframes([
           {
             frame: 0,
+            origin: 'permanent',
             ...defaultCrop
           },
           {
             frame: totalFrames,
+            origin: 'permanent',
             ...defaultCrop
           }
         ]);
@@ -117,10 +125,14 @@ export default function useCrop(videoMetadata) {
       const totalFrames = timeToFrame(videoMetadata.duration, framerate);
 
       const updatedKeyframes = keyframes.map(kf => {
+        // Preserve origin
+        const origin = kf.origin || 'user';
+
         // If end hasn't been explicitly set, use default for all keyframes
         if (!isEndKeyframeExplicit) {
           return {
             frame: kf.frame,
+            origin,
             ...newCrop
           };
         }
@@ -133,12 +145,14 @@ export default function useCrop(videoMetadata) {
           // For now, just recalculate - could be smarter about preserving position
           return {
             frame: kf.frame,
+            origin,
             ...newCrop
           };
         }
 
         return {
           frame: kf.frame,
+          origin,
           ...newCrop
         };
       });
@@ -152,16 +166,23 @@ export default function useCrop(videoMetadata) {
    * Add or update a keyframe at the specified time
    * If updating start keyframe and end hasn't been explicitly set, end mirrors start
    * NOTE: This accepts time for API compatibility but converts to frames internally
+   * @param {number} time - Time in seconds
+   * @param {Object} cropData - Crop rectangle {x, y, width, height}
+   * @param {number} duration - Video duration in seconds
+   * @param {string} origin - Keyframe origin: 'user', 'trim', or 'permanent' (defaults to 'user')
    */
-  const addOrUpdateKeyframe = useCallback((time, cropData, duration) => {
+  const addOrUpdateKeyframe = useCallback((time, cropData, duration, origin = 'user') => {
     const frame = timeToFrame(time, framerate);
     const totalFrames = duration ? timeToFrame(duration, framerate) : null;
 
-    console.log('[useCrop] Adding/updating keyframe at time', time, '(frame', frame + '):', cropData);
+    console.log('[useCrop] Adding/updating keyframe at time', time, '(frame', frame + '), origin:', origin, 'data:', cropData);
 
     // Check if we're updating the end keyframe
     const isEndKeyframe = totalFrames !== null && frame === totalFrames;
     const isStartKeyframe = frame === 0;
+
+    // Permanent keyframes always have origin='permanent'
+    const actualOrigin = (isStartKeyframe || isEndKeyframe) ? 'permanent' : origin;
 
     if (isEndKeyframe) {
       console.log('[useCrop] End keyframe explicitly set by user');
@@ -174,12 +195,13 @@ export default function useCrop(videoMetadata) {
 
       let updated;
       if (existingIndex >= 0) {
-        // Update existing keyframe - set frame AFTER spreading to avoid overwrite
+        // Update existing keyframe - preserve origin if updating permanent keyframe
+        const preservedOrigin = prev[existingIndex].origin === 'permanent' ? 'permanent' : actualOrigin;
         updated = [...prev];
-        updated[existingIndex] = { ...cropData, frame };
+        updated[existingIndex] = { ...cropData, frame, origin: preservedOrigin };
       } else {
         // Add new keyframe and sort by frame
-        const newKeyframes = [...prev, { ...cropData, frame }];
+        const newKeyframes = [...prev, { ...cropData, frame, origin: actualOrigin }];
         updated = newKeyframes.sort((a, b) => a.frame - b.frame);
       }
 
@@ -191,8 +213,17 @@ export default function useCrop(videoMetadata) {
           // Set frame AFTER spreading cropData to preserve the totalFrames
           updated[endKeyframeIndex] = {
             ...cropData,
-            frame: totalFrames
+            frame: totalFrames,
+            origin: 'permanent'
           };
+        }
+      }
+
+      // INVARIANT: Check that all keyframes have an origin
+      if (process.env.NODE_ENV === 'development') {
+        const missingOrigin = updated.filter(kf => !kf.origin);
+        if (missingOrigin.length > 0) {
+          console.error('⚠️ INVARIANT VIOLATION: Keyframes missing origin:', missingOrigin);
         }
       }
 
@@ -421,6 +452,24 @@ export default function useCrop(videoMetadata) {
   }, [interpolateCrop]);
 
   /**
+   * Clean up trim-related keyframes
+   * Removes all keyframes with origin='trim'
+   * Called when trim range is cleared
+   */
+  const cleanupTrimKeyframes = useCallback(() => {
+    setKeyframes(prev => {
+      const filtered = prev.filter(kf => kf.origin !== 'trim');
+      const removedCount = prev.length - filtered.length;
+
+      if (removedCount > 0) {
+        console.log('[useCrop] Cleaned up', removedCount, 'trim-related keyframe(s)');
+      }
+
+      return filtered;
+    });
+  }, []);
+
+  /**
    * Reset all crop state (for when loading a new video)
    */
   const reset = useCallback(() => {
@@ -443,6 +492,7 @@ export default function useCrop(videoMetadata) {
     addOrUpdateKeyframe,
     removeKeyframe,
     deleteKeyframesInRange,
+    cleanupTrimKeyframes,  // NEW: Clean up trim-related keyframes
     copyCropKeyframe,
     pasteCropKeyframe,
     reset,
