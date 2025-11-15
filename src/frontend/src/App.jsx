@@ -167,7 +167,13 @@ function App() {
   }, [dragCrop, keyframes, currentTime, interpolateCrop]);
 
   // DERIVED STATE: Current highlight state
+  // Only show highlight when current time is within the highlight duration
   const currentHighlightState = useMemo(() => {
+    // Don't show highlight if current time is past the highlight duration
+    if (currentTime > highlightDuration) {
+      return null;
+    }
+
     let highlight;
     if (dragHighlight) {
       highlight = dragHighlight;
@@ -186,7 +192,7 @@ function App() {
       opacity: highlight.opacity,
       color: highlight.color
     };
-  }, [dragHighlight, highlightKeyframes, currentTime, interpolateHighlight]);
+  }, [dragHighlight, highlightKeyframes, currentTime, interpolateHighlight, highlightDuration]);
 
   // Debug: Log keyframes changes
   useEffect(() => {
