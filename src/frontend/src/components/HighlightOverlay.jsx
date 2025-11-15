@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
 /**
- * HighlightOverlay component - renders a draggable/resizable highlight circle
+ * HighlightOverlay component - renders a draggable/resizable highlight ellipse
  * over the video player to indicate the highlighted player
+ * Uses a vertical ellipse (taller than wide) for upright players
  */
 export default function HighlightOverlay({
   videoRef,
@@ -16,6 +17,7 @@ export default function HighlightOverlay({
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [resizeHandle, setResizeHandle] = useState(null); // 'horizontal' or 'vertical'
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [highlightStart, setHighlightStart] = useState(null);
   const overlayRef = useRef(null);
@@ -77,33 +79,21 @@ export default function HighlightOverlay({
   /**
    * Convert video coordinates to screen coordinates
    */
-  const videoToScreen = useCallback((x, y, radius) => {
-    if (!videoDisplayRect) return { x: 0, y: 0, radius: 0 };
+  const videoToScreen = useCallback((x, y, radiusX, radiusY) => {
+    if (!videoDisplayRect) return { x: 0, y: 0, radiusX: 0, radiusY: 0 };
 
     return {
       x: x * videoDisplayRect.scaleX + videoDisplayRect.offsetX,
       y: y * videoDisplayRect.scaleY + videoDisplayRect.offsetY,
-      radius: radius * videoDisplayRect.scaleY // Use Y scale for radius to maintain circle
+      radiusX: radiusX * videoDisplayRect.scaleX,
+      radiusY: radiusY * videoDisplayRect.scaleY
     };
   }, [videoDisplayRect]);
 
   const round3 = (value) => Math.round(value * 1000) / 1000;
 
   /**
-   * Convert screen coordinates to video coordinates
-   */
-  const screenToVideo = useCallback((x, y, radius) => {
-    if (!videoDisplayRect) return { x: 0, y: 0, radius: 0 };
-
-    return {
-      x: round3((x - videoDisplayRect.offsetX) / videoDisplayRect.scaleX),
-      y: round3((y - videoDisplayRect.offsetY) / videoDisplayRect.scaleY),
-      radius: round3(radius / videoDisplayRect.scaleY)
-    };
-  }, [videoDisplayRect]);
-
-  /**
-   * Constrain highlight circle to video bounds
+   * Constrain highlight ellipse to video bounds
    */
   const constrainHighlight = useCallback((highlight) => {
     const maxWidth = videoMetadata.width;
@@ -111,39 +101,41 @@ export default function HighlightOverlay({
 
     let constrained = { ...highlight };
 
-    // Ensure minimum radius
-    constrained.radius = Math.max(10, constrained.radius);
+    // Ensure minimum radii
+    constrained.radiusX = Math.max(10, constrained.radiusX);
+    constrained.radiusY = Math.max(15, constrained.radiusY);
 
-    // Constrain center position to keep circle within video bounds
-    const minX = constrained.radius;
-    const maxX = maxWidth - constrained.radius;
-    const minY = constrained.radius;
-    const maxY = maxHeight - constrained.radius;
+    // Constrain center position to keep ellipse within video bounds
+    const minX = constrained.radiusX;
+    const maxX = maxWidth - constrained.radiusX;
+    const minY = constrained.radiusY;
+    const maxY = maxHeight - constrained.radiusY;
 
     constrained.x = Math.max(minX, Math.min(constrained.x, maxX));
     constrained.y = Math.max(minY, Math.min(constrained.y, maxY));
 
-    // If radius is too large, reduce it
-    if (constrained.radius > maxWidth / 2) {
-      constrained.radius = maxWidth / 2;
+    // If radii are too large, reduce them
+    if (constrained.radiusX > maxWidth / 2) {
+      constrained.radiusX = maxWidth / 2;
     }
-    if (constrained.radius > maxHeight / 2) {
-      constrained.radius = maxHeight / 2;
+    if (constrained.radiusY > maxHeight / 2) {
+      constrained.radiusY = maxHeight / 2;
     }
 
     return {
       x: round3(constrained.x),
       y: round3(constrained.y),
-      radius: round3(constrained.radius),
+      radiusX: round3(constrained.radiusX),
+      radiusY: round3(constrained.radiusY),
       opacity: constrained.opacity,
       color: constrained.color
     };
   }, [videoMetadata]);
 
   /**
-   * Handle mouse down on highlight circle (start drag)
+   * Handle mouse down on highlight ellipse (start drag)
    */
-  const handleCircleMouseDown = (e) => {
+  const handleEllipseMouseDown = (e) => {
     if (e.target.classList.contains('resize-handle')) return;
 
     e.preventDefault();
@@ -157,11 +149,12 @@ export default function HighlightOverlay({
   /**
    * Handle mouse down on resize handle
    */
-  const handleResizeMouseDown = (e) => {
+  const handleResizeMouseDown = (e, handle) => {
     e.preventDefault();
     e.stopPropagation();
 
     setIsResizing(true);
+    setResizeHandle(handle);
     setDragStart({ x: e.clientX, y: e.clientY });
     setHighlightStart(currentHighlight);
   };
@@ -186,26 +179,28 @@ export default function HighlightOverlay({
       const constrained = constrainHighlight(newHighlight);
       onHighlightChange(constrained);
     } else if (isResizing) {
-      // Calculate new radius based on distance from center
-      const centerScreenX = highlightStart.x * videoDisplayRect.scaleX + videoDisplayRect.offsetX;
-      const centerScreenY = highlightStart.y * videoDisplayRect.scaleY + videoDisplayRect.offsetY;
+      // Delta-based resizing - much more intuitive
+      let newRadiusX = highlightStart.radiusX;
+      let newRadiusY = highlightStart.radiusY;
 
-      const distanceToMouse = Math.sqrt(
-        Math.pow(e.clientX - centerScreenX, 2) +
-        Math.pow(e.clientY - centerScreenY, 2)
-      );
-
-      const newRadius = distanceToMouse / videoDisplayRect.scaleY;
+      if (resizeHandle === 'horizontal') {
+        // Horizontal handle - adjust radiusX
+        newRadiusX = highlightStart.radiusX + deltaX;
+      } else if (resizeHandle === 'vertical') {
+        // Vertical handle - adjust radiusY
+        newRadiusY = highlightStart.radiusY + deltaY;
+      }
 
       const newHighlight = {
         ...highlightStart,
-        radius: newRadius
+        radiusX: newRadiusX,
+        radiusY: newRadiusY
       };
 
       const constrained = constrainHighlight(newHighlight);
       onHighlightChange(constrained);
     }
-  }, [isDragging, isResizing, highlightStart, dragStart, videoDisplayRect, constrainHighlight, onHighlightChange]);
+  }, [isDragging, isResizing, resizeHandle, highlightStart, dragStart, videoDisplayRect, constrainHighlight, onHighlightChange]);
 
   /**
    * Handle mouse up
@@ -215,7 +210,8 @@ export default function HighlightOverlay({
       onHighlightComplete({
         x: round3(currentHighlight.x),
         y: round3(currentHighlight.y),
-        radius: round3(currentHighlight.radius),
+        radiusX: round3(currentHighlight.radiusX),
+        radiusY: round3(currentHighlight.radiusY),
         opacity: currentHighlight.opacity,
         color: currentHighlight.color
       });
@@ -223,6 +219,7 @@ export default function HighlightOverlay({
 
     setIsDragging(false);
     setIsResizing(false);
+    setResizeHandle(null);
     setHighlightStart(null);
   }, [isDragging, isResizing, currentHighlight, onHighlightComplete]);
 
@@ -244,7 +241,12 @@ export default function HighlightOverlay({
   }
 
   // Convert highlight to screen coordinates
-  const screenHighlight = videoToScreen(currentHighlight.x, currentHighlight.y, currentHighlight.radius);
+  const screenHighlight = videoToScreen(
+    currentHighlight.x,
+    currentHighlight.y,
+    currentHighlight.radiusX,
+    currentHighlight.radiusY
+  );
 
   // Parse color for fill and stroke
   const fillColor = currentHighlight.color || '#FFFF00';
@@ -262,45 +264,58 @@ export default function HighlightOverlay({
         height: '100%'
       }}
     >
-      {/* Highlight circle using SVG */}
+      {/* Highlight ellipse using SVG */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{ position: 'absolute', top: 0, left: 0 }}
       >
-        {/* Main highlight circle */}
-        <circle
+        {/* Main highlight ellipse */}
+        <ellipse
           cx={screenHighlight.x}
           cy={screenHighlight.y}
-          r={screenHighlight.radius}
+          rx={screenHighlight.radiusX}
+          ry={screenHighlight.radiusY}
           fill={fillColor}
           fillOpacity={currentHighlight.opacity}
           stroke={strokeColor}
           strokeWidth="3"
-          strokeOpacity="0.8"
+          strokeOpacity="0.6"
           className="pointer-events-auto cursor-move"
-          onMouseDown={handleCircleMouseDown}
+          onMouseDown={handleEllipseMouseDown}
         />
 
-        {/* Resize handle - small circle on the edge */}
+        {/* Horizontal resize handle (right edge) */}
         <circle
-          cx={screenHighlight.x + screenHighlight.radius}
+          cx={screenHighlight.x + screenHighlight.radiusX}
           cy={screenHighlight.y}
-          r="8"
+          r="7"
           fill="white"
           stroke={strokeColor}
           strokeWidth="2"
-          className="resize-handle pointer-events-auto cursor-nwse-resize"
-          onMouseDown={handleResizeMouseDown}
+          className="resize-handle pointer-events-auto cursor-ew-resize"
+          onMouseDown={(e) => handleResizeMouseDown(e, 'horizontal')}
+        />
+
+        {/* Vertical resize handle (bottom edge) */}
+        <circle
+          cx={screenHighlight.x}
+          cy={screenHighlight.y + screenHighlight.radiusY}
+          r="7"
+          fill="white"
+          stroke={strokeColor}
+          strokeWidth="2"
+          className="resize-handle pointer-events-auto cursor-ns-resize"
+          onMouseDown={(e) => handleResizeMouseDown(e, 'vertical')}
         />
 
         {/* Center indicator */}
         <circle
           cx={screenHighlight.x}
           cy={screenHighlight.y}
-          r="4"
+          r="3"
           fill="white"
           stroke={strokeColor}
-          strokeWidth="2"
+          strokeWidth="1"
           className="pointer-events-none"
         />
       </svg>

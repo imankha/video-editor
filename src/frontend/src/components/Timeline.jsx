@@ -29,6 +29,7 @@ import SegmentLayer from './SegmentLayer';
  * @param {Function} props.onHighlightKeyframeCopy - Callback when highlight keyframe is copied
  * @param {Function} props.onHighlightKeyframePaste - Callback when highlight is pasted at a time
  * @param {Function} props.onHighlightToggleEnabled - Callback to toggle highlight layer enabled state
+ * @param {Function} props.onHighlightDurationChange - Callback when highlight duration changes
  * @param {Array} props.segments - Segments to display
  * @param {Array} props.segmentBoundaries - Segment boundaries
  * @param {Array} props.segmentVisualLayout - Pre-calculated segment visual positions
@@ -66,6 +67,7 @@ export function Timeline({
   onHighlightKeyframeCopy,
   onHighlightKeyframePaste,
   onHighlightToggleEnabled,
+  onHighlightDurationChange,
   segments = [],
   segmentBoundaries = [],
   segmentVisualLayout = [],
@@ -241,6 +243,7 @@ export function Timeline({
             onKeyframeCopy={onHighlightKeyframeCopy}
             onKeyframePaste={onHighlightKeyframePaste}
             onToggleEnabled={onHighlightToggleEnabled}
+            onDurationChange={onHighlightDurationChange}
             sourceTimeToVisualTime={sourceTimeToVisualTime}
             visualTimeToSourceTime={visualTimeToSourceTime}
           />

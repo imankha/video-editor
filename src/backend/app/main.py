@@ -300,7 +300,8 @@ class HighlightKeyframe(BaseModel):
     time: float
     x: float
     y: float
-    radius: float
+    radiusX: float  # Horizontal radius of ellipse
+    radiusY: float  # Vertical radius of ellipse (larger for upright players)
     opacity: float
     color: str
 

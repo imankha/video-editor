@@ -96,7 +96,9 @@ function App() {
     copiedHighlight,
     framerate: highlightFramerate,
     isEnabled: isHighlightEnabled,
+    highlightDuration,
     toggleEnabled: toggleHighlightEnabled,
+    updateHighlightDuration,
     addOrUpdateKeyframe: addOrUpdateHighlightKeyframe,
     removeKeyframe: removeHighlightKeyframe,
     deleteKeyframesInRange: deleteHighlightKeyframesInRange,
@@ -179,7 +181,8 @@ function App() {
     return {
       x: highlight.x,
       y: highlight.y,
-      radius: highlight.radius,
+      radiusX: highlight.radiusX,
+      radiusY: highlight.radiusY,
       opacity: highlight.opacity,
       color: highlight.color
     };
@@ -438,6 +441,11 @@ function App() {
     removeHighlightKeyframe(time, duration);
   };
 
+  // Handle highlight duration change
+  const handleHighlightDurationChange = (newDuration) => {
+    updateHighlightDuration(newDuration, duration);
+  };
+
   // Prepare crop context value
   const cropContextValue = useMemo(() => ({
     keyframes,
@@ -459,14 +467,16 @@ function App() {
     isEndKeyframeExplicit: isHighlightEndKeyframeExplicit,
     copiedHighlight,
     isEnabled: isHighlightEnabled,
+    highlightDuration,
     toggleEnabled: toggleHighlightEnabled,
+    updateHighlightDuration,
     addOrUpdateKeyframe: addOrUpdateHighlightKeyframe,
     removeKeyframe: removeHighlightKeyframe,
     copyHighlightKeyframe,
     pasteHighlightKeyframe,
     interpolateHighlight,
     hasKeyframeAt: hasHighlightKeyframeAt,
-  }), [highlightKeyframes, isHighlightEndKeyframeExplicit, copiedHighlight, isHighlightEnabled, toggleHighlightEnabled, addOrUpdateHighlightKeyframe, removeHighlightKeyframe, copyHighlightKeyframe, pasteHighlightKeyframe, interpolateHighlight, hasHighlightKeyframeAt]);
+  }), [highlightKeyframes, isHighlightEndKeyframeExplicit, copiedHighlight, isHighlightEnabled, highlightDuration, toggleHighlightEnabled, updateHighlightDuration, addOrUpdateHighlightKeyframe, removeHighlightKeyframe, copyHighlightKeyframe, pasteHighlightKeyframe, interpolateHighlight, hasHighlightKeyframeAt]);
 
   /**
    * Get filtered keyframes for export
@@ -658,6 +668,7 @@ function App() {
                     onHighlightKeyframeCopy={handleCopyHighlight}
                     onHighlightKeyframePaste={handlePasteHighlight}
                     onHighlightToggleEnabled={toggleHighlightEnabled}
+                    onHighlightDurationChange={handleHighlightDurationChange}
                     segments={segments}
                     segmentBoundaries={segmentBoundaries}
                     segmentVisualLayout={segmentVisualLayout}

@@ -21,11 +21,12 @@ export default function HighlightLayer({
   onKeyframePaste,
   isActive,
   onToggleEnabled,
+  onDurationChange,
   sourceTimeToVisualTime = (t) => t,
   visualTimeToSourceTime = (t) => t,
   framerate = 30
 }) {
-  const { isEndKeyframeExplicit, copiedHighlight, isEnabled } = useHighlightContext();
+  const { isEndKeyframeExplicit, copiedHighlight, isEnabled, highlightDuration } = useHighlightContext();
 
   const [hoveredKeyframeIndex, setHoveredKeyframeIndex] = React.useState(null);
   const trackRef = React.useRef(null);
@@ -95,128 +96,179 @@ export default function HighlightLayer({
     onKeyframePaste(time);
   };
 
+  /**
+   * Handle duration slider change
+   */
+  const handleDurationSliderChange = (e) => {
+    const newDuration = parseFloat(e.target.value);
+    if (onDurationChange) {
+      onDurationChange(newDuration);
+    }
+  };
+
+  // Calculate the highlight end position on timeline
+  const highlightEndPosition = frameToPixel(Math.round(highlightDuration * framerate));
+
   return (
-    <div className="relative bg-gray-800/95 border-t border-gray-700/50 h-12 rounded-b-lg">
-      {/* Layer label with toggle button */}
-      <div className="absolute left-0 top-0 h-full flex items-center justify-center bg-gray-900 border-r border-gray-700/50 w-32 rounded-bl-lg">
-        <button
-          onClick={onToggleEnabled}
-          className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
-            isEnabled
-              ? 'text-orange-400 hover:text-orange-300'
-              : 'text-gray-500 hover:text-gray-400'
-          }`}
-          title={isEnabled ? 'Disable highlight layer' : 'Enable highlight layer'}
+    <div className="relative bg-gray-800/95 border-t border-gray-700/50 rounded-b-lg">
+      {/* Main row with toggle and keyframes */}
+      <div className="relative h-12">
+        {/* Layer label with toggle button */}
+        <div className="absolute left-0 top-0 h-full flex items-center justify-center bg-gray-900 border-r border-gray-700/50 w-32 rounded-bl-lg">
+          <button
+            onClick={onToggleEnabled}
+            className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
+              isEnabled
+                ? 'text-orange-400 hover:text-orange-300'
+                : 'text-gray-500 hover:text-gray-400'
+            }`}
+            title={isEnabled ? 'Disable highlight layer' : 'Enable highlight layer'}
+          >
+            <Circle size={18} className={isEnabled ? 'fill-current' : ''} />
+            {isEnabled ? (
+              <Eye size={14} />
+            ) : (
+              <EyeOff size={14} />
+            )}
+          </button>
+        </div>
+
+        {/* Keyframes track */}
+        <div
+          ref={trackRef}
+          className={`absolute left-32 right-0 top-0 h-full ${
+            isEnabled && copiedHighlight ? 'cursor-copy' : ''
+          } ${!isEnabled ? 'opacity-50' : ''}`}
+          onClick={handleTrackClick}
+          onMouseMove={handleTrackMouseMove}
+          onMouseLeave={handleTrackMouseLeave}
         >
-          <Circle size={18} className={isEnabled ? 'fill-current' : ''} />
-          {isEnabled ? (
-            <Eye size={14} />
-          ) : (
-            <EyeOff size={14} />
-          )}
-        </button>
-      </div>
+          {/* Background track */}
+          <div className="absolute inset-0 bg-orange-900 bg-opacity-10" />
 
-      {/* Keyframes track */}
-      <div
-        ref={trackRef}
-        className={`absolute left-32 right-0 top-0 h-full rounded-br-lg ${
-          isEnabled && copiedHighlight ? 'cursor-copy' : ''
-        } ${!isEnabled ? 'opacity-50' : ''}`}
-        onClick={handleTrackClick}
-        onMouseMove={handleTrackMouseMove}
-        onMouseLeave={handleTrackMouseLeave}
-      >
-        {/* Background track */}
-        <div className="absolute inset-0 bg-orange-900 bg-opacity-10 rounded-br-lg" />
-
-        {/* Placeholder text */}
-        {!isEnabled && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-gray-500 text-sm">Click the circle icon to enable highlight layer</span>
-          </div>
-        )}
-
-        {isEnabled && keyframes.length === 2 && !isEndKeyframeExplicit && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-gray-400 text-sm">Drag the highlight circle on the video to add keyframes</span>
-          </div>
-        )}
-
-        {/* Keyframe indicators (only show when enabled) */}
-        {isEnabled && keyframes.map((keyframe, index) => {
-          const position = frameToPixel(keyframe.frame);
-          const keyframeTime = frameToTime(keyframe.frame, framerate);
-          const isAtCurrentTime = Math.abs(keyframeTime - currentTime) < 0.01;
-          const isStartKeyframe = keyframe.frame === 0;
-          const totalFrames = Math.round(duration * framerate);
-          const isEndKeyframe = keyframe.frame === totalFrames;
-          const isAtStartTime = Math.abs(currentTime) < 0.01;
-
-          const shouldHighlight = isAtCurrentTime ||
-                                  (isEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
-
-          const isHovered = hoveredKeyframeIndex === index;
-
-          return (
+          {/* Active highlight region indicator */}
+          {isEnabled && (
             <div
-              key={index}
-              className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
-              style={{ left: `${position}%` }}
-            >
-              {/* Hit area */}
-              <div className="absolute -top-8 -bottom-6 -left-4 -right-4" />
+              className="absolute top-0 bottom-0 bg-orange-500/20 border-r-2 border-orange-400"
+              style={{
+                left: 0,
+                width: `${highlightEndPosition}%`
+              }}
+            />
+          )}
 
-              {/* Copy button */}
-              {onKeyframeCopy && (
-                <button
-                  className={`absolute -top-8 left-1/2 transform -translate-x-1/2 transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1 z-50 ${
-                    isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onKeyframeCopy(keyframeTime);
-                  }}
-                  title="Copy keyframe"
-                >
-                  <Copy size={10} />
-                </button>
-              )}
-
-              {/* Diamond keyframe indicator */}
-              <div
-                className={`w-3 h-3 transform rotate-45 cursor-pointer transition-colors ${
-                  shouldHighlight
-                    ? 'bg-orange-400 scale-125'
-                    : 'bg-orange-500 hover:bg-orange-400'
-                }`}
-                onClick={() => onKeyframeClick(keyframeTime)}
-                title={`Highlight keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
-                  isEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
-                }`}
-              />
-
-              {/* Delete button */}
-              {keyframes.length > 2 &&
-               !isStartKeyframe &&
-               !isEndKeyframe && (
-                <button
-                  className={`absolute top-6 left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1 z-50 ${
-                    isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onKeyframeDelete(keyframeTime, duration);
-                  }}
-                  title="Delete keyframe"
-                >
-                  <Trash2 size={10} />
-                </button>
-              )}
+          {/* Placeholder text */}
+          {!isEnabled && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="text-gray-500 text-sm">Click the circle icon to enable highlight layer</span>
             </div>
-          );
-        })}
+          )}
+
+          {isEnabled && keyframes.length === 2 && !isEndKeyframeExplicit && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="text-gray-400 text-sm">Drag the highlight ellipse on the video to add keyframes</span>
+            </div>
+          )}
+
+          {/* Keyframe indicators (only show when enabled) */}
+          {isEnabled && keyframes.map((keyframe, index) => {
+            const position = frameToPixel(keyframe.frame);
+            const keyframeTime = frameToTime(keyframe.frame, framerate);
+            const isAtCurrentTime = Math.abs(keyframeTime - currentTime) < 0.01;
+            const isStartKeyframe = keyframe.frame === 0;
+            const highlightEndFrame = Math.round(highlightDuration * framerate);
+            const isEndKeyframe = keyframe.frame === highlightEndFrame;
+            const isAtStartTime = Math.abs(currentTime) < 0.01;
+
+            const shouldHighlight = isAtCurrentTime ||
+                                    (isEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
+
+            const isHovered = hoveredKeyframeIndex === index;
+
+            return (
+              <div
+                key={index}
+                className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
+                style={{ left: `${position}%` }}
+              >
+                {/* Hit area */}
+                <div className="absolute -top-8 -bottom-6 -left-4 -right-4" />
+
+                {/* Copy button */}
+                {onKeyframeCopy && (
+                  <button
+                    className={`absolute -top-8 left-1/2 transform -translate-x-1/2 transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1 z-50 ${
+                      isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onKeyframeCopy(keyframeTime);
+                    }}
+                    title="Copy keyframe"
+                  >
+                    <Copy size={10} />
+                  </button>
+                )}
+
+                {/* Diamond keyframe indicator */}
+                <div
+                  className={`w-3 h-3 transform rotate-45 cursor-pointer transition-colors ${
+                    shouldHighlight
+                      ? 'bg-orange-400 scale-125'
+                      : 'bg-orange-500 hover:bg-orange-400'
+                  }`}
+                  onClick={() => onKeyframeClick(keyframeTime)}
+                  title={`Highlight keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
+                    isEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
+                  }`}
+                />
+
+                {/* Delete button */}
+                {keyframes.length > 2 &&
+                 !isStartKeyframe &&
+                 !isEndKeyframe && (
+                  <button
+                    className={`absolute top-6 left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1 z-50 ${
+                      isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onKeyframeDelete(keyframeTime, duration);
+                    }}
+                    title="Delete keyframe"
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Duration slider row (only when enabled) */}
+      {isEnabled && (
+        <div className="relative h-8 border-t border-gray-700/30">
+          <div className="absolute left-0 top-0 h-full flex items-center justify-end bg-gray-900 border-r border-gray-700/50 w-32 pr-2">
+            <span className="text-xs text-gray-400">Duration</span>
+          </div>
+          <div className="absolute left-32 right-0 top-0 h-full flex items-center px-3 gap-3">
+            <input
+              type="range"
+              min="0.5"
+              max={duration || 60}
+              step="0.1"
+              value={highlightDuration}
+              onChange={handleDurationSliderChange}
+              className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+              title={`Highlight duration: ${highlightDuration.toFixed(1)}s`}
+            />
+            <span className="text-xs text-orange-400 font-mono w-16 text-right">
+              {highlightDuration.toFixed(1)}s
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
