@@ -1289,7 +1289,7 @@ class AIVideoUpscaler:
         base_name: str
     ):
         """Write a comparison report to a text file"""
-        with open(report_path, 'w') as f:
+        with open(report_path, 'w', encoding='utf-8') as f:
             f.write("=" * 70 + "\n")
             f.write("VIDEO UPSCALING COMPARISON REPORT\n")
             f.write("=" * 70 + "\n\n")
