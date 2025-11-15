@@ -220,6 +220,7 @@ export default function SegmentLayer({
                       className="p-1.5 rounded transition-colors bg-blue-600 hover:bg-blue-700 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={(e) => {
                         e.stopPropagation();
+                        console.log('[SegmentLayer] Undo start trim button clicked, startTrimCount:', startTrimCount);
                         if (startTrimCount > 0) {
                           onDetrimStart();
                         }
@@ -257,6 +258,7 @@ export default function SegmentLayer({
                       className="p-1.5 rounded transition-colors bg-blue-600 hover:bg-blue-700 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={(e) => {
                         e.stopPropagation();
+                        console.log('[SegmentLayer] Undo end trim button clicked, endTrimCount:', endTrimCount);
                         if (endTrimCount > 0) {
                           onDetrimEnd();
                         }
