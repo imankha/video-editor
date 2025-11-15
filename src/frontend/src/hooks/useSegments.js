@@ -327,8 +327,15 @@ export function useSegments() {
       // Use flushSync to ensure both state updates complete synchronously
       // CRITICAL: Both setters must be at the same level, NOT nested
       flushSync(() => {
-        console.log('[useSegments] Calling setTrimRange with:', JSON.stringify(lastStartOp.previousRange));
-        setTrimRange(lastStartOp.previousRange);
+        // FIX: Only restore the start value, preserve current end
+        // This prevents losing end trim when undoing a start trim
+        setTrimRange(current => {
+          const restoredStart = lastStartOp.previousRange?.start || 0;
+          const currentEnd = current?.end || duration;
+          const newRange = { start: restoredStart, end: currentEnd };
+          console.log('[useSegments] Calling setTrimRange - restoring start:', restoredStart, 'preserving end:', currentEnd);
+          return newRange;
+        });
 
         console.log('[useSegments] Updating trimHistory to remove index:', lastStartIndex);
         setTrimHistory(prev => {
@@ -341,7 +348,7 @@ export function useSegments() {
     } finally {
       detrimLockRef.current.isLocked = false;
     }
-  }, [trimHistory]);
+  }, [trimHistory, duration]);
 
   /**
    * De-trim (undo last trim operation from end)
@@ -375,8 +382,15 @@ export function useSegments() {
       // Use flushSync to ensure both state updates complete synchronously
       // CRITICAL: Both setters must be at the same level, NOT nested
       flushSync(() => {
-        console.log('[useSegments] Calling setTrimRange with:', JSON.stringify(lastEndOp.previousRange));
-        setTrimRange(lastEndOp.previousRange);
+        // FIX: Only restore the end value, preserve current start
+        // This prevents losing start trim when undoing an end trim
+        setTrimRange(current => {
+          const restoredEnd = lastEndOp.previousRange?.end || duration;
+          const currentStart = current?.start || 0;
+          const newRange = { start: currentStart, end: restoredEnd };
+          console.log('[useSegments] Calling setTrimRange - preserving start:', currentStart, 'restoring end:', restoredEnd);
+          return newRange;
+        });
 
         console.log('[useSegments] Updating trimHistory to remove index:', lastEndIndex);
         setTrimHistory(prev => {
@@ -389,7 +403,7 @@ export function useSegments() {
     } finally {
       detrimLockRef.current.isLocked = false;
     }
-  }, [trimHistory]);
+  }, [trimHistory, duration]);
 
   /**
    * Toggle trim status for a segment (only works for first or last segment)
