@@ -217,11 +217,15 @@ export default function SegmentLayer({
                 <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 z-10 flex gap-1">
                   {startTrimCount > 0 && onDetrimStart && (
                     <button
-                      className="p-1.5 rounded transition-colors bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
+                      className="p-1.5 rounded transition-colors bg-blue-600 hover:bg-blue-700 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDetrimStart();
+                        console.log('[SegmentLayer] Undo start trim button clicked, startTrimCount:', startTrimCount);
+                        if (startTrimCount > 0) {
+                          onDetrimStart();
+                        }
                       }}
+                      disabled={startTrimCount === 0}
                       title={`Undo last start trim (${startTrimCount} in history)`}
                     >
                       <Undo size={12} />
@@ -251,11 +255,15 @@ export default function SegmentLayer({
                 <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 z-10 flex gap-1">
                   {endTrimCount > 0 && onDetrimEnd && (
                     <button
-                      className="p-1.5 rounded transition-colors bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
+                      className="p-1.5 rounded transition-colors bg-blue-600 hover:bg-blue-700 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDetrimEnd();
+                        console.log('[SegmentLayer] Undo end trim button clicked, endTrimCount:', endTrimCount);
+                        if (endTrimCount > 0) {
+                          onDetrimEnd();
+                        }
                       }}
+                      disabled={endTrimCount === 0}
                       title={`Undo last end trim (${endTrimCount} in history)`}
                     >
                       <Undo size={12} />

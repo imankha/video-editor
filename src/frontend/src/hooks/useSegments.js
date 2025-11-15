@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { timeToFrame, frameToTime } from '../utils/videoUtils';
 
 /**
@@ -36,6 +37,11 @@ export function useSegments() {
 
   // Framerate for frame calculations (matches useCrop)
   const [framerate] = useState(30);
+
+  // Lock to prevent re-entrant calls to detrim functions
+  // This is critical because React can invoke handlers multiple times
+  // MUST use useRef (not useState) so the same object persists across renders
+  const detrimLockRef = useRef({ isLocked: false });
 
   /**
    * DERIVED: Compute all boundaries from userSplits + duration
@@ -192,52 +198,101 @@ export function useSegments() {
   /**
    * Trim from the start: sets trim range to [time, end]
    * Pushes operation to history for de-trim functionality
+   * Uses flushSync to prevent duplicate operations from rapid clicking
+   * FIXED: Updates both states at the same level to avoid nested state update anti-pattern
    */
   const trimStart = useCallback((time) => {
-    setTrimRange(prev => {
-      // Record this operation in history
-      setTrimHistory(history => [...history, {
-        type: 'start',
-        time,
-        previousRange: prev
-      }]);
+    console.log('[useSegments] trimStart called with time:', time);
+    flushSync(() => {
+      let prevRange = null;
+      let shouldUpdate = true;
 
-      return {
-        start: time,
-        end: prev?.end || duration
-      };
+      // First, capture the current trim range and check for duplicates
+      setTrimRange(prev => {
+        console.log('[useSegments] trimStart - current trimRange:', JSON.stringify(prev));
+        // Prevent duplicate operations - if already trimmed to this exact position, ignore
+        if (prev && Math.abs(prev.start - time) < 0.01) {
+          console.log('[useSegments] Ignoring duplicate trimStart at:', time);
+          shouldUpdate = false;
+          return prev;
+        }
+
+        prevRange = prev;
+        const newRange = {
+          start: time,
+          end: prev?.end || duration
+        };
+        console.log('[useSegments] Setting trimRange to:', JSON.stringify(newRange));
+        return newRange;
+      });
+
+      // Then, update history if this wasn't a duplicate
+      if (shouldUpdate) {
+        setTrimHistory(history => {
+          console.log('[useSegments] trimStart - current history:', JSON.stringify(history));
+          const newHistory = [...history, {
+            type: 'start',
+            time,
+            previousRange: prevRange
+          }];
+          console.log('[useSegments] trimStart - new history:', JSON.stringify(newHistory));
+          return newHistory;
+        });
+        console.log('[useSegments] Trimmed start to:', time, 'previousRange was:', JSON.stringify(prevRange));
+      }
     });
-    console.log('[useSegments] Trimmed start to:', time);
+    console.log('[useSegments] trimStart completed');
   }, [duration]);
 
   /**
    * Trim from the end: sets trim range to [start, time]
    * Pushes operation to history for de-trim functionality
+   * Uses flushSync to prevent duplicate operations from rapid clicking
+   * FIXED: Updates both states at the same level to avoid nested state update anti-pattern
    */
   const trimEnd = useCallback((time) => {
-    setTrimRange(prev => {
-      // Record this operation in history
-      setTrimHistory(history => [...history, {
-        type: 'end',
-        time,
-        previousRange: prev
-      }]);
+    flushSync(() => {
+      let prevRange = null;
+      let shouldUpdate = true;
 
-      return {
-        start: prev?.start || 0,
-        end: time
-      };
+      // First, capture the current trim range and check for duplicates
+      setTrimRange(prev => {
+        // Prevent duplicate operations - if already trimmed to this exact position, ignore
+        if (prev && Math.abs(prev.end - time) < 0.01) {
+          console.log('[useSegments] Ignoring duplicate trimEnd at:', time);
+          shouldUpdate = false;
+          return prev;
+        }
+
+        prevRange = prev;
+        return {
+          start: prev?.start || 0,
+          end: time
+        };
+      });
+
+      // Then, update history if this wasn't a duplicate
+      if (shouldUpdate) {
+        setTrimHistory(history => [...history, {
+          type: 'end',
+          time,
+          previousRange: prevRange
+        }]);
+        console.log('[useSegments] Trimmed end to:', time);
+      }
     });
-    console.log('[useSegments] Trimmed end to:', time);
   }, []);
 
   /**
    * Restore trim range (remove trimming) and clear history
+   * Uses flushSync for immediate, atomic state updates
    */
   const clearTrim = useCallback(() => {
-    setTrimRange(null);
-    setTrimHistory([]);
-    console.log('[useSegments] Cleared all trim state');
+    flushSync(() => {
+      setTrimRange(null);
+      setTrimHistory([]);
+      console.log('[useSegments] Cleared all trim state');
+    });
   }, []);
 
   /**
@@ -248,32 +303,45 @@ export function useSegments() {
    * preventing double-click issues caused by stale state during re-renders.
    */
   const detrimStart = useCallback(() => {
-    // Access current state synchronously using functional updater
-    let rangeToRestore = null;
+    console.log('[useSegments] detrimStart called');
 
-    // First, find what we need to restore
-    setTrimHistory(prev => {
-      const lastStartIndex = prev.findLastIndex(op => op.type === 'start');
-      if (lastStartIndex === -1) {
-        console.log('[useSegments] No start trim to undo');
-        return prev;
-      }
-
-      const lastStartOp = prev[lastStartIndex];
-      console.log('[useSegments] De-trimming start, restoring to:', lastStartOp.previousRange);
-
-      // Capture the range we need to restore
-      rangeToRestore = lastStartOp.previousRange;
-
-      // Remove this operation from history
-      return prev.filter((_, i) => i !== lastStartIndex);
-    });
-
-    // Now update trim range if we found something to restore
-    if (rangeToRestore !== null) {
-      setTrimRange(rangeToRestore);
+    // CRITICAL: Prevent re-entrant calls using a lock
+    if (detrimLockRef.current.isLocked) {
+      console.log('[useSegments] detrimStart blocked - operation already in progress');
+      return;
     }
-  }, []);
+
+    // Pre-check: find the operation to undo BEFORE acquiring lock
+    console.log('[useSegments] detrimStart - current history:', JSON.stringify(trimHistory));
+    const lastStartIndex = trimHistory.findLastIndex(op => op.type === 'start');
+    if (lastStartIndex === -1) {
+      console.log('[useSegments] detrimStart aborted - no start operations in history');
+      return;
+    }
+
+    const lastStartOp = trimHistory[lastStartIndex];
+    console.log('[useSegments] De-trimming start, restoring to:', JSON.stringify(lastStartOp.previousRange));
+
+    detrimLockRef.current.isLocked = true;
+    try {
+      // Use flushSync to ensure both state updates complete synchronously
+      // CRITICAL: Both setters must be at the same level, NOT nested
+      flushSync(() => {
+        console.log('[useSegments] Calling setTrimRange with:', JSON.stringify(lastStartOp.previousRange));
+        setTrimRange(lastStartOp.previousRange);
+
+        console.log('[useSegments] Updating trimHistory to remove index:', lastStartIndex);
+        setTrimHistory(prev => {
+          const newHistory = prev.filter((_, i) => i !== lastStartIndex);
+          console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
+          return newHistory;
+        });
+      });
+      console.log('[useSegments] detrimStart completed');
+    } finally {
+      detrimLockRef.current.isLocked = false;
+    }
+  }, [trimHistory]);
 
   /**
    * De-trim (undo last trim operation from end)
@@ -283,38 +351,52 @@ export function useSegments() {
    * preventing double-click issues caused by stale state during re-renders.
    */
   const detrimEnd = useCallback(() => {
-    // Access current state synchronously using functional updater
-    let rangeToRestore = null;
+    console.log('[useSegments] detrimEnd called');
 
-    // First, find what we need to restore
-    setTrimHistory(prev => {
-      const lastEndIndex = prev.findLastIndex(op => op.type === 'end');
-      if (lastEndIndex === -1) {
-        console.log('[useSegments] No end trim to undo');
-        return prev;
-      }
-
-      const lastEndOp = prev[lastEndIndex];
-      console.log('[useSegments] De-trimming end, restoring to:', lastEndOp.previousRange);
-
-      // Capture the range we need to restore
-      rangeToRestore = lastEndOp.previousRange;
-
-      // Remove this operation from history
-      return prev.filter((_, i) => i !== lastEndIndex);
-    });
-
-    // Now update trim range if we found something to restore
-    if (rangeToRestore !== null) {
-      setTrimRange(rangeToRestore);
+    // CRITICAL: Prevent re-entrant calls using a lock
+    if (detrimLockRef.current.isLocked) {
+      console.log('[useSegments] detrimEnd blocked - operation already in progress');
+      return;
     }
-  }, []);
+
+    // Pre-check: find the operation to undo BEFORE acquiring lock
+    console.log('[useSegments] detrimEnd - current history:', JSON.stringify(trimHistory));
+    const lastEndIndex = trimHistory.findLastIndex(op => op.type === 'end');
+    if (lastEndIndex === -1) {
+      console.log('[useSegments] detrimEnd aborted - no end operations in history');
+      return;
+    }
+
+    const lastEndOp = trimHistory[lastEndIndex];
+    console.log('[useSegments] De-trimming end, restoring to:', JSON.stringify(lastEndOp.previousRange));
+
+    detrimLockRef.current.isLocked = true;
+    try {
+      // Use flushSync to ensure both state updates complete synchronously
+      // CRITICAL: Both setters must be at the same level, NOT nested
+      flushSync(() => {
+        console.log('[useSegments] Calling setTrimRange with:', JSON.stringify(lastEndOp.previousRange));
+        setTrimRange(lastEndOp.previousRange);
+
+        console.log('[useSegments] Updating trimHistory to remove index:', lastEndIndex);
+        setTrimHistory(prev => {
+          const newHistory = prev.filter((_, i) => i !== lastEndIndex);
+          console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
+          return newHistory;
+        });
+      });
+      console.log('[useSegments] detrimEnd completed');
+    } finally {
+      detrimLockRef.current.isLocked = false;
+    }
+  }, [trimHistory]);
 
   /**
    * Toggle trim status for a segment (only works for first or last segment)
    * This is the main trim operation called from UI
    */
   const toggleTrimSegment = useCallback((segmentIndex) => {
+    console.log('[useSegments] toggleTrimSegment called with index:', segmentIndex);
     if (boundaries.length < 2) return;
 
     const numSegments = boundaries.length - 1;
@@ -323,6 +405,7 @@ export function useSegments() {
     const segmentStart = boundaries[segmentIndex];
     const segmentEnd = boundaries[segmentIndex + 1];
     const isTrimmed = isSegmentTrimmed(segmentStart, segmentEnd);
+    console.log('[useSegments] Segment', segmentIndex, 'range:', segmentStart, '-', segmentEnd, 'isTrimmed:', isTrimmed);
 
     // Determine first and last non-trimmed segments
     let firstNonTrimmedIndex = -1;
