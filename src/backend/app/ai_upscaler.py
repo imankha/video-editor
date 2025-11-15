@@ -1682,6 +1682,10 @@ class AIVideoUpscaler:
         else:
             logger.info("Starting single-pass encoding...")
 
+        logger.info(f"Input framerate: {input_framerate}fps")
+        logger.info(f"Output framerate: {fps}fps")
+        if needs_interpolation:
+            logger.info(f"Frame interpolation: {interpolation_ratio:.2f}x (minterpolate active)")
         logger.info("=" * 60)
 
         # Build FFmpeg command based on codec
@@ -1730,6 +1734,7 @@ class AIVideoUpscaler:
 
         # Add common parameters
         cmd_pass2.extend([
+            '-r', str(fps),  # Explicit output framerate - CRITICAL for frame interpolation
             '-pix_fmt', 'yuv420p',
             '-colorspace', 'bt709',
             '-color_primaries', 'bt709',
