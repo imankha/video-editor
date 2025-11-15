@@ -850,6 +850,205 @@ async def export_with_ai_upscale(
         raise HTTPException(status_code=500, detail=f"AI upscaling failed: {str(e)}")
 
 
+# Flag to enable comparison export mode for testing
+# Set to True to enable batch comparison exports
+COMPARING_EXPORTS = True
+
+
+@app.post("/api/export/upscale/comparison")
+async def export_comparison_variants(
+    video: UploadFile = File(...),
+    keyframes_json: str = Form(...),
+    export_id: str = Form(...),
+    segment_data_json: str = Form(None),
+    include_audio: str = Form("true")
+):
+    """
+    Export multiple video variants for quality comparison testing.
+    Exports 4 versions: realesrgan_30fps, realesrgan_60fps, realbasicvsr_30fps, realbasicvsr_60fps
+
+    This is for testing and comparing different backend configurations.
+
+    Args:
+        video: Video file to process
+        keyframes_json: JSON array of crop keyframes
+        export_id: Unique ID for tracking export progress
+        segment_data_json: Optional segment speed/trim data
+        include_audio: Include audio in export - "true" or "false" (default "true")
+
+    Returns:
+        JSON with paths to all exported variants
+    """
+    if not COMPARING_EXPORTS:
+        raise HTTPException(
+            status_code=400,
+            detail="Comparison export mode is disabled. Set COMPARING_EXPORTS = True to enable."
+        )
+
+    # Initialize progress tracking
+    export_progress[export_id] = {
+        "progress": 0,
+        "message": "Starting comparison batch export...",
+        "status": "processing"
+    }
+
+    # Parse include_audio parameter
+    include_audio_bool = include_audio.lower() == "true"
+    logger.info(f"Comparison export - Audio setting: {'Include audio' if include_audio_bool else 'Video only'}")
+
+    # Parse keyframes
+    try:
+        keyframes_data = json.loads(keyframes_json)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid keyframes JSON: {str(e)}")
+
+    keyframes = [CropKeyframe(**kf) for kf in keyframes_data]
+
+    if len(keyframes) == 0:
+        raise HTTPException(status_code=400, detail="No crop keyframes provided")
+
+    # Parse segment data if provided
+    segment_data = None
+    if segment_data_json:
+        try:
+            segment_data = json.loads(segment_data_json)
+            logger.info("Comparison export with segment data")
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid segment data JSON: {str(e)}")
+
+    # Create output directory for comparison results
+    comparison_dir = tempfile.mkdtemp(prefix="comparison_")
+    temp_dir = tempfile.mkdtemp(prefix="upscale_input_")
+    input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex}{Path(video.filename).suffix}")
+
+    try:
+        # Save uploaded file
+        with open(input_path, 'wb') as f:
+            content = await video.read()
+            f.write(content)
+
+        # Convert keyframes to dict format
+        keyframes_dict = [
+            {
+                'time': kf.time,
+                'x': kf.x,
+                'y': kf.y,
+                'width': kf.width,
+                'height': kf.height
+            }
+            for kf in keyframes
+        ]
+
+        # Check if AI upscaler is available
+        if AIVideoUpscaler is None:
+            raise HTTPException(
+                status_code=503,
+                detail="AI upscaling dependencies not installed"
+            )
+
+        # Initialize AI upscaler
+        logger.info("=" * 80)
+        logger.info("COMPARISON BATCH EXPORT")
+        logger.info("=" * 80)
+        upscaler = AIVideoUpscaler(device='cuda', export_mode='fast')
+
+        # Verify AI model is loaded
+        if upscaler.upsampler is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Real-ESRGAN model failed to load"
+            )
+
+        # Capture the event loop
+        loop = asyncio.get_running_loop()
+
+        def progress_callback(current, total, message, phase=''):
+            """Update progress tracking for comparison export"""
+            overall_percent = (current / total * 100) if total > 0 else 0
+            progress_data = {
+                "progress": overall_percent,
+                "message": message,
+                "status": "processing",
+                "phase": phase
+            }
+            export_progress[export_id] = progress_data
+            logger.info(f"Comparison Progress: {overall_percent:.1f}% - {message}")
+
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    manager.send_progress(export_id, progress_data),
+                    loop
+                )
+            except Exception as e:
+                logger.error(f"Failed to send WebSocket update: {e}")
+
+        # Generate base name from original filename
+        base_name = Path(video.filename).stem
+
+        # Run comparison batch export
+        init_data = {
+            "progress": 0,
+            "message": "Starting comparison batch export...",
+            "status": "processing"
+        }
+        export_progress[export_id] = init_data
+        await manager.send_progress(export_id, init_data)
+
+        result = await asyncio.to_thread(
+            upscaler.export_comparison_batch,
+            input_path=input_path,
+            output_dir=comparison_dir,
+            keyframes=keyframes_dict,
+            base_name=base_name,
+            progress_callback=progress_callback,
+            segment_data=segment_data,
+            include_audio=include_audio_bool
+        )
+
+        logger.info("=" * 80)
+        logger.info("COMPARISON BATCH EXPORT COMPLETE")
+        logger.info(f"Results: {result}")
+        logger.info("=" * 80)
+
+        # Update progress - complete
+        complete_data = {
+            "progress": 100,
+            "message": "Comparison batch export complete!",
+            "status": "complete",
+            "results": result
+        }
+        export_progress[export_id] = complete_data
+        await manager.send_progress(export_id, complete_data)
+
+        # Return JSON with all paths
+        return {
+            "success": result['success'],
+            "output_directory": comparison_dir,
+            "total_variants": result['total_variants'],
+            "successful_variants": result['successful_variants'],
+            "variants": result['results'],
+            "note": "Files are saved in the output directory. Download them manually for comparison."
+        }
+
+    except Exception as e:
+        logger.error(f"Comparison export failed: {str(e)}", exc_info=True)
+
+        # Update progress - error
+        error_data = {
+            "progress": 0,
+            "message": f"Comparison export failed: {str(e)}",
+            "status": "error"
+        }
+        export_progress[export_id] = error_data
+        await manager.send_progress(export_id, error_data)
+
+        # Clean up input temp dir on error
+        if os.path.exists(temp_dir):
+            import shutil
+            shutil.rmtree(temp_dir)
+        raise HTTPException(status_code=500, detail=f"Comparison export failed: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
