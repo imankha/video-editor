@@ -35,7 +35,7 @@ class AIVideoUpscaler:
     - Target resolution based on aspect ratio
     """
 
-    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality'):
+    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan'):
         """
         Initialize the AI upscaler
 
@@ -44,11 +44,14 @@ class AIVideoUpscaler:
             device: 'cuda' for GPU or 'cpu' for CPU processing
             enable_multi_gpu: Enable multi-GPU parallel processing (default: True)
             export_mode: Export mode - "fast" or "quality" (default "quality")
+            sr_backend: Super-resolution backend - "realesrgan" or "realbasicvsr" (default "realesrgan")
         """
         # Detect available GPUs
         self.num_gpus = 0
         self.enable_multi_gpu = enable_multi_gpu
         self.export_mode = export_mode
+        self.sr_backend = sr_backend
+        self.vsr_model = None  # For RealBasicVSR
 
         if device == 'cuda' and torch.cuda.is_available():
             self.num_gpus = torch.cuda.device_count()
@@ -85,7 +88,13 @@ class AIVideoUpscaler:
         self.upsamplers = {}  # Dictionary to store upsampler for each GPU
         self.progress_lock = threading.Lock()  # Thread-safe progress tracking
 
-        self.setup_model()
+        # Setup appropriate backend
+        if self.sr_backend == 'realbasicvsr':
+            logger.info(f"Using RealBasicVSR backend for video super-resolution")
+            self.setup_realbasicvsr()
+        else:
+            logger.info(f"Using Real-ESRGAN backend for frame-by-frame super-resolution")
+            self.setup_model()
 
     def setup_model(self):
         """Download and setup Real-ESRGAN model"""
@@ -232,6 +241,101 @@ class AIVideoUpscaler:
             logger.error(traceback.format_exc())
             self.upsampler = None
 
+    def setup_realbasicvsr(self):
+        """Setup RealBasicVSR model for temporal video super-resolution"""
+        try:
+            # Try to import mmagic (formerly mmediting)
+            try:
+                from mmagic.apis import MMagicInferencer
+                logger.info("Using MMagic API for RealBasicVSR")
+                self._mmagic_version = 'mmagic'
+            except ImportError:
+                try:
+                    from mmedit.apis import init_model
+                    logger.info("Using MMEdit API for RealBasicVSR")
+                    self._mmagic_version = 'mmedit'
+                except ImportError:
+                    logger.error("Neither MMagic nor MMEdit is installed")
+                    raise ImportError("RealBasicVSR requires mmagic or mmedit package")
+
+            logger.info(f"Initializing RealBasicVSR model...")
+
+            # Model configuration paths
+            # Users need to download these from MMagic model zoo
+            weights_dir = Path('weights')
+            weights_dir.mkdir(exist_ok=True)
+
+            config_path = weights_dir / 'realbasicvsr_x4.py'
+            checkpoint_path = weights_dir / 'realbasicvsr_x4.pth'
+
+            # Check if config and weights exist
+            if not config_path.exists() or not checkpoint_path.exists():
+                logger.warning("=" * 60)
+                logger.warning("RealBasicVSR model files not found!")
+                logger.warning("=" * 60)
+                logger.warning(f"Expected config: {config_path}")
+                logger.warning(f"Expected weights: {checkpoint_path}")
+                logger.warning("")
+                logger.warning("Please download from MMagic model zoo:")
+                logger.warning("  https://github.com/open-mmlab/mmagic/tree/main/configs/realbasicvsr")
+                logger.warning("")
+                logger.warning("Falling back to Real-ESRGAN backend...")
+                logger.warning("=" * 60)
+                self.sr_backend = 'realesrgan'
+                self.setup_model()
+                return
+
+            # Initialize the model
+            if self._mmagic_version == 'mmagic':
+                # MMagic 1.x API
+                self.vsr_model = MMagicInferencer(
+                    'realbasicvsr',
+                    model_config=str(config_path),
+                    model_ckpt=str(checkpoint_path),
+                    device=str(self.device)
+                )
+            else:
+                # MMEdit API (older)
+                self.vsr_model = init_model(str(config_path), str(checkpoint_path), device=self.device)
+
+            logger.info("✓ RealBasicVSR model loaded successfully!")
+            logger.info(f"  Config: {config_path}")
+            logger.info(f"  Weights: {checkpoint_path}")
+            logger.info(f"  Device: {self.device}")
+
+            # Also initialize Real-ESRGAN as fallback (for fast mode)
+            logger.info("Also initializing Real-ESRGAN as fallback...")
+            self.setup_model()
+
+        except ImportError as e:
+            logger.error("=" * 80)
+            logger.error("❌ CRITICAL: RealBasicVSR dependencies not installed!")
+            logger.error("=" * 80)
+            logger.error(f"Import error: {e}")
+            logger.error("")
+            logger.error("To install MMagic (recommended):")
+            logger.error("  pip install mmagic")
+            logger.error("  # or for older systems:")
+            logger.error("  pip install mmedit")
+            logger.error("")
+            logger.error("Falling back to Real-ESRGAN backend...")
+            logger.error("=" * 80)
+            self.sr_backend = 'realesrgan'
+            self.setup_model()
+        except Exception as e:
+            logger.error("=" * 80)
+            logger.error("❌ CRITICAL: RealBasicVSR setup failed!")
+            logger.error("=" * 80)
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {e}")
+            logger.error("")
+            logger.error("Falling back to Real-ESRGAN backend...")
+            logger.error("=" * 80)
+            import traceback
+            logger.error(traceback.format_exc())
+            self.sr_backend = 'realesrgan'
+            self.setup_model()
+
     def detect_aspect_ratio(self, width: int, height: int) -> Tuple[str, Tuple[int, int]]:
         """
         Detect aspect ratio and determine target resolution
@@ -333,18 +437,22 @@ class AIVideoUpscaler:
             logger.debug(f"AI upscaling frame from {current_w}x{current_h} to {target_w}x{target_h}")
 
             # Denoise before upscaling to prevent noise amplification (QUALITY mode only)
+            # Using milder settings to preserve more detail
             if self.device.type == 'cuda' and self.export_mode == 'quality':
-                # Light denoising preserves details
-                frame = cv2.bilateralFilter(frame, d=5, sigmaColor=10, sigmaSpace=10)
+                # Light denoising - reduced from d=5, sigma=10 to d=3, sigma=5
+                frame = cv2.bilateralFilter(frame, d=3, sigmaColor=5, sigmaSpace=5)
 
-            # Real-ESRGAN upscales by 4x by default
-            # We'll upscale first, then resize to exact target if needed
+            # Calculate desired scale for Real-ESRGAN
+            scale_x = target_w / current_w
+            scale_y = target_h / current_h
+            desired_scale = min(scale_x, scale_y, 4.0)
+
+            # Real-ESRGAN can use outscale < 4 for more efficient processing
             with contextlib.redirect_stderr(open(os.devnull, 'w')):
-                # Upscale with AI (4x)
-                enhanced, _ = self.upsampler.enhance(frame, outscale=4)
+                enhanced, _ = self.upsampler.enhance(frame, outscale=desired_scale)
 
             upscaled_h, upscaled_w = enhanced.shape[:2]
-            logger.debug(f"Real-ESRGAN upscaled to {upscaled_w}x{upscaled_h}")
+            logger.debug(f"Real-ESRGAN upscaled to {upscaled_w}x{upscaled_h} (scale={desired_scale:.2f})")
 
             # Resize to exact target size if needed (using highest quality interpolation)
             if enhanced.shape[:2] != (target_h, target_w):
@@ -352,11 +460,12 @@ class AIVideoUpscaler:
                 logger.debug(f"Resized to exact target: {target_w}x{target_h}")
 
             # Sharpen upscaled output for better perceived quality (QUALITY mode only)
+            # Using milder unsharp mask to avoid over-sharpening
             if self.device.type == 'cuda' and self.export_mode == 'quality':
-                # Gaussian blur for unsharp mask
-                gaussian = cv2.GaussianBlur(enhanced, (0, 0), 2.0)
-                # Unsharp mask: original + (original - blurred) * amount
-                enhanced = cv2.addWeighted(enhanced, 1.5, gaussian, -0.5, 0)
+                # Gaussian blur for unsharp mask - reduced sigma from 2.0 to 1.0
+                gaussian = cv2.GaussianBlur(enhanced, (0, 0), 1.0)
+                # Unsharp mask: reduced from 1.5/-0.5 to 1.2/-0.2
+                enhanced = cv2.addWeighted(enhanced, 1.2, gaussian, -0.2, 0)
                 # Clip values to valid range
                 enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
 
@@ -410,14 +519,20 @@ class AIVideoUpscaler:
             target_w, target_h = target_resolution
 
             # Denoise before upscaling to prevent noise amplification (QUALITY mode only)
+            # Using milder settings to preserve more detail
             gpu_device = torch.device(f'cuda:{gpu_id}') if gpu_id >= 0 else self.device
             if gpu_device.type == 'cuda' and self.export_mode == 'quality':
-                # Light denoising preserves details
-                frame = cv2.bilateralFilter(frame, d=5, sigmaColor=10, sigmaSpace=10)
+                # Light denoising - reduced from d=5, sigma=10 to d=3, sigma=5
+                frame = cv2.bilateralFilter(frame, d=3, sigmaColor=5, sigmaSpace=5)
 
-            # Real-ESRGAN upscales by 4x by default
+            # Calculate desired scale for Real-ESRGAN
+            scale_x = target_w / current_w
+            scale_y = target_h / current_h
+            desired_scale = min(scale_x, scale_y, 4.0)
+
+            # Real-ESRGAN can use outscale < 4 for more efficient processing
             with contextlib.redirect_stderr(open(os.devnull, 'w')):
-                enhanced, _ = upsampler.enhance(frame, outscale=4)
+                enhanced, _ = upsampler.enhance(frame, outscale=desired_scale)
 
             upscaled_h, upscaled_w = enhanced.shape[:2]
 
@@ -426,11 +541,12 @@ class AIVideoUpscaler:
                 enhanced = cv2.resize(enhanced, target_resolution, interpolation=cv2.INTER_LANCZOS4)
 
             # Sharpen upscaled output for better perceived quality (QUALITY mode only)
+            # Using milder unsharp mask to avoid over-sharpening
             if gpu_device.type == 'cuda' and self.export_mode == 'quality':
-                # Gaussian blur for unsharp mask
-                gaussian = cv2.GaussianBlur(enhanced, (0, 0), 2.0)
-                # Unsharp mask: original + (original - blurred) * amount
-                enhanced = cv2.addWeighted(enhanced, 1.5, gaussian, -0.5, 0)
+                # Gaussian blur for unsharp mask - reduced sigma from 2.0 to 1.0
+                gaussian = cv2.GaussianBlur(enhanced, (0, 0), 1.0)
+                # Unsharp mask: reduced from 1.5/-0.5 to 1.2/-0.2
+                enhanced = cv2.addWeighted(enhanced, 1.2, gaussian, -0.2, 0)
                 # Clip values to valid range
                 enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
 
@@ -486,6 +602,137 @@ class AIVideoUpscaler:
             frame = frame[y:y+h, x:x+w]
 
         return frame
+
+    def process_with_realbasicvsr(
+        self,
+        input_path: str,
+        keyframes_sorted: List[Dict[str, Any]],
+        target_resolution: Tuple[int, int],
+        total_frames: int,
+        original_fps: float,
+        frames_dir: Path,
+        progress_callback=None
+    ) -> int:
+        """
+        Process video using RealBasicVSR temporal super-resolution
+
+        Args:
+            input_path: Path to input video
+            keyframes_sorted: Sorted list of keyframes
+            target_resolution: Target (width, height)
+            total_frames: Total number of frames
+            original_fps: Original video FPS
+            frames_dir: Directory to save enhanced frames
+            progress_callback: Optional progress callback
+
+        Returns:
+            Number of successfully processed frames
+        """
+        if self.vsr_model is None:
+            raise RuntimeError("RealBasicVSR model not initialized")
+
+        # Create temporary directory for cropped frames
+        cropped_dir = frames_dir.parent / "cropped"
+        cropped_dir.mkdir(exist_ok=True)
+
+        logger.info("=" * 60)
+        logger.info("REALBASICVSR SEQUENCE PROCESSING")
+        logger.info("=" * 60)
+        logger.info(f"Step 1: Extracting and cropping {total_frames} frames...")
+
+        # Step 1: Extract and crop all frames (no SR yet)
+        for frame_idx in range(total_frames):
+            time = frame_idx / original_fps
+            crop = self.interpolate_crop(keyframes_sorted, time)
+
+            frame = self.extract_frame_with_crop(input_path, frame_idx, crop)
+
+            # Save cropped frame
+            frame_path = cropped_dir / f"frame_{frame_idx:06d}.png"
+            cv2.imwrite(str(frame_path), frame)
+
+            if progress_callback and frame_idx % 10 == 0:
+                progress_callback(
+                    frame_idx + 1,
+                    total_frames * 2,  # Account for both cropping and upscaling phases
+                    f"Cropping frame {frame_idx + 1}/{total_frames}",
+                    phase='crop'
+                )
+
+            if frame_idx == 0:
+                cropped_h, cropped_w = frame.shape[:2]
+                logger.info(f"✓ Cropped frame size: {cropped_w}x{cropped_h}")
+
+        logger.info(f"✓ All {total_frames} frames cropped")
+
+        # Step 2: Run RealBasicVSR on the sequence
+        logger.info("=" * 60)
+        logger.info("Step 2: Running RealBasicVSR on frame sequence...")
+        logger.info("This may take a while for temporal consistency processing...")
+
+        try:
+            if hasattr(self, '_mmagic_version') and self._mmagic_version == 'mmagic':
+                # MMagic API - process entire directory
+                # Get list of cropped frame paths
+                frame_paths = sorted(cropped_dir.glob("frame_*.png"))
+                frame_list = [str(p) for p in frame_paths]
+
+                # Process with MMagic inferencer
+                results = self.vsr_model.infer(
+                    video=frame_list,
+                    result_out_dir=str(frames_dir)
+                )
+                logger.info(f"RealBasicVSR processing complete")
+
+            else:
+                # MMEdit API (older) - use inference_video
+                from mmedit.apis import inference_video
+                inference_video(
+                    self.vsr_model,
+                    str(cropped_dir),
+                    str(frames_dir)
+                )
+
+            # Verify output frames exist and resize if needed
+            output_frames = sorted(frames_dir.glob("frame_*.png"))
+            if len(output_frames) == 0:
+                # Try alternative output naming from mmagic
+                output_frames = sorted(frames_dir.glob("*.png"))
+
+            logger.info(f"✓ RealBasicVSR produced {len(output_frames)} frames")
+
+            # Resize frames to exact target if needed (RealBasicVSR outputs 4x)
+            target_w, target_h = target_resolution
+            for i, frame_path in enumerate(output_frames):
+                frame = cv2.imread(str(frame_path))
+                if frame.shape[:2] != (target_h, target_w):
+                    frame = cv2.resize(frame, target_resolution, interpolation=cv2.INTER_LANCZOS4)
+                    cv2.imwrite(str(frame_path), frame)
+
+                if progress_callback and i % 10 == 0:
+                    progress_callback(
+                        total_frames + i + 1,
+                        total_frames * 2,
+                        f"Finalizing frame {i + 1}/{len(output_frames)}",
+                        phase='ai_upscale'
+                    )
+
+            # Rename frames to expected naming if needed
+            if len(output_frames) > 0 and not output_frames[0].name.startswith("frame_"):
+                for i, old_path in enumerate(output_frames):
+                    new_path = frames_dir / f"frame_{i:06d}.png"
+                    if old_path != new_path:
+                        shutil.move(str(old_path), str(new_path))
+
+            return len(output_frames)
+
+        except Exception as e:
+            logger.error(f"RealBasicVSR processing failed: {e}")
+            raise RuntimeError(f"RealBasicVSR processing failed: {e}")
+        finally:
+            # Cleanup cropped frames
+            if cropped_dir.exists():
+                shutil.rmtree(cropped_dir)
 
     def interpolate_crop(
         self,
@@ -617,10 +864,33 @@ class AIVideoUpscaler:
         logger.info("RESOLUTION DETECTION")
         logger.info("=" * 60)
         initial_crop = self.interpolate_crop(keyframes_sorted, 0)
-        aspect_type, target_resolution = self.detect_aspect_ratio(
-            int(initial_crop['width']),
-            int(initial_crop['height'])
-        )
+
+        # Use smart resolution capping instead of forcing 4K
+        crop_w = int(initial_crop['width'])
+        crop_h = int(initial_crop['height'])
+
+        # Ideal 4x SR size
+        sr_w = crop_w * 4
+        sr_h = crop_h * 4
+
+        # Clamp to a sane max (1440p for quality, avoids over-upscaling small crops)
+        max_w, max_h = 2560, 1440  # 1440p cap
+        scale_limit = min(max_w / sr_w, max_h / sr_h, 1.0)
+
+        target_w = int(sr_w * scale_limit)
+        target_h = int(sr_h * scale_limit)
+
+        # Ensure even dimensions for video encoding
+        target_w = target_w - (target_w % 2)
+        target_h = target_h - (target_h % 2)
+
+        target_resolution = (target_w, target_h)
+        aspect_type = 'custom_sr'
+
+        logger.info(f"Crop dimensions: {crop_w}x{crop_h}")
+        logger.info(f"Ideal 4x SR: {sr_w}x{sr_h}")
+        logger.info(f"Scale limit (capped to 1440p): {scale_limit:.3f}")
+        logger.info(f"✓ Target resolution: {target_w}x{target_h}")
 
         # Create temp directory for frames
         temp_dir = tempfile.mkdtemp(prefix='upscale_')
@@ -668,122 +938,139 @@ class AIVideoUpscaler:
 
             logger.info("=" * 60)
 
-            # Prepare frame processing tasks
-            frame_tasks = []
-            for frame_idx in range(total_frames):
-                time = frame_idx / original_fps
-                crop = self.interpolate_crop(keyframes_sorted, time)
-
-                # Assign GPU in round-robin fashion
-                gpu_id = frame_idx % num_workers if use_multi_gpu else 0
-
-                frame_tasks.append((frame_idx, input_path, crop, target_resolution, gpu_id, time))
-
-            # Track progress
-            completed_frames = 0
-            failed_frames = []
-
-            if use_multi_gpu:
-                # Multi-GPU parallel processing with ThreadPoolExecutor
-                logger.info(f"Submitting {total_frames} frames to {num_workers} GPU workers...")
-
-                with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                    # Submit all tasks
-                    future_to_frame = {
-                        executor.submit(self.process_single_frame, task): task[0]
-                        for task in frame_tasks
-                    }
-
-                    # Process completed frames as they finish
-                    for future in as_completed(future_to_frame):
-                        frame_idx = future_to_frame[future]
-
-                        try:
-                            result_idx, enhanced, success = future.result()
-
-                            if success and enhanced is not None:
-                                # Save enhanced frame
-                                frame_path = frames_dir / f"frame_{result_idx:06d}.png"
-                                cv2.imwrite(str(frame_path), enhanced)
-
-                                # Verify first frame
-                                if result_idx == 0:
-                                    final_h, final_w = enhanced.shape[:2]
-                                    logger.info(f"✓ First frame upscaled: {final_w}x{final_h}")
-
-                                # Thread-safe progress update
-                                with self.progress_lock:
-                                    completed_frames += 1
-
-                                    if progress_callback:
-                                        progress_callback(
-                                            completed_frames,
-                                            total_frames,
-                                            f"Upscaling frame {completed_frames}/{total_frames} (Multi-GPU)",
-                                            phase='ai_upscale'
-                                        )
-                            else:
-                                failed_frames.append(result_idx)
-                                logger.error(f"Frame {result_idx} processing failed")
-
-                        except Exception as e:
-                            logger.error(f"Error processing frame {frame_idx}: {e}")
-                            failed_frames.append(frame_idx)
-
-                    # Cleanup GPU memory after batch
-                    if torch.cuda.is_available():
-                        for gpu_id in range(self.num_gpus):
-                            with torch.cuda.device(gpu_id):
-                                torch.cuda.empty_cache()
-
+            # Check if using RealBasicVSR backend
+            if self.sr_backend == 'realbasicvsr' and self.vsr_model is not None:
+                logger.info("Using RealBasicVSR temporal super-resolution backend")
+                completed_frames = self.process_with_realbasicvsr(
+                    input_path,
+                    keyframes_sorted,
+                    target_resolution,
+                    total_frames,
+                    original_fps,
+                    frames_dir,
+                    progress_callback
+                )
+                failed_frames = []
             else:
-                # Sequential processing (single GPU or CPU)
-                logger.info(f"Processing {total_frames} frames sequentially...")
+                # Use Real-ESRGAN frame-by-frame processing
+                logger.info("Using Real-ESRGAN frame-by-frame super-resolution backend")
 
+                # Prepare frame processing tasks
+                frame_tasks = []
                 for frame_idx in range(total_frames):
                     time = frame_idx / original_fps
                     crop = self.interpolate_crop(keyframes_sorted, time)
 
-                    # Log crop info for first and key frames
-                    if frame_idx == 0 or frame_idx % 30 == 0:
-                        logger.info(f"Frame {frame_idx} @ {time:.2f}s: crop={int(crop['width'])}x{int(crop['height'])} at ({int(crop['x'])}, {int(crop['y'])})")
+                    # Assign GPU in round-robin fashion
+                    gpu_id = frame_idx % num_workers if use_multi_gpu else 0
 
-                    try:
-                        # Extract and crop frame
-                        frame = self.extract_frame_with_crop(input_path, frame_idx, crop)
+                    frame_tasks.append((frame_idx, input_path, crop, target_resolution, gpu_id, time))
 
-                        # Verify frame was cropped
-                        cropped_h, cropped_w = frame.shape[:2]
-                        if frame_idx == 0:
-                            logger.info(f"✓ De-zoomed frame size: {cropped_w}x{cropped_h}")
+                # Track progress
+                completed_frames = 0
+                failed_frames = []
 
-                        # AI upscale to target resolution
-                        enhanced = self.enhance_frame_ai(frame, target_resolution)
+                if use_multi_gpu:
+                    # Multi-GPU parallel processing with ThreadPoolExecutor
+                    logger.info(f"Submitting {total_frames} frames to {num_workers} GPU workers...")
 
-                        # Verify upscaling worked
-                        final_h, final_w = enhanced.shape[:2]
-                        if frame_idx == 0:
-                            logger.info(f"✓ Final upscaled size: {final_w}x{final_h}")
-                            if (final_w, final_h) != target_resolution:
-                                logger.error(f"⚠ Size mismatch! Expected {target_resolution}, got ({final_w}, {final_h})")
+                    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                        # Submit all tasks
+                        future_to_frame = {
+                            executor.submit(self.process_single_frame, task): task[0]
+                            for task in frame_tasks
+                        }
 
-                        # Save enhanced frame
-                        frame_path = frames_dir / f"frame_{frame_idx:06d}.png"
-                        cv2.imwrite(str(frame_path), enhanced)
+                        # Process completed frames as they finish
+                        for future in as_completed(future_to_frame):
+                            frame_idx = future_to_frame[future]
 
-                        completed_frames += 1
+                            try:
+                                result_idx, enhanced, success = future.result()
 
-                        # Progress callback
-                        if progress_callback:
-                            progress_callback(completed_frames, total_frames, f"Upscaling frame {completed_frames}/{total_frames}", phase='ai_upscale')
+                                if success and enhanced is not None:
+                                    # Save enhanced frame
+                                    frame_path = frames_dir / f"frame_{result_idx:06d}.png"
+                                    cv2.imwrite(str(frame_path), enhanced)
 
-                        # Periodic GPU cleanup
-                        if frame_idx % 10 == 0 and torch.cuda.is_available():
-                            torch.cuda.empty_cache()
+                                    # Verify first frame
+                                    if result_idx == 0:
+                                        final_h, final_w = enhanced.shape[:2]
+                                        logger.info(f"✓ First frame upscaled: {final_w}x{final_h}")
 
-                    except Exception as e:
-                        logger.error(f"Failed to process frame {frame_idx}: {e}")
-                        failed_frames.append(frame_idx)
+                                    # Thread-safe progress update
+                                    with self.progress_lock:
+                                        completed_frames += 1
+
+                                        if progress_callback:
+                                            progress_callback(
+                                                completed_frames,
+                                                total_frames,
+                                                f"Upscaling frame {completed_frames}/{total_frames} (Multi-GPU)",
+                                                phase='ai_upscale'
+                                            )
+                                else:
+                                    failed_frames.append(result_idx)
+                                    logger.error(f"Frame {result_idx} processing failed")
+
+                            except Exception as e:
+                                logger.error(f"Error processing frame {frame_idx}: {e}")
+                                failed_frames.append(frame_idx)
+
+                        # Cleanup GPU memory after batch
+                        if torch.cuda.is_available():
+                            for gpu_id in range(self.num_gpus):
+                                with torch.cuda.device(gpu_id):
+                                    torch.cuda.empty_cache()
+
+                else:
+                    # Sequential processing (single GPU or CPU)
+                    logger.info(f"Processing {total_frames} frames sequentially...")
+
+                    for frame_idx in range(total_frames):
+                        time = frame_idx / original_fps
+                        crop = self.interpolate_crop(keyframes_sorted, time)
+
+                        # Log crop info for first and key frames
+                        if frame_idx == 0 or frame_idx % 30 == 0:
+                            logger.info(f"Frame {frame_idx} @ {time:.2f}s: crop={int(crop['width'])}x{int(crop['height'])} at ({int(crop['x'])}, {int(crop['y'])})")
+
+                        try:
+                            # Extract and crop frame
+                            frame = self.extract_frame_with_crop(input_path, frame_idx, crop)
+
+                            # Verify frame was cropped
+                            cropped_h, cropped_w = frame.shape[:2]
+                            if frame_idx == 0:
+                                logger.info(f"✓ De-zoomed frame size: {cropped_w}x{cropped_h}")
+
+                            # AI upscale to target resolution
+                            enhanced = self.enhance_frame_ai(frame, target_resolution)
+
+                            # Verify upscaling worked
+                            final_h, final_w = enhanced.shape[:2]
+                            if frame_idx == 0:
+                                logger.info(f"✓ Final upscaled size: {final_w}x{final_h}")
+                                if (final_w, final_h) != target_resolution:
+                                    logger.error(f"⚠ Size mismatch! Expected {target_resolution}, got ({final_w}, {final_h})")
+
+                            # Save enhanced frame
+                            frame_path = frames_dir / f"frame_{frame_idx:06d}.png"
+                            cv2.imwrite(str(frame_path), enhanced)
+
+                            completed_frames += 1
+
+                            # Progress callback
+                            if progress_callback:
+                                progress_callback(completed_frames, total_frames, f"Upscaling frame {completed_frames}/{total_frames}", phase='ai_upscale')
+
+                            # Periodic GPU cleanup
+                            if frame_idx % 10 == 0 and torch.cuda.is_available():
+                                torch.cuda.empty_cache()
+
+                        except Exception as e:
+                            logger.error(f"Failed to process frame {frame_idx}: {e}")
+                            failed_frames.append(frame_idx)
 
             # Report any failures
             if failed_frames:
@@ -817,6 +1104,279 @@ class AIVideoUpscaler:
             # Final GPU cleanup
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+
+    def export_comparison_batch(
+        self,
+        input_path: str,
+        output_dir: str,
+        keyframes: List[Dict[str, Any]],
+        base_name: str = "comparison",
+        progress_callback=None,
+        segment_data: Optional[Dict[str, Any]] = None,
+        include_audio: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Export multiple versions for quality comparison testing.
+        Exports: realesrgan_30fps, realesrgan_60fps, realbasicvsr_30fps, realbasicvsr_60fps
+
+        Args:
+            input_path: Path to input video
+            output_dir: Directory to save comparison videos
+            keyframes: List of crop keyframes
+            base_name: Base name for output files
+            progress_callback: Optional callback(current, total, message, phase)
+            segment_data: Optional segment speed/trim data
+            include_audio: Include audio in export (default True)
+
+        Returns:
+            Dict with results for each export variant
+        """
+        from pathlib import Path
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        results = {}
+        variants = [
+            ('realesrgan', 30),
+            ('realesrgan', 60),
+            ('realbasicvsr', 30),
+            ('realbasicvsr', 60),
+        ]
+
+        total_variants = len(variants)
+        batch_start_time = datetime.now()
+
+        logger.info("=" * 60)
+        logger.info("COMPARISON BATCH EXPORT")
+        logger.info("=" * 60)
+        logger.info(f"Exporting {total_variants} variants for quality comparison:")
+        for backend, fps in variants:
+            logger.info(f"  - {backend}_{fps}fps")
+        logger.info("=" * 60)
+
+        for variant_idx, (backend, target_fps) in enumerate(variants):
+            variant_name = f"{backend}_{target_fps}fps"
+            output_file = output_path / f"{base_name}_{variant_name}.mp4"
+
+            logger.info(f"\n{'=' * 60}")
+            logger.info(f"VARIANT {variant_idx + 1}/{total_variants}: {variant_name}")
+            logger.info(f"{'=' * 60}")
+
+            # Create a new upscaler instance with the appropriate backend
+            try:
+                # Save current backend
+                original_backend = self.sr_backend
+
+                # Switch backend
+                self.sr_backend = backend
+
+                # Re-initialize if switching to RealBasicVSR
+                if backend == 'realbasicvsr' and self.vsr_model is None:
+                    logger.info(f"Initializing RealBasicVSR backend...")
+                    self.setup_realbasicvsr()
+
+                # Create wrapper for progress callback that accounts for variant
+                def variant_progress(current, total, message, phase=''):
+                    if progress_callback:
+                        overall_progress = variant_idx * 100 + (current / total * 100)
+                        progress_callback(
+                            overall_progress,
+                            total_variants * 100,
+                            f"[{variant_name}] {message}",
+                            phase=phase
+                        )
+
+                # Track time for this variant
+                variant_start_time = datetime.now()
+
+                # Process video
+                result = self.process_video_with_upscale(
+                    input_path=input_path,
+                    output_path=str(output_file),
+                    keyframes=keyframes,
+                    target_fps=target_fps,
+                    export_mode='fast',  # Use fast mode for comparison (H.264, single-pass)
+                    progress_callback=variant_progress,
+                    segment_data=segment_data,
+                    include_audio=include_audio
+                )
+
+                variant_end_time = datetime.now()
+                variant_duration = (variant_end_time - variant_start_time).total_seconds()
+
+                # Get file size
+                file_size_mb = os.path.getsize(str(output_file)) / (1024 * 1024)
+
+                results[variant_name] = {
+                    'success': True,
+                    'output_path': str(output_file),
+                    'backend': backend,
+                    'fps': target_fps,
+                    'duration_seconds': variant_duration,
+                    'duration_formatted': f"{int(variant_duration // 60)}m {int(variant_duration % 60)}s",
+                    'file_size_mb': round(file_size_mb, 2),
+                    'details': result
+                }
+
+                logger.info(f"✓ {variant_name} export complete: {output_file}")
+                logger.info(f"  Time: {variant_duration:.2f}s ({int(variant_duration // 60)}m {int(variant_duration % 60)}s)")
+                logger.info(f"  Size: {file_size_mb:.2f} MB")
+
+                # Restore original backend
+                self.sr_backend = original_backend
+
+            except Exception as e:
+                logger.error(f"✗ {variant_name} export failed: {e}")
+                results[variant_name] = {
+                    'success': False,
+                    'error': str(e),
+                    'backend': backend,
+                    'fps': target_fps,
+                    'duration_seconds': 0,
+                    'duration_formatted': 'N/A',
+                    'file_size_mb': 0
+                }
+                # Continue with other variants even if one fails
+                continue
+
+        batch_end_time = datetime.now()
+        total_batch_duration = (batch_end_time - batch_start_time).total_seconds()
+
+        logger.info(f"\n{'=' * 60}")
+        logger.info("COMPARISON BATCH COMPLETE")
+        logger.info("=" * 60)
+        successful = sum(1 for r in results.values() if r.get('success', False))
+        logger.info(f"Successfully exported {successful}/{total_variants} variants")
+        logger.info(f"Total batch time: {total_batch_duration:.2f}s ({int(total_batch_duration // 60)}m {int(total_batch_duration % 60)}s)")
+        for variant_name, result in results.items():
+            if result.get('success'):
+                logger.info(f"  ✓ {variant_name}: {result['output_path']}")
+                logger.info(f"      Time: {result['duration_formatted']}, Size: {result['file_size_mb']} MB")
+            else:
+                logger.info(f"  ✗ {variant_name}: {result.get('error', 'Unknown error')}")
+        logger.info("=" * 60)
+
+        # Generate comparison report
+        report_path = output_path / f"{base_name}_comparison_report.txt"
+        self._write_comparison_report(
+            report_path=report_path,
+            results=results,
+            total_batch_duration=total_batch_duration,
+            batch_start_time=batch_start_time,
+            batch_end_time=batch_end_time,
+            input_path=input_path,
+            base_name=base_name
+        )
+
+        return {
+            'success': successful == total_variants,
+            'total_variants': total_variants,
+            'successful_variants': successful,
+            'total_duration_seconds': total_batch_duration,
+            'total_duration_formatted': f"{int(total_batch_duration // 60)}m {int(total_batch_duration % 60)}s",
+            'report_path': str(report_path),
+            'results': results
+        }
+
+    def _write_comparison_report(
+        self,
+        report_path: Path,
+        results: Dict[str, Any],
+        total_batch_duration: float,
+        batch_start_time: datetime,
+        batch_end_time: datetime,
+        input_path: str,
+        base_name: str
+    ):
+        """Write a comparison report to a text file"""
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.write("=" * 70 + "\n")
+            f.write("VIDEO UPSCALING COMPARISON REPORT\n")
+            f.write("=" * 70 + "\n\n")
+
+            f.write(f"Generated: {batch_end_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Input Video: {input_path}\n")
+            f.write(f"Base Name: {base_name}\n\n")
+
+            f.write("-" * 70 + "\n")
+            f.write("TIMING SUMMARY\n")
+            f.write("-" * 70 + "\n")
+            f.write(f"Batch Start: {batch_start_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Batch End:   {batch_end_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Total Time:  {total_batch_duration:.2f} seconds ")
+            f.write(f"({int(total_batch_duration // 60)} min {int(total_batch_duration % 60)} sec)\n\n")
+
+            f.write("-" * 70 + "\n")
+            f.write("VARIANT RESULTS\n")
+            f.write("-" * 70 + "\n\n")
+
+            # Sort by variant name for consistent ordering
+            for variant_name in sorted(results.keys()):
+                result = results[variant_name]
+                f.write(f"Variant: {variant_name}\n")
+                f.write(f"  Backend: {result['backend']}\n")
+                f.write(f"  FPS: {result['fps']}\n")
+
+                if result.get('success'):
+                    f.write(f"  Status: SUCCESS\n")
+                    f.write(f"  Processing Time: {result['duration_formatted']} ({result['duration_seconds']:.2f}s)\n")
+                    f.write(f"  File Size: {result['file_size_mb']} MB\n")
+                    f.write(f"  Output: {result['output_path']}\n")
+
+                    # Add resolution info if available
+                    if 'details' in result and 'target_resolution' in result['details']:
+                        res = result['details']['target_resolution']
+                        f.write(f"  Resolution: {res[0]}x{res[1]}\n")
+                else:
+                    f.write(f"  Status: FAILED\n")
+                    f.write(f"  Error: {result.get('error', 'Unknown error')}\n")
+
+                f.write("\n")
+
+            f.write("-" * 70 + "\n")
+            f.write("PERFORMANCE COMPARISON\n")
+            f.write("-" * 70 + "\n\n")
+
+            # Create a comparison table
+            successful_variants = {k: v for k, v in results.items() if v.get('success')}
+            if successful_variants:
+                # Find fastest and slowest
+                fastest = min(successful_variants.items(), key=lambda x: x[1]['duration_seconds'])
+                slowest = max(successful_variants.items(), key=lambda x: x[1]['duration_seconds'])
+                smallest = min(successful_variants.items(), key=lambda x: x[1]['file_size_mb'])
+                largest = max(successful_variants.items(), key=lambda x: x[1]['file_size_mb'])
+
+                f.write(f"Fastest:      {fastest[0]} - {fastest[1]['duration_formatted']}\n")
+                f.write(f"Slowest:      {slowest[0]} - {slowest[1]['duration_formatted']}\n")
+                f.write(f"Smallest:     {smallest[0]} - {smallest[1]['file_size_mb']} MB\n")
+                f.write(f"Largest:      {largest[0]} - {largest[1]['file_size_mb']} MB\n\n")
+
+                # Time comparison table
+                f.write("Time Comparison (relative to fastest):\n")
+                for variant_name in sorted(successful_variants.keys()):
+                    result = successful_variants[variant_name]
+                    relative = result['duration_seconds'] / fastest[1]['duration_seconds']
+                    bar_length = int(relative * 20)
+                    bar = "█" * bar_length
+                    f.write(f"  {variant_name:25s} {result['duration_formatted']:>10s} {bar} ({relative:.2f}x)\n")
+                f.write("\n")
+
+                # File size comparison table
+                f.write("File Size Comparison (relative to smallest):\n")
+                for variant_name in sorted(successful_variants.keys()):
+                    result = successful_variants[variant_name]
+                    relative = result['file_size_mb'] / smallest[1]['file_size_mb']
+                    bar_length = int(relative * 20)
+                    bar = "█" * bar_length
+                    f.write(f"  {variant_name:25s} {result['file_size_mb']:>8.2f} MB {bar} ({relative:.2f}x)\n")
+            else:
+                f.write("No successful exports to compare.\n")
+
+            f.write("\n" + "=" * 70 + "\n")
+            f.write("END OF REPORT\n")
+            f.write("=" * 70 + "\n")
+
+        logger.info(f"✓ Comparison report written to: {report_path}")
 
     def parse_ffmpeg_progress(self, line: str) -> Optional[int]:
         """
@@ -1122,6 +1682,10 @@ class AIVideoUpscaler:
         else:
             logger.info("Starting single-pass encoding...")
 
+        logger.info(f"Input framerate: {input_framerate}fps")
+        logger.info(f"Output framerate: {fps}fps")
+        if needs_interpolation:
+            logger.info(f"Frame interpolation: {interpolation_ratio:.2f}x (minterpolate active)")
         logger.info("=" * 60)
 
         # Build FFmpeg command based on codec
@@ -1170,6 +1734,7 @@ class AIVideoUpscaler:
 
         # Add common parameters
         cmd_pass2.extend([
+            '-r', str(fps),  # Explicit output framerate - CRITICAL for frame interpolation
             '-pix_fmt', 'yuv420p',
             '-colorspace', 'bt709',
             '-color_primaries', 'bt709',
