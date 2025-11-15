@@ -112,6 +112,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         ? clampToVisibleRange(time)
         : Math.max(0, Math.min(time, duration));
       videoRef.current.currentTime = validTime;
+      // Immediately update React state to ensure synchronization
+      // This prevents stale state issues when play is called right after seek
+      setCurrentTime(validTime);
     }
   };
 
