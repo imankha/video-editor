@@ -311,38 +311,27 @@ export function useSegments() {
       return;
     }
 
+    // Pre-check: find the operation to undo BEFORE acquiring lock
+    console.log('[useSegments] detrimStart - current history:', JSON.stringify(trimHistory));
+    const lastStartIndex = trimHistory.findLastIndex(op => op.type === 'start');
+    if (lastStartIndex === -1) {
+      console.log('[useSegments] detrimStart aborted - no start operations in history');
+      return;
+    }
+
+    const lastStartOp = trimHistory[lastStartIndex];
+    console.log('[useSegments] De-trimming start, restoring to:', JSON.stringify(lastStartOp.previousRange));
+
     detrimLockRef.current.isLocked = true;
     try {
-      // Use flushSync to batch both state updates atomically
+      // Use flushSync to ensure both state updates complete synchronously
+      // CRITICAL: Both setters must be at the same level, NOT nested
       flushSync(() => {
-        // Track if we've already processed to handle React's double-invocation
-        let alreadyProcessed = false;
+        console.log('[useSegments] Calling setTrimRange with:', JSON.stringify(lastStartOp.previousRange));
+        setTrimRange(lastStartOp.previousRange);
 
+        console.log('[useSegments] Updating trimHistory to remove index:', lastStartIndex);
         setTrimHistory(prev => {
-          // Skip if already processed (React StrictMode double-invocation)
-          if (alreadyProcessed) {
-            console.log('[useSegments] detrimStart - skipping duplicate invocation');
-            return prev;
-          }
-
-          console.log('[useSegments] detrimStart - current history:', JSON.stringify(prev));
-          const lastStartIndex = prev.findLastIndex(op => op.type === 'start');
-          if (lastStartIndex === -1) {
-            console.log('[useSegments] detrimStart aborted - no start operations in history');
-            return prev;
-          }
-
-          const lastStartOp = prev[lastStartIndex];
-          console.log('[useSegments] De-trimming start, restoring to:', JSON.stringify(lastStartOp.previousRange));
-
-          // Mark as processed BEFORE calling setTrimRange
-          alreadyProcessed = true;
-
-          // Update trim range INSIDE the history updater for atomicity
-          console.log('[useSegments] Calling setTrimRange with:', JSON.stringify(lastStartOp.previousRange));
-          setTrimRange(lastStartOp.previousRange);
-
-          // Remove this operation from history
           const newHistory = prev.filter((_, i) => i !== lastStartIndex);
           console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
           return newHistory;
@@ -352,7 +341,7 @@ export function useSegments() {
     } finally {
       detrimLockRef.current.isLocked = false;
     }
-  }, []);
+  }, [trimHistory]);
 
   /**
    * De-trim (undo last trim operation from end)
@@ -370,38 +359,27 @@ export function useSegments() {
       return;
     }
 
+    // Pre-check: find the operation to undo BEFORE acquiring lock
+    console.log('[useSegments] detrimEnd - current history:', JSON.stringify(trimHistory));
+    const lastEndIndex = trimHistory.findLastIndex(op => op.type === 'end');
+    if (lastEndIndex === -1) {
+      console.log('[useSegments] detrimEnd aborted - no end operations in history');
+      return;
+    }
+
+    const lastEndOp = trimHistory[lastEndIndex];
+    console.log('[useSegments] De-trimming end, restoring to:', JSON.stringify(lastEndOp.previousRange));
+
     detrimLockRef.current.isLocked = true;
     try {
-      // Use flushSync to batch both state updates atomically
+      // Use flushSync to ensure both state updates complete synchronously
+      // CRITICAL: Both setters must be at the same level, NOT nested
       flushSync(() => {
-        // Track if we've already processed to handle React's double-invocation
-        let alreadyProcessed = false;
+        console.log('[useSegments] Calling setTrimRange with:', JSON.stringify(lastEndOp.previousRange));
+        setTrimRange(lastEndOp.previousRange);
 
+        console.log('[useSegments] Updating trimHistory to remove index:', lastEndIndex);
         setTrimHistory(prev => {
-          // Skip if already processed (React StrictMode double-invocation)
-          if (alreadyProcessed) {
-            console.log('[useSegments] detrimEnd - skipping duplicate invocation');
-            return prev;
-          }
-
-          console.log('[useSegments] detrimEnd - current history:', JSON.stringify(prev));
-          const lastEndIndex = prev.findLastIndex(op => op.type === 'end');
-          if (lastEndIndex === -1) {
-            console.log('[useSegments] detrimEnd aborted - no end operations in history');
-            return prev;
-          }
-
-          const lastEndOp = prev[lastEndIndex];
-          console.log('[useSegments] De-trimming end, restoring to:', JSON.stringify(lastEndOp.previousRange));
-
-          // Mark as processed BEFORE calling setTrimRange
-          alreadyProcessed = true;
-
-          // Update trim range INSIDE the history updater for atomicity
-          console.log('[useSegments] Calling setTrimRange with:', JSON.stringify(lastEndOp.previousRange));
-          setTrimRange(lastEndOp.previousRange);
-
-          // Remove this operation from history
           const newHistory = prev.filter((_, i) => i !== lastEndIndex);
           console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
           return newHistory;
@@ -411,7 +389,7 @@ export function useSegments() {
     } finally {
       detrimLockRef.current.isLocked = false;
     }
-  }, []);
+  }, [trimHistory]);
 
   /**
    * Toggle trim status for a segment (only works for first or last segment)
