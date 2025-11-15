@@ -250,9 +250,14 @@ export default function HighlightLayer({
       {isEnabled && (
         <div className="relative h-8 border-t border-gray-700/30">
           <div className="absolute left-0 top-0 h-full flex items-center justify-end bg-gray-900 border-r border-gray-700/50 w-32 pr-2">
-            <span className="text-xs text-gray-400">Duration</span>
+            <span className="text-xs text-gray-400">
+              Duration
+              <span className="ml-1 text-orange-400 font-mono">
+                {highlightDuration.toFixed(1)}s
+              </span>
+            </span>
           </div>
-          <div className="absolute left-32 right-0 top-0 h-full flex items-center px-3 gap-3">
+          <div className="absolute left-32 right-0 top-0 h-full flex items-center">
             <input
               type="range"
               min="0.5"
@@ -260,12 +265,9 @@ export default function HighlightLayer({
               step="0.1"
               value={highlightDuration}
               onChange={handleDurationSliderChange}
-              className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
               title={`Highlight duration: ${highlightDuration.toFixed(1)}s`}
             />
-            <span className="text-xs text-orange-400 font-mono w-16 text-right">
-              {highlightDuration.toFixed(1)}s
-            </span>
           </div>
         </div>
       )}
