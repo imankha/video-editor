@@ -14,7 +14,7 @@ function generateExportId() {
  * Always uses AI upscaling with de-zoom for best quality
  * Automatically downloads the exported video
  */
-export default function ExportButton({ videoFile, cropKeyframes, segmentData, disabled }) {
+export default function ExportButton({ videoFile, cropKeyframes, highlightKeyframes = [], segmentData, disabled }) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
@@ -116,6 +116,16 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
         formData.append('segment_data_json', JSON.stringify(segmentData));
       } else {
         console.log('=== EXPORT: No segment data to send ===');
+      }
+
+      // Add highlight keyframes if available
+      if (highlightKeyframes && highlightKeyframes.length > 0) {
+        console.log('=== EXPORT: Sending highlight keyframes to backend ===');
+        console.log(JSON.stringify(highlightKeyframes, null, 2));
+        console.log('==============================================');
+        formData.append('highlight_keyframes_json', JSON.stringify(highlightKeyframes));
+      } else {
+        console.log('=== EXPORT: No highlight keyframes to send (layer disabled or empty) ===');
       }
 
       // Always use AI upscale endpoint

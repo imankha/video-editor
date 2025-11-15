@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import CropOverlay from './CropOverlay';
+import HighlightOverlay from './HighlightOverlay';
 
 /**
  * VideoPlayer component - Displays the video element with zoom and pan support
@@ -14,6 +15,11 @@ import CropOverlay from './CropOverlay';
  * @param {string} props.aspectRatio - Aspect ratio for crop
  * @param {Function} props.onCropChange - Callback when crop changes
  * @param {Function} props.onCropComplete - Callback when crop change is complete
+ * @param {boolean} props.showHighlightOverlay - Whether to show highlight overlay
+ * @param {Object} props.currentHighlight - Current highlight circle data
+ * @param {boolean} props.isHighlightEnabled - Whether highlight layer is enabled
+ * @param {Function} props.onHighlightChange - Callback when highlight changes
+ * @param {Function} props.onHighlightComplete - Callback when highlight change is complete
  * @param {number} props.zoom - Zoom level (1 = 100%)
  * @param {Object} props.panOffset - Pan offset {x, y}
  * @param {Function} props.onZoomChange - Callback when zoom changes (wheel)
@@ -30,6 +36,11 @@ export function VideoPlayer({
   aspectRatio,
   onCropChange,
   onCropComplete,
+  showHighlightOverlay = false,
+  currentHighlight,
+  isHighlightEnabled = false,
+  onHighlightChange,
+  onHighlightComplete,
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   onZoomChange,
@@ -193,6 +204,20 @@ export function VideoPlayer({
               aspectRatio={aspectRatio}
               onCropChange={onCropChange}
               onCropComplete={onCropComplete}
+              zoom={zoom}
+              panOffset={panOffset}
+            />
+          )}
+
+          {/* Highlight Overlay */}
+          {showHighlightOverlay && currentHighlight && videoMetadata && (
+            <HighlightOverlay
+              videoRef={videoRef}
+              videoMetadata={videoMetadata}
+              currentHighlight={currentHighlight}
+              onHighlightChange={onHighlightChange}
+              onHighlightComplete={onHighlightComplete}
+              isEnabled={isHighlightEnabled}
               zoom={zoom}
               panOffset={panOffset}
             />
