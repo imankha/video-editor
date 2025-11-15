@@ -314,14 +314,17 @@ export function useSegments() {
     detrimLockRef.current.isLocked = true;
     try {
       // Use flushSync to batch both state updates atomically
-      // This forces React to apply both state updates synchronously before any re-render
       flushSync(() => {
-        // Access current state synchronously using functional updater
-        let rangeToRestore = null;
-        let shouldUpdate = false;
+        // Track if we've already processed to handle React's double-invocation
+        let alreadyProcessed = false;
 
-        // First, find what we need to restore
         setTrimHistory(prev => {
+          // Skip if already processed (React StrictMode double-invocation)
+          if (alreadyProcessed) {
+            console.log('[useSegments] detrimStart - skipping duplicate invocation');
+            return prev;
+          }
+
           console.log('[useSegments] detrimStart - current history:', JSON.stringify(prev));
           const lastStartIndex = prev.findLastIndex(op => op.type === 'start');
           if (lastStartIndex === -1) {
@@ -330,27 +333,20 @@ export function useSegments() {
           }
 
           const lastStartOp = prev[lastStartIndex];
-          console.log('[useSegments] De-trimming start, operation:', JSON.stringify(lastStartOp));
-          console.log('[useSegments] Restoring to:', JSON.stringify(lastStartOp.previousRange));
+          console.log('[useSegments] De-trimming start, restoring to:', JSON.stringify(lastStartOp.previousRange));
 
-          // Capture the range we need to restore
-          rangeToRestore = lastStartOp.previousRange;
-          shouldUpdate = true;
+          // Mark as processed BEFORE calling setTrimRange
+          alreadyProcessed = true;
+
+          // Update trim range INSIDE the history updater for atomicity
+          console.log('[useSegments] Calling setTrimRange with:', JSON.stringify(lastStartOp.previousRange));
+          setTrimRange(lastStartOp.previousRange);
 
           // Remove this operation from history
           const newHistory = prev.filter((_, i) => i !== lastStartIndex);
           console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
           return newHistory;
         });
-
-        // Now update trim range if we found something to restore
-        // This happens in the same synchronous batch due to flushSync
-        if (shouldUpdate) {
-          console.log('[useSegments] Updating trimRange to:', JSON.stringify(rangeToRestore));
-          setTrimRange(rangeToRestore);
-        } else {
-          console.log('[useSegments] NOT updating trimRange - no operation found');
-        }
       });
       console.log('[useSegments] detrimStart completed');
     } finally {
@@ -377,14 +373,17 @@ export function useSegments() {
     detrimLockRef.current.isLocked = true;
     try {
       // Use flushSync to batch both state updates atomically
-      // This forces React to apply both state updates synchronously before any re-render
       flushSync(() => {
-        // Access current state synchronously using functional updater
-        let rangeToRestore = null;
-        let shouldUpdate = false;
+        // Track if we've already processed to handle React's double-invocation
+        let alreadyProcessed = false;
 
-        // First, find what we need to restore
         setTrimHistory(prev => {
+          // Skip if already processed (React StrictMode double-invocation)
+          if (alreadyProcessed) {
+            console.log('[useSegments] detrimEnd - skipping duplicate invocation');
+            return prev;
+          }
+
           console.log('[useSegments] detrimEnd - current history:', JSON.stringify(prev));
           const lastEndIndex = prev.findLastIndex(op => op.type === 'end');
           if (lastEndIndex === -1) {
@@ -393,27 +392,20 @@ export function useSegments() {
           }
 
           const lastEndOp = prev[lastEndIndex];
-          console.log('[useSegments] De-trimming end, operation:', JSON.stringify(lastEndOp));
-          console.log('[useSegments] Restoring to:', JSON.stringify(lastEndOp.previousRange));
+          console.log('[useSegments] De-trimming end, restoring to:', JSON.stringify(lastEndOp.previousRange));
 
-          // Capture the range we need to restore
-          rangeToRestore = lastEndOp.previousRange;
-          shouldUpdate = true;
+          // Mark as processed BEFORE calling setTrimRange
+          alreadyProcessed = true;
+
+          // Update trim range INSIDE the history updater for atomicity
+          console.log('[useSegments] Calling setTrimRange with:', JSON.stringify(lastEndOp.previousRange));
+          setTrimRange(lastEndOp.previousRange);
 
           // Remove this operation from history
           const newHistory = prev.filter((_, i) => i !== lastEndIndex);
           console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
           return newHistory;
         });
-
-        // Now update trim range if we found something to restore
-        // This happens in the same synchronous batch due to flushSync
-        if (shouldUpdate) {
-          console.log('[useSegments] Updating trimRange to:', JSON.stringify(rangeToRestore));
-          setTrimRange(rangeToRestore);
-        } else {
-          console.log('[useSegments] NOT updating trimRange - no operation found');
-        }
       });
       console.log('[useSegments] detrimEnd completed');
     } finally {
