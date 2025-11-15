@@ -1,4 +1,5 @@
 import { Crop, Trash2, Copy } from 'lucide-react';
+import React from 'react';
 import { useCropContext } from '../contexts/CropContext';
 import { frameToTime } from '../utils/videoUtils';
 
@@ -26,6 +27,10 @@ export default function CropLayer({
   // Get isEndKeyframeExplicit and copiedCrop from context
   const { isEndKeyframeExplicit, copiedCrop } = useCropContext();
 
+  // Track which keyframe index should show buttons (closest to mouse)
+  const [hoveredKeyframeIndex, setHoveredKeyframeIndex] = React.useState(null);
+  const trackRef = React.useRef(null);
+
   // Use visual duration if provided, otherwise fall back to source duration
   const timelineDuration = visualDuration || duration;
 
@@ -40,6 +45,43 @@ export default function CropLayer({
     // Convert source time to visual time, then to percentage
     const visualTime = sourceTimeToVisualTime(sourceTime);
     return (visualTime / timelineDuration) * 100;
+  };
+
+  /**
+   * Handle mouse move to determine which keyframe is closest to cursor
+   * This prevents overlapping hit areas from showing wrong keyframe's buttons
+   */
+  const handleTrackMouseMove = (e) => {
+    if (!trackRef.current || keyframes.length === 0) return;
+
+    const rect = trackRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mousePercent = (mouseX / rect.width) * 100;
+
+    // Find the keyframe closest to the mouse position
+    let closestIndex = null;
+    let minDistance = Infinity;
+
+    keyframes.forEach((keyframe, index) => {
+      const keyframePercent = frameToPixel(keyframe.frame);
+      const distance = Math.abs(mousePercent - keyframePercent);
+
+      // Only consider keyframes within a reasonable hit area (about 2% of timeline width)
+      // This corresponds roughly to the -left-4 -right-4 area
+      if (distance < 3 && distance < minDistance) {
+        minDistance = distance;
+        closestIndex = index;
+      }
+    });
+
+    setHoveredKeyframeIndex(closestIndex);
+  };
+
+  /**
+   * Handle mouse leave to clear hovered keyframe
+   */
+  const handleTrackMouseLeave = () => {
+    setHoveredKeyframeIndex(null);
   };
 
   /**
@@ -80,8 +122,11 @@ export default function CropLayer({
 
       {/* Keyframes track */}
       <div
+        ref={trackRef}
         className={`absolute left-32 right-0 top-0 h-full rounded-br-lg ${copiedCrop ? 'cursor-copy' : ''}`}
         onClick={handleTrackClick}
+        onMouseMove={handleTrackMouseMove}
+        onMouseLeave={handleTrackMouseLeave}
       >
         {/* Background track */}
         <div className="absolute inset-0 bg-blue-900 bg-opacity-10 rounded-br-lg" />
@@ -110,10 +155,13 @@ export default function CropLayer({
           const shouldHighlight = isAtCurrentTime ||
                                   (isEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
 
+          // Check if this keyframe should show its buttons (closest to mouse)
+          const isHovered = hoveredKeyframeIndex === index;
+
           return (
             <div
               key={index}
-              className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 group z-50"
+              className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
               style={{ left: `${position}%` }}
             >
               {/* Invisible hit area that keeps buttons visible when moving mouse between elements */}
@@ -122,7 +170,9 @@ export default function CropLayer({
               {/* Copy button (shown on hover, above keyframe) - z-50 to appear above all UI including playhead */}
               {onKeyframeCopy && (
                 <button
-                  className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1 z-50"
+                  className={`absolute -top-8 left-1/2 transform -translate-x-1/2 transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1 z-50 ${
+                    isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onKeyframeCopy(keyframeTime);
@@ -151,7 +201,9 @@ export default function CropLayer({
                !isStartKeyframe &&
                !isEndKeyframe && (
                 <button
-                  className="absolute top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1 z-50"
+                  className={`absolute top-6 left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1 z-50 ${
+                    isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onKeyframeDelete(keyframeTime, duration);
