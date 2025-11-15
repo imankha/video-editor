@@ -1026,8 +1026,11 @@ async def export_comparison_variants(
             "output_directory": comparison_dir,
             "total_variants": result['total_variants'],
             "successful_variants": result['successful_variants'],
+            "total_duration_seconds": result.get('total_duration_seconds', 0),
+            "total_duration_formatted": result.get('total_duration_formatted', 'N/A'),
+            "report_path": result.get('report_path', ''),
             "variants": result['results'],
-            "note": "Files are saved in the output directory. Download them manually for comparison."
+            "note": "Files are saved in the output directory. Check the comparison report for timing details."
         }
 
     except Exception as e:

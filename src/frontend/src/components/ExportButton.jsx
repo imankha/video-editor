@@ -501,12 +501,27 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
           </div>
           <div className="text-sm text-gray-300 mb-3">
             {comparisonResults.successful_variants}/{comparisonResults.total_variants} variants exported successfully.
+            {comparisonResults.total_duration_formatted && (
+              <span className="ml-2 text-gray-400">
+                Total time: {comparisonResults.total_duration_formatted}
+              </span>
+            )}
           </div>
           <div className="space-y-2 text-xs">
             <div className="font-medium text-gray-300">Output Directory:</div>
             <div className="bg-gray-800 p-2 rounded font-mono break-all">
               {comparisonResults.output_directory}
             </div>
+
+            {comparisonResults.report_path && (
+              <>
+                <div className="font-medium text-gray-300 mt-3">Comparison Report:</div>
+                <div className="bg-gray-800 p-2 rounded font-mono break-all text-yellow-300">
+                  {comparisonResults.report_path}
+                </div>
+              </>
+            )}
+
             <div className="font-medium text-gray-300 mt-3">Variants:</div>
             {Object.entries(comparisonResults.variants || {}).map(([name, result]) => (
               <div key={name} className={`p-2 rounded ${result.success ? 'bg-green-900/30' : 'bg-red-900/30'}`}>
@@ -515,6 +530,11 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
                     {result.success ? '✓' : '✗'}
                   </span>
                   <span className="font-medium">{name}</span>
+                  {result.success && result.duration_formatted && (
+                    <span className="text-gray-400 ml-auto">
+                      {result.duration_formatted} | {result.file_size_mb} MB
+                    </span>
+                  )}
                 </div>
                 {result.success ? (
                   <div className="mt-1 font-mono text-gray-400 break-all">{result.output_path}</div>
@@ -525,7 +545,7 @@ export default function ExportButton({ videoFile, cropKeyframes, segmentData, di
             ))}
           </div>
           <div className="mt-3 text-xs text-gray-400">
-            Note: Files are saved on the server. Access them manually for comparison.
+            Note: Files are saved on the server. Check the comparison report for detailed timing analysis.
           </div>
         </div>
       )}
