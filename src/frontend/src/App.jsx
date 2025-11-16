@@ -3,6 +3,7 @@ import { useVideo } from './hooks/useVideo';
 import useCrop from './hooks/useCrop';
 import useHighlight from './hooks/useHighlight';
 import useZoom from './hooks/useZoom';
+import useTimelineZoom from './hooks/useTimelineZoom';
 import { useSegments } from './hooks/useSegments';
 import { VideoPlayer } from './components/VideoPlayer';
 import { Timeline } from './components/Timeline';
@@ -130,6 +131,15 @@ function App() {
     zoomByWheel,
     updatePan,
   } = useZoom();
+
+  // Timeline zoom hook
+  const {
+    timelineZoom,
+    scrollPosition: timelineScrollPosition,
+    zoomByWheel: timelineZoomByWheel,
+    updateScrollPosition: updateTimelineScrollPosition,
+    getTimelineScale,
+  } = useTimelineZoom();
 
   const handleFileSelect = async (file) => {
     // Reset all state before loading new video
@@ -805,6 +815,11 @@ function App() {
                     onDetrimEnd={detrimEnd}
                     sourceTimeToVisualTime={sourceTimeToVisualTime}
                     visualTimeToSourceTime={visualTimeToSourceTime}
+                    timelineZoom={timelineZoom}
+                    onTimelineZoomByWheel={timelineZoomByWheel}
+                    timelineScale={getTimelineScale()}
+                    timelineScrollPosition={timelineScrollPosition}
+                    onTimelineScrollPositionChange={updateTimelineScrollPosition}
                   />
                 </HighlightProvider>
               </CropProvider>
