@@ -654,19 +654,32 @@ async def export_with_ai_upscale(
     else:
         logger.info("No segment data provided - processing without speed/trim adjustments")
 
-    # Parse highlight keyframes (optional - for future implementation)
+    # Parse highlight keyframes (optional)
     highlight_keyframes = []
+    highlight_keyframes_dict = []
     if highlight_keyframes_json:
         try:
             highlight_keyframes_data = json.loads(highlight_keyframes_json)
             highlight_keyframes = [HighlightKeyframe(**kf) for kf in highlight_keyframes_data]
+            # Convert to dict format for upscaler
+            highlight_keyframes_dict = [
+                {
+                    'time': hkf.time,
+                    'x': hkf.x,
+                    'y': hkf.y,
+                    'radiusX': hkf.radiusX,
+                    'radiusY': hkf.radiusY,
+                    'opacity': hkf.opacity,
+                    'color': hkf.color
+                }
+                for hkf in highlight_keyframes
+            ]
             logger.info("=" * 80)
             logger.info("HIGHLIGHT KEYFRAMES RECEIVED FROM CLIENT")
             logger.info("=" * 80)
             logger.info(f"Number of highlight keyframes: {len(highlight_keyframes)}")
             logger.info(json.dumps(highlight_keyframes_data, indent=2))
             logger.info("=" * 80)
-            logger.info("NOTE: Highlight overlay rendering in export is planned for future release")
         except json.JSONDecodeError as e:
             raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {str(e)}")
     else:
@@ -835,7 +848,8 @@ async def export_with_ai_upscale(
             export_mode=export_mode,
             progress_callback=progress_callback,
             segment_data=segment_data,
-            include_audio=include_audio_bool
+            include_audio=include_audio_bool,
+            highlight_keyframes=highlight_keyframes_dict
         )
 
         complete_timestamp = datetime.now()

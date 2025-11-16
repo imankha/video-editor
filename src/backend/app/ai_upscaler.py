@@ -490,22 +490,26 @@ class AIVideoUpscaler:
 
     def process_single_frame(
         self,
-        frame_data: Tuple[int, str, Dict, Tuple[int, int], int, float]
+        frame_data: Tuple[int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int]]
     ) -> Tuple[int, np.ndarray, bool]:
         """
         Process a single frame with AI upscaling on a specific GPU
 
         Args:
-            frame_data: Tuple of (frame_idx, input_path, crop, target_resolution, gpu_id, time)
+            frame_data: Tuple of (frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size)
 
         Returns:
             Tuple of (frame_idx, enhanced_frame, success)
         """
-        frame_idx, input_path, crop, target_resolution, gpu_id, time = frame_data
+        frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size = frame_data
 
         try:
             # Extract and crop frame
             frame = self.extract_frame_with_crop(input_path, frame_idx, crop)
+
+            # Apply highlight overlay if provided
+            if highlight is not None:
+                frame = self.render_highlight_on_frame(frame, highlight, original_video_size, crop)
 
             # Get the appropriate upsampler for this GPU
             upsampler = self.get_upsampler_for_gpu(gpu_id)
@@ -789,6 +793,185 @@ class AIVideoUpscaler:
             'time': time
         }
 
+    def interpolate_highlight(
+        self,
+        keyframes: List[Dict[str, Any]],
+        time: float
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Interpolate highlight values between keyframes for a given time
+
+        Args:
+            keyframes: List of highlight keyframe dicts with 'time', 'x', 'y', 'radiusX', 'radiusY', 'opacity', 'color'
+                      x, y are percentages (0-100), radiusX/radiusY are pixel values
+            time: Time in seconds
+
+        Returns:
+            Interpolated highlight parameters, or None if time is after last keyframe
+        """
+        if len(keyframes) == 0:
+            return None
+
+        # Sort keyframes by time
+        sorted_kf = sorted(keyframes, key=lambda k: k['time'])
+
+        # If time is after the last keyframe, no highlight should be rendered
+        if time > sorted_kf[-1]['time']:
+            return None
+
+        if len(sorted_kf) == 1:
+            return sorted_kf[0]
+
+        # Find surrounding keyframes
+        before_kf = None
+        after_kf = None
+
+        for kf in sorted_kf:
+            if kf['time'] <= time:
+                before_kf = kf
+            if kf['time'] > time and after_kf is None:
+                after_kf = kf
+                break
+
+        # If before first keyframe, return first
+        if before_kf is None:
+            return sorted_kf[0]
+
+        # If after last keyframe (shouldn't happen due to check above), return None
+        if after_kf is None:
+            return before_kf
+
+        # Linear interpolation between keyframes
+        duration = after_kf['time'] - before_kf['time']
+        if duration == 0:
+            return before_kf
+
+        progress = (time - before_kf['time']) / duration
+
+        return {
+            'x': before_kf['x'] + (after_kf['x'] - before_kf['x']) * progress,
+            'y': before_kf['y'] + (after_kf['y'] - before_kf['y']) * progress,
+            'radiusX': before_kf['radiusX'] + (after_kf['radiusX'] - before_kf['radiusX']) * progress,
+            'radiusY': before_kf['radiusY'] + (after_kf['radiusY'] - before_kf['radiusY']) * progress,
+            'opacity': before_kf['opacity'] + (after_kf['opacity'] - before_kf['opacity']) * progress,
+            'color': before_kf['color'],  # Use color from before keyframe (no interpolation for color)
+            'time': time
+        }
+
+    def render_highlight_on_frame(
+        self,
+        frame: np.ndarray,
+        highlight: Dict[str, Any],
+        original_video_size: Tuple[int, int],
+        crop: Optional[Dict[str, float]] = None
+    ) -> np.ndarray:
+        """
+        Render a semi-transparent highlight ellipse on a frame
+
+        Args:
+            frame: Input frame (BGR format, already cropped)
+            highlight: Highlight parameters with x, y (percentages 0-100), radiusX, radiusY (pixels in original coords)
+            original_video_size: Original video (width, height) before crop
+            crop: Crop parameters that were applied to this frame
+
+        Returns:
+            Frame with highlight overlay
+        """
+        if highlight is None:
+            return frame
+
+        frame_h, frame_w = frame.shape[:2]
+        orig_w, orig_h = original_video_size
+
+        # Convert highlight position from percentage to original video pixels
+        highlight_x_orig = (highlight['x'] / 100.0) * orig_w
+        highlight_y_orig = (highlight['y'] / 100.0) * orig_h
+        radius_x_orig = highlight['radiusX']
+        radius_y_orig = highlight['radiusY']
+
+        # Transform highlight coordinates to cropped frame coordinates
+        if crop:
+            crop_x = crop['x']
+            crop_y = crop['y']
+            crop_w = crop['width']
+            crop_h = crop['height']
+
+            # Transform center position relative to crop
+            highlight_x_crop = highlight_x_orig - crop_x
+            highlight_y_crop = highlight_y_orig - crop_y
+
+            # Scale to current frame size (in case frame was resized after crop)
+            scale_x = frame_w / crop_w
+            scale_y = frame_h / crop_h
+
+            center_x = int(highlight_x_crop * scale_x)
+            center_y = int(highlight_y_crop * scale_y)
+            radius_x = int(radius_x_orig * scale_x)
+            radius_y = int(radius_y_orig * scale_y)
+        else:
+            # No crop, just scale to frame size
+            scale_x = frame_w / orig_w
+            scale_y = frame_h / orig_h
+
+            center_x = int(highlight_x_orig * scale_x)
+            center_y = int(highlight_y_orig * scale_y)
+            radius_x = int(radius_x_orig * scale_x)
+            radius_y = int(radius_y_orig * scale_y)
+
+        # Check if ellipse is within frame bounds (at least partially)
+        if (center_x + radius_x < 0 or center_x - radius_x > frame_w or
+            center_y + radius_y < 0 or center_y - radius_y > frame_h):
+            # Ellipse is completely outside frame
+            return frame
+
+        # Parse color from hex string (e.g., "#FFFF00")
+        color_hex = highlight['color'].lstrip('#')
+        if len(color_hex) == 6:
+            r = int(color_hex[0:2], 16)
+            g = int(color_hex[2:4], 16)
+            b = int(color_hex[4:6], 16)
+            color_bgr = (b, g, r)  # OpenCV uses BGR
+        else:
+            # Default to yellow if parsing fails
+            color_bgr = (0, 255, 255)  # Yellow in BGR
+
+        opacity = highlight['opacity']
+
+        # Create an overlay for blending
+        overlay = frame.copy()
+
+        # Draw filled ellipse on overlay
+        cv2.ellipse(
+            overlay,
+            center=(center_x, center_y),
+            axes=(radius_x, radius_y),
+            angle=0,
+            startAngle=0,
+            endAngle=360,
+            color=color_bgr,
+            thickness=-1  # Filled
+        )
+
+        # Blend the overlay with original frame using opacity
+        result = cv2.addWeighted(overlay, opacity, frame, 1 - opacity, 0)
+
+        # Draw ellipse stroke (outline) for better visibility
+        stroke_opacity = 0.6
+        stroke_overlay = result.copy()
+        cv2.ellipse(
+            stroke_overlay,
+            center=(center_x, center_y),
+            axes=(radius_x, radius_y),
+            angle=0,
+            startAngle=0,
+            endAngle=360,
+            color=color_bgr,
+            thickness=3
+        )
+        result = cv2.addWeighted(stroke_overlay, stroke_opacity, result, 1 - stroke_opacity, 0)
+
+        return result
+
     def process_video_with_upscale(
         self,
         input_path: str,
@@ -798,7 +981,8 @@ class AIVideoUpscaler:
         export_mode: str = "quality",
         progress_callback=None,
         segment_data: Optional[Dict[str, Any]] = None,
-        include_audio: bool = True
+        include_audio: bool = True,
+        highlight_keyframes: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Process video with de-zoom and AI upscaling
@@ -815,6 +999,7 @@ class AIVideoUpscaler:
                   (speed = 0.5 requires AI frame interpolation)
                 - trim_start, trim_end: Trim points
             include_audio: Include audio in export (default True)
+            highlight_keyframes: Optional list of highlight keyframes for overlay rendering
 
         Returns:
             Dict with processing results
@@ -823,10 +1008,16 @@ class AIVideoUpscaler:
         cap = cv2.VideoCapture(input_path)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         original_fps = cap.get(cv2.CAP_PROP_FPS)
+        original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         duration = total_frames / original_fps
         cap.release()
 
+        # Store original video size for highlight rendering
+        original_video_size = (original_width, original_height)
+
         logger.info(f"Processing {total_frames} frames @ {original_fps} fps")
+        logger.info(f"Original video dimensions: {original_width}x{original_height}")
         logger.info(f"Export mode: {export_mode.upper()}")
 
         # Sort keyframes by time
@@ -838,6 +1029,23 @@ class AIVideoUpscaler:
         logger.info(f"Total keyframes: {len(keyframes_sorted)}")
         for i, kf in enumerate(keyframes_sorted):
             logger.info(f"  Keyframe {i+1}: t={kf['time']:.2f}s, crop={int(kf['width'])}x{int(kf['height'])} at ({int(kf['x'])}, {int(kf['y'])})")
+
+        # Log highlight keyframes if provided
+        if highlight_keyframes and len(highlight_keyframes) > 0:
+            highlight_sorted = sorted(highlight_keyframes, key=lambda k: k['time'])
+            logger.info("=" * 60)
+            logger.info("HIGHLIGHT OVERLAY ANALYSIS")
+            logger.info("=" * 60)
+            logger.info(f"Total highlight keyframes: {len(highlight_sorted)}")
+            for i, hkf in enumerate(highlight_sorted):
+                logger.info(f"  Highlight {i+1}: t={hkf['time']:.2f}s, pos=({hkf['x']:.1f}%, {hkf['y']:.1f}%), "
+                           f"radii=({hkf['radiusX']:.1f}, {hkf['radiusY']:.1f})px, "
+                           f"opacity={hkf['opacity']:.2f}, color={hkf['color']}")
+            highlight_end_time = highlight_sorted[-1]['time']
+            logger.info(f"Highlight will be rendered for first {highlight_end_time:.2f}s of video")
+        else:
+            logger.info("No highlight keyframes provided - exporting without highlight overlay")
+            highlight_keyframes = []  # Ensure it's an empty list
 
         # Log segment data if provided
         if segment_data:
@@ -961,10 +1169,15 @@ class AIVideoUpscaler:
                     time = frame_idx / original_fps
                     crop = self.interpolate_crop(keyframes_sorted, time)
 
+                    # Get highlight for this frame (if any)
+                    highlight = None
+                    if highlight_keyframes and len(highlight_keyframes) > 0:
+                        highlight = self.interpolate_highlight(highlight_keyframes, time)
+
                     # Assign GPU in round-robin fashion
                     gpu_id = frame_idx % num_workers if use_multi_gpu else 0
 
-                    frame_tasks.append((frame_idx, input_path, crop, target_resolution, gpu_id, time))
+                    frame_tasks.append((frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size))
 
                 # Track progress
                 completed_frames = 0
@@ -1043,6 +1256,16 @@ class AIVideoUpscaler:
                             cropped_h, cropped_w = frame.shape[:2]
                             if frame_idx == 0:
                                 logger.info(f"✓ De-zoomed frame size: {cropped_w}x{cropped_h}")
+
+                            # Apply highlight overlay if keyframes are provided
+                            if highlight_keyframes and len(highlight_keyframes) > 0:
+                                highlight = self.interpolate_highlight(highlight_keyframes, time)
+                                if highlight is not None:
+                                    frame = self.render_highlight_on_frame(frame, highlight, original_video_size, crop)
+                                    if frame_idx == 0:
+                                        logger.info(f"✓ Highlight overlay applied at ({highlight['x']:.1f}%, {highlight['y']:.1f}%)")
+                                elif frame_idx == 0:
+                                    logger.info("No highlight for first frame (time is after last keyframe)")
 
                             # AI upscale to target resolution
                             enhanced = self.enhance_frame_ai(frame, target_resolution)
