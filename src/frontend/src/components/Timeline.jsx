@@ -21,6 +21,7 @@ import SegmentLayer from './SegmentLayer';
  * @param {Function} props.onCropKeyframeDelete - Callback when crop keyframe is deleted
  * @param {Function} props.onCropKeyframeCopy - Callback when crop keyframe is copied
  * @param {Function} props.onCropKeyframePaste - Callback when crop is pasted at a time
+ * @param {number|null} props.selectedCropKeyframeIndex - Index of selected crop keyframe
  * @param {Array} props.highlightKeyframes - Highlight keyframes to display
  * @param {number} props.highlightFramerate - Video framerate for highlight keyframes
  * @param {boolean} props.isHighlightActive - Whether highlight layer is active
@@ -28,8 +29,11 @@ import SegmentLayer from './SegmentLayer';
  * @param {Function} props.onHighlightKeyframeDelete - Callback when highlight keyframe is deleted
  * @param {Function} props.onHighlightKeyframeCopy - Callback when highlight keyframe is copied
  * @param {Function} props.onHighlightKeyframePaste - Callback when highlight is pasted at a time
+ * @param {number|null} props.selectedHighlightKeyframeIndex - Index of selected highlight keyframe
  * @param {Function} props.onHighlightToggleEnabled - Callback to toggle highlight layer enabled state
  * @param {Function} props.onHighlightDurationChange - Callback when highlight duration changes
+ * @param {string} props.selectedLayer - Currently selected layer ('playhead' | 'crop' | 'highlight')
+ * @param {Function} props.onLayerSelect - Callback when layer is selected
  * @param {Array} props.segments - Segments to display
  * @param {Array} props.segmentBoundaries - Segment boundaries
  * @param {Array} props.segmentVisualLayout - Pre-calculated segment visual positions
@@ -59,6 +63,7 @@ export function Timeline({
   onCropKeyframeDelete,
   onCropKeyframeCopy,
   onCropKeyframePaste,
+  selectedCropKeyframeIndex = null,
   highlightKeyframes = [],
   highlightFramerate = 30,
   isHighlightActive = false,
@@ -66,8 +71,11 @@ export function Timeline({
   onHighlightKeyframeDelete,
   onHighlightKeyframeCopy,
   onHighlightKeyframePaste,
+  selectedHighlightKeyframeIndex = null,
   onHighlightToggleEnabled,
   onHighlightDurationChange,
+  selectedLayer = 'playhead',
+  onLayerSelect,
   segments = [],
   segmentBoundaries = [],
   segmentVisualLayout = [],
@@ -107,6 +115,10 @@ export function Timeline({
     setIsDragging(true);
     const time = getTimeFromPosition(e.clientX);
     onSeek(time);
+    // Select playhead layer when clicking on video timeline
+    if (onLayerSelect) {
+      onLayerSelect('playhead');
+    }
   };
 
   const handleMouseMove = (e) => {
@@ -168,10 +180,17 @@ export function Timeline({
       {/* Timeline layers container with unified playhead */}
       <div className="relative">
         {/* Video Timeline Layer */}
-        <div className="relative bg-gray-800 h-12 rounded-lg">
+        <div className={`relative bg-gray-800 h-12 rounded-lg transition-all ${
+          selectedLayer === 'playhead' ? 'ring-2 ring-blue-400 ring-opacity-75' : ''
+        }`}>
           {/* Layer label */}
-          <div className="absolute left-0 top-0 h-full flex items-center justify-center bg-gray-900 border-r border-gray-700 w-32 rounded-l-lg">
-            <Film size={18} className="text-blue-400" />
+          <div
+            className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700 w-32 rounded-l-lg transition-colors cursor-pointer ${
+              selectedLayer === 'playhead' ? 'bg-blue-900/50' : 'bg-gray-900 hover:bg-gray-800'
+            }`}
+            onClick={() => onLayerSelect && onLayerSelect('playhead')}
+          >
+            <Film size={18} className={selectedLayer === 'playhead' ? 'text-blue-300' : 'text-blue-400'} />
           </div>
 
           {/* Timeline track */}
@@ -224,6 +243,9 @@ export function Timeline({
             onKeyframeDelete={onCropKeyframeDelete}
             onKeyframeCopy={onCropKeyframeCopy}
             onKeyframePaste={onCropKeyframePaste}
+            selectedKeyframeIndex={selectedCropKeyframeIndex}
+            isLayerSelected={selectedLayer === 'crop'}
+            onLayerSelect={() => onLayerSelect && onLayerSelect('crop')}
             sourceTimeToVisualTime={sourceTimeToVisualTime}
             visualTimeToSourceTime={visualTimeToSourceTime}
           />
@@ -267,6 +289,9 @@ export function Timeline({
             onKeyframeDelete={onHighlightKeyframeDelete}
             onKeyframeCopy={onHighlightKeyframeCopy}
             onKeyframePaste={onHighlightKeyframePaste}
+            selectedKeyframeIndex={selectedHighlightKeyframeIndex}
+            isLayerSelected={selectedLayer === 'highlight'}
+            onLayerSelect={() => onLayerSelect && onLayerSelect('highlight')}
             onToggleEnabled={onHighlightToggleEnabled}
             onDurationChange={onHighlightDurationChange}
             sourceTimeToVisualTime={sourceTimeToVisualTime}

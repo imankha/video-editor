@@ -20,6 +20,9 @@ export default function HighlightLayer({
   onKeyframeCopy,
   onKeyframePaste,
   isActive,
+  selectedKeyframeIndex = null,
+  isLayerSelected = false,
+  onLayerSelect,
   onToggleEnabled,
   onDurationChange,
   sourceTimeToVisualTime = (t) => t,
@@ -77,6 +80,11 @@ export default function HighlightLayer({
    * Handle click on keyframes track to paste highlight at clicked time
    */
   const handleTrackClick = (e) => {
+    // Select this layer when clicking on it
+    if (onLayerSelect) {
+      onLayerSelect();
+    }
+
     if (!isEnabled) return;
     if (!copiedHighlight || !onKeyframePaste) return;
 
@@ -110,16 +118,33 @@ export default function HighlightLayer({
   const highlightEndPosition = frameToPixel(Math.round(highlightDuration * framerate));
 
   return (
-    <div className="relative bg-gray-800/95 border-t border-gray-700/50 rounded-b-lg">
+    <div className={`relative bg-gray-800/95 border-t border-gray-700/50 rounded-b-lg transition-all ${
+      isLayerSelected ? 'ring-2 ring-orange-400 ring-opacity-75' : ''
+    }`}>
       {/* Main row with toggle and keyframes */}
       <div className="relative h-12">
         {/* Layer label with toggle button */}
-        <div className="absolute left-0 top-0 h-full flex items-center justify-center bg-gray-900 border-r border-gray-700/50 w-32 rounded-bl-lg">
+        <div
+          className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700/50 w-32 rounded-bl-lg transition-colors cursor-pointer ${
+            isLayerSelected ? 'bg-orange-900/30' : 'bg-gray-900 hover:bg-gray-800'
+          }`}
+          onClick={(e) => {
+            // Only select layer if not clicking directly on the toggle button
+            if (!e.target.closest('button')) {
+              onLayerSelect && onLayerSelect();
+            }
+          }}
+        >
           <button
-            onClick={onToggleEnabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleEnabled();
+              // Also select the layer when toggling
+              onLayerSelect && onLayerSelect();
+            }}
             className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
               isEnabled
-                ? 'text-orange-400 hover:text-orange-300'
+                ? isLayerSelected ? 'text-orange-300 hover:text-orange-200' : 'text-orange-400 hover:text-orange-300'
                 : 'text-gray-500 hover:text-gray-400'
             }`}
             title={isEnabled ? 'Disable highlight layer' : 'Enable highlight layer'}
@@ -179,6 +204,7 @@ export default function HighlightLayer({
             const highlightEndFrame = Math.round(highlightDuration * framerate);
             const isEndKeyframe = keyframe.frame === highlightEndFrame;
             const isAtStartTime = Math.abs(currentTime) < 0.01;
+            const isSelected = selectedKeyframeIndex === index;
 
             const shouldHighlight = isAtCurrentTime ||
                                     (isEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
@@ -212,15 +238,17 @@ export default function HighlightLayer({
 
                 {/* Diamond keyframe indicator */}
                 <div
-                  className={`w-3 h-3 transform rotate-45 cursor-pointer transition-colors ${
-                    shouldHighlight
+                  className={`w-3 h-3 transform rotate-45 cursor-pointer transition-all ${
+                    isSelected
+                      ? 'bg-orange-300 scale-150 ring-2 ring-orange-200'
+                      : shouldHighlight
                       ? 'bg-orange-400 scale-125'
                       : 'bg-orange-500 hover:bg-orange-400'
                   }`}
-                  onClick={() => onKeyframeClick(keyframeTime)}
+                  onClick={() => onKeyframeClick(keyframeTime, index)}
                   title={`Highlight keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
                     isEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
-                  }`}
+                  }${isSelected ? ' [SELECTED]' : ''}`}
                 />
 
                 {/* Delete button */}
