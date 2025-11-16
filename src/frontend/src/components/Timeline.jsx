@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film } from 'lucide-react';
+import { Film, Crop, Split, Circle, Eye, EyeOff } from 'lucide-react';
 import { formatTimeSimple } from '../utils/timeFormat';
 import CropLayer from './CropLayer';
 import HighlightLayer from './HighlightLayer';
@@ -254,149 +254,202 @@ export function Timeline({
         </div>
       </div>
 
-      {/* Scrollable timeline container */}
-      <div
-        ref={scrollContainerRef}
-        className="overflow-x-auto"
-        onScroll={handleScroll}
-        style={{
-          scrollbarWidth: timelineScale > 1 ? 'auto' : 'none',
-        }}
-      >
-        {/* Scaled timeline content */}
+      {/* Timeline with fixed labels and scrollable tracks */}
+      <div className="relative">
+        {/* Fixed layer labels on the left */}
+        <div className="absolute left-0 top-0 w-32 z-10">
+          {/* Video Timeline Label */}
+          <div
+            className={`h-12 flex items-center justify-center border-r border-gray-700 rounded-l-lg transition-colors cursor-pointer ${
+              selectedLayer === 'playhead' ? 'bg-blue-900/50' : 'bg-gray-900 hover:bg-gray-800'
+            }`}
+            onClick={() => onLayerSelect && onLayerSelect('playhead')}
+          >
+            <Film size={18} className={selectedLayer === 'playhead' ? 'text-blue-300' : 'text-blue-400'} />
+          </div>
+
+          {/* Crop Layer Label */}
+          <div
+            className={`mt-1 h-12 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
+              selectedLayer === 'crop' ? 'bg-yellow-900/30' : 'bg-gray-900 hover:bg-gray-800'
+            }`}
+            onClick={() => onLayerSelect && onLayerSelect('crop')}
+          >
+            <Crop size={18} className={selectedLayer === 'crop' ? 'text-yellow-300' : 'text-yellow-400'} />
+          </div>
+
+          {/* Segment Layer Label (only if segments exist) */}
+          {segments.length > 0 && (
+            <div className="mt-1 h-12 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 rounded-bl-lg">
+              <Split size={18} className="text-purple-400" />
+            </div>
+          )}
+
+          {/* Highlight Layer Label */}
+          <div
+            className={`mt-1 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
+              selectedLayer === 'highlight' ? 'bg-orange-900/30' : 'bg-gray-900 hover:bg-gray-800'
+            }`}
+            style={{ height: isHighlightActive && highlightKeyframes.length > 0 ? '5rem' : '3rem' }}
+            onClick={(e) => {
+              if (!e.target.closest('button')) {
+                onLayerSelect && onLayerSelect('highlight');
+              }
+            }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onHighlightToggleEnabled();
+                onLayerSelect && onLayerSelect('highlight');
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
+                isHighlightActive
+                  ? selectedLayer === 'highlight' ? 'text-orange-300 hover:text-orange-200' : 'text-orange-400 hover:text-orange-300'
+                  : 'text-gray-500 hover:text-gray-400'
+              }`}
+              title={isHighlightActive ? 'Disable highlight layer' : 'Enable highlight layer'}
+            >
+              <Circle size={18} className={isHighlightActive ? 'fill-current' : ''} />
+              {isHighlightActive ? (
+                <Eye size={14} />
+              ) : (
+                <EyeOff size={14} />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable timeline tracks container */}
         <div
+          ref={scrollContainerRef}
+          className="ml-32 overflow-x-auto"
+          onScroll={handleScroll}
           style={{
-            width: timelineScale > 1 ? `${timelineScale * 100}%` : '100%',
-            minWidth: '100%',
+            scrollbarWidth: timelineScale > 1 ? 'auto' : 'none',
           }}
         >
-          {/* Timeline layers container with unified playhead */}
-          <div className="relative">
-            {/* Video Timeline Layer */}
-            <div className={`relative bg-gray-800 h-12 rounded-lg transition-all ${
-              selectedLayer === 'playhead' ? 'ring-2 ring-blue-400 ring-opacity-75' : ''
-            }`}>
-              {/* Layer label */}
-              <div
-                className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700 rounded-l-lg transition-colors cursor-pointer ${
-                  selectedLayer === 'playhead' ? 'bg-blue-900/50' : 'bg-gray-900 hover:bg-gray-800'
-                }`}
-                style={{ width: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
-                onClick={() => onLayerSelect && onLayerSelect('playhead')}
-              >
-                <Film size={18} className={selectedLayer === 'playhead' ? 'text-blue-300' : 'text-blue-400'} />
-              </div>
-
-              {/* Timeline track */}
-              <div
-                ref={timelineRef}
-                className="absolute right-0 top-0 h-full bg-gray-700 rounded-r-lg cursor-pointer select-none"
-                style={{ left: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseLeave={handleMouseLeave}
-              >
-                {/* Progress bar */}
+          {/* Scaled timeline content */}
+          <div
+            style={{
+              width: timelineScale > 1 ? `${timelineScale * 100}%` : '100%',
+              minWidth: '100%',
+            }}
+          >
+            {/* Timeline layers container with unified playhead */}
+            <div className="relative">
+              {/* Video Timeline Track */}
+              <div className={`relative bg-gray-800 h-12 rounded-r-lg transition-all ${
+                selectedLayer === 'playhead' ? 'ring-2 ring-blue-400 ring-opacity-75' : ''
+              }`}>
+                {/* Timeline track */}
                 <div
-                  className="absolute top-0 left-0 h-full bg-blue-600 rounded-r-lg transition-all pointer-events-none"
-                  style={{ width: `${progress}%` }}
-                />
-
-                {/* Hover tooltip */}
-                {hoverTime !== null && !isDragging && (
+                  ref={timelineRef}
+                  className="absolute inset-0 bg-gray-700 rounded-r-lg cursor-pointer select-none"
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseLeave={handleMouseLeave}
+                >
+                  {/* Progress bar */}
                   <div
-                    className="absolute -top-8 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded pointer-events-none"
-                    style={{ left: `${hoverX}px` }}
-                  >
-                    {formatTimeSimple(hoverTime)}
-                  </div>
-                )}
+                    className="absolute top-0 left-0 h-full bg-blue-600 rounded-r-lg transition-all pointer-events-none"
+                    style={{ width: `${progress}%` }}
+                  />
+
+                  {/* Hover tooltip */}
+                  {hoverTime !== null && !isDragging && (
+                    <div
+                      className="absolute -top-8 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded pointer-events-none"
+                      style={{ left: `${hoverX}px` }}
+                    >
+                      {formatTimeSimple(hoverTime)}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Unified Playhead - extends through all layers - rendered BEFORE layers so they paint on top */}
-            <div
-              className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none"
-              style={{
-                left: timelineScale > 1
-                  ? `calc(${8 / timelineScale}rem + (100% - ${8 / timelineScale}rem) * ${progress / 100})`
-                  : `calc(8rem + (100% - 8rem) * ${progress / 100})`,
-                height: segments.length > 0 ? 'calc(100% - 0.25rem)' : 'calc(9.25rem - 0.25rem)'  // Extend through video + crop + highlight layers, or all layers if segments exist
-              }}
-            >
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full" />
-            </div>
+              {/* Unified Playhead - extends through all layers */}
+              <div
+                className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none"
+                style={{
+                  left: `${progress}%`,
+                  height: segments.length > 0 ? 'calc(100% - 0.25rem)' : 'calc(9.25rem - 0.25rem)'
+                }}
+              >
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full" />
+              </div>
 
-            {/* Crop Layer */}
-            <div className="mt-1">
-              <CropLayer
-                keyframes={cropKeyframes}
-                duration={duration}
-                visualDuration={visualDuration}
-                currentTime={currentTime}
-                framerate={framerate}
-                isActive={isCropActive}
-                onKeyframeClick={onCropKeyframeClick}
-                onKeyframeDelete={onCropKeyframeDelete}
-                onKeyframeCopy={onCropKeyframeCopy}
-                onKeyframePaste={onCropKeyframePaste}
-                selectedKeyframeIndex={selectedCropKeyframeIndex}
-                isLayerSelected={selectedLayer === 'crop'}
-                onLayerSelect={() => onLayerSelect && onLayerSelect('crop')}
-                sourceTimeToVisualTime={sourceTimeToVisualTime}
-                visualTimeToSourceTime={visualTimeToSourceTime}
-                timelineScale={timelineScale}
-              />
-            </div>
-
-            {/* Segment Layer */}
-            {segments.length > 0 && (
+              {/* Crop Layer */}
               <div className="mt-1">
-                <SegmentLayer
-                  segments={segments}
-                  boundaries={segmentBoundaries}
+                <CropLayer
+                  keyframes={cropKeyframes}
                   duration={duration}
                   visualDuration={visualDuration}
                   currentTime={currentTime}
-                  isActive={isSegmentActive}
-                  segmentVisualLayout={segmentVisualLayout}
-                  onAddBoundary={onAddSegmentBoundary}
-                  onRemoveBoundary={onRemoveSegmentBoundary}
-                  onSegmentSpeedChange={onSegmentSpeedChange}
-                  onSegmentTrim={onSegmentTrim}
-                  trimRange={trimRange}
-                  trimHistory={trimHistory}
-                  onDetrimStart={onDetrimStart}
-                  onDetrimEnd={onDetrimEnd}
+                  framerate={framerate}
+                  isActive={isCropActive}
+                  onKeyframeClick={onCropKeyframeClick}
+                  onKeyframeDelete={onCropKeyframeDelete}
+                  onKeyframeCopy={onCropKeyframeCopy}
+                  onKeyframePaste={onCropKeyframePaste}
+                  selectedKeyframeIndex={selectedCropKeyframeIndex}
+                  isLayerSelected={selectedLayer === 'crop'}
+                  onLayerSelect={() => onLayerSelect && onLayerSelect('crop')}
                   sourceTimeToVisualTime={sourceTimeToVisualTime}
                   visualTimeToSourceTime={visualTimeToSourceTime}
                   timelineScale={timelineScale}
                 />
               </div>
-            )}
 
-            {/* Highlight Layer - at the bottom */}
-            <div className="mt-1">
-              <HighlightLayer
-                keyframes={highlightKeyframes}
-                duration={duration}
-                visualDuration={visualDuration}
-                currentTime={currentTime}
-                framerate={highlightFramerate}
-                isActive={isHighlightActive}
-                onKeyframeClick={onHighlightKeyframeClick}
-                onKeyframeDelete={onHighlightKeyframeDelete}
-                onKeyframeCopy={onHighlightKeyframeCopy}
-                onKeyframePaste={onHighlightKeyframePaste}
-                selectedKeyframeIndex={selectedHighlightKeyframeIndex}
-                isLayerSelected={selectedLayer === 'highlight'}
-                onLayerSelect={() => onLayerSelect && onLayerSelect('highlight')}
-                onToggleEnabled={onHighlightToggleEnabled}
-                onDurationChange={onHighlightDurationChange}
-                sourceTimeToVisualTime={sourceTimeToVisualTime}
-                visualTimeToSourceTime={visualTimeToSourceTime}
-                timelineScale={timelineScale}
-              />
+              {/* Segment Layer */}
+              {segments.length > 0 && (
+                <div className="mt-1">
+                  <SegmentLayer
+                    segments={segments}
+                    boundaries={segmentBoundaries}
+                    duration={duration}
+                    visualDuration={visualDuration}
+                    currentTime={currentTime}
+                    isActive={isSegmentActive}
+                    segmentVisualLayout={segmentVisualLayout}
+                    onAddBoundary={onAddSegmentBoundary}
+                    onRemoveBoundary={onRemoveSegmentBoundary}
+                    onSegmentSpeedChange={onSegmentSpeedChange}
+                    onSegmentTrim={onSegmentTrim}
+                    trimRange={trimRange}
+                    trimHistory={trimHistory}
+                    onDetrimStart={onDetrimStart}
+                    onDetrimEnd={onDetrimEnd}
+                    sourceTimeToVisualTime={sourceTimeToVisualTime}
+                    visualTimeToSourceTime={visualTimeToSourceTime}
+                    timelineScale={timelineScale}
+                  />
+                </div>
+              )}
+
+              {/* Highlight Layer - at the bottom */}
+              <div className="mt-1">
+                <HighlightLayer
+                  keyframes={highlightKeyframes}
+                  duration={duration}
+                  visualDuration={visualDuration}
+                  currentTime={currentTime}
+                  framerate={highlightFramerate}
+                  isActive={isHighlightActive}
+                  onKeyframeClick={onHighlightKeyframeClick}
+                  onKeyframeDelete={onHighlightKeyframeDelete}
+                  onKeyframeCopy={onHighlightKeyframeCopy}
+                  onKeyframePaste={onHighlightKeyframePaste}
+                  selectedKeyframeIndex={selectedHighlightKeyframeIndex}
+                  isLayerSelected={selectedLayer === 'highlight'}
+                  onLayerSelect={() => onLayerSelect && onLayerSelect('highlight')}
+                  onToggleEnabled={onHighlightToggleEnabled}
+                  onDurationChange={onHighlightDurationChange}
+                  sourceTimeToVisualTime={sourceTimeToVisualTime}
+                  visualTimeToSourceTime={visualTimeToSourceTime}
+                  timelineScale={timelineScale}
+                />
+              </div>
             </div>
           </div>
         </div>

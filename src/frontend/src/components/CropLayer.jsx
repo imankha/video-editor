@@ -123,31 +123,19 @@ export default function CropLayer({
   };
 
   return (
-    <div className={`relative bg-gray-800/95 border-t border-gray-700/50 h-12 rounded-b-lg transition-all ${
+    <div className={`relative bg-gray-800/95 border-t border-gray-700/50 h-12 rounded-r-lg transition-all ${
       isLayerSelected ? 'ring-2 ring-yellow-400 ring-opacity-75' : ''
     }`}>
-      {/* Layer label */}
-      <div
-        className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
-          isLayerSelected ? 'bg-yellow-900/30' : 'bg-gray-900 hover:bg-gray-800'
-        }`}
-        style={{ width: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
-        onClick={() => onLayerSelect && onLayerSelect()}
-      >
-        <Crop size={18} className={isLayerSelected ? 'text-yellow-300' : 'text-yellow-400'} />
-      </div>
-
       {/* Keyframes track */}
       <div
         ref={trackRef}
-        className={`absolute right-0 top-0 h-full rounded-br-lg ${copiedCrop ? 'cursor-copy' : ''}`}
-        style={{ left: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
+        className={`absolute inset-0 rounded-r-lg ${copiedCrop ? 'cursor-copy' : ''}`}
         onClick={handleTrackClick}
         onMouseMove={handleTrackMouseMove}
         onMouseLeave={handleTrackMouseLeave}
       >
         {/* Background track */}
-        <div className="absolute inset-0 bg-blue-900 bg-opacity-10 rounded-br-lg" />
+        <div className="absolute inset-0 bg-blue-900 bg-opacity-10 rounded-r-lg" />
 
         {/* Placeholder text when no explicit keyframes (only auto-created start/end) */}
         {keyframes.length === 2 && !isEndKeyframeExplicit && (

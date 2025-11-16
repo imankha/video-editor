@@ -119,60 +119,23 @@ export default function HighlightLayer({
   const highlightEndPosition = frameToPixel(Math.round(highlightDuration * framerate));
 
   return (
-    <div className={`relative bg-gray-800/95 border-t border-gray-700/50 rounded-b-lg transition-all ${
+    <div className={`relative bg-gray-800/95 border-t border-gray-700/50 rounded-r-lg transition-all ${
       isLayerSelected ? 'ring-2 ring-orange-400 ring-opacity-75' : ''
     }`}>
       {/* Main row with toggle and keyframes */}
       <div className="relative h-12">
-        {/* Layer label with toggle button */}
-        <div
-          className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
-            isLayerSelected ? 'bg-orange-900/30' : 'bg-gray-900 hover:bg-gray-800'
-          }`}
-          style={{ width: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
-          onClick={(e) => {
-            // Only select layer if not clicking directly on the toggle button
-            if (!e.target.closest('button')) {
-              onLayerSelect && onLayerSelect();
-            }
-          }}
-        >
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleEnabled();
-              // Also select the layer when toggling
-              onLayerSelect && onLayerSelect();
-            }}
-            className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
-              isEnabled
-                ? isLayerSelected ? 'text-orange-300 hover:text-orange-200' : 'text-orange-400 hover:text-orange-300'
-                : 'text-gray-500 hover:text-gray-400'
-            }`}
-            title={isEnabled ? 'Disable highlight layer' : 'Enable highlight layer'}
-          >
-            <Circle size={18} className={isEnabled ? 'fill-current' : ''} />
-            {isEnabled ? (
-              <Eye size={14} />
-            ) : (
-              <EyeOff size={14} />
-            )}
-          </button>
-        </div>
-
         {/* Keyframes track */}
         <div
           ref={trackRef}
-          className={`absolute right-0 top-0 h-full ${
+          className={`absolute inset-0 rounded-r-lg ${
             isEnabled && copiedHighlight ? 'cursor-copy' : ''
           } ${!isEnabled ? 'opacity-50' : ''}`}
-          style={{ left: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
           onClick={handleTrackClick}
           onMouseMove={handleTrackMouseMove}
           onMouseLeave={handleTrackMouseLeave}
         >
           {/* Background track */}
-          <div className="absolute inset-0 bg-orange-900 bg-opacity-10" />
+          <div className="absolute inset-0 bg-orange-900 bg-opacity-10 rounded-r-lg" />
 
           {/* Active highlight region indicator */}
           {isEnabled && (
@@ -279,33 +242,23 @@ export default function HighlightLayer({
 
       {/* Duration slider row (only when enabled) */}
       {isEnabled && (
-        <div className="relative h-8 border-t border-gray-700/30">
-          <div
-            className="absolute left-0 top-0 h-full flex items-center justify-end bg-gray-900 border-r border-gray-700/50 pr-2"
-            style={{ width: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
-          >
-            <span className="text-xs text-gray-400">
-              Duration
-              <span className="ml-1 text-orange-400 font-mono">
-                {highlightDuration.toFixed(1)}s
-              </span>
+        <div className="relative h-8 border-t border-gray-700/30 flex items-center px-2">
+          <span className="text-xs text-gray-400 mr-2 whitespace-nowrap">
+            Duration
+            <span className="ml-1 text-orange-400 font-mono">
+              {highlightDuration.toFixed(1)}s
             </span>
-          </div>
-          <div
-            className="absolute right-0 top-0 h-full flex items-center"
-            style={{ left: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
-          >
-            <input
-              type="range"
-              min="0.5"
-              max={duration || 60}
-              step="0.1"
-              value={highlightDuration}
-              onChange={handleDurationSliderChange}
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
-              title={`Highlight duration: ${highlightDuration.toFixed(1)}s`}
-            />
-          </div>
+          </span>
+          <input
+            type="range"
+            min="0.5"
+            max={duration || 60}
+            step="0.1"
+            value={highlightDuration}
+            onChange={handleDurationSliderChange}
+            className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+            title={`Highlight duration: ${highlightDuration.toFixed(1)}s`}
+          />
         </div>
       )}
     </div>
