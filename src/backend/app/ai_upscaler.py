@@ -18,6 +18,48 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from datetime import datetime
 
+# ============================================================================
+# COMPATIBILITY SHIM: Fix for torchvision.transforms.functional_tensor removal
+# In torchvision >= 0.16.0, functional_tensor was merged into functional
+# BasicSR/Real-ESRGAN may still try to import from the old location
+# ============================================================================
+import sys
+import types
+
+# Check if the module already exists (either real or previously shimmed)
+if 'torchvision.transforms.functional_tensor' not in sys.modules:
+    try:
+        import torchvision.transforms.functional_tensor
+    except ImportError:
+        # Create a compatibility shim for the removed module
+        # First ensure torchvision.transforms is loaded
+        import torchvision.transforms
+        import torchvision.transforms.functional as F
+
+        # Create fake module that redirects to functional
+        functional_tensor = types.ModuleType('torchvision.transforms.functional_tensor')
+        functional_tensor.__file__ = F.__file__
+        functional_tensor.__package__ = 'torchvision.transforms'
+
+        # Copy all attributes from functional to functional_tensor
+        for attr in dir(F):
+            if not attr.startswith('_'):
+                try:
+                    setattr(functional_tensor, attr, getattr(F, attr))
+                except Exception:
+                    pass
+
+        # Register the shim module in sys.modules
+        sys.modules['torchvision.transforms.functional_tensor'] = functional_tensor
+
+        # Also add it as an attribute of torchvision.transforms so that
+        # "from torchvision.transforms import functional_tensor" works
+        torchvision.transforms.functional_tensor = functional_tensor
+
+        logging.getLogger(__name__).info(
+            "Applied torchvision.transforms.functional_tensor compatibility shim for Real-ESRGAN"
+        )
+
 # Configure logging
 logging.getLogger('basicsr').setLevel(logging.CRITICAL)
 logging.getLogger('realesrgan').setLevel(logging.CRITICAL)
