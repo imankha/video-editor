@@ -21,6 +21,11 @@ function App() {
   const [dragCrop, setDragCrop] = useState(null);
   const [dragHighlight, setDragHighlight] = useState(null);
 
+  // Layer selection state for arrow key navigation
+  const [selectedLayer, setSelectedLayer] = useState('playhead'); // 'playhead' | 'crop' | 'highlight'
+  const [selectedCropKeyframeIndex, setSelectedCropKeyframeIndex] = useState(null);
+  const [selectedHighlightKeyframeIndex, setSelectedHighlightKeyframeIndex] = useState(null);
+
   // Segments hook (defined early so we can pass getSegmentAtTime and clampToVisibleRange to useVideo)
   const {
     boundaries: segmentBoundaries,
@@ -131,6 +136,10 @@ function App() {
     resetSegments();
     resetCrop();
     resetHighlight();
+    // Reset selection state
+    setSelectedLayer('playhead');
+    setSelectedCropKeyframeIndex(null);
+    setSelectedHighlightKeyframeIndex(null);
     setVideoFile(file);
     await loadVideo(file);
   };
@@ -405,6 +414,86 @@ function App() {
     };
   }, [videoUrl, currentTime, duration, copiedCrop, copyCropKeyframe, pasteCropKeyframe]);
 
+  // Keyboard handler: Arrow keys for layer-specific navigation
+  useEffect(() => {
+    const handleArrowKeys = (event) => {
+      // Only handle if video is loaded and arrow keys pressed
+      if (!videoUrl) return;
+      if (event.code !== 'ArrowLeft' && event.code !== 'ArrowRight') return;
+
+      // Don't handle if modifier keys are pressed (let other shortcuts work)
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+      event.preventDefault();
+
+      const isLeft = event.code === 'ArrowLeft';
+      const direction = isLeft ? -1 : 1;
+
+      switch (selectedLayer) {
+        case 'playhead': {
+          // Move playhead one frame in the direction
+          if (isLeft) {
+            stepBackward();
+          } else {
+            stepForward();
+          }
+          break;
+        }
+
+        case 'crop': {
+          // Navigate to next/previous crop keyframe
+          if (keyframes.length === 0) break;
+
+          let targetIndex;
+          if (selectedCropKeyframeIndex === null) {
+            // No keyframe selected, select based on direction
+            targetIndex = isLeft ? keyframes.length - 1 : 0;
+          } else {
+            // Move to next/previous keyframe
+            targetIndex = selectedCropKeyframeIndex + direction;
+            // Clamp to valid range
+            targetIndex = Math.max(0, Math.min(targetIndex, keyframes.length - 1));
+          }
+
+          if (targetIndex !== selectedCropKeyframeIndex) {
+            const keyframe = keyframes[targetIndex];
+            const keyframeTime = keyframe.frame / framerate;
+            setSelectedCropKeyframeIndex(targetIndex);
+            seek(keyframeTime);
+          }
+          break;
+        }
+
+        case 'highlight': {
+          // Navigate to next/previous highlight keyframe
+          if (highlightKeyframes.length === 0 || !isHighlightEnabled) break;
+
+          let targetIndex;
+          if (selectedHighlightKeyframeIndex === null) {
+            // No keyframe selected, select based on direction
+            targetIndex = isLeft ? highlightKeyframes.length - 1 : 0;
+          } else {
+            // Move to next/previous keyframe
+            targetIndex = selectedHighlightKeyframeIndex + direction;
+            // Clamp to valid range
+            targetIndex = Math.max(0, Math.min(targetIndex, highlightKeyframes.length - 1));
+          }
+
+          if (targetIndex !== selectedHighlightKeyframeIndex) {
+            const keyframe = highlightKeyframes[targetIndex];
+            const keyframeTime = keyframe.frame / highlightFramerate;
+            setSelectedHighlightKeyframeIndex(targetIndex);
+            seek(keyframeTime);
+          }
+          break;
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleArrowKeys);
+    return () => document.removeEventListener('keydown', handleArrowKeys);
+  }, [videoUrl, selectedLayer, selectedCropKeyframeIndex, selectedHighlightKeyframeIndex, keyframes, highlightKeyframes, framerate, highlightFramerate, isHighlightEnabled, stepForward, stepBackward, seek]);
+
   // Handle crop changes during drag/resize (live preview)
   const handleCropChange = (newCrop) => {
     setDragCrop(newCrop);
@@ -427,24 +516,31 @@ function App() {
     setDragHighlight(null);
   };
 
-  // Handle keyframe click (seek to keyframe time)
-  const handleKeyframeClick = (time) => {
+  // Handle keyframe click (seek to keyframe time and select it)
+  const handleKeyframeClick = (time, index) => {
     seek(time);
+    setSelectedCropKeyframeIndex(index);
+    setSelectedLayer('crop');
   };
 
   // Handle keyframe delete (pass duration to removeKeyframe)
   const handleKeyframeDelete = (time) => {
     removeKeyframe(time, duration);
+    // Clear selection if we just deleted the selected keyframe
+    setSelectedCropKeyframeIndex(null);
   };
 
-  // Handle highlight keyframe click
-  const handleHighlightKeyframeClick = (time) => {
+  // Handle highlight keyframe click (seek and select)
+  const handleHighlightKeyframeClick = (time, index) => {
     seek(time);
+    setSelectedHighlightKeyframeIndex(index);
+    setSelectedLayer('highlight');
   };
 
   // Handle highlight keyframe delete
   const handleHighlightKeyframeDelete = (time) => {
     removeHighlightKeyframe(time, duration);
+    setSelectedHighlightKeyframeIndex(null);
   };
 
   // Handle highlight duration change
@@ -666,6 +762,7 @@ function App() {
                     onCropKeyframeDelete={handleKeyframeDelete}
                     onCropKeyframeCopy={handleCopyCrop}
                     onCropKeyframePaste={handlePasteCrop}
+                    selectedCropKeyframeIndex={selectedCropKeyframeIndex}
                     highlightKeyframes={highlightKeyframes}
                     highlightFramerate={highlightFramerate}
                     isHighlightActive={true}
@@ -673,8 +770,11 @@ function App() {
                     onHighlightKeyframeDelete={handleHighlightKeyframeDelete}
                     onHighlightKeyframeCopy={handleCopyHighlight}
                     onHighlightKeyframePaste={handlePasteHighlight}
+                    selectedHighlightKeyframeIndex={selectedHighlightKeyframeIndex}
                     onHighlightToggleEnabled={toggleHighlightEnabled}
                     onHighlightDurationChange={handleHighlightDurationChange}
+                    selectedLayer={selectedLayer}
+                    onLayerSelect={setSelectedLayer}
                     segments={segments}
                     segmentBoundaries={segmentBoundaries}
                     segmentVisualLayout={segmentVisualLayout}

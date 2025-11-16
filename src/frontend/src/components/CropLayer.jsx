@@ -20,6 +20,9 @@ export default function CropLayer({
   onKeyframeCopy,
   onKeyframePaste,
   isActive,
+  selectedKeyframeIndex = null,
+  isLayerSelected = false,
+  onLayerSelect,
   sourceTimeToVisualTime = (t) => t,
   visualTimeToSourceTime = (t) => t,
   framerate = 30
@@ -88,6 +91,11 @@ export default function CropLayer({
    * Handle click on keyframes track to paste crop at clicked time
    */
   const handleTrackClick = (e) => {
+    // Select this layer when clicking on it
+    if (onLayerSelect) {
+      onLayerSelect();
+    }
+
     // Only paste if we have copied crop and paste handler
     if (!copiedCrop || !onKeyframePaste) return;
 
@@ -114,10 +122,14 @@ export default function CropLayer({
   };
 
   return (
-    <div className="relative bg-gray-800/95 border-t border-gray-700/50 h-12 rounded-b-lg">
+    <div className={`relative bg-gray-800/95 border-t border-gray-700/50 h-12 rounded-b-lg transition-all ${
+      isLayerSelected ? 'ring-2 ring-yellow-400 ring-opacity-75' : ''
+    }`}>
       {/* Layer label */}
-      <div className="absolute left-0 top-0 h-full flex items-center justify-center bg-gray-900 border-r border-gray-700/50 w-32 rounded-bl-lg">
-        <Crop size={18} className="text-yellow-400" />
+      <div className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700/50 w-32 rounded-bl-lg transition-colors ${
+        isLayerSelected ? 'bg-yellow-900/30' : 'bg-gray-900'
+      }`}>
+        <Crop size={18} className={isLayerSelected ? 'text-yellow-300' : 'text-yellow-400'} />
       </div>
 
       {/* Keyframes track */}
@@ -148,6 +160,7 @@ export default function CropLayer({
           const totalFrames = Math.round(duration * framerate);
           const isEndKeyframe = keyframe.frame === totalFrames;
           const isAtStartTime = Math.abs(currentTime) < 0.01;
+          const isSelected = selectedKeyframeIndex === index;
 
           // Highlight keyframe if:
           // 1. At current time, OR
@@ -185,15 +198,17 @@ export default function CropLayer({
 
               {/* Diamond keyframe indicator */}
               <div
-                className={`w-3 h-3 transform rotate-45 cursor-pointer transition-colors ${
-                  shouldHighlight
+                className={`w-3 h-3 transform rotate-45 cursor-pointer transition-all ${
+                  isSelected
+                    ? 'bg-yellow-300 scale-150 ring-2 ring-yellow-200'
+                    : shouldHighlight
                     ? 'bg-yellow-400 scale-125'
                     : 'bg-blue-400 hover:bg-blue-300'
                 }`}
-                onClick={() => onKeyframeClick(keyframeTime)}
+                onClick={() => onKeyframeClick(keyframeTime, index)}
                 title={`Keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
                   isEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
-                }`}
+                }${isSelected ? ' [SELECTED]' : ''}`}
               />
 
               {/* Delete button (shown on hover, but not for permanent start/end keyframes) - z-50 to appear above all UI including playhead */}
