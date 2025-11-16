@@ -593,7 +593,9 @@ async def export_with_ai_upscale(
     export_mode: str = Form("quality"),
     segment_data_json: str = Form(None),
     include_audio: str = Form("true"),
-    highlight_keyframes_json: str = Form(None)
+    highlight_keyframes_json: str = Form(None),
+    enable_source_preupscale: str = Form("false"),
+    enable_diffusion_sr: str = Form("false")
 ):
     """
     Export video with AI upscaling and de-zoom
@@ -614,6 +616,8 @@ async def export_with_ai_upscale(
         export_mode: Export mode - "fast" or "quality" (default "quality")
         include_audio: Include audio in export - "true" or "false" (default "true")
         highlight_keyframes_json: JSON array of highlight keyframes (optional)
+        enable_source_preupscale: Pre-upscale source frame before cropping (default "false")
+        enable_diffusion_sr: Enable Stable Diffusion upscaler for extreme cases (default "false")
 
     Returns:
         AI-upscaled video file
@@ -627,6 +631,14 @@ async def export_with_ai_upscale(
     # Parse include_audio parameter
     include_audio_bool = include_audio.lower() == "true"
     logger.info(f"Audio setting: {'Include audio' if include_audio_bool else 'Video only'}")
+
+    # Parse extreme upscaling parameters
+    enable_source_preupscale_bool = enable_source_preupscale.lower() == "true"
+    enable_diffusion_sr_bool = enable_diffusion_sr.lower() == "true"
+    if enable_source_preupscale_bool:
+        logger.info("Source pre-upscaling: ENABLED (will pre-upscale source frame before cropping)")
+    if enable_diffusion_sr_bool:
+        logger.info("Diffusion SR: ENABLED (will use Stable Diffusion for extreme upscaling >5x)")
 
     # Parse keyframes
     try:
@@ -731,7 +743,12 @@ async def export_with_ai_upscale(
         logger.info("=" * 80)
         logger.info("INITIALIZING AI UPSCALER")
         logger.info("=" * 80)
-        upscaler = AIVideoUpscaler(device='cuda', export_mode=export_mode)
+        upscaler = AIVideoUpscaler(
+            device='cuda',
+            export_mode=export_mode,
+            enable_source_preupscale=enable_source_preupscale_bool,
+            enable_diffusion_sr=enable_diffusion_sr_bool
+        )
 
         # Verify AI model is loaded - fail if not available (no low-quality fallback)
         if upscaler.upsampler is None:

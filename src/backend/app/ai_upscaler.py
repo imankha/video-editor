@@ -18,6 +18,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from datetime import datetime
 
+# Try to import diffusion SR model
+try:
+    from diffusers import StableDiffusionUpscalePipeline
+    DIFFUSION_SR_AVAILABLE = True
+except ImportError:
+    DIFFUSION_SR_AVAILABLE = False
+
 # ============================================================================
 # COMPATIBILITY SHIM: Fix for torchvision.transforms.functional_tensor removal
 # In torchvision >= 0.16.0, functional_tensor was merged into functional
@@ -77,7 +84,7 @@ class AIVideoUpscaler:
     - Target resolution based on aspect ratio
     """
 
-    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan'):
+    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False):
         """
         Initialize the AI upscaler
 
@@ -87,6 +94,8 @@ class AIVideoUpscaler:
             enable_multi_gpu: Enable multi-GPU parallel processing (default: True)
             export_mode: Export mode - "fast" or "quality" (default "quality")
             sr_backend: Super-resolution backend - "realesrgan" or "realbasicvsr" (default "realesrgan")
+            enable_source_preupscale: Pre-upscale source frame before cropping (default: False)
+            enable_diffusion_sr: Enable Stable Diffusion upscaler for extreme cases (default: False)
         """
         # Detect available GPUs
         self.num_gpus = 0
@@ -94,6 +103,9 @@ class AIVideoUpscaler:
         self.export_mode = export_mode
         self.sr_backend = sr_backend
         self.vsr_model = None  # For RealBasicVSR
+        self.enable_source_preupscale = enable_source_preupscale
+        self.enable_diffusion_sr = enable_diffusion_sr
+        self.diffusion_model = None
 
         if device == 'cuda' and torch.cuda.is_available():
             self.num_gpus = torch.cuda.device_count()
@@ -137,6 +149,13 @@ class AIVideoUpscaler:
         else:
             logger.info(f"Using Real-ESRGAN backend for frame-by-frame super-resolution")
             self.setup_model()
+
+        # Setup diffusion SR if enabled
+        if self.enable_diffusion_sr and DIFFUSION_SR_AVAILABLE:
+            self.setup_diffusion_sr()
+        elif self.enable_diffusion_sr and not DIFFUSION_SR_AVAILABLE:
+            logger.warning("Diffusion SR requested but diffusers package not installed")
+            logger.warning("To install: pip install diffusers transformers accelerate")
 
     def setup_model(self):
         """Download and setup Real-ESRGAN model"""
@@ -378,6 +397,84 @@ class AIVideoUpscaler:
             self.sr_backend = 'realesrgan'
             self.setup_model()
 
+    def setup_diffusion_sr(self):
+        """Setup Stable Diffusion upscaler for extreme cases"""
+        try:
+            logger.info("Initializing Stable Diffusion upscaler...")
+
+            # Use stable-diffusion-x4-upscaler model
+            # This is a 4x upscaler trained on image restoration
+            self.diffusion_model = StableDiffusionUpscalePipeline.from_pretrained(
+                "stabilityai/stable-diffusion-x4-upscaler",
+                torch_dtype=torch.float16 if self.device.type == 'cuda' else torch.float32
+            )
+            self.diffusion_model = self.diffusion_model.to(self.device)
+
+            # Enable memory-efficient attention if available
+            if hasattr(self.diffusion_model, 'enable_xformers_memory_efficient_attention'):
+                try:
+                    self.diffusion_model.enable_xformers_memory_efficient_attention()
+                    logger.info("  ✓ xformers memory-efficient attention enabled")
+                except Exception as e:
+                    logger.warning(f"  Could not enable xformers: {e}")
+
+            logger.info("✓ Stable Diffusion upscaler loaded successfully!")
+        except Exception as e:
+            logger.warning(f"Failed to load diffusion SR model: {e}")
+            self.diffusion_model = None
+
+    def enhance_with_diffusion(self, frame: np.ndarray, prompt: str = "high quality sports video frame, sharp details") -> np.ndarray:
+        """
+        Enhance frame using Stable Diffusion upscaler.
+
+        WARNING: This is SLOW (10-60 seconds per frame) but produces highest quality.
+
+        Args:
+            frame: Input BGR image (will be converted to RGB PIL)
+            prompt: Text guidance for upscaling
+
+        Returns:
+            Upscaled BGR image (4x resolution)
+        """
+        if self.diffusion_model is None:
+            raise RuntimeError("Diffusion SR model not initialized")
+
+        from PIL import Image
+
+        # Convert BGR to RGB PIL Image
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(rgb_frame)
+
+        # Ensure image is small enough (diffusion models are memory-heavy)
+        max_dim = 512
+        original_size = pil_image.size
+        if max(pil_image.size) > max_dim:
+            # Resize down first, then upscale
+            ratio = max_dim / max(pil_image.size)
+            new_size = (int(pil_image.size[0] * ratio), int(pil_image.size[1] * ratio))
+            pil_image = pil_image.resize(new_size, Image.LANCZOS)
+            logger.info(f"Resized input from {original_size} to {new_size} for diffusion processing")
+
+        logger.info(f"Running Stable Diffusion upscaler on {pil_image.size} image...")
+
+        # Run diffusion upscaling
+        with torch.inference_mode():
+            upscaled_image = self.diffusion_model(
+                prompt=prompt,
+                image=pil_image,
+                num_inference_steps=20,  # Balance quality vs speed
+                guidance_scale=7.5,
+                noise_level=20,  # Low noise for preservation
+            ).images[0]
+
+        # Convert back to BGR numpy
+        upscaled_rgb = np.array(upscaled_image)
+        upscaled_bgr = cv2.cvtColor(upscaled_rgb, cv2.COLOR_RGB2BGR)
+
+        logger.info(f"Diffusion upscaling complete: {frame.shape[:2]} -> {upscaled_bgr.shape[:2]}")
+
+        return upscaled_bgr
+
     def detect_aspect_ratio(self, width: int, height: int) -> Tuple[str, Tuple[int, int]]:
         """
         Detect aspect ratio and determine target resolution
@@ -463,7 +560,24 @@ class AIVideoUpscaler:
         Returns:
             Dictionary of enhancement parameters
         """
-        if scale_factor > 3.5:
+        if scale_factor > 4.5:
+            # ULTRA upscaling (extremely small crops, desperate measures)
+            params = {
+                'bilateral_d': 1,              # Almost no denoising
+                'bilateral_sigma_color': 2,
+                'bilateral_sigma_space': 2,
+                'unsharp_weight': 1.8,         # VERY aggressive sharpening
+                'unsharp_blur_weight': -0.8,
+                'gaussian_sigma': 2.0,
+                'apply_clahe': True,
+                'clahe_clip_limit': 4.5,       # Maximum contrast enhancement
+                'clahe_tile_size': (6, 6),     # Finer tiles for local contrast
+                'apply_detail_enhancement': True,
+                'apply_edge_enhancement': True,  # NEW: edge-specific boosting
+                'enhancement_level': 'ultra'
+            }
+            logger.info(f"Scale factor {scale_factor:.2f}x: Using ULTRA enhancement parameters (aggressive)")
+        elif scale_factor > 3.5:
             # EXTREME upscaling (very small crops like 206x366 -> 1080x1920)
             # These need the most aggressive enhancement
             params = {
@@ -477,6 +591,7 @@ class AIVideoUpscaler:
                 'clahe_clip_limit': 3.5,
                 'clahe_tile_size': (8, 8),
                 'apply_detail_enhancement': True,  # Extra detail enhancement pass
+                'apply_edge_enhancement': False,
                 'enhancement_level': 'extreme'
             }
             logger.info(f"Scale factor {scale_factor:.2f}x: Using EXTREME enhancement parameters")
@@ -493,6 +608,7 @@ class AIVideoUpscaler:
                 'clahe_clip_limit': 3.0,
                 'clahe_tile_size': (8, 8),
                 'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
                 'enhancement_level': 'high'
             }
             logger.info(f"Scale factor {scale_factor:.2f}x: Using HIGH enhancement parameters")
@@ -509,6 +625,7 @@ class AIVideoUpscaler:
                 'clahe_clip_limit': 3.0,
                 'clahe_tile_size': (8, 8),
                 'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
                 'enhancement_level': 'normal'
             }
             logger.debug(f"Scale factor {scale_factor:.2f}x: Using NORMAL enhancement parameters")
@@ -546,6 +663,72 @@ class AIVideoUpscaler:
         result = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2BGR)
 
         return result
+
+    def apply_edge_enhancement(self, image: np.ndarray) -> np.ndarray:
+        """Apply edge-specific enhancement using Sobel operators"""
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        # Detect edges with Sobel
+        sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+        sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+        edges = np.sqrt(sobelx**2 + sobely**2)
+        edges = np.clip(edges / edges.max() * 255, 0, 255).astype(np.uint8)
+
+        # Create edge mask (normalize to 0-1)
+        edge_mask = edges.astype(np.float32) / 255.0
+        edge_mask = cv2.GaussianBlur(edge_mask, (3, 3), 0)
+
+        # Enhance edges in original image
+        enhanced = image.astype(np.float32)
+        for i in range(3):  # For each BGR channel
+            enhanced[:,:,i] = enhanced[:,:,i] * (1 + 0.3 * edge_mask)
+
+        return np.clip(enhanced, 0, 255).astype(np.uint8)
+
+    def multi_pass_upscale(self, frame: np.ndarray, target_scale: float) -> np.ndarray:
+        """
+        Perform multi-pass upscaling for scale factors > 4x.
+        Two passes of 2x often produce better results than one pass of 4x.
+
+        Args:
+            frame: Input BGR image
+            target_scale: Desired total scale factor
+
+        Returns:
+            Upscaled image
+        """
+        if target_scale <= 2.0:
+            # Single pass
+            with contextlib.redirect_stderr(open(os.devnull, 'w')):
+                enhanced, _ = self.upsampler.enhance(frame, outscale=target_scale)
+            return enhanced
+        elif target_scale <= 4.0:
+            # Single 4x pass or two 2x passes (two 2x often better)
+            logger.info(f"Multi-pass: 2x -> {target_scale/2:.2f}x")
+            with contextlib.redirect_stderr(open(os.devnull, 'w')):
+                # First pass: 2x
+                pass1, _ = self.upsampler.enhance(frame, outscale=2.0)
+                # Second pass: remaining scale
+                remaining_scale = target_scale / 2.0
+                enhanced, _ = self.upsampler.enhance(pass1, outscale=remaining_scale)
+            return enhanced
+        else:
+            # Scale > 4: Do 4x first (as 2x+2x), then continue
+            logger.info(f"Multi-pass: 2x -> 2x -> {target_scale/4:.2f}x (extreme scale)")
+            with contextlib.redirect_stderr(open(os.devnull, 'w')):
+                pass1, _ = self.upsampler.enhance(frame, outscale=2.0)
+                pass2, _ = self.upsampler.enhance(pass1, outscale=2.0)
+
+                if target_scale > 4.0:
+                    # Need additional scaling beyond 4x
+                    remaining_scale = min(target_scale / 4.0, 2.0)
+                    if remaining_scale > 1.0:
+                        enhanced, _ = self.upsampler.enhance(pass2, outscale=remaining_scale)
+                    else:
+                        enhanced = pass2
+                else:
+                    enhanced = pass2
+            return enhanced
 
     def enhance_frame_ai(self, frame: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
         """
@@ -592,12 +775,30 @@ class AIVideoUpscaler:
                     sigmaSpace=enhance_params['bilateral_sigma_space']
                 )
 
-            # Calculate desired scale for Real-ESRGAN (capped at 4x)
-            desired_scale = min(scale_x, scale_y, 4.0)
+            # Calculate desired scale for Real-ESRGAN
+            desired_scale = min(scale_x, scale_y)  # Remove 4.0 cap
 
-            # Real-ESRGAN can use outscale < 4 for more efficient processing
-            with contextlib.redirect_stderr(open(os.devnull, 'w')):
-                enhanced, _ = self.upsampler.enhance(frame, outscale=desired_scale)
+            # Check if we should use diffusion model for this frame
+            if (self.enable_diffusion_sr and
+                self.diffusion_model is not None and
+                overall_scale > 5.0 and
+                enhance_params.get('enhancement_level') == 'ultra'):
+
+                logger.info(f"Using Stable Diffusion for extreme {overall_scale:.2f}x upscaling")
+                enhanced = self.enhance_with_diffusion(frame,
+                    prompt="high quality sports video, soccer players, sharp uniforms, grass field")
+
+                # Resize to exact target if needed
+                if enhanced.shape[:2] != (target_h, target_w):
+                    enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
+            elif desired_scale > 4.0 and enhance_params.get('enhancement_level') in ['extreme', 'ultra']:
+                # Use multi-pass for extreme cases
+                enhanced = self.multi_pass_upscale(frame, desired_scale)
+            else:
+                # Standard single-pass (capped at 4x)
+                capped_scale = min(desired_scale, 4.0)
+                with contextlib.redirect_stderr(open(os.devnull, 'w')):
+                    enhanced, _ = self.upsampler.enhance(frame, outscale=capped_scale)
 
             upscaled_h, upscaled_w = enhanced.shape[:2]
             logger.debug(f"Real-ESRGAN upscaled to {upscaled_w}x{upscaled_h} (scale={desired_scale:.2f})")
@@ -624,6 +825,11 @@ class AIVideoUpscaler:
             if self.device.type == 'cuda' and self.export_mode == 'quality' and enhance_params['apply_detail_enhancement']:
                 enhanced = self.apply_detail_enhancement(enhanced)
                 logger.debug("Applied additional detail enhancement pass")
+
+            # Apply edge-specific enhancement for ultra cases
+            if self.device.type == 'cuda' and self.export_mode == 'quality' and enhance_params.get('apply_edge_enhancement', False):
+                enhanced = self.apply_edge_enhancement(enhanced)
+                logger.debug("Applied edge-specific enhancement pass")
 
             # Sharpen upscaled output for better perceived quality (QUALITY mode only)
             if self.device.type == 'cuda' and self.export_mode == 'quality':
@@ -658,6 +864,36 @@ class AIVideoUpscaler:
             return self.upsamplers[gpu_id]
         return self.upsampler
 
+    def pre_upscale_source_frame(self, frame: np.ndarray, crop: Dict, scale: float = 2.0) -> Tuple[np.ndarray, Dict]:
+        """
+        Pre-upscale the entire source frame before cropping.
+
+        Args:
+            frame: Full source frame (BGR)
+            crop: Original crop region dict with x, y, width, height
+            scale: Pre-upscale factor (default 2.0)
+
+        Returns:
+            Tuple of (upscaled_frame, adjusted_crop_dict)
+        """
+        logger.info(f"Pre-upscaling source frame by {scale}x before crop extraction")
+
+        # Upscale entire frame
+        with contextlib.redirect_stderr(open(os.devnull, 'w')):
+            upscaled_frame, _ = self.upsampler.enhance(frame, outscale=scale)
+
+        # Adjust crop coordinates to match upscaled frame
+        adjusted_crop = {
+            'x': crop['x'] * scale,
+            'y': crop['y'] * scale,
+            'width': crop['width'] * scale,
+            'height': crop['height'] * scale
+        }
+
+        logger.info(f"Crop adjusted: {int(crop['width'])}x{int(crop['height'])} -> {int(adjusted_crop['width'])}x{int(adjusted_crop['height'])}")
+
+        return upscaled_frame, adjusted_crop
+
     def process_single_frame(
         self,
         frame_data: Tuple[int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int]]
@@ -674,8 +910,35 @@ class AIVideoUpscaler:
         frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size = frame_data
 
         try:
-            # Extract and crop frame
-            frame = self.extract_frame_with_crop(input_path, frame_idx, crop)
+            # Calculate scale factor to determine if pre-upscaling helps
+            scale_x = target_resolution[0] / crop['width']
+            scale_y = target_resolution[1] / crop['height']
+            overall_scale = max(scale_x, scale_y)
+
+            # Pre-upscale source if enabled and scale is extreme
+            if self.enable_source_preupscale and overall_scale > 3.5:
+                # Extract full frame first (no crop)
+                full_frame = self.extract_frame_with_crop(input_path, frame_idx, crop=None)
+
+                # Pre-upscale the entire source frame
+                full_frame, adjusted_crop = self.pre_upscale_source_frame(full_frame, crop, scale=2.0)
+
+                # Now extract the adjusted crop from upscaled frame
+                frame = full_frame[
+                    int(adjusted_crop['y']):int(adjusted_crop['y'] + adjusted_crop['height']),
+                    int(adjusted_crop['x']):int(adjusted_crop['x'] + adjusted_crop['width'])
+                ]
+
+                # Update crop reference for highlight rendering
+                crop = adjusted_crop
+                # Update original video size to reflect upscaled frame
+                original_video_size = (original_video_size[0] * 2, original_video_size[1] * 2)
+
+                if frame_idx % 30 == 0:
+                    logger.info(f"Frame {frame_idx}: Pre-upscaled source, new crop size: {frame.shape[1]}x{frame.shape[0]}")
+            else:
+                # Standard crop extraction
+                frame = self.extract_frame_with_crop(input_path, frame_idx, crop)
 
             # Apply highlight overlay if provided
             if highlight is not None:
