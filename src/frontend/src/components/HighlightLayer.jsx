@@ -124,11 +124,24 @@ export default function HighlightLayer({
       {/* Main row with toggle and keyframes */}
       <div className="relative h-12">
         {/* Layer label with toggle button */}
-        <div className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700/50 w-32 rounded-bl-lg transition-colors ${
-          isLayerSelected ? 'bg-orange-900/30' : 'bg-gray-900'
-        }`}>
+        <div
+          className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700/50 w-32 rounded-bl-lg transition-colors cursor-pointer ${
+            isLayerSelected ? 'bg-orange-900/30' : 'bg-gray-900 hover:bg-gray-800'
+          }`}
+          onClick={(e) => {
+            // Only select layer if not clicking directly on the toggle button
+            if (!e.target.closest('button')) {
+              onLayerSelect && onLayerSelect();
+            }
+          }}
+        >
           <button
-            onClick={onToggleEnabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleEnabled();
+              // Also select the layer when toggling
+              onLayerSelect && onLayerSelect();
+            }}
             className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
               isEnabled
                 ? isLayerSelected ? 'text-orange-300 hover:text-orange-200' : 'text-orange-400 hover:text-orange-300'

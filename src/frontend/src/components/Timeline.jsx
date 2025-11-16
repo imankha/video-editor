@@ -184,9 +184,12 @@ export function Timeline({
           selectedLayer === 'playhead' ? 'ring-2 ring-blue-400 ring-opacity-75' : ''
         }`}>
           {/* Layer label */}
-          <div className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700 w-32 rounded-l-lg transition-colors ${
-            selectedLayer === 'playhead' ? 'bg-blue-900/50' : 'bg-gray-900'
-          }`}>
+          <div
+            className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700 w-32 rounded-l-lg transition-colors cursor-pointer ${
+              selectedLayer === 'playhead' ? 'bg-blue-900/50' : 'bg-gray-900 hover:bg-gray-800'
+            }`}
+            onClick={() => onLayerSelect && onLayerSelect('playhead')}
+          >
             <Film size={18} className={selectedLayer === 'playhead' ? 'text-blue-300' : 'text-blue-400'} />
           </div>
 
