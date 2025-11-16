@@ -27,12 +27,18 @@ echo "Installing critical dependencies with version constraints..."
 echo "  - NumPy < 2.0.0 (required for PyTorch/Real-ESRGAN compatibility)"
 echo "  - OpenCV 4.8.x-4.9.x (required for numpy 1.x compatibility)"
 pip install 'numpy>=1.24.0,<2.0.0' --force-reinstall
-pip install 'opencv-python>=4.8.0,<4.10.0' --force-reinstall
+# Use --no-deps to prevent opencv from pulling numpy 2.x
+pip install 'opencv-python>=4.8.0,<4.10.0' --no-deps --force-reinstall
 
 # Now install remaining requirements
 echo ""
 echo "Installing remaining dependencies..."
 pip install -r requirements.txt
+
+# Re-force numpy version in case any package pulled in numpy 2.x
+echo ""
+echo "Ensuring NumPy version is correct..."
+pip install 'numpy>=1.24.0,<2.0.0' --force-reinstall
 
 # Verify critical version constraints are met
 echo ""

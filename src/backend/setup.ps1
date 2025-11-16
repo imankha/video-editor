@@ -51,12 +51,14 @@ Write-Host "`nInstalling critical dependencies with version constraints..." -For
 Write-Host "  - NumPy < 2.0.0 (required for PyTorch/Real-ESRGAN compatibility)" -ForegroundColor Gray
 Write-Host "  - OpenCV 4.8.x-4.9.x (required for numpy 1.x compatibility)" -ForegroundColor Gray
 
+# Install numpy first
 & $venvPip install "numpy>=1.24.0,<2.0.0" --force-reinstall
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Warning: NumPy installation had issues, continuing..." -ForegroundColor Yellow
 }
 
-& $venvPip install "opencv-python>=4.8.0,<4.10.0" --force-reinstall
+# Install opencv with --no-deps to prevent it from pulling numpy 2.x
+& $venvPip install "opencv-python>=4.8.0,<4.10.0" --no-deps --force-reinstall
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Warning: OpenCV installation had issues, continuing..." -ForegroundColor Yellow
 }
@@ -67,6 +69,13 @@ Write-Host "`nInstalling remaining dependencies..." -ForegroundColor Yellow
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Failed to install requirements!" -ForegroundColor Red
     exit 1
+}
+
+# Re-force numpy version in case it was overwritten
+Write-Host "`nEnsuring NumPy version is correct..." -ForegroundColor Yellow
+& $venvPip install "numpy>=1.24.0,<2.0.0" --force-reinstall
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Warning: NumPy reinstall had issues" -ForegroundColor Yellow
 }
 
 # Verify critical version constraints are met
