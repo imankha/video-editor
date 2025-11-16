@@ -990,9 +990,13 @@ async def export_with_upscale_comparison(
     if AIVideoUpscaler is None:
         raise HTTPException(status_code=503, detail="AI upscaling dependencies not installed")
 
-    # Create output directory for comparison videos
+    # Create output directory for comparison videos in project root (accessible location)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    comparison_dir = Path(f"/tmp/upscale_comparison_{timestamp}")
+    # Save to exports directory in project root for easy access
+    project_root = Path(__file__).parent.parent.parent.parent  # Go up from main.py to project root
+    exports_dir = project_root / "exports"
+    exports_dir.mkdir(exist_ok=True)
+    comparison_dir = exports_dir / f"comparison_{timestamp}"
     comparison_dir.mkdir(exist_ok=True)
 
     # Define permutations to test
