@@ -229,26 +229,6 @@ export function Timeline({
           />
         </div>
 
-        {/* Highlight Layer */}
-        <div className="mt-1">
-          <HighlightLayer
-            keyframes={highlightKeyframes}
-            duration={duration}
-            visualDuration={visualDuration}
-            currentTime={currentTime}
-            framerate={highlightFramerate}
-            isActive={isHighlightActive}
-            onKeyframeClick={onHighlightKeyframeClick}
-            onKeyframeDelete={onHighlightKeyframeDelete}
-            onKeyframeCopy={onHighlightKeyframeCopy}
-            onKeyframePaste={onHighlightKeyframePaste}
-            onToggleEnabled={onHighlightToggleEnabled}
-            onDurationChange={onHighlightDurationChange}
-            sourceTimeToVisualTime={sourceTimeToVisualTime}
-            visualTimeToSourceTime={visualTimeToSourceTime}
-          />
-        </div>
-
         {/* Segment Layer */}
         {segments.length > 0 && (
           <div className="mt-1">
@@ -273,6 +253,26 @@ export function Timeline({
             />
           </div>
         )}
+
+        {/* Highlight Layer - at the bottom */}
+        <div className="mt-1">
+          <HighlightLayer
+            keyframes={highlightKeyframes}
+            duration={duration}
+            visualDuration={visualDuration}
+            currentTime={currentTime}
+            framerate={highlightFramerate}
+            isActive={isHighlightActive}
+            onKeyframeClick={onHighlightKeyframeClick}
+            onKeyframeDelete={onHighlightKeyframeDelete}
+            onKeyframeCopy={onHighlightKeyframeCopy}
+            onKeyframePaste={onHighlightKeyframePaste}
+            onToggleEnabled={onHighlightToggleEnabled}
+            onDurationChange={onHighlightDurationChange}
+            sourceTimeToVisualTime={sourceTimeToVisualTime}
+            visualTimeToSourceTime={visualTimeToSourceTime}
+          />
+        </div>
       </div>
     </div>
   );

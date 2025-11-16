@@ -192,12 +192,12 @@ export default function HighlightLayer({
                 style={{ left: `${position}%` }}
               >
                 {/* Hit area */}
-                <div className="absolute -top-8 -bottom-6 -left-4 -right-4" />
+                <div className="absolute -top-5 -bottom-4 -left-4 -right-4" />
 
                 {/* Copy button */}
                 {onKeyframeCopy && (
                   <button
-                    className={`absolute -top-8 left-1/2 transform -translate-x-1/2 transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1 z-50 ${
+                    className={`absolute -top-5 left-1/2 transform -translate-x-1/2 transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1 z-50 ${
                       isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
                     }`}
                     onClick={(e) => {
@@ -228,7 +228,7 @@ export default function HighlightLayer({
                  !isStartKeyframe &&
                  !isEndKeyframe && (
                   <button
-                    className={`absolute top-6 left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1 z-50 ${
+                    className={`absolute top-4 left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1 z-50 ${
                       isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
                     }`}
                     onClick={(e) => {
