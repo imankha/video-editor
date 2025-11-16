@@ -15,6 +15,7 @@ import HighlightOverlay from './HighlightOverlay';
  * @param {string} props.aspectRatio - Aspect ratio for crop
  * @param {Function} props.onCropChange - Callback when crop changes
  * @param {Function} props.onCropComplete - Callback when crop change is complete
+ * @param {number|null} props.selectedKeyframeIndex - Index of selected crop keyframe (for debug display)
  * @param {boolean} props.showHighlightOverlay - Whether to show highlight overlay
  * @param {Object} props.currentHighlight - Current highlight circle data
  * @param {boolean} props.isHighlightEnabled - Whether highlight layer is enabled
@@ -36,6 +37,7 @@ export function VideoPlayer({
   aspectRatio,
   onCropChange,
   onCropComplete,
+  selectedKeyframeIndex = null,
   showHighlightOverlay = false,
   currentHighlight,
   isHighlightEnabled = false,
@@ -206,6 +208,7 @@ export function VideoPlayer({
               onCropComplete={onCropComplete}
               zoom={zoom}
               panOffset={panOffset}
+              selectedKeyframeIndex={selectedKeyframeIndex}
             />
           )}
 

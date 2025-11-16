@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import versionInfo from '../version.json';
 
 /**
  * CropOverlay component - renders a draggable/resizable crop rectangle
@@ -12,7 +13,8 @@ export default function CropOverlay({
   onCropChange,
   onCropComplete,
   zoom = 1,
-  panOffset = { x: 0, y: 0 }
+  panOffset = { x: 0, y: 0 },
+  selectedKeyframeIndex = null
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -404,6 +406,16 @@ export default function CropOverlay({
           <line x1="0" y1="33.33%" x2="100%" y2="33.33%" stroke="white" strokeOpacity="0.5" strokeWidth="1" />
           <line x1="0" y1="66.66%" x2="100%" y2="66.66%" stroke="white" strokeOpacity="0.5" strokeWidth="1" />
         </svg>
+
+        {/* Debug: Show crop size when keyframe is selected (only in development mode) */}
+        {versionInfo.environment !== 'production' && selectedKeyframeIndex !== null && (
+          <div
+            className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-black/75 text-yellow-300 px-2 py-1 rounded text-sm font-mono pointer-events-none"
+            title={`Crop size: ${Math.round(currentCrop.width)}x${Math.round(currentCrop.height)}`}
+          >
+            {Math.round(currentCrop.width)}x{Math.round(currentCrop.height)}
+          </div>
+        )}
 
         {/* Resize handles */}
         {handles.map(handle => (

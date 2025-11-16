@@ -758,6 +758,7 @@ function App() {
             aspectRatio={aspectRatio}
             onCropChange={handleCropChange}
             onCropComplete={handleCropComplete}
+            selectedKeyframeIndex={selectedCropKeyframeIndex}
             showHighlightOverlay={!!videoUrl}
             currentHighlight={currentHighlightState}
             isHighlightEnabled={isHighlightEnabled}
