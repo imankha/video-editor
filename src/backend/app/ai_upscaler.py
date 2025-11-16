@@ -845,7 +845,7 @@ class AIVideoUpscaler:
 
         Args:
             keyframes: List of highlight keyframe dicts with 'time', 'x', 'y', 'radiusX', 'radiusY', 'opacity', 'color'
-                      x, y are percentages (0-100), radiusX/radiusY are pixel values
+                      x, y are pixel coordinates in original video space, radiusX/radiusY are pixel values
             time: Time in seconds
 
         Returns:
@@ -912,7 +912,7 @@ class AIVideoUpscaler:
 
         Args:
             frame: Input frame (BGR format, already cropped)
-            highlight: Highlight parameters with x, y (percentages 0-100), radiusX, radiusY (pixels in original coords)
+            highlight: Highlight parameters with x, y (pixels in original video coords), radiusX, radiusY (pixels in original coords)
             original_video_size: Original video (width, height) before crop
             crop: Crop parameters that were applied to this frame
 
@@ -925,9 +925,9 @@ class AIVideoUpscaler:
         frame_h, frame_w = frame.shape[:2]
         orig_w, orig_h = original_video_size
 
-        # Convert highlight position from percentage to original video pixels
-        highlight_x_orig = (highlight['x'] / 100.0) * orig_w
-        highlight_y_orig = (highlight['y'] / 100.0) * orig_h
+        # Highlight position is already in original video pixel coordinates
+        highlight_x_orig = highlight['x']
+        highlight_y_orig = highlight['y']
         radius_x_orig = highlight['radiusX']
         radius_y_orig = highlight['radiusY']
 
@@ -1080,7 +1080,7 @@ class AIVideoUpscaler:
             logger.info("=" * 60)
             logger.info(f"Total highlight keyframes: {len(highlight_sorted)}")
             for i, hkf in enumerate(highlight_sorted):
-                logger.info(f"  Highlight {i+1}: t={hkf['time']:.2f}s, pos=({hkf['x']:.1f}%, {hkf['y']:.1f}%), "
+                logger.info(f"  Highlight {i+1}: t={hkf['time']:.2f}s, pos=({hkf['x']:.1f}px, {hkf['y']:.1f}px), "
                            f"radii=({hkf['radiusX']:.1f}, {hkf['radiusY']:.1f})px, "
                            f"opacity={hkf['opacity']:.2f}, color={hkf['color']}")
             highlight_end_time = highlight_sorted[-1]['time']
