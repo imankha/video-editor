@@ -25,7 +25,8 @@ export default function CropLayer({
   onLayerSelect,
   sourceTimeToVisualTime = (t) => t,
   visualTimeToSourceTime = (t) => t,
-  framerate = 30
+  framerate = 30,
+  timelineScale = 1
 }) {
   // Get isEndKeyframeExplicit and copiedCrop from context
   const { isEndKeyframeExplicit, copiedCrop } = useCropContext();
@@ -127,9 +128,10 @@ export default function CropLayer({
     }`}>
       {/* Layer label */}
       <div
-        className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700/50 w-32 rounded-bl-lg transition-colors cursor-pointer ${
+        className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
           isLayerSelected ? 'bg-yellow-900/30' : 'bg-gray-900 hover:bg-gray-800'
         }`}
+        style={{ width: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
         onClick={() => onLayerSelect && onLayerSelect()}
       >
         <Crop size={18} className={isLayerSelected ? 'text-yellow-300' : 'text-yellow-400'} />
@@ -138,7 +140,8 @@ export default function CropLayer({
       {/* Keyframes track */}
       <div
         ref={trackRef}
-        className={`absolute left-32 right-0 top-0 h-full rounded-br-lg ${copiedCrop ? 'cursor-copy' : ''}`}
+        className={`absolute right-0 top-0 h-full rounded-br-lg ${copiedCrop ? 'cursor-copy' : ''}`}
+        style={{ left: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
         onClick={handleTrackClick}
         onMouseMove={handleTrackMouseMove}
         onMouseLeave={handleTrackMouseLeave}

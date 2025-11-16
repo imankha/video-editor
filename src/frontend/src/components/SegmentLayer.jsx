@@ -22,7 +22,8 @@ export default function SegmentLayer({
   isActive,
   segmentVisualLayout = [], // Pre-calculated visual positions from hook
   sourceTimeToVisualTime = (t) => t, // Convert source time to visual time
-  visualTimeToSourceTime = (t) => t  // Convert visual time to source time
+  visualTimeToSourceTime = (t) => t,  // Convert visual time to source time
+  timelineScale = 1
 }) {
   const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(null);
 
@@ -93,13 +94,17 @@ export default function SegmentLayer({
   return (
     <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-b-lg" style={{ minHeight: '60px', paddingBottom: '8px' }}>
       {/* Layer label */}
-      <div className="absolute left-0 top-0 h-12 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 w-32 rounded-bl-lg">
+      <div
+        className="absolute left-0 top-0 h-12 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 rounded-bl-lg"
+        style={{ width: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
+      >
         <Split size={18} className="text-purple-400" />
       </div>
 
       {/* Segments track */}
       <div
-        className="segment-track absolute left-32 right-0 top-0 h-12 cursor-pointer overflow-visible rounded-br-lg"
+        className="segment-track absolute right-0 top-0 h-12 cursor-pointer overflow-visible rounded-br-lg"
+        style={{ left: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
         onClick={handleTrackClick}
       >
         {/* Background track */}

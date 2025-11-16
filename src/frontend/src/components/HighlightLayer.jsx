@@ -27,7 +27,8 @@ export default function HighlightLayer({
   onDurationChange,
   sourceTimeToVisualTime = (t) => t,
   visualTimeToSourceTime = (t) => t,
-  framerate = 30
+  framerate = 30,
+  timelineScale = 1
 }) {
   const { isEndKeyframeExplicit, copiedHighlight, isEnabled, highlightDuration } = useHighlightContext();
 
@@ -125,9 +126,10 @@ export default function HighlightLayer({
       <div className="relative h-12">
         {/* Layer label with toggle button */}
         <div
-          className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700/50 w-32 rounded-bl-lg transition-colors cursor-pointer ${
+          className={`absolute left-0 top-0 h-full flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
             isLayerSelected ? 'bg-orange-900/30' : 'bg-gray-900 hover:bg-gray-800'
           }`}
+          style={{ width: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
           onClick={(e) => {
             // Only select layer if not clicking directly on the toggle button
             if (!e.target.closest('button')) {
@@ -161,9 +163,10 @@ export default function HighlightLayer({
         {/* Keyframes track */}
         <div
           ref={trackRef}
-          className={`absolute left-32 right-0 top-0 h-full ${
+          className={`absolute right-0 top-0 h-full ${
             isEnabled && copiedHighlight ? 'cursor-copy' : ''
           } ${!isEnabled ? 'opacity-50' : ''}`}
+          style={{ left: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
           onClick={handleTrackClick}
           onMouseMove={handleTrackMouseMove}
           onMouseLeave={handleTrackMouseLeave}
@@ -277,7 +280,10 @@ export default function HighlightLayer({
       {/* Duration slider row (only when enabled) */}
       {isEnabled && (
         <div className="relative h-8 border-t border-gray-700/30">
-          <div className="absolute left-0 top-0 h-full flex items-center justify-end bg-gray-900 border-r border-gray-700/50 w-32 pr-2">
+          <div
+            className="absolute left-0 top-0 h-full flex items-center justify-end bg-gray-900 border-r border-gray-700/50 pr-2"
+            style={{ width: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
+          >
             <span className="text-xs text-gray-400">
               Duration
               <span className="ml-1 text-orange-400 font-mono">
@@ -285,7 +291,10 @@ export default function HighlightLayer({
               </span>
             </span>
           </div>
-          <div className="absolute left-32 right-0 top-0 h-full flex items-center">
+          <div
+            className="absolute right-0 top-0 h-full flex items-center"
+            style={{ left: timelineScale > 1 ? `${8 / timelineScale}rem` : '8rem' }}
+          >
             <input
               type="range"
               min="0.5"
