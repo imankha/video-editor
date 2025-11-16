@@ -2,7 +2,6 @@ import { Crop, Trash2, Copy } from 'lucide-react';
 import React from 'react';
 import { useCropContext } from '../contexts/CropContext';
 import { frameToTime } from '../utils/videoUtils';
-import versionInfo from '../version.json';
 
 /**
  * CropLayer component - displays crop keyframes on the timeline
@@ -222,26 +221,6 @@ export default function CropLayer({
                 >
                   <Trash2 size={10} />
                 </button>
-              )}
-
-              {/* Debug: Show crop size at keyframe (only in development mode) */}
-              {versionInfo.environment !== 'production' && (
-                <div
-                  className={`absolute left-1/2 transform -translate-x-1/2 text-[9px] font-mono whitespace-nowrap pointer-events-none ${
-                    keyframes.length > 2 && !isStartKeyframe && !isEndKeyframe
-                      ? 'top-9' // Position below delete button
-                      : 'top-5' // Position below diamond
-                  } ${
-                    isSelected
-                      ? 'text-yellow-300'
-                      : shouldHighlight
-                      ? 'text-yellow-400'
-                      : 'text-blue-300'
-                  }`}
-                  title={`Crop size: ${Math.round(keyframe.width)}x${Math.round(keyframe.height)}`}
-                >
-                  {Math.round(keyframe.width)}x{Math.round(keyframe.height)}
-                </div>
               )}
             </div>
           );
