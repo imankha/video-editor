@@ -9,9 +9,16 @@ function generateExportId() {
   return 'export_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
 }
 
+// Export configuration - centralized for easy A/B testing
+const EXPORT_CONFIG = {
+  targetFps: 30,           // Fixed at 30fps
+  exportMode: 'fast',      // Single-pass encoding (H.264, medium preset, CRF 15)
+  // Future A/B test settings can be added here
+};
+
 /**
  * ExportButton component - handles video export with AI upscaling
- * Always uses AI upscaling with de-zoom for best quality
+ * Always uses AI upscaling with ESRGAN at 30fps for best quality
  * Automatically downloads the exported video
  */
 export default function ExportButton({ videoFile, cropKeyframes, highlightKeyframes = [], segmentData, disabled }) {
@@ -19,11 +26,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState(null);
-  const [exportQuality, setExportQuality] = useState('quality'); // 'fast' or 'quality'
-  const [includeAudio, setIncludeAudio] = useState(true); // true or false
-  const [targetFps, setTargetFps] = useState(30); // 24, 30, or 60
-  const [comparisonMode, setComparisonMode] = useState(false); // Enable comparison export
-  const [comparisonResults, setComparisonResults] = useState(null); // Results from comparison export
+  const [includeAudio, setIncludeAudio] = useState(true);
   const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
@@ -99,13 +102,13 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
     exportIdRef.current = exportId;
 
     try {
-      // Prepare form data
+      // Prepare form data with fixed export settings
       const formData = new FormData();
       formData.append('video', videoFile);
       formData.append('keyframes_json', JSON.stringify(cropKeyframes));
-      formData.append('target_fps', String(targetFps));
+      formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
       formData.append('export_id', exportId);
-      formData.append('export_mode', exportQuality);
+      formData.append('export_mode', EXPORT_CONFIG.exportMode);
       formData.append('include_audio', includeAudio ? 'true' : 'false');
 
       // Add segment data if available (only if speed changes or trimming exist)
@@ -226,163 +229,11 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
     }
   };
 
-  const handleComparisonExport = async () => {
-    if (!videoFile) {
-      setError('No video file loaded');
-      return;
-    }
-
-    if (!cropKeyframes || cropKeyframes.length === 0) {
-      setError('No crop keyframes defined. Please add at least one crop keyframe.');
-      return;
-    }
-
-    setIsExporting(true);
-    setProgress(0);
-    setProgressMessage('Starting comparison batch export...');
-    setError(null);
-    setComparisonResults(null);
-    uploadCompleteRef.current = false;
-
-    // Generate unique export ID
-    const exportId = generateExportId();
-    exportIdRef.current = exportId;
-
-    try {
-      // Prepare form data
-      const formData = new FormData();
-      formData.append('video', videoFile);
-      formData.append('keyframes_json', JSON.stringify(cropKeyframes));
-      formData.append('export_id', exportId);
-      formData.append('include_audio', includeAudio ? 'true' : 'false');
-
-      // Add segment data if available
-      if (segmentData) {
-        console.log('=== COMPARISON EXPORT: Sending segment data to backend ===');
-        console.log(JSON.stringify(segmentData, null, 2));
-        formData.append('segment_data_json', JSON.stringify(segmentData));
-      }
-
-      // Use comparison endpoint
-      const endpoint = 'http://localhost:8000/api/export/upscale/comparison';
-
-      // Connect WebSocket for real-time progress updates
-      connectWebSocket(exportId);
-
-      // Send export request
-      const response = await axios.post(
-        endpoint,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          },
-          onUploadProgress: (progressEvent) => {
-            if (!uploadCompleteRef.current) {
-              const uploadPercent = Math.round(
-                (progressEvent.loaded * 5) / progressEvent.total
-              );
-              setProgress(uploadPercent);
-              setProgressMessage('Uploading video...');
-
-              if (progressEvent.loaded === progressEvent.total) {
-                uploadCompleteRef.current = true;
-              }
-            }
-          }
-        }
-      );
-
-      // Store comparison results
-      setComparisonResults(response.data);
-
-      // Close WebSocket
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-
-      setProgress(100);
-      setProgressMessage('Comparison export complete!');
-      setTimeout(() => {
-        setIsExporting(false);
-        setProgress(0);
-        setProgressMessage('');
-      }, 2000);
-
-    } catch (err) {
-      console.error('Comparison export failed:', err);
-
-      // Close WebSocket on error
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-
-      setError(err.response?.data?.detail || err.message || 'Comparison export failed.');
-      setIsExporting(false);
-      setProgress(0);
-      setProgressMessage('');
-    }
-  };
-
   return (
     <div className="space-y-3">
       {/* Export Settings */}
       <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
         <div className="text-sm font-medium text-gray-300 mb-3">Export Settings</div>
-
-        {/* Quality Toggle */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-gray-200">Quality</span>
-            <span className="text-xs text-gray-400">
-              {exportQuality === 'fast' ? 'H.264, 1-pass - faster' : 'H.265, 2-pass - best quality'}
-            </span>
-          </div>
-          <button
-            onClick={() => setExportQuality(exportQuality === 'fast' ? 'quality' : 'fast')}
-            disabled={isExporting}
-            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-              exportQuality === 'quality' ? 'bg-blue-600' : 'bg-gray-600'
-            } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-            role="switch"
-            aria-checked={exportQuality === 'quality'}
-            aria-label="Toggle export quality"
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                exportQuality === 'quality' ? 'translate-x-8' : 'translate-x-1'
-              }`}
-            />
-          </button>
-        </div>
-
-        {/* Frame Rate Toggle */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-gray-200">Frame Rate</span>
-            <span className="text-xs text-gray-400">
-              {targetFps === 30 ? '30 fps - standard' : '60 fps - AI interpolated smooth motion'}
-            </span>
-          </div>
-          <button
-            onClick={() => setTargetFps(targetFps === 30 ? 60 : 30)}
-            disabled={isExporting}
-            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-              targetFps === 60 ? 'bg-blue-600' : 'bg-gray-600'
-            } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-            role="switch"
-            aria-checked={targetFps === 60}
-            aria-label="Toggle frame rate"
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                targetFps === 60 ? 'translate-x-8' : 'translate-x-1'
-              }`}
-            />
-          </button>
-        </div>
 
         {/* Audio Toggle */}
         <div className="flex items-center justify-between">
@@ -410,56 +261,31 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
           </button>
         </div>
 
-        {/* Comparison Mode Toggle */}
-        <div className="flex items-center justify-between border-t border-gray-600 pt-4">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-yellow-400">Comparison Mode</span>
-            <span className="text-xs text-gray-400">
-              {comparisonMode
-                ? 'Export 4 variants: RealESRGAN & RealBasicVSR @ 30fps & 60fps'
-                : 'Normal single export'}
-            </span>
-          </div>
-          <button
-            onClick={() => setComparisonMode(!comparisonMode)}
-            disabled={isExporting}
-            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-              comparisonMode ? 'bg-yellow-600' : 'bg-gray-600'
-            } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-            role="switch"
-            aria-checked={comparisonMode}
-            aria-label="Toggle comparison mode"
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                comparisonMode ? 'translate-x-8' : 'translate-x-1'
-              }`}
-            />
-          </button>
+        {/* Export Info */}
+        <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
+          AI upscaling with Real-ESRGAN at {EXPORT_CONFIG.targetFps}fps (H.264)
         </div>
       </div>
 
-      {/* Single Export Button */}
+      {/* Export Button */}
       <button
-        onClick={comparisonMode ? handleComparisonExport : handleExport}
+        onClick={handleExport}
         disabled={disabled || isExporting || !videoFile}
         className={`w-full px-6 py-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
           disabled || isExporting || !videoFile
             ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-            : comparisonMode
-              ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
-              : 'bg-blue-600 hover:bg-blue-700 text-white'
+            : 'bg-blue-600 hover:bg-blue-700 text-white'
         }`}
       >
         {isExporting ? (
           <>
             <Loader className="animate-spin" size={20} />
-            <span>{comparisonMode ? 'Exporting Variants...' : 'Exporting...'}</span>
+            <span>Exporting...</span>
           </>
         ) : (
           <>
             <Download size={20} />
-            <span>{comparisonMode ? 'Export Comparison Batch' : 'Export Video'}</span>
+            <span>Export Video</span>
           </>
         )}
       </button>
@@ -497,66 +323,9 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
       )}
 
       {/* Success message */}
-      {progress === 100 && !isExporting && !comparisonResults && (
+      {progress === 100 && !isExporting && (
         <div className="text-green-400 text-sm bg-green-900/20 border border-green-800 rounded p-2">
           Export complete! Video downloaded.
-        </div>
-      )}
-
-      {/* Comparison Results */}
-      {comparisonResults && (
-        <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4">
-          <div className="text-yellow-400 font-medium mb-2">
-            Comparison Export Complete!
-          </div>
-          <div className="text-sm text-gray-300 mb-3">
-            {comparisonResults.successful_variants}/{comparisonResults.total_variants} variants exported successfully.
-            {comparisonResults.total_duration_formatted && (
-              <span className="ml-2 text-gray-400">
-                Total time: {comparisonResults.total_duration_formatted}
-              </span>
-            )}
-          </div>
-          <div className="space-y-2 text-xs">
-            <div className="font-medium text-gray-300">Output Directory:</div>
-            <div className="bg-gray-800 p-2 rounded font-mono break-all">
-              {comparisonResults.output_directory}
-            </div>
-
-            {comparisonResults.report_path && (
-              <>
-                <div className="font-medium text-gray-300 mt-3">Comparison Report:</div>
-                <div className="bg-gray-800 p-2 rounded font-mono break-all text-yellow-300">
-                  {comparisonResults.report_path}
-                </div>
-              </>
-            )}
-
-            <div className="font-medium text-gray-300 mt-3">Variants:</div>
-            {Object.entries(comparisonResults.variants || {}).map(([name, result]) => (
-              <div key={name} className={`p-2 rounded ${result.success ? 'bg-green-900/30' : 'bg-red-900/30'}`}>
-                <div className="flex items-center gap-2">
-                  <span className={result.success ? 'text-green-400' : 'text-red-400'}>
-                    {result.success ? '✓' : '✗'}
-                  </span>
-                  <span className="font-medium">{name}</span>
-                  {result.success && result.duration_formatted && (
-                    <span className="text-gray-400 ml-auto">
-                      {result.duration_formatted} | {result.file_size_mb} MB
-                    </span>
-                  )}
-                </div>
-                {result.success ? (
-                  <div className="mt-1 font-mono text-gray-400 break-all">{result.output_path}</div>
-                ) : (
-                  <div className="mt-1 text-red-400">{result.error}</div>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 text-xs text-gray-400">
-            Note: Files are saved on the server. Check the comparison report for detailed timing analysis.
-          </div>
         </div>
       )}
     </div>
