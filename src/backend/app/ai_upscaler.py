@@ -18,6 +18,40 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from datetime import datetime
 
+# ============================================================================
+# COMPATIBILITY SHIM: Fix for torchvision.transforms.functional_tensor removal
+# In torchvision >= 0.16.0, functional_tensor was merged into functional
+# BasicSR/Real-ESRGAN may still try to import from the old location
+# ============================================================================
+try:
+    import torchvision.transforms.functional_tensor
+except ImportError:
+    # Create a compatibility shim for the removed module
+    import sys
+    import types
+
+    # Create fake module that redirects to functional
+    functional_tensor = types.ModuleType('torchvision.transforms.functional_tensor')
+
+    # Import the actual functional module
+    import torchvision.transforms.functional as F
+
+    # Copy all attributes from functional to functional_tensor
+    for attr in dir(F):
+        if not attr.startswith('_'):
+            setattr(functional_tensor, attr, getattr(F, attr))
+
+    # Register the shim module
+    sys.modules['torchvision.transforms.functional_tensor'] = functional_tensor
+
+    # Also ensure the parent module structure is correct
+    if hasattr(torch, 'torchvision'):
+        pass  # Already exists
+
+    logging.getLogger(__name__).debug(
+        "Applied torchvision.transforms.functional_tensor compatibility shim"
+    )
+
 # Configure logging
 logging.getLogger('basicsr').setLevel(logging.CRITICAL)
 logging.getLogger('realesrgan').setLevel(logging.CRITICAL)
