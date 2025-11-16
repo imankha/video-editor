@@ -23,34 +23,42 @@ from datetime import datetime
 # In torchvision >= 0.16.0, functional_tensor was merged into functional
 # BasicSR/Real-ESRGAN may still try to import from the old location
 # ============================================================================
-try:
-    import torchvision.transforms.functional_tensor
-except ImportError:
-    # Create a compatibility shim for the removed module
-    import sys
-    import types
+import sys
+import types
 
-    # Create fake module that redirects to functional
-    functional_tensor = types.ModuleType('torchvision.transforms.functional_tensor')
+# Check if the module already exists (either real or previously shimmed)
+if 'torchvision.transforms.functional_tensor' not in sys.modules:
+    try:
+        import torchvision.transforms.functional_tensor
+    except ImportError:
+        # Create a compatibility shim for the removed module
+        # First ensure torchvision.transforms is loaded
+        import torchvision.transforms
+        import torchvision.transforms.functional as F
 
-    # Import the actual functional module
-    import torchvision.transforms.functional as F
+        # Create fake module that redirects to functional
+        functional_tensor = types.ModuleType('torchvision.transforms.functional_tensor')
+        functional_tensor.__file__ = F.__file__
+        functional_tensor.__package__ = 'torchvision.transforms'
 
-    # Copy all attributes from functional to functional_tensor
-    for attr in dir(F):
-        if not attr.startswith('_'):
-            setattr(functional_tensor, attr, getattr(F, attr))
+        # Copy all attributes from functional to functional_tensor
+        for attr in dir(F):
+            if not attr.startswith('_'):
+                try:
+                    setattr(functional_tensor, attr, getattr(F, attr))
+                except Exception:
+                    pass
 
-    # Register the shim module
-    sys.modules['torchvision.transforms.functional_tensor'] = functional_tensor
+        # Register the shim module in sys.modules
+        sys.modules['torchvision.transforms.functional_tensor'] = functional_tensor
 
-    # Also ensure the parent module structure is correct
-    if hasattr(torch, 'torchvision'):
-        pass  # Already exists
+        # Also add it as an attribute of torchvision.transforms so that
+        # "from torchvision.transforms import functional_tensor" works
+        torchvision.transforms.functional_tensor = functional_tensor
 
-    logging.getLogger(__name__).debug(
-        "Applied torchvision.transforms.functional_tensor compatibility shim"
-    )
+        logging.getLogger(__name__).info(
+            "Applied torchvision.transforms.functional_tensor compatibility shim for Real-ESRGAN"
+        )
 
 # Configure logging
 logging.getLogger('basicsr').setLevel(logging.CRITICAL)
