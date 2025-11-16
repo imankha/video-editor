@@ -226,6 +226,22 @@ function App() {
     prevTrimRangeRef.current = trimRange;
   }, [trimRange, cleanupTrimKeyframes, cleanupHighlightTrimKeyframes]);
 
+  // BUG FIX: Auto-reposition playhead when it becomes invalid after trim operation
+  // This ensures the playhead is always within the visible (non-trimmed) range
+  useEffect(() => {
+    if (!trimRange || !videoUrl) return;
+
+    // Check if current playhead position is outside the valid trim range
+    const isPlayheadInvalid = currentTime < trimRange.start || currentTime > trimRange.end;
+
+    if (isPlayheadInvalid) {
+      // Clamp to the nearest valid position
+      const validTime = clampToVisibleRange(currentTime);
+      console.log('[App] Playhead repositioned after trim:', currentTime, '->', validTime);
+      seek(validTime);
+    }
+  }, [trimRange, currentTime, videoUrl, clampToVisibleRange, seek]);
+
   // Handler functions for copy/paste (defined BEFORE useEffect to avoid initialization errors)
   const handleCopyCrop = (time = currentTime) => {
     if (videoUrl) {
