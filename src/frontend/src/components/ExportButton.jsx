@@ -12,7 +12,7 @@ function generateExportId() {
 // Export configuration - centralized for easy A/B testing
 const EXPORT_CONFIG = {
   targetFps: 30,           // Fixed at 30fps
-  exportMode: 'quality',   // Always use quality mode (H.265, 2-pass)
+  exportMode: 'fast',      // Single-pass encoding (H.264, medium preset, CRF 15)
   // Future A/B test settings can be added here
 };
 
@@ -263,7 +263,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
 
         {/* Export Info */}
         <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
-          AI upscaling with Real-ESRGAN at {EXPORT_CONFIG.targetFps}fps
+          AI upscaling with Real-ESRGAN at {EXPORT_CONFIG.targetFps}fps (H.264)
         </div>
       </div>
 
