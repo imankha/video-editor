@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useVideo } from './hooks/useVideo';
 import useCrop from './hooks/useCrop';
+import useHighlight from './hooks/useHighlight';
 import useZoom from './hooks/useZoom';
 import { useSegments } from './hooks/useSegments';
 import { VideoPlayer } from './components/VideoPlayer';
@@ -12,11 +13,13 @@ import ZoomControls from './components/ZoomControls';
 import ExportButton from './components/ExportButton';
 import DebugInfo from './components/DebugInfo';
 import { CropProvider } from './contexts/CropContext';
+import { HighlightProvider } from './contexts/HighlightContext';
 
 function App() {
   const [videoFile, setVideoFile] = useState(null);
   // Temporary state for live drag/resize preview (null when not dragging)
   const [dragCrop, setDragCrop] = useState(null);
+  const [dragHighlight, setDragHighlight] = useState(null);
 
   // Segments hook (defined early so we can pass getSegmentAtTime and clampToVisibleRange to useVideo)
   const {
@@ -86,6 +89,29 @@ function App() {
     reset: resetCrop,
   } = useCrop(metadata);
 
+  // Highlight hook - for highlighting specific players
+  const {
+    keyframes: highlightKeyframes,
+    isEndKeyframeExplicit: isHighlightEndKeyframeExplicit,
+    copiedHighlight,
+    framerate: highlightFramerate,
+    isEnabled: isHighlightEnabled,
+    highlightDuration,
+    toggleEnabled: toggleHighlightEnabled,
+    updateHighlightDuration,
+    addOrUpdateKeyframe: addOrUpdateHighlightKeyframe,
+    removeKeyframe: removeHighlightKeyframe,
+    deleteKeyframesInRange: deleteHighlightKeyframesInRange,
+    cleanupTrimKeyframes: cleanupHighlightTrimKeyframes,
+    copyHighlightKeyframe,
+    pasteHighlightKeyframe,
+    interpolateHighlight,
+    hasKeyframeAt: hasHighlightKeyframeAt,
+    getHighlightDataAtTime,
+    getKeyframesForExport: getHighlightKeyframesForExport,
+    reset: resetHighlight,
+  } = useHighlight(metadata);
+
   // Zoom hook
   const {
     zoom,
@@ -104,6 +130,7 @@ function App() {
     // Reset all state before loading new video
     resetSegments();
     resetCrop();
+    resetHighlight();
     setVideoFile(file);
     await loadVideo(file);
   };
@@ -139,6 +166,34 @@ function App() {
     };
   }, [dragCrop, keyframes, currentTime, interpolateCrop]);
 
+  // DERIVED STATE: Current highlight state
+  // Only show highlight when current time is within the highlight duration
+  const currentHighlightState = useMemo(() => {
+    // Don't show highlight if current time is past the highlight duration
+    if (currentTime > highlightDuration) {
+      return null;
+    }
+
+    let highlight;
+    if (dragHighlight) {
+      highlight = dragHighlight;
+    } else if (highlightKeyframes.length === 0) {
+      return null;
+    } else {
+      highlight = interpolateHighlight(currentTime);
+    }
+
+    if (!highlight) return null;
+    return {
+      x: highlight.x,
+      y: highlight.y,
+      radiusX: highlight.radiusX,
+      radiusY: highlight.radiusY,
+      opacity: highlight.opacity,
+      color: highlight.color
+    };
+  }, [dragHighlight, highlightKeyframes, currentTime, interpolateHighlight, highlightDuration]);
+
   // Debug: Log keyframes changes
   useEffect(() => {
     console.log('[App] Keyframes changed:', keyframes);
@@ -157,9 +212,10 @@ function App() {
     if (prevTrimRangeRef.current !== undefined && prevTrimRangeRef.current !== null && trimRange === null) {
       console.log('[App] trimRange cleared - cleaning up trim keyframes');
       cleanupTrimKeyframes();
+      cleanupHighlightTrimKeyframes();
     }
     prevTrimRangeRef.current = trimRange;
-  }, [trimRange, cleanupTrimKeyframes]);
+  }, [trimRange, cleanupTrimKeyframes, cleanupHighlightTrimKeyframes]);
 
   // Handler functions for copy/paste (defined BEFORE useEffect to avoid initialization errors)
   const handleCopyCrop = (time = currentTime) => {
@@ -172,6 +228,20 @@ function App() {
     if (videoUrl && copiedCrop) {
       pasteCropKeyframe(time, duration);
       // Move playhead to the pasted keyframe location
+      seek(time);
+    }
+  };
+
+  // Handler functions for highlight copy/paste
+  const handleCopyHighlight = (time = currentTime) => {
+    if (videoUrl && isHighlightEnabled) {
+      copyHighlightKeyframe(time);
+    }
+  };
+
+  const handlePasteHighlight = (time = currentTime) => {
+    if (videoUrl && copiedHighlight && isHighlightEnabled) {
+      pasteHighlightKeyframe(time, duration);
       seek(time);
     }
   };
@@ -346,6 +416,17 @@ function App() {
     setDragCrop(null); // Clear drag preview
   };
 
+  // Handle highlight changes during drag/resize
+  const handleHighlightChange = (newHighlight) => {
+    setDragHighlight(newHighlight);
+  };
+
+  // Handle highlight complete (create keyframe and clear drag state)
+  const handleHighlightComplete = (highlightData) => {
+    addOrUpdateHighlightKeyframe(currentTime, highlightData, duration);
+    setDragHighlight(null);
+  };
+
   // Handle keyframe click (seek to keyframe time)
   const handleKeyframeClick = (time) => {
     seek(time);
@@ -354,6 +435,21 @@ function App() {
   // Handle keyframe delete (pass duration to removeKeyframe)
   const handleKeyframeDelete = (time) => {
     removeKeyframe(time, duration);
+  };
+
+  // Handle highlight keyframe click
+  const handleHighlightKeyframeClick = (time) => {
+    seek(time);
+  };
+
+  // Handle highlight keyframe delete
+  const handleHighlightKeyframeDelete = (time) => {
+    removeHighlightKeyframe(time, duration);
+  };
+
+  // Handle highlight duration change
+  const handleHighlightDurationChange = (newDuration) => {
+    updateHighlightDuration(newDuration, duration);
   };
 
   // Prepare crop context value
@@ -370,6 +466,23 @@ function App() {
     interpolateCrop,
     hasKeyframeAt,
   }), [keyframes, isEndKeyframeExplicit, aspectRatio, copiedCrop, updateAspectRatio, addOrUpdateKeyframe, removeKeyframe, copyCropKeyframe, pasteCropKeyframe, interpolateCrop, hasKeyframeAt]);
+
+  // Prepare highlight context value
+  const highlightContextValue = useMemo(() => ({
+    keyframes: highlightKeyframes,
+    isEndKeyframeExplicit: isHighlightEndKeyframeExplicit,
+    copiedHighlight,
+    isEnabled: isHighlightEnabled,
+    highlightDuration,
+    toggleEnabled: toggleHighlightEnabled,
+    updateHighlightDuration,
+    addOrUpdateKeyframe: addOrUpdateHighlightKeyframe,
+    removeKeyframe: removeHighlightKeyframe,
+    copyHighlightKeyframe,
+    pasteHighlightKeyframe,
+    interpolateHighlight,
+    hasKeyframeAt: hasHighlightKeyframeAt,
+  }), [highlightKeyframes, isHighlightEndKeyframeExplicit, copiedHighlight, isHighlightEnabled, highlightDuration, toggleHighlightEnabled, updateHighlightDuration, addOrUpdateHighlightKeyframe, removeHighlightKeyframe, copyHighlightKeyframe, pasteHighlightKeyframe, interpolateHighlight, hasHighlightKeyframeAt]);
 
   /**
    * Get filtered keyframes for export
@@ -401,6 +514,40 @@ function App() {
 
     return filtered;
   }, [getKeyframesForExport, getSegmentExportData, duration]);
+
+  /**
+   * Get filtered highlight keyframes for export
+   */
+  const getFilteredHighlightKeyframesForExport = useMemo(() => {
+    if (!isHighlightEnabled) {
+      return []; // Don't export if highlight layer is disabled
+    }
+
+    const allKeyframes = getHighlightKeyframesForExport();
+    const segmentData = getSegmentExportData();
+
+    // If no trimming, return all keyframes
+    if (!segmentData || (!segmentData.trim_start && !segmentData.trim_end)) {
+      return allKeyframes;
+    }
+
+    const trimStart = segmentData.trim_start || 0;
+    const trimEnd = segmentData.trim_end || duration || Infinity;
+
+    // Filter keyframes to only include those within the trim bounds
+    const filtered = allKeyframes.filter(kf => {
+      return kf.time >= trimStart && kf.time <= trimEnd;
+    });
+
+    console.log('[App] Filtered highlight keyframes for export:', {
+      original: allKeyframes.length,
+      filtered: filtered.length,
+      trimStart,
+      trimEnd
+    });
+
+    return filtered;
+  }, [isHighlightEnabled, getHighlightKeyframesForExport, getSegmentExportData, duration]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -489,6 +636,11 @@ function App() {
             aspectRatio={aspectRatio}
             onCropChange={handleCropChange}
             onCropComplete={handleCropComplete}
+            showHighlightOverlay={!!videoUrl}
+            currentHighlight={currentHighlightState}
+            isHighlightEnabled={isHighlightEnabled}
+            onHighlightChange={handleHighlightChange}
+            onHighlightComplete={handleHighlightComplete}
             zoom={zoom}
             panOffset={panOffset}
             onZoomChange={zoomByWheel}
@@ -499,35 +651,46 @@ function App() {
           {videoUrl && (
             <div className="mt-6">
               <CropProvider value={cropContextValue}>
-                <Timeline
-                  currentTime={currentTime}
-                  duration={duration}
-                  visualDuration={visualDuration || duration}
-                  sourceDuration={sourceDuration || duration}
-                  trimmedDuration={trimmedDuration || 0}
-                  onSeek={seek}
-                  cropKeyframes={keyframes}
-                  framerate={framerate}
-                  isCropActive={true}
-                  onCropKeyframeClick={handleKeyframeClick}
-                  onCropKeyframeDelete={handleKeyframeDelete}
-                  onCropKeyframeCopy={handleCopyCrop}
-                  onCropKeyframePaste={handlePasteCrop}
-                  segments={segments}
-                  segmentBoundaries={segmentBoundaries}
-                  segmentVisualLayout={segmentVisualLayout}
-                  isSegmentActive={true}
-                  onAddSegmentBoundary={addSegmentBoundary}
-                  onRemoveSegmentBoundary={removeSegmentBoundary}
-                  onSegmentSpeedChange={setSegmentSpeed}
-                  onSegmentTrim={handleTrimSegment}
-                  trimRange={trimRange}
-                  trimHistory={trimHistory}
-                  onDetrimStart={detrimStart}
-                  onDetrimEnd={detrimEnd}
-                  sourceTimeToVisualTime={sourceTimeToVisualTime}
-                  visualTimeToSourceTime={visualTimeToSourceTime}
-                />
+                <HighlightProvider value={highlightContextValue}>
+                  <Timeline
+                    currentTime={currentTime}
+                    duration={duration}
+                    visualDuration={visualDuration || duration}
+                    sourceDuration={sourceDuration || duration}
+                    trimmedDuration={trimmedDuration || 0}
+                    onSeek={seek}
+                    cropKeyframes={keyframes}
+                    framerate={framerate}
+                    isCropActive={true}
+                    onCropKeyframeClick={handleKeyframeClick}
+                    onCropKeyframeDelete={handleKeyframeDelete}
+                    onCropKeyframeCopy={handleCopyCrop}
+                    onCropKeyframePaste={handlePasteCrop}
+                    highlightKeyframes={highlightKeyframes}
+                    highlightFramerate={highlightFramerate}
+                    isHighlightActive={true}
+                    onHighlightKeyframeClick={handleHighlightKeyframeClick}
+                    onHighlightKeyframeDelete={handleHighlightKeyframeDelete}
+                    onHighlightKeyframeCopy={handleCopyHighlight}
+                    onHighlightKeyframePaste={handlePasteHighlight}
+                    onHighlightToggleEnabled={toggleHighlightEnabled}
+                    onHighlightDurationChange={handleHighlightDurationChange}
+                    segments={segments}
+                    segmentBoundaries={segmentBoundaries}
+                    segmentVisualLayout={segmentVisualLayout}
+                    isSegmentActive={true}
+                    onAddSegmentBoundary={addSegmentBoundary}
+                    onRemoveSegmentBoundary={removeSegmentBoundary}
+                    onSegmentSpeedChange={setSegmentSpeed}
+                    onSegmentTrim={handleTrimSegment}
+                    trimRange={trimRange}
+                    trimHistory={trimHistory}
+                    onDetrimStart={detrimStart}
+                    onDetrimEnd={detrimEnd}
+                    sourceTimeToVisualTime={sourceTimeToVisualTime}
+                    visualTimeToSourceTime={visualTimeToSourceTime}
+                  />
+                </HighlightProvider>
               </CropProvider>
             </div>
           )}
@@ -553,6 +716,7 @@ function App() {
               <ExportButton
                 videoFile={videoFile}
                 cropKeyframes={getFilteredKeyframesForExport}
+                highlightKeyframes={getFilteredHighlightKeyframesForExport}
                 segmentData={getSegmentExportData()}
                 disabled={!videoFile}
               />

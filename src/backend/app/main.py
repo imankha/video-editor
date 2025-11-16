@@ -295,6 +295,21 @@ class CropExportRequest(BaseModel):
     keyframes: List[CropKeyframe]
 
 
+# Highlight Export Models
+class HighlightKeyframe(BaseModel):
+    time: float
+    x: float
+    y: float
+    radiusX: float  # Horizontal radius of ellipse
+    radiusY: float  # Vertical radius of ellipse (larger for upright players)
+    opacity: float
+    color: str
+
+
+class HighlightExportRequest(BaseModel):
+    keyframes: List[HighlightKeyframe]
+
+
 def interpolate_crop(keyframes: List[Dict[str, Any]], time: float) -> Dict[str, float]:
     """
     Interpolate crop values between keyframes for a given time
@@ -577,7 +592,8 @@ async def export_with_ai_upscale(
     export_id: str = Form(...),
     export_mode: str = Form("quality"),
     segment_data_json: str = Form(None),
-    include_audio: str = Form("true")
+    include_audio: str = Form("true"),
+    highlight_keyframes_json: str = Form(None)
 ):
     """
     Export video with AI upscaling and de-zoom
@@ -597,6 +613,7 @@ async def export_with_ai_upscale(
         export_id: Unique ID for tracking export progress
         export_mode: Export mode - "fast" or "quality" (default "quality")
         include_audio: Include audio in export - "true" or "false" (default "true")
+        highlight_keyframes_json: JSON array of highlight keyframes (optional)
 
     Returns:
         AI-upscaled video file
@@ -636,6 +653,24 @@ async def export_with_ai_upscale(
             raise HTTPException(status_code=400, detail=f"Invalid segment data JSON: {str(e)}")
     else:
         logger.info("No segment data provided - processing without speed/trim adjustments")
+
+    # Parse highlight keyframes (optional - for future implementation)
+    highlight_keyframes = []
+    if highlight_keyframes_json:
+        try:
+            highlight_keyframes_data = json.loads(highlight_keyframes_json)
+            highlight_keyframes = [HighlightKeyframe(**kf) for kf in highlight_keyframes_data]
+            logger.info("=" * 80)
+            logger.info("HIGHLIGHT KEYFRAMES RECEIVED FROM CLIENT")
+            logger.info("=" * 80)
+            logger.info(f"Number of highlight keyframes: {len(highlight_keyframes)}")
+            logger.info(json.dumps(highlight_keyframes_data, indent=2))
+            logger.info("=" * 80)
+            logger.info("NOTE: Highlight overlay rendering in export is planned for future release")
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {str(e)}")
+    else:
+        logger.info("No highlight keyframes provided - exporting without highlight overlay")
 
     # Create temporary directory for processing
     temp_dir = tempfile.mkdtemp()

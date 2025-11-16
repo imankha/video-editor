@@ -2,6 +2,7 @@ import React from 'react';
 import { Film } from 'lucide-react';
 import { formatTimeSimple } from '../utils/timeFormat';
 import CropLayer from './CropLayer';
+import HighlightLayer from './HighlightLayer';
 import SegmentLayer from './SegmentLayer';
 
 /**
@@ -20,6 +21,15 @@ import SegmentLayer from './SegmentLayer';
  * @param {Function} props.onCropKeyframeDelete - Callback when crop keyframe is deleted
  * @param {Function} props.onCropKeyframeCopy - Callback when crop keyframe is copied
  * @param {Function} props.onCropKeyframePaste - Callback when crop is pasted at a time
+ * @param {Array} props.highlightKeyframes - Highlight keyframes to display
+ * @param {number} props.highlightFramerate - Video framerate for highlight keyframes
+ * @param {boolean} props.isHighlightActive - Whether highlight layer is active
+ * @param {Function} props.onHighlightKeyframeClick - Callback when highlight keyframe is clicked
+ * @param {Function} props.onHighlightKeyframeDelete - Callback when highlight keyframe is deleted
+ * @param {Function} props.onHighlightKeyframeCopy - Callback when highlight keyframe is copied
+ * @param {Function} props.onHighlightKeyframePaste - Callback when highlight is pasted at a time
+ * @param {Function} props.onHighlightToggleEnabled - Callback to toggle highlight layer enabled state
+ * @param {Function} props.onHighlightDurationChange - Callback when highlight duration changes
  * @param {Array} props.segments - Segments to display
  * @param {Array} props.segmentBoundaries - Segment boundaries
  * @param {Array} props.segmentVisualLayout - Pre-calculated segment visual positions
@@ -49,6 +59,15 @@ export function Timeline({
   onCropKeyframeDelete,
   onCropKeyframeCopy,
   onCropKeyframePaste,
+  highlightKeyframes = [],
+  highlightFramerate = 30,
+  isHighlightActive = false,
+  onHighlightKeyframeClick,
+  onHighlightKeyframeDelete,
+  onHighlightKeyframeCopy,
+  onHighlightKeyframePaste,
+  onHighlightToggleEnabled,
+  onHighlightDurationChange,
   segments = [],
   segmentBoundaries = [],
   segmentVisualLayout = [],
@@ -186,7 +205,7 @@ export function Timeline({
           className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none left-32"
           style={{
             left: `calc(8rem + (100% - 8rem) * ${progress / 100})`,  // 8rem label + progress% of remaining width
-            height: segments.length > 0 ? 'calc(100% - 0.25rem)' : 'calc(6rem - 0.25rem)'  // Extend through video + crop layers, or all layers if segments exist
+            height: segments.length > 0 ? 'calc(100% - 0.25rem)' : 'calc(9.25rem - 0.25rem)'  // Extend through video + crop + highlight layers, or all layers if segments exist
           }}
         >
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full" />
@@ -234,6 +253,26 @@ export function Timeline({
             />
           </div>
         )}
+
+        {/* Highlight Layer - at the bottom */}
+        <div className="mt-1">
+          <HighlightLayer
+            keyframes={highlightKeyframes}
+            duration={duration}
+            visualDuration={visualDuration}
+            currentTime={currentTime}
+            framerate={highlightFramerate}
+            isActive={isHighlightActive}
+            onKeyframeClick={onHighlightKeyframeClick}
+            onKeyframeDelete={onHighlightKeyframeDelete}
+            onKeyframeCopy={onHighlightKeyframeCopy}
+            onKeyframePaste={onHighlightKeyframePaste}
+            onToggleEnabled={onHighlightToggleEnabled}
+            onDurationChange={onHighlightDurationChange}
+            sourceTimeToVisualTime={sourceTimeToVisualTime}
+            visualTimeToSourceTime={visualTimeToSourceTime}
+          />
+        </div>
       </div>
     </div>
   );
