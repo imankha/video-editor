@@ -450,6 +450,103 @@ class AIVideoUpscaler:
 
         return final
 
+    def get_adaptive_enhancement_params(self, scale_factor: float) -> Dict:
+        """
+        Get adaptive enhancement parameters based on upscale factor.
+
+        Higher scale factors (smaller crops) need more aggressive enhancement
+        to compensate for limited source information.
+
+        Args:
+            scale_factor: The upscaling ratio (target_size / crop_size)
+
+        Returns:
+            Dictionary of enhancement parameters
+        """
+        if scale_factor > 3.5:
+            # EXTREME upscaling (very small crops like 206x366 -> 1080x1920)
+            # These need the most aggressive enhancement
+            params = {
+                'bilateral_d': 2,              # Minimal denoising to preserve sparse detail
+                'bilateral_sigma_color': 3,
+                'bilateral_sigma_space': 3,
+                'unsharp_weight': 1.5,         # Aggressive sharpening
+                'unsharp_blur_weight': -0.5,
+                'gaussian_sigma': 1.5,
+                'apply_clahe': True,           # Apply contrast enhancement
+                'clahe_clip_limit': 3.5,
+                'clahe_tile_size': (8, 8),
+                'apply_detail_enhancement': True,  # Extra detail enhancement pass
+                'enhancement_level': 'extreme'
+            }
+            logger.info(f"Scale factor {scale_factor:.2f}x: Using EXTREME enhancement parameters")
+        elif scale_factor > 2.5:
+            # HIGH upscaling (medium crops)
+            params = {
+                'bilateral_d': 3,
+                'bilateral_sigma_color': 4,
+                'bilateral_sigma_space': 4,
+                'unsharp_weight': 1.35,
+                'unsharp_blur_weight': -0.35,
+                'gaussian_sigma': 1.2,
+                'apply_clahe': True,
+                'clahe_clip_limit': 3.0,
+                'clahe_tile_size': (8, 8),
+                'apply_detail_enhancement': False,
+                'enhancement_level': 'high'
+            }
+            logger.info(f"Scale factor {scale_factor:.2f}x: Using HIGH enhancement parameters")
+        else:
+            # NORMAL upscaling (large crops with plenty of source data)
+            params = {
+                'bilateral_d': 3,
+                'bilateral_sigma_color': 5,
+                'bilateral_sigma_space': 5,
+                'unsharp_weight': 1.2,
+                'unsharp_blur_weight': -0.2,
+                'gaussian_sigma': 1.0,
+                'apply_clahe': False,
+                'clahe_clip_limit': 3.0,
+                'clahe_tile_size': (8, 8),
+                'apply_detail_enhancement': False,
+                'enhancement_level': 'normal'
+            }
+            logger.debug(f"Scale factor {scale_factor:.2f}x: Using NORMAL enhancement parameters")
+
+        return params
+
+    def apply_detail_enhancement(self, image: np.ndarray) -> np.ndarray:
+        """
+        Apply additional detail enhancement for extreme upscaling cases.
+        Uses edge-preserving filtering and local contrast enhancement.
+
+        Args:
+            image: Input BGR image
+
+        Returns:
+            Enhanced image with improved local details
+        """
+        # Convert to LAB color space for better processing
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        l_channel, a_channel, b_channel = cv2.split(lab)
+
+        # Apply guided filter for edge-preserving smoothing (reduces noise while keeping edges)
+        # Using bilateral as approximation since guided filter needs OpenCV contrib
+        l_filtered = cv2.bilateralFilter(l_channel, d=5, sigmaColor=10, sigmaSpace=10)
+
+        # Enhance local contrast on luminance channel
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+        l_enhanced = clahe.apply(l_filtered)
+
+        # Blend original and enhanced (70% enhanced, 30% original to avoid over-processing)
+        l_final = cv2.addWeighted(l_enhanced, 0.7, l_channel, 0.3, 0)
+
+        # Reconstruct image
+        lab_enhanced = cv2.merge([l_final, a_channel, b_channel])
+        result = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2BGR)
+
+        return result
+
     def enhance_frame_ai(self, frame: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
         """
         Enhance a single frame using Real-ESRGAN AI model
@@ -476,17 +573,26 @@ class AIVideoUpscaler:
             current_h, current_w = frame.shape[:2]
             target_w, target_h = target_size
 
-            logger.debug(f"AI upscaling frame from {current_w}x{current_h} to {target_w}x{target_h}")
-
-            # Denoise before upscaling to prevent noise amplification (QUALITY mode only)
-            # Using milder settings to preserve more detail
-            if self.device.type == 'cuda' and self.export_mode == 'quality':
-                # Light denoising - reduced from d=5, sigma=10 to d=3, sigma=5
-                frame = cv2.bilateralFilter(frame, d=3, sigmaColor=5, sigmaSpace=5)
-
-            # Calculate desired scale for Real-ESRGAN
+            # Calculate overall scale factor for adaptive parameters
             scale_x = target_w / current_w
             scale_y = target_h / current_h
+            overall_scale = max(scale_x, scale_y)
+
+            logger.debug(f"AI upscaling frame from {current_w}x{current_h} to {target_w}x{target_h} (scale={overall_scale:.2f}x)")
+
+            # Get adaptive enhancement parameters based on scale factor
+            enhance_params = self.get_adaptive_enhancement_params(overall_scale)
+
+            # Denoise before upscaling to prevent noise amplification (QUALITY mode only)
+            if self.device.type == 'cuda' and self.export_mode == 'quality':
+                frame = cv2.bilateralFilter(
+                    frame,
+                    d=enhance_params['bilateral_d'],
+                    sigmaColor=enhance_params['bilateral_sigma_color'],
+                    sigmaSpace=enhance_params['bilateral_sigma_space']
+                )
+
+            # Calculate desired scale for Real-ESRGAN (capped at 4x)
             desired_scale = min(scale_x, scale_y, 4.0)
 
             # Real-ESRGAN can use outscale < 4 for more efficient processing
@@ -501,15 +607,37 @@ class AIVideoUpscaler:
                 enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
                 logger.debug(f"Resized to exact target: {target_w}x{target_h}")
 
+            # Apply CLAHE contrast enhancement if needed (for high/extreme upscaling)
+            if self.device.type == 'cuda' and self.export_mode == 'quality' and enhance_params['apply_clahe']:
+                lab = cv2.cvtColor(enhanced, cv2.COLOR_BGR2LAB)
+                l_channel, a_channel, b_channel = cv2.split(lab)
+                clahe = cv2.createCLAHE(
+                    clipLimit=enhance_params['clahe_clip_limit'],
+                    tileGridSize=enhance_params['clahe_tile_size']
+                )
+                l_enhanced = clahe.apply(l_channel)
+                lab_enhanced = cv2.merge([l_enhanced, a_channel, b_channel])
+                enhanced = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2BGR)
+                logger.debug(f"Applied CLAHE contrast enhancement (clip={enhance_params['clahe_clip_limit']})")
+
+            # Apply additional detail enhancement for extreme cases
+            if self.device.type == 'cuda' and self.export_mode == 'quality' and enhance_params['apply_detail_enhancement']:
+                enhanced = self.apply_detail_enhancement(enhanced)
+                logger.debug("Applied additional detail enhancement pass")
+
             # Sharpen upscaled output for better perceived quality (QUALITY mode only)
-            # Using milder unsharp mask to avoid over-sharpening
             if self.device.type == 'cuda' and self.export_mode == 'quality':
-                # Gaussian blur for unsharp mask - reduced sigma from 2.0 to 1.0
-                gaussian = cv2.GaussianBlur(enhanced, (0, 0), 1.0)
-                # Unsharp mask: reduced from 1.5/-0.5 to 1.2/-0.2
-                enhanced = cv2.addWeighted(enhanced, 1.2, gaussian, -0.2, 0)
+                gaussian = cv2.GaussianBlur(enhanced, (0, 0), enhance_params['gaussian_sigma'])
+                enhanced = cv2.addWeighted(
+                    enhanced,
+                    enhance_params['unsharp_weight'],
+                    gaussian,
+                    enhance_params['unsharp_blur_weight'],
+                    0
+                )
                 # Clip values to valid range
                 enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
+                logger.debug(f"Applied unsharp mask (weight={enhance_params['unsharp_weight']}, blur_weight={enhance_params['unsharp_blur_weight']})")
 
             return enhanced
         except Exception as e:
