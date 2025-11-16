@@ -245,7 +245,7 @@ export function Timeline({
       <div className="flex justify-between mb-2 text-xs text-gray-400 pl-32">
         <span>{formatTimeSimple(visualCurrentTime)}</span>
         <div className="flex items-center gap-2">
-          {timelineZoom < 100 && (
+          {timelineZoom > 100 && (
             <span className="text-blue-400">Zoom: {Math.round(timelineZoom)}%</span>
           )}
           <span title={visualDuration !== duration ? `Source: ${formatTimeSimple(duration)}` : undefined}>

@@ -4,23 +4,22 @@ import { useState, useCallback } from 'react';
  * Hook for managing timeline zoom state
  *
  * Zoom interpretation:
- * - 100% = Maximum zoom (most detail, timeline is widest, scrollbar needed)
- * - Lower percentages = More zoomed out (timeline fits more content)
- * - Cannot zoom in past 100%
+ * - 100% = Timeline fits exactly in viewport (no scrollbar needed)
+ * - >100% = Timeline is larger than viewport (scrollbar appears)
+ * - Cannot zoom out below 100%
  */
 export default function useTimelineZoom() {
-  // Zoom level as percentage (100 = max zoom, lower = more zoomed out)
-  // Start at MIN_ZOOM so timeline fits in view initially
-  const [timelineZoom, setTimelineZoom] = useState(10);
+  // Zoom level as percentage (100 = fits viewport, >100 = larger than viewport)
+  const [timelineZoom, setTimelineZoom] = useState(100);
 
   // Scroll position as percentage (0-100)
   const [scrollPosition, setScrollPosition] = useState(0);
 
   // Constraints
-  const MIN_ZOOM = 10;  // 10% = very zoomed out (fits in view, no scrollbar)
-  const MAX_ZOOM = 100; // 100% = maximum zoom (can't go past this, needs scrollbar)
-  const ZOOM_STEP = 10; // 10% per step
-  const WHEEL_SENSITIVITY = 0.1; // How much to zoom per wheel delta
+  const MIN_ZOOM = 100;  // 100% = fits exactly in viewport (no scrollbar)
+  const MAX_ZOOM = 500;  // 500% = timeline is 5x wider than viewport
+  const ZOOM_STEP = 25;  // 25% per step
+  const WHEEL_SENSITIVITY = 0.25; // How much to zoom per wheel delta
 
   /**
    * Zoom in (increase zoom percentage, up to 100% max)
@@ -67,34 +66,25 @@ export default function useTimelineZoom() {
   }, []);
 
   /**
-   * Check if timeline is zoomed out (less than 100%)
+   * Check if timeline is zoomed in (above 100%)
    */
-  const isZoomedOut = timelineZoom < MAX_ZOOM;
+  const isZoomedIn = timelineZoom > MIN_ZOOM;
 
   /**
    * Get the scale factor for the timeline width
-   * At 100% zoom, scale = 1 (timeline fits exactly)
-   * At 50% zoom, scale = 0.5 (timeline is half width)
-   * At 200% zoom (if we allowed it), scale = 2 (timeline is double width)
-   *
-   * But since we want scrollbar when zoomed in (to 100%), we invert:
-   * At 100% zoom = maximum detail = timeline should be wide (e.g., 5x normal)
-   * At lower zoom = less detail = timeline fits in view
+   * At 100% zoom, scale = 1 (timeline fits exactly in viewport)
+   * At 200% zoom, scale = 2 (timeline is 2x wider, needs scrollbar)
+   * At 500% zoom, scale = 5 (timeline is 5x wider)
    */
   const getTimelineScale = useCallback(() => {
-    // Map 10-100% zoom to 1x-5x scale
-    // 100% zoom = 5x scale (widest, needs scroll)
-    // 10% zoom = 1x scale (fits in view)
-    const minScale = 1;
-    const maxScale = 5;
-    const normalizedZoom = (timelineZoom - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM);
-    return minScale + normalizedZoom * (maxScale - minScale);
+    // Direct mapping: 100% = 1x, 200% = 2x, 500% = 5x
+    return timelineZoom / 100;
   }, [timelineZoom]);
 
   return {
     timelineZoom,
     scrollPosition,
-    isZoomedOut,
+    isZoomedIn,
     MIN_ZOOM,
     MAX_ZOOM,
     zoomIn,
