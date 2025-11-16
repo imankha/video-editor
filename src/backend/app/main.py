@@ -916,6 +916,297 @@ async def export_with_ai_upscale(
         raise HTTPException(status_code=500, detail=f"AI upscaling failed: {str(e)}")
 
 
+@app.post("/api/export/upscale-comparison")
+async def export_with_upscale_comparison(
+    video: UploadFile = File(...),
+    keyframes_json: str = Form(...),
+    target_fps: int = Form(30),
+    export_id: str = Form(...),
+    export_mode: str = Form("quality"),
+    segment_data_json: str = Form(None),
+    include_audio: str = Form("true"),
+    highlight_keyframes_json: str = Form(None)
+):
+    """
+    Export video with multiple enhancement settings for A/B comparison testing.
+
+    Generates multiple videos with different permutations of extreme upscaling settings:
+    1. baseline - Standard Real-ESRGAN (single pass, no extras)
+    2. multipass - Multi-pass upscaling for >4x scales
+    3. preupscale - Pre-upscale source frame before cropping
+    4. multipass_preupscale - Both multi-pass and pre-upscaling
+
+    Note: Diffusion SR is excluded by default due to very long processing time (10-60s/frame).
+
+    All videos are saved to a timestamped directory and paths are returned.
+    """
+    # Initialize progress tracking
+    export_progress[export_id] = {
+        "progress": 5,
+        "message": "Starting comparison export...",
+        "status": "processing"
+    }
+
+    # Parse parameters
+    include_audio_bool = include_audio.lower() == "true"
+
+    # Parse keyframes
+    try:
+        keyframes_data = json.loads(keyframes_json)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid keyframes JSON: {str(e)}")
+
+    keyframes = [CropKeyframe(**kf) for kf in keyframes_data]
+    if len(keyframes) == 0:
+        raise HTTPException(status_code=400, detail="No crop keyframes provided")
+
+    keyframes_dict = [
+        {'time': kf.time, 'x': kf.x, 'y': kf.y, 'width': kf.width, 'height': kf.height}
+        for kf in keyframes
+    ]
+
+    # Parse segment data
+    segment_data = None
+    if segment_data_json:
+        try:
+            segment_data = json.loads(segment_data_json)
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid segment data JSON: {str(e)}")
+
+    # Parse highlight keyframes
+    highlight_keyframes_dict = []
+    if highlight_keyframes_json:
+        try:
+            highlight_keyframes_data = json.loads(highlight_keyframes_json)
+            highlight_keyframes = [HighlightKeyframe(**kf) for kf in highlight_keyframes_data]
+            highlight_keyframes_dict = [
+                {'time': kf.time, 'x': kf.x, 'y': kf.y, 'radiusX': kf.radiusX,
+                 'radiusY': kf.radiusY, 'opacity': kf.opacity, 'color': kf.color}
+                for kf in highlight_keyframes
+            ]
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {str(e)}")
+
+    if AIVideoUpscaler is None:
+        raise HTTPException(status_code=503, detail="AI upscaling dependencies not installed")
+
+    # Create output directory for comparison videos
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    comparison_dir = Path(f"/tmp/upscale_comparison_{timestamp}")
+    comparison_dir.mkdir(exist_ok=True)
+
+    # Define permutations to test
+    # Each permutation tests a different combination of extreme upscaling features
+    permutations = [
+        {
+            'name': 'baseline',
+            'description': 'Standard Real-ESRGAN (single pass capped at 4x, no new features)',
+            'enable_source_preupscale': False,
+            'enable_diffusion_sr': False,
+            'enable_multipass': False  # Explicitly disable multi-pass for true baseline
+        },
+        {
+            'name': 'multipass',
+            'description': 'Multi-pass upscaling (2x->2x->Nx for extreme scales)',
+            'enable_source_preupscale': False,
+            'enable_diffusion_sr': False,
+            'enable_multipass': True  # Enable multi-pass for >4x scales
+        },
+        {
+            'name': 'preupscale',
+            'description': 'Pre-upscale source frame 2x before cropping (no multipass)',
+            'enable_source_preupscale': True,
+            'enable_diffusion_sr': False,
+            'enable_multipass': False  # Only test pre-upscale effect
+        },
+        {
+            'name': 'multipass_preupscale',
+            'description': 'Both multi-pass and source pre-upscaling',
+            'enable_source_preupscale': True,
+            'enable_diffusion_sr': False,
+            'enable_multipass': True  # All enhancements except diffusion
+        }
+    ]
+
+    # Save input video to temp location
+    temp_dir = tempfile.mkdtemp()
+    input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex}{Path(video.filename).suffix}")
+
+    try:
+        # Save uploaded file
+        with open(input_path, 'wb') as f:
+            content = await video.read()
+            f.write(content)
+
+        logger.info("=" * 80)
+        logger.info("STARTING COMPARISON EXPORT")
+        logger.info("=" * 80)
+        logger.info(f"Output directory: {comparison_dir}")
+        logger.info(f"Permutations to test: {len(permutations)}")
+        for perm in permutations:
+            logger.info(f"  - {perm['name']}: {perm['description']}")
+        logger.info("=" * 80)
+
+        # Capture the event loop
+        loop = asyncio.get_running_loop()
+
+        results = []
+        total_permutations = len(permutations)
+
+        for idx, perm in enumerate(permutations):
+            perm_name = perm['name']
+            output_path = comparison_dir / f"{perm_name}_{timestamp}.mp4"
+
+            # Update progress for this permutation
+            base_progress = 5 + (idx / total_permutations * 90)  # 5-95% range
+            progress_data = {
+                "progress": base_progress,
+                "message": f"Processing {perm_name} ({idx+1}/{total_permutations}): {perm['description']}",
+                "status": "processing",
+                "current_permutation": perm_name,
+                "permutation_index": idx + 1,
+                "total_permutations": total_permutations
+            }
+            export_progress[export_id] = progress_data
+            await manager.send_progress(export_id, progress_data)
+
+            logger.info("=" * 80)
+            logger.info(f"PERMUTATION {idx+1}/{total_permutations}: {perm_name}")
+            logger.info(f"Description: {perm['description']}")
+            logger.info(f"Output: {output_path}")
+            logger.info("=" * 80)
+
+            try:
+                # Initialize upscaler with this permutation's settings
+                upscaler = AIVideoUpscaler(
+                    device='cuda',
+                    export_mode=export_mode,
+                    enable_source_preupscale=perm['enable_source_preupscale'],
+                    enable_diffusion_sr=perm['enable_diffusion_sr'],
+                    enable_multipass=perm.get('enable_multipass', True)
+                )
+
+                if upscaler.upsampler is None:
+                    raise RuntimeError("Real-ESRGAN model failed to load")
+
+                # Progress callback for this permutation
+                def make_progress_callback(perm_idx, perm_name):
+                    def progress_callback(current, total, message, phase='ai_upscale'):
+                        # Map phase progress to permutation progress slice
+                        perm_start = 5 + (perm_idx / total_permutations * 90)
+                        perm_end = 5 + ((perm_idx + 1) / total_permutations * 90)
+                        phase_progress = (current / total) if total > 0 else 0
+                        overall = perm_start + (phase_progress * (perm_end - perm_start))
+
+                        progress_data = {
+                            "progress": overall,
+                            "message": f"[{perm_name}] {message}",
+                            "status": "processing",
+                            "current_permutation": perm_name,
+                            "permutation_index": perm_idx + 1,
+                            "total_permutations": total_permutations,
+                            "phase": phase
+                        }
+                        export_progress[export_id] = progress_data
+                        try:
+                            asyncio.run_coroutine_threadsafe(
+                                manager.send_progress(export_id, progress_data),
+                                loop
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to send WebSocket update: {e}")
+                    return progress_callback
+
+                # Process video
+                start_time = datetime.now()
+                result = await asyncio.to_thread(
+                    upscaler.process_video_with_upscale,
+                    input_path=input_path,
+                    output_path=str(output_path),
+                    keyframes=keyframes_dict,
+                    target_fps=target_fps,
+                    export_mode=export_mode,
+                    progress_callback=make_progress_callback(idx, perm_name),
+                    segment_data=segment_data,
+                    include_audio=include_audio_bool,
+                    highlight_keyframes=highlight_keyframes_dict
+                )
+                end_time = datetime.now()
+                duration = (end_time - start_time).total_seconds()
+
+                file_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
+
+                results.append({
+                    'name': perm_name,
+                    'description': perm['description'],
+                    'path': str(output_path),
+                    'success': True,
+                    'duration_seconds': duration,
+                    'file_size_mb': file_size,
+                    'resolution': result.get('target_resolution', (0, 0))
+                })
+
+                logger.info(f"✓ {perm_name} completed in {duration:.2f}s, size: {file_size:.2f}MB")
+
+            except Exception as e:
+                logger.error(f"✗ {perm_name} failed: {str(e)}")
+                results.append({
+                    'name': perm_name,
+                    'description': perm['description'],
+                    'path': None,
+                    'success': False,
+                    'error': str(e)
+                })
+
+        # Generate summary
+        logger.info("=" * 80)
+        logger.info("COMPARISON EXPORT COMPLETE")
+        logger.info("=" * 80)
+        logger.info(f"Output directory: {comparison_dir}")
+        for r in results:
+            if r['success']:
+                logger.info(f"✓ {r['name']}: {r['duration_seconds']:.2f}s, {r['file_size_mb']:.2f}MB")
+            else:
+                logger.info(f"✗ {r['name']}: FAILED - {r.get('error', 'Unknown error')}")
+        logger.info("=" * 80)
+
+        # Update progress - complete
+        complete_data = {
+            "progress": 100,
+            "message": f"Comparison export complete! {len([r for r in results if r['success']])} videos generated",
+            "status": "complete",
+            "results": results,
+            "output_directory": str(comparison_dir)
+        }
+        export_progress[export_id] = complete_data
+        await manager.send_progress(export_id, complete_data)
+
+        # Return results summary (videos are saved to disk for review)
+        return {
+            "status": "complete",
+            "output_directory": str(comparison_dir),
+            "results": results,
+            "summary": f"Generated {len([r for r in results if r['success']])} comparison videos. Review them at: {comparison_dir}"
+        }
+
+    except Exception as e:
+        logger.error(f"Comparison export failed: {str(e)}", exc_info=True)
+        error_data = {
+            "progress": 0,
+            "message": f"Export failed: {str(e)}",
+            "status": "error"
+        }
+        export_progress[export_id] = error_data
+        await manager.send_progress(export_id, error_data)
+        raise HTTPException(status_code=500, detail=f"Comparison export failed: {str(e)}")
+
+    finally:
+        # Clean up input file temp directory
+        if os.path.exists(temp_dir):
+            import shutil
+            shutil.rmtree(temp_dir)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

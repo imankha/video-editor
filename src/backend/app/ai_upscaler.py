@@ -84,7 +84,7 @@ class AIVideoUpscaler:
     - Target resolution based on aspect ratio
     """
 
-    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False):
+    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False, enable_multipass: bool = True):
         """
         Initialize the AI upscaler
 
@@ -96,6 +96,7 @@ class AIVideoUpscaler:
             sr_backend: Super-resolution backend - "realesrgan" or "realbasicvsr" (default "realesrgan")
             enable_source_preupscale: Pre-upscale source frame before cropping (default: False)
             enable_diffusion_sr: Enable Stable Diffusion upscaler for extreme cases (default: False)
+            enable_multipass: Enable multi-pass upscaling for >4x scales (default: True)
         """
         # Detect available GPUs
         self.num_gpus = 0
@@ -105,6 +106,7 @@ class AIVideoUpscaler:
         self.vsr_model = None  # For RealBasicVSR
         self.enable_source_preupscale = enable_source_preupscale
         self.enable_diffusion_sr = enable_diffusion_sr
+        self.enable_multipass = enable_multipass
         self.diffusion_model = None
 
         if device == 'cuda' and torch.cuda.is_available():
@@ -791,7 +793,9 @@ class AIVideoUpscaler:
                 # Resize to exact target if needed
                 if enhanced.shape[:2] != (target_h, target_w):
                     enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
-            elif desired_scale > 4.0 and enhance_params.get('enhancement_level') in ['extreme', 'ultra']:
+            elif (self.enable_multipass and
+                  desired_scale > 4.0 and
+                  enhance_params.get('enhancement_level') in ['extreme', 'ultra']):
                 # Use multi-pass for extreme cases
                 enhanced = self.multi_pass_upscale(frame, desired_scale)
             else:
