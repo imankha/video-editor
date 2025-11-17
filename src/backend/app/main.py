@@ -999,14 +999,14 @@ async def export_with_upscale_comparison(
     comparison_dir = exports_dir / f"comparison_{timestamp}"
     comparison_dir.mkdir(exist_ok=True)
 
-    # Define permutations to test FFmpeg encoding presets and CRF values
-    # Testing different encoding quality vs speed tradeoffs
-    # Preset: ultrafast < superfast < veryfast < faster < fast < medium < slow < slower < veryslow
-    # CRF: Lower = better quality, larger file (0-51, 0=lossless, 18=visually lossless, 23=default)
+    # Define permutations to test H.265 vs H.264 and file size optimization
+    # Since visual quality is similar, focus on file size and encoding speed tradeoffs
+    # H.265 (HEVC) = better compression, slower encode
+    # H.264 (AVC) = faster encode, larger files
     permutations = [
         {
-            'name': 'fast_crf18',
-            'description': 'H.264 fast preset, CRF 18 (visually lossless)',
+            'name': 'h264_fast_crf18',
+            'description': 'H.264 fast preset, CRF 18 (baseline winner)',
             'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
             'enable_multipass': False,
@@ -1026,16 +1026,37 @@ async def export_with_upscale_comparison(
             }
         },
         {
-            'name': 'medium_crf15',
-            'description': 'H.264 medium preset, CRF 15 (high quality)',
+            'name': 'h265_fast_crf20',
+            'description': 'H.265 fast preset, CRF 20 (smaller files, H.265 CRF ~= H.264 CRF-6)',
             'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
             'enable_multipass': False,
             'pre_enhance_source': False,
             'tile_size': 0,
-            'ffmpeg_codec': 'libx264',
+            'ffmpeg_codec': 'libx265',
+            'ffmpeg_preset': 'fast',
+            'ffmpeg_crf': '20',
+            'custom_enhance_params': {
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
+                'unsharp_blur_weight': 0.0,
+                'apply_clahe': False,
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'none'
+            }
+        },
+        {
+            'name': 'h265_medium_crf22',
+            'description': 'H.265 medium preset, CRF 22 (balance of size/speed)',
+            'enable_source_preupscale': False,
+            'enable_diffusion_sr': False,
+            'enable_multipass': False,
+            'pre_enhance_source': False,
+            'tile_size': 0,
+            'ffmpeg_codec': 'libx265',
             'ffmpeg_preset': 'medium',
-            'ffmpeg_crf': '15',
+            'ffmpeg_crf': '22',
             'custom_enhance_params': {
                 'bilateral_d': 0,
                 'unsharp_weight': 1.0,
@@ -1047,37 +1068,16 @@ async def export_with_upscale_comparison(
             }
         },
         {
-            'name': 'slow_crf12',
-            'description': 'H.264 slow preset, CRF 12 (very high quality)',
+            'name': 'h264_ultrafast_crf20',
+            'description': 'H.264 ultrafast preset, CRF 20 (maximum speed)',
             'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
             'enable_multipass': False,
             'pre_enhance_source': False,
             'tile_size': 0,
             'ffmpeg_codec': 'libx264',
-            'ffmpeg_preset': 'slow',
-            'ffmpeg_crf': '12',
-            'custom_enhance_params': {
-                'bilateral_d': 0,
-                'unsharp_weight': 1.0,
-                'unsharp_blur_weight': 0.0,
-                'apply_clahe': False,
-                'apply_detail_enhancement': False,
-                'apply_edge_enhancement': False,
-                'enhancement_level': 'none'
-            }
-        },
-        {
-            'name': 'veryslow_crf10',
-            'description': 'H.264 veryslow preset, CRF 10 (maximum quality)',
-            'enable_source_preupscale': False,
-            'enable_diffusion_sr': False,
-            'enable_multipass': False,
-            'pre_enhance_source': False,
-            'tile_size': 0,
-            'ffmpeg_codec': 'libx264',
-            'ffmpeg_preset': 'veryslow',
-            'ffmpeg_crf': '10',
+            'ffmpeg_preset': 'ultrafast',
+            'ffmpeg_crf': '20',
             'custom_enhance_params': {
                 'bilateral_d': 0,
                 'unsharp_weight': 1.0,

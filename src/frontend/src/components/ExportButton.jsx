@@ -131,8 +131,8 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
         console.log('=== EXPORT: No highlight keyframes to send (layer disabled or empty) ===');
       }
 
-      // Use comparison endpoint for A/B testing different encoding settings
-      const endpoint = 'http://localhost:8000/api/export/upscale-comparison';
+      // Use optimized AI upscale endpoint (raw ESRGAN + H.264 fast CRF 18)
+      const endpoint = 'http://localhost:8000/api/export/upscale';
 
       // Connect WebSocket for real-time progress updates
       connectWebSocket(exportId);
@@ -145,7 +145,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
           headers: {
             'Content-Type': 'multipart/form-data'
           },
-          responseType: 'json',  // Comparison endpoint returns JSON with file paths
+          responseType: 'blob',
           onUploadProgress: (progressEvent) => {
             // Only update during upload phase, don't override WebSocket updates
             if (!uploadCompleteRef.current) {
@@ -165,23 +165,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
         }
       );
 
-      // Handle comparison export results (JSON response with file paths)
-      if (response.data && response.data.output_directory) {
-        console.log('=== COMPARISON EXPORT COMPLETE ===');
-        console.log('Output directory:', response.data.output_directory);
-        console.log('Results:', response.data.results);
-
-        // Show results to user
-        const successCount = response.data.results.filter(r => r.success).length;
-        alert(`Comparison export complete!\n\n${successCount} videos generated.\n\nOutput directory:\n${response.data.output_directory}\n\nCheck the directory for:\n${response.data.results.map(r => `- ${r.name}: ${r.success ? r.path : 'FAILED'}`).join('\n')}`);
-
-        setProgress(100);
-        setProgressMessage(`Export complete! ${successCount} comparison videos saved to ${response.data.output_directory}`);
-        setIsExporting(false);
-        return;
-      }
-
-      // Fallback for single video response (if comparison endpoint not used)
+      // Create download link and trigger download
       const blob = new Blob([response.data], { type: 'video/mp4' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
