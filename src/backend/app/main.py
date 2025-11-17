@@ -593,7 +593,9 @@ async def export_with_ai_upscale(
     export_mode: str = Form("quality"),
     segment_data_json: str = Form(None),
     include_audio: str = Form("true"),
-    highlight_keyframes_json: str = Form(None)
+    highlight_keyframes_json: str = Form(None),
+    enable_source_preupscale: str = Form("false"),
+    enable_diffusion_sr: str = Form("false")
 ):
     """
     Export video with AI upscaling and de-zoom
@@ -614,6 +616,8 @@ async def export_with_ai_upscale(
         export_mode: Export mode - "fast" or "quality" (default "quality")
         include_audio: Include audio in export - "true" or "false" (default "true")
         highlight_keyframes_json: JSON array of highlight keyframes (optional)
+        enable_source_preupscale: Pre-upscale source frame before cropping (default "false")
+        enable_diffusion_sr: Enable Stable Diffusion upscaler for extreme cases (default "false")
 
     Returns:
         AI-upscaled video file
@@ -627,6 +631,14 @@ async def export_with_ai_upscale(
     # Parse include_audio parameter
     include_audio_bool = include_audio.lower() == "true"
     logger.info(f"Audio setting: {'Include audio' if include_audio_bool else 'Video only'}")
+
+    # Parse extreme upscaling parameters
+    enable_source_preupscale_bool = enable_source_preupscale.lower() == "true"
+    enable_diffusion_sr_bool = enable_diffusion_sr.lower() == "true"
+    if enable_source_preupscale_bool:
+        logger.info("Source pre-upscaling: ENABLED (will pre-upscale source frame before cropping)")
+    if enable_diffusion_sr_bool:
+        logger.info("Diffusion SR: ENABLED (will use Stable Diffusion for extreme upscaling >5x)")
 
     # Parse keyframes
     try:
@@ -731,7 +743,12 @@ async def export_with_ai_upscale(
         logger.info("=" * 80)
         logger.info("INITIALIZING AI UPSCALER")
         logger.info("=" * 80)
-        upscaler = AIVideoUpscaler(device='cuda', export_mode=export_mode)
+        upscaler = AIVideoUpscaler(
+            device='cuda',
+            export_mode=export_mode,
+            enable_source_preupscale=enable_source_preupscale_bool,
+            enable_diffusion_sr=enable_diffusion_sr_bool
+        )
 
         # Verify AI model is loaded - fail if not available (no low-quality fallback)
         if upscaler.upsampler is None:
@@ -897,6 +914,429 @@ async def export_with_ai_upscale(
             import shutil
             shutil.rmtree(temp_dir)
         raise HTTPException(status_code=500, detail=f"AI upscaling failed: {str(e)}")
+
+
+@app.post("/api/export/upscale-comparison")
+async def export_with_upscale_comparison(
+    video: UploadFile = File(...),
+    keyframes_json: str = Form(...),
+    target_fps: int = Form(30),
+    export_id: str = Form(...),
+    export_mode: str = Form("quality"),
+    segment_data_json: str = Form(None),
+    include_audio: str = Form("true"),
+    highlight_keyframes_json: str = Form(None)
+):
+    """
+    Export video with multiple enhancement settings for A/B comparison testing.
+
+    Generates multiple videos with different permutations of extreme upscaling settings:
+    1. baseline - Standard Real-ESRGAN (single pass, no extras)
+    2. multipass - Multi-pass upscaling for >4x scales
+    3. preupscale - Pre-upscale source frame before cropping
+    4. multipass_preupscale - Both multi-pass and pre-upscaling
+
+    Note: Diffusion SR is excluded by default due to very long processing time (10-60s/frame).
+
+    All videos are saved to a timestamped directory and paths are returned.
+    """
+    # Initialize progress tracking
+    export_progress[export_id] = {
+        "progress": 5,
+        "message": "Starting comparison export...",
+        "status": "processing"
+    }
+
+    # Parse parameters
+    include_audio_bool = include_audio.lower() == "true"
+
+    # Parse keyframes
+    try:
+        keyframes_data = json.loads(keyframes_json)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid keyframes JSON: {str(e)}")
+
+    keyframes = [CropKeyframe(**kf) for kf in keyframes_data]
+    if len(keyframes) == 0:
+        raise HTTPException(status_code=400, detail="No crop keyframes provided")
+
+    keyframes_dict = [
+        {'time': kf.time, 'x': kf.x, 'y': kf.y, 'width': kf.width, 'height': kf.height}
+        for kf in keyframes
+    ]
+
+    # Parse segment data
+    segment_data = None
+    if segment_data_json:
+        try:
+            segment_data = json.loads(segment_data_json)
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid segment data JSON: {str(e)}")
+
+    # Parse highlight keyframes
+    highlight_keyframes_dict = []
+    if highlight_keyframes_json:
+        try:
+            highlight_keyframes_data = json.loads(highlight_keyframes_json)
+            highlight_keyframes = [HighlightKeyframe(**kf) for kf in highlight_keyframes_data]
+            highlight_keyframes_dict = [
+                {'time': kf.time, 'x': kf.x, 'y': kf.y, 'radiusX': kf.radiusX,
+                 'radiusY': kf.radiusY, 'opacity': kf.opacity, 'color': kf.color}
+                for kf in highlight_keyframes
+            ]
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {str(e)}")
+
+    if AIVideoUpscaler is None:
+        raise HTTPException(status_code=503, detail="AI upscaling dependencies not installed")
+
+    # Create output directory for comparison videos in project root (accessible location)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Save to exports directory in project root for easy access
+    project_root = Path(__file__).parent.parent.parent.parent  # Go up from main.py to project root
+    exports_dir = project_root / "exports"
+    exports_dir.mkdir(exist_ok=True)
+    comparison_dir = exports_dir / f"comparison_{timestamp}"
+    comparison_dir.mkdir(exist_ok=True)
+
+    # Define permutations to test H.265 vs H.264 and file size optimization
+    # Since visual quality is similar, focus on file size and encoding speed tradeoffs
+    # H.265 (HEVC) = better compression, slower encode
+    # H.264 (AVC) = faster encode, larger files
+    permutations = [
+        {
+            'name': 'h264_fast_crf18',
+            'description': 'H.264 fast preset, CRF 18 (baseline winner)',
+            'enable_source_preupscale': False,
+            'enable_diffusion_sr': False,
+            'enable_multipass': False,
+            'pre_enhance_source': False,
+            'tile_size': 0,
+            'ffmpeg_codec': 'libx264',
+            'ffmpeg_preset': 'fast',
+            'ffmpeg_crf': '18',
+            'custom_enhance_params': {
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
+                'unsharp_blur_weight': 0.0,
+                'apply_clahe': False,
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'none'
+            }
+        },
+        {
+            'name': 'h265_fast_crf20',
+            'description': 'H.265 fast preset, CRF 20 (smaller files, H.265 CRF ~= H.264 CRF-6)',
+            'enable_source_preupscale': False,
+            'enable_diffusion_sr': False,
+            'enable_multipass': False,
+            'pre_enhance_source': False,
+            'tile_size': 0,
+            'ffmpeg_codec': 'libx265',
+            'ffmpeg_preset': 'fast',
+            'ffmpeg_crf': '20',
+            'custom_enhance_params': {
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
+                'unsharp_blur_weight': 0.0,
+                'apply_clahe': False,
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'none'
+            }
+        },
+        {
+            'name': 'h265_medium_crf22',
+            'description': 'H.265 medium preset, CRF 22 (balance of size/speed)',
+            'enable_source_preupscale': False,
+            'enable_diffusion_sr': False,
+            'enable_multipass': False,
+            'pre_enhance_source': False,
+            'tile_size': 0,
+            'ffmpeg_codec': 'libx265',
+            'ffmpeg_preset': 'medium',
+            'ffmpeg_crf': '22',
+            'custom_enhance_params': {
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
+                'unsharp_blur_weight': 0.0,
+                'apply_clahe': False,
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'none'
+            }
+        },
+        {
+            'name': 'h264_ultrafast_crf20',
+            'description': 'H.264 ultrafast preset, CRF 20 (maximum speed)',
+            'enable_source_preupscale': False,
+            'enable_diffusion_sr': False,
+            'enable_multipass': False,
+            'pre_enhance_source': False,
+            'tile_size': 0,
+            'ffmpeg_codec': 'libx264',
+            'ffmpeg_preset': 'ultrafast',
+            'ffmpeg_crf': '20',
+            'custom_enhance_params': {
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
+                'unsharp_blur_weight': 0.0,
+                'apply_clahe': False,
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'none'
+            }
+        }
+    ]
+
+    # Save input video to temp location
+    temp_dir = tempfile.mkdtemp()
+    input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex}{Path(video.filename).suffix}")
+
+    try:
+        # Save uploaded file
+        with open(input_path, 'wb') as f:
+            content = await video.read()
+            f.write(content)
+
+        logger.info("=" * 80)
+        logger.info("STARTING COMPARISON EXPORT")
+        logger.info("=" * 80)
+        logger.info(f"Output directory: {comparison_dir}")
+        logger.info(f"Permutations to test: {len(permutations)}")
+        for perm in permutations:
+            logger.info(f"  - {perm['name']}: {perm['description']}")
+        logger.info("=" * 80)
+
+        # Capture the event loop
+        loop = asyncio.get_running_loop()
+
+        results = []
+        total_permutations = len(permutations)
+
+        for idx, perm in enumerate(permutations):
+            perm_name = perm['name']
+            output_path = comparison_dir / f"{perm_name}_{timestamp}.mp4"
+
+            # Update progress for this permutation
+            base_progress = 5 + (idx / total_permutations * 90)  # 5-95% range
+            progress_data = {
+                "progress": base_progress,
+                "message": f"Processing {perm_name} ({idx+1}/{total_permutations}): {perm['description']}",
+                "status": "processing",
+                "current_permutation": perm_name,
+                "permutation_index": idx + 1,
+                "total_permutations": total_permutations
+            }
+            export_progress[export_id] = progress_data
+            await manager.send_progress(export_id, progress_data)
+
+            logger.info("=" * 80)
+            logger.info(f"PERMUTATION {idx+1}/{total_permutations}: {perm_name}")
+            logger.info(f"Description: {perm['description']}")
+            logger.info(f"Output: {output_path}")
+            logger.info("=" * 80)
+
+            try:
+                # Initialize upscaler with this permutation's settings
+                upscaler = AIVideoUpscaler(
+                    device='cuda',
+                    export_mode=export_mode,
+                    enable_source_preupscale=perm['enable_source_preupscale'],
+                    enable_diffusion_sr=perm['enable_diffusion_sr'],
+                    enable_multipass=perm.get('enable_multipass', True),
+                    custom_enhance_params=perm.get('custom_enhance_params', None),
+                    pre_enhance_source=perm.get('pre_enhance_source', False),
+                    pre_enhance_params=perm.get('pre_enhance_params', None),
+                    tile_size=perm.get('tile_size', 0),
+                    ffmpeg_codec=perm.get('ffmpeg_codec', None),
+                    ffmpeg_preset=perm.get('ffmpeg_preset', None),
+                    ffmpeg_crf=perm.get('ffmpeg_crf', None)
+                )
+
+                if upscaler.upsampler is None:
+                    raise RuntimeError("Real-ESRGAN model failed to load")
+
+                # Reset VRAM tracking for this permutation
+                upscaler.reset_peak_vram()
+
+                # Progress callback for this permutation
+                def make_progress_callback(perm_idx, perm_name):
+                    def progress_callback(current, total, message, phase='ai_upscale'):
+                        # Map phase progress to permutation progress slice
+                        perm_start = 5 + (perm_idx / total_permutations * 90)
+                        perm_end = 5 + ((perm_idx + 1) / total_permutations * 90)
+                        phase_progress = (current / total) if total > 0 else 0
+                        overall = perm_start + (phase_progress * (perm_end - perm_start))
+
+                        progress_data = {
+                            "progress": overall,
+                            "message": f"[{perm_name}] {message}",
+                            "status": "processing",
+                            "current_permutation": perm_name,
+                            "permutation_index": perm_idx + 1,
+                            "total_permutations": total_permutations,
+                            "phase": phase
+                        }
+                        export_progress[export_id] = progress_data
+                        try:
+                            asyncio.run_coroutine_threadsafe(
+                                manager.send_progress(export_id, progress_data),
+                                loop
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to send WebSocket update: {e}")
+                    return progress_callback
+
+                # Process video
+                start_time = datetime.now()
+                result = await asyncio.to_thread(
+                    upscaler.process_video_with_upscale,
+                    input_path=input_path,
+                    output_path=str(output_path),
+                    keyframes=keyframes_dict,
+                    target_fps=target_fps,
+                    export_mode=export_mode,
+                    progress_callback=make_progress_callback(idx, perm_name),
+                    segment_data=segment_data,
+                    include_audio=include_audio_bool,
+                    highlight_keyframes=highlight_keyframes_dict
+                )
+                end_time = datetime.now()
+                duration = (end_time - start_time).total_seconds()
+
+                file_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
+                peak_vram = upscaler.get_peak_vram_mb()
+
+                results.append({
+                    'name': perm_name,
+                    'description': perm['description'],
+                    'path': str(output_path),
+                    'success': True,
+                    'duration_seconds': duration,
+                    'file_size_mb': file_size,
+                    'peak_vram_mb': peak_vram,
+                    'resolution': result.get('target_resolution', (0, 0))
+                })
+
+                logger.info(f"✓ {perm_name} completed in {duration:.2f}s, size: {file_size:.2f}MB, peak VRAM: {peak_vram:.1f}MB")
+
+            except Exception as e:
+                logger.error(f"✗ {perm_name} failed: {str(e)}")
+                results.append({
+                    'name': perm_name,
+                    'description': perm['description'],
+                    'path': None,
+                    'success': False,
+                    'error': str(e)
+                })
+
+        # Generate summary
+        logger.info("=" * 80)
+        logger.info("COMPARISON EXPORT COMPLETE")
+        logger.info("=" * 80)
+        logger.info(f"Output directory: {comparison_dir}")
+        for r in results:
+            if r['success']:
+                logger.info(f"✓ {r['name']}: {r['duration_seconds']:.2f}s, {r['file_size_mb']:.2f}MB, VRAM: {r.get('peak_vram_mb', 0):.1f}MB")
+            else:
+                logger.info(f"✗ {r['name']}: FAILED - {r.get('error', 'Unknown error')}")
+        logger.info("=" * 80)
+
+        # Generate report file
+        report_path = comparison_dir / "report.txt"
+        with open(report_path, 'w') as f:
+            f.write("=" * 80 + "\n")
+            f.write(f"UPSCALING COMPARISON REPORT\n")
+            f.write(f"Generated: {timestamp}\n")
+            f.write("=" * 80 + "\n\n")
+
+            f.write("SETTINGS:\n")
+            f.write(f"  Export Mode: {export_mode}\n")
+            f.write(f"  Target FPS: {target_fps}\n")
+            f.write(f"  Include Audio: {include_audio_bool}\n")
+            if keyframes_dict:
+                first_kf = keyframes_dict[0]
+                f.write(f"  Initial Crop: {int(first_kf['width'])}x{int(first_kf['height'])}\n")
+            f.write("\n")
+
+            f.write("RESULTS:\n")
+            f.write("-" * 80 + "\n")
+            f.write(f"{'Name':<25} {'Duration':>12} {'Size':>12} {'Peak VRAM':>12} {'Status':<10}\n")
+            f.write("-" * 80 + "\n")
+
+            for r in results:
+                if r['success']:
+                    f.write(f"{r['name']:<25} {r['duration_seconds']:>10.2f}s {r['file_size_mb']:>10.2f}MB {r.get('peak_vram_mb', 0):>10.1f}MB {'SUCCESS':<10}\n")
+                else:
+                    f.write(f"{r['name']:<25} {'N/A':>12} {'N/A':>12} {'N/A':>12} {'FAILED':<10}\n")
+
+            f.write("-" * 80 + "\n\n")
+
+            f.write("DETAILED RESULTS:\n")
+            for r in results:
+                f.write(f"\n{r['name']}:\n")
+                f.write(f"  Description: {r['description']}\n")
+                if r['success']:
+                    f.write(f"  Path: {r['path']}\n")
+                    f.write(f"  Duration: {r['duration_seconds']:.2f} seconds ({r['duration_seconds']/60:.2f} minutes)\n")
+                    f.write(f"  File Size: {r['file_size_mb']:.2f} MB\n")
+                    f.write(f"  Peak VRAM: {r.get('peak_vram_mb', 0):.1f} MB\n")
+                    f.write(f"  Resolution: {r.get('resolution', 'N/A')}\n")
+                else:
+                    f.write(f"  Error: {r.get('error', 'Unknown error')}\n")
+
+            f.write("\n" + "=" * 80 + "\n")
+            f.write("RECOMMENDATION:\n")
+            successful = [r for r in results if r['success']]
+            if successful:
+                # Sort by quality (we don't know quality, so sort by processing time as proxy for complexity)
+                fastest = min(successful, key=lambda x: x['duration_seconds'])
+                f.write(f"  Fastest: {fastest['name']} ({fastest['duration_seconds']:.2f}s)\n")
+                smallest_vram = min(successful, key=lambda x: x.get('peak_vram_mb', 0))
+                f.write(f"  Lowest VRAM: {smallest_vram['name']} ({smallest_vram.get('peak_vram_mb', 0):.1f}MB)\n")
+                smallest_file = min(successful, key=lambda x: x['file_size_mb'])
+                f.write(f"  Smallest File: {smallest_file['name']} ({smallest_file['file_size_mb']:.2f}MB)\n")
+            f.write("=" * 80 + "\n")
+
+        logger.info(f"Report saved to: {report_path}")
+
+        # Update progress - complete
+        complete_data = {
+            "progress": 100,
+            "message": f"Comparison export complete! {len([r for r in results if r['success']])} videos generated",
+            "status": "complete",
+            "results": results,
+            "output_directory": str(comparison_dir)
+        }
+        export_progress[export_id] = complete_data
+        await manager.send_progress(export_id, complete_data)
+
+        # Return results summary (videos are saved to disk for review)
+        return {
+            "status": "complete",
+            "output_directory": str(comparison_dir),
+            "results": results,
+            "summary": f"Generated {len([r for r in results if r['success']])} comparison videos. Review them at: {comparison_dir}"
+        }
+
+    except Exception as e:
+        logger.error(f"Comparison export failed: {str(e)}", exc_info=True)
+        error_data = {
+            "progress": 0,
+            "message": f"Export failed: {str(e)}",
+            "status": "error"
+        }
+        export_progress[export_id] = error_data
+        await manager.send_progress(export_id, error_data)
+        raise HTTPException(status_code=500, detail=f"Comparison export failed: {str(e)}")
+
+    finally:
+        # Clean up input file temp directory
+        if os.path.exists(temp_dir):
+            import shutil
+            shutil.rmtree(temp_dir)
 
 
 if __name__ == "__main__":

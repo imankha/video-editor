@@ -131,7 +131,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
         console.log('=== EXPORT: No highlight keyframes to send (layer disabled or empty) ===');
       }
 
-      // Always use AI upscale endpoint
+      // Use optimized AI upscale endpoint (raw ESRGAN + H.264 fast CRF 18)
       const endpoint = 'http://localhost:8000/api/export/upscale';
 
       // Connect WebSocket for real-time progress updates
