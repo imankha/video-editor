@@ -17,6 +17,10 @@ import DebugInfo from './components/DebugInfo';
 import { CropProvider } from './contexts/CropContext';
 import { HighlightProvider } from './contexts/HighlightContext';
 
+// Feature flags for experimental features
+// Set to true to enable model comparison UI (for A/B testing different AI models)
+const ENABLE_MODEL_COMPARISON = false;
+
 function App() {
   const [videoFile, setVideoFile] = useState(null);
   // Temporary state for live drag/resize preview (null when not dragging)
@@ -857,7 +861,7 @@ function App() {
           )}
 
           {/* Model Comparison Button (for testing different AI models) */}
-          {videoUrl && (
+          {ENABLE_MODEL_COMPARISON && videoUrl && (
             <div className="mt-6">
               <CompareModelsButton
                 videoFile={videoFile}

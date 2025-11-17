@@ -263,7 +263,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
 
         {/* Export Info */}
         <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
-          AI upscaling with Real-ESRGAN at {EXPORT_CONFIG.targetFps}fps (H.264)
+          AI upscaling at {EXPORT_CONFIG.targetFps}fps (H.264)
         </div>
       </div>
 
