@@ -84,7 +84,7 @@ class AIVideoUpscaler:
     - Target resolution based on aspect ratio
     """
 
-    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False, enable_multipass: bool = True, custom_enhance_params: Optional[Dict] = None, pre_enhance_source: bool = False, pre_enhance_params: Optional[Dict] = None, tile_size: int = 0):
+    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False, enable_multipass: bool = True, custom_enhance_params: Optional[Dict] = None, pre_enhance_source: bool = False, pre_enhance_params: Optional[Dict] = None, tile_size: int = 0, ffmpeg_codec: Optional[str] = None, ffmpeg_preset: Optional[str] = None, ffmpeg_crf: Optional[str] = None):
         """
         Initialize the AI upscaler
 
@@ -101,6 +101,9 @@ class AIVideoUpscaler:
             pre_enhance_source: Apply enhancement to source BEFORE Real-ESRGAN (default: False)
             pre_enhance_params: Parameters for pre-enhancement (default: None)
             tile_size: Tile size for Real-ESRGAN processing, 0=no tiling (default: 0)
+            ffmpeg_codec: FFmpeg codec override (e.g., 'libx264', 'libx265') (default: None = auto)
+            ffmpeg_preset: FFmpeg preset override (e.g., 'fast', 'medium', 'slow') (default: None = auto)
+            ffmpeg_crf: FFmpeg CRF override (e.g., '10', '15', '18') (default: None = auto)
         """
         # Detect available GPUs
         self.num_gpus = 0
@@ -115,6 +118,9 @@ class AIVideoUpscaler:
         self.pre_enhance_source = pre_enhance_source
         self.pre_enhance_params = pre_enhance_params or {}
         self.tile_size = tile_size
+        self.ffmpeg_codec = ffmpeg_codec
+        self.ffmpeg_preset = ffmpeg_preset
+        self.ffmpeg_crf = ffmpeg_crf
         self.diffusion_model = None
         self.peak_vram_mb = 0  # Track peak VRAM usage
 
@@ -583,8 +589,10 @@ class AIVideoUpscaler:
         """
         Get adaptive enhancement parameters based on upscale factor.
 
-        Higher scale factors (smaller crops) need more aggressive enhancement
-        to compensate for limited source information.
+        OPTIMIZED BASED ON A/B TESTING RESULTS:
+        Testing showed that raw Real-ESRGAN output (no post-processing) produces
+        identical visual quality to heavily post-processed versions, but is faster.
+        Therefore, we now use minimal post-processing by default.
 
         Args:
             scale_factor: The upscaling ratio (target_size / crop_size)
@@ -597,41 +605,25 @@ class AIVideoUpscaler:
             logger.info(f"Scale factor {scale_factor:.2f}x: Using CUSTOM enhancement parameters (level: {self.custom_enhance_params.get('enhancement_level', 'custom')})")
             return self.custom_enhance_params
 
-        if scale_factor > 4.5:
-            # ULTRA upscaling (extremely small crops, desperate measures)
+        # OPTIMIZED: Based on A/B testing, raw Real-ESRGAN output performs best
+        # No post-processing filters needed - they don't improve quality for extreme upscaling
+        if scale_factor > 3.5:
+            # EXTREME/ULTRA upscaling - use raw ESRGAN output (tested and verified)
             params = {
-                'bilateral_d': 1,              # Almost no denoising
-                'bilateral_sigma_color': 2,
-                'bilateral_sigma_space': 2,
-                'unsharp_weight': 1.8,         # VERY aggressive sharpening
-                'unsharp_blur_weight': -0.8,
-                'gaussian_sigma': 2.0,
-                'apply_clahe': True,
-                'clahe_clip_limit': 4.5,       # Maximum contrast enhancement
-                'clahe_tile_size': (6, 6),     # Finer tiles for local contrast
-                'apply_detail_enhancement': True,
-                'apply_edge_enhancement': True,  # NEW: edge-specific boosting
-                'enhancement_level': 'ultra'
-            }
-            logger.info(f"Scale factor {scale_factor:.2f}x: Using ULTRA enhancement parameters (aggressive)")
-        elif scale_factor > 3.5:
-            # EXTREME upscaling (very small crops like 206x366 -> 1080x1920)
-            # These need the most aggressive enhancement
-            params = {
-                'bilateral_d': 2,              # Minimal denoising to preserve sparse detail
-                'bilateral_sigma_color': 3,
-                'bilateral_sigma_space': 3,
-                'unsharp_weight': 1.5,         # Aggressive sharpening
-                'unsharp_blur_weight': -0.5,
-                'gaussian_sigma': 1.5,
-                'apply_clahe': True,           # Apply contrast enhancement
-                'clahe_clip_limit': 3.5,
+                'bilateral_d': 0,              # No denoising (ESRGAN handles this)
+                'bilateral_sigma_color': 0,
+                'bilateral_sigma_space': 0,
+                'unsharp_weight': 1.0,         # No sharpening (ESRGAN output is sharp enough)
+                'unsharp_blur_weight': 0.0,
+                'gaussian_sigma': 1.0,
+                'apply_clahe': False,          # No contrast enhancement needed
+                'clahe_clip_limit': 3.0,
                 'clahe_tile_size': (8, 8),
-                'apply_detail_enhancement': True,  # Extra detail enhancement pass
+                'apply_detail_enhancement': False,
                 'apply_edge_enhancement': False,
-                'enhancement_level': 'extreme'
+                'enhancement_level': 'optimized_raw'
             }
-            logger.info(f"Scale factor {scale_factor:.2f}x: Using EXTREME enhancement parameters")
+            logger.info(f"Scale factor {scale_factor:.2f}x: Using OPTIMIZED RAW parameters (no post-processing)")
         elif scale_factor > 2.5:
             # HIGH upscaling (medium crops)
             params = {
@@ -2037,20 +2029,24 @@ class AIVideoUpscaler:
 
         logger.info(f"Expected output frame count: {expected_output_frames}")
 
-        # Set encoding parameters based on export mode
+        # Set encoding parameters based on export mode (with custom overrides)
         if export_mode == "fast":
-            codec = "libx264"  # H.264 - faster encoding
-            preset = "medium"
-            crf = "15"
-            logger.info(f"Encoding video with FAST settings (H.264, 1-pass, medium preset, CRF {crf}) at {fps} fps...")
+            codec = self.ffmpeg_codec or "libx264"  # H.264 - faster encoding
+            preset = self.ffmpeg_preset or "medium"
+            crf = self.ffmpeg_crf or "15"
+            logger.info(f"Encoding video with FAST settings ({codec}, 1-pass, {preset} preset, CRF {crf}) at {fps} fps...")
         else:
-            codec = "libx265"  # H.265 - better compression
-            preset = "veryslow"
-            crf = "10"
-            logger.info(f"Encoding video with QUALITY settings (H.265, 2-pass, veryslow preset, CRF {crf}) at {fps} fps...")
+            codec = self.ffmpeg_codec or "libx265"  # H.265 - better compression
+            preset = self.ffmpeg_preset or "veryslow"
+            crf = self.ffmpeg_crf or "10"
+            logger.info(f"Encoding video with QUALITY settings ({codec}, 2-pass, {preset} preset, CRF {crf}) at {fps} fps...")
 
-        # Pass 1 - Analysis (only for quality mode with H.265)
-        if export_mode == "quality":
+        # Log if custom parameters are being used
+        if self.ffmpeg_codec or self.ffmpeg_preset or self.ffmpeg_crf:
+            logger.info(f"Using CUSTOM FFmpeg parameters: codec={codec}, preset={preset}, CRF={crf}")
+
+        # Pass 1 - Analysis (only for quality mode with H.265, single-pass for H.264)
+        if export_mode == "quality" and codec == "libx265":
             ffmpeg_pass1_start = datetime.now()
             logger.info("=" * 60)
             logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 START - {ffmpeg_pass1_start.isoformat()}")

@@ -999,40 +999,22 @@ async def export_with_upscale_comparison(
     comparison_dir = exports_dir / f"comparison_{timestamp}"
     comparison_dir.mkdir(exist_ok=True)
 
-    # Define permutations to test
-    # Each permutation tests a different combination of extreme upscaling features
+    # Define permutations to test FFmpeg encoding presets and CRF values
+    # Testing different encoding quality vs speed tradeoffs
+    # Preset: ultrafast < superfast < veryfast < faster < fast < medium < slow < slower < veryslow
+    # CRF: Lower = better quality, larger file (0-51, 0=lossless, 18=visually lossless, 23=default)
     permutations = [
         {
-            'name': 'raw_esrgan',
-            'description': 'Pure Real-ESRGAN (winner from last test)',
+            'name': 'fast_crf18',
+            'description': 'H.264 fast preset, CRF 18 (visually lossless)',
             'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
             'enable_multipass': False,
             'pre_enhance_source': False,
-            'tile_size': 0,  # No tiling
-            'custom_enhance_params': {
-                'bilateral_d': 0,
-                'unsharp_weight': 1.0,
-                'unsharp_blur_weight': 0.0,
-                'apply_clahe': False,
-                'apply_detail_enhancement': False,
-                'apply_edge_enhancement': False,
-                'enhancement_level': 'none'
-            }
-        },
-        {
-            'name': 'pre_sharpen_source',
-            'description': 'Sharpen source BEFORE Real-ESRGAN (unsharp 1.5)',
-            'enable_source_preupscale': False,
-            'enable_diffusion_sr': False,
-            'enable_multipass': False,
-            'pre_enhance_source': True,
-            'pre_enhance_params': {
-                'unsharp_weight': 1.5,
-                'unsharp_blur_weight': -0.5,
-                'gaussian_sigma': 1.0,
-            },
             'tile_size': 0,
+            'ffmpeg_codec': 'libx264',
+            'ffmpeg_preset': 'fast',
+            'ffmpeg_crf': '18',
             'custom_enhance_params': {
                 'bilateral_d': 0,
                 'unsharp_weight': 1.0,
@@ -1044,36 +1026,58 @@ async def export_with_upscale_comparison(
             }
         },
         {
-            'name': 'pre_contrast_source',
-            'description': 'Enhance contrast of source BEFORE Real-ESRGAN (CLAHE)',
-            'enable_source_preupscale': False,
-            'enable_diffusion_sr': False,
-            'enable_multipass': False,
-            'pre_enhance_source': True,
-            'pre_enhance_params': {
-                'apply_clahe': True,
-                'clahe_clip_limit': 2.0,
-                'clahe_tile_size': (4, 4),  # Small tiles for 206x366 crop
-            },
-            'tile_size': 0,
-            'custom_enhance_params': {
-                'bilateral_d': 0,
-                'unsharp_weight': 1.0,
-                'unsharp_blur_weight': 0.0,
-                'apply_clahe': False,
-                'apply_detail_enhancement': False,
-                'apply_edge_enhancement': False,
-                'enhancement_level': 'none'
-            }
-        },
-        {
-            'name': 'tiled_400',
-            'description': 'Real-ESRGAN with 400px tile processing',
+            'name': 'medium_crf15',
+            'description': 'H.264 medium preset, CRF 15 (high quality)',
             'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
             'enable_multipass': False,
             'pre_enhance_source': False,
-            'tile_size': 400,  # Process in 400px tiles
+            'tile_size': 0,
+            'ffmpeg_codec': 'libx264',
+            'ffmpeg_preset': 'medium',
+            'ffmpeg_crf': '15',
+            'custom_enhance_params': {
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
+                'unsharp_blur_weight': 0.0,
+                'apply_clahe': False,
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'none'
+            }
+        },
+        {
+            'name': 'slow_crf12',
+            'description': 'H.264 slow preset, CRF 12 (very high quality)',
+            'enable_source_preupscale': False,
+            'enable_diffusion_sr': False,
+            'enable_multipass': False,
+            'pre_enhance_source': False,
+            'tile_size': 0,
+            'ffmpeg_codec': 'libx264',
+            'ffmpeg_preset': 'slow',
+            'ffmpeg_crf': '12',
+            'custom_enhance_params': {
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
+                'unsharp_blur_weight': 0.0,
+                'apply_clahe': False,
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'none'
+            }
+        },
+        {
+            'name': 'veryslow_crf10',
+            'description': 'H.264 veryslow preset, CRF 10 (maximum quality)',
+            'enable_source_preupscale': False,
+            'enable_diffusion_sr': False,
+            'enable_multipass': False,
+            'pre_enhance_source': False,
+            'tile_size': 0,
+            'ffmpeg_codec': 'libx264',
+            'ffmpeg_preset': 'veryslow',
+            'ffmpeg_crf': '10',
             'custom_enhance_params': {
                 'bilateral_d': 0,
                 'unsharp_weight': 1.0,
@@ -1145,7 +1149,10 @@ async def export_with_upscale_comparison(
                     custom_enhance_params=perm.get('custom_enhance_params', None),
                     pre_enhance_source=perm.get('pre_enhance_source', False),
                     pre_enhance_params=perm.get('pre_enhance_params', None),
-                    tile_size=perm.get('tile_size', 0)
+                    tile_size=perm.get('tile_size', 0),
+                    ffmpeg_codec=perm.get('ffmpeg_codec', None),
+                    ffmpeg_preset=perm.get('ffmpeg_preset', None),
+                    ffmpeg_crf=perm.get('ffmpeg_crf', None)
                 )
 
                 if upscaler.upsampler is None:

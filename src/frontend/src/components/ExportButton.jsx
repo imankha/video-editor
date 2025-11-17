@@ -131,7 +131,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
         console.log('=== EXPORT: No highlight keyframes to send (layer disabled or empty) ===');
       }
 
-      // Use comparison endpoint for A/B testing different enhancement settings
+      // Use comparison endpoint for A/B testing different encoding settings
       const endpoint = 'http://localhost:8000/api/export/upscale-comparison';
 
       // Connect WebSocket for real-time progress updates
