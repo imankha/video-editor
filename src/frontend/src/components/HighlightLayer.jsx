@@ -33,7 +33,9 @@ export default function HighlightLayer({
   const { isEndKeyframeExplicit, copiedHighlight, isEnabled, highlightDuration } = useHighlightContext();
 
   const [hoveredKeyframeIndex, setHoveredKeyframeIndex] = React.useState(null);
+  const [isDragging, setIsDragging] = React.useState(false);
   const trackRef = React.useRef(null);
+  const sliderTrackRef = React.useRef(null);
 
   const timelineDuration = visualDuration || duration;
 
@@ -106,14 +108,60 @@ export default function HighlightLayer({
   };
 
   /**
-   * Handle duration slider change
+   * Handle duration slider mouse down
    */
-  const handleDurationSliderChange = (e) => {
-    const newDuration = parseFloat(e.target.value);
-    if (onDurationChange) {
-      onDurationChange(newDuration);
-    }
+  const handleSliderMouseDown = (e) => {
+    if (!sliderTrackRef.current || !onDurationChange) return;
+
+    setIsDragging(true);
+    updateDurationFromMouse(e.clientX);
   };
+
+  /**
+   * Update duration based on mouse X position
+   */
+  const updateDurationFromMouse = (clientX) => {
+    if (!sliderTrackRef.current || !onDurationChange) return;
+
+    const rect = sliderTrackRef.current.getBoundingClientRect();
+    const mouseX = Math.max(0, Math.min(clientX - rect.left, rect.width));
+
+    // Convert mouse X position to percentage of timeline width
+    const percentage = (mouseX / rect.width) * 100;
+
+    // Convert percentage to visual time
+    const visualTime = (percentage / 100) * timelineDuration;
+
+    // Convert visual time to source time
+    const sourceTime = visualTimeToSourceTime(visualTime);
+
+    // Clamp to valid range and update
+    const newDuration = Math.max(0.5, Math.min(sourceTime, duration));
+    onDurationChange(newDuration);
+  };
+
+  /**
+   * Handle window mouse move during drag
+   */
+  React.useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e) => {
+      updateDurationFromMouse(e.clientX);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, timelineDuration, duration, onDurationChange, sourceTimeToVisualTime, visualTimeToSourceTime]);
 
   // Calculate the highlight end position on timeline
   const highlightEndPosition = frameToPixel(Math.round(highlightDuration * framerate));
@@ -121,7 +169,7 @@ export default function HighlightLayer({
   return (
     <div className={`relative bg-gray-800/95 border-t border-gray-700/50 rounded-r-lg transition-all ${
       isLayerSelected ? 'ring-2 ring-orange-400 ring-opacity-75' : ''
-    }`}>
+    } ${isEnabled ? 'h-20' : 'h-12'}`}>
       {/* Main row with toggle and keyframes */}
       <div className="relative h-12">
         {/* Keyframes track */}
@@ -242,23 +290,48 @@ export default function HighlightLayer({
 
       {/* Duration slider row (only when enabled) */}
       {isEnabled && (
-        <div className="relative h-8 border-t border-gray-700/30 flex items-center px-2">
-          <span className="text-xs text-gray-400 mr-2 whitespace-nowrap">
-            Duration
-            <span className="ml-1 text-orange-400 font-mono">
-              {highlightDuration.toFixed(1)}s
+        <div className="relative h-8 border-t border-gray-700/30 flex items-center">
+          {/* Duration label - positioned on the left outside the timeline */}
+          <div className="absolute -left-32 w-32 flex items-center justify-center pr-2">
+            <span className="text-xs text-gray-400 whitespace-nowrap">
+              Duration
+              <span className="ml-1 text-orange-400 font-mono">
+                {highlightDuration.toFixed(1)}s
+              </span>
             </span>
-          </span>
-          <input
-            type="range"
-            min="0.5"
-            max={duration || 60}
-            step="0.1"
-            value={highlightDuration}
-            onChange={handleDurationSliderChange}
-            className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
-            title={`Highlight duration: ${highlightDuration.toFixed(1)}s`}
-          />
+          </div>
+
+          {/* Custom slider track - aligns with timeline */}
+          <div
+            ref={sliderTrackRef}
+            className="absolute inset-0 cursor-pointer"
+            onMouseDown={handleSliderMouseDown}
+          >
+            {/* Slider background track */}
+            <div className="absolute inset-y-0 left-0 right-0 flex items-center">
+              <div className="w-full h-1.5 bg-gray-700 rounded-full" />
+            </div>
+
+            {/* Slider thumb - positioned at highlight end position */}
+            <div
+              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 pointer-events-none"
+              style={{ left: `${highlightEndPosition}%` }}
+            >
+              <div
+                className={`w-4 h-4 bg-orange-500 rounded-full border-2 border-white shadow-lg transition-transform ${
+                  isDragging ? 'scale-125' : 'scale-100'
+                }`}
+              />
+            </div>
+
+            {/* Active track (filled portion) */}
+            <div
+              className="absolute inset-y-0 left-0 flex items-center pointer-events-none"
+              style={{ width: `${highlightEndPosition}%` }}
+            >
+              <div className="w-full h-1.5 bg-orange-500 rounded-full" />
+            </div>
+          </div>
         </div>
       )}
     </div>

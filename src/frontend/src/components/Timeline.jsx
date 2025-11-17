@@ -280,7 +280,7 @@ export function Timeline({
 
           {/* Segment Layer Label (only if segments exist) */}
           {segments.length > 0 && (
-            <div className="mt-1 h-12 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 rounded-bl-lg">
+            <div className="mt-1 h-16 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 rounded-bl-lg">
               <Split size={18} className="text-purple-400" />
             </div>
           )}
@@ -289,8 +289,7 @@ export function Timeline({
           <div
             className={`mt-1 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
               selectedLayer === 'highlight' ? 'bg-orange-900/30' : 'bg-gray-900 hover:bg-gray-800'
-            }`}
-            style={{ height: isHighlightActive && highlightKeyframes.length > 0 ? '5rem' : '3rem' }}
+            } ${isHighlightActive ? 'h-20' : 'h-12'}`}
             onClick={(e) => {
               if (!e.target.closest('button')) {
                 onLayerSelect && onLayerSelect('highlight');
@@ -373,7 +372,11 @@ export function Timeline({
                 className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none"
                 style={{
                   left: `${progress}%`,
-                  height: segments.length > 0 ? 'calc(100% - 0.25rem)' : 'calc(9.25rem - 0.25rem)'
+                  height: segments.length > 0
+                    ? 'calc(100% - 0.25rem)'
+                    : isHighlightActive
+                      ? 'calc(11.5rem - 0.25rem)'
+                      : 'calc(9.5rem - 0.25rem)'
                 }}
               >
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full" />
