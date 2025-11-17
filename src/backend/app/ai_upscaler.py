@@ -489,14 +489,15 @@ class AIVideoUpscaler:
                 model_path = 'weights/RealESRGAN_x4plus_anime_6B.pth'
                 download_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth'
             elif variant_name == 'realesr-general-x4v3':
-                # This is a newer general model, uses ESRNET architecture
-                model = RRDBNet(
+                # This newer model uses SRVGGNetCompact architecture, not RRDBNet
+                from realesrgan.archs.srvgg_arch import SRVGGNetCompact
+                model = SRVGGNetCompact(
                     num_in_ch=3,
                     num_out_ch=3,
                     num_feat=64,
-                    num_block=23,
-                    num_grow_ch=32,
-                    scale=4
+                    num_conv=32,
+                    upscale=4,
+                    act_type='prelu'
                 )
                 model_path = 'weights/realesr-general-x4v3.pth'
                 download_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth'
