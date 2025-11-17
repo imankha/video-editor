@@ -1004,31 +1004,74 @@ async def export_with_upscale_comparison(
     permutations = [
         {
             'name': 'baseline',
-            'description': 'Standard Real-ESRGAN (single pass capped at 4x, no new features)',
+            'description': 'Standard Real-ESRGAN (single pass capped at 4x)',
             'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
-            'enable_multipass': False  # Explicitly disable multi-pass for true baseline
+            'enable_multipass': False,
+            'custom_enhance_params': None  # Use default adaptive params
         },
         {
-            'name': 'multipass',
-            'description': 'Multi-pass upscaling (2x->2x->Nx for extreme scales)',
+            'name': 'raw_esrgan',
+            'description': 'Raw Real-ESRGAN output (no post-processing filters)',
             'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
-            'enable_multipass': True  # Enable multi-pass for >4x scales
+            'enable_multipass': False,
+            'custom_enhance_params': {
+                'bilateral_d': 0,  # Skip bilateral
+                'bilateral_sigma_color': 0,
+                'bilateral_sigma_space': 0,
+                'unsharp_weight': 1.0,  # No sharpening
+                'unsharp_blur_weight': 0.0,
+                'gaussian_sigma': 1.0,
+                'apply_clahe': False,
+                'clahe_clip_limit': 3.0,
+                'clahe_tile_size': (8, 8),
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'none'
+            }
         },
         {
-            'name': 'preupscale',
-            'description': 'Pre-upscale source frame 2x before cropping (no multipass)',
-            'enable_source_preupscale': True,
+            'name': 'mild_sharpen',
+            'description': 'Gentle sharpening only (unsharp 1.3, no CLAHE)',
+            'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
-            'enable_multipass': False  # Only test pre-upscale effect
+            'enable_multipass': False,
+            'custom_enhance_params': {
+                'bilateral_d': 3,
+                'bilateral_sigma_color': 5,
+                'bilateral_sigma_space': 5,
+                'unsharp_weight': 1.3,
+                'unsharp_blur_weight': -0.3,
+                'gaussian_sigma': 1.0,
+                'apply_clahe': False,
+                'clahe_clip_limit': 3.0,
+                'clahe_tile_size': (8, 8),
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'mild'
+            }
         },
         {
-            'name': 'multipass_preupscale',
-            'description': 'Both multi-pass and source pre-upscaling',
-            'enable_source_preupscale': True,
+            'name': 'balanced',
+            'description': 'Balanced enhancement (mild CLAHE + moderate sharpen)',
+            'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
-            'enable_multipass': True  # All enhancements except diffusion
+            'enable_multipass': False,
+            'custom_enhance_params': {
+                'bilateral_d': 2,
+                'bilateral_sigma_color': 3,
+                'bilateral_sigma_space': 3,
+                'unsharp_weight': 1.4,
+                'unsharp_blur_weight': -0.4,
+                'gaussian_sigma': 1.2,
+                'apply_clahe': True,
+                'clahe_clip_limit': 2.5,  # Milder than ULTRA's 4.5
+                'clahe_tile_size': (8, 8),
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'balanced'
+            }
         }
     ]
 
@@ -1087,11 +1130,15 @@ async def export_with_upscale_comparison(
                     export_mode=export_mode,
                     enable_source_preupscale=perm['enable_source_preupscale'],
                     enable_diffusion_sr=perm['enable_diffusion_sr'],
-                    enable_multipass=perm.get('enable_multipass', True)
+                    enable_multipass=perm.get('enable_multipass', True),
+                    custom_enhance_params=perm.get('custom_enhance_params', None)
                 )
 
                 if upscaler.upsampler is None:
                     raise RuntimeError("Real-ESRGAN model failed to load")
+
+                # Reset VRAM tracking for this permutation
+                upscaler.reset_peak_vram()
 
                 # Progress callback for this permutation
                 def make_progress_callback(perm_idx, perm_name):
@@ -1139,6 +1186,7 @@ async def export_with_upscale_comparison(
                 duration = (end_time - start_time).total_seconds()
 
                 file_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
+                peak_vram = upscaler.get_peak_vram_mb()
 
                 results.append({
                     'name': perm_name,
@@ -1147,10 +1195,11 @@ async def export_with_upscale_comparison(
                     'success': True,
                     'duration_seconds': duration,
                     'file_size_mb': file_size,
+                    'peak_vram_mb': peak_vram,
                     'resolution': result.get('target_resolution', (0, 0))
                 })
 
-                logger.info(f"✓ {perm_name} completed in {duration:.2f}s, size: {file_size:.2f}MB")
+                logger.info(f"✓ {perm_name} completed in {duration:.2f}s, size: {file_size:.2f}MB, peak VRAM: {peak_vram:.1f}MB")
 
             except Exception as e:
                 logger.error(f"✗ {perm_name} failed: {str(e)}")
@@ -1169,10 +1218,68 @@ async def export_with_upscale_comparison(
         logger.info(f"Output directory: {comparison_dir}")
         for r in results:
             if r['success']:
-                logger.info(f"✓ {r['name']}: {r['duration_seconds']:.2f}s, {r['file_size_mb']:.2f}MB")
+                logger.info(f"✓ {r['name']}: {r['duration_seconds']:.2f}s, {r['file_size_mb']:.2f}MB, VRAM: {r.get('peak_vram_mb', 0):.1f}MB")
             else:
                 logger.info(f"✗ {r['name']}: FAILED - {r.get('error', 'Unknown error')}")
         logger.info("=" * 80)
+
+        # Generate report file
+        report_path = comparison_dir / "report.txt"
+        with open(report_path, 'w') as f:
+            f.write("=" * 80 + "\n")
+            f.write(f"UPSCALING COMPARISON REPORT\n")
+            f.write(f"Generated: {timestamp}\n")
+            f.write("=" * 80 + "\n\n")
+
+            f.write("SETTINGS:\n")
+            f.write(f"  Export Mode: {export_mode}\n")
+            f.write(f"  Target FPS: {target_fps}\n")
+            f.write(f"  Include Audio: {include_audio_bool}\n")
+            if keyframes_dict:
+                first_kf = keyframes_dict[0]
+                f.write(f"  Initial Crop: {int(first_kf['width'])}x{int(first_kf['height'])}\n")
+            f.write("\n")
+
+            f.write("RESULTS:\n")
+            f.write("-" * 80 + "\n")
+            f.write(f"{'Name':<25} {'Duration':>12} {'Size':>12} {'Peak VRAM':>12} {'Status':<10}\n")
+            f.write("-" * 80 + "\n")
+
+            for r in results:
+                if r['success']:
+                    f.write(f"{r['name']:<25} {r['duration_seconds']:>10.2f}s {r['file_size_mb']:>10.2f}MB {r.get('peak_vram_mb', 0):>10.1f}MB {'SUCCESS':<10}\n")
+                else:
+                    f.write(f"{r['name']:<25} {'N/A':>12} {'N/A':>12} {'N/A':>12} {'FAILED':<10}\n")
+
+            f.write("-" * 80 + "\n\n")
+
+            f.write("DETAILED RESULTS:\n")
+            for r in results:
+                f.write(f"\n{r['name']}:\n")
+                f.write(f"  Description: {r['description']}\n")
+                if r['success']:
+                    f.write(f"  Path: {r['path']}\n")
+                    f.write(f"  Duration: {r['duration_seconds']:.2f} seconds ({r['duration_seconds']/60:.2f} minutes)\n")
+                    f.write(f"  File Size: {r['file_size_mb']:.2f} MB\n")
+                    f.write(f"  Peak VRAM: {r.get('peak_vram_mb', 0):.1f} MB\n")
+                    f.write(f"  Resolution: {r.get('resolution', 'N/A')}\n")
+                else:
+                    f.write(f"  Error: {r.get('error', 'Unknown error')}\n")
+
+            f.write("\n" + "=" * 80 + "\n")
+            f.write("RECOMMENDATION:\n")
+            successful = [r for r in results if r['success']]
+            if successful:
+                # Sort by quality (we don't know quality, so sort by processing time as proxy for complexity)
+                fastest = min(successful, key=lambda x: x['duration_seconds'])
+                f.write(f"  Fastest: {fastest['name']} ({fastest['duration_seconds']:.2f}s)\n")
+                smallest_vram = min(successful, key=lambda x: x.get('peak_vram_mb', 0))
+                f.write(f"  Lowest VRAM: {smallest_vram['name']} ({smallest_vram.get('peak_vram_mb', 0):.1f}MB)\n")
+                smallest_file = min(successful, key=lambda x: x['file_size_mb'])
+                f.write(f"  Smallest File: {smallest_file['name']} ({smallest_file['file_size_mb']:.2f}MB)\n")
+            f.write("=" * 80 + "\n")
+
+        logger.info(f"Report saved to: {report_path}")
 
         # Update progress - complete
         complete_data = {

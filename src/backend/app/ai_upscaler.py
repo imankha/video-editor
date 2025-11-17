@@ -84,7 +84,7 @@ class AIVideoUpscaler:
     - Target resolution based on aspect ratio
     """
 
-    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False, enable_multipass: bool = True):
+    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False, enable_multipass: bool = True, custom_enhance_params: Optional[Dict] = None):
         """
         Initialize the AI upscaler
 
@@ -97,6 +97,7 @@ class AIVideoUpscaler:
             enable_source_preupscale: Pre-upscale source frame before cropping (default: False)
             enable_diffusion_sr: Enable Stable Diffusion upscaler for extreme cases (default: False)
             enable_multipass: Enable multi-pass upscaling for >4x scales (default: True)
+            custom_enhance_params: Custom enhancement parameters to override adaptive selection (default: None)
         """
         # Detect available GPUs
         self.num_gpus = 0
@@ -107,7 +108,9 @@ class AIVideoUpscaler:
         self.enable_source_preupscale = enable_source_preupscale
         self.enable_diffusion_sr = enable_diffusion_sr
         self.enable_multipass = enable_multipass
+        self.custom_enhance_params = custom_enhance_params
         self.diffusion_model = None
+        self.peak_vram_mb = 0  # Track peak VRAM usage
 
         if device == 'cuda' and torch.cuda.is_available():
             self.num_gpus = torch.cuda.device_count()
@@ -549,6 +552,22 @@ class AIVideoUpscaler:
 
         return final
 
+    def update_peak_vram(self):
+        """Update peak VRAM usage tracking"""
+        if self.device.type == 'cuda' and torch.cuda.is_available():
+            current_vram = torch.cuda.memory_allocated() / (1024 * 1024)  # MB
+            self.peak_vram_mb = max(self.peak_vram_mb, current_vram)
+
+    def get_peak_vram_mb(self) -> float:
+        """Get peak VRAM usage in MB"""
+        return self.peak_vram_mb
+
+    def reset_peak_vram(self):
+        """Reset peak VRAM tracking"""
+        self.peak_vram_mb = 0
+        if self.device.type == 'cuda' and torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+
     def get_adaptive_enhancement_params(self, scale_factor: float) -> Dict:
         """
         Get adaptive enhancement parameters based on upscale factor.
@@ -562,6 +581,11 @@ class AIVideoUpscaler:
         Returns:
             Dictionary of enhancement parameters
         """
+        # Use custom parameters if provided (for A/B testing)
+        if self.custom_enhance_params is not None:
+            logger.info(f"Scale factor {scale_factor:.2f}x: Using CUSTOM enhancement parameters (level: {self.custom_enhance_params.get('enhancement_level', 'custom')})")
+            return self.custom_enhance_params
+
         if scale_factor > 4.5:
             # ULTRA upscaling (extremely small crops, desperate measures)
             params = {
@@ -769,7 +793,9 @@ class AIVideoUpscaler:
             enhance_params = self.get_adaptive_enhancement_params(overall_scale)
 
             # Denoise before upscaling to prevent noise amplification (QUALITY mode only)
-            if self.device.type == 'cuda' and self.export_mode == 'quality':
+            # Skip if bilateral_d is 0 or negative (for raw output testing)
+            if (self.device.type == 'cuda' and self.export_mode == 'quality' and
+                enhance_params.get('bilateral_d', 0) > 0):
                 frame = cv2.bilateralFilter(
                     frame,
                     d=enhance_params['bilateral_d'],
@@ -779,6 +805,9 @@ class AIVideoUpscaler:
 
             # Calculate desired scale for Real-ESRGAN
             desired_scale = min(scale_x, scale_y)  # Remove 4.0 cap
+
+            # Track VRAM before upscaling
+            self.update_peak_vram()
 
             # Check if we should use diffusion model for this frame
             if (self.enable_diffusion_sr and
@@ -807,13 +836,16 @@ class AIVideoUpscaler:
             upscaled_h, upscaled_w = enhanced.shape[:2]
             logger.debug(f"Real-ESRGAN upscaled to {upscaled_w}x{upscaled_h} (scale={desired_scale:.2f})")
 
+            # Track VRAM after upscaling (peak usage)
+            self.update_peak_vram()
+
             # Resize to exact target size if needed (using highest quality interpolation)
             if enhanced.shape[:2] != (target_h, target_w):
                 enhanced = cv2.resize(enhanced, target_size, interpolation=cv2.INTER_LANCZOS4)
                 logger.debug(f"Resized to exact target: {target_w}x{target_h}")
 
             # Apply CLAHE contrast enhancement if needed (for high/extreme upscaling)
-            if self.device.type == 'cuda' and self.export_mode == 'quality' and enhance_params['apply_clahe']:
+            if self.device.type == 'cuda' and self.export_mode == 'quality' and enhance_params.get('apply_clahe', False):
                 lab = cv2.cvtColor(enhanced, cv2.COLOR_BGR2LAB)
                 l_channel, a_channel, b_channel = cv2.split(lab)
                 clahe = cv2.createCLAHE(
@@ -826,7 +858,7 @@ class AIVideoUpscaler:
                 logger.debug(f"Applied CLAHE contrast enhancement (clip={enhance_params['clahe_clip_limit']})")
 
             # Apply additional detail enhancement for extreme cases
-            if self.device.type == 'cuda' and self.export_mode == 'quality' and enhance_params['apply_detail_enhancement']:
+            if self.device.type == 'cuda' and self.export_mode == 'quality' and enhance_params.get('apply_detail_enhancement', False):
                 enhanced = self.apply_detail_enhancement(enhanced)
                 logger.debug("Applied additional detail enhancement pass")
 
@@ -836,18 +868,22 @@ class AIVideoUpscaler:
                 logger.debug("Applied edge-specific enhancement pass")
 
             # Sharpen upscaled output for better perceived quality (QUALITY mode only)
-            if self.device.type == 'cuda' and self.export_mode == 'quality':
-                gaussian = cv2.GaussianBlur(enhanced, (0, 0), enhance_params['gaussian_sigma'])
+            # Skip if unsharp_weight is 1.0 and blur_weight is 0.0 (no effect)
+            unsharp_weight = enhance_params.get('unsharp_weight', 1.0)
+            blur_weight = enhance_params.get('unsharp_blur_weight', 0.0)
+            if (self.device.type == 'cuda' and self.export_mode == 'quality' and
+                not (unsharp_weight == 1.0 and blur_weight == 0.0)):
+                gaussian = cv2.GaussianBlur(enhanced, (0, 0), enhance_params.get('gaussian_sigma', 1.0))
                 enhanced = cv2.addWeighted(
                     enhanced,
-                    enhance_params['unsharp_weight'],
+                    unsharp_weight,
                     gaussian,
-                    enhance_params['unsharp_blur_weight'],
+                    blur_weight,
                     0
                 )
                 # Clip values to valid range
                 enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
-                logger.debug(f"Applied unsharp mask (weight={enhance_params['unsharp_weight']}, blur_weight={enhance_params['unsharp_blur_weight']})")
+                logger.debug(f"Applied unsharp mask (weight={unsharp_weight}, blur_weight={blur_weight})")
 
             return enhanced
         except Exception as e:
