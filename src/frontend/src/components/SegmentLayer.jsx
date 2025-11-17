@@ -92,7 +92,7 @@ export default function SegmentLayer({
   };
 
   return (
-    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg" style={{ minHeight: '60px', paddingBottom: '8px' }}>
+    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-16 pb-2">
       {/* Segments track */}
       <div
         className="segment-track absolute inset-x-0 top-0 h-12 cursor-pointer overflow-visible rounded-r-lg"

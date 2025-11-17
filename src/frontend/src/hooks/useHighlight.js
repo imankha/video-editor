@@ -128,9 +128,17 @@ export default function useHighlight(videoMetadata) {
    * Enable or disable the highlight layer
    */
   const toggleEnabled = useCallback(() => {
-    setIsEnabled(prev => !prev);
-    console.log('[useHighlight] Highlight layer toggled:', !isEnabled);
-  }, [isEnabled]);
+    setIsEnabled(prev => {
+      const newEnabled = !prev;
+      // When enabling, ensure duration is at least 3s if it's currently 0 or very small
+      if (newEnabled && highlightDuration < 0.5) {
+        setHighlightDuration(3);
+        console.log('[useHighlight] Reset highlight duration to 3s on enable');
+      }
+      console.log('[useHighlight] Highlight layer toggled:', newEnabled);
+      return newEnabled;
+    });
+  }, [isEnabled, highlightDuration]);
 
   /**
    * Add or update a keyframe at the specified time
