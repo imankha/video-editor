@@ -12,6 +12,7 @@ import { FileUpload } from './components/FileUpload';
 import AspectRatioSelector from './components/AspectRatioSelector';
 import ZoomControls from './components/ZoomControls';
 import ExportButton from './components/ExportButton';
+import CompareModelsButton from './components/CompareModelsButton';
 import DebugInfo from './components/DebugInfo';
 import { CropProvider } from './contexts/CropContext';
 import { HighlightProvider } from './contexts/HighlightContext';
@@ -846,6 +847,19 @@ function App() {
           {videoUrl && (
             <div className="mt-6">
               <ExportButton
+                videoFile={videoFile}
+                cropKeyframes={getFilteredKeyframesForExport}
+                highlightKeyframes={getFilteredHighlightKeyframesForExport}
+                segmentData={getSegmentExportData()}
+                disabled={!videoFile}
+              />
+            </div>
+          )}
+
+          {/* Model Comparison Button (for testing different AI models) */}
+          {videoUrl && (
+            <div className="mt-6">
+              <CompareModelsButton
                 videoFile={videoFile}
                 cropKeyframes={getFilteredKeyframesForExport}
                 highlightKeyframes={getFilteredHighlightKeyframesForExport}

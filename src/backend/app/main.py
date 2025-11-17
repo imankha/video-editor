@@ -1273,25 +1273,31 @@ async def export_with_upscale_comparison(
             f.write("\n")
 
             f.write("RESULTS:\n")
-            f.write("-" * 80 + "\n")
-            f.write(f"{'Name':<25} {'Duration':>12} {'Size':>12} {'Peak VRAM':>12} {'Status':<10}\n")
-            f.write("-" * 80 + "\n")
+            f.write("-" * 100 + "\n")
+            f.write(f"{'Model Name':<30} {'Test Name':<20} {'Time':>10} {'Size':>10} {'VRAM':>10} {'FPS':>10} {'Status':<10}\n")
+            f.write("-" * 100 + "\n")
 
             for r in results:
                 if r['success']:
-                    f.write(f"{r['name']:<25} {r['duration_seconds']:>10.2f}s {r['file_size_mb']:>10.2f}MB {r.get('peak_vram_mb', 0):>10.1f}MB {'SUCCESS':<10}\n")
+                    fps = 30.0 / r['duration_seconds'] if r['duration_seconds'] > 0 else 0  # Assuming 30fps target
+                    model_name = r.get('sr_model_name', 'Unknown')
+                    f.write(f"{model_name:<30} {r['name']:<20} {r['duration_seconds']:>8.2f}s {r['file_size_mb']:>8.2f}MB {r.get('peak_vram_mb', 0):>8.1f}MB {fps:>8.2f} {'SUCCESS':<10}\n")
                 else:
-                    f.write(f"{r['name']:<25} {'N/A':>12} {'N/A':>12} {'N/A':>12} {'FAILED':<10}\n")
+                    model_name = r.get('sr_model_name', 'Unknown')
+                    f.write(f"{model_name:<30} {r['name']:<20} {'N/A':>10} {'N/A':>10} {'N/A':>10} {'N/A':>10} {'FAILED':<10}\n")
 
-            f.write("-" * 80 + "\n\n")
+            f.write("-" * 100 + "\n\n")
 
             f.write("DETAILED RESULTS:\n")
             for r in results:
                 f.write(f"\n{r['name']}:\n")
+                f.write(f"  SR Model: {r.get('sr_model_name', 'Unknown')}\n")
                 f.write(f"  Description: {r['description']}\n")
                 if r['success']:
+                    fps = 30.0 / r['duration_seconds'] if r['duration_seconds'] > 0 else 0
                     f.write(f"  Path: {r['path']}\n")
-                    f.write(f"  Duration: {r['duration_seconds']:.2f} seconds ({r['duration_seconds']/60:.2f} minutes)\n")
+                    f.write(f"  Processing Time: {r['duration_seconds']:.2f} seconds ({r['duration_seconds']/60:.2f} minutes)\n")
+                    f.write(f"  Effective FPS: {fps:.2f} (frames processed per second)\n")
                     f.write(f"  File Size: {r['file_size_mb']:.2f} MB\n")
                     f.write(f"  Peak VRAM: {r.get('peak_vram_mb', 0):.1f} MB\n")
                     f.write(f"  Resolution: {r.get('resolution', 'N/A')}\n")
