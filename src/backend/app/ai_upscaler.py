@@ -84,12 +84,12 @@ class AIVideoUpscaler:
     - Target resolution based on aspect ratio
     """
 
-    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False, enable_multipass: bool = True, custom_enhance_params: Optional[Dict] = None, pre_enhance_source: bool = False, pre_enhance_params: Optional[Dict] = None, tile_size: int = 0, ffmpeg_codec: Optional[str] = None, ffmpeg_preset: Optional[str] = None, ffmpeg_crf: Optional[str] = None):
+    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False, enable_multipass: bool = True, custom_enhance_params: Optional[Dict] = None, pre_enhance_source: bool = False, pre_enhance_params: Optional[Dict] = None, tile_size: int = 0, ffmpeg_codec: Optional[str] = None, ffmpeg_preset: Optional[str] = None, ffmpeg_crf: Optional[str] = None, sr_model_name: Optional[str] = None):
         """
         Initialize the AI upscaler
 
         Args:
-            model_name: Model to use for upscaling
+            model_name: Model to use for upscaling (deprecated, use sr_model_name)
             device: 'cuda' for GPU or 'cpu' for CPU processing
             enable_multi_gpu: Enable multi-GPU parallel processing (default: True)
             export_mode: Export mode - "fast" or "quality" (default "quality")
@@ -104,6 +104,14 @@ class AIVideoUpscaler:
             ffmpeg_codec: FFmpeg codec override (e.g., 'libx264', 'libx265') (default: None = auto)
             ffmpeg_preset: FFmpeg preset override (e.g., 'fast', 'medium', 'slow') (default: None = auto)
             ffmpeg_crf: FFmpeg CRF override (e.g., '10', '15', '18') (default: None = auto)
+            sr_model_name: Super-resolution model name (default: None = use model_name or 'RealESRGAN_x4plus')
+                Supported models:
+                - 'RealESRGAN_x4plus' (default, best balance of speed/quality)
+                - 'RealESRGAN_x4plus_anime_6B' (anime-optimized)
+                - 'realesr_general_x4v3' (newer general model)
+                - 'SwinIR_4x' (transformer-based, better global context)
+                - 'SwinIR_4x_GAN' (SwinIR with GAN training for perceptual quality)
+                - 'HAT_4x' (Hybrid Attention Transformer, state-of-the-art)
         """
         # Detect available GPUs
         self.num_gpus = 0
@@ -123,6 +131,11 @@ class AIVideoUpscaler:
         self.ffmpeg_crf = ffmpeg_crf
         self.diffusion_model = None
         self.peak_vram_mb = 0  # Track peak VRAM usage
+
+        # Model-specific attributes
+        self.swinir_model = None
+        self.hat_model = None
+        self.current_sr_model = None  # Track which model is active for enhancement
 
         if device == 'cuda' and torch.cuda.is_available():
             self.num_gpus = torch.cuda.device_count()
@@ -155,6 +168,8 @@ class AIVideoUpscaler:
             logger.info(f"Using device: cpu")
 
         self.model_name = model_name
+        # Use sr_model_name if provided, otherwise fallback to model_name
+        self.sr_model_name = sr_model_name or model_name
         self.upsampler = None
         self.upsamplers = {}  # Dictionary to store upsampler for each GPU
         self.progress_lock = threading.Lock()  # Thread-safe progress tracking
@@ -164,8 +179,8 @@ class AIVideoUpscaler:
             logger.info(f"Using RealBasicVSR backend for video super-resolution")
             self.setup_realbasicvsr()
         else:
-            logger.info(f"Using Real-ESRGAN backend for frame-by-frame super-resolution")
-            self.setup_model()
+            logger.info(f"Using {self.sr_model_name} for frame-by-frame super-resolution")
+            self._setup_sr_model()
 
         # Setup diffusion SR if enabled
         if self.enable_diffusion_sr and DIFFUSION_SR_AVAILABLE:
@@ -247,6 +262,9 @@ class AIVideoUpscaler:
             # Store tile configuration
             self.tile_size = tile_size
             self.tile_pad = tile_pad
+
+            # Mark current model as Real-ESRGAN
+            self.current_sr_model = 'realesrgan'
 
             # Create separate upsampler instances for each GPU if multi-GPU enabled
             if self.num_gpus > 1 and self.enable_multi_gpu:
@@ -418,6 +436,479 @@ class AIVideoUpscaler:
             logger.error(traceback.format_exc())
             self.sr_backend = 'realesrgan'
             self.setup_model()
+
+    def _setup_sr_model(self):
+        """
+        Setup the specified super-resolution model based on sr_model_name.
+        This is the central routing method for all SR model initialization.
+        """
+        model_name = self.sr_model_name
+
+        # Model registry - maps model names to setup methods
+        model_registry = {
+            'RealESRGAN_x4plus': self.setup_model,
+            'RealESRGAN_x4plus_anime_6B': lambda: self._setup_realesrgan_variant('RealESRGAN_x4plus_anime_6B'),
+            'realesr_general_x4v3': lambda: self._setup_realesrgan_variant('realesr-general-x4v3'),
+            'SwinIR_4x': lambda: self._setup_swinir('SwinIR_4x'),
+            'SwinIR_4x_GAN': lambda: self._setup_swinir('SwinIR_4x_GAN'),
+            'HAT_4x': lambda: self._setup_hat('HAT_4x'),
+            'HAT_Large_4x': lambda: self._setup_hat('HAT_Large_4x'),
+        }
+
+        if model_name in model_registry:
+            logger.info(f"Setting up SR model: {model_name}")
+            model_registry[model_name]()
+        else:
+            logger.warning(f"Unknown SR model '{model_name}', falling back to RealESRGAN_x4plus")
+            self.sr_model_name = 'RealESRGAN_x4plus'
+            self.setup_model()
+
+    def _setup_realesrgan_variant(self, variant_name: str):
+        """
+        Setup alternative Real-ESRGAN model variants.
+
+        Args:
+            variant_name: Model variant to load
+        """
+        try:
+            from basicsr.archs.rrdbnet_arch import RRDBNet
+            from realesrgan import RealESRGANer
+
+            logger.info(f"Initializing Real-ESRGAN variant: {variant_name}")
+
+            # Model configuration for different variants
+            if variant_name == 'RealESRGAN_x4plus_anime_6B':
+                model = RRDBNet(
+                    num_in_ch=3,
+                    num_out_ch=3,
+                    num_feat=64,
+                    num_block=6,  # 6 blocks instead of 23
+                    num_grow_ch=32,
+                    scale=4
+                )
+                model_path = 'weights/RealESRGAN_x4plus_anime_6B.pth'
+                download_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth'
+            elif variant_name == 'realesr-general-x4v3':
+                # This newer model uses SRVGGNetCompact architecture, not RRDBNet
+                from realesrgan.archs.srvgg_arch import SRVGGNetCompact
+                model = SRVGGNetCompact(
+                    num_in_ch=3,
+                    num_out_ch=3,
+                    num_feat=64,
+                    num_conv=32,
+                    upscale=4,
+                    act_type='prelu'
+                )
+                model_path = 'weights/realesr-general-x4v3.pth'
+                download_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth'
+            else:
+                raise ValueError(f"Unsupported Real-ESRGAN variant: {variant_name}")
+
+            # Download weights if not present
+            if not os.path.exists(model_path):
+                os.makedirs('weights', exist_ok=True)
+                logger.info(f"Downloading {variant_name} weights...")
+                import wget
+                wget.download(download_url, out='weights/')
+                logger.info(f"\n{variant_name} weights downloaded successfully!")
+
+            # Initialize upsampler
+            if self.device.type == 'cuda':
+                if self.tile_size > 0:
+                    tile_size = self.tile_size
+                elif self.export_mode == 'fast':
+                    tile_size = 512
+                else:
+                    tile_size = 0
+                tile_pad = 10 if tile_size > 0 else 0
+            else:
+                tile_size = 512
+                tile_pad = 10
+
+            self.upsampler = RealESRGANer(
+                scale=4,
+                model_path=model_path,
+                dni_weight=None,
+                model=model,
+                tile=tile_size,
+                tile_pad=tile_pad,
+                pre_pad=0,
+                half=True if self.device.type == 'cuda' else False,
+                device=self.device
+            )
+
+            self.current_sr_model = 'realesrgan'
+            self.tile_size = tile_size
+            self.tile_pad = tile_pad
+
+            logger.info(f"✓ {variant_name} model loaded successfully!")
+
+        except ImportError as e:
+            logger.error(f"Failed to import Real-ESRGAN dependencies: {e}")
+            self.upsampler = None
+        except Exception as e:
+            logger.error(f"Failed to setup {variant_name}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            self.upsampler = None
+
+    def _setup_swinir(self, model_variant: str = 'SwinIR_4x_GAN'):
+        """
+        Setup SwinIR (Swin Transformer) model for super-resolution.
+        SwinIR uses transformer architecture with shifted windows for better global context.
+
+        Args:
+            model_variant: 'SwinIR_4x' for PSNR-optimized, 'SwinIR_4x_GAN' for perceptual quality
+        """
+        try:
+            from basicsr.archs.swinir_arch import SwinIR
+
+            logger.info(f"Initializing SwinIR model: {model_variant}")
+
+            # SwinIR-M (medium size) configuration for real-world SR
+            model = SwinIR(
+                upscale=4,
+                in_chans=3,
+                img_size=64,
+                window_size=8,
+                img_range=1.,
+                depths=[6, 6, 6, 6, 6, 6],
+                embed_dim=180,
+                num_heads=[6, 6, 6, 6, 6, 6],
+                mlp_ratio=2,
+                upsampler='pixelshuffle',
+                resi_connection='1conv'
+            )
+
+            # Model weights paths and download URLs
+            weights_dir = Path('weights')
+            weights_dir.mkdir(exist_ok=True)
+
+            if model_variant == 'SwinIR_4x_GAN':
+                model_path = weights_dir / '003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN.pth'
+                download_url = 'https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN.pth'
+            else:  # SwinIR_4x (PSNR-optimized)
+                model_path = weights_dir / '003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_PSNR.pth'
+                download_url = 'https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_PSNR.pth'
+
+            # Download weights if not present
+            if not model_path.exists():
+                logger.info(f"Downloading {model_variant} weights from {download_url}...")
+                import wget
+                wget.download(download_url, out=str(weights_dir))
+                logger.info(f"\n{model_variant} weights downloaded successfully!")
+
+            # Load weights
+            logger.info(f"Loading weights from {model_path}...")
+            pretrained_model = torch.load(str(model_path), map_location=self.device, weights_only=True)
+
+            # Handle different weight formats
+            if 'params_ema' in pretrained_model:
+                model.load_state_dict(pretrained_model['params_ema'], strict=True)
+            elif 'params' in pretrained_model:
+                model.load_state_dict(pretrained_model['params'], strict=True)
+            else:
+                model.load_state_dict(pretrained_model, strict=True)
+
+            # Move model to device and set to eval mode
+            model = model.to(self.device)
+            model.eval()
+
+            # Use FP16 for GPU inference
+            if self.device.type == 'cuda':
+                model = model.half()
+
+            self.swinir_model = model
+            self.current_sr_model = 'swinir'
+
+            logger.info(f"✓ SwinIR model ({model_variant}) loaded successfully!")
+            logger.info(f"  Architecture: SwinIR-M (6 RSTB blocks, 180 embed_dim)")
+            logger.info(f"  Window size: 8, Image size: 64")
+            logger.info(f"  Parameters: ~11.9M")
+
+        except ImportError as e:
+            logger.error(f"SwinIR dependencies not available: {e}")
+            logger.error("Install with: pip install basicsr")
+            logger.warning("Falling back to Real-ESRGAN...")
+            self.current_sr_model = None
+            self.setup_model()
+        except Exception as e:
+            logger.error(f"Failed to setup SwinIR: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            logger.warning("Falling back to Real-ESRGAN...")
+            self.current_sr_model = None
+            self.setup_model()
+
+    def _setup_hat(self, model_variant: str = 'HAT_4x'):
+        """
+        Setup HAT (Hybrid Attention Transformer) model for super-resolution.
+        HAT combines window attention and channel attention for state-of-the-art performance.
+
+        Args:
+            model_variant: 'HAT_4x' for standard, 'HAT_Large_4x' for larger model
+        """
+        try:
+            # HAT requires timm for some components
+            import timm
+
+            # Try to import HAT from basicsr (not included by default)
+            # If not available, try from local archs directory
+            try:
+                from basicsr.archs.hat_arch import HAT
+            except ImportError:
+                try:
+                    from app.archs.hat_arch import HAT
+                except ImportError:
+                    raise ImportError(
+                        "HAT architecture not found. Please install HAT manually:\n"
+                        "1. Clone https://github.com/XPixelGroup/HAT\n"
+                        "2. Copy hat/archs/hat_arch.py to src/backend/app/archs/\n"
+                        "Or use SwinIR which is available in basicsr."
+                    )
+
+            logger.info(f"Initializing HAT model: {model_variant}")
+
+            # HAT model configuration
+            if model_variant == 'HAT_Large_4x':
+                model = HAT(
+                    upscale=4,
+                    in_chans=3,
+                    img_size=64,
+                    window_size=16,
+                    compress_ratio=3,
+                    squeeze_factor=30,
+                    conv_scale=0.01,
+                    overlap_ratio=0.5,
+                    img_range=1.,
+                    depths=[6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],  # 12 blocks
+                    embed_dim=180,
+                    num_heads=[6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
+                    mlp_ratio=2,
+                    upsampler='pixelshuffle',
+                    resi_connection='1conv'
+                )
+                model_path = Path('weights') / 'HAT-L_SRx4_ImageNet-pretrain.pth'
+                download_info = "HAT-L (large) model"
+            else:  # HAT_4x
+                model = HAT(
+                    upscale=4,
+                    in_chans=3,
+                    img_size=64,
+                    window_size=16,
+                    compress_ratio=3,
+                    squeeze_factor=30,
+                    conv_scale=0.01,
+                    overlap_ratio=0.5,
+                    img_range=1.,
+                    depths=[6, 6, 6, 6, 6, 6],  # 6 blocks
+                    embed_dim=180,
+                    num_heads=[6, 6, 6, 6, 6, 6],
+                    mlp_ratio=2,
+                    upsampler='pixelshuffle',
+                    resi_connection='1conv'
+                )
+                model_path = Path('weights') / 'HAT_SRx4_ImageNet-pretrain.pth'
+                download_info = "HAT (standard) model"
+
+            weights_dir = Path('weights')
+            weights_dir.mkdir(exist_ok=True)
+
+            # Check if weights exist
+            if not model_path.exists():
+                logger.warning(f"{download_info} weights not found at {model_path}")
+                logger.warning("=" * 60)
+                logger.warning("HAT weights need to be downloaded manually:")
+                logger.warning("  1. Visit: https://github.com/XPixelGroup/HAT")
+                logger.warning("  2. Download weights from their releases or model zoo")
+                logger.warning("  3. Place in 'weights/' directory")
+                logger.warning("")
+                logger.warning("Trying to download from GitHub releases...")
+
+                # Try to download HAT weights
+                try:
+                    import wget
+                    # HAT weights are hosted on Google Drive, we'll need a direct link or mirror
+                    # For now, we'll use a placeholder and provide instructions
+                    download_url = f'https://github.com/XPixelGroup/HAT/releases/download/v0.0/{model_path.name}'
+                    logger.info(f"Attempting to download from {download_url}")
+                    wget.download(download_url, out=str(weights_dir))
+                    logger.info(f"\n{model_variant} weights downloaded!")
+                except Exception as download_error:
+                    logger.error(f"Failed to download HAT weights: {download_error}")
+                    logger.warning("Falling back to Real-ESRGAN...")
+                    self.setup_model()
+                    return
+
+            # Load weights
+            logger.info(f"Loading HAT weights from {model_path}...")
+            pretrained_model = torch.load(str(model_path), map_location=self.device, weights_only=True)
+
+            # Handle different weight formats
+            if 'params_ema' in pretrained_model:
+                model.load_state_dict(pretrained_model['params_ema'], strict=True)
+            elif 'params' in pretrained_model:
+                model.load_state_dict(pretrained_model['params'], strict=True)
+            else:
+                model.load_state_dict(pretrained_model, strict=True)
+
+            # Move to device and set eval mode
+            model = model.to(self.device)
+            model.eval()
+
+            # Use FP16 for GPU
+            if self.device.type == 'cuda':
+                model = model.half()
+
+            self.hat_model = model
+            self.current_sr_model = 'hat'
+
+            logger.info(f"✓ HAT model ({model_variant}) loaded successfully!")
+            logger.info(f"  Architecture: Hybrid Attention Transformer")
+            logger.info(f"  Window size: 16, Overlap ratio: 0.5")
+
+        except ImportError as e:
+            logger.error(f"HAT dependencies not available: {e}")
+            if 'timm' in str(e):
+                logger.error("Install with: pip install timm")
+            if 'hat_arch' in str(e):
+                logger.error("HAT architecture not found in basicsr")
+                logger.error("You may need to manually add HAT architecture from:")
+                logger.error("  https://github.com/XPixelGroup/HAT/tree/main/hat/archs")
+            logger.warning("Falling back to Real-ESRGAN...")
+            self.current_sr_model = None
+            self.setup_model()
+        except Exception as e:
+            logger.error(f"Failed to setup HAT: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            logger.warning("Falling back to Real-ESRGAN...")
+            self.current_sr_model = None
+            self.setup_model()
+
+    def _swinir_enhance(self, frame: np.ndarray, outscale: float = 4.0) -> np.ndarray:
+        """
+        Enhance frame using SwinIR model.
+
+        Args:
+            frame: Input BGR image
+            outscale: Output scale factor (max 4.0 for this model)
+
+        Returns:
+            Upscaled BGR image
+        """
+        if self.swinir_model is None:
+            raise RuntimeError("SwinIR model not initialized")
+
+        # Pad image to be divisible by window size (8)
+        window_size = 8
+        h, w = frame.shape[:2]
+
+        # Pad to multiple of window_size
+        pad_h = (window_size - h % window_size) % window_size
+        pad_w = (window_size - w % window_size) % window_size
+
+        if pad_h > 0 or pad_w > 0:
+            frame = cv2.copyMakeBorder(frame, 0, pad_h, 0, pad_w, cv2.BORDER_REFLECT_101)
+
+        # Convert BGR to RGB and normalize
+        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32) / 255.0
+
+        # Convert to tensor: HWC -> CHW -> BCHW
+        img_tensor = torch.from_numpy(np.transpose(img, (2, 0, 1))).unsqueeze(0)
+        img_tensor = img_tensor.to(self.device)
+
+        if self.device.type == 'cuda':
+            img_tensor = img_tensor.half()
+
+        # Inference
+        with torch.no_grad():
+            output = self.swinir_model(img_tensor)
+
+        # Convert back to numpy
+        output = output.squeeze(0).float().cpu().clamp_(0, 1).numpy()
+        output = np.transpose(output, (1, 2, 0))  # CHW -> HWC
+        output = (output * 255.0).round().astype(np.uint8)
+
+        # Convert RGB to BGR
+        output = cv2.cvtColor(output, cv2.COLOR_RGB2BGR)
+
+        # Remove padding from output (scaled by 4)
+        if pad_h > 0 or pad_w > 0:
+            output_h = h * 4
+            output_w = w * 4
+            output = output[:output_h, :output_w]
+
+        # Handle non-4x scales
+        if abs(outscale - 4.0) > 0.01:
+            target_h = int(h * outscale)
+            target_w = int(w * outscale)
+            output = cv2.resize(output, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
+
+        return output
+
+    def _hat_enhance(self, frame: np.ndarray, outscale: float = 4.0) -> np.ndarray:
+        """
+        Enhance frame using HAT model.
+
+        Args:
+            frame: Input BGR image
+            outscale: Output scale factor (max 4.0 for this model)
+
+        Returns:
+            Upscaled BGR image
+        """
+        if self.hat_model is None:
+            raise RuntimeError("HAT model not initialized")
+
+        # Pad image to be divisible by window size (16 for HAT)
+        window_size = 16
+        h, w = frame.shape[:2]
+
+        # Pad to multiple of window_size
+        pad_h = (window_size - h % window_size) % window_size
+        pad_w = (window_size - w % window_size) % window_size
+
+        if pad_h > 0 or pad_w > 0:
+            frame = cv2.copyMakeBorder(frame, 0, pad_h, 0, pad_w, cv2.BORDER_REFLECT_101)
+
+        # Convert BGR to RGB and normalize
+        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = img.astype(np.float32) / 255.0
+
+        # Convert to tensor
+        img_tensor = torch.from_numpy(np.transpose(img, (2, 0, 1))).unsqueeze(0)
+        img_tensor = img_tensor.to(self.device)
+
+        if self.device.type == 'cuda':
+            img_tensor = img_tensor.half()
+
+        # Inference
+        with torch.no_grad():
+            output = self.hat_model(img_tensor)
+
+        # Convert back to numpy
+        output = output.squeeze(0).float().cpu().clamp_(0, 1).numpy()
+        output = np.transpose(output, (1, 2, 0))
+        output = (output * 255.0).round().astype(np.uint8)
+
+        # Convert RGB to BGR
+        output = cv2.cvtColor(output, cv2.COLOR_RGB2BGR)
+
+        # Remove padding from output
+        if pad_h > 0 or pad_w > 0:
+            output_h = h * 4
+            output_w = w * 4
+            output = output[:output_h, :output_w]
+
+        # Handle non-4x scales
+        if abs(outscale - 4.0) > 0.01:
+            target_h = int(h * outscale)
+            target_w = int(w * outscale)
+            output = cv2.resize(output, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
+
+        return output
 
     def setup_diffusion_sr(self):
         """Setup Stable Diffusion upscaler for extreme cases"""
@@ -860,13 +1351,26 @@ class AIVideoUpscaler:
                 # Use multi-pass for extreme cases
                 enhanced = self.multi_pass_upscale(frame, desired_scale)
             else:
-                # Standard single-pass (capped at 4x)
+                # Standard single-pass - use appropriate model
                 capped_scale = min(desired_scale, 4.0)
-                with contextlib.redirect_stderr(open(os.devnull, 'w')):
-                    enhanced, _ = self.upsampler.enhance(frame, outscale=capped_scale)
+
+                # Route to appropriate model based on current_sr_model
+                if self.current_sr_model == 'swinir' and self.swinir_model is not None:
+                    logger.debug(f"Using SwinIR model for {capped_scale:.2f}x upscaling")
+                    enhanced = self._swinir_enhance(frame, outscale=capped_scale)
+                elif self.current_sr_model == 'hat' and self.hat_model is not None:
+                    logger.debug(f"Using HAT model for {capped_scale:.2f}x upscaling")
+                    enhanced = self._hat_enhance(frame, outscale=capped_scale)
+                elif self.upsampler is not None:
+                    # Default to Real-ESRGAN variants
+                    logger.debug(f"Using Real-ESRGAN model for {capped_scale:.2f}x upscaling")
+                    with contextlib.redirect_stderr(open(os.devnull, 'w')):
+                        enhanced, _ = self.upsampler.enhance(frame, outscale=capped_scale)
+                else:
+                    raise RuntimeError(f"No valid SR model available (current_sr_model={self.current_sr_model})")
 
             upscaled_h, upscaled_w = enhanced.shape[:2]
-            logger.debug(f"Real-ESRGAN upscaled to {upscaled_w}x{upscaled_h} (scale={desired_scale:.2f})")
+            logger.debug(f"AI model upscaled to {upscaled_w}x{upscaled_h} (scale={desired_scale:.2f})")
 
             # Track VRAM after upscaling (peak usage)
             self.update_peak_vram()

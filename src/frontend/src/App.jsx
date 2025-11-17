@@ -12,9 +12,14 @@ import { FileUpload } from './components/FileUpload';
 import AspectRatioSelector from './components/AspectRatioSelector';
 import ZoomControls from './components/ZoomControls';
 import ExportButton from './components/ExportButton';
+import CompareModelsButton from './components/CompareModelsButton';
 import DebugInfo from './components/DebugInfo';
 import { CropProvider } from './contexts/CropContext';
 import { HighlightProvider } from './contexts/HighlightContext';
+
+// Feature flags for experimental features
+// Set to true to enable model comparison UI (for A/B testing different AI models)
+const ENABLE_MODEL_COMPARISON = false;
 
 function App() {
   const [videoFile, setVideoFile] = useState(null);
@@ -846,6 +851,19 @@ function App() {
           {videoUrl && (
             <div className="mt-6">
               <ExportButton
+                videoFile={videoFile}
+                cropKeyframes={getFilteredKeyframesForExport}
+                highlightKeyframes={getFilteredHighlightKeyframesForExport}
+                segmentData={getSegmentExportData()}
+                disabled={!videoFile}
+              />
+            </div>
+          )}
+
+          {/* Model Comparison Button (for testing different AI models) */}
+          {ENABLE_MODEL_COMPARISON && videoUrl && (
+            <div className="mt-6">
+              <CompareModelsButton
                 videoFile={videoFile}
                 cropKeyframes={getFilteredKeyframesForExport}
                 highlightKeyframes={getFilteredHighlightKeyframesForExport}
