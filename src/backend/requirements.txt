@@ -26,3 +26,6 @@ gfpgan>=1.3.8             # GAN for face restoration (required by realesrgan)
 basicsr>=1.4.2            # BasicSR image/video restoration toolbox
 realesrgan>=0.3.0         # Real-ESRGAN AI upscaling
 wget>=3.2                 # Download model weights
+# Transformer-based SR model dependencies
+timm>=0.9.0               # PyTorch Image Models (for HAT and advanced architectures)
+einops>=0.7.0             # Tensor operations for transformers (used by SwinIR/HAT)
