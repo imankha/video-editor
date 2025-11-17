@@ -84,7 +84,7 @@ class AIVideoUpscaler:
     - Target resolution based on aspect ratio
     """
 
-    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False, enable_multipass: bool = True, custom_enhance_params: Optional[Dict] = None):
+    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False, enable_multipass: bool = True, custom_enhance_params: Optional[Dict] = None, pre_enhance_source: bool = False, pre_enhance_params: Optional[Dict] = None, tile_size: int = 0):
         """
         Initialize the AI upscaler
 
@@ -98,6 +98,9 @@ class AIVideoUpscaler:
             enable_diffusion_sr: Enable Stable Diffusion upscaler for extreme cases (default: False)
             enable_multipass: Enable multi-pass upscaling for >4x scales (default: True)
             custom_enhance_params: Custom enhancement parameters to override adaptive selection (default: None)
+            pre_enhance_source: Apply enhancement to source BEFORE Real-ESRGAN (default: False)
+            pre_enhance_params: Parameters for pre-enhancement (default: None)
+            tile_size: Tile size for Real-ESRGAN processing, 0=no tiling (default: 0)
         """
         # Detect available GPUs
         self.num_gpus = 0
@@ -109,6 +112,9 @@ class AIVideoUpscaler:
         self.enable_diffusion_sr = enable_diffusion_sr
         self.enable_multipass = enable_multipass
         self.custom_enhance_params = custom_enhance_params
+        self.pre_enhance_source = pre_enhance_source
+        self.pre_enhance_params = pre_enhance_params or {}
+        self.tile_size = tile_size
         self.diffusion_model = None
         self.peak_vram_mb = 0  # Track peak VRAM usage
 
@@ -201,7 +207,12 @@ class AIVideoUpscaler:
             # Determine optimal tile size based on device and export mode
             # Larger tiles = better quality (fewer seams) but more VRAM
             if self.device.type == 'cuda':
-                if self.export_mode == 'fast':
+                # Use custom tile_size if set, otherwise use defaults based on mode
+                if self.tile_size > 0:
+                    tile_size = self.tile_size
+                    tile_pad = 10
+                    logger.info(f"GPU detected: Using CUSTOM tiled processing ({tile_size}x{tile_size})")
+                elif self.export_mode == 'fast':
                     tile_size = 512  # Tiling for faster processing
                     tile_pad = 10
                     logger.info("GPU detected: Using tiled processing (512x512) for FAST mode")
@@ -791,6 +802,35 @@ class AIVideoUpscaler:
 
             # Get adaptive enhancement parameters based on scale factor
             enhance_params = self.get_adaptive_enhancement_params(overall_scale)
+
+            # PRE-ENHANCE SOURCE before Real-ESRGAN (if enabled)
+            # This enhances the input to give ESRGAN better data to work with
+            if self.pre_enhance_source and self.pre_enhance_params:
+                # Apply CLAHE to source if requested
+                if self.pre_enhance_params.get('apply_clahe', False):
+                    lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+                    l_channel, a_channel, b_channel = cv2.split(lab)
+                    clahe = cv2.createCLAHE(
+                        clipLimit=self.pre_enhance_params.get('clahe_clip_limit', 2.0),
+                        tileGridSize=self.pre_enhance_params.get('clahe_tile_size', (4, 4))
+                    )
+                    l_enhanced = clahe.apply(l_channel)
+                    lab_enhanced = cv2.merge([l_enhanced, a_channel, b_channel])
+                    frame = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2BGR)
+                    logger.debug(f"Pre-enhanced source with CLAHE (clip={self.pre_enhance_params.get('clahe_clip_limit', 2.0)})")
+
+                # Apply unsharp masking to source if requested
+                if self.pre_enhance_params.get('unsharp_weight', 1.0) != 1.0:
+                    gaussian = cv2.GaussianBlur(frame, (0, 0), self.pre_enhance_params.get('gaussian_sigma', 1.0))
+                    frame = cv2.addWeighted(
+                        frame,
+                        self.pre_enhance_params.get('unsharp_weight', 1.0),
+                        gaussian,
+                        self.pre_enhance_params.get('unsharp_blur_weight', 0.0),
+                        0
+                    )
+                    frame = np.clip(frame, 0, 255).astype(np.uint8)
+                    logger.debug(f"Pre-enhanced source with unsharp mask (weight={self.pre_enhance_params.get('unsharp_weight', 1.0)})")
 
             # Denoise before upscaling to prevent noise amplification (QUALITY mode only)
             # Skip if bilateral_d is 0 or negative (for raw output testing)

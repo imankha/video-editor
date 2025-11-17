@@ -1003,74 +1003,85 @@ async def export_with_upscale_comparison(
     # Each permutation tests a different combination of extreme upscaling features
     permutations = [
         {
-            'name': 'baseline',
-            'description': 'Standard Real-ESRGAN (single pass capped at 4x)',
-            'enable_source_preupscale': False,
-            'enable_diffusion_sr': False,
-            'enable_multipass': False,
-            'custom_enhance_params': None  # Use default adaptive params
-        },
-        {
             'name': 'raw_esrgan',
-            'description': 'Raw Real-ESRGAN output (no post-processing filters)',
+            'description': 'Pure Real-ESRGAN (winner from last test)',
             'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
             'enable_multipass': False,
+            'pre_enhance_source': False,
+            'tile_size': 0,  # No tiling
             'custom_enhance_params': {
-                'bilateral_d': 0,  # Skip bilateral
-                'bilateral_sigma_color': 0,
-                'bilateral_sigma_space': 0,
-                'unsharp_weight': 1.0,  # No sharpening
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
                 'unsharp_blur_weight': 0.0,
-                'gaussian_sigma': 1.0,
                 'apply_clahe': False,
-                'clahe_clip_limit': 3.0,
-                'clahe_tile_size': (8, 8),
                 'apply_detail_enhancement': False,
                 'apply_edge_enhancement': False,
                 'enhancement_level': 'none'
             }
         },
         {
-            'name': 'mild_sharpen',
-            'description': 'Gentle sharpening only (unsharp 1.3, no CLAHE)',
+            'name': 'pre_sharpen_source',
+            'description': 'Sharpen source BEFORE Real-ESRGAN (unsharp 1.5)',
             'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
             'enable_multipass': False,
-            'custom_enhance_params': {
-                'bilateral_d': 3,
-                'bilateral_sigma_color': 5,
-                'bilateral_sigma_space': 5,
-                'unsharp_weight': 1.3,
-                'unsharp_blur_weight': -0.3,
+            'pre_enhance_source': True,
+            'pre_enhance_params': {
+                'unsharp_weight': 1.5,
+                'unsharp_blur_weight': -0.5,
                 'gaussian_sigma': 1.0,
+            },
+            'tile_size': 0,
+            'custom_enhance_params': {
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
+                'unsharp_blur_weight': 0.0,
                 'apply_clahe': False,
-                'clahe_clip_limit': 3.0,
-                'clahe_tile_size': (8, 8),
                 'apply_detail_enhancement': False,
                 'apply_edge_enhancement': False,
-                'enhancement_level': 'mild'
+                'enhancement_level': 'none'
             }
         },
         {
-            'name': 'balanced',
-            'description': 'Balanced enhancement (mild CLAHE + moderate sharpen)',
+            'name': 'pre_contrast_source',
+            'description': 'Enhance contrast of source BEFORE Real-ESRGAN (CLAHE)',
             'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
             'enable_multipass': False,
-            'custom_enhance_params': {
-                'bilateral_d': 2,
-                'bilateral_sigma_color': 3,
-                'bilateral_sigma_space': 3,
-                'unsharp_weight': 1.4,
-                'unsharp_blur_weight': -0.4,
-                'gaussian_sigma': 1.2,
+            'pre_enhance_source': True,
+            'pre_enhance_params': {
                 'apply_clahe': True,
-                'clahe_clip_limit': 2.5,  # Milder than ULTRA's 4.5
-                'clahe_tile_size': (8, 8),
+                'clahe_clip_limit': 2.0,
+                'clahe_tile_size': (4, 4),  # Small tiles for 206x366 crop
+            },
+            'tile_size': 0,
+            'custom_enhance_params': {
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
+                'unsharp_blur_weight': 0.0,
+                'apply_clahe': False,
                 'apply_detail_enhancement': False,
                 'apply_edge_enhancement': False,
-                'enhancement_level': 'balanced'
+                'enhancement_level': 'none'
+            }
+        },
+        {
+            'name': 'tiled_400',
+            'description': 'Real-ESRGAN with 400px tile processing',
+            'enable_source_preupscale': False,
+            'enable_diffusion_sr': False,
+            'enable_multipass': False,
+            'pre_enhance_source': False,
+            'tile_size': 400,  # Process in 400px tiles
+            'custom_enhance_params': {
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
+                'unsharp_blur_weight': 0.0,
+                'apply_clahe': False,
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'none'
             }
         }
     ]
@@ -1131,7 +1142,10 @@ async def export_with_upscale_comparison(
                     enable_source_preupscale=perm['enable_source_preupscale'],
                     enable_diffusion_sr=perm['enable_diffusion_sr'],
                     enable_multipass=perm.get('enable_multipass', True),
-                    custom_enhance_params=perm.get('custom_enhance_params', None)
+                    custom_enhance_params=perm.get('custom_enhance_params', None),
+                    pre_enhance_source=perm.get('pre_enhance_source', False),
+                    pre_enhance_params=perm.get('pre_enhance_params', None),
+                    tile_size=perm.get('tile_size', 0)
                 )
 
                 if upscaler.upsampler is None:
