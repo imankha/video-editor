@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { timeToFrame, frameToTime } from '../utils/videoUtils';
+import { interpolateHighlightSpline } from '../utils/splineInterpolation';
 
 /**
  * Custom hook for managing highlight ellipse state and keyframes
@@ -213,62 +214,12 @@ export default function useHighlight(videoMetadata) {
   }, [framerate, highlightDuration]);
 
   /**
-   * Round to 3 decimal places
-   */
-  const round3 = (value) => Math.round(value * 1000) / 1000;
-
-  /**
    * Interpolate highlight values between keyframes for a given time
+   * Uses cubic spline (Catmull-Rom) interpolation for smooth animations
    */
   const interpolateHighlight = useCallback((time) => {
-    if (keyframes.length === 0) {
-      return null;
-    }
-
     const frame = timeToFrame(time, framerate);
-
-    if (keyframes.length === 1) {
-      return { ...keyframes[0], time };
-    }
-
-    // Find surrounding keyframes
-    let beforeKf = null;
-    let afterKf = null;
-
-    for (let i = 0; i < keyframes.length; i++) {
-      if (keyframes[i].frame <= frame) {
-        beforeKf = keyframes[i];
-      }
-      if (keyframes[i].frame > frame && !afterKf) {
-        afterKf = keyframes[i];
-        break;
-      }
-    }
-
-    if (!beforeKf) {
-      return { ...keyframes[0], time };
-    }
-
-    if (!afterKf) {
-      return { ...beforeKf, time };
-    }
-
-    // Linear interpolation
-    const frameDuration = afterKf.frame - beforeKf.frame;
-    const progress = (frame - beforeKf.frame) / frameDuration;
-
-    return {
-      time,
-      frame,
-      x: round3(beforeKf.x + (afterKf.x - beforeKf.x) * progress),
-      y: round3(beforeKf.y + (afterKf.y - beforeKf.y) * progress),
-      radiusX: round3(beforeKf.radiusX + (afterKf.radiusX - beforeKf.radiusX) * progress),
-      radiusY: round3(beforeKf.radiusY + (afterKf.radiusY - beforeKf.radiusY) * progress),
-      opacity: round3(beforeKf.opacity + (afterKf.opacity - beforeKf.opacity) * progress),
-      // Color interpolation - for now just use the before color
-      // Could implement HSL interpolation for smoother transitions
-      color: beforeKf.color
-    };
+    return interpolateHighlightSpline(keyframes, frame, time);
   }, [keyframes, framerate]);
 
   /**

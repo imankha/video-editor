@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { timeToFrame, frameToTime } from '../utils/videoUtils';
+import { interpolateCropSpline } from '../utils/splineInterpolation';
 
 /**
  * Custom hook for managing crop tool state and keyframes
@@ -263,63 +264,13 @@ export default function useCrop(videoMetadata) {
   }, [framerate]);
 
   /**
-   * Round to 3 decimal places for precision
-   */
-  const round3 = (value) => Math.round(value * 1000) / 1000;
-
-  /**
    * Interpolate crop values between keyframes for a given time
+   * Uses cubic spline (Catmull-Rom) interpolation for smooth animations
    * NOTE: This accepts time for API compatibility but converts to frames internally
    */
   const interpolateCrop = useCallback((time) => {
-    if (keyframes.length === 0) {
-      return null;
-    }
-
     const frame = timeToFrame(time, framerate);
-
-    // If only one keyframe, return it
-    if (keyframes.length === 1) {
-      return { ...keyframes[0], time };
-    }
-
-    // Find surrounding keyframes
-    let beforeKf = null;
-    let afterKf = null;
-
-    for (let i = 0; i < keyframes.length; i++) {
-      if (keyframes[i].frame <= frame) {
-        beforeKf = keyframes[i];
-      }
-      if (keyframes[i].frame > frame && !afterKf) {
-        afterKf = keyframes[i];
-        break;
-      }
-    }
-
-    // If before first keyframe, return first
-    if (!beforeKf) {
-      return { ...keyframes[0], time };
-    }
-
-    // If after last keyframe, return last
-    if (!afterKf) {
-      return { ...beforeKf, time };
-    }
-
-    // Linear interpolation between keyframes (based on frames)
-    // Round to 3 decimal places to maintain precision
-    const frameDuration = afterKf.frame - beforeKf.frame;
-    const progress = (frame - beforeKf.frame) / frameDuration;
-
-    return {
-      time,
-      frame,
-      x: round3(beforeKf.x + (afterKf.x - beforeKf.x) * progress),
-      y: round3(beforeKf.y + (afterKf.y - beforeKf.y) * progress),
-      width: round3(beforeKf.width + (afterKf.width - beforeKf.width) * progress),
-      height: round3(beforeKf.height + (afterKf.height - beforeKf.height) * progress)
-    };
+    return interpolateCropSpline(keyframes, frame, time);
   }, [keyframes, framerate]);
 
   /**
