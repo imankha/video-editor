@@ -999,14 +999,14 @@ async def export_with_upscale_comparison(
     comparison_dir = exports_dir / f"comparison_{timestamp}"
     comparison_dir.mkdir(exist_ok=True)
 
-    # Define permutations to test H.265 vs H.264 and file size optimization
-    # Since visual quality is similar, focus on file size and encoding speed tradeoffs
-    # H.265 (HEVC) = better compression, slower encode
-    # H.264 (AVC) = faster encode, larger files
+    # Define permutations to test different AI super-resolution models
+    # Focus on model quality comparison for extreme upscaling (5x+)
+    # Testing: Real-ESRGAN vs SwinIR vs HAT variants
     permutations = [
         {
-            'name': 'h264_fast_crf18',
-            'description': 'H.264 fast preset, CRF 18 (baseline winner)',
+            'name': 'realesrgan_x4plus',
+            'description': 'Real-ESRGAN x4plus (baseline, proven performer)',
+            'sr_model_name': 'RealESRGAN_x4plus',
             'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
             'enable_multipass': False,
@@ -1026,58 +1026,61 @@ async def export_with_upscale_comparison(
             }
         },
         {
-            'name': 'h265_fast_crf20',
-            'description': 'H.265 fast preset, CRF 20 (smaller files, H.265 CRF ~= H.264 CRF-6)',
-            'enable_source_preupscale': False,
-            'enable_diffusion_sr': False,
-            'enable_multipass': False,
-            'pre_enhance_source': False,
-            'tile_size': 0,
-            'ffmpeg_codec': 'libx265',
-            'ffmpeg_preset': 'fast',
-            'ffmpeg_crf': '20',
-            'custom_enhance_params': {
-                'bilateral_d': 0,
-                'unsharp_weight': 1.0,
-                'unsharp_blur_weight': 0.0,
-                'apply_clahe': False,
-                'apply_detail_enhancement': False,
-                'apply_edge_enhancement': False,
-                'enhancement_level': 'none'
-            }
-        },
-        {
-            'name': 'h265_medium_crf22',
-            'description': 'H.265 medium preset, CRF 22 (balance of size/speed)',
-            'enable_source_preupscale': False,
-            'enable_diffusion_sr': False,
-            'enable_multipass': False,
-            'pre_enhance_source': False,
-            'tile_size': 0,
-            'ffmpeg_codec': 'libx265',
-            'ffmpeg_preset': 'medium',
-            'ffmpeg_crf': '22',
-            'custom_enhance_params': {
-                'bilateral_d': 0,
-                'unsharp_weight': 1.0,
-                'unsharp_blur_weight': 0.0,
-                'apply_clahe': False,
-                'apply_detail_enhancement': False,
-                'apply_edge_enhancement': False,
-                'enhancement_level': 'none'
-            }
-        },
-        {
-            'name': 'h264_ultrafast_crf20',
-            'description': 'H.264 ultrafast preset, CRF 20 (maximum speed)',
+            'name': 'swinir_4x_gan',
+            'description': 'SwinIR-M x4 GAN (transformer-based, better global context)',
+            'sr_model_name': 'SwinIR_4x_GAN',
             'enable_source_preupscale': False,
             'enable_diffusion_sr': False,
             'enable_multipass': False,
             'pre_enhance_source': False,
             'tile_size': 0,
             'ffmpeg_codec': 'libx264',
-            'ffmpeg_preset': 'ultrafast',
-            'ffmpeg_crf': '20',
+            'ffmpeg_preset': 'fast',
+            'ffmpeg_crf': '18',
+            'custom_enhance_params': {
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
+                'unsharp_blur_weight': 0.0,
+                'apply_clahe': False,
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'none'
+            }
+        },
+        {
+            'name': 'realesr_general_x4v3',
+            'description': 'Real-ESRGAN General v3 (newer general model)',
+            'sr_model_name': 'realesr_general_x4v3',
+            'enable_source_preupscale': False,
+            'enable_diffusion_sr': False,
+            'enable_multipass': False,
+            'pre_enhance_source': False,
+            'tile_size': 0,
+            'ffmpeg_codec': 'libx264',
+            'ffmpeg_preset': 'fast',
+            'ffmpeg_crf': '18',
+            'custom_enhance_params': {
+                'bilateral_d': 0,
+                'unsharp_weight': 1.0,
+                'unsharp_blur_weight': 0.0,
+                'apply_clahe': False,
+                'apply_detail_enhancement': False,
+                'apply_edge_enhancement': False,
+                'enhancement_level': 'none'
+            }
+        },
+        {
+            'name': 'realesrgan_anime_6b',
+            'description': 'Real-ESRGAN x4plus Anime 6B (lighter model, different training)',
+            'sr_model_name': 'RealESRGAN_x4plus_anime_6B',
+            'enable_source_preupscale': False,
+            'enable_diffusion_sr': False,
+            'enable_multipass': False,
+            'pre_enhance_source': False,
+            'tile_size': 0,
+            'ffmpeg_codec': 'libx264',
+            'ffmpeg_preset': 'fast',
+            'ffmpeg_crf': '18',
             'custom_enhance_params': {
                 'bilateral_d': 0,
                 'unsharp_weight': 1.0,
@@ -1152,11 +1155,18 @@ async def export_with_upscale_comparison(
                     tile_size=perm.get('tile_size', 0),
                     ffmpeg_codec=perm.get('ffmpeg_codec', None),
                     ffmpeg_preset=perm.get('ffmpeg_preset', None),
-                    ffmpeg_crf=perm.get('ffmpeg_crf', None)
+                    ffmpeg_crf=perm.get('ffmpeg_crf', None),
+                    sr_model_name=perm.get('sr_model_name', 'RealESRGAN_x4plus')
                 )
 
-                if upscaler.upsampler is None:
-                    raise RuntimeError("Real-ESRGAN model failed to load")
+                # Check if model was loaded successfully
+                model_loaded = (
+                    upscaler.upsampler is not None or
+                    upscaler.swinir_model is not None or
+                    upscaler.hat_model is not None
+                )
+                if not model_loaded:
+                    raise RuntimeError(f"SR model '{perm.get('sr_model_name', 'RealESRGAN_x4plus')}' failed to load")
 
                 # Reset VRAM tracking for this permutation
                 upscaler.reset_peak_vram()
@@ -1217,10 +1227,11 @@ async def export_with_upscale_comparison(
                     'duration_seconds': duration,
                     'file_size_mb': file_size,
                     'peak_vram_mb': peak_vram,
-                    'resolution': result.get('target_resolution', (0, 0))
+                    'resolution': result.get('target_resolution', (0, 0)),
+                    'sr_model_name': perm.get('sr_model_name', 'RealESRGAN_x4plus')
                 })
 
-                logger.info(f"✓ {perm_name} completed in {duration:.2f}s, size: {file_size:.2f}MB, peak VRAM: {peak_vram:.1f}MB")
+                logger.info(f"✓ {perm_name} (model: {perm.get('sr_model_name', 'RealESRGAN_x4plus')}) completed in {duration:.2f}s, size: {file_size:.2f}MB, peak VRAM: {peak_vram:.1f}MB")
 
             except Exception as e:
                 logger.error(f"✗ {perm_name} failed: {str(e)}")
