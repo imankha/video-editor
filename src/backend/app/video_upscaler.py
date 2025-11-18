@@ -131,6 +131,8 @@ class AIVideoUpscaler:
         elif self.enable_diffusion_sr and not DIFFUSION_SR_AVAILABLE:
             logger.warning("Diffusion SR requested but diffusers package not installed")
             logger.warning("To install: pip install diffusers transformers accelerate")
+
+    def detect_aspect_ratio(self, width: int, height: int) -> Tuple[str, Tuple[int, int]]:
         """Wrapper for utils.detect_aspect_ratio - kept for backward compatibility"""
         return detect_aspect_ratio(width, height)
 
@@ -139,20 +141,16 @@ class AIVideoUpscaler:
         return enhance_frame_opencv(frame, target_size)
 
     def update_peak_vram(self):
-        """Update peak VRAM usage tracking"""
-        if self.device.type == 'cuda' and torch.cuda.is_available():
-            current_vram = torch.cuda.memory_allocated() / (1024 * 1024)  # MB
-            self.peak_vram_mb = max(self.peak_vram_mb, current_vram)
+        """Update peak VRAM usage tracking - delegates to ModelManager"""
+        self.model_manager.update_peak_vram()
 
     def get_peak_vram_mb(self) -> float:
-        """Get peak VRAM usage in MB"""
-        return self.peak_vram_mb
+        """Get peak VRAM usage in MB - delegates to ModelManager"""
+        return self.model_manager.get_peak_vram_mb()
 
     def reset_peak_vram(self):
-        """Reset peak VRAM tracking"""
-        self.peak_vram_mb = 0
-        if self.device.type == 'cuda' and torch.cuda.is_available():
-            torch.cuda.reset_peak_memory_stats()
+        """Reset peak VRAM tracking - delegates to ModelManager"""
+        self.model_manager.reset_peak_vram()
 
     def get_adaptive_enhancement_params(self, scale_factor: float) -> Dict:
         """
@@ -506,17 +504,15 @@ class AIVideoUpscaler:
 
     def get_upsampler_for_gpu(self, gpu_id: int):
         """
-        Get the upsampler instance for a specific GPU
+        Get the upsampler instance for a specific GPU - delegates to ModelManager
 
         Args:
             gpu_id: GPU device ID
 
         Returns:
-            RealESRGANer instance for the specified GPU
+            Model backend for the specified GPU
         """
-        if self.num_gpus > 1 and self.enable_multi_gpu and gpu_id in self.upsamplers:
-            return self.upsamplers[gpu_id]
-        return self.upsampler
+        return self.model_manager.get_backend_for_gpu(gpu_id)
 
     def pre_upscale_source_frame(self, frame: np.ndarray, crop: Dict, scale: float = 2.0) -> Tuple[np.ndarray, Dict]:
         """
