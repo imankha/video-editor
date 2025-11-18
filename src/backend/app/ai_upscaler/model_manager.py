@@ -17,6 +17,7 @@ Architecture:
 import torch
 import logging
 import os
+import traceback
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, Tuple
 import numpy as np
@@ -464,8 +465,12 @@ class ModelManager:
                 half=half_precision
             )
         except Exception as e:
+            logger.error("=" * 80)
             logger.error(f"Failed to setup primary backend: {e}")
+            logger.error("Full traceback:")
+            logger.error(traceback.format_exc())
             logger.error("Falling back to OpenCV-based upscaling")
+            logger.error("=" * 80)
             self.backend = None
 
     def _setup_multi_gpu_backends(self):
@@ -486,6 +491,7 @@ class ModelManager:
                 logger.info(f"  ✓ GPU {gpu_id} model loaded")
             except Exception as e:
                 logger.error(f"Failed to setup backend for GPU {gpu_id}: {e}")
+                logger.error(traceback.format_exc())
 
     def get_backend_for_gpu(self, gpu_id: int) -> Optional[BaseModelBackend]:
         """Get model backend for specific GPU"""
