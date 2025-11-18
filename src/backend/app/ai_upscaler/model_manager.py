@@ -65,6 +65,7 @@ class RealESRGANBackend(BaseModelBackend):
         """Setup Real-ESRGAN model"""
         try:
             from basicsr.archs.rrdbnet_arch import RRDBNet
+            from realesrgan.archs.srvgg_arch import SRVGGNetCompact
             from realesrgan import RealESRGANer
 
             logger.info(f"Initializing Real-ESRGAN model: {self.model_variant}")
@@ -82,12 +83,12 @@ class RealESRGANBackend(BaseModelBackend):
                     'path': 'weights/RealESRGAN_x4plus_anime_6B.pth'
                 },
                 'realesr-general-x4v3': {
-                    'model': RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4),
+                    'model': SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu'),
                     'url': 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth',
                     'path': 'weights/realesr-general-x4v3.pth'
                 },
                 'realesr_general_x4v3': {  # Alias with underscores
-                    'model': RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4),
+                    'model': SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu'),
                     'url': 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth',
                     'path': 'weights/realesr-general-x4v3.pth'
                 }
