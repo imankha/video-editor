@@ -241,7 +241,8 @@ class AIVideoUpscaler:
         total_frames: int,
         original_fps: float,
         frames_dir: Path,
-        progress_callback=None
+        progress_callback=None,
+        start_frame: int = 0
     ) -> int:
         """
         Process video using RealBasicVSR temporal super-resolution
@@ -250,10 +251,11 @@ class AIVideoUpscaler:
             input_path: Path to input video
             keyframes_sorted: Sorted list of keyframes
             target_resolution: Target (width, height)
-            total_frames: Total number of frames
+            total_frames: Total number of frames to process
             original_fps: Original video FPS
             frames_dir: Directory to save enhanced frames
             progress_callback: Optional progress callback
+            start_frame: Starting frame index in source video (for trim optimization)
 
         Returns:
             Number of successfully processed frames
@@ -269,27 +271,31 @@ class AIVideoUpscaler:
         logger.info("REALBASICVSR SEQUENCE PROCESSING")
         logger.info("=" * 60)
         logger.info(f"Step 1: Extracting and cropping {total_frames} frames...")
+        if start_frame > 0:
+            logger.info(f"Trim optimization: Starting from frame {start_frame}")
 
         # Step 1: Extract and crop all frames (no SR yet)
-        for frame_idx in range(total_frames):
-            time = frame_idx / original_fps
+        # Process only frames in trim range
+        for output_frame_idx in range(total_frames):
+            source_frame_idx = start_frame + output_frame_idx
+            time = source_frame_idx / original_fps
             crop = self.interpolate_crop(keyframes_sorted, time)
 
-            frame = self.extract_frame_with_crop(input_path, frame_idx, crop)
+            frame = self.extract_frame_with_crop(input_path, source_frame_idx, crop)
 
-            # Save cropped frame
-            frame_path = cropped_dir / f"frame_{frame_idx:06d}.png"
+            # Save cropped frame with sequential numbering
+            frame_path = cropped_dir / f"frame_{output_frame_idx:06d}.png"
             cv2.imwrite(str(frame_path), frame)
 
-            if progress_callback and frame_idx % 10 == 0:
+            if progress_callback and output_frame_idx % 10 == 0:
                 progress_callback(
-                    frame_idx + 1,
+                    output_frame_idx + 1,
                     total_frames * 2,  # Account for both cropping and upscaling phases
-                    f"Cropping frame {frame_idx + 1}/{total_frames}",
+                    f"Cropping frame {output_frame_idx + 1}/{total_frames}",
                     phase='crop'
                 )
 
-            if frame_idx == 0:
+            if output_frame_idx == 0:
                 cropped_h, cropped_w = frame.shape[:2]
                 logger.info(f"✓ Cropped frame size: {cropped_w}x{cropped_h}")
 
@@ -424,15 +430,27 @@ class AIVideoUpscaler:
         """
         # Get video info
         cap = cv2.VideoCapture(input_path)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        video_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         original_fps = cap.get(cv2.CAP_PROP_FPS)
         original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        duration = total_frames / original_fps
+        duration = video_total_frames / original_fps
         cap.release()
 
         # Store original video size for highlight rendering
         original_video_size = (original_width, original_height)
+
+        # Calculate which frames to process based on trim range
+        # This optimization avoids upscaling frames that get thrown away during encoding!
+        if segment_data and 'trim_start' in segment_data:
+            start_frame = int(segment_data['trim_start'] * original_fps)
+            end_frame = int(segment_data.get('trim_end', duration) * original_fps)
+            total_frames = end_frame - start_frame
+            logger.info(f"Trim optimization: Processing only frames {start_frame}-{end_frame} ({total_frames} frames)")
+            logger.info(f"Skipping {start_frame + (video_total_frames - end_frame)} frames that would be discarded!")
+        else:
+            start_frame = 0
+            total_frames = video_total_frames
 
         logger.info(f"Processing {total_frames} frames @ {original_fps} fps")
         logger.info(f"Original video dimensions: {original_width}x{original_height}")
@@ -539,7 +557,7 @@ class AIVideoUpscaler:
             logger.info("=" * 60)
             logger.info("INTERPOLATION TEST (sample frames)")
             logger.info("=" * 60)
-            test_frames = [0, int(total_frames * 0.25), int(total_frames * 0.5), int(total_frames * 0.75), total_frames - 1]
+            test_frames = [start_frame, start_frame + int(total_frames * 0.25), start_frame + int(total_frames * 0.5), start_frame + int(total_frames * 0.75), start_frame + total_frames - 1]
             for test_idx in test_frames:
                 test_time = test_idx / original_fps
                 test_crop = self.interpolate_crop(keyframes_sorted, test_time)
@@ -574,7 +592,8 @@ class AIVideoUpscaler:
                     total_frames,
                     original_fps,
                     frames_dir,
-                    progress_callback
+                    progress_callback,
+                    start_frame=start_frame
                 )
                 failed_frames = []
             else:
@@ -582,8 +601,11 @@ class AIVideoUpscaler:
                 logger.info("Using Real-ESRGAN frame-by-frame super-resolution backend")
 
                 # Prepare frame processing tasks
+                # Process only frames in trim range: start_frame to (start_frame + total_frames)
                 frame_tasks = []
-                for frame_idx in range(total_frames):
+                for output_frame_idx in range(total_frames):
+                    # Actual frame index in the source video
+                    frame_idx = start_frame + output_frame_idx
                     time = frame_idx / original_fps
                     crop = self.interpolate_crop(keyframes_sorted, time)
 
@@ -593,9 +615,10 @@ class AIVideoUpscaler:
                         highlight = self.interpolate_highlight(highlight_keyframes, time)
 
                     # Assign GPU in round-robin fashion
-                    gpu_id = frame_idx % num_workers if use_multi_gpu else 0
+                    gpu_id = output_frame_idx % num_workers if use_multi_gpu else 0
 
-                    frame_tasks.append((frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size))
+                    # Store task with both indices: (output_idx, source_frame_idx, ...)
+                    frame_tasks.append((output_frame_idx, frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size))
 
                 # Track progress
                 completed_frames = 0
@@ -658,21 +681,23 @@ class AIVideoUpscaler:
                     # Sequential processing (single GPU or CPU)
                     logger.info(f"Processing {total_frames} frames sequentially...")
 
-                    for frame_idx in range(total_frames):
-                        time = frame_idx / original_fps
+                    for output_frame_idx in range(total_frames):
+                        # Actual frame index in the source video
+                        source_frame_idx = start_frame + output_frame_idx
+                        time = source_frame_idx / original_fps
                         crop = self.interpolate_crop(keyframes_sorted, time)
 
                         # Log crop info for first and key frames
-                        if frame_idx == 0 or frame_idx % 30 == 0:
-                            logger.info(f"Frame {frame_idx} @ {time:.2f}s: crop={int(crop['width'])}x{int(crop['height'])} at ({int(crop['x'])}, {int(crop['y'])})")
+                        if output_frame_idx == 0 or output_frame_idx % 30 == 0:
+                            logger.info(f"Frame {source_frame_idx} (output {output_frame_idx}) @ {time:.2f}s: crop={int(crop['width'])}x{int(crop['height'])} at ({int(crop['x'])}, {int(crop['y'])})")
 
                         try:
-                            # Extract and crop frame
-                            frame = self.extract_frame_with_crop(input_path, frame_idx, crop)
+                            # Extract and crop frame from source video
+                            frame = self.extract_frame_with_crop(input_path, source_frame_idx, crop)
 
                             # Verify frame was cropped
                             cropped_h, cropped_w = frame.shape[:2]
-                            if frame_idx == 0:
+                            if output_frame_idx == 0:
                                 logger.info(f"✓ De-zoomed frame size: {cropped_w}x{cropped_h}")
 
                             # Apply highlight overlay if keyframes are provided
@@ -680,9 +705,9 @@ class AIVideoUpscaler:
                                 highlight = self.interpolate_highlight(highlight_keyframes, time)
                                 if highlight is not None:
                                     frame = self.render_highlight_on_frame(frame, highlight, original_video_size, crop)
-                                    if frame_idx == 0:
+                                    if output_frame_idx == 0:
                                         logger.info(f"✓ Highlight overlay applied at ({highlight['x']:.1f}%, {highlight['y']:.1f}%)")
-                                elif frame_idx == 0:
+                                elif output_frame_idx == 0:
                                     logger.info("No highlight for first frame (time is after last keyframe)")
 
                             # AI upscale to target resolution
@@ -690,13 +715,13 @@ class AIVideoUpscaler:
 
                             # Verify upscaling worked
                             final_h, final_w = enhanced.shape[:2]
-                            if frame_idx == 0:
+                            if output_frame_idx == 0:
                                 logger.info(f"✓ Final upscaled size: {final_w}x{final_h}")
                                 if (final_w, final_h) != target_resolution:
                                     logger.error(f"⚠ Size mismatch! Expected {target_resolution}, got ({final_w}, {final_h})")
 
-                            # Save enhanced frame
-                            frame_path = frames_dir / f"frame_{frame_idx:06d}.png"
+                            # Save enhanced frame with sequential numbering (0, 1, 2, ...)
+                            frame_path = frames_dir / f"frame_{output_frame_idx:06d}.png"
                             cv2.imwrite(str(frame_path), enhanced)
 
                             completed_frames += 1
@@ -706,12 +731,12 @@ class AIVideoUpscaler:
                                 progress_callback(completed_frames, total_frames, f"Upscaling frame {completed_frames}/{total_frames}", phase='ai_upscale')
 
                             # Periodic GPU cleanup
-                            if frame_idx % 10 == 0 and torch.cuda.is_available():
+                            if output_frame_idx % 10 == 0 and torch.cuda.is_available():
                                 torch.cuda.empty_cache()
 
                         except Exception as e:
-                            logger.error(f"Failed to process frame {frame_idx}: {e}")
-                            failed_frames.append(frame_idx)
+                            logger.error(f"Failed to process frame {source_frame_idx} (output {output_frame_idx}): {e}")
+                            failed_frames.append(output_frame_idx)
 
             # Report any failures
             if failed_frames:
