@@ -194,7 +194,9 @@ function App() {
   // Only show highlight when current time is within the highlight duration
   const currentHighlightState = useMemo(() => {
     // Don't show highlight if current time is past the highlight duration
-    if (currentTime > highlightDuration) {
+    // Add small tolerance (~1 frame at 30fps) to handle floating point precision
+    const TOLERANCE = 0.033;
+    if (currentTime > highlightDuration + TOLERANCE) {
       return null;
     }
 
@@ -577,6 +579,8 @@ function App() {
   // Handle highlight duration change
   const handleHighlightDurationChange = (newDuration) => {
     updateHighlightDuration(newDuration, duration);
+    // Sync playhead to the new duration position
+    seek(newDuration);
   };
 
   // Prepare crop context value
