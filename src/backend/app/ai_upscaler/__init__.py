@@ -8,5 +8,6 @@ from . import utils
 from .video_encoder import VideoEncoder
 from .keyframe_interpolator import KeyframeInterpolator
 from .model_manager import ModelManager
+from .frame_enhancer import FrameEnhancer
 
-__all__ = ['utils', 'VideoEncoder', 'KeyframeInterpolator', 'ModelManager']
+__all__ = ['utils', 'VideoEncoder', 'KeyframeInterpolator', 'ModelManager', 'FrameEnhancer']
