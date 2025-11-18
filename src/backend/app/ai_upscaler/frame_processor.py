@@ -101,18 +101,30 @@ class FrameProcessor:
 
     def process_single_frame(
         self,
-        frame_data: Tuple[int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int]]
+        frame_data: Tuple[int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int]] | Tuple[int, int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int]]
     ) -> Tuple[int, np.ndarray, bool]:
         """
         Process a single frame with AI upscaling on a specific GPU
 
         Args:
             frame_data: Tuple of (frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size)
+                        OR (output_frame_idx, source_frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size)
+                        The second form is used when processing a trim range - output_frame_idx is used for saving,
+                        source_frame_idx is used for extraction.
 
         Returns:
-            Tuple of (frame_idx, enhanced_frame, success)
+            Tuple of (output_frame_idx, enhanced_frame, success)
         """
-        frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size = frame_data
+        # Support both old and new tuple formats for backward compatibility
+        if len(frame_data) == 9:
+            # New format with separate output and source indices (for trim optimization)
+            output_frame_idx, source_frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size = frame_data
+            frame_idx = source_frame_idx  # Use source index for extraction
+            result_idx = output_frame_idx  # Use output index for saving
+        else:
+            # Old format (backward compatible)
+            frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size = frame_data
+            result_idx = frame_idx  # Same index for both
 
         try:
             # Calculate scale factor to determine if pre-upscaling helps
@@ -196,8 +208,8 @@ class FrameProcessor:
             if frame_idx % 30 == 0:
                 logger.info(f"GPU {gpu_id}: Processed frame {frame_idx} @ {time:.2f}s")
 
-            return (frame_idx, enhanced, True)
+            return (result_idx, enhanced, True)
 
         except Exception as e:
             logger.error(f"GPU {gpu_id}: Failed to process frame {frame_idx}: {e}")
-            return (frame_idx, None, False)
+            return (result_idx, None, False)
