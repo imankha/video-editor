@@ -23,6 +23,7 @@ from app.ai_upscaler import utils
 from app.ai_upscaler.utils import setup_torchvision_compatibility, detect_aspect_ratio, enhance_frame_opencv
 from app.ai_upscaler.video_encoder import VideoEncoder
 from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
+from app.ai_upscaler.model_manager import ModelManager
 
 # Try to import diffusion SR model
 try:
