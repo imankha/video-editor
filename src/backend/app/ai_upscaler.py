@@ -2354,6 +2354,46 @@ class AIVideoUpscaler:
             return int(match.group(1))
         return None
 
+    def build_atempo_filter(self, speed: float) -> str:
+        """
+        Build atempo filter chain for audio speed adjustment.
+        FFmpeg's atempo only supports 0.5-2.0 range, so we chain multiple filters for extreme speeds.
+
+        Args:
+            speed: Target speed multiplier (e.g., 0.5 for half speed, 2.0 for double speed)
+
+        Returns:
+            String containing chained atempo filters (e.g., "atempo=2.0,atempo=2.0" for 4x speed)
+        """
+        if speed == 1.0:
+            return ""  # No filter needed for normal speed
+
+        if 0.5 <= speed <= 2.0:
+            return f"atempo={speed}"
+
+        # For speeds outside 0.5-2.0 range, chain multiple atempo filters
+        filters = []
+        remaining_speed = speed
+
+        if speed > 2.0:
+            # Chain multiple 2.0x filters
+            while remaining_speed > 2.0:
+                filters.append("atempo=2.0")
+                remaining_speed /= 2.0
+            # Apply remaining speed if it's not exactly 1.0
+            if remaining_speed > 1.0:
+                filters.append(f"atempo={remaining_speed}")
+        else:  # speed < 0.5
+            # Chain multiple 0.5x filters
+            while remaining_speed < 0.5:
+                filters.append("atempo=0.5")
+                remaining_speed /= 0.5
+            # Apply remaining speed if it's not exactly 1.0
+            if remaining_speed < 1.0:
+                filters.append(f"atempo={remaining_speed}")
+
+        return ','.join(filters)
+
     def create_video_from_frames(
         self,
         frames_dir: Path,
@@ -2431,7 +2471,9 @@ class AIVideoUpscaler:
             if segments:
                 # Build complex filtergraph for segment-based speed changes
                 filter_parts = []
+                audio_filter_parts = []
                 output_labels = []
+                audio_output_labels = []
                 expected_output_frames = 0
 
                 for i, seg in enumerate(segments):
@@ -2448,6 +2490,7 @@ class AIVideoUpscaler:
                         logger.info(f"Segment {i}: {start_time:.2f}s-{end_time:.2f}s @ 0.5x speed")
                         logger.info(f"  → Input frames: {segment_input_frames}, Output frames (2x): {segment_input_frames * 2}")
                         logger.info(f"  → Using minterpolate with motion compensation")
+                        logger.info(f"  → Applying atempo=0.5 to audio for slow motion")
 
                         # Trim, reset PTS, interpolate to double FPS
                         filter_parts.append(
@@ -2455,8 +2498,17 @@ class AIVideoUpscaler:
                             f"minterpolate=fps={fps*2}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none,"
                             f"setpts=PTS*2[v{i}]"
                         )
+
+                        # Audio: trim and slow down with atempo=0.5
+                        atempo_filter = self.build_atempo_filter(speed)
+                        audio_filter_parts.append(
+                            f"[1:a]atrim=start={start_time}:end={end_time},asetpts=PTS-STARTPTS,"
+                            f"{atempo_filter}[a{i}]"
+                        )
+
                         expected_output_frames += segment_input_frames * 2
                         output_labels.append(f"[v{i}]")
+                        audio_output_labels.append(f"[a{i}]")
                     else:
                         # For other speeds or normal: trim and optionally adjust PTS
                         logger.info(f"Segment {i}: {start_time:.2f}s-{end_time:.2f}s @ {speed}x speed")
@@ -2465,12 +2517,32 @@ class AIVideoUpscaler:
                         filter_parts.append(
                             f"[0:v]trim=start={start_time}:end={end_time},setpts=PTS-STARTPTS[v{i}]"
                         )
+
+                        # Audio: build atempo filter for speed adjustment
+                        atempo_filter = self.build_atempo_filter(speed)
+                        if atempo_filter:
+                            logger.info(f"  → Applying {atempo_filter} to audio")
+                            audio_filter_parts.append(
+                                f"[1:a]atrim=start={start_time}:end={end_time},asetpts=PTS-STARTPTS,"
+                                f"{atempo_filter}[a{i}]"
+                            )
+                        else:
+                            # No atempo needed for 1.0x speed
+                            audio_filter_parts.append(
+                                f"[1:a]atrim=start={start_time}:end={end_time},asetpts=PTS-STARTPTS[a{i}]"
+                            )
+
                         expected_output_frames += segment_input_frames
                         output_labels.append(f"[v{i}]")
+                        audio_output_labels.append(f"[a{i}]")
 
-                # Concatenate all segments
+                # Concatenate all video segments
                 concat_inputs = ''.join(output_labels)
                 concat_filter = f'{concat_inputs}concat=n={len(segments)}:v=1:a=0'
+
+                # Concatenate all audio segments
+                audio_concat_inputs = ''.join(audio_output_labels)
+                audio_concat_filter = f'{audio_concat_inputs}concat=n={len(segments)}:v=0:a=1'
 
                 # Apply frame interpolation after concatenation if needed
                 if needs_interpolation:
@@ -2478,11 +2550,17 @@ class AIVideoUpscaler:
                     logger.info("APPLYING FRAME INTERPOLATION AFTER SEGMENT PROCESSING")
                     logger.info("=" * 60)
                     logger.info(f"Interpolating concatenated segments from {original_fps}fps to {fps}fps")
-                    filter_complex = ';'.join(filter_parts) + f';{concat_filter}[concat];[concat]minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none[outv]'
+
+                    # Combine video and audio filters
+                    all_filters = ';'.join(filter_parts + audio_filter_parts)
+                    filter_complex = f'{all_filters};{concat_filter}[concat];[concat]minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none[outv];{audio_concat_filter}[outa]'
+
                     expected_output_frames = int(expected_output_frames * interpolation_ratio)
                     logger.info(f"Expected output frames after interpolation: {expected_output_frames}")
                 else:
-                    filter_complex = ';'.join(filter_parts) + f';{concat_filter}[outv]'
+                    # Combine video and audio filters
+                    all_filters = ';'.join(filter_parts + audio_filter_parts)
+                    filter_complex = f'{all_filters};{concat_filter}[outv];{audio_concat_filter}[outa]'
 
                 logger.info(f"Expected output frames: {expected_output_frames}")
                 logger.info(f"Filter complex: {filter_complex}")
@@ -2567,7 +2645,12 @@ class AIVideoUpscaler:
 
             # Add filter_complex for segment processing or simple trim filter
             if filter_complex:
-                cmd_pass1.extend(['-filter_complex', filter_complex, '-map', '[outv]', '-map', '1:a?'])
+                cmd_pass1.extend(['-filter_complex', filter_complex, '-map', '[outv]'])
+                # Map audio from filter_complex if it has audio output, otherwise map original audio
+                if '[outa]' in filter_complex:
+                    cmd_pass1.extend(['-map', '[outa]'])
+                else:
+                    cmd_pass1.extend(['-map', '1:a?'])
             elif trim_filter:
                 cmd_pass1.extend(['-vf', trim_filter, '-map', '0:v', '-map', '1:a?'])
             else:
@@ -2665,7 +2748,11 @@ class AIVideoUpscaler:
         if filter_complex:
             cmd_pass2.extend(['-filter_complex', filter_complex, '-map', '[outv]'])
             if include_audio:
-                cmd_pass2.extend(['-map', '1:a?'])
+                # Map audio from filter_complex if it has audio output, otherwise map original audio
+                if '[outa]' in filter_complex:
+                    cmd_pass2.extend(['-map', '[outa]'])
+                else:
+                    cmd_pass2.extend(['-map', '1:a?'])
         elif trim_filter:
             cmd_pass2.extend(['-vf', trim_filter, '-map', '0:v'])
             if include_audio:
