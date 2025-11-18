@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # if dependencies aren't installed
 AIVideoUpscaler = None
 try:
-    from app.video_upscaler import AIVideoUpscaler as _AIVideoUpscaler
+    from app.ai_upscaler import AIVideoUpscaler as _AIVideoUpscaler
     AIVideoUpscaler = _AIVideoUpscaler
     logger.info("AI upscaler module loaded successfully")
 except ImportError as e:

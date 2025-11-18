@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # We'll import the actual module, but mock heavy dependencies
 with patch('torch.cuda.is_available', return_value=False):
-    from app.video_upscaler import AIVideoUpscaler
+    from app.ai_upscaler import AIVideoUpscaler
 
 
 class TestUtilityFunctions:
