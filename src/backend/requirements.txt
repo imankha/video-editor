@@ -29,3 +29,8 @@ wget>=3.2                 # Download model weights
 # Transformer-based SR model dependencies
 timm>=0.9.0               # PyTorch Image Models (for HAT and advanced architectures)
 einops>=0.7.0             # Tensor operations for transformers (used by SwinIR/HAT)
+
+# Testing Dependencies
+pytest>=7.4.0             # Testing framework
+pytest-mock>=3.12.0       # Mocking support for pytest
+pytest-cov>=4.1.0         # Test coverage reporting

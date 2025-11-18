@@ -18,6 +18,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from datetime import datetime
 
+# Import utilities
+from app.ai_upscaler import utils
+from app.ai_upscaler.utils import setup_torchvision_compatibility, detect_aspect_ratio, enhance_frame_opencv
+from app.ai_upscaler.video_encoder import VideoEncoder
+from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
+
 # Try to import diffusion SR model
 try:
     from diffusers import StableDiffusionUpscalePipeline
@@ -25,47 +31,8 @@ try:
 except ImportError:
     DIFFUSION_SR_AVAILABLE = False
 
-# ============================================================================
-# COMPATIBILITY SHIM: Fix for torchvision.transforms.functional_tensor removal
-# In torchvision >= 0.16.0, functional_tensor was merged into functional
-# BasicSR/Real-ESRGAN may still try to import from the old location
-# ============================================================================
-import sys
-import types
-
-# Check if the module already exists (either real or previously shimmed)
-if 'torchvision.transforms.functional_tensor' not in sys.modules:
-    try:
-        import torchvision.transforms.functional_tensor
-    except ImportError:
-        # Create a compatibility shim for the removed module
-        # First ensure torchvision.transforms is loaded
-        import torchvision.transforms
-        import torchvision.transforms.functional as F
-
-        # Create fake module that redirects to functional
-        functional_tensor = types.ModuleType('torchvision.transforms.functional_tensor')
-        functional_tensor.__file__ = F.__file__
-        functional_tensor.__package__ = 'torchvision.transforms'
-
-        # Copy all attributes from functional to functional_tensor
-        for attr in dir(F):
-            if not attr.startswith('_'):
-                try:
-                    setattr(functional_tensor, attr, getattr(F, attr))
-                except Exception:
-                    pass
-
-        # Register the shim module in sys.modules
-        sys.modules['torchvision.transforms.functional_tensor'] = functional_tensor
-
-        # Also add it as an attribute of torchvision.transforms so that
-        # "from torchvision.transforms import functional_tensor" works
-        torchvision.transforms.functional_tensor = functional_tensor
-
-        logging.getLogger(__name__).info(
-            "Applied torchvision.transforms.functional_tensor compatibility shim for Real-ESRGAN"
-        )
+# Setup torchvision compatibility
+setup_torchvision_compatibility()
 
 # Configure logging
 logging.getLogger('basicsr').setLevel(logging.CRITICAL)
@@ -131,6 +98,13 @@ class AIVideoUpscaler:
         self.ffmpeg_crf = ffmpeg_crf
         self.diffusion_model = None
         self.peak_vram_mb = 0  # Track peak VRAM usage
+
+        # Initialize video encoder with FFmpeg parameters
+        self.video_encoder = VideoEncoder(
+            codec=ffmpeg_codec,
+            preset=ffmpeg_preset,
+            crf=ffmpeg_crf
+        )
 
         # Model-specific attributes
         self.swinir_model = None
@@ -989,76 +963,12 @@ class AIVideoUpscaler:
         return upscaled_bgr
 
     def detect_aspect_ratio(self, width: int, height: int) -> Tuple[str, Tuple[int, int]]:
-        """
-        Detect aspect ratio and determine target resolution
-
-        Args:
-            width: Frame width
-            height: Frame height
-
-        Returns:
-            Tuple of (aspect_ratio_type, target_resolution)
-            - aspect_ratio_type: '16:9', '9:16', or 'other'
-            - target_resolution: (width, height) tuple
-        """
-        ratio = width / height
-
-        logger.info(f"Input dimensions: {width}x{height}, ratio: {ratio:.3f}")
-
-        # 16:9 (horizontal) - target 4K (3840x2160)
-        if 1.7 <= ratio <= 1.8:  # 16/9 ≈ 1.778
-            logger.info(f"✓ Detected 16:9 aspect ratio → Target: 4K (3840x2160)")
-            return ('16:9', (3840, 2160))
-
-        # 9:16 (vertical) - target 1080x1920
-        elif 0.55 <= ratio <= 0.6:  # 9/16 ≈ 0.5625
-            logger.info(f"✓ Detected 9:16 aspect ratio → Target: 1080x1920 (vertical)")
-            return ('9:16', (1080, 1920))
-
-        # Other ratios - upscale proportionally to closest standard
-        else:
-            if ratio > 1:  # Wider than tall - use 4K width
-                target = (3840, int(3840 / ratio))
-                logger.info(f"✓ Custom wide ratio → Target: {target[0]}x{target[1]}")
-                return ('other', target)
-            else:  # Taller than wide - use 1080 width
-                target = (1080, int(1080 / ratio))
-                logger.info(f"✓ Custom tall ratio → Target: {target[0]}x{target[1]}")
-                return ('other', target)
+        """Wrapper for utils.detect_aspect_ratio - kept for backward compatibility"""
+        return detect_aspect_ratio(width, height)
 
     def enhance_frame_opencv(self, frame: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
-        """
-        Fallback enhancement using OpenCV (if Real-ESRGAN not available)
-
-        Args:
-            frame: Input frame
-            target_size: Target (width, height)
-
-        Returns:
-            Enhanced frame
-        """
-        # Upscale using Lanczos4 interpolation (highest quality)
-        upscaled = cv2.resize(frame, target_size, interpolation=cv2.INTER_LANCZOS4)
-
-        # Apply enhancement filters
-        # Denoise
-        denoised = cv2.fastNlMeansDenoisingColored(upscaled, None, 10, 10, 7, 21)
-
-        # Sharpen
-        kernel = np.array([[-1, -1, -1],
-                          [-1,  9, -1],
-                          [-1, -1, -1]])
-        sharpened = cv2.filter2D(denoised, -1, kernel)
-
-        # Enhance contrast using CLAHE
-        lab = cv2.cvtColor(sharpened, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-        enhanced_l = clahe.apply(l)
-        enhanced = cv2.merge([enhanced_l, a, b])
-        final = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
-
-        return final
+        """Wrapper for utils.enhance_frame_opencv - kept for backward compatibility"""
+        return enhance_frame_opencv(frame, target_size)
 
     def update_peak_vram(self):
         """Update peak VRAM usage tracking"""
@@ -1752,120 +1662,16 @@ class AIVideoUpscaler:
         keyframes: List[Dict[str, Any]],
         time: float
     ) -> Dict[str, float]:
-        """
-        Interpolate crop values between keyframes for a given time
-
-        Args:
-            keyframes: List of keyframe dicts with 'time', 'x', 'y', 'width', 'height'
-            time: Time in seconds
-
-        Returns:
-            Interpolated crop parameters
-        """
-        if len(keyframes) == 0:
-            raise ValueError("No keyframes provided")
-
-        if len(keyframes) == 1:
-            return keyframes[0]
-
-        # Find surrounding keyframes
-        before_kf = None
-        after_kf = None
-
-        for kf in keyframes:
-            if kf['time'] <= time:
-                before_kf = kf
-            if kf['time'] > time and after_kf is None:
-                after_kf = kf
-                break
-
-        # If before first keyframe, return first
-        if before_kf is None:
-            return keyframes[0]
-
-        # If after last keyframe, return last
-        if after_kf is None:
-            return before_kf
-
-        # Linear interpolation between keyframes
-        duration = after_kf['time'] - before_kf['time']
-        if duration == 0:
-            return before_kf
-
-        progress = (time - before_kf['time']) / duration
-
-        return {
-            'x': before_kf['x'] + (after_kf['x'] - before_kf['x']) * progress,
-            'y': before_kf['y'] + (after_kf['y'] - before_kf['y']) * progress,
-            'width': before_kf['width'] + (after_kf['width'] - before_kf['width']) * progress,
-            'height': before_kf['height'] + (after_kf['height'] - before_kf['height']) * progress,
-            'time': time
-        }
+        """Wrapper for KeyframeInterpolator.interpolate_crop - kept for backward compatibility"""
+        return KeyframeInterpolator.interpolate_crop(keyframes, time)
 
     def interpolate_highlight(
         self,
         keyframes: List[Dict[str, Any]],
         time: float
     ) -> Optional[Dict[str, Any]]:
-        """
-        Interpolate highlight values between keyframes for a given time
-
-        Args:
-            keyframes: List of highlight keyframe dicts with 'time', 'x', 'y', 'radiusX', 'radiusY', 'opacity', 'color'
-                      x, y are pixel coordinates in original video space, radiusX/radiusY are pixel values
-            time: Time in seconds
-
-        Returns:
-            Interpolated highlight parameters, or None if time is after last keyframe
-        """
-        if len(keyframes) == 0:
-            return None
-
-        # Sort keyframes by time
-        sorted_kf = sorted(keyframes, key=lambda k: k['time'])
-
-        # If time is after the last keyframe, no highlight should be rendered
-        if time > sorted_kf[-1]['time']:
-            return None
-
-        if len(sorted_kf) == 1:
-            return sorted_kf[0]
-
-        # Find surrounding keyframes
-        before_kf = None
-        after_kf = None
-
-        for kf in sorted_kf:
-            if kf['time'] <= time:
-                before_kf = kf
-            if kf['time'] > time and after_kf is None:
-                after_kf = kf
-                break
-
-        # If before first keyframe, return first
-        if before_kf is None:
-            return sorted_kf[0]
-
-        # If after last keyframe (shouldn't happen due to check above), return None
-        if after_kf is None:
-            return before_kf
-
-        # Linear interpolation between keyframes
-        duration = after_kf['time'] - before_kf['time']
-        if duration == 0:
-            return before_kf
-
-        progress = (time - before_kf['time']) / duration
-
-        return {
-            'x': before_kf['x'] + (after_kf['x'] - before_kf['x']) * progress,
-            'y': before_kf['y'] + (after_kf['y'] - before_kf['y']) * progress,
-            'radiusX': before_kf['radiusX'] + (after_kf['radiusX'] - before_kf['radiusX']) * progress,
-            'radiusY': before_kf['radiusY'] + (after_kf['radiusY'] - before_kf['radiusY']) * progress,
-            'opacity': before_kf['opacity'] + (after_kf['opacity'] - before_kf['opacity']) * progress,
-            'color': before_kf['color'],  # Use color from before keyframe (no interpolation for color)
-            'time': time
-        }
+        """Wrapper for KeyframeInterpolator.interpolate_highlight - kept for backward compatibility"""
+        return KeyframeInterpolator.interpolate_highlight(keyframes, time)
 
     def render_highlight_on_frame(
         self,
@@ -1874,112 +1680,8 @@ class AIVideoUpscaler:
         original_video_size: Tuple[int, int],
         crop: Optional[Dict[str, float]] = None
     ) -> np.ndarray:
-        """
-        Render a semi-transparent highlight ellipse on a frame
-
-        Args:
-            frame: Input frame (BGR format, already cropped)
-            highlight: Highlight parameters with x, y (pixels in original video coords), radiusX, radiusY (pixels in original coords)
-            original_video_size: Original video (width, height) before crop
-            crop: Crop parameters that were applied to this frame
-
-        Returns:
-            Frame with highlight overlay
-        """
-        if highlight is None:
-            return frame
-
-        frame_h, frame_w = frame.shape[:2]
-        orig_w, orig_h = original_video_size
-
-        # Highlight position is already in original video pixel coordinates
-        highlight_x_orig = highlight['x']
-        highlight_y_orig = highlight['y']
-        radius_x_orig = highlight['radiusX']
-        radius_y_orig = highlight['radiusY']
-
-        # Transform highlight coordinates to cropped frame coordinates
-        if crop:
-            crop_x = crop['x']
-            crop_y = crop['y']
-            crop_w = crop['width']
-            crop_h = crop['height']
-
-            # Transform center position relative to crop
-            highlight_x_crop = highlight_x_orig - crop_x
-            highlight_y_crop = highlight_y_orig - crop_y
-
-            # Scale to current frame size (in case frame was resized after crop)
-            scale_x = frame_w / crop_w
-            scale_y = frame_h / crop_h
-
-            center_x = int(highlight_x_crop * scale_x)
-            center_y = int(highlight_y_crop * scale_y)
-            radius_x = int(radius_x_orig * scale_x)
-            radius_y = int(radius_y_orig * scale_y)
-        else:
-            # No crop, just scale to frame size
-            scale_x = frame_w / orig_w
-            scale_y = frame_h / orig_h
-
-            center_x = int(highlight_x_orig * scale_x)
-            center_y = int(highlight_y_orig * scale_y)
-            radius_x = int(radius_x_orig * scale_x)
-            radius_y = int(radius_y_orig * scale_y)
-
-        # Check if ellipse is within frame bounds (at least partially)
-        if (center_x + radius_x < 0 or center_x - radius_x > frame_w or
-            center_y + radius_y < 0 or center_y - radius_y > frame_h):
-            # Ellipse is completely outside frame
-            return frame
-
-        # Parse color from hex string (e.g., "#FFFF00")
-        color_hex = highlight['color'].lstrip('#')
-        if len(color_hex) == 6:
-            r = int(color_hex[0:2], 16)
-            g = int(color_hex[2:4], 16)
-            b = int(color_hex[4:6], 16)
-            color_bgr = (b, g, r)  # OpenCV uses BGR
-        else:
-            # Default to yellow if parsing fails
-            color_bgr = (0, 255, 255)  # Yellow in BGR
-
-        opacity = highlight['opacity']
-
-        # Create an overlay for blending
-        overlay = frame.copy()
-
-        # Draw filled ellipse on overlay
-        cv2.ellipse(
-            overlay,
-            center=(center_x, center_y),
-            axes=(radius_x, radius_y),
-            angle=0,
-            startAngle=0,
-            endAngle=360,
-            color=color_bgr,
-            thickness=-1  # Filled
-        )
-
-        # Blend the overlay with original frame using opacity
-        result = cv2.addWeighted(overlay, opacity, frame, 1 - opacity, 0)
-
-        # Draw ellipse stroke (outline) for better visibility
-        stroke_opacity = 0.6
-        stroke_overlay = result.copy()
-        cv2.ellipse(
-            stroke_overlay,
-            center=(center_x, center_y),
-            axes=(radius_x, radius_y),
-            angle=0,
-            startAngle=0,
-            endAngle=360,
-            color=color_bgr,
-            thickness=3
-        )
-        result = cv2.addWeighted(stroke_overlay, stroke_opacity, result, 1 - stroke_opacity, 0)
-
-        return result
+        """Wrapper for KeyframeInterpolator.render_highlight_on_frame - kept for backward compatibility"""
+        return KeyframeInterpolator.render_highlight_on_frame(frame, highlight, original_video_size, crop)
 
     def process_video_with_upscale(
         self,
@@ -2338,61 +2040,13 @@ class AIVideoUpscaler:
                 torch.cuda.empty_cache()
 
     def parse_ffmpeg_progress(self, line: str) -> Optional[int]:
-        """
-        Parse FFmpeg progress output to extract current frame number
-
-        Args:
-            line: Line from FFmpeg stderr output
-
-        Returns:
-            Frame number if found, None otherwise
-        """
-        import re
-        # FFmpeg outputs progress lines like: "frame=  126 fps= 38 q=-1.0 ..."
-        match = re.search(r'frame=\s*(\d+)', line)
-        if match:
-            return int(match.group(1))
-        return None
+        """Wrapper for VideoEncoder.parse_ffmpeg_progress - kept for backward compatibility"""
+        return VideoEncoder.parse_ffmpeg_progress(line)
 
     def build_atempo_filter(self, speed: float) -> str:
-        """
-        Build atempo filter chain for audio speed adjustment.
-        FFmpeg's atempo only supports 0.5-2.0 range, so we chain multiple filters for extreme speeds.
+        """Wrapper for VideoEncoder.build_atempo_filter - kept for backward compatibility"""
+        return VideoEncoder.build_atempo_filter(speed)
 
-        Args:
-            speed: Target speed multiplier (e.g., 0.5 for half speed, 2.0 for double speed)
-
-        Returns:
-            String containing chained atempo filters (e.g., "atempo=2.0,atempo=2.0" for 4x speed)
-        """
-        if speed == 1.0:
-            return ""  # No filter needed for normal speed
-
-        if 0.5 <= speed <= 2.0:
-            return f"atempo={speed}"
-
-        # For speeds outside 0.5-2.0 range, chain multiple atempo filters
-        filters = []
-        remaining_speed = speed
-
-        if speed > 2.0:
-            # Chain multiple 2.0x filters
-            while remaining_speed > 2.0:
-                filters.append("atempo=2.0")
-                remaining_speed /= 2.0
-            # Apply remaining speed if it's not exactly 1.0
-            if remaining_speed > 1.0:
-                filters.append(f"atempo={remaining_speed}")
-        else:  # speed < 0.5
-            # Chain multiple 0.5x filters
-            while remaining_speed < 0.5:
-                filters.append("atempo=0.5")
-                remaining_speed /= 0.5
-            # Apply remaining speed if it's not exactly 1.0
-            if remaining_speed < 1.0:
-                filters.append(f"atempo={remaining_speed}")
-
-        return ','.join(filters)
 
     def create_video_from_frames(
         self,
@@ -2407,448 +2061,15 @@ class AIVideoUpscaler:
     ):
         """
         Create video from enhanced frames using FFmpeg encoding
-        Applies segment speed changes (with AI frame interpolation for 0.5x) and trimming
-
-        Args:
-            frames_dir: Directory containing frames
-            output_path: Output video path
-            fps: Output framerate
-            input_video_path: Path to input video (for audio)
-            export_mode: Export mode - "fast" (1-pass) or "quality" (2-pass)
-            progress_callback: Optional callback(current, total, message, phase)
-            segment_data: Optional segment speed/trim data for applying speed changes
-            include_audio: Include audio in export (default True)
+        Delegates to VideoEncoder for the actual encoding work.
         """
-        frames_pattern = str(frames_dir / "frame_%06d.png")
-
-        # Count total frames for progress tracking
-        frame_files = list(frames_dir.glob("frame_*.png"))
-        input_frame_count = len(frame_files)
-        logger.info(f"Total input frames: {input_frame_count}")
-
-        # Get original FPS from input video (needed for frame interpolation and segment processing)
-        cap = cv2.VideoCapture(input_video_path)
-        original_fps = cap.get(cv2.CAP_PROP_FPS)
-        cap.release()
-
-        # Detect if frame interpolation is needed (target FPS > source FPS)
-        # Use tolerance to handle floating-point comparisons (e.g., 29.97 vs 30)
-        fps_tolerance = 0.5
-        needs_interpolation = fps > (original_fps + fps_tolerance)
-        interpolation_ratio = fps / original_fps if needs_interpolation else 1.0
-
-        if needs_interpolation:
-            logger.info("=" * 60)
-            logger.info("AI FRAME INTERPOLATION REQUIRED")
-            logger.info("=" * 60)
-            logger.info(f"Source FPS: {original_fps}")
-            logger.info(f"Target FPS: {fps}")
-            logger.info(f"Interpolation ratio: {interpolation_ratio:.2f}x")
-            logger.info(f"Using minterpolate with motion compensation for smooth {fps}fps output")
-            logger.info("=" * 60)
-        elif fps < original_fps:
-            logger.info(f"Downsampling from {original_fps}fps to {fps}fps (no interpolation needed)")
-        else:
-            logger.info(f"Source and target FPS match ({original_fps}fps → {fps}fps, no interpolation needed)")
-
-        # Build FFmpeg complex filter for segment speed changes
-        filter_complex = None
-        expected_output_frames = input_frame_count
-        trim_filter = None
-
-        # Determine input framerate for FFmpeg (use original FPS to maintain correct timing)
-        input_framerate = original_fps
-
-        if segment_data:
-            logger.info("=" * 60)
-            logger.info("APPLYING SEGMENT SPEED/TRIM PROCESSING")
-            logger.info("=" * 60)
-
-            segments = segment_data.get('segments', [])
-            trim_start = segment_data.get('trim_start', 0)
-            trim_end = segment_data.get('trim_end')
-
-            if segments:
-                # Build complex filtergraph for segment-based speed changes
-                filter_parts = []
-                audio_filter_parts = []
-                output_labels = []
-                audio_output_labels = []
-                expected_output_frames = 0
-
-                for i, seg in enumerate(segments):
-                    start_time = seg['start']
-                    end_time = seg['end']
-                    speed = seg['speed']
-
-                    # Calculate input frames for this segment
-                    segment_duration = end_time - start_time
-                    segment_input_frames = int(segment_duration * original_fps)
-
-                    if speed == 0.5:
-                        # For 0.5x speed: trim segment, apply minterpolate to double frames
-                        logger.info(f"Segment {i}: {start_time:.2f}s-{end_time:.2f}s @ 0.5x speed")
-                        logger.info(f"  → Input frames: {segment_input_frames}, Output frames (2x): {segment_input_frames * 2}")
-                        logger.info(f"  → Using minterpolate with motion compensation")
-                        logger.info(f"  → Applying atempo=0.5 to audio for slow motion")
-
-                        # Trim, reset PTS, interpolate to double FPS
-                        filter_parts.append(
-                            f"[0:v]trim=start={start_time}:end={end_time},setpts=PTS-STARTPTS,"
-                            f"minterpolate=fps={fps*2}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none,"
-                            f"setpts=PTS*2[v{i}]"
-                        )
-
-                        # Audio: trim and slow down with atempo=0.5
-                        atempo_filter = self.build_atempo_filter(speed)
-                        audio_filter_parts.append(
-                            f"[1:a]atrim=start={start_time}:end={end_time},asetpts=PTS-STARTPTS,"
-                            f"{atempo_filter}[a{i}]"
-                        )
-
-                        expected_output_frames += segment_input_frames * 2
-                        output_labels.append(f"[v{i}]")
-                        audio_output_labels.append(f"[a{i}]")
-                    else:
-                        # For other speeds or normal: trim and optionally adjust PTS
-                        logger.info(f"Segment {i}: {start_time:.2f}s-{end_time:.2f}s @ {speed}x speed")
-                        logger.info(f"  → Frames: {segment_input_frames}")
-
-                        filter_parts.append(
-                            f"[0:v]trim=start={start_time}:end={end_time},setpts=PTS-STARTPTS[v{i}]"
-                        )
-
-                        # Audio: build atempo filter for speed adjustment
-                        atempo_filter = self.build_atempo_filter(speed)
-                        if atempo_filter:
-                            logger.info(f"  → Applying {atempo_filter} to audio")
-                            audio_filter_parts.append(
-                                f"[1:a]atrim=start={start_time}:end={end_time},asetpts=PTS-STARTPTS,"
-                                f"{atempo_filter}[a{i}]"
-                            )
-                        else:
-                            # No atempo needed for 1.0x speed
-                            audio_filter_parts.append(
-                                f"[1:a]atrim=start={start_time}:end={end_time},asetpts=PTS-STARTPTS[a{i}]"
-                            )
-
-                        expected_output_frames += segment_input_frames
-                        output_labels.append(f"[v{i}]")
-                        audio_output_labels.append(f"[a{i}]")
-
-                # Concatenate all video segments
-                concat_inputs = ''.join(output_labels)
-                concat_filter = f'{concat_inputs}concat=n={len(segments)}:v=1:a=0'
-
-                # Concatenate all audio segments
-                audio_concat_inputs = ''.join(audio_output_labels)
-                audio_concat_filter = f'{audio_concat_inputs}concat=n={len(segments)}:v=0:a=1'
-
-                # Apply frame interpolation after concatenation if needed
-                if needs_interpolation:
-                    logger.info("=" * 60)
-                    logger.info("APPLYING FRAME INTERPOLATION AFTER SEGMENT PROCESSING")
-                    logger.info("=" * 60)
-                    logger.info(f"Interpolating concatenated segments from {original_fps}fps to {fps}fps")
-
-                    # Combine video and audio filters
-                    all_filters = ';'.join(filter_parts + audio_filter_parts)
-                    filter_complex = f'{all_filters};{concat_filter}[concat];[concat]minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none[outv];{audio_concat_filter}[outa]'
-
-                    expected_output_frames = int(expected_output_frames * interpolation_ratio)
-                    logger.info(f"Expected output frames after interpolation: {expected_output_frames}")
-                else:
-                    # Combine video and audio filters
-                    all_filters = ';'.join(filter_parts + audio_filter_parts)
-                    filter_complex = f'{all_filters};{concat_filter}[outv];{audio_concat_filter}[outa]'
-
-                logger.info(f"Expected output frames: {expected_output_frames}")
-                logger.info(f"Filter complex: {filter_complex}")
-
-            # Handle trim (apply after segment processing if no segments)
-            if trim_start > 0 or trim_end:
-                if not filter_complex:
-                    # Simple trim without segments
-                    if trim_end:
-                        trim_filter = f"trim=start={trim_start}:end={trim_end},setpts=PTS-STARTPTS"
-                        logger.info(f"Applying trim: {trim_start:.2f}s to {trim_end:.2f}s")
-                    else:
-                        trim_filter = f"trim=start={trim_start},setpts=PTS-STARTPTS"
-                        logger.info(f"Trimming start at {trim_start:.2f}s")
-
-                    # Recalculate expected frames for trim
-                    total_duration = input_frame_count / original_fps
-                    actual_end = trim_end if trim_end else total_duration
-                    trimmed_duration = actual_end - trim_start
-                    expected_output_frames = int(trimmed_duration * original_fps)
-
-        # Apply frame interpolation if needed (when target FPS > source FPS and no segment processing)
-        if needs_interpolation and not filter_complex and not trim_filter:
-            # Add minterpolate filter for frame interpolation
-            logger.info("=" * 60)
-            logger.info("APPLYING FRAME INTERPOLATION FILTER")
-            logger.info("=" * 60)
-            logger.info(f"Interpolating {input_frame_count} frames @ {original_fps}fps → {int(input_frame_count * interpolation_ratio)} frames @ {fps}fps")
-
-            # Create video filter with minterpolate
-            trim_filter = f"minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none"
-            expected_output_frames = int(input_frame_count * interpolation_ratio)
-
-            logger.info(f"Motion interpolation filter: {trim_filter}")
-            logger.info("=" * 60)
-        elif needs_interpolation and trim_filter:
-            # Append minterpolate to existing trim filter
-            logger.info("=" * 60)
-            logger.info("APPLYING FRAME INTERPOLATION WITH TRIM")
-            logger.info("=" * 60)
-            logger.info(f"Combining trim and interpolation filters")
-
-            trim_filter = f"{trim_filter},minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none"
-            expected_output_frames = int(expected_output_frames * interpolation_ratio)
-
-            logger.info(f"Combined filter: {trim_filter}")
-            logger.info("=" * 60)
-
-        logger.info(f"Expected output frame count: {expected_output_frames}")
-
-        # Set encoding parameters based on export mode (with custom overrides)
-        # OPTIMIZED: Based on A/B testing, H.264 fast preset with CRF 18 provides best speed/quality balance
-        if export_mode == "fast":
-            codec = self.ffmpeg_codec or "libx264"  # H.264 - faster encoding
-            preset = self.ffmpeg_preset or "ultrafast"
-            crf = self.ffmpeg_crf or "20"
-            logger.info(f"Encoding video with FAST settings ({codec}, 1-pass, {preset} preset, CRF {crf}) at {fps} fps...")
-        else:
-            # OPTIMIZED: Use H.264 fast preset CRF 18 (tested to be optimal for speed without quality loss)
-            codec = self.ffmpeg_codec or "libx264"  # H.264 - fast encoding
-            preset = self.ffmpeg_preset or "fast"
-            crf = self.ffmpeg_crf or "18"
-            logger.info(f"Encoding video with QUALITY settings ({codec}, 1-pass, {preset} preset, CRF {crf}) at {fps} fps...")
-
-        # Log if custom parameters are being used
-        if self.ffmpeg_codec or self.ffmpeg_preset or self.ffmpeg_crf:
-            logger.info(f"Using CUSTOM FFmpeg parameters: codec={codec}, preset={preset}, CRF={crf}")
-
-        # Pass 1 - Analysis (only for quality mode with H.265, single-pass for H.264)
-        if export_mode == "quality" and codec == "libx265":
-            ffmpeg_pass1_start = datetime.now()
-            logger.info("=" * 60)
-            logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 START - {ffmpeg_pass1_start.isoformat()}")
-            logger.info("Starting pass 1 - analyzing video...")
-            logger.info("=" * 60)
-            cmd_pass1 = [
-                'ffmpeg', '-y',
-                '-framerate', str(input_framerate),
-                '-i', frames_pattern,
-                '-i', input_video_path
-            ]
-
-            # Add filter_complex for segment processing or simple trim filter
-            if filter_complex:
-                cmd_pass1.extend(['-filter_complex', filter_complex, '-map', '[outv]'])
-                # Map audio from filter_complex if it has audio output, otherwise map original audio
-                if '[outa]' in filter_complex:
-                    cmd_pass1.extend(['-map', '[outa]'])
-                else:
-                    cmd_pass1.extend(['-map', '1:a?'])
-            elif trim_filter:
-                cmd_pass1.extend(['-vf', trim_filter, '-map', '0:v', '-map', '1:a?'])
-            else:
-                cmd_pass1.extend(['-map', '0:v', '-map', '1:a?'])
-
-            cmd_pass1.extend([
-                '-c:v', codec,
-                '-preset', preset,
-                '-crf', crf,
-                '-x265-params', 'pass=1:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6',
-                '-an',  # No audio in pass 1
-                '-f', 'null',
-                '/dev/null' if os.name != 'nt' else 'NUL'
-            ])
-
-            try:
-                # Use Popen to read stderr in real-time for progress monitoring
-                process = subprocess.Popen(
-                    cmd_pass1,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    bufsize=1,
-                    universal_newlines=True
-                )
-
-                # Read stderr line by line to track progress
-                last_frame = 0
-                for line in process.stderr:
-                    # Parse frame number from FFmpeg output
-                    frame_num = self.parse_ffmpeg_progress(line)
-                    if frame_num is not None and frame_num > last_frame:
-                        last_frame = frame_num
-                        # Send progress callback
-                        if progress_callback:
-                            progress_callback(
-                                frame_num,
-                                expected_output_frames,
-                                f"Pass 1: Analyzing frame {frame_num}/{expected_output_frames}",
-                                phase='ffmpeg_pass1'
-                            )
-
-                # Wait for process to complete
-                process.wait()
-
-                if process.returncode != 0:
-                    # Read any remaining output for error reporting
-                    _, stderr = process.communicate()
-                    logger.error(f"FFmpeg pass 1 failed with return code {process.returncode}")
-                    raise RuntimeError(f"Video encoding pass 1 failed: {stderr}")
-
-                ffmpeg_pass1_end = datetime.now()
-                ffmpeg_pass1_duration = (ffmpeg_pass1_end - ffmpeg_pass1_start).total_seconds()
-                logger.info("=" * 60)
-                logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 END - {ffmpeg_pass1_end.isoformat()}")
-                logger.info(f"[EXPORT_PHASE] FFMPEG_PASS1 DURATION - {ffmpeg_pass1_duration:.2f} seconds")
-                logger.info("Pass 1 complete!")
-                logger.info("=" * 60)
-            except subprocess.CalledProcessError as e:
-                logger.error(f"FFmpeg pass 1 failed: {e.stderr}")
-                raise RuntimeError(f"Video encoding pass 1 failed: {e.stderr}")
-            except Exception as e:
-                logger.error(f"FFmpeg pass 1 failed: {e}")
-                raise RuntimeError(f"Video encoding pass 1 failed: {e}")
-        else:
-            logger.info("=" * 60)
-            logger.info("Skipping pass 1 for FAST mode - using single-pass encoding")
-            logger.info("=" * 60)
-
-        # Pass 2 - Encode (or single-pass for fast mode)
-        ffmpeg_pass2_start = datetime.now()
-        logger.info("=" * 60)
-        logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE START - {ffmpeg_pass2_start.isoformat()}")
-
-        if export_mode == "quality":
-            logger.info("Starting pass 2 - encoding video...")
-        else:
-            logger.info("Starting single-pass encoding...")
-
-        logger.info(f"Input framerate: {input_framerate}fps")
-        logger.info(f"Output framerate: {fps}fps")
-        if needs_interpolation:
-            logger.info(f"Frame interpolation: {interpolation_ratio:.2f}x (minterpolate active)")
-        logger.info("=" * 60)
-
-        # Build FFmpeg command based on codec
-        cmd_pass2 = [
-            'ffmpeg', '-y',
-            '-framerate', str(input_framerate),
-            '-i', frames_pattern,
-            '-i', input_video_path
-        ]
-
-        # Add filter_complex for segment processing or simple trim filter
-        if filter_complex:
-            cmd_pass2.extend(['-filter_complex', filter_complex, '-map', '[outv]'])
-            if include_audio:
-                # Map audio from filter_complex if it has audio output, otherwise map original audio
-                if '[outa]' in filter_complex:
-                    cmd_pass2.extend(['-map', '[outa]'])
-                else:
-                    cmd_pass2.extend(['-map', '1:a?'])
-        elif trim_filter:
-            cmd_pass2.extend(['-vf', trim_filter, '-map', '0:v'])
-            if include_audio:
-                cmd_pass2.extend(['-map', '1:a?'])
-        else:
-            cmd_pass2.extend(['-map', '0:v'])
-            if include_audio:
-                cmd_pass2.extend(['-map', '1:a?'])
-
-        cmd_pass2.extend([
-            '-c:v', codec,
-            '-preset', preset,
-            '-crf', crf
-        ])
-
-        # Add codec-specific parameters
-        if codec == 'libx265':
-            # H.265 specific parameters
-            if export_mode == "quality":
-                x265_params = 'pass=2:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6'
-            else:
-                x265_params = 'aq-mode=3:aq-strength=1.0:deblock=-1,-1'
-            cmd_pass2.extend(['-x265-params', x265_params])
-        # libx264 uses default parameters (no special params needed for fast mode)
-
-        # Add audio encoding parameters if audio is included
-        if include_audio:
-            cmd_pass2.extend(['-c:a', 'aac', '-b:a', '256k'])
-        else:
-            cmd_pass2.extend(['-an'])  # No audio
-
-        # Add common parameters
-        cmd_pass2.extend([
-            '-r', str(fps),  # Explicit output framerate - CRITICAL for frame interpolation
-            '-pix_fmt', 'yuv420p',
-            '-colorspace', 'bt709',
-            '-color_primaries', 'bt709',
-            '-color_trc', 'bt709',
-            '-color_range', 'tv',
-            '-movflags', '+faststart',
-            str(output_path)
-        ])
-
-        try:
-            # Use Popen to read stderr in real-time for progress monitoring
-            process = subprocess.Popen(
-                cmd_pass2,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
-
-            # Read stderr line by line to track progress
-            last_frame = 0
-            for line in process.stderr:
-                # Parse frame number from FFmpeg output
-                frame_num = self.parse_ffmpeg_progress(line)
-                if frame_num is not None and frame_num > last_frame:
-                    last_frame = frame_num
-                    # Send progress callback
-                    if progress_callback:
-                        if export_mode == "quality":
-                            message = f"Pass 2: Encoding frame {frame_num}/{expected_output_frames}"
-                        else:
-                            message = f"Encoding frame {frame_num}/{expected_output_frames}"
-                        progress_callback(
-                            frame_num,
-                            expected_output_frames,
-                            message,
-                            phase='ffmpeg_encode'
-                        )
-
-            # Wait for process to complete
-            process.wait()
-
-            if process.returncode != 0:
-                # Read any remaining output for error reporting
-                _, stderr = process.communicate()
-                logger.error(f"FFmpeg encoding failed with return code {process.returncode}")
-                raise RuntimeError(f"Video encoding failed: {stderr}")
-
-            ffmpeg_pass2_end = datetime.now()
-            ffmpeg_pass2_duration = (ffmpeg_pass2_end - ffmpeg_pass2_start).total_seconds()
-            logger.info("=" * 60)
-            logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE END - {ffmpeg_pass2_end.isoformat()}")
-            logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE DURATION - {ffmpeg_pass2_duration:.2f} seconds")
-            if export_mode == "quality":
-                logger.info("Pass 2 complete! Video encoding finished.")
-            else:
-                logger.info("Single-pass encoding complete!")
-            logger.info("=" * 60)
-        except subprocess.CalledProcessError as e:
-            logger.error(f"FFmpeg encoding failed: {e.stderr}")
-            raise RuntimeError(f"Video encoding failed: {e.stderr}")
-        except Exception as e:
-            logger.error(f"FFmpeg encoding failed: {e}")
-            raise RuntimeError(f"Video encoding failed: {e}")
+        return self.video_encoder.create_video_from_frames(
+            frames_dir=frames_dir,
+            output_path=output_path,
+            fps=fps,
+            input_video_path=input_video_path,
+            export_mode=export_mode,
+            progress_callback=progress_callback,
+            segment_data=segment_data,
+            include_audio=include_audio
+        )
