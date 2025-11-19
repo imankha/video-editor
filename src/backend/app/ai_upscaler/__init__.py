@@ -751,8 +751,18 @@ class AIVideoUpscaler:
             logger.info(f"✓ Successfully processed {completed_frames}/{total_frames} frames")
             logger.info("=" * 60)
 
+            # Prepare segment_data for encoding
+            # IMPORTANT: If we've already trimmed frames during processing, we need to tell
+            # the encoder that frames are pre-trimmed to avoid double-trimming
+            encoding_segment_data = segment_data.copy() if segment_data else None
+            frames_already_trimmed = start_frame > 0
+            if encoding_segment_data and frames_already_trimmed:
+                # Mark that video frames are already trimmed
+                encoding_segment_data['frames_pretrimmed'] = True
+                logger.info(f"Frames already trimmed during processing (start_frame={start_frame})")
+
             # Reassemble video with FFmpeg
-            self.create_video_from_frames(frames_dir, output_path, target_fps, input_path, export_mode, progress_callback, segment_data, include_audio)
+            self.create_video_from_frames(frames_dir, output_path, target_fps, input_path, export_mode, progress_callback, encoding_segment_data, include_audio)
 
             return {
                 'success': True,

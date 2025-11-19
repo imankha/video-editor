@@ -181,6 +181,12 @@ class VideoEncoder:
             segments = segment_data.get('segments', [])
             trim_start = segment_data.get('trim_start', 0)
             trim_end = segment_data.get('trim_end')
+            frames_pretrimmed = segment_data.get('frames_pretrimmed', False)
+
+            # Calculate time offset for pre-trimmed frames
+            # If frames are pre-trimmed, they start at 0.0s in the frame sequence
+            # but represent trim_start in source time
+            time_offset = trim_start if frames_pretrimmed else 0.0
 
             if segments:
                 # Build complex filtergraph for segment-based speed changes
@@ -190,33 +196,58 @@ class VideoEncoder:
                 audio_output_labels = []
                 expected_output_frames = 0
 
+                if frames_pretrimmed:
+                    logger.info(f"Frames pre-trimmed: adjusting all segment times by -{time_offset:.2f}s")
+
                 for i, seg in enumerate(segments):
                     start_time = seg['start']
                     end_time = seg['end']
                     speed = seg['speed']
 
-                    # Calculate input frames for this segment
-                    segment_duration = end_time - start_time
+                    # Adjust segment times for pre-trimmed frames
+                    # Video frames start at 0.0s in the sequence, so subtract the offset
+                    video_start = start_time - time_offset
+                    video_end = end_time - time_offset
+
+                    # Clamp video times to valid range (can't be negative or beyond frame duration)
+                    frame_duration = input_frame_count / original_fps
+                    video_start = max(0.0, video_start)
+                    video_end = min(frame_duration, video_end)
+
+                    # Skip segment if it's completely outside the frame range
+                    if video_start >= video_end:
+                        logger.info(f"Segment {i}: {start_time:.2f}s-{end_time:.2f}s SKIPPED (outside pre-trimmed frame range)")
+                        continue
+
+                    # Audio uses original times from source
+                    audio_start = start_time
+                    audio_end = end_time
+
+                    # Calculate input frames for this segment based on adjusted video times
+                    # This accounts for clipping at trim boundaries
+                    segment_duration = video_end - video_start
                     segment_input_frames = int(segment_duration * original_fps)
 
                     if speed == 0.5:
                         # For 0.5x speed: trim segment, apply minterpolate to double frames
-                        logger.info(f"Segment {i}: {start_time:.2f}s-{end_time:.2f}s @ 0.5x speed")
+                        logger.info(f"Segment {i}: source {start_time:.2f}s-{end_time:.2f}s @ 0.5x speed")
+                        if frames_pretrimmed:
+                            logger.info(f"  → Video trim adjusted: {video_start:.2f}s-{video_end:.2f}s (frames pre-trimmed)")
                         logger.info(f"  → Input frames: {segment_input_frames}, Output frames (2x): {segment_input_frames * 2}")
                         logger.info(f"  → Using minterpolate with motion compensation")
                         logger.info(f"  → Applying atempo=0.5 to audio for slow motion")
 
-                        # Trim, reset PTS, interpolate to double FPS
+                        # Trim video using adjusted times, reset PTS, interpolate to double FPS
                         filter_parts.append(
-                            f"[0:v]trim=start={start_time}:end={end_time},setpts=PTS-STARTPTS,"
+                            f"[0:v]trim=start={video_start}:end={video_end},setpts=PTS-STARTPTS,"
                             f"minterpolate=fps={fps*2}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none,"
                             f"setpts=PTS*2[v{i}]"
                         )
 
-                        # Audio: trim and slow down with atempo=0.5
+                        # Audio: trim using original source times and slow down with atempo=0.5
                         atempo_filter = self.build_atempo_filter(speed)
                         audio_filter_parts.append(
-                            f"[1:a]atrim=start={start_time}:end={end_time},asetpts=PTS-STARTPTS,"
+                            f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,"
                             f"{atempo_filter}[a{i}]"
                         )
 
@@ -225,25 +256,28 @@ class VideoEncoder:
                         audio_output_labels.append(f"[a{i}]")
                     else:
                         # For other speeds or normal: trim and optionally adjust PTS
-                        logger.info(f"Segment {i}: {start_time:.2f}s-{end_time:.2f}s @ {speed}x speed")
+                        logger.info(f"Segment {i}: source {start_time:.2f}s-{end_time:.2f}s @ {speed}x speed")
+                        if frames_pretrimmed:
+                            logger.info(f"  → Video trim adjusted: {video_start:.2f}s-{video_end:.2f}s (frames pre-trimmed)")
                         logger.info(f"  → Frames: {segment_input_frames}")
 
+                        # Trim video using adjusted times
                         filter_parts.append(
-                            f"[0:v]trim=start={start_time}:end={end_time},setpts=PTS-STARTPTS[v{i}]"
+                            f"[0:v]trim=start={video_start}:end={video_end},setpts=PTS-STARTPTS[v{i}]"
                         )
 
-                        # Audio: build atempo filter for speed adjustment
+                        # Audio: build atempo filter for speed adjustment using original source times
                         atempo_filter = self.build_atempo_filter(speed)
                         if atempo_filter:
                             logger.info(f"  → Applying {atempo_filter} to audio")
                             audio_filter_parts.append(
-                                f"[1:a]atrim=start={start_time}:end={end_time},asetpts=PTS-STARTPTS,"
+                                f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,"
                                 f"{atempo_filter}[a{i}]"
                             )
                         else:
                             # No atempo needed for 1.0x speed
                             audio_filter_parts.append(
-                                f"[1:a]atrim=start={start_time}:end={end_time},asetpts=PTS-STARTPTS[a{i}]"
+                                f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS[a{i}]"
                             )
 
                         expected_output_frames += segment_input_frames
@@ -280,21 +314,37 @@ class VideoEncoder:
                 logger.info(f"Filter complex: {filter_complex}")
 
             # Handle trim (apply after segment processing if no segments)
+            # Check if frames are already pre-trimmed during processing
+            frames_pretrimmed = segment_data.get('frames_pretrimmed', False) if segment_data else False
+
             if trim_start > 0 or trim_end:
                 if not filter_complex:
-                    # Simple trim without segments
-                    if trim_end:
-                        trim_filter = f"trim=start={trim_start}:end={trim_end},setpts=PTS-STARTPTS"
-                        logger.info(f"Applying trim: {trim_start:.2f}s to {trim_end:.2f}s")
+                    if frames_pretrimmed:
+                        # Frames are already trimmed - only trim audio, not video
+                        logger.info("=" * 60)
+                        logger.info("FRAMES PRE-TRIMMED DURING PROCESSING")
+                        logger.info("=" * 60)
+                        logger.info(f"Video frames already trimmed to {trim_start:.2f}s-{trim_end or 'end'}s")
+                        logger.info("Applying audio trim only (video trim skipped)")
+                        logger.info("=" * 60)
+                        # Don't set trim_filter - frames are already the right range
+                        # Audio trim will be handled separately in the FFmpeg command
+                        trim_filter = None
+                        expected_output_frames = input_frame_count  # Use actual frame count
                     else:
-                        trim_filter = f"trim=start={trim_start},setpts=PTS-STARTPTS"
-                        logger.info(f"Trimming start at {trim_start:.2f}s")
+                        # Normal trim - apply to both video and audio
+                        if trim_end:
+                            trim_filter = f"trim=start={trim_start}:end={trim_end},setpts=PTS-STARTPTS"
+                            logger.info(f"Applying trim: {trim_start:.2f}s to {trim_end:.2f}s")
+                        else:
+                            trim_filter = f"trim=start={trim_start},setpts=PTS-STARTPTS"
+                            logger.info(f"Trimming start at {trim_start:.2f}s")
 
-                    # Recalculate expected frames for trim
-                    total_duration = input_frame_count / original_fps
-                    actual_end = trim_end if trim_end else total_duration
-                    trimmed_duration = actual_end - trim_start
-                    expected_output_frames = int(trimmed_duration * original_fps)
+                        # Recalculate expected frames for trim
+                        total_duration = input_frame_count / original_fps
+                        actual_end = trim_end if trim_end else total_duration
+                        trimmed_duration = actual_end - trim_start
+                        expected_output_frames = int(trimmed_duration * original_fps)
 
         # Apply frame interpolation if needed (when target FPS > source FPS and no segment processing)
         if needs_interpolation and not filter_complex and not trim_filter:
@@ -348,25 +398,31 @@ class VideoEncoder:
             self._run_ffmpeg_pass1(
                 frames_pattern, input_video_path, input_framerate,
                 filter_complex, trim_filter, codec, preset, crf,
-                expected_output_frames, progress_callback
+                expected_output_frames, progress_callback, audio_trim_params
             )
         else:
             logger.info("=" * 60)
             logger.info("Skipping pass 1 for FAST mode - using single-pass encoding")
             logger.info("=" * 60)
 
+        # Prepare audio trim parameters if frames are pre-trimmed
+        audio_trim_params = None
+        if frames_pretrimmed and (trim_start > 0 or trim_end):
+            audio_trim_params = {'start': trim_start, 'end': trim_end}
+            logger.info(f"Audio trim params: start={trim_start:.2f}s, end={trim_end or 'end'}s")
+
         # Pass 2 - Encode (or single-pass for fast mode)
         self._run_ffmpeg_pass2(
             frames_pattern, input_video_path, output_path, input_framerate, fps,
             filter_complex, trim_filter, codec, preset, crf, export_mode,
             needs_interpolation, interpolation_ratio, include_audio,
-            expected_output_frames, progress_callback
+            expected_output_frames, progress_callback, audio_trim_params
         )
 
     def _run_ffmpeg_pass1(
         self, frames_pattern, input_video_path, input_framerate,
         filter_complex, trim_filter, codec, preset, crf,
-        expected_output_frames, progress_callback
+        expected_output_frames, progress_callback, audio_trim_params=None
     ):
         """Run FFmpeg pass 1 (analysis)"""
         ffmpeg_pass1_start = datetime.now()
@@ -459,7 +515,7 @@ class VideoEncoder:
         self, frames_pattern, input_video_path, output_path, input_framerate, fps,
         filter_complex, trim_filter, codec, preset, crf, export_mode,
         needs_interpolation, interpolation_ratio, include_audio,
-        expected_output_frames, progress_callback
+        expected_output_frames, progress_callback, audio_trim_params=None
     ):
         """Run FFmpeg pass 2 (encoding)"""
         ffmpeg_pass2_start = datetime.now()
@@ -501,7 +557,19 @@ class VideoEncoder:
         else:
             cmd_pass2.extend(['-map', '0:v'])
             if include_audio:
-                cmd_pass2.extend(['-map', '1:a?'])
+                # Check if we need to trim audio separately (for pre-trimmed frames)
+                if audio_trim_params:
+                    # Video frames are already trimmed, but we need to trim audio from source
+                    start = audio_trim_params['start']
+                    end = audio_trim_params['end']
+                    if end:
+                        audio_filter = f'[1:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[outa]'
+                    else:
+                        audio_filter = f'[1:a]atrim=start={start},asetpts=PTS-STARTPTS[outa]'
+                    cmd_pass2.extend(['-filter_complex', audio_filter, '-map', '[outa]'])
+                    logger.info(f"Applying audio trim filter: {audio_filter}")
+                else:
+                    cmd_pass2.extend(['-map', '1:a?'])
 
         cmd_pass2.extend([
             '-c:v', codec,
