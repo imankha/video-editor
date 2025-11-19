@@ -617,7 +617,7 @@ function App() {
 
   /**
    * Get filtered keyframes for export
-   * Filters out keyframes that are outside the trimmed boundaries
+   * Includes keyframes within trim range PLUS surrounding keyframes for proper interpolation
    */
   const getFilteredKeyframesForExport = useMemo(() => {
     const allKeyframes = getKeyframesForExport();
@@ -631,16 +631,45 @@ function App() {
     const trimStart = segmentData.trim_start || 0;
     const trimEnd = segmentData.trim_end || duration || Infinity;
 
-    // Filter keyframes to only include those within the trim bounds
-    const filtered = allKeyframes.filter(kf => {
-      return kf.time >= trimStart && kf.time <= trimEnd;
+    // Find keyframes needed for proper interpolation:
+    // 1. All keyframes within trim range
+    // 2. Last keyframe BEFORE trim start (for interpolation at trim start)
+    // 3. First keyframe AFTER trim end (for interpolation at trim end)
+    let lastBeforeTrimStart = null;
+    let firstAfterTrimEnd = null;
+    const keyframesInRange = [];
+
+    allKeyframes.forEach(kf => {
+      if (kf.time >= trimStart && kf.time <= trimEnd) {
+        // Keyframe is within trim range
+        keyframesInRange.push(kf);
+      } else if (kf.time < trimStart) {
+        // Track last keyframe before trim start
+        if (!lastBeforeTrimStart || kf.time > lastBeforeTrimStart.time) {
+          lastBeforeTrimStart = kf;
+        }
+      } else if (kf.time > trimEnd) {
+        // Track first keyframe after trim end
+        if (!firstAfterTrimEnd || kf.time < firstAfterTrimEnd.time) {
+          firstAfterTrimEnd = kf;
+        }
+      }
     });
+
+    // Combine all needed keyframes
+    const filtered = [
+      ...(lastBeforeTrimStart ? [lastBeforeTrimStart] : []),
+      ...keyframesInRange,
+      ...(firstAfterTrimEnd ? [firstAfterTrimEnd] : [])
+    ];
 
     console.log('[App] Filtered keyframes for export:', {
       original: allKeyframes.length,
       filtered: filtered.length,
       trimStart,
-      trimEnd
+      trimEnd,
+      includedBefore: !!lastBeforeTrimStart,
+      includedAfter: !!firstAfterTrimEnd
     });
 
     return filtered;
@@ -648,6 +677,7 @@ function App() {
 
   /**
    * Get filtered highlight keyframes for export
+   * Includes keyframes within trim range PLUS surrounding keyframes for proper interpolation
    */
   const getFilteredHighlightKeyframesForExport = useMemo(() => {
     if (!isHighlightEnabled) {
@@ -665,16 +695,45 @@ function App() {
     const trimStart = segmentData.trim_start || 0;
     const trimEnd = segmentData.trim_end || duration || Infinity;
 
-    // Filter keyframes to only include those within the trim bounds
-    const filtered = allKeyframes.filter(kf => {
-      return kf.time >= trimStart && kf.time <= trimEnd;
+    // Find keyframes needed for proper interpolation:
+    // 1. All keyframes within trim range
+    // 2. Last keyframe BEFORE trim start (for interpolation at trim start)
+    // 3. First keyframe AFTER trim end (for interpolation at trim end)
+    let lastBeforeTrimStart = null;
+    let firstAfterTrimEnd = null;
+    const keyframesInRange = [];
+
+    allKeyframes.forEach(kf => {
+      if (kf.time >= trimStart && kf.time <= trimEnd) {
+        // Keyframe is within trim range
+        keyframesInRange.push(kf);
+      } else if (kf.time < trimStart) {
+        // Track last keyframe before trim start
+        if (!lastBeforeTrimStart || kf.time > lastBeforeTrimStart.time) {
+          lastBeforeTrimStart = kf;
+        }
+      } else if (kf.time > trimEnd) {
+        // Track first keyframe after trim end
+        if (!firstAfterTrimEnd || kf.time < firstAfterTrimEnd.time) {
+          firstAfterTrimEnd = kf;
+        }
+      }
     });
+
+    // Combine all needed keyframes
+    const filtered = [
+      ...(lastBeforeTrimStart ? [lastBeforeTrimStart] : []),
+      ...keyframesInRange,
+      ...(firstAfterTrimEnd ? [firstAfterTrimEnd] : [])
+    ];
 
     console.log('[App] Filtered highlight keyframes for export:', {
       original: allKeyframes.length,
       filtered: filtered.length,
       trimStart,
-      trimEnd
+      trimEnd,
+      includedBefore: !!lastBeforeTrimStart,
+      includedAfter: !!firstAfterTrimEnd
     });
 
     return filtered;
