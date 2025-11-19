@@ -391,10 +391,11 @@ class AIVideoUpscaler:
         frame: np.ndarray,
         highlight: Dict[str, Any],
         original_video_size: Tuple[int, int],
-        crop: Optional[Dict[str, float]] = None
+        crop: Optional[Dict[str, float]] = None,
+        effect_type: str = "original"
     ) -> np.ndarray:
         """Wrapper for KeyframeInterpolator.render_highlight_on_frame - kept for backward compatibility"""
-        return KeyframeInterpolator.render_highlight_on_frame(frame, highlight, original_video_size, crop)
+        return KeyframeInterpolator.render_highlight_on_frame(frame, highlight, original_video_size, crop, effect_type)
 
     def process_video_with_upscale(
         self,
@@ -406,7 +407,8 @@ class AIVideoUpscaler:
         progress_callback=None,
         segment_data: Optional[Dict[str, Any]] = None,
         include_audio: bool = True,
-        highlight_keyframes: Optional[List[Dict[str, Any]]] = None
+        highlight_keyframes: Optional[List[Dict[str, Any]]] = None,
+        highlight_effect_type: str = "original"
     ) -> Dict[str, Any]:
         """
         Process video with de-zoom and AI upscaling
@@ -618,7 +620,7 @@ class AIVideoUpscaler:
                     gpu_id = output_frame_idx % num_workers if use_multi_gpu else 0
 
                     # Store task with both indices: (output_idx, source_frame_idx, ...)
-                    frame_tasks.append((output_frame_idx, frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size))
+                    frame_tasks.append((output_frame_idx, frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size, highlight_effect_type))
 
                 # Track progress
                 completed_frames = 0
@@ -704,7 +706,7 @@ class AIVideoUpscaler:
                             if highlight_keyframes and len(highlight_keyframes) > 0:
                                 highlight = self.interpolate_highlight(highlight_keyframes, time)
                                 if highlight is not None:
-                                    frame = self.render_highlight_on_frame(frame, highlight, original_video_size, crop)
+                                    frame = KeyframeInterpolator.render_highlight_on_frame(frame, highlight, original_video_size, crop, highlight_effect_type)
                                     if output_frame_idx == 0:
                                         logger.info(f"✓ Highlight overlay applied at ({highlight['x']:.1f}%, {highlight['y']:.1f}%)")
                                 elif output_frame_idx == 0:

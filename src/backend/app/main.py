@@ -595,7 +595,8 @@ async def export_with_ai_upscale(
     include_audio: str = Form("true"),
     highlight_keyframes_json: str = Form(None),
     enable_source_preupscale: str = Form("false"),
-    enable_diffusion_sr: str = Form("false")
+    enable_diffusion_sr: str = Form("false"),
+    highlight_effect_type: str = Form("original")
 ):
     """
     Export video with AI upscaling and de-zoom
@@ -867,7 +868,8 @@ async def export_with_ai_upscale(
             progress_callback=progress_callback,
             segment_data=segment_data,
             include_audio=include_audio_bool,
-            highlight_keyframes=highlight_keyframes_dict
+            highlight_keyframes=highlight_keyframes_dict,
+            highlight_effect_type=highlight_effect_type
         )
 
         complete_timestamp = datetime.now()
@@ -926,7 +928,8 @@ async def export_with_upscale_comparison(
     export_mode: str = Form("quality"),
     segment_data_json: str = Form(None),
     include_audio: str = Form("true"),
-    highlight_keyframes_json: str = Form(None)
+    highlight_keyframes_json: str = Form(None),
+    highlight_effect_type: str = Form("original")
 ):
     """
     Export video with multiple enhancement settings for A/B comparison testing.
@@ -1212,7 +1215,8 @@ async def export_with_upscale_comparison(
                     progress_callback=make_progress_callback(idx, perm_name),
                     segment_data=segment_data,
                     include_audio=include_audio_bool,
-                    highlight_keyframes=highlight_keyframes_dict
+                    highlight_keyframes=highlight_keyframes_dict,
+                    highlight_effect_type=highlight_effect_type
                 )
                 end_time = datetime.now()
                 duration = (end_time - start_time).total_seconds()

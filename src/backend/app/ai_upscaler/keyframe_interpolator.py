@@ -147,7 +147,8 @@ class KeyframeInterpolator:
         frame: np.ndarray,
         highlight: Dict[str, Any],
         original_video_size: Tuple[int, int],
-        crop: Optional[Dict[str, float]] = None
+        crop: Optional[Dict[str, float]] = None,
+        effect_type: str = "original"
     ) -> np.ndarray:
         """
         Render a semi-transparent highlight ellipse on a frame
@@ -221,37 +222,60 @@ class KeyframeInterpolator:
 
         opacity = highlight['opacity']
 
-        # Create an overlay for blending
-        overlay = frame.copy()
+        # NEW: Route to different effects
+        if effect_type == "brightness_boost":
+            # NEW CODE: brightness boost effect
+            mask = np.zeros((frame_h, frame_w), dtype=np.uint8)
+            cv2.ellipse(mask, center=(center_x, center_y), axes=(radius_x, radius_y),
+                       angle=0, startAngle=0, endAngle=360, color=255, thickness=-1)
+            mask_3ch = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR).astype(np.float32) / 255.0
+            result = frame.astype(np.float32)
+            result = result * (1.0 + mask_3ch * 0.5)  # 50% brighter
+            return np.clip(result, 0, 255).astype(np.uint8)
 
-        # Draw filled ellipse on overlay
-        cv2.ellipse(
-            overlay,
-            center=(center_x, center_y),
-            axes=(radius_x, radius_y),
-            angle=0,
-            startAngle=0,
-            endAngle=360,
-            color=color_bgr,
-            thickness=-1  # Filled
-        )
+        elif effect_type == "dark_overlay":
+            # NEW CODE: dark overlay effect
+            mask = np.zeros((frame_h, frame_w), dtype=np.uint8)
+            cv2.ellipse(mask, center=(center_x, center_y), axes=(radius_x, radius_y),
+                       angle=0, startAngle=0, endAngle=360, color=255, thickness=-1)
+            mask_inv = cv2.bitwise_not(mask)
+            mask_inv_3ch = cv2.cvtColor(mask_inv, cv2.COLOR_GRAY2BGR).astype(np.float32) / 255.0
+            result = frame.astype(np.float32)
+            result = result * (1.0 - mask_inv_3ch * 0.3)  # 30% darker outside ellipse
+            return np.clip(result, 0, 255).astype(np.uint8)
 
-        # Blend the overlay with original frame using opacity
-        result = cv2.addWeighted(overlay, opacity, frame, 1 - opacity, 0)
+        else:  # "original" - EXISTING CODE BELOW (EXACT COPY, DON'T MODIFY)
+            # Create an overlay for blending
+            overlay = frame.copy()
 
-        # Draw ellipse stroke (outline) for better visibility
-        stroke_opacity = 0.6
-        stroke_overlay = result.copy()
-        cv2.ellipse(
-            stroke_overlay,
-            center=(center_x, center_y),
-            axes=(radius_x, radius_y),
-            angle=0,
-            startAngle=0,
-            endAngle=360,
-            color=color_bgr,
-            thickness=3
-        )
-        result = cv2.addWeighted(stroke_overlay, stroke_opacity, result, 1 - stroke_opacity, 0)
+            # Draw filled ellipse on overlay
+            cv2.ellipse(
+                overlay,
+                center=(center_x, center_y),
+                axes=(radius_x, radius_y),
+                angle=0,
+                startAngle=0,
+                endAngle=360,
+                color=color_bgr,
+                thickness=-1  # Filled
+            )
 
-        return result
+            # Blend the overlay with original frame using opacity
+            result = cv2.addWeighted(overlay, opacity, frame, 1 - opacity, 0)
+
+            # Draw ellipse stroke (outline) for better visibility
+            stroke_opacity = 0.6
+            stroke_overlay = result.copy()
+            cv2.ellipse(
+                stroke_overlay,
+                center=(center_x, center_y),
+                axes=(radius_x, radius_y),
+                angle=0,
+                startAngle=0,
+                endAngle=360,
+                color=color_bgr,
+                thickness=3
+            )
+            result = cv2.addWeighted(stroke_overlay, stroke_opacity, result, 1 - stroke_opacity, 0)
+
+            return result
