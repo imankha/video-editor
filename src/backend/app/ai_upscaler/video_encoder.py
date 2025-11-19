@@ -209,12 +209,23 @@ class VideoEncoder:
                     video_start = start_time - time_offset
                     video_end = end_time - time_offset
 
+                    # Clamp video times to valid range (can't be negative or beyond frame duration)
+                    frame_duration = input_frame_count / original_fps
+                    video_start = max(0.0, video_start)
+                    video_end = min(frame_duration, video_end)
+
+                    # Skip segment if it's completely outside the frame range
+                    if video_start >= video_end:
+                        logger.info(f"Segment {i}: {start_time:.2f}s-{end_time:.2f}s SKIPPED (outside pre-trimmed frame range)")
+                        continue
+
                     # Audio uses original times from source
                     audio_start = start_time
                     audio_end = end_time
 
-                    # Calculate input frames for this segment
-                    segment_duration = end_time - start_time
+                    # Calculate input frames for this segment based on adjusted video times
+                    # This accounts for clipping at trim boundaries
+                    segment_duration = video_end - video_start
                     segment_input_frames = int(segment_duration * original_fps)
 
                     if speed == 0.5:
