@@ -280,21 +280,37 @@ class VideoEncoder:
                 logger.info(f"Filter complex: {filter_complex}")
 
             # Handle trim (apply after segment processing if no segments)
+            # Check if frames are already pre-trimmed during processing
+            frames_pretrimmed = segment_data.get('frames_pretrimmed', False) if segment_data else False
+
             if trim_start > 0 or trim_end:
                 if not filter_complex:
-                    # Simple trim without segments
-                    if trim_end:
-                        trim_filter = f"trim=start={trim_start}:end={trim_end},setpts=PTS-STARTPTS"
-                        logger.info(f"Applying trim: {trim_start:.2f}s to {trim_end:.2f}s")
+                    if frames_pretrimmed:
+                        # Frames are already trimmed - only trim audio, not video
+                        logger.info("=" * 60)
+                        logger.info("FRAMES PRE-TRIMMED DURING PROCESSING")
+                        logger.info("=" * 60)
+                        logger.info(f"Video frames already trimmed to {trim_start:.2f}s-{trim_end or 'end'}s")
+                        logger.info("Applying audio trim only (video trim skipped)")
+                        logger.info("=" * 60)
+                        # Don't set trim_filter - frames are already the right range
+                        # Audio trim will be handled separately in the FFmpeg command
+                        trim_filter = None
+                        expected_output_frames = input_frame_count  # Use actual frame count
                     else:
-                        trim_filter = f"trim=start={trim_start},setpts=PTS-STARTPTS"
-                        logger.info(f"Trimming start at {trim_start:.2f}s")
+                        # Normal trim - apply to both video and audio
+                        if trim_end:
+                            trim_filter = f"trim=start={trim_start}:end={trim_end},setpts=PTS-STARTPTS"
+                            logger.info(f"Applying trim: {trim_start:.2f}s to {trim_end:.2f}s")
+                        else:
+                            trim_filter = f"trim=start={trim_start},setpts=PTS-STARTPTS"
+                            logger.info(f"Trimming start at {trim_start:.2f}s")
 
-                    # Recalculate expected frames for trim
-                    total_duration = input_frame_count / original_fps
-                    actual_end = trim_end if trim_end else total_duration
-                    trimmed_duration = actual_end - trim_start
-                    expected_output_frames = int(trimmed_duration * original_fps)
+                        # Recalculate expected frames for trim
+                        total_duration = input_frame_count / original_fps
+                        actual_end = trim_end if trim_end else total_duration
+                        trimmed_duration = actual_end - trim_start
+                        expected_output_frames = int(trimmed_duration * original_fps)
 
         # Apply frame interpolation if needed (when target FPS > source FPS and no segment processing)
         if needs_interpolation and not filter_complex and not trim_filter:
@@ -348,25 +364,31 @@ class VideoEncoder:
             self._run_ffmpeg_pass1(
                 frames_pattern, input_video_path, input_framerate,
                 filter_complex, trim_filter, codec, preset, crf,
-                expected_output_frames, progress_callback
+                expected_output_frames, progress_callback, audio_trim_params
             )
         else:
             logger.info("=" * 60)
             logger.info("Skipping pass 1 for FAST mode - using single-pass encoding")
             logger.info("=" * 60)
 
+        # Prepare audio trim parameters if frames are pre-trimmed
+        audio_trim_params = None
+        if frames_pretrimmed and (trim_start > 0 or trim_end):
+            audio_trim_params = {'start': trim_start, 'end': trim_end}
+            logger.info(f"Audio trim params: start={trim_start:.2f}s, end={trim_end or 'end'}s")
+
         # Pass 2 - Encode (or single-pass for fast mode)
         self._run_ffmpeg_pass2(
             frames_pattern, input_video_path, output_path, input_framerate, fps,
             filter_complex, trim_filter, codec, preset, crf, export_mode,
             needs_interpolation, interpolation_ratio, include_audio,
-            expected_output_frames, progress_callback
+            expected_output_frames, progress_callback, audio_trim_params
         )
 
     def _run_ffmpeg_pass1(
         self, frames_pattern, input_video_path, input_framerate,
         filter_complex, trim_filter, codec, preset, crf,
-        expected_output_frames, progress_callback
+        expected_output_frames, progress_callback, audio_trim_params=None
     ):
         """Run FFmpeg pass 1 (analysis)"""
         ffmpeg_pass1_start = datetime.now()
@@ -459,7 +481,7 @@ class VideoEncoder:
         self, frames_pattern, input_video_path, output_path, input_framerate, fps,
         filter_complex, trim_filter, codec, preset, crf, export_mode,
         needs_interpolation, interpolation_ratio, include_audio,
-        expected_output_frames, progress_callback
+        expected_output_frames, progress_callback, audio_trim_params=None
     ):
         """Run FFmpeg pass 2 (encoding)"""
         ffmpeg_pass2_start = datetime.now()
@@ -501,7 +523,19 @@ class VideoEncoder:
         else:
             cmd_pass2.extend(['-map', '0:v'])
             if include_audio:
-                cmd_pass2.extend(['-map', '1:a?'])
+                # Check if we need to trim audio separately (for pre-trimmed frames)
+                if audio_trim_params:
+                    # Video frames are already trimmed, but we need to trim audio from source
+                    start = audio_trim_params['start']
+                    end = audio_trim_params['end']
+                    if end:
+                        audio_filter = f'[1:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[outa]'
+                    else:
+                        audio_filter = f'[1:a]atrim=start={start},asetpts=PTS-STARTPTS[outa]'
+                    cmd_pass2.extend(['-filter_complex', audio_filter, '-map', '[outa]'])
+                    logger.info(f"Applying audio trim filter: {audio_filter}")
+                else:
+                    cmd_pass2.extend(['-map', '1:a?'])
 
         cmd_pass2.extend([
             '-c:v', codec,
