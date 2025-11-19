@@ -27,6 +27,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
   const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState(null);
   const [includeAudio, setIncludeAudio] = useState(true);
+  const [highlightEffectStyle, setHighlightEffectStyle] = useState('original');
   const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
@@ -127,6 +128,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
         console.log(JSON.stringify(highlightKeyframes, null, 2));
         console.log('==============================================');
         formData.append('highlight_keyframes_json', JSON.stringify(highlightKeyframes));
+        formData.append('highlight_effect_type', highlightEffectStyle);
       } else {
         console.log('=== EXPORT: No highlight keyframes to send (layer disabled or empty) ===');
       }
@@ -259,6 +261,33 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
               }`}
             />
           </button>
+        </div>
+
+        {/* Highlight Effect Style */}
+        <div className="flex flex-col space-y-2">
+          <label htmlFor="highlight-effect" className="text-sm font-medium text-gray-200">
+            Highlight Effect
+          </label>
+          <select
+            id="highlight-effect"
+            value={highlightEffectStyle}
+            onChange={(e) => setHighlightEffectStyle(e.target.value)}
+            disabled={isExporting || !highlightKeyframes || highlightKeyframes.length === 0}
+            className={`w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              isExporting || !highlightKeyframes || highlightKeyframes.length === 0
+                ? 'opacity-50 cursor-not-allowed'
+                : 'cursor-pointer hover:bg-gray-600'
+            }`}
+          >
+            <option value="original">Original (Semi-transparent overlay)</option>
+            <option value="brightness_boost">Brightness Boost (50% brighter)</option>
+            <option value="dark_overlay">Dark Overlay (Spotlight effect)</option>
+          </select>
+          <span className="text-xs text-gray-400">
+            {!highlightKeyframes || highlightKeyframes.length === 0
+              ? 'No highlights to style'
+              : 'Choose how highlights appear in exported video'}
+          </span>
         </div>
 
         {/* Export Info */}

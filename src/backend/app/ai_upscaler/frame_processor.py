@@ -101,7 +101,7 @@ class FrameProcessor:
 
     def process_single_frame(
         self,
-        frame_data: Tuple[int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int]] | Tuple[int, int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int]]
+        frame_data: Tuple[int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int]] | Tuple[int, int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int]] | Tuple[int, int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int], str]
     ) -> Tuple[int, np.ndarray, bool]:
         """
         Process a single frame with AI upscaling on a specific GPU
@@ -109,15 +109,23 @@ class FrameProcessor:
         Args:
             frame_data: Tuple of (frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size)
                         OR (output_frame_idx, source_frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size)
-                        The second form is used when processing a trim range - output_frame_idx is used for saving,
+                        OR (output_frame_idx, source_frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size, highlight_effect_type)
+                        The second and third forms are used when processing a trim range - output_frame_idx is used for saving,
                         source_frame_idx is used for extraction.
 
         Returns:
             Tuple of (output_frame_idx, enhanced_frame, success)
         """
-        # Support both old and new tuple formats for backward compatibility
-        if len(frame_data) == 9:
-            # New format with separate output and source indices (for trim optimization)
+        # Support multiple tuple formats for backward compatibility
+        highlight_effect_type = "original"  # Default
+
+        if len(frame_data) == 10:
+            # New format with highlight_effect_type
+            output_frame_idx, source_frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size, highlight_effect_type = frame_data
+            frame_idx = source_frame_idx  # Use source index for extraction
+            result_idx = output_frame_idx  # Use output index for saving
+        elif len(frame_data) == 9:
+            # Format with separate output and source indices (for trim optimization)
             output_frame_idx, source_frame_idx, input_path, crop, target_resolution, gpu_id, time, highlight, original_video_size = frame_data
             frame_idx = source_frame_idx  # Use source index for extraction
             result_idx = output_frame_idx  # Use output index for saving
@@ -159,7 +167,7 @@ class FrameProcessor:
 
             # Apply highlight overlay if provided
             if highlight is not None:
-                frame = KeyframeInterpolator.render_highlight_on_frame(frame, highlight, original_video_size, crop)
+                frame = KeyframeInterpolator.render_highlight_on_frame(frame, highlight, original_video_size, crop, highlight_effect_type)
 
             # Get the appropriate upsampler for this GPU
             upsampler = self.model_manager.get_backend_for_gpu(gpu_id)
