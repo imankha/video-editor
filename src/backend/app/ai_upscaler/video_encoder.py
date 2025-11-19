@@ -181,6 +181,12 @@ class VideoEncoder:
             segments = segment_data.get('segments', [])
             trim_start = segment_data.get('trim_start', 0)
             trim_end = segment_data.get('trim_end')
+            frames_pretrimmed = segment_data.get('frames_pretrimmed', False)
+
+            # Calculate time offset for pre-trimmed frames
+            # If frames are pre-trimmed, they start at 0.0s in the frame sequence
+            # but represent trim_start in source time
+            time_offset = trim_start if frames_pretrimmed else 0.0
 
             if segments:
                 # Build complex filtergraph for segment-based speed changes
@@ -190,10 +196,22 @@ class VideoEncoder:
                 audio_output_labels = []
                 expected_output_frames = 0
 
+                if frames_pretrimmed:
+                    logger.info(f"Frames pre-trimmed: adjusting all segment times by -{time_offset:.2f}s")
+
                 for i, seg in enumerate(segments):
                     start_time = seg['start']
                     end_time = seg['end']
                     speed = seg['speed']
+
+                    # Adjust segment times for pre-trimmed frames
+                    # Video frames start at 0.0s in the sequence, so subtract the offset
+                    video_start = start_time - time_offset
+                    video_end = end_time - time_offset
+
+                    # Audio uses original times from source
+                    audio_start = start_time
+                    audio_end = end_time
 
                     # Calculate input frames for this segment
                     segment_duration = end_time - start_time
@@ -201,22 +219,24 @@ class VideoEncoder:
 
                     if speed == 0.5:
                         # For 0.5x speed: trim segment, apply minterpolate to double frames
-                        logger.info(f"Segment {i}: {start_time:.2f}s-{end_time:.2f}s @ 0.5x speed")
+                        logger.info(f"Segment {i}: source {start_time:.2f}s-{end_time:.2f}s @ 0.5x speed")
+                        if frames_pretrimmed:
+                            logger.info(f"  → Video trim adjusted: {video_start:.2f}s-{video_end:.2f}s (frames pre-trimmed)")
                         logger.info(f"  → Input frames: {segment_input_frames}, Output frames (2x): {segment_input_frames * 2}")
                         logger.info(f"  → Using minterpolate with motion compensation")
                         logger.info(f"  → Applying atempo=0.5 to audio for slow motion")
 
-                        # Trim, reset PTS, interpolate to double FPS
+                        # Trim video using adjusted times, reset PTS, interpolate to double FPS
                         filter_parts.append(
-                            f"[0:v]trim=start={start_time}:end={end_time},setpts=PTS-STARTPTS,"
+                            f"[0:v]trim=start={video_start}:end={video_end},setpts=PTS-STARTPTS,"
                             f"minterpolate=fps={fps*2}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none,"
                             f"setpts=PTS*2[v{i}]"
                         )
 
-                        # Audio: trim and slow down with atempo=0.5
+                        # Audio: trim using original source times and slow down with atempo=0.5
                         atempo_filter = self.build_atempo_filter(speed)
                         audio_filter_parts.append(
-                            f"[1:a]atrim=start={start_time}:end={end_time},asetpts=PTS-STARTPTS,"
+                            f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,"
                             f"{atempo_filter}[a{i}]"
                         )
 
@@ -225,25 +245,28 @@ class VideoEncoder:
                         audio_output_labels.append(f"[a{i}]")
                     else:
                         # For other speeds or normal: trim and optionally adjust PTS
-                        logger.info(f"Segment {i}: {start_time:.2f}s-{end_time:.2f}s @ {speed}x speed")
+                        logger.info(f"Segment {i}: source {start_time:.2f}s-{end_time:.2f}s @ {speed}x speed")
+                        if frames_pretrimmed:
+                            logger.info(f"  → Video trim adjusted: {video_start:.2f}s-{video_end:.2f}s (frames pre-trimmed)")
                         logger.info(f"  → Frames: {segment_input_frames}")
 
+                        # Trim video using adjusted times
                         filter_parts.append(
-                            f"[0:v]trim=start={start_time}:end={end_time},setpts=PTS-STARTPTS[v{i}]"
+                            f"[0:v]trim=start={video_start}:end={video_end},setpts=PTS-STARTPTS[v{i}]"
                         )
 
-                        # Audio: build atempo filter for speed adjustment
+                        # Audio: build atempo filter for speed adjustment using original source times
                         atempo_filter = self.build_atempo_filter(speed)
                         if atempo_filter:
                             logger.info(f"  → Applying {atempo_filter} to audio")
                             audio_filter_parts.append(
-                                f"[1:a]atrim=start={start_time}:end={end_time},asetpts=PTS-STARTPTS,"
+                                f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,"
                                 f"{atempo_filter}[a{i}]"
                             )
                         else:
                             # No atempo needed for 1.0x speed
                             audio_filter_parts.append(
-                                f"[1:a]atrim=start={start_time}:end={end_time},asetpts=PTS-STARTPTS[a{i}]"
+                                f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS[a{i}]"
                             )
 
                         expected_output_frames += segment_input_frames
