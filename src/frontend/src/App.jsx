@@ -225,10 +225,10 @@ function App() {
     console.log('[App] Keyframes changed:', keyframes);
   }, [keyframes]);
 
-  // Debug: Log currentCropState changes
-  useEffect(() => {
-    console.log('[App] Current crop state:', currentCropState);
-  }, [currentCropState]);
+  // Debug: Log currentCropState changes (disabled - too spammy)
+  // useEffect(() => {
+  //   console.log('[App] Current crop state:', currentCropState);
+  // }, [currentCropState]);
 
   // BUG FIX: Auto-cleanup trim keyframes when trimRange is cleared
   // Use ref to track previous value to avoid cleanup on initial mount
@@ -245,6 +245,7 @@ function App() {
 
   // BUG FIX: Auto-reposition playhead when it becomes invalid after trim operation
   // This ensures the playhead is always within the visible (non-trimmed) range
+  const lastSeekTimeRef = useRef(null);
   useEffect(() => {
     if (!trimRange || !videoUrl) return;
 
@@ -254,8 +255,17 @@ function App() {
     if (isPlayheadInvalid) {
       // Clamp to the nearest valid position
       const validTime = clampToVisibleRange(currentTime);
-      console.log('[App] Playhead repositioned after trim:', currentTime, '->', validTime);
-      seek(validTime);
+
+      // Only seek if the difference is significant (avoid floating point precision loops)
+      const threshold = 0.001; // 1ms threshold
+      const needsSeek = lastSeekTimeRef.current === null ||
+                        Math.abs(validTime - lastSeekTimeRef.current) > threshold;
+
+      if (needsSeek) {
+        console.log('[App] Playhead repositioned after trim:', currentTime, '->', validTime);
+        lastSeekTimeRef.current = validTime;
+        seek(validTime);
+      }
     }
   }, [trimRange, currentTime, videoUrl, clampToVisibleRange, seek]);
 
@@ -291,9 +301,11 @@ function App() {
   /**
    * Coordinated segment trim handler
    * This function ensures keyframes are properly managed when trimming segments:
-   * 1. Deletes all keyframes in the trimmed region
-   * 2. Updates the boundary keyframe with crop data from the furthest keyframe in the trimmed region
+   * 1. Deletes all crop and highlight keyframes in the trimmed region
+   * 2. Updates the boundary crop and highlight keyframes with data from the furthest keyframes in the trimmed region
    * 3. Toggles the segment trim state
+   *
+   * Both crop and highlight keyframes use identical trim logic for consistency.
    */
   const handleTrimSegment = (segmentIndex) => {
     if (!duration || segmentIndex < 0 || segmentIndex >= segments.length) return;
@@ -301,7 +313,28 @@ function App() {
     const segment = segments[segmentIndex];
     const isCurrentlyTrimmed = segment.isTrimmed;
 
+    console.log('========== TRIM OPERATION START ==========');
     console.log('[App] handleTrimSegment - segment:', segment, 'isCurrentlyTrimmed:', isCurrentlyTrimmed);
+    console.log('[App] BEFORE TRIM - Crop keyframes:', keyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / framerate,
+      origin: kf.origin,
+      x: kf.x,
+      y: kf.y,
+      width: kf.width,
+      height: kf.height
+    })));
+    console.log('[App] BEFORE TRIM - Highlight keyframes:', highlightKeyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / framerate,
+      origin: kf.origin,
+      x: kf.x,
+      y: kf.y,
+      radiusX: kf.radiusX,
+      radiusY: kf.radiusY
+    })));
+    console.log('[App] BEFORE TRIM - trimRange:', trimRange);
+    console.log('[App] BEFORE TRIM - currentTime:', currentTime);
 
     // INVARIANT: Can only trim edge segments
     if (process.env.NODE_ENV === 'development') {
@@ -314,9 +347,10 @@ function App() {
     if (!isCurrentlyTrimmed) {
       // We're about to trim this segment
 
-      // Step 1: Find the furthest keyframe in the trimmed region to preserve its crop data
+      // ========== CROP KEYFRAMES ==========
+      // Step 1: Find the furthest crop keyframe in the trimmed region to preserve its data
       let boundaryTime;
-      let furthestKeyframeInTrimmedRegion = null;
+      let furthestCropKeyframeInTrimmedRegion = null;
 
       if (segment.isLast) {
         // Trimming from the end
@@ -326,7 +360,7 @@ function App() {
         for (let i = keyframes.length - 1; i >= 0; i--) {
           const kfTime = keyframes[i].frame / framerate;
           if (kfTime >= segment.start && kfTime <= segment.end) {
-            furthestKeyframeInTrimmedRegion = keyframes[i];
+            furthestCropKeyframeInTrimmedRegion = keyframes[i];
             break;
           }
         }
@@ -338,59 +372,99 @@ function App() {
         for (let i = 0; i < keyframes.length; i++) {
           const kfTime = keyframes[i].frame / framerate;
           if (kfTime >= segment.start && kfTime <= segment.end) {
-            furthestKeyframeInTrimmedRegion = keyframes[i];
+            furthestCropKeyframeInTrimmedRegion = keyframes[i];
           }
         }
       }
 
-      // Step 2: If we found a keyframe in the trimmed region, get its crop data
+      // Step 2: If we found a crop keyframe in the trimmed region, get its data
       // Otherwise, interpolate at the furthest point in the trimmed region
       let cropDataToPreserve = null;
-      if (furthestKeyframeInTrimmedRegion) {
-        const kfTime = furthestKeyframeInTrimmedRegion.frame / framerate;
+      if (furthestCropKeyframeInTrimmedRegion) {
+        const kfTime = furthestCropKeyframeInTrimmedRegion.frame / framerate;
         cropDataToPreserve = getCropDataAtTime(kfTime);
         console.log('[App] Preserving crop from keyframe at:', kfTime, 'data:', cropDataToPreserve);
       } else {
         // No keyframe in trimmed region, interpolate at the far edge
         const edgeTime = segment.isLast ? segment.end : segment.start;
         cropDataToPreserve = getCropDataAtTime(edgeTime);
-        console.log('[App] No keyframe in trimmed region, interpolating at:', edgeTime, 'data:', cropDataToPreserve);
+        console.log('[App] No crop keyframe in trimmed region, interpolating at:', edgeTime, 'data:', cropDataToPreserve);
       }
 
-      // Step 3: Delete keyframes in the trimmed range
-      console.log('[App] Deleting keyframes in range:', segment.start, '-', segment.end);
+      // Step 3: Delete crop keyframes in the trimmed range
+      console.log('[App] Deleting crop keyframes in range:', segment.start, '-', segment.end);
       deleteKeyframesInRange(segment.start, segment.end, duration);
 
-      // Step 4: Update the boundary keyframe with the preserved crop data
+      // Step 4: Reconstitute the permanent keyframe at the boundary
+      // The permanent keyframe (frame 0 or end) was deleted in the trimmed range,
+      // so we reconstitute it at the new boundary with origin='permanent'
       if (cropDataToPreserve && boundaryTime !== undefined) {
-        console.log('[App] Updating boundary keyframe at:', boundaryTime, 'with data:', cropDataToPreserve);
-        // Mark this keyframe as 'trim' origin so it can be cleaned up later
-        addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration, 'trim');
+        console.log('[App] Reconstituting permanent crop keyframe at:', boundaryTime, 'with data:', cropDataToPreserve);
+        addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration, 'permanent');
+      }
+
+      // ========== HIGHLIGHT KEYFRAMES ==========
+      // Step 1: Find the furthest highlight keyframe in the trimmed region to preserve its data
+      let furthestHighlightKeyframeInTrimmedRegion = null;
+
+      if (segment.isLast) {
+        // Trimming from the end
+        // Find the furthest keyframe before or at the segment end
+        for (let i = highlightKeyframes.length - 1; i >= 0; i--) {
+          const kfTime = highlightKeyframes[i].frame / framerate;
+          if (kfTime >= segment.start && kfTime <= segment.end) {
+            furthestHighlightKeyframeInTrimmedRegion = highlightKeyframes[i];
+            break;
+          }
+        }
+      } else if (segment.isFirst) {
+        // Trimming from the start
+        // Find the furthest keyframe after or at the segment start
+        for (let i = 0; i < highlightKeyframes.length; i++) {
+          const kfTime = highlightKeyframes[i].frame / framerate;
+          if (kfTime >= segment.start && kfTime <= segment.end) {
+            furthestHighlightKeyframeInTrimmedRegion = highlightKeyframes[i];
+          }
+        }
+      }
+
+      // Step 2: If we found a highlight keyframe in the trimmed region, get its data
+      // Otherwise, interpolate at the furthest point in the trimmed region
+      let highlightDataToPreserve = null;
+      if (furthestHighlightKeyframeInTrimmedRegion) {
+        const kfTime = furthestHighlightKeyframeInTrimmedRegion.frame / framerate;
+        highlightDataToPreserve = getHighlightDataAtTime(kfTime);
+        console.log('[App] Preserving highlight from keyframe at:', kfTime, 'data:', highlightDataToPreserve);
+      } else {
+        // No keyframe in trimmed region, interpolate at the far edge
+        const edgeTime = segment.isLast ? segment.end : segment.start;
+        highlightDataToPreserve = getHighlightDataAtTime(edgeTime);
+        console.log('[App] No highlight keyframe in trimmed region, interpolating at:', edgeTime, 'data:', highlightDataToPreserve);
+      }
+
+      // Step 3: Delete highlight keyframes in the trimmed range
+      console.log('[App] Deleting highlight keyframes in range:', segment.start, '-', segment.end);
+      deleteHighlightKeyframesInRange(segment.start, segment.end, duration);
+
+      // Step 4: Reconstitute the permanent highlight keyframe at the boundary
+      // The permanent keyframe was deleted in the trimmed range,
+      // so we reconstitute it at the new boundary with origin='permanent'
+      if (highlightDataToPreserve && boundaryTime !== undefined) {
+        console.log('[App] Reconstituting permanent highlight keyframe at:', boundaryTime, 'with data:', highlightDataToPreserve);
+        addOrUpdateHighlightKeyframe(boundaryTime, highlightDataToPreserve, duration, 'permanent');
       }
     }
     // Note: Cleanup of trim keyframes is now automatic via useEffect watching trimRange
 
     // Step 5: Toggle the trim state (this works for both trimming and restoring)
     console.log('[App] Toggling trim state for segment:', segmentIndex);
+    console.log('========== TRIM OPERATION COMPLETE ==========');
+
+    // NOTE: Keyframe state updates happen asynchronously via React's batching.
+    // Check the "[App] Keyframes changed" log to see the actual updated state.
+    // setTimeout closures capture stale variables and show incorrect state.
+
     toggleTrimSegment(segmentIndex);
-
-    // INVARIANT: After trim operation, verify keyframe count is reasonable
-    if (process.env.NODE_ENV === 'development') {
-      setTimeout(() => {
-        if (!isCurrentlyTrimmed) {
-          // After trimming, we should have created a boundary keyframe
-          const boundaryTime = segment.isLast ? segment.start : segment.end;
-          const boundaryFrame = Math.round(boundaryTime * framerate);
-          const boundaryKeyframe = keyframes.find(kf => kf.frame === boundaryFrame);
-
-          if (!boundaryKeyframe) {
-            console.warn('⚠️ INVARIANT WARNING: Expected boundary keyframe at frame', boundaryFrame, 'after trim operation');
-          } else if (boundaryKeyframe.origin !== 'trim') {
-            console.warn('⚠️ INVARIANT WARNING: Boundary keyframe has wrong origin:', boundaryKeyframe.origin, 'expected: trim');
-          }
-        }
-      }, 100); // Delay to allow state updates to complete
-    }
   };
 
   // Keyboard handler: Space bar toggles play/pause
@@ -534,6 +608,19 @@ function App() {
 
   // Handle crop complete (create keyframe and clear drag state)
   const handleCropComplete = (cropData) => {
+    console.log('========== CROP EDIT ==========');
+    console.log('[App] handleCropComplete - currentTime:', currentTime);
+    console.log('[App] handleCropComplete - cropData:', cropData);
+    console.log('[App] handleCropComplete - existing keyframes:', keyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / framerate,
+      origin: kf.origin
+    })));
+    const frame = Math.round(currentTime * framerate);
+    const existingKeyframe = keyframes.find(kf => kf.frame === frame);
+    console.log('[App] handleCropComplete - looking for keyframe at frame:', frame, '(time:', currentTime, ')');
+    console.log('[App] handleCropComplete - existing keyframe at this frame:', existingKeyframe);
+
     addOrUpdateKeyframe(currentTime, cropData, duration);
     setDragCrop(null); // Clear drag preview
   };
@@ -545,6 +632,19 @@ function App() {
 
   // Handle highlight complete (create keyframe and clear drag state)
   const handleHighlightComplete = (highlightData) => {
+    console.log('========== HIGHLIGHT EDIT ==========');
+    console.log('[App] handleHighlightComplete - currentTime:', currentTime);
+    console.log('[App] handleHighlightComplete - highlightData:', highlightData);
+    console.log('[App] handleHighlightComplete - existing keyframes:', highlightKeyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / framerate,
+      origin: kf.origin
+    })));
+    const frame = Math.round(currentTime * framerate);
+    const existingKeyframe = highlightKeyframes.find(kf => kf.frame === frame);
+    console.log('[App] handleHighlightComplete - looking for keyframe at frame:', frame, '(time:', currentTime, ')');
+    console.log('[App] handleHighlightComplete - existing keyframe at this frame:', existingKeyframe);
+
     addOrUpdateHighlightKeyframe(currentTime, highlightData, duration);
     setDragHighlight(null);
   };
@@ -663,14 +763,15 @@ function App() {
       ...(firstAfterTrimEnd ? [firstAfterTrimEnd] : [])
     ];
 
-    console.log('[App] Filtered keyframes for export:', {
-      original: allKeyframes.length,
-      filtered: filtered.length,
-      trimStart,
-      trimEnd,
-      includedBefore: !!lastBeforeTrimStart,
-      includedAfter: !!firstAfterTrimEnd
-    });
+    // Debug log (disabled - too spammy)
+    // console.log('[App] Filtered keyframes for export:', {
+    //   original: allKeyframes.length,
+    //   filtered: filtered.length,
+    //   trimStart,
+    //   trimEnd,
+    //   includedBefore: !!lastBeforeTrimStart,
+    //   includedAfter: !!firstAfterTrimEnd
+    // });
 
     return filtered;
   }, [getKeyframesForExport, getSegmentExportData, duration]);
@@ -727,14 +828,15 @@ function App() {
       ...(firstAfterTrimEnd ? [firstAfterTrimEnd] : [])
     ];
 
-    console.log('[App] Filtered highlight keyframes for export:', {
-      original: allKeyframes.length,
-      filtered: filtered.length,
-      trimStart,
-      trimEnd,
-      includedBefore: !!lastBeforeTrimStart,
-      includedAfter: !!firstAfterTrimEnd
-    });
+    // Debug log (disabled - too spammy)
+    // console.log('[App] Filtered highlight keyframes for export:', {
+    //   original: allKeyframes.length,
+    //   filtered: filtered.length,
+    //   trimStart,
+    //   trimEnd,
+    //   includedBefore: !!lastBeforeTrimStart,
+    //   includedAfter: !!firstAfterTrimEnd
+    // });
 
     return filtered;
   }, [isHighlightEnabled, getHighlightKeyframesForExport, getSegmentExportData, duration]);
