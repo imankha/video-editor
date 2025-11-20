@@ -438,13 +438,13 @@ export default function CropOverlay({
           <line x1="0" y1="66.66%" x2="100%" y2="66.66%" stroke="white" strokeOpacity="0.5" strokeWidth="1" />
         </svg>
 
-        {/* Debug: Show crop size when keyframe is selected (only in development mode) */}
+        {/* Debug: Show crop size and position when keyframe is selected (only in development mode) */}
         {versionInfo.environment !== 'production' && selectedKeyframeIndex !== null && (
           <div
             className={`absolute top-2 left-1/2 transform -translate-x-1/2 bg-black/75 px-2 py-1 rounded text-sm font-mono pointer-events-none ${cropTooSmall ? 'text-red-400' : 'text-yellow-300'}`}
-            title={`Crop size: ${Math.round(currentCrop.width)}x${Math.round(currentCrop.height)}${cropTooSmall ? ' (Too small for optimal 4x upscale)' : ''}`}
+            title={`Crop: ${Math.round(currentCrop.width)}x${Math.round(currentCrop.height)} at position (${Math.round(currentCrop.x)}, ${Math.round(currentCrop.y)})${cropTooSmall ? ' (Too small for optimal 4x upscale)' : ''}`}
           >
-            {Math.round(currentCrop.width)}x{Math.round(currentCrop.height)}
+            {Math.round(currentCrop.width)}x{Math.round(currentCrop.height)} @ ({Math.round(currentCrop.x)}, {Math.round(currentCrop.y)})
             {cropTooSmall && ' ⚠️'}
           </div>
         )}
