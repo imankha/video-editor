@@ -28,9 +28,12 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
   // Ref to track pending keyframe operations and prevent duplicates
   const pendingKeyframeOpsRef = useRef(new Map());
 
-  // Ref to track keyframes we've already decided to create in the current setState batch
-  // This persists across callback re-executions within the same batch
-  const createdInBatchRef = useRef(new Set());
+  // Ref to cache the result of setState operations during batch re-executions
+  // When React batches updates, it re-executes callbacks with the same prev state.
+  // We cache the computed result and return it in subsequent executions to ensure
+  // all callbacks return the same array reference, preventing state loss.
+  // Maps batchKey -> computed result array
+  const batchResultCacheRef = useRef(new Map());
 
   /**
    * Initialize keyframes with start and end
@@ -124,22 +127,17 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
 
       console.log('[useKeyframes] Existing keyframe at frame', frame, ':', existingIndex >= 0 ? 'YES (index ' + existingIndex + ')' : 'NO');
 
-      // DEDUPLICATION: Check if we already decided to create/update this keyframe in a previous callback execution
+      // DEDUPLICATION: Check if we already computed the result for this operation in a previous callback execution
       // React can re-execute setState callbacks with the same prev state during batching
       const batchKey = `${frame}-${actualOrigin}`;
-      if (createdInBatchRef.current.has(batchKey)) {
-        console.log('[useKeyframes] SKIPPING - already decided to create/update frame', frame, 'in this batch (callback re-execution)');
-        return prev;
+      const cachedResult = batchResultCacheRef.current.get(batchKey);
+
+      if (cachedResult) {
+        console.log('[useKeyframes] Returning cached result for frame', frame, '(callback re-execution)');
+        return cachedResult;
       }
 
-      // Mark this keyframe as being created/updated in this batch
-      createdInBatchRef.current.add(batchKey);
-
-      // Clear the batch tracking after React finishes the current batch (next tick)
-      setTimeout(() => {
-        createdInBatchRef.current.delete(batchKey);
-      }, 0);
-
+      // First execution for this operation in this batch - compute the result
       let updated;
       if (existingIndex >= 0) {
         // Update existing keyframe - preserve origin if updating permanent keyframe
@@ -174,6 +172,14 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
           console.error('⚠️ INVARIANT VIOLATION: Keyframes missing origin:', missingOrigin);
         }
       }
+
+      // Cache this result so subsequent callback re-executions return the same array
+      batchResultCacheRef.current.set(batchKey, updated);
+
+      // Clear the cache after React finishes the current batch (next tick)
+      setTimeout(() => {
+        batchResultCacheRef.current.delete(batchKey);
+      }, 0);
 
       return updated;
     });
