@@ -341,19 +341,19 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
             <button
               onClick={() => handleHighlightEffectClick('brightness_boost')}
               disabled={isExporting || !isHighlightEnabled}
-              className="absolute left-0 h-full w-1/3 focus:outline-none"
+              className="absolute left-0 h-full w-1/3 z-10 focus:outline-none"
               aria-label="Bright Inside"
             />
             <button
               onClick={() => handleHighlightEffectClick('original')}
               disabled={isExporting || !isHighlightEnabled}
-              className="absolute left-1/3 h-full w-1/3 focus:outline-none"
+              className="absolute left-1/3 h-full w-1/3 z-10 focus:outline-none"
               aria-label="Yellow Inside"
             />
             <button
               onClick={() => handleHighlightEffectClick('dark_overlay')}
               disabled={isExporting || !isHighlightEnabled}
-              className="absolute right-0 h-full w-1/3 focus:outline-none"
+              className="absolute right-0 h-full w-1/3 z-10 focus:outline-none"
               aria-label="Dim Outside"
             />
 
