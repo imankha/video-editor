@@ -42,6 +42,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
    */
   const initializeKeyframes = useCallback((defaultData, endFrame) => {
     console.log('[useKeyframes] Initializing keyframes at frame=0 and frame=' + endFrame, defaultData);
+    console.trace('[useKeyframes] initializeKeyframes call stack:');
     setIsEndKeyframeExplicit(false);
     setKeyframes([
       {
@@ -103,6 +104,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
     pendingKeyframeOpsRef.current.set(opKey, now);
 
     console.log('[useKeyframes] Adding/updating keyframe at time', time, '(frame', frame + '), origin:', origin);
+    console.trace('[useKeyframes] addOrUpdateKeyframe call stack:');
     console.log('[useKeyframes] totalFrames:', totalFrames, 'endFrame:', endFrame);
     console.log('[useKeyframes] Current keyframes before add/update:', keyframes.map(kf => ({
       frame: kf.frame,
@@ -134,6 +136,10 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
 
       if (cachedResult) {
         console.log('[useKeyframes] Returning cached result for frame', frame, '(callback re-execution)');
+        console.log('[useKeyframes] Cached keyframes:', cachedResult.map(kf => ({
+          frame: kf.frame,
+          origin: kf.origin
+        })));
         return cachedResult;
       }
 
@@ -148,6 +154,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
       } else {
         // Add new keyframe and sort by frame
         console.log('[useKeyframes] CREATING new keyframe at frame', frame, 'origin:', actualOrigin);
+        console.trace('[useKeyframes] CREATE call stack:');
         const newKeyframes = [...prev, { ...data, frame, origin: actualOrigin }];
         updated = newKeyframes.sort((a, b) => a.frame - b.frame);
       }
@@ -180,6 +187,11 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
       setTimeout(() => {
         batchResultCacheRef.current.delete(batchKey);
       }, 0);
+
+      console.log('[useKeyframes] Returning updated keyframes:', updated.map(kf => ({
+        frame: kf.frame,
+        origin: kf.origin
+      })));
 
       return updated;
     });
