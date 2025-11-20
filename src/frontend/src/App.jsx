@@ -395,11 +395,12 @@ function App() {
       console.log('[App] Deleting crop keyframes in range:', segment.start, '-', segment.end);
       deleteKeyframesInRange(segment.start, segment.end, duration);
 
-      // Step 4: Update the boundary crop keyframe with the preserved data
+      // Step 4: Reconstitute the permanent keyframe at the boundary
+      // The permanent keyframe (frame 0 or end) was deleted in the trimmed range,
+      // so we reconstitute it at the new boundary with origin='permanent'
       if (cropDataToPreserve && boundaryTime !== undefined) {
-        console.log('[App] Updating boundary crop keyframe at:', boundaryTime, 'with data:', cropDataToPreserve);
-        // Mark this keyframe as 'trim' origin so it can be cleaned up later
-        addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration, 'trim');
+        console.log('[App] Reconstituting permanent crop keyframe at:', boundaryTime, 'with data:', cropDataToPreserve);
+        addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration, 'permanent');
       }
 
       // ========== HIGHLIGHT KEYFRAMES ==========
@@ -445,11 +446,12 @@ function App() {
       console.log('[App] Deleting highlight keyframes in range:', segment.start, '-', segment.end);
       deleteHighlightKeyframesInRange(segment.start, segment.end, duration);
 
-      // Step 4: Update the boundary highlight keyframe with the preserved data
+      // Step 4: Reconstitute the permanent highlight keyframe at the boundary
+      // The permanent keyframe was deleted in the trimmed range,
+      // so we reconstitute it at the new boundary with origin='permanent'
       if (highlightDataToPreserve && boundaryTime !== undefined) {
-        console.log('[App] Updating boundary highlight keyframe at:', boundaryTime, 'with data:', highlightDataToPreserve);
-        // Mark this keyframe as 'trim' origin so it can be cleaned up later
-        addOrUpdateHighlightKeyframe(boundaryTime, highlightDataToPreserve, duration, 'trim');
+        console.log('[App] Reconstituting permanent highlight keyframe at:', boundaryTime, 'with data:', highlightDataToPreserve);
+        addOrUpdateHighlightKeyframe(boundaryTime, highlightDataToPreserve, duration, 'permanent');
       }
     }
     // Note: Cleanup of trim keyframes is now automatic via useEffect watching trimRange

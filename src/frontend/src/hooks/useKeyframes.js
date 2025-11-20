@@ -306,7 +306,8 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
   /**
    * Delete all keyframes within a time range
    * Used when trimming segments - removes keyframes that will be cut from the video
-   * NOTE: Does not delete permanent start/end keyframes
+   * IMPORTANT: This DOES delete permanent keyframes in the trimmed range.
+   * They will reconstitute at the trim boundary with origin='permanent'.
    */
   const deleteKeyframesInRange = useCallback((startTime, endTime, totalFrames = null) => {
     const startFrame = timeToFrame(startTime, framerate);
@@ -322,19 +323,9 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
           return true;
         }
 
-        // Always keep permanent start keyframe
-        if (kf.frame === 0) {
-          console.log('[useKeyframes] Keeping permanent start keyframe (frame=0)');
-          return true;
-        }
-
-        // Always keep permanent end keyframe
-        if (endKeyframeValue !== null && kf.frame === endKeyframeValue) {
-          console.log('[useKeyframes] Keeping permanent end keyframe');
-          return true;
-        }
-
-        // Delete this keyframe (it's in the trimmed range and not permanent)
+        // DELETE all keyframes in the trimmed range, including permanent ones
+        // Permanent keyframes will reconstitute at the trim boundary
+        console.log('[useKeyframes] Deleting keyframe at frame', kf.frame, 'origin:', kf.origin);
         return false;
       });
 
