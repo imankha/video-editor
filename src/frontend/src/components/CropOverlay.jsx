@@ -339,6 +339,32 @@ export default function CropOverlay({
   // Convert crop to screen coordinates
   const screenCrop = videoToScreen(currentCrop.x, currentCrop.y, currentCrop.width, currentCrop.height);
 
+  /**
+   * Check if crop size requires maximum 4x AI upscaling
+   * Warns when crop is small enough that it would hit the 1440p limit with 4x upscaling.
+   * This means we're using the full upscaling power - any smaller would be clamped.
+   *
+   * Backend clamps target to 1440p (2560x1440), so crops smaller than 640x360
+   * will be upscaled at exactly 4x to reach the limit.
+   */
+  const isCropTooSmall = () => {
+    const cropW = currentCrop.width;
+    const cropH = currentCrop.height;
+
+    // Backend clamps to 1440p max (2560x1440)
+    // Crops smaller than 1440p/4 will use full 4x upscaling
+    const maxW = 2560;
+    const maxH = 1440;
+    const minCropW = maxW / 4; // 640
+    const minCropH = maxH / 4; // 360
+
+    // Warn if BOTH dimensions are smaller than threshold (requires full 4x to reach 1440p)
+    // Using AND because if one dimension is large, it won't need full 4x upscaling
+    return cropW < minCropW && cropH < minCropH;
+  };
+
+  const cropTooSmall = isCropTooSmall();
+
   const handles = [
     { name: 'nw', cursor: 'nw-resize', x: 0, y: 0 },
     { name: 'n', cursor: 'n-resize', x: 0.5, y: 0 },
@@ -389,7 +415,7 @@ export default function CropOverlay({
 
       {/* Crop rectangle */}
       <div
-        className="absolute border-2 border-white cursor-move pointer-events-auto"
+        className={`absolute border-2 cursor-move pointer-events-auto ${cropTooSmall ? 'border-red-500' : 'border-white'}`}
         style={{
           left: `${screenCrop.x}px`,
           top: `${screenCrop.y}px`,
@@ -407,13 +433,26 @@ export default function CropOverlay({
           <line x1="0" y1="66.66%" x2="100%" y2="66.66%" stroke="white" strokeOpacity="0.5" strokeWidth="1" />
         </svg>
 
-        {/* Debug: Show crop size when keyframe is selected (only in development mode) */}
+        {/* Debug: Show crop size and position when keyframe is selected (only in development mode) */}
         {versionInfo.environment !== 'production' && selectedKeyframeIndex !== null && (
           <div
-            className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-black/75 text-yellow-300 px-2 py-1 rounded text-sm font-mono pointer-events-none"
-            title={`Crop size: ${Math.round(currentCrop.width)}x${Math.round(currentCrop.height)}`}
+            className={`absolute left-1/2 transform -translate-x-1/2 bg-black/75 px-2 py-1 rounded text-sm font-mono pointer-events-none whitespace-nowrap ${cropTooSmall ? 'text-red-400' : 'text-yellow-300'}`}
+            style={{ top: '-28px' }}
+            title={`Crop: ${Math.round(currentCrop.width)}x${Math.round(currentCrop.height)} at position (${Math.round(currentCrop.x)}, ${Math.round(currentCrop.y)})${cropTooSmall ? ' (Too small for optimal 4x upscale)' : ''}`}
           >
-            {Math.round(currentCrop.width)}x{Math.round(currentCrop.height)}
+            {Math.round(currentCrop.width)}x{Math.round(currentCrop.height)} @ ({Math.round(currentCrop.x)}, {Math.round(currentCrop.y)})
+            {cropTooSmall && ' ⚠️'}
+          </div>
+        )}
+
+        {/* Warning: Show when crop is too small for optimal 4x upscale */}
+        {cropTooSmall && (
+          <div
+            className="absolute left-1/2 transform -translate-x-1/2 bg-red-900/90 text-red-100 px-3 py-1.5 rounded text-xs font-medium pointer-events-none whitespace-nowrap"
+            style={{ bottom: '-32px' }}
+            title="AI upscaler works best with 4x scaling. Current crop will require more than 4x upscale."
+          >
+            ⚠️ sub-optimal upscale
           </div>
         )}
 
@@ -421,7 +460,7 @@ export default function CropOverlay({
         {handles.map(handle => (
           <div
             key={handle.name}
-            className="crop-handle absolute bg-white border-2 border-blue-500 pointer-events-auto"
+            className={`crop-handle absolute bg-white border-2 pointer-events-auto ${cropTooSmall ? 'border-red-500' : 'border-blue-500'}`}
             style={{
               width: '12px',
               height: '12px',
