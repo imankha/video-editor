@@ -269,6 +269,45 @@ function App() {
     }
   }, [trimRange, currentTime, videoUrl, clampToVisibleRange, seek]);
 
+  // Auto-select keyframe when playhead moves over it
+  // This keeps the selected keyframe in sync with the playhead position
+  // ensuring the frame the user is seeing is always the one they're manipulating
+  useEffect(() => {
+    if (!videoUrl) return;
+
+    const currentFrame = Math.round(currentTime * framerate);
+
+    // Check for crop keyframe at current position
+    const cropKeyframeIndex = keyframes.findIndex(kf => kf.frame === currentFrame);
+
+    // Check for highlight keyframe at current position
+    const highlightKeyframeIndex = highlightKeyframes.findIndex(kf => kf.frame === currentFrame);
+
+    // Update selection based on what's at the playhead position
+    if (cropKeyframeIndex !== -1) {
+      // Prioritize crop keyframes
+      if (selectedCropKeyframeIndex !== cropKeyframeIndex || selectedLayer !== 'crop') {
+        setSelectedCropKeyframeIndex(cropKeyframeIndex);
+        setSelectedLayer('crop');
+        setSelectedHighlightKeyframeIndex(null);
+      }
+    } else if (highlightKeyframeIndex !== -1 && isHighlightEnabled) {
+      // Select highlight keyframe if no crop keyframe
+      if (selectedHighlightKeyframeIndex !== highlightKeyframeIndex || selectedLayer !== 'highlight') {
+        setSelectedHighlightKeyframeIndex(highlightKeyframeIndex);
+        setSelectedLayer('highlight');
+        setSelectedCropKeyframeIndex(null);
+      }
+    } else {
+      // No keyframe at current position - deselect
+      if (selectedCropKeyframeIndex !== null || selectedHighlightKeyframeIndex !== null) {
+        setSelectedCropKeyframeIndex(null);
+        setSelectedHighlightKeyframeIndex(null);
+        setSelectedLayer('playhead');
+      }
+    }
+  }, [currentTime, keyframes, highlightKeyframes, framerate, isHighlightEnabled, videoUrl, selectedCropKeyframeIndex, selectedHighlightKeyframeIndex, selectedLayer]);
+
   // Handler functions for copy/paste (defined BEFORE useEffect to avoid initialization errors)
   const handleCopyCrop = (time = currentTime) => {
     if (videoUrl) {
