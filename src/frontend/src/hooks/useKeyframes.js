@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { timeToFrame, frameToTime } from '../utils/videoUtils';
 
 /**
@@ -24,6 +24,9 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
   const [keyframes, setKeyframes] = useState([]);
   const [isEndKeyframeExplicit, setIsEndKeyframeExplicit] = useState(false);
   const [copiedData, setCopiedData] = useState(null);
+
+  // Ref to track pending keyframe operations and prevent duplicates
+  const pendingKeyframeOpsRef = useRef(new Map());
 
   /**
    * Initialize keyframes with start and end
@@ -70,6 +73,27 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
   const addOrUpdateKeyframe = useCallback((time, data, totalFrames = null, origin = 'user') => {
     const frame = timeToFrame(time, framerate);
     const endFrame = getEndFrame ? getEndFrame(totalFrames) : totalFrames;
+
+    // Check if this exact operation is already pending (deduplication)
+    const opKey = `${frame}-${origin}`;
+    const now = Date.now();
+
+    // Clean up old entries (older than 100ms)
+    for (const [key, timestamp] of pendingKeyframeOpsRef.current.entries()) {
+      if (now - timestamp > 100) {
+        pendingKeyframeOpsRef.current.delete(key);
+      }
+    }
+
+    // Check if this operation is already in progress
+    const existingTimestamp = pendingKeyframeOpsRef.current.get(opKey);
+    if (existingTimestamp && now - existingTimestamp < 100) {
+      console.log('[useKeyframes] Skipping duplicate operation for frame', frame, 'origin:', origin, '(within 100ms window)');
+      return;
+    }
+
+    // Record this operation
+    pendingKeyframeOpsRef.current.set(opKey, now);
 
     console.log('[useKeyframes] Adding/updating keyframe at time', time, '(frame', frame + '), origin:', origin);
     console.log('[useKeyframes] totalFrames:', totalFrames, 'endFrame:', endFrame);
