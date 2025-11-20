@@ -29,6 +29,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
   const [includeAudio, setIncludeAudio] = useState(true);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
   const [highlightEffectStyle, setHighlightEffectStyle] = useState('brightness_boost');
+  const previousHighlightPositionRef = useRef('brightness_boost'); // Track previous position for cycling
   const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
@@ -53,6 +54,38 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
       }
     }
   }, [segmentData, audioExplicitlySet, includeAudio]);
+
+  /**
+   * Handle highlight effect toggle with cycling behavior
+   * - Clicking position 0 or 2 → moves to position 1 (middle)
+   * - Clicking position 1 → returns to previous position (0 or 2)
+   */
+  const handleHighlightEffectClick = (targetPosition) => {
+    const current = highlightEffectStyle;
+
+    // If clicking the current position, cycle forward
+    if (current === targetPosition) {
+      if (current === 'brightness_boost') {
+        // Position 0 → Position 1
+        previousHighlightPositionRef.current = current;
+        setHighlightEffectStyle('original');
+      } else if (current === 'original') {
+        // Position 1 → Return to previous position (0 or 2)
+        const previous = previousHighlightPositionRef.current;
+        const nextPosition = previous === 'brightness_boost' ? 'dark_overlay' : 'brightness_boost';
+        previousHighlightPositionRef.current = current;
+        setHighlightEffectStyle(nextPosition);
+      } else if (current === 'dark_overlay') {
+        // Position 2 → Position 1
+        previousHighlightPositionRef.current = current;
+        setHighlightEffectStyle('original');
+      }
+    } else {
+      // Clicking a different position, just move there
+      previousHighlightPositionRef.current = current;
+      setHighlightEffectStyle(targetPosition);
+    }
+  };
 
   /**
    * Connect to WebSocket for real-time progress updates
@@ -306,19 +339,19 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
           >
             {/* Clickable zones for each position */}
             <button
-              onClick={() => setHighlightEffectStyle('brightness_boost')}
+              onClick={() => handleHighlightEffectClick('brightness_boost')}
               disabled={isExporting || !isHighlightEnabled}
               className="absolute left-0 h-full w-1/3 focus:outline-none"
               aria-label="Bright Inside"
             />
             <button
-              onClick={() => setHighlightEffectStyle('original')}
+              onClick={() => handleHighlightEffectClick('original')}
               disabled={isExporting || !isHighlightEnabled}
               className="absolute left-1/3 h-full w-1/3 focus:outline-none"
               aria-label="Yellow Inside"
             />
             <button
-              onClick={() => setHighlightEffectStyle('dark_overlay')}
+              onClick={() => handleHighlightEffectClick('dark_overlay')}
               disabled={isExporting || !isHighlightEnabled}
               className="absolute right-0 h-full w-1/3 focus:outline-none"
               aria-label="Dim Outside"
