@@ -194,6 +194,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
     const endFrame = getEndFrame ? getEndFrame(totalFrames) : totalFrames;
 
     console.log('[useKeyframes] Attempting to remove keyframe at time:', time, '(frame', frame + ')');
+    console.trace('[useKeyframes] removeKeyframe call stack:');
 
     // Don't allow removing permanent start/end keyframes
     if (frame === 0) {
