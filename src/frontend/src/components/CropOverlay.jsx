@@ -436,7 +436,8 @@ export default function CropOverlay({
         {/* Debug: Show crop size and position when keyframe is selected (only in development mode) */}
         {versionInfo.environment !== 'production' && selectedKeyframeIndex !== null && (
           <div
-            className={`absolute top-2 left-1/2 transform -translate-x-1/2 bg-black/75 px-2 py-1 rounded text-sm font-mono pointer-events-none ${cropTooSmall ? 'text-red-400' : 'text-yellow-300'}`}
+            className={`absolute left-1/2 transform -translate-x-1/2 bg-black/75 px-2 py-1 rounded text-sm font-mono pointer-events-none ${cropTooSmall ? 'text-red-400' : 'text-yellow-300'}`}
+            style={{ top: '-28px' }}
             title={`Crop: ${Math.round(currentCrop.width)}x${Math.round(currentCrop.height)} at position (${Math.round(currentCrop.x)}, ${Math.round(currentCrop.y)})${cropTooSmall ? ' (Too small for optimal 4x upscale)' : ''}`}
           >
             {Math.round(currentCrop.width)}x{Math.round(currentCrop.height)} @ ({Math.round(currentCrop.x)}, {Math.round(currentCrop.y)})
@@ -447,7 +448,8 @@ export default function CropOverlay({
         {/* Warning: Show when crop is too small for optimal 4x upscale */}
         {cropTooSmall && (
           <div
-            className="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-red-900/90 text-red-100 px-3 py-1.5 rounded text-xs font-medium pointer-events-none whitespace-nowrap"
+            className="absolute left-1/2 transform -translate-x-1/2 bg-red-900/90 text-red-100 px-3 py-1.5 rounded text-xs font-medium pointer-events-none whitespace-nowrap"
+            style={{ bottom: '-32px' }}
             title="AI upscaler works best with 4x scaling. Current crop will require more than 4x upscale."
           >
             ⚠️ Crop too small for optimal 4x upscale
