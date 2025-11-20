@@ -27,7 +27,8 @@ export default function SegmentLayer({
 }) {
   const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(null);
 
-  console.log('[SegmentLayer] Render - segments:', segments.length, 'visualLayout:', segmentVisualLayout.length);
+  // Debug log (disabled - too spammy on every render)
+  // console.log('[SegmentLayer] Render - segments:', segments.length, 'visualLayout:', segmentVisualLayout.length);
 
   if (!duration) return null;
 
@@ -280,15 +281,16 @@ export default function SegmentLayer({
           const isEnd = Math.abs(time - duration) < 0.01;
           const isAtCurrentTime = Math.abs(time - currentTime) < 0.01;
 
-          console.log('[SegmentLayer] Rendering boundary:', time, 'isStart:', isStart, 'isEnd:', isEnd);
+          // Debug logs (disabled - too spammy on every render)
+          // console.log('[SegmentLayer] Rendering boundary:', time, 'isStart:', isStart, 'isEnd:', isEnd);
 
           // Don't show start and end boundaries
           if (isStart || isEnd) {
-            console.log('[SegmentLayer] Skipping start/end boundary at:', time);
+            // console.log('[SegmentLayer] Skipping start/end boundary at:', time);
             return null;
           }
 
-          console.log('[SegmentLayer] Drawing vertical line at:', position, '%');
+          // console.log('[SegmentLayer] Drawing vertical line at:', position, '%');
 
           return (
             <div

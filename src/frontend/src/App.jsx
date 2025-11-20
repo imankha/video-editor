@@ -225,10 +225,10 @@ function App() {
     console.log('[App] Keyframes changed:', keyframes);
   }, [keyframes]);
 
-  // Debug: Log currentCropState changes
-  useEffect(() => {
-    console.log('[App] Current crop state:', currentCropState);
-  }, [currentCropState]);
+  // Debug: Log currentCropState changes (disabled - too spammy)
+  // useEffect(() => {
+  //   console.log('[App] Current crop state:', currentCropState);
+  // }, [currentCropState]);
 
   // BUG FIX: Auto-cleanup trim keyframes when trimRange is cleared
   // Use ref to track previous value to avoid cleanup on initial mount
@@ -245,6 +245,7 @@ function App() {
 
   // BUG FIX: Auto-reposition playhead when it becomes invalid after trim operation
   // This ensures the playhead is always within the visible (non-trimmed) range
+  const lastSeekTimeRef = useRef(null);
   useEffect(() => {
     if (!trimRange || !videoUrl) return;
 
@@ -254,8 +255,17 @@ function App() {
     if (isPlayheadInvalid) {
       // Clamp to the nearest valid position
       const validTime = clampToVisibleRange(currentTime);
-      console.log('[App] Playhead repositioned after trim:', currentTime, '->', validTime);
-      seek(validTime);
+
+      // Only seek if the difference is significant (avoid floating point precision loops)
+      const threshold = 0.001; // 1ms threshold
+      const needsSeek = lastSeekTimeRef.current === null ||
+                        Math.abs(validTime - lastSeekTimeRef.current) > threshold;
+
+      if (needsSeek) {
+        console.log('[App] Playhead repositioned after trim:', currentTime, '->', validTime);
+        lastSeekTimeRef.current = validTime;
+        seek(validTime);
+      }
     }
   }, [trimRange, currentTime, videoUrl, clampToVisibleRange, seek]);
 
@@ -791,14 +801,15 @@ function App() {
       ...(firstAfterTrimEnd ? [firstAfterTrimEnd] : [])
     ];
 
-    console.log('[App] Filtered keyframes for export:', {
-      original: allKeyframes.length,
-      filtered: filtered.length,
-      trimStart,
-      trimEnd,
-      includedBefore: !!lastBeforeTrimStart,
-      includedAfter: !!firstAfterTrimEnd
-    });
+    // Debug log (disabled - too spammy)
+    // console.log('[App] Filtered keyframes for export:', {
+    //   original: allKeyframes.length,
+    //   filtered: filtered.length,
+    //   trimStart,
+    //   trimEnd,
+    //   includedBefore: !!lastBeforeTrimStart,
+    //   includedAfter: !!firstAfterTrimEnd
+    // });
 
     return filtered;
   }, [getKeyframesForExport, getSegmentExportData, duration]);
@@ -855,14 +866,15 @@ function App() {
       ...(firstAfterTrimEnd ? [firstAfterTrimEnd] : [])
     ];
 
-    console.log('[App] Filtered highlight keyframes for export:', {
-      original: allKeyframes.length,
-      filtered: filtered.length,
-      trimStart,
-      trimEnd,
-      includedBefore: !!lastBeforeTrimStart,
-      includedAfter: !!firstAfterTrimEnd
-    });
+    // Debug log (disabled - too spammy)
+    // console.log('[App] Filtered highlight keyframes for export:', {
+    //   original: allKeyframes.length,
+    //   filtered: filtered.length,
+    //   trimStart,
+    //   trimEnd,
+    //   includedBefore: !!lastBeforeTrimStart,
+    //   includedAfter: !!firstAfterTrimEnd
+    // });
 
     return filtered;
   }, [isHighlightEnabled, getHighlightKeyframesForExport, getSegmentExportData, duration]);
