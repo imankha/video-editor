@@ -195,6 +195,9 @@ export function useSegments() {
     });
   }, []);
 
+  // Ref to track the last trim operation to prevent duplicates
+  const lastTrimOperationRef = useRef({ type: null, time: null, timestamp: null });
+
   /**
    * Trim from the start: sets trim range to [time, end]
    * Pushes operation to history for de-trim functionality
@@ -202,13 +205,26 @@ export function useSegments() {
   const trimStart = useCallback((time) => {
     console.log('[useSegments] trimStart called with time:', time);
 
-    // Prevent duplicate operations - check current state first
+    // Check if this is a duplicate call (same operation within 100ms)
+    const now = Date.now();
+    const lastOp = lastTrimOperationRef.current;
+    if (lastOp.type === 'start' &&
+        Math.abs(lastOp.time - time) < 0.01 &&
+        now - lastOp.timestamp < 100) {
+      console.log('[useSegments] Ignoring duplicate trimStart call within 100ms');
+      return;
+    }
+
+    // Record this operation
+    lastTrimOperationRef.current = { type: 'start', time, timestamp: now };
+
+    // Update trimRange
     setTrimRange(prev => {
       console.log('[useSegments] trimStart - current trimRange:', JSON.stringify(prev));
 
       // If already trimmed to this exact position, ignore
       if (prev && Math.abs(prev.start - time) < 0.01) {
-        console.log('[useSegments] Ignoring duplicate trimStart at:', time);
+        console.log('[useSegments] Ignoring duplicate trimStart - already at this position');
         return prev; // No change
       }
 
@@ -217,25 +233,25 @@ export function useSegments() {
         end: prev?.end || duration
       };
       console.log('[useSegments] Setting trimRange to:', JSON.stringify(newRange));
-
-      // Update history in the same state update to keep them in sync
-      setTrimHistory(history => {
-        console.log('[useSegments] trimStart - current history:', JSON.stringify(history));
-        const newHistory = [...history, {
-          type: 'start',
-          time,
-          previousRange: prev
-        }];
-        console.log('[useSegments] trimStart - new history:', JSON.stringify(newHistory));
-        return newHistory;
-      });
-
       console.log('[useSegments] Trimmed start to:', time, 'previousRange was:', JSON.stringify(prev));
+
       return newRange;
     });
 
+    // Update history separately (not nested)
+    setTrimHistory(prev => {
+      console.log('[useSegments] trimStart - current history:', JSON.stringify(prev));
+      const newHistory = [...prev, {
+        type: 'start',
+        time,
+        previousRange: trimRange
+      }];
+      console.log('[useSegments] trimStart - new history:', JSON.stringify(newHistory));
+      return newHistory;
+    });
+
     console.log('[useSegments] trimStart completed');
-  }, [duration]);
+  }, [duration, trimRange]);
 
   /**
    * Trim from the end: sets trim range to [start, time]
@@ -244,13 +260,26 @@ export function useSegments() {
   const trimEnd = useCallback((time) => {
     console.log('[useSegments] trimEnd called with time:', time);
 
-    // Prevent duplicate operations - check current state first
+    // Check if this is a duplicate call (same operation within 100ms)
+    const now = Date.now();
+    const lastOp = lastTrimOperationRef.current;
+    if (lastOp.type === 'end' &&
+        Math.abs(lastOp.time - time) < 0.01 &&
+        now - lastOp.timestamp < 100) {
+      console.log('[useSegments] Ignoring duplicate trimEnd call within 100ms');
+      return;
+    }
+
+    // Record this operation
+    lastTrimOperationRef.current = { type: 'end', time, timestamp: now };
+
+    // Update trimRange
     setTrimRange(prev => {
       console.log('[useSegments] trimEnd - current trimRange:', JSON.stringify(prev));
 
       // If already trimmed to this exact position, ignore
       if (prev && Math.abs(prev.end - time) < 0.01) {
-        console.log('[useSegments] Ignoring duplicate trimEnd at:', time);
+        console.log('[useSegments] Ignoring duplicate trimEnd - already at this position');
         return prev; // No change
       }
 
@@ -259,25 +288,25 @@ export function useSegments() {
         end: time
       };
       console.log('[useSegments] Setting trimRange to:', JSON.stringify(newRange));
-
-      // Update history in the same state update to keep them in sync
-      setTrimHistory(history => {
-        console.log('[useSegments] trimEnd - current history:', JSON.stringify(history));
-        const newHistory = [...history, {
-          type: 'end',
-          time,
-          previousRange: prev
-        }];
-        console.log('[useSegments] trimEnd - new history:', JSON.stringify(newHistory));
-        return newHistory;
-      });
-
       console.log('[useSegments] Trimmed end to:', time, 'previousRange was:', JSON.stringify(prev));
+
       return newRange;
     });
 
+    // Update history separately (not nested)
+    setTrimHistory(prev => {
+      console.log('[useSegments] trimEnd - current history:', JSON.stringify(prev));
+      const newHistory = [...prev, {
+        type: 'end',
+        time,
+        previousRange: trimRange
+      }];
+      console.log('[useSegments] trimEnd - new history:', JSON.stringify(newHistory));
+      return newHistory;
+    });
+
     console.log('[useSegments] trimEnd completed');
-  }, []);
+  }, [trimRange]);
 
   /**
    * Restore trim range (remove trimming) and clear history
