@@ -340,32 +340,41 @@ export default function CropOverlay({
   const screenCrop = videoToScreen(currentCrop.x, currentCrop.y, currentCrop.width, currentCrop.height);
 
   /**
-   * Check if crop size is too small for optimal 4x AI upscaling
-   * For 16:9 videos → 4K (3840x2160), optimal crop is 960x540 (3840/4 x 2160/4)
-   * For 9:16 videos → 1080x1920, optimal crop is 270x480 (1080/4 x 1920/4)
+   * Check if crop size requires more than 4x AI upscaling
+   * Calculates the actual scale factor based on crop size and target resolution
    */
   const isCropTooSmall = () => {
     const videoRatio = videoMetadata.width / videoMetadata.height;
 
+    // Determine target resolution based on aspect ratio (matching backend logic)
+    let targetWidth, targetHeight;
+
     // 16:9 (horizontal) - ratio ≈ 1.778
     if (videoRatio >= 1.7 && videoRatio <= 1.8) {
-      // Target 4K: 3840x2160, so 4x upscale needs 960x540
-      return currentCrop.width < 960 || currentCrop.height < 540;
+      targetWidth = 3840;
+      targetHeight = 2160;
     }
-
     // 9:16 (vertical) - ratio ≈ 0.5625
-    if (videoRatio >= 0.55 && videoRatio <= 0.6) {
-      // Target 1080x1920, so 4x upscale needs 270x480
-      return currentCrop.width < 270 || currentCrop.height < 480;
+    else if (videoRatio >= 0.55 && videoRatio <= 0.6) {
+      targetWidth = 1080;
+      targetHeight = 1920;
+    }
+    // Other ratios - upscale proportionally
+    else if (videoRatio > 1) {
+      targetWidth = 3840;
+      targetHeight = Math.round(3840 / videoRatio);
+    } else {
+      targetWidth = 1080;
+      targetHeight = Math.round(1080 / videoRatio);
     }
 
-    // For other aspect ratios, use a general threshold (4x from target)
-    // Wide videos target 3840 width, tall videos target 1080 width
-    if (videoRatio > 1) {
-      return currentCrop.width < 960; // 3840/4
-    } else {
-      return currentCrop.width < 270; // 1080/4
-    }
+    // Calculate scale factors (matching backend logic in frame_processor.py)
+    const scaleX = targetWidth / currentCrop.width;
+    const scaleY = targetHeight / currentCrop.height;
+    const maxScale = Math.max(scaleX, scaleY);
+
+    // Return true if scale factor exceeds 4x
+    return maxScale > 4.0;
   };
 
   const cropTooSmall = isCropTooSmall();
