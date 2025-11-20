@@ -29,6 +29,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
   const [includeAudio, setIncludeAudio] = useState(true);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
   const [highlightEffectStyle, setHighlightEffectStyle] = useState('brightness_boost');
+  const previousHighlightPositionRef = useRef('brightness_boost'); // Track previous position for cycling
   const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
@@ -53,6 +54,38 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
       }
     }
   }, [segmentData, audioExplicitlySet, includeAudio]);
+
+  /**
+   * Handle highlight effect toggle with cycling behavior
+   * - Clicking position 0 or 2 → moves to position 1 (middle)
+   * - Clicking position 1 → returns to previous position (0 or 2)
+   */
+  const handleHighlightEffectClick = (targetPosition) => {
+    const current = highlightEffectStyle;
+
+    // If clicking the current position, cycle forward
+    if (current === targetPosition) {
+      if (current === 'brightness_boost') {
+        // Position 0 → Position 1
+        previousHighlightPositionRef.current = current;
+        setHighlightEffectStyle('original');
+      } else if (current === 'original') {
+        // Position 1 → Return to previous position (0 or 2)
+        const previous = previousHighlightPositionRef.current;
+        const nextPosition = previous === 'brightness_boost' ? 'dark_overlay' : 'brightness_boost';
+        previousHighlightPositionRef.current = current;
+        setHighlightEffectStyle(nextPosition);
+      } else if (current === 'dark_overlay') {
+        // Position 2 → Position 1
+        previousHighlightPositionRef.current = current;
+        setHighlightEffectStyle('original');
+      }
+    } else {
+      // Clicking a different position, just move there
+      previousHighlightPositionRef.current = current;
+      setHighlightEffectStyle(targetPosition);
+    }
+  };
 
   /**
    * Connect to WebSocket for real-time progress updates
@@ -280,30 +313,61 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
         </div>
 
         {/* Highlight Effect Style */}
-        <div className="flex flex-col space-y-2">
-          <label htmlFor="highlight-effect" className="text-sm font-medium text-gray-200">
-            Highlight Effect
-          </label>
-          <select
-            id="highlight-effect"
-            value={highlightEffectStyle}
-            onChange={(e) => setHighlightEffectStyle(e.target.value)}
-            disabled={isExporting || !isHighlightEnabled}
-            className={`w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-              isExporting || !isHighlightEnabled
-                ? 'opacity-50 cursor-not-allowed'
-                : 'cursor-pointer hover:bg-gray-600'
-            }`}
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-gray-200">Highlight Effect</span>
+            <span className="text-xs text-gray-400">
+              {!isHighlightEnabled
+                ? 'Enable highlight layer'
+                : highlightEffectStyle === 'brightness_boost'
+                ? 'Bright Inside'
+                : highlightEffectStyle === 'original'
+                ? 'Yellow Inside'
+                : 'Dim Outside'}
+            </span>
+          </div>
+
+          {/* 3-Position Toggle Switch */}
+          <div
+            className={`relative inline-flex h-7 w-20 items-center rounded-full transition-colors focus:outline-none ${
+              highlightEffectStyle === 'brightness_boost'
+                ? 'bg-blue-600'
+                : highlightEffectStyle === 'original'
+                ? 'bg-yellow-600'
+                : 'bg-purple-600'
+            } ${isExporting || !isHighlightEnabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
           >
-            <option value="brightness_boost">Bright Inside</option>
-            <option value="original">Yellow Inside</option>
-            <option value="dark_overlay">Dim Outside</option>
-          </select>
-          <span className="text-xs text-gray-400">
-            {!isHighlightEnabled
-              ? 'Enable highlight layer to choose effect style'
-              : 'Choose how highlights appear in exported video'}
-          </span>
+            {/* Clickable zones for each position */}
+            <button
+              onClick={() => handleHighlightEffectClick('brightness_boost')}
+              disabled={isExporting || !isHighlightEnabled}
+              className="absolute left-0 h-full w-1/3 z-10 focus:outline-none"
+              aria-label="Bright Inside"
+            />
+            <button
+              onClick={() => handleHighlightEffectClick('original')}
+              disabled={isExporting || !isHighlightEnabled}
+              className="absolute left-1/3 h-full w-1/3 z-10 focus:outline-none"
+              aria-label="Yellow Inside"
+            />
+            <button
+              onClick={() => handleHighlightEffectClick('dark_overlay')}
+              disabled={isExporting || !isHighlightEnabled}
+              className="absolute right-0 h-full w-1/3 z-10 focus:outline-none"
+              aria-label="Dim Outside"
+            />
+
+            {/* Sliding indicator */}
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                highlightEffectStyle === 'brightness_boost'
+                  ? 'translate-x-1'
+                  : highlightEffectStyle === 'original'
+                  ? 'translate-x-8'
+                  : 'translate-x-[3.75rem]'
+              }`}
+            />
+          </div>
         </div>
 
         {/* Export Info */}
