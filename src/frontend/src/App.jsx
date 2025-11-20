@@ -456,53 +456,13 @@ function App() {
 
     // Step 5: Toggle the trim state (this works for both trimming and restoring)
     console.log('[App] Toggling trim state for segment:', segmentIndex);
+    console.log('========== TRIM OPERATION COMPLETE ==========');
+
+    // NOTE: Keyframe state updates happen asynchronously via React's batching.
+    // Check the "[App] Keyframes changed" log to see the actual updated state.
+    // setTimeout closures capture stale variables and show incorrect state.
+
     toggleTrimSegment(segmentIndex);
-
-    // Log state after trim (using setTimeout to let state updates complete)
-    setTimeout(() => {
-      console.log('========== TRIM OPERATION COMPLETE ==========');
-      console.log('[App] AFTER TRIM - Crop keyframes:', keyframes.map(kf => ({
-        frame: kf.frame,
-        time: kf.frame / framerate,
-        origin: kf.origin,
-        x: kf.x,
-        y: kf.y,
-        width: kf.width,
-        height: kf.height
-      })));
-      console.log('[App] AFTER TRIM - Highlight keyframes:', highlightKeyframes.map(kf => ({
-        frame: kf.frame,
-        time: kf.frame / framerate,
-        origin: kf.origin,
-        x: kf.x,
-        y: kf.y,
-        radiusX: kf.radiusX,
-        radiusY: kf.radiusY
-      })));
-      console.log('[App] AFTER TRIM - trimRange:', trimRange);
-      console.log('[App] AFTER TRIM - currentTime:', currentTime);
-
-      // INVARIANT: After trim operation, verify keyframe count is reasonable
-      if (process.env.NODE_ENV === 'development' && !isCurrentlyTrimmed) {
-        // After trimming, we should have created boundary keyframes
-        const boundaryTime = segment.isLast ? segment.start : segment.end;
-        const boundaryFrame = Math.round(boundaryTime * framerate);
-
-        const boundaryCropKeyframe = keyframes.find(kf => kf.frame === boundaryFrame);
-        if (!boundaryCropKeyframe) {
-          console.warn('⚠️ INVARIANT WARNING: Expected boundary crop keyframe at frame', boundaryFrame, 'after trim operation');
-        } else if (boundaryCropKeyframe.origin !== 'trim') {
-          console.warn('⚠️ INVARIANT WARNING: Boundary crop keyframe has wrong origin:', boundaryCropKeyframe.origin, 'expected: trim');
-        }
-
-        const boundaryHighlightKeyframe = highlightKeyframes.find(kf => kf.frame === boundaryFrame);
-        if (!boundaryHighlightKeyframe) {
-          console.warn('⚠️ INVARIANT WARNING: Expected boundary highlight keyframe at frame', boundaryFrame, 'after trim operation');
-        } else if (boundaryHighlightKeyframe.origin !== 'trim') {
-          console.warn('⚠️ INVARIANT WARNING: Boundary highlight keyframe has wrong origin:', boundaryHighlightKeyframe.origin, 'expected: trim');
-        }
-      }
-    }, 100); // Delay to allow state updates to complete
   };
 
   // Keyboard handler: Space bar toggles play/pause
