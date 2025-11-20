@@ -198,6 +198,10 @@ export function useSegments() {
   // Ref to track the last trim operation to prevent duplicates
   const lastTrimOperationRef = useRef({ type: null, time: null, timestamp: null });
 
+  // Ref to cache trim range objects to prevent React from re-executing setState callbacks
+  // when the same range is being set (prevents duplicate object references)
+  const trimRangeCacheRef = useRef(new Map());
+
   /**
    * Trim from the start: sets trim range to [time, end]
    * Pushes operation to history for de-trim functionality
@@ -228,10 +232,34 @@ export function useSegments() {
         return prev; // No change
       }
 
+      // Calculate new range values
+      const newStart = time;
+      const newEnd = prev?.end || duration;
+      const rangeKey = `${newStart}-${newEnd}`;
+
+      // Check cache for existing range object with these values (prevents duplicate object references)
+      const cached = trimRangeCacheRef.current.get(rangeKey);
+      if (cached && Date.now() - cached.timestamp < 100) {
+        console.log('[useSegments] Reusing cached trim range object to prevent React callback re-execution');
+        return cached.range;
+      }
+
+      // Create new range object
       const newRange = {
-        start: time,
-        end: prev?.end || duration
+        start: newStart,
+        end: newEnd
       };
+
+      // Cache it
+      trimRangeCacheRef.current.set(rangeKey, { range: newRange, timestamp: Date.now() });
+
+      // Cleanup old cache entries (older than 100ms)
+      for (const [key, value] of trimRangeCacheRef.current.entries()) {
+        if (Date.now() - value.timestamp > 100) {
+          trimRangeCacheRef.current.delete(key);
+        }
+      }
+
       console.log('[useSegments] Setting trimRange to:', JSON.stringify(newRange));
       console.log('[useSegments] Trimmed start to:', time, 'previousRange was:', JSON.stringify(prev));
 
@@ -283,10 +311,34 @@ export function useSegments() {
         return prev; // No change
       }
 
+      // Calculate new range values
+      const newStart = prev?.start || 0;
+      const newEnd = time;
+      const rangeKey = `${newStart}-${newEnd}`;
+
+      // Check cache for existing range object with these values (prevents duplicate object references)
+      const cached = trimRangeCacheRef.current.get(rangeKey);
+      if (cached && Date.now() - cached.timestamp < 100) {
+        console.log('[useSegments] Reusing cached trim range object to prevent React callback re-execution');
+        return cached.range;
+      }
+
+      // Create new range object
       const newRange = {
-        start: prev?.start || 0,
-        end: time
+        start: newStart,
+        end: newEnd
       };
+
+      // Cache it
+      trimRangeCacheRef.current.set(rangeKey, { range: newRange, timestamp: Date.now() });
+
+      // Cleanup old cache entries (older than 100ms)
+      for (const [key, value] of trimRangeCacheRef.current.entries()) {
+        if (Date.now() - value.timestamp > 100) {
+          trimRangeCacheRef.current.delete(key);
+        }
+      }
+
       console.log('[useSegments] Setting trimRange to:', JSON.stringify(newRange));
       console.log('[useSegments] Trimmed end to:', time, 'previousRange was:', JSON.stringify(prev));
 
