@@ -1019,6 +1019,7 @@ function App() {
                 videoFile={videoFile}
                 cropKeyframes={getFilteredKeyframesForExport}
                 highlightKeyframes={getFilteredHighlightKeyframesForExport}
+                isHighlightEnabled={isHighlightEnabled}
                 segmentData={getSegmentExportData()}
                 disabled={!videoFile}
               />
