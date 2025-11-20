@@ -339,6 +339,37 @@ export default function CropOverlay({
   // Convert crop to screen coordinates
   const screenCrop = videoToScreen(currentCrop.x, currentCrop.y, currentCrop.width, currentCrop.height);
 
+  /**
+   * Check if crop size is too small for optimal 4x AI upscaling
+   * For 16:9 videos → 4K (3840x2160), optimal crop is 960x540 (3840/4 x 2160/4)
+   * For 9:16 videos → 1080x1920, optimal crop is 270x480 (1080/4 x 1920/4)
+   */
+  const isCropTooSmall = () => {
+    const videoRatio = videoMetadata.width / videoMetadata.height;
+
+    // 16:9 (horizontal) - ratio ≈ 1.778
+    if (videoRatio >= 1.7 && videoRatio <= 1.8) {
+      // Target 4K: 3840x2160, so 4x upscale needs 960x540
+      return currentCrop.width < 960 || currentCrop.height < 540;
+    }
+
+    // 9:16 (vertical) - ratio ≈ 0.5625
+    if (videoRatio >= 0.55 && videoRatio <= 0.6) {
+      // Target 1080x1920, so 4x upscale needs 270x480
+      return currentCrop.width < 270 || currentCrop.height < 480;
+    }
+
+    // For other aspect ratios, use a general threshold (4x from target)
+    // Wide videos target 3840 width, tall videos target 1080 width
+    if (videoRatio > 1) {
+      return currentCrop.width < 960; // 3840/4
+    } else {
+      return currentCrop.width < 270; // 1080/4
+    }
+  };
+
+  const cropTooSmall = isCropTooSmall();
+
   const handles = [
     { name: 'nw', cursor: 'nw-resize', x: 0, y: 0 },
     { name: 'n', cursor: 'n-resize', x: 0.5, y: 0 },
@@ -389,7 +420,7 @@ export default function CropOverlay({
 
       {/* Crop rectangle */}
       <div
-        className="absolute border-2 border-white cursor-move pointer-events-auto"
+        className={`absolute border-2 cursor-move pointer-events-auto ${cropTooSmall ? 'border-red-500' : 'border-white'}`}
         style={{
           left: `${screenCrop.x}px`,
           top: `${screenCrop.y}px`,
@@ -410,10 +441,21 @@ export default function CropOverlay({
         {/* Debug: Show crop size when keyframe is selected (only in development mode) */}
         {versionInfo.environment !== 'production' && selectedKeyframeIndex !== null && (
           <div
-            className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-black/75 text-yellow-300 px-2 py-1 rounded text-sm font-mono pointer-events-none"
-            title={`Crop size: ${Math.round(currentCrop.width)}x${Math.round(currentCrop.height)}`}
+            className={`absolute top-2 left-1/2 transform -translate-x-1/2 bg-black/75 px-2 py-1 rounded text-sm font-mono pointer-events-none ${cropTooSmall ? 'text-red-400' : 'text-yellow-300'}`}
+            title={`Crop size: ${Math.round(currentCrop.width)}x${Math.round(currentCrop.height)}${cropTooSmall ? ' (Too small for optimal 4x upscale)' : ''}`}
           >
             {Math.round(currentCrop.width)}x{Math.round(currentCrop.height)}
+            {cropTooSmall && ' ⚠️'}
+          </div>
+        )}
+
+        {/* Warning: Show when crop is too small for optimal 4x upscale */}
+        {cropTooSmall && (
+          <div
+            className="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-red-900/90 text-red-100 px-3 py-1.5 rounded text-xs font-medium pointer-events-none whitespace-nowrap"
+            title="AI upscaler works best with 4x scaling. Current crop will require more than 4x upscale."
+          >
+            ⚠️ Crop too small for optimal 4x upscale
           </div>
         )}
 
@@ -421,7 +463,7 @@ export default function CropOverlay({
         {handles.map(handle => (
           <div
             key={handle.name}
-            className="crop-handle absolute bg-white border-2 border-blue-500 pointer-events-auto"
+            className={`crop-handle absolute bg-white border-2 pointer-events-auto ${cropTooSmall ? 'border-red-500' : 'border-blue-500'}`}
             style={{
               width: '12px',
               height: '12px',
