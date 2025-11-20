@@ -21,13 +21,14 @@ const EXPORT_CONFIG = {
  * Always uses AI upscaling with ESRGAN at 30fps for best quality
  * Automatically downloads the exported video
  */
-export default function ExportButton({ videoFile, cropKeyframes, highlightKeyframes = [], segmentData, disabled }) {
+export default function ExportButton({ videoFile, cropKeyframes, highlightKeyframes = [], isHighlightEnabled = false, segmentData, disabled }) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState(null);
   const [includeAudio, setIncludeAudio] = useState(true);
-  const [highlightEffectStyle, setHighlightEffectStyle] = useState('original');
+  const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
+  const [highlightEffectStyle, setHighlightEffectStyle] = useState('brightness_boost');
   const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
@@ -40,6 +41,18 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
       }
     };
   }, []);
+
+  // Auto-disable audio when slow motion is detected (unless user has explicitly set audio)
+  useEffect(() => {
+    if (!audioExplicitlySet && segmentData && segmentData.segments) {
+      // Check if any segment has slow motion (speed < 1)
+      const hasSlowMotion = segmentData.segments.some(segment => segment.speed < 1);
+      if (hasSlowMotion && includeAudio) {
+        console.log('[ExportButton] Auto-disabling audio due to slow motion');
+        setIncludeAudio(false);
+      }
+    }
+  }, [segmentData, audioExplicitlySet, includeAudio]);
 
   /**
    * Connect to WebSocket for real-time progress updates
@@ -246,7 +259,10 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
             </span>
           </div>
           <button
-            onClick={() => setIncludeAudio(!includeAudio)}
+            onClick={() => {
+              setIncludeAudio(!includeAudio);
+              setAudioExplicitlySet(true);
+            }}
             disabled={isExporting}
             className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
               includeAudio ? 'bg-blue-600' : 'bg-gray-600'
@@ -272,20 +288,20 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
             id="highlight-effect"
             value={highlightEffectStyle}
             onChange={(e) => setHighlightEffectStyle(e.target.value)}
-            disabled={isExporting || !highlightKeyframes || highlightKeyframes.length === 0}
+            disabled={isExporting || !isHighlightEnabled}
             className={`w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-              isExporting || !highlightKeyframes || highlightKeyframes.length === 0
+              isExporting || !isHighlightEnabled
                 ? 'opacity-50 cursor-not-allowed'
                 : 'cursor-pointer hover:bg-gray-600'
             }`}
           >
-            <option value="original">Original (Semi-transparent overlay)</option>
-            <option value="brightness_boost">Brightness Boost (50% brighter)</option>
-            <option value="dark_overlay">Dark Overlay (Spotlight effect)</option>
+            <option value="brightness_boost">Bright Inside</option>
+            <option value="original">Yellow Inside</option>
+            <option value="dark_overlay">Dim Outside</option>
           </select>
           <span className="text-xs text-gray-400">
-            {!highlightKeyframes || highlightKeyframes.length === 0
-              ? 'No highlights to style'
+            {!isHighlightEnabled
+              ? 'Enable highlight layer to choose effect style'
               : 'Choose how highlights appear in exported video'}
           </span>
         </div>
