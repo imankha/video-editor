@@ -120,6 +120,18 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
 
       console.log('[useKeyframes] Existing keyframe at frame', frame, ':', existingIndex >= 0 ? 'YES (index ' + existingIndex + ')' : 'NO');
 
+      // DEDUPLICATION: If we're trying to create a new keyframe but it already exists (from a previous callback execution),
+      // return prev unchanged to prevent React from triggering another re-render and callback execution
+      if (existingIndex < 0) {
+        // We want to create a new keyframe, but check if one was already created by a previous callback execution
+        // This can happen when React batches state updates and re-executes callbacks
+        const alreadyCreated = prev.some(kf => kf.frame === frame && kf.origin === actualOrigin);
+        if (alreadyCreated) {
+          console.log('[useKeyframes] SKIPPING - keyframe at frame', frame, 'already exists from previous callback execution');
+          return prev;
+        }
+      }
+
       let updated;
       if (existingIndex >= 0) {
         // Update existing keyframe - preserve origin if updating permanent keyframe
