@@ -200,12 +200,17 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       // If playing and in a trimmed segment, pause at the boundary
       // This handles continuous playback reaching the end of visible content
       if (isPlaying && segment.isTrimmed) {
-        pause();
-        // Use clampToVisibleRange to find the correct boundary
-        // This will automatically put us at the right edge of visible content
-        if (clampToVisibleRange) {
-          seek(clampToVisibleRange(currentTime));
+        // BUG FIX: Don't pause if we're at a valid boundary position (e.g., trimRange.start)
+        // This prevents the bug where playback fails when starting from Frame 0 after front trimming
+        const clampedTime = clampToVisibleRange ? clampToVisibleRange(currentTime) : currentTime;
+        const epsilon = 0.01; // 10ms tolerance for floating point precision
+
+        if (Math.abs(clampedTime - currentTime) > epsilon) {
+          // We're truly in a trimmed area (not at a valid boundary), pause and seek to valid position
+          pause();
+          seek(clampedTime);
         }
+        // Otherwise, we're at a valid boundary position, allow playback to continue
       }
     } else {
       // No segment info, use normal playback
