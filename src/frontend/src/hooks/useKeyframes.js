@@ -25,16 +25,6 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
   const [isEndKeyframeExplicit, setIsEndKeyframeExplicit] = useState(false);
   const [copiedData, setCopiedData] = useState(null);
 
-  // Ref to track pending keyframe operations and prevent duplicates
-  const pendingKeyframeOpsRef = useRef(new Map());
-
-  // Ref to cache the result of setState operations during batch re-executions
-  // When React batches updates, it re-executes callbacks with the same prev state.
-  // We cache the computed result and return it in subsequent executions to ensure
-  // all callbacks return the same array reference, preventing state loss.
-  // Maps batchKey -> computed result array
-  const batchResultCacheRef = useRef(new Map());
-
   /**
    * Initialize keyframes with start and end
    * @param {Object} defaultData - Default keyframe data
@@ -42,7 +32,6 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
    */
   const initializeKeyframes = useCallback((defaultData, endFrame) => {
     console.log('[useKeyframes] Initializing keyframes at frame=0 and frame=' + endFrame, defaultData);
-    console.trace('[useKeyframes] initializeKeyframes call stack:');
     setIsEndKeyframeExplicit(false);
     setKeyframes([
       {
@@ -82,34 +71,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
     const frame = timeToFrame(time, framerate);
     const endFrame = getEndFrame ? getEndFrame(totalFrames) : totalFrames;
 
-    // Check if this exact operation is already pending (deduplication)
-    const opKey = `${frame}-${origin}`;
-    const now = Date.now();
-
-    // Clean up old entries (older than 100ms)
-    for (const [key, timestamp] of pendingKeyframeOpsRef.current.entries()) {
-      if (now - timestamp > 100) {
-        pendingKeyframeOpsRef.current.delete(key);
-      }
-    }
-
-    // Check if this operation is already in progress
-    const existingTimestamp = pendingKeyframeOpsRef.current.get(opKey);
-    if (existingTimestamp && now - existingTimestamp < 100) {
-      console.log('[useKeyframes] Skipping duplicate operation for frame', frame, 'origin:', origin, '(within 100ms window)');
-      return;
-    }
-
-    // Record this operation
-    pendingKeyframeOpsRef.current.set(opKey, now);
-
     console.log('[useKeyframes] Adding/updating keyframe at time', time, '(frame', frame + '), origin:', origin);
-    console.trace('[useKeyframes] addOrUpdateKeyframe call stack:');
-    console.log('[useKeyframes] totalFrames:', totalFrames, 'endFrame:', endFrame);
-    console.log('[useKeyframes] Current keyframes before add/update:', keyframes.map(kf => ({
-      frame: kf.frame,
-      origin: kf.origin
-    })));
 
     // Determine if this is a boundary keyframe
     const isEndKeyframe = endFrame !== null && frame === endFrame;
@@ -127,23 +89,6 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
       // Check if keyframe exists at this frame
       const existingIndex = prev.findIndex(kf => kf.frame === frame);
 
-      console.log('[useKeyframes] Existing keyframe at frame', frame, ':', existingIndex >= 0 ? 'YES (index ' + existingIndex + ')' : 'NO');
-
-      // DEDUPLICATION: Check if we already computed the result for this operation in a previous callback execution
-      // React can re-execute setState callbacks with the same prev state during batching
-      const batchKey = `${frame}-${actualOrigin}`;
-      const cachedResult = batchResultCacheRef.current.get(batchKey);
-
-      if (cachedResult) {
-        console.log('[useKeyframes] Returning cached result for frame', frame, '(callback re-execution)');
-        console.log('[useKeyframes] Cached keyframes:', cachedResult.map(kf => ({
-          frame: kf.frame,
-          origin: kf.origin
-        })));
-        return cachedResult;
-      }
-
-      // First execution for this operation in this batch - compute the result
       let updated;
       if (existingIndex >= 0) {
         // Update existing keyframe - preserve origin if updating permanent keyframe
@@ -154,7 +99,6 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
       } else {
         // Add new keyframe and sort by frame
         console.log('[useKeyframes] CREATING new keyframe at frame', frame, 'origin:', actualOrigin);
-        console.trace('[useKeyframes] CREATE call stack:');
         const newKeyframes = [...prev, { ...data, frame, origin: actualOrigin }];
         updated = newKeyframes.sort((a, b) => a.frame - b.frame);
       }
@@ -180,19 +124,6 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
         }
       }
 
-      // Cache this result so subsequent callback re-executions return the same array
-      batchResultCacheRef.current.set(batchKey, updated);
-
-      // Clear the cache after React finishes the current batch (next tick)
-      setTimeout(() => {
-        batchResultCacheRef.current.delete(batchKey);
-      }, 0);
-
-      console.log('[useKeyframes] Returning updated keyframes:', updated.map(kf => ({
-        frame: kf.frame,
-        origin: kf.origin
-      })));
-
       return updated;
     });
   }, [isEndKeyframeExplicit, framerate, getEndFrame]);
@@ -206,7 +137,6 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
     const endFrame = getEndFrame ? getEndFrame(totalFrames) : totalFrames;
 
     console.log('[useKeyframes] Attempting to remove keyframe at time:', time, '(frame', frame + ')');
-    console.trace('[useKeyframes] removeKeyframe call stack:');
 
     setKeyframes(prev => {
       // Find the keyframe at this frame
