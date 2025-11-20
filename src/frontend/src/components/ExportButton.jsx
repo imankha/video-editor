@@ -285,60 +285,55 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
             <span className="text-sm font-medium text-gray-200">Highlight Effect</span>
             <span className="text-xs text-gray-400">
               {!isHighlightEnabled
-                ? 'Enable highlight layer to choose effect style'
-                : 'Choose how highlights appear in exported video'}
+                ? 'Enable highlight layer'
+                : highlightEffectStyle === 'brightness_boost'
+                ? 'Bright Inside'
+                : highlightEffectStyle === 'original'
+                ? 'Yellow Inside'
+                : 'Dim Outside'}
             </span>
           </div>
 
-          {/* Segmented Control */}
-          <div className="flex gap-1">
+          {/* 3-Position Toggle Switch */}
+          <div
+            className={`relative inline-flex h-7 w-20 items-center rounded-full transition-colors focus:outline-none ${
+              highlightEffectStyle === 'brightness_boost'
+                ? 'bg-blue-600'
+                : highlightEffectStyle === 'original'
+                ? 'bg-yellow-600'
+                : 'bg-purple-600'
+            } ${isExporting || !isHighlightEnabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            {/* Clickable zones for each position */}
             <button
               onClick={() => setHighlightEffectStyle('brightness_boost')}
               disabled={isExporting || !isHighlightEnabled}
-              className={`px-2 py-1.5 rounded-md text-xs font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 whitespace-nowrap ${
-                highlightEffectStyle === 'brightness_boost'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              } ${
-                isExporting || !isHighlightEnabled
-                  ? 'opacity-50 cursor-not-allowed'
-                  : 'cursor-pointer'
-              }`}
-            >
-              Bright Inside
-            </button>
-
+              className="absolute left-0 h-full w-1/3 focus:outline-none"
+              aria-label="Bright Inside"
+            />
             <button
               onClick={() => setHighlightEffectStyle('original')}
               disabled={isExporting || !isHighlightEnabled}
-              className={`px-2 py-1.5 rounded-md text-xs font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 whitespace-nowrap ${
-                highlightEffectStyle === 'original'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              } ${
-                isExporting || !isHighlightEnabled
-                  ? 'opacity-50 cursor-not-allowed'
-                  : 'cursor-pointer'
-              }`}
-            >
-              Yellow Inside
-            </button>
-
+              className="absolute left-1/3 h-full w-1/3 focus:outline-none"
+              aria-label="Yellow Inside"
+            />
             <button
               onClick={() => setHighlightEffectStyle('dark_overlay')}
               disabled={isExporting || !isHighlightEnabled}
-              className={`px-2 py-1.5 rounded-md text-xs font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 whitespace-nowrap ${
-                highlightEffectStyle === 'dark_overlay'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              } ${
-                isExporting || !isHighlightEnabled
-                  ? 'opacity-50 cursor-not-allowed'
-                  : 'cursor-pointer'
+              className="absolute right-0 h-full w-1/3 focus:outline-none"
+              aria-label="Dim Outside"
+            />
+
+            {/* Sliding indicator */}
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                highlightEffectStyle === 'brightness_boost'
+                  ? 'translate-x-1'
+                  : highlightEffectStyle === 'original'
+                  ? 'translate-x-8'
+                  : 'translate-x-[3.75rem]'
               }`}
-            >
-              Dim Outside
-            </button>
+            />
           </div>
         </div>
 
