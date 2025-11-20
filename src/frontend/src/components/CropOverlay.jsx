@@ -341,36 +341,28 @@ export default function CropOverlay({
 
   /**
    * Check if crop size requires more than 4x AI upscaling
-   * Calculates the actual scale factor based on crop size and target resolution
+   * Matches backend logic in __init__.py:507-539
    */
   const isCropTooSmall = () => {
-    const videoRatio = videoMetadata.width / videoMetadata.height;
+    const cropW = currentCrop.width;
+    const cropH = currentCrop.height;
 
-    // Determine target resolution based on aspect ratio (matching backend logic)
-    let targetWidth, targetHeight;
+    // Backend calculates ideal 4x SR size
+    const srW = cropW * 4;
+    const srH = cropH * 4;
 
-    // 16:9 (horizontal) - ratio ≈ 1.778
-    if (videoRatio >= 1.7 && videoRatio <= 1.8) {
-      targetWidth = 3840;
-      targetHeight = 2160;
-    }
-    // 9:16 (vertical) - ratio ≈ 0.5625
-    else if (videoRatio >= 0.55 && videoRatio <= 0.6) {
-      targetWidth = 1080;
-      targetHeight = 1920;
-    }
-    // Other ratios - upscale proportionally
-    else if (videoRatio > 1) {
-      targetWidth = 3840;
-      targetHeight = Math.round(3840 / videoRatio);
-    } else {
-      targetWidth = 1080;
-      targetHeight = Math.round(1080 / videoRatio);
-    }
+    // Backend clamps to 1440p max (2560x1440)
+    const maxW = 2560;
+    const maxH = 1440;
+    const scaleLimit = Math.min(maxW / srW, maxH / srH, 1.0);
 
-    // Calculate scale factors (matching backend logic in frame_processor.py)
-    const scaleX = targetWidth / currentCrop.width;
-    const scaleY = targetHeight / currentCrop.height;
+    // Actual target dimensions
+    const targetW = Math.floor(srW * scaleLimit);
+    const targetH = Math.floor(srH * scaleLimit);
+
+    // Calculate actual scale factors
+    const scaleX = targetW / cropW;
+    const scaleY = targetH / cropH;
     const maxScale = Math.max(scaleX, scaleY);
 
     // Return true if scale factor exceeds 4x
