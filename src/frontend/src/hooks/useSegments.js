@@ -198,101 +198,94 @@ export function useSegments() {
   /**
    * Trim from the start: sets trim range to [time, end]
    * Pushes operation to history for de-trim functionality
-   * Uses flushSync to prevent duplicate operations from rapid clicking
-   * FIXED: Updates both states at the same level to avoid nested state update anti-pattern
    */
   const trimStart = useCallback((time) => {
     console.log('[useSegments] trimStart called with time:', time);
-    flushSync(() => {
-      let prevRange = null;
-      let shouldUpdate = true;
 
-      // First, capture the current trim range and check for duplicates
-      setTrimRange(prev => {
-        console.log('[useSegments] trimStart - current trimRange:', JSON.stringify(prev));
-        // Prevent duplicate operations - if already trimmed to this exact position, ignore
-        if (prev && Math.abs(prev.start - time) < 0.01) {
-          console.log('[useSegments] Ignoring duplicate trimStart at:', time);
-          shouldUpdate = false;
-          return prev;
-        }
+    // Prevent duplicate operations - check current state first
+    setTrimRange(prev => {
+      console.log('[useSegments] trimStart - current trimRange:', JSON.stringify(prev));
 
-        prevRange = prev;
-        const newRange = {
-          start: time,
-          end: prev?.end || duration
-        };
-        console.log('[useSegments] Setting trimRange to:', JSON.stringify(newRange));
-        return newRange;
+      // If already trimmed to this exact position, ignore
+      if (prev && Math.abs(prev.start - time) < 0.01) {
+        console.log('[useSegments] Ignoring duplicate trimStart at:', time);
+        return prev; // No change
+      }
+
+      const newRange = {
+        start: time,
+        end: prev?.end || duration
+      };
+      console.log('[useSegments] Setting trimRange to:', JSON.stringify(newRange));
+
+      // Update history in the same state update to keep them in sync
+      setTrimHistory(history => {
+        console.log('[useSegments] trimStart - current history:', JSON.stringify(history));
+        const newHistory = [...history, {
+          type: 'start',
+          time,
+          previousRange: prev
+        }];
+        console.log('[useSegments] trimStart - new history:', JSON.stringify(newHistory));
+        return newHistory;
       });
 
-      // Then, update history if this wasn't a duplicate
-      if (shouldUpdate) {
-        setTrimHistory(history => {
-          console.log('[useSegments] trimStart - current history:', JSON.stringify(history));
-          const newHistory = [...history, {
-            type: 'start',
-            time,
-            previousRange: prevRange
-          }];
-          console.log('[useSegments] trimStart - new history:', JSON.stringify(newHistory));
-          return newHistory;
-        });
-        console.log('[useSegments] Trimmed start to:', time, 'previousRange was:', JSON.stringify(prevRange));
-      }
+      console.log('[useSegments] Trimmed start to:', time, 'previousRange was:', JSON.stringify(prev));
+      return newRange;
     });
+
     console.log('[useSegments] trimStart completed');
   }, [duration]);
 
   /**
    * Trim from the end: sets trim range to [start, time]
    * Pushes operation to history for de-trim functionality
-   * Uses flushSync to prevent duplicate operations from rapid clicking
-   * FIXED: Updates both states at the same level to avoid nested state update anti-pattern
    */
   const trimEnd = useCallback((time) => {
-    flushSync(() => {
-      let prevRange = null;
-      let shouldUpdate = true;
+    console.log('[useSegments] trimEnd called with time:', time);
 
-      // First, capture the current trim range and check for duplicates
-      setTrimRange(prev => {
-        // Prevent duplicate operations - if already trimmed to this exact position, ignore
-        if (prev && Math.abs(prev.end - time) < 0.01) {
-          console.log('[useSegments] Ignoring duplicate trimEnd at:', time);
-          shouldUpdate = false;
-          return prev;
-        }
+    // Prevent duplicate operations - check current state first
+    setTrimRange(prev => {
+      console.log('[useSegments] trimEnd - current trimRange:', JSON.stringify(prev));
 
-        prevRange = prev;
-        return {
-          start: prev?.start || 0,
-          end: time
-        };
-      });
+      // If already trimmed to this exact position, ignore
+      if (prev && Math.abs(prev.end - time) < 0.01) {
+        console.log('[useSegments] Ignoring duplicate trimEnd at:', time);
+        return prev; // No change
+      }
 
-      // Then, update history if this wasn't a duplicate
-      if (shouldUpdate) {
-        setTrimHistory(history => [...history, {
+      const newRange = {
+        start: prev?.start || 0,
+        end: time
+      };
+      console.log('[useSegments] Setting trimRange to:', JSON.stringify(newRange));
+
+      // Update history in the same state update to keep them in sync
+      setTrimHistory(history => {
+        console.log('[useSegments] trimEnd - current history:', JSON.stringify(history));
+        const newHistory = [...history, {
           type: 'end',
           time,
-          previousRange: prevRange
-        }]);
-        console.log('[useSegments] Trimmed end to:', time);
-      }
+          previousRange: prev
+        }];
+        console.log('[useSegments] trimEnd - new history:', JSON.stringify(newHistory));
+        return newHistory;
+      });
+
+      console.log('[useSegments] Trimmed end to:', time, 'previousRange was:', JSON.stringify(prev));
+      return newRange;
     });
+
+    console.log('[useSegments] trimEnd completed');
   }, []);
 
   /**
    * Restore trim range (remove trimming) and clear history
-   * Uses flushSync for immediate, atomic state updates
    */
   const clearTrim = useCallback(() => {
-    flushSync(() => {
-      setTrimRange(null);
-      setTrimHistory([]);
-      console.log('[useSegments] Cleared all trim state');
-    });
+    setTrimRange(null);
+    setTrimHistory([]);
+    console.log('[useSegments] Cleared all trim state');
   }, []);
 
   /**
@@ -324,25 +317,23 @@ export function useSegments() {
 
     detrimLockRef.current.isLocked = true;
     try {
-      // Use flushSync to ensure both state updates complete synchronously
-      // CRITICAL: Both setters must be at the same level, NOT nested
-      flushSync(() => {
-        // FIX: Only restore the start value, preserve current end
-        // This prevents losing end trim when undoing a start trim
-        setTrimRange(current => {
-          const restoredStart = lastStartOp.previousRange?.start || 0;
-          const currentEnd = current?.end || duration;
-          const newRange = { start: restoredStart, end: currentEnd };
-          console.log('[useSegments] Calling setTrimRange - restoring start:', restoredStart, 'preserving end:', currentEnd);
-          return newRange;
-        });
+      // FIX: Only restore the start value, preserve current end
+      // This prevents losing end trim when undoing a start trim
+      setTrimRange(current => {
+        const restoredStart = lastStartOp.previousRange?.start || 0;
+        const currentEnd = current?.end || duration;
+        const newRange = { start: restoredStart, end: currentEnd };
+        console.log('[useSegments] Calling setTrimRange - restoring start:', restoredStart, 'preserving end:', currentEnd);
 
+        // Update history in the same state update
         console.log('[useSegments] Updating trimHistory to remove index:', lastStartIndex);
         setTrimHistory(prev => {
           const newHistory = prev.filter((_, i) => i !== lastStartIndex);
           console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
           return newHistory;
         });
+
+        return newRange;
       });
       console.log('[useSegments] detrimStart completed');
     } finally {
@@ -379,25 +370,23 @@ export function useSegments() {
 
     detrimLockRef.current.isLocked = true;
     try {
-      // Use flushSync to ensure both state updates complete synchronously
-      // CRITICAL: Both setters must be at the same level, NOT nested
-      flushSync(() => {
-        // FIX: Only restore the end value, preserve current start
-        // This prevents losing start trim when undoing an end trim
-        setTrimRange(current => {
-          const restoredEnd = lastEndOp.previousRange?.end || duration;
-          const currentStart = current?.start || 0;
-          const newRange = { start: currentStart, end: restoredEnd };
-          console.log('[useSegments] Calling setTrimRange - preserving start:', currentStart, 'restoring end:', restoredEnd);
-          return newRange;
-        });
+      // FIX: Only restore the end value, preserve current start
+      // This prevents losing start trim when undoing an end trim
+      setTrimRange(current => {
+        const restoredEnd = lastEndOp.previousRange?.end || duration;
+        const currentStart = current?.start || 0;
+        const newRange = { start: currentStart, end: restoredEnd };
+        console.log('[useSegments] Calling setTrimRange - preserving start:', currentStart, 'restoring end:', restoredEnd);
 
+        // Update history in the same state update
         console.log('[useSegments] Updating trimHistory to remove index:', lastEndIndex);
         setTrimHistory(prev => {
           const newHistory = prev.filter((_, i) => i !== lastEndIndex);
           console.log('[useSegments] New history after removal:', JSON.stringify(newHistory));
           return newHistory;
         });
+
+        return newRange;
       });
       console.log('[useSegments] detrimEnd completed');
     } finally {
