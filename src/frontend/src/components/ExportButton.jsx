@@ -280,17 +280,22 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
         </div>
 
         {/* Highlight Effect Style */}
-        <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium text-gray-200">
-            Highlight Effect
-          </label>
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-gray-200">Highlight Effect</span>
+            <span className="text-xs text-gray-400">
+              {!isHighlightEnabled
+                ? 'Enable highlight layer to choose effect style'
+                : 'Choose how highlights appear in exported video'}
+            </span>
+          </div>
 
           {/* Segmented Control */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="flex gap-1">
             <button
               onClick={() => setHighlightEffectStyle('brightness_boost')}
               disabled={isExporting || !isHighlightEnabled}
-              className={`px-3 py-2.5 rounded-md text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+              className={`px-2 py-1.5 rounded-md text-xs font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 whitespace-nowrap ${
                 highlightEffectStyle === 'brightness_boost'
                   ? 'bg-blue-600 text-white shadow-lg'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -306,7 +311,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
             <button
               onClick={() => setHighlightEffectStyle('original')}
               disabled={isExporting || !isHighlightEnabled}
-              className={`px-3 py-2.5 rounded-md text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+              className={`px-2 py-1.5 rounded-md text-xs font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 whitespace-nowrap ${
                 highlightEffectStyle === 'original'
                   ? 'bg-blue-600 text-white shadow-lg'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -322,7 +327,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
             <button
               onClick={() => setHighlightEffectStyle('dark_overlay')}
               disabled={isExporting || !isHighlightEnabled}
-              className={`px-3 py-2.5 rounded-md text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+              className={`px-2 py-1.5 rounded-md text-xs font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 whitespace-nowrap ${
                 highlightEffectStyle === 'dark_overlay'
                   ? 'bg-blue-600 text-white shadow-lg'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -335,12 +340,6 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
               Dim Outside
             </button>
           </div>
-
-          <span className="text-xs text-gray-400">
-            {!isHighlightEnabled
-              ? 'Enable highlight layer to choose effect style'
-              : 'Choose how highlights appear in exported video'}
-          </span>
         </div>
 
         {/* Export Info */}
