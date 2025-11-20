@@ -202,15 +202,18 @@ export function useSegments() {
   const trimStart = useCallback((time) => {
     console.log('[useSegments] trimStart called with time:', time);
 
+    // Check if this would be a no-op (already at this position)
+    if (trimRange && Math.abs(trimRange.start - time) < 0.01) {
+      console.log('[useSegments] Ignoring duplicate trimStart - already at this position');
+      return;
+    }
+
+    // Capture current trim range for history before updating
+    const previousRange = trimRange;
+
     // Update trimRange
     setTrimRange(prev => {
       console.log('[useSegments] trimStart - current trimRange:', JSON.stringify(prev));
-
-      // If already trimmed to this exact position, ignore
-      if (prev && Math.abs(prev.start - time) < 0.01) {
-        console.log('[useSegments] Ignoring duplicate trimStart - already at this position');
-        return prev; // No change
-      }
 
       // Create new range object
       const newRange = {
@@ -224,13 +227,13 @@ export function useSegments() {
       return newRange;
     });
 
-    // Update history separately (not nested)
+    // Update history separately (not nested) - only if we're actually changing
     setTrimHistory(prev => {
       console.log('[useSegments] trimStart - current history:', JSON.stringify(prev));
       const newHistory = [...prev, {
         type: 'start',
         time,
-        previousRange: trimRange
+        previousRange: previousRange
       }];
       console.log('[useSegments] trimStart - new history:', JSON.stringify(newHistory));
       return newHistory;
@@ -246,15 +249,18 @@ export function useSegments() {
   const trimEnd = useCallback((time) => {
     console.log('[useSegments] trimEnd called with time:', time);
 
+    // Check if this would be a no-op (already at this position)
+    if (trimRange && Math.abs(trimRange.end - time) < 0.01) {
+      console.log('[useSegments] Ignoring duplicate trimEnd - already at this position');
+      return;
+    }
+
+    // Capture current trim range for history before updating
+    const previousRange = trimRange;
+
     // Update trimRange
     setTrimRange(prev => {
       console.log('[useSegments] trimEnd - current trimRange:', JSON.stringify(prev));
-
-      // If already trimmed to this exact position, ignore
-      if (prev && Math.abs(prev.end - time) < 0.01) {
-        console.log('[useSegments] Ignoring duplicate trimEnd - already at this position');
-        return prev; // No change
-      }
 
       // Create new range object
       const newRange = {
@@ -268,13 +274,13 @@ export function useSegments() {
       return newRange;
     });
 
-    // Update history separately (not nested)
+    // Update history separately (not nested) - only if we're actually changing
     setTrimHistory(prev => {
       console.log('[useSegments] trimEnd - current history:', JSON.stringify(prev));
       const newHistory = [...prev, {
         type: 'end',
         time,
-        previousRange: trimRange
+        previousRange: previousRange
       }];
       console.log('[useSegments] trimEnd - new history:', JSON.stringify(newHistory));
       return newHistory;
