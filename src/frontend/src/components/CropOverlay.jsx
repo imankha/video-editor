@@ -452,7 +452,7 @@ export default function CropOverlay({
             style={{ bottom: '-32px' }}
             title="AI upscaler works best with 4x scaling. Current crop will require more than 4x upscale."
           >
-            ⚠️ Crop too small for optimal 4x upscale
+            ⚠️ sub-optimal upscale
           </div>
         )}
 
