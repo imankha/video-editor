@@ -178,8 +178,13 @@ export default function CropLayer({
               {/* Copy button (shown on hover or when selected, above keyframe) - z-50 to appear above all UI including playhead */}
               {onKeyframeCopy && (
                 <button
-                  className={`absolute -top-5 left-1/2 transform -translate-x-1/2 transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1 z-50 ${
-                    (isHovered || isSelected) ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  className={`absolute -top-5 left-1/2 transform transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1.5 z-50 ${
+                    isPermanent && index === 0
+                      ? '-translate-x-[20%]'
+                      : isPermanent && index === keyframes.length - 1
+                      ? '-translate-x-[80%]'
+                      : '-translate-x-1/2'
+                  } ${(isHovered || isSelected) ? 'opacity-100' : 'opacity-0 pointer-events-none'
                   }`}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -187,7 +192,7 @@ export default function CropLayer({
                   }}
                   title="Copy keyframe"
                 >
-                  <Copy size={10} />
+                  <Copy size={13} />
                 </button>
               )}
 
@@ -210,7 +215,7 @@ export default function CropLayer({
               {keyframes.length > 2 &&
                !isPermanent && (
                 <button
-                  className={`absolute top-4 left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1 z-50 ${
+                  className={`absolute top-4 left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 z-50 ${
                     (isHovered || isSelected) ? 'opacity-100' : 'opacity-0 pointer-events-none'
                   }`}
                   onClick={(e) => {
@@ -219,7 +224,7 @@ export default function CropLayer({
                   }}
                   title="Delete keyframe"
                 >
-                  <Trash2 size={10} />
+                  <Trash2 size={13} />
                 </button>
               )}
             </div>
