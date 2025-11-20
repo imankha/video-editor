@@ -199,7 +199,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
 
   /**
    * Remove a keyframe at the specified time
-   * Cannot remove permanent keyframes at frame=0 or end frame
+   * Cannot remove permanent keyframes (origin='permanent')
    */
   const removeKeyframe = useCallback((time, totalFrames = null) => {
     const frame = timeToFrame(time, framerate);
@@ -208,22 +208,28 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
     console.log('[useKeyframes] Attempting to remove keyframe at time:', time, '(frame', frame + ')');
     console.trace('[useKeyframes] removeKeyframe call stack:');
 
-    // Don't allow removing permanent start/end keyframes
-    if (frame === 0) {
-      console.log('[useKeyframes] Cannot remove permanent start keyframe (frame=0)');
-      return;
-    }
-    if (endFrame !== null && frame === endFrame) {
-      console.log('[useKeyframes] Cannot remove permanent end keyframe');
-      return;
-    }
-
     setKeyframes(prev => {
+      // Find the keyframe at this frame
+      const keyframeToRemove = prev.find(kf => kf.frame === frame);
+
+      if (!keyframeToRemove) {
+        console.log('[useKeyframes] No keyframe found at frame', frame);
+        return prev;
+      }
+
+      // Don't allow removing permanent keyframes
+      if (keyframeToRemove.origin === 'permanent') {
+        console.log('[useKeyframes] Cannot remove permanent keyframe at frame', frame);
+        return prev;
+      }
+
       // Don't allow removing if it would leave less than 2 keyframes
       if (prev.length <= 2) {
         console.log('[useKeyframes] Cannot remove - must have at least 2 keyframes');
         return prev;
       }
+
+      console.log('[useKeyframes] Removing keyframe at frame', frame, 'origin:', keyframeToRemove.origin);
       return prev.filter(kf => kf.frame !== frame);
     });
   }, [framerate, getEndFrame]);

@@ -219,6 +219,7 @@ export default function HighlightLayer({
             const isEndKeyframe = keyframe.frame === highlightEndFrame;
             const isAtStartTime = Math.abs(currentTime) < 0.01;
             const isSelected = selectedKeyframeIndex === index;
+            const isPermanent = keyframe.origin === 'permanent';
 
             const shouldHighlight = isAtCurrentTime ||
                                     (isEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
@@ -265,10 +266,9 @@ export default function HighlightLayer({
                   }${isSelected ? ' [SELECTED]' : ''}`}
                 />
 
-                {/* Delete button (shown on hover or when selected) */}
+                {/* Delete button (shown on hover or when selected, but not for permanent keyframes) */}
                 {keyframes.length > 2 &&
-                 !isStartKeyframe &&
-                 !isEndKeyframe && (
+                 !isPermanent && (
                   <button
                     className={`absolute top-4 left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1 z-50 ${
                       (isHovered || isSelected) ? 'opacity-100' : 'opacity-0 pointer-events-none'
