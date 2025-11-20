@@ -72,6 +72,11 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
     const endFrame = getEndFrame ? getEndFrame(totalFrames) : totalFrames;
 
     console.log('[useKeyframes] Adding/updating keyframe at time', time, '(frame', frame + '), origin:', origin);
+    console.log('[useKeyframes] totalFrames:', totalFrames, 'endFrame:', endFrame);
+    console.log('[useKeyframes] Current keyframes before add/update:', keyframes.map(kf => ({
+      frame: kf.frame,
+      origin: kf.origin
+    })));
 
     // Determine if this is a boundary keyframe
     const isEndKeyframe = endFrame !== null && frame === endFrame;
@@ -89,14 +94,18 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
       // Check if keyframe exists at this frame
       const existingIndex = prev.findIndex(kf => kf.frame === frame);
 
+      console.log('[useKeyframes] Existing keyframe at frame', frame, ':', existingIndex >= 0 ? 'YES (index ' + existingIndex + ')' : 'NO');
+
       let updated;
       if (existingIndex >= 0) {
         // Update existing keyframe - preserve origin if updating permanent keyframe
         const preservedOrigin = prev[existingIndex].origin === 'permanent' ? 'permanent' : actualOrigin;
+        console.log('[useKeyframes] UPDATING existing keyframe at frame', frame, 'origin:', prev[existingIndex].origin, '->', preservedOrigin);
         updated = [...prev];
         updated[existingIndex] = { ...data, frame, origin: preservedOrigin };
       } else {
         // Add new keyframe and sort by frame
+        console.log('[useKeyframes] CREATING new keyframe at frame', frame, 'origin:', actualOrigin);
         const newKeyframes = [...prev, { ...data, frame, origin: actualOrigin }];
         updated = newKeyframes.sort((a, b) => a.frame - b.frame);
       }

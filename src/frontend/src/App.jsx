@@ -303,7 +303,28 @@ function App() {
     const segment = segments[segmentIndex];
     const isCurrentlyTrimmed = segment.isTrimmed;
 
+    console.log('========== TRIM OPERATION START ==========');
     console.log('[App] handleTrimSegment - segment:', segment, 'isCurrentlyTrimmed:', isCurrentlyTrimmed);
+    console.log('[App] BEFORE TRIM - Crop keyframes:', keyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / framerate,
+      origin: kf.origin,
+      x: kf.x,
+      y: kf.y,
+      width: kf.width,
+      height: kf.height
+    })));
+    console.log('[App] BEFORE TRIM - Highlight keyframes:', highlightKeyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / framerate,
+      origin: kf.origin,
+      x: kf.x,
+      y: kf.y,
+      radiusX: kf.radiusX,
+      radiusY: kf.radiusY
+    })));
+    console.log('[App] BEFORE TRIM - trimRange:', trimRange);
+    console.log('[App] BEFORE TRIM - currentTime:', currentTime);
 
     // INVARIANT: Can only trim edge segments
     if (process.env.NODE_ENV === 'development') {
@@ -427,30 +448,51 @@ function App() {
     console.log('[App] Toggling trim state for segment:', segmentIndex);
     toggleTrimSegment(segmentIndex);
 
-    // INVARIANT: After trim operation, verify keyframe count is reasonable
-    if (process.env.NODE_ENV === 'development') {
-      setTimeout(() => {
-        if (!isCurrentlyTrimmed) {
-          // After trimming, we should have created boundary keyframes
-          const boundaryTime = segment.isLast ? segment.start : segment.end;
-          const boundaryFrame = Math.round(boundaryTime * framerate);
+    // Log state after trim (using setTimeout to let state updates complete)
+    setTimeout(() => {
+      console.log('========== TRIM OPERATION COMPLETE ==========');
+      console.log('[App] AFTER TRIM - Crop keyframes:', keyframes.map(kf => ({
+        frame: kf.frame,
+        time: kf.frame / framerate,
+        origin: kf.origin,
+        x: kf.x,
+        y: kf.y,
+        width: kf.width,
+        height: kf.height
+      })));
+      console.log('[App] AFTER TRIM - Highlight keyframes:', highlightKeyframes.map(kf => ({
+        frame: kf.frame,
+        time: kf.frame / framerate,
+        origin: kf.origin,
+        x: kf.x,
+        y: kf.y,
+        radiusX: kf.radiusX,
+        radiusY: kf.radiusY
+      })));
+      console.log('[App] AFTER TRIM - trimRange:', trimRange);
+      console.log('[App] AFTER TRIM - currentTime:', currentTime);
 
-          const boundaryCropKeyframe = keyframes.find(kf => kf.frame === boundaryFrame);
-          if (!boundaryCropKeyframe) {
-            console.warn('⚠️ INVARIANT WARNING: Expected boundary crop keyframe at frame', boundaryFrame, 'after trim operation');
-          } else if (boundaryCropKeyframe.origin !== 'trim') {
-            console.warn('⚠️ INVARIANT WARNING: Boundary crop keyframe has wrong origin:', boundaryCropKeyframe.origin, 'expected: trim');
-          }
+      // INVARIANT: After trim operation, verify keyframe count is reasonable
+      if (process.env.NODE_ENV === 'development' && !isCurrentlyTrimmed) {
+        // After trimming, we should have created boundary keyframes
+        const boundaryTime = segment.isLast ? segment.start : segment.end;
+        const boundaryFrame = Math.round(boundaryTime * framerate);
 
-          const boundaryHighlightKeyframe = highlightKeyframes.find(kf => kf.frame === boundaryFrame);
-          if (!boundaryHighlightKeyframe) {
-            console.warn('⚠️ INVARIANT WARNING: Expected boundary highlight keyframe at frame', boundaryFrame, 'after trim operation');
-          } else if (boundaryHighlightKeyframe.origin !== 'trim') {
-            console.warn('⚠️ INVARIANT WARNING: Boundary highlight keyframe has wrong origin:', boundaryHighlightKeyframe.origin, 'expected: trim');
-          }
+        const boundaryCropKeyframe = keyframes.find(kf => kf.frame === boundaryFrame);
+        if (!boundaryCropKeyframe) {
+          console.warn('⚠️ INVARIANT WARNING: Expected boundary crop keyframe at frame', boundaryFrame, 'after trim operation');
+        } else if (boundaryCropKeyframe.origin !== 'trim') {
+          console.warn('⚠️ INVARIANT WARNING: Boundary crop keyframe has wrong origin:', boundaryCropKeyframe.origin, 'expected: trim');
         }
-      }, 100); // Delay to allow state updates to complete
-    }
+
+        const boundaryHighlightKeyframe = highlightKeyframes.find(kf => kf.frame === boundaryFrame);
+        if (!boundaryHighlightKeyframe) {
+          console.warn('⚠️ INVARIANT WARNING: Expected boundary highlight keyframe at frame', boundaryFrame, 'after trim operation');
+        } else if (boundaryHighlightKeyframe.origin !== 'trim') {
+          console.warn('⚠️ INVARIANT WARNING: Boundary highlight keyframe has wrong origin:', boundaryHighlightKeyframe.origin, 'expected: trim');
+        }
+      }
+    }, 100); // Delay to allow state updates to complete
   };
 
   // Keyboard handler: Space bar toggles play/pause
@@ -594,6 +636,19 @@ function App() {
 
   // Handle crop complete (create keyframe and clear drag state)
   const handleCropComplete = (cropData) => {
+    console.log('========== CROP EDIT ==========');
+    console.log('[App] handleCropComplete - currentTime:', currentTime);
+    console.log('[App] handleCropComplete - cropData:', cropData);
+    console.log('[App] handleCropComplete - existing keyframes:', keyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / framerate,
+      origin: kf.origin
+    })));
+    const frame = Math.round(currentTime * framerate);
+    const existingKeyframe = keyframes.find(kf => kf.frame === frame);
+    console.log('[App] handleCropComplete - looking for keyframe at frame:', frame, '(time:', currentTime, ')');
+    console.log('[App] handleCropComplete - existing keyframe at this frame:', existingKeyframe);
+
     addOrUpdateKeyframe(currentTime, cropData, duration);
     setDragCrop(null); // Clear drag preview
   };
@@ -605,6 +660,19 @@ function App() {
 
   // Handle highlight complete (create keyframe and clear drag state)
   const handleHighlightComplete = (highlightData) => {
+    console.log('========== HIGHLIGHT EDIT ==========');
+    console.log('[App] handleHighlightComplete - currentTime:', currentTime);
+    console.log('[App] handleHighlightComplete - highlightData:', highlightData);
+    console.log('[App] handleHighlightComplete - existing keyframes:', highlightKeyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / framerate,
+      origin: kf.origin
+    })));
+    const frame = Math.round(currentTime * framerate);
+    const existingKeyframe = highlightKeyframes.find(kf => kf.frame === frame);
+    console.log('[App] handleHighlightComplete - looking for keyframe at frame:', frame, '(time:', currentTime, ')');
+    console.log('[App] handleHighlightComplete - existing keyframe at this frame:', existingKeyframe);
+
     addOrUpdateHighlightKeyframe(currentTime, highlightData, duration);
     setDragHighlight(null);
   };
