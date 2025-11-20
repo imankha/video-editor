@@ -340,33 +340,27 @@ export default function CropOverlay({
   const screenCrop = videoToScreen(currentCrop.x, currentCrop.y, currentCrop.width, currentCrop.height);
 
   /**
-   * Check if crop size requires more than 4x AI upscaling
-   * Matches backend logic in __init__.py:507-539
+   * Check if crop size requires maximum 4x AI upscaling
+   * Warns when crop is small enough that it would hit the 1440p limit with 4x upscaling.
+   * This means we're using the full upscaling power - any smaller would be clamped.
+   *
+   * Backend clamps target to 1440p (2560x1440), so crops smaller than 640x360
+   * will be upscaled at exactly 4x to reach the limit.
    */
   const isCropTooSmall = () => {
     const cropW = currentCrop.width;
     const cropH = currentCrop.height;
 
-    // Backend calculates ideal 4x SR size
-    const srW = cropW * 4;
-    const srH = cropH * 4;
-
     // Backend clamps to 1440p max (2560x1440)
+    // Crops smaller than 1440p/4 will use full 4x upscaling
     const maxW = 2560;
     const maxH = 1440;
-    const scaleLimit = Math.min(maxW / srW, maxH / srH, 1.0);
+    const minCropW = maxW / 4; // 640
+    const minCropH = maxH / 4; // 360
 
-    // Actual target dimensions
-    const targetW = Math.floor(srW * scaleLimit);
-    const targetH = Math.floor(srH * scaleLimit);
-
-    // Calculate actual scale factors
-    const scaleX = targetW / cropW;
-    const scaleY = targetH / cropH;
-    const maxScale = Math.max(scaleX, scaleY);
-
-    // Return true if scale factor exceeds 4x
-    return maxScale > 4.0;
+    // Warn if BOTH dimensions are smaller than threshold (requires full 4x to reach 1440p)
+    // Using AND because if one dimension is large, it won't need full 4x upscaling
+    return cropW < minCropW && cropH < minCropH;
   };
 
   const cropTooSmall = isCropTooSmall();
