@@ -281,24 +281,61 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
 
         {/* Highlight Effect Style */}
         <div className="flex flex-col space-y-2">
-          <label htmlFor="highlight-effect" className="text-sm font-medium text-gray-200">
+          <label className="text-sm font-medium text-gray-200">
             Highlight Effect
           </label>
-          <select
-            id="highlight-effect"
-            value={highlightEffectStyle}
-            onChange={(e) => setHighlightEffectStyle(e.target.value)}
-            disabled={isExporting || !isHighlightEnabled}
-            className={`w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-              isExporting || !isHighlightEnabled
-                ? 'opacity-50 cursor-not-allowed'
-                : 'cursor-pointer hover:bg-gray-600'
-            }`}
-          >
-            <option value="brightness_boost">Bright Inside</option>
-            <option value="original">Yellow Inside</option>
-            <option value="dark_overlay">Dim Outside</option>
-          </select>
+
+          {/* Segmented Control */}
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => setHighlightEffectStyle('brightness_boost')}
+              disabled={isExporting || !isHighlightEnabled}
+              className={`px-3 py-2.5 rounded-md text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                highlightEffectStyle === 'brightness_boost'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              } ${
+                isExporting || !isHighlightEnabled
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'cursor-pointer'
+              }`}
+            >
+              Bright Inside
+            </button>
+
+            <button
+              onClick={() => setHighlightEffectStyle('original')}
+              disabled={isExporting || !isHighlightEnabled}
+              className={`px-3 py-2.5 rounded-md text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                highlightEffectStyle === 'original'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              } ${
+                isExporting || !isHighlightEnabled
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'cursor-pointer'
+              }`}
+            >
+              Yellow Inside
+            </button>
+
+            <button
+              onClick={() => setHighlightEffectStyle('dark_overlay')}
+              disabled={isExporting || !isHighlightEnabled}
+              className={`px-3 py-2.5 rounded-md text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                highlightEffectStyle === 'dark_overlay'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              } ${
+                isExporting || !isHighlightEnabled
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'cursor-pointer'
+              }`}
+            >
+              Dim Outside
+            </button>
+          </div>
+
           <span className="text-xs text-gray-400">
             {!isHighlightEnabled
               ? 'Enable highlight layer to choose effect style'
