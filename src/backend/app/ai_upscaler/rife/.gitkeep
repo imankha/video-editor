@@ -1,0 +1,15 @@
+# RIFE Frame Interpolation
+#
+# This directory contains the RIFE (Real-time Intermediate Flow Estimation)
+# model for high-quality slow motion frame interpolation.
+#
+# RIFE is NOT included in this repository - it must be installed separately.
+#
+# To install RIFE, run from the project root:
+#   ./scripts/setup_rife.sh
+#
+# This will clone: https://github.com/hzwer/ECCV2022-RIFE
+# and download the model weights.
+#
+# Without RIFE, the system automatically falls back to FFmpeg's minterpolate
+# filter, which provides acceptable but lower quality slow motion.
