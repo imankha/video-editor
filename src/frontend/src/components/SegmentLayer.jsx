@@ -1,4 +1,4 @@
-import { Split, Trash2, RotateCcw, Undo } from 'lucide-react';
+import { Split, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 /**
@@ -186,93 +186,6 @@ export default function SegmentLayer({
             </div>
           </div>
         ))}
-
-        {/* Render trim indicators using trimRange (NEW APPROACH) */}
-        {(() => {
-          const indicators = [];
-
-          // Count trim operations in history for each side
-          const startTrimCount = trimHistory.filter(op => op.type === 'start').length;
-          const endTrimCount = trimHistory.filter(op => op.type === 'end').length;
-
-          // Start trim indicator (if trimmed from start)
-          if (trimRange && trimRange.start > 0) {
-            const trimmedDuration = trimRange.start;
-            indicators.push(
-              <div
-                key="trimmed-start"
-                className="absolute top-0 h-12"
-                style={{
-                  left: '-100px',
-                  width: '90px'
-                }}
-              >
-                <div className="h-12 bg-gray-700 bg-opacity-60 border-2 border-dashed border-gray-500 rounded flex flex-col items-center justify-center transition-all">
-                  <div className="text-gray-300 text-[10px] font-semibold">TRIM</div>
-                  <div className="text-gray-400 text-[9px]">{trimmedDuration.toFixed(1)}s</div>
-                </div>
-                <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 z-10 flex gap-1">
-                  {startTrimCount > 0 && onDetrimStart && (
-                    <button
-                      className="p-1.5 rounded transition-colors bg-blue-600 hover:bg-blue-700 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log('[SegmentLayer] Undo start trim button clicked, startTrimCount:', startTrimCount);
-                        if (startTrimCount > 0) {
-                          onDetrimStart();
-                        }
-                      }}
-                      disabled={startTrimCount === 0}
-                      title={`Undo last start trim (${startTrimCount} in history)`}
-                    >
-                      <Undo size={12} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          }
-
-          // End trim indicator (if trimmed from end)
-          if (trimRange && trimRange.end < duration) {
-            const trimmedDuration = duration - trimRange.end;
-            indicators.push(
-              <div
-                key="trimmed-end"
-                className="absolute top-0 h-12"
-                style={{
-                  left: 'calc(100% + 10px)',
-                  width: '90px'
-                }}
-              >
-                <div className="h-12 bg-gray-700 bg-opacity-60 border-2 border-dashed border-gray-500 rounded flex flex-col items-center justify-center transition-all">
-                  <div className="text-gray-300 text-[10px] font-semibold">TRIM</div>
-                  <div className="text-gray-400 text-[9px]">{trimmedDuration.toFixed(1)}s</div>
-                </div>
-                <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 z-10 flex gap-1">
-                  {endTrimCount > 0 && onDetrimEnd && (
-                    <button
-                      className="p-1.5 rounded transition-colors bg-blue-600 hover:bg-blue-700 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log('[SegmentLayer] Undo end trim button clicked, endTrimCount:', endTrimCount);
-                        if (endTrimCount > 0) {
-                          onDetrimEnd();
-                        }
-                      }}
-                      disabled={endTrimCount === 0}
-                      title={`Undo last end trim (${endTrimCount} in history)`}
-                    >
-                      <Undo size={12} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          }
-
-          return indicators;
-        })()}
 
         {/* Render segment boundaries (vertical lines) */}
         {boundaries.map((time, index) => {

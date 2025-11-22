@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film, Crop, Split, Circle, Eye, EyeOff } from 'lucide-react';
+import { Film, Crop, Split, Circle, Eye, EyeOff, Undo2 } from 'lucide-react';
 import { formatTimeSimple } from '../utils/timeFormat';
 import CropLayer from './CropLayer';
 import HighlightLayer from './HighlightLayer';
@@ -400,6 +400,54 @@ export function Timeline({
               >
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full" />
               </div>
+
+              {/* Start Trim Undo Indicator - centered in left padding area */}
+              {trimRange && trimRange.start > 0 && onDetrimStart && (
+                <button
+                  className="absolute top-0 flex items-center justify-center bg-gray-600 hover:bg-blue-600 rounded transition-colors cursor-pointer z-40"
+                  style={{
+                    left: `${EDGE_PADDING / 2}px`,
+                    transform: 'translateX(-50%)',
+                    width: '16px',
+                    height: segments.length > 0
+                      ? 'calc(100% - 0.25rem)'
+                      : isHighlightActive
+                        ? 'calc(11.5rem - 0.25rem)'
+                        : 'calc(9.5rem - 0.25rem)'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDetrimStart();
+                  }}
+                  title={`Undo start trim (${trimRange.start.toFixed(1)}s trimmed)`}
+                >
+                  <Undo2 size={10} className="text-white" />
+                </button>
+              )}
+
+              {/* End Trim Undo Indicator - centered in right padding area */}
+              {trimRange && trimRange.end < duration && onDetrimEnd && (
+                <button
+                  className="absolute top-0 flex items-center justify-center bg-gray-600 hover:bg-blue-600 rounded transition-colors cursor-pointer z-40"
+                  style={{
+                    right: `${EDGE_PADDING / 2}px`,
+                    transform: 'translateX(50%)',
+                    width: '16px',
+                    height: segments.length > 0
+                      ? 'calc(100% - 0.25rem)'
+                      : isHighlightActive
+                        ? 'calc(11.5rem - 0.25rem)'
+                        : 'calc(9.5rem - 0.25rem)'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDetrimEnd();
+                  }}
+                  title={`Undo end trim (${(duration - trimRange.end).toFixed(1)}s trimmed)`}
+                >
+                  <Undo2 size={10} className="text-white rotate-180" />
+                </button>
+              )}
 
               {/* Crop Layer */}
               <div className="mt-1">
