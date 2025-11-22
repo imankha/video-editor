@@ -292,27 +292,47 @@ function App() {
       Math.abs(kf.frame - currentFrame) <= FRAME_TOLERANCE
     );
 
+    const hasCropKeyframe = cropKeyframeIndex !== -1;
+    const hasHighlightKeyframe = highlightKeyframeIndex !== -1 && isHighlightEnabled;
+
     // Update selection based on what's at the playhead position
-    if (cropKeyframeIndex !== -1) {
-      // Prioritize crop keyframes
+    // PRIORITY: Respect the currently selected layer when both have keyframes
+    if (hasCropKeyframe && hasHighlightKeyframe) {
+      // Both layers have keyframes - respect current layer selection
+      if (selectedLayer === 'highlight') {
+        // User is on highlight layer, select highlight keyframe
+        if (selectedHighlightKeyframeIndex !== highlightKeyframeIndex) {
+          setSelectedHighlightKeyframeIndex(highlightKeyframeIndex);
+          setSelectedCropKeyframeIndex(null);
+        }
+      } else {
+        // Default to crop layer (includes 'playhead' and 'crop')
+        if (selectedCropKeyframeIndex !== cropKeyframeIndex || selectedLayer !== 'crop') {
+          setSelectedCropKeyframeIndex(cropKeyframeIndex);
+          setSelectedLayer('crop');
+          setSelectedHighlightKeyframeIndex(null);
+        }
+      }
+    } else if (hasCropKeyframe) {
+      // Only crop keyframe exists
       if (selectedCropKeyframeIndex !== cropKeyframeIndex || selectedLayer !== 'crop') {
         setSelectedCropKeyframeIndex(cropKeyframeIndex);
         setSelectedLayer('crop');
         setSelectedHighlightKeyframeIndex(null);
       }
-    } else if (highlightKeyframeIndex !== -1 && isHighlightEnabled) {
-      // Select highlight keyframe if no crop keyframe
+    } else if (hasHighlightKeyframe) {
+      // Only highlight keyframe exists
       if (selectedHighlightKeyframeIndex !== highlightKeyframeIndex || selectedLayer !== 'highlight') {
         setSelectedHighlightKeyframeIndex(highlightKeyframeIndex);
         setSelectedLayer('highlight');
         setSelectedCropKeyframeIndex(null);
       }
     } else {
-      // No keyframe at current position - deselect
+      // No keyframe at current position - deselect but keep current layer
       if (selectedCropKeyframeIndex !== null || selectedHighlightKeyframeIndex !== null) {
         setSelectedCropKeyframeIndex(null);
         setSelectedHighlightKeyframeIndex(null);
-        setSelectedLayer('playhead');
+        // Don't change selectedLayer - user might still want to stay on their layer
       }
     }
   }, [currentTime, keyframes, highlightKeyframes, framerate, isHighlightEnabled, videoUrl, selectedCropKeyframeIndex, selectedHighlightKeyframeIndex, selectedLayer]);

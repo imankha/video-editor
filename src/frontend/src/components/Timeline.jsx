@@ -107,14 +107,24 @@ export function Timeline({
   const [hoverTime, setHoverTime] = React.useState(null);
   const [hoverX, setHoverX] = React.useState(0);
 
+  // Padding at timeline edges for easier keyframe selection (in pixels)
+  const EDGE_PADDING = 20;
+
   const getTimeFromPosition = (clientX) => {
     if (!timelineRef.current) return 0;
     const rect = timelineRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+
+    // Account for edge padding - usable area starts at EDGE_PADDING and ends at width - EDGE_PADDING
+    const usableWidth = rect.width - (EDGE_PADDING * 2);
+    const x = clientX - rect.left - EDGE_PADDING;
+
+    // Clamp x to usable area and convert to percentage
+    const clampedX = Math.max(0, Math.min(x, usableWidth));
+    const percentage = clampedX / usableWidth;
 
     // Calculate visual time from position (timeline displays visual duration)
     const effectiveDuration = visualDuration || duration;
-    const visualTime = (x / rect.width) * effectiveDuration;
+    const visualTime = percentage * effectiveDuration;
 
     // Convert visual time to source time for seeking
     const sourceTime = visualTimeToSourceTime(visualTime);
@@ -136,13 +146,19 @@ export function Timeline({
     if (!timelineRef.current) return;
 
     const rect = timelineRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+
+    // Account for edge padding - usable area starts at EDGE_PADDING
+    const usableWidth = rect.width - (EDGE_PADDING * 2);
+    const x = e.clientX - rect.left - EDGE_PADDING;
+    const clampedX = Math.max(0, Math.min(x, usableWidth));
+    const percentage = clampedX / usableWidth;
 
     // Calculate visual time for display
     const effectiveDuration = visualDuration || duration;
-    const visualTime = (x / rect.width) * effectiveDuration;
+    const visualTime = percentage * effectiveDuration;
 
-    setHoverX(x);
+    // Store hover position relative to padded area (add padding back for tooltip positioning)
+    setHoverX(clampedX + EDGE_PADDING);
     setHoverTime(visualTime); // Store visual time for display
 
     if (isDragging) {
@@ -349,10 +365,13 @@ export function Timeline({
                   onMouseMove={handleMouseMove}
                   onMouseLeave={handleMouseLeave}
                 >
-                  {/* Progress bar */}
+                  {/* Progress bar - accounts for edge padding */}
                   <div
-                    className="absolute top-0 left-0 h-full bg-blue-600 rounded-r-lg transition-all pointer-events-none"
-                    style={{ width: `${progress}%` }}
+                    className="absolute top-0 h-full bg-blue-600 rounded-r-lg transition-all pointer-events-none"
+                    style={{
+                      left: `${EDGE_PADDING}px`,
+                      width: `calc((100% - ${EDGE_PADDING * 2}px) * ${progress / 100})`
+                    }}
                   />
 
                   {/* Hover tooltip */}
@@ -367,11 +386,11 @@ export function Timeline({
                 </div>
               </div>
 
-              {/* Unified Playhead - extends through all layers */}
+              {/* Unified Playhead - extends through all layers, accounts for edge padding */}
               <div
                 className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none"
                 style={{
-                  left: `${progress}%`,
+                  left: `calc(${EDGE_PADDING}px + (100% - ${EDGE_PADDING * 2}px) * ${progress / 100})`,
                   height: segments.length > 0
                     ? 'calc(100% - 0.25rem)'
                     : isHighlightActive
@@ -401,6 +420,8 @@ export function Timeline({
                   sourceTimeToVisualTime={sourceTimeToVisualTime}
                   visualTimeToSourceTime={visualTimeToSourceTime}
                   timelineScale={timelineScale}
+                  trimRange={trimRange}
+                  edgePadding={EDGE_PADDING}
                 />
               </div>
 
@@ -451,6 +472,8 @@ export function Timeline({
                   sourceTimeToVisualTime={sourceTimeToVisualTime}
                   visualTimeToSourceTime={visualTimeToSourceTime}
                   timelineScale={timelineScale}
+                  trimRange={trimRange}
+                  edgePadding={EDGE_PADDING}
                 />
               </div>
             </div>

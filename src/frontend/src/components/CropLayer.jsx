@@ -26,7 +26,9 @@ export default function CropLayer({
   sourceTimeToVisualTime = (t) => t,
   visualTimeToSourceTime = (t) => t,
   framerate = 30,
-  timelineScale = 1
+  timelineScale = 1,
+  trimRange = null,
+  edgePadding = 0
 }) {
   // Get isEndKeyframeExplicit and copiedCrop from context
   const { isEndKeyframeExplicit, copiedCrop } = useCropContext();
@@ -97,10 +99,18 @@ export default function CropLayer({
           const position = frameToPixel(keyframe.frame);
           const keyframeTime = frameToTime(keyframe.frame, framerate);
           const isAtCurrentTime = Math.abs(keyframeTime - currentTime) < 0.01;
-          const isStartKeyframe = keyframe.frame === 0;
-          const totalFrames = Math.round(duration * framerate);
-          const isEndKeyframe = keyframe.frame === totalFrames;
-          const isAtStartTime = Math.abs(currentTime) < 0.01;
+
+          // Calculate effective start/end based on trimRange
+          // After trimming, keyframes are reconstituted at trim boundaries
+          const effectiveStartTime = trimRange?.start ?? 0;
+          const effectiveEndTime = trimRange?.end ?? duration;
+          const effectiveStartFrame = Math.round(effectiveStartTime * framerate);
+          const effectiveEndFrame = Math.round(effectiveEndTime * framerate);
+
+          // Check if this is a boundary keyframe (at effective start or end)
+          const isStartKeyframe = keyframe.frame === effectiveStartFrame;
+          const isEndKeyframe = keyframe.frame === effectiveEndFrame;
+          const isAtStartTime = Math.abs(currentTime - effectiveStartTime) < 0.01;
           const isSelected = selectedKeyframeIndex === index;
           const isPermanent = keyframe.origin === 'permanent';
 
@@ -114,7 +124,11 @@ export default function CropLayer({
             <div
               key={index}
               className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
-              style={{ left: `${position}%` }}
+              style={{
+                left: edgePadding > 0
+                  ? `calc(${edgePadding}px + (100% - ${edgePadding * 2}px) * ${position / 100})`
+                  : `${position}%`
+              }}
             >
               {/* Invisible hit area that keeps buttons visible when moving mouse between elements */}
               <div className="absolute -top-5 -bottom-4 -left-4 -right-4" />
