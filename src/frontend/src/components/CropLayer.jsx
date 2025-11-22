@@ -108,8 +108,14 @@ export default function CropLayer({
           const effectiveEndFrame = Math.round(effectiveEndTime * framerate);
 
           // Check if this is a boundary keyframe (at effective start or end)
-          const isStartKeyframe = keyframe.frame === effectiveStartFrame;
-          const isEndKeyframe = keyframe.frame === effectiveEndFrame;
+          // Use tolerance of 1 frame to handle floating point precision issues
+          const FRAME_TOLERANCE = 1;
+          const isStartKeyframe = Math.abs(keyframe.frame - effectiveStartFrame) <= FRAME_TOLERANCE;
+          const isEndKeyframe = Math.abs(keyframe.frame - effectiveEndFrame) <= FRAME_TOLERANCE;
+          // Also consider the last keyframe in the array as the end keyframe (fallback for edge cases)
+          const isLastKeyframe = index === keyframes.length - 1 && keyframe.origin === 'permanent';
+          const isEffectiveEndKeyframe = isEndKeyframe || isLastKeyframe;
+
           const isAtStartTime = Math.abs(currentTime - effectiveStartTime) < 0.01;
           const isSelected = selectedKeyframeIndex === index;
           const isPermanent = keyframe.origin === 'permanent';
@@ -118,7 +124,7 @@ export default function CropLayer({
           // 1. At current time, OR
           // 2. This is end keyframe, end hasn't been explicitly set, and we're at start time
           const shouldHighlight = isAtCurrentTime ||
-                                  (isEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
+                                  (isEffectiveEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
 
           return (
             <div
@@ -137,9 +143,9 @@ export default function CropLayer({
               {onKeyframeCopy && (
                 <button
                   className={`absolute -top-5 left-1/2 transform transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1.5 z-50 ${
-                    isPermanent && index === 0
+                    isPermanent && isStartKeyframe
                       ? '-translate-x-[20%]'
-                      : isPermanent && index === keyframes.length - 1
+                      : isPermanent && isEffectiveEndKeyframe
                       ? '-translate-x-[80%]'
                       : '-translate-x-1/2'
                   } ${isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -165,7 +171,7 @@ export default function CropLayer({
                 }`}
                 onClick={() => onKeyframeClick(keyframeTime, index)}
                 title={`Keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
-                  isEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
+                  isEffectiveEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
                 }${isSelected ? ' [SELECTED]' : ''}`}
               />
 
