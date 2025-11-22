@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Download, Loader } from 'lucide-react';
 import axios from 'axios';
+import ThreePositionToggle from './ThreePositionToggle';
 
 /**
  * Generate a unique ID for tracking export progress
@@ -16,6 +17,11 @@ const EXPORT_CONFIG = {
   // Future A/B test settings can be added here
 };
 
+// Highlight effect styles mapped to toggle positions
+const HIGHLIGHT_EFFECT_STYLES = ['brightness_boost', 'original', 'dark_overlay'];
+const HIGHLIGHT_EFFECT_LABELS = ['Bright Inside', 'Yellow Inside', 'Dim Outside'];
+const HIGHLIGHT_EFFECT_COLORS = ['bg-blue-600', 'bg-yellow-600', 'bg-purple-600'];
+
 /**
  * ExportButton component - handles video export with AI upscaling
  * Always uses AI upscaling with ESRGAN at 30fps for best quality
@@ -28,8 +34,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
   const [error, setError] = useState(null);
   const [includeAudio, setIncludeAudio] = useState(true);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
-  const [highlightEffectStyle, setHighlightEffectStyle] = useState('brightness_boost');
-  const previousHighlightPositionRef = useRef('brightness_boost'); // Track previous position for cycling
+  const [highlightEffectPosition, setHighlightEffectPosition] = useState(0);
   const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
@@ -54,38 +59,6 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
       }
     }
   }, [segmentData, audioExplicitlySet, includeAudio]);
-
-  /**
-   * Handle highlight effect toggle with cycling behavior
-   * - Clicking position 0 or 2 → moves to position 1 (middle)
-   * - Clicking position 1 → returns to previous position (0 or 2)
-   */
-  const handleHighlightEffectClick = (targetPosition) => {
-    const current = highlightEffectStyle;
-
-    // If clicking the current position, cycle forward
-    if (current === targetPosition) {
-      if (current === 'brightness_boost') {
-        // Position 0 → Position 1
-        previousHighlightPositionRef.current = current;
-        setHighlightEffectStyle('original');
-      } else if (current === 'original') {
-        // Position 1 → Return to previous position (0 or 2)
-        const previous = previousHighlightPositionRef.current;
-        const nextPosition = previous === 'brightness_boost' ? 'dark_overlay' : 'brightness_boost';
-        previousHighlightPositionRef.current = current;
-        setHighlightEffectStyle(nextPosition);
-      } else if (current === 'dark_overlay') {
-        // Position 2 → Position 1
-        previousHighlightPositionRef.current = current;
-        setHighlightEffectStyle('original');
-      }
-    } else {
-      // Clicking a different position, just move there
-      previousHighlightPositionRef.current = current;
-      setHighlightEffectStyle(targetPosition);
-    }
-  };
 
   /**
    * Connect to WebSocket for real-time progress updates
@@ -174,7 +147,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
         console.log(JSON.stringify(highlightKeyframes, null, 2));
         console.log('==============================================');
         formData.append('highlight_keyframes_json', JSON.stringify(highlightKeyframes));
-        formData.append('highlight_effect_type', highlightEffectStyle);
+        formData.append('highlight_effect_type', HIGHLIGHT_EFFECT_STYLES[highlightEffectPosition]);
       } else {
         console.log('=== EXPORT: No highlight keyframes to send (layer disabled or empty) ===');
       }
@@ -319,55 +292,17 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
             <span className="text-xs text-gray-400">
               {!isHighlightEnabled
                 ? 'Enable highlight layer'
-                : highlightEffectStyle === 'brightness_boost'
-                ? 'Bright Inside'
-                : highlightEffectStyle === 'original'
-                ? 'Yellow Inside'
-                : 'Dim Outside'}
+                : HIGHLIGHT_EFFECT_LABELS[highlightEffectPosition]}
             </span>
           </div>
 
-          {/* 3-Position Toggle Switch */}
-          <div
-            className={`relative inline-flex h-7 w-20 items-center rounded-full transition-colors focus:outline-none ${
-              highlightEffectStyle === 'brightness_boost'
-                ? 'bg-blue-600'
-                : highlightEffectStyle === 'original'
-                ? 'bg-yellow-600'
-                : 'bg-purple-600'
-            } ${isExporting || !isHighlightEnabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-          >
-            {/* Clickable zones for each position */}
-            <button
-              onClick={() => handleHighlightEffectClick('brightness_boost')}
-              disabled={isExporting || !isHighlightEnabled}
-              className="absolute left-0 h-full w-1/3 z-10 focus:outline-none"
-              aria-label="Bright Inside"
-            />
-            <button
-              onClick={() => handleHighlightEffectClick('original')}
-              disabled={isExporting || !isHighlightEnabled}
-              className="absolute left-1/3 h-full w-1/3 z-10 focus:outline-none"
-              aria-label="Yellow Inside"
-            />
-            <button
-              onClick={() => handleHighlightEffectClick('dark_overlay')}
-              disabled={isExporting || !isHighlightEnabled}
-              className="absolute right-0 h-full w-1/3 z-10 focus:outline-none"
-              aria-label="Dim Outside"
-            />
-
-            {/* Sliding indicator */}
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                highlightEffectStyle === 'brightness_boost'
-                  ? 'translate-x-1'
-                  : highlightEffectStyle === 'original'
-                  ? 'translate-x-8'
-                  : 'translate-x-[3.75rem]'
-              }`}
-            />
-          </div>
+          <ThreePositionToggle
+            value={highlightEffectPosition}
+            onChange={setHighlightEffectPosition}
+            colors={HIGHLIGHT_EFFECT_COLORS}
+            labels={HIGHLIGHT_EFFECT_LABELS}
+            disabled={isExporting || !isHighlightEnabled}
+          />
         </div>
 
         {/* Export Info */}
