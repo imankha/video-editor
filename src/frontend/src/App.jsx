@@ -32,6 +32,9 @@ function App() {
   const [selectedCropKeyframeIndex, setSelectedCropKeyframeIndex] = useState(null);
   const [selectedHighlightKeyframeIndex, setSelectedHighlightKeyframeIndex] = useState(null);
 
+  // Ref to track if a keyframe was just manually selected (to prevent race condition with auto-selection)
+  const manualHighlightSelectionRef = useRef(null);
+
   // Segments hook (defined early so we can pass getSegmentAtTime and clampToVisibleRange to useVideo)
   const {
     boundaries: segmentBoundaries,
@@ -222,8 +225,21 @@ function App() {
 
   // Debug: Log keyframes changes
   useEffect(() => {
-    console.log('[App] Keyframes changed:', keyframes);
-  }, [keyframes]);
+    console.log('[App] Crop keyframes changed:', keyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / framerate,
+      origin: kf.origin
+    })));
+  }, [keyframes, framerate]);
+
+  // Debug: Log highlight keyframes changes
+  useEffect(() => {
+    console.log('[App] Highlight keyframes changed:', highlightKeyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / highlightFramerate,
+      origin: kf.origin
+    })));
+  }, [highlightKeyframes, highlightFramerate]);
 
   // Debug: Log currentCropState changes (disabled - too spammy)
   // useEffect(() => {
@@ -297,6 +313,12 @@ function App() {
     const hasCropKeyframe = cropKeyframeIndex !== -1;
     const hasHighlightKeyframe = highlightKeyframeIndex !== -1 && isHighlightEnabled;
 
+    // Debug logging for highlight selection
+    console.log('[App] Auto-selection effect - currentTime:', currentTime, 'currentFrame:', currentFrame);
+    console.log('[App] Auto-selection effect - highlight keyframes:', highlightKeyframes.map(kf => kf.frame));
+    console.log('[App] Auto-selection effect - highlightKeyframeIndex:', highlightKeyframeIndex, 'hasHighlightKeyframe:', hasHighlightKeyframe);
+    console.log('[App] Auto-selection effect - current selectedHighlightKeyframeIndex:', selectedHighlightKeyframeIndex);
+
     // Update crop selection independently
     if (hasCropKeyframe) {
       if (selectedCropKeyframeIndex !== cropKeyframeIndex) {
@@ -309,13 +331,33 @@ function App() {
     }
 
     // Update highlight selection independently
+    // BUG FIX: Check if a manual selection was made recently (within 500ms)
+    // This prevents the auto-selection from clearing a manually-selected keyframe
+    // before the video finishes seeking to that position
+    const manualSelectionAge = manualHighlightSelectionRef.current
+      ? Date.now() - manualHighlightSelectionRef.current.time
+      : Infinity;
+    const hasRecentManualSelection = manualSelectionAge < 500;
+
     if (hasHighlightKeyframe) {
       if (selectedHighlightKeyframeIndex !== highlightKeyframeIndex) {
+        console.log('[App] Auto-selection: SETTING highlight selection to', highlightKeyframeIndex);
         setSelectedHighlightKeyframeIndex(highlightKeyframeIndex);
+        // Clear the manual selection ref since we've successfully synced
+        if (manualHighlightSelectionRef.current?.index === highlightKeyframeIndex) {
+          console.log('[App] Auto-selection: clearing manualHighlightSelectionRef (synced)');
+          manualHighlightSelectionRef.current = null;
+        }
       }
     } else {
       if (selectedHighlightKeyframeIndex !== null) {
-        setSelectedHighlightKeyframeIndex(null);
+        // BUG FIX: Don't clear if we have a recent manual selection
+        if (hasRecentManualSelection) {
+          console.log('[App] Auto-selection: PRESERVING manual highlight selection', selectedHighlightKeyframeIndex, '(manual selection age:', manualSelectionAge + 'ms)');
+        } else {
+          console.log('[App] Auto-selection: CLEARING highlight selection (was', selectedHighlightKeyframeIndex + ')');
+          setSelectedHighlightKeyframeIndex(null);
+        }
       }
     }
 
@@ -735,6 +777,19 @@ function App() {
 
   // Handle highlight keyframe click (seek and select)
   const handleHighlightKeyframeClick = (time, index) => {
+    console.log('[App] handleHighlightKeyframeClick - time:', time, 'index:', index);
+    console.log('[App] handleHighlightKeyframeClick - keyframes:', highlightKeyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / highlightFramerate,
+      origin: kf.origin
+    })));
+    console.log('[App] handleHighlightKeyframeClick - trimRange:', trimRange);
+
+    // Set manual selection ref to prevent auto-selection from clearing this selection
+    // while the video is seeking to the new position
+    manualHighlightSelectionRef.current = { index, time: Date.now() };
+    console.log('[App] handleHighlightKeyframeClick - set manualHighlightSelectionRef:', manualHighlightSelectionRef.current);
+
     seek(time);
     setSelectedHighlightKeyframeIndex(index);
     setSelectedLayer('highlight');
