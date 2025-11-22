@@ -272,6 +272,8 @@ function App() {
   // Auto-select keyframe when playhead moves over it
   // This keeps the selected keyframe in sync with the playhead position
   // ensuring the frame the user is seeing is always the one they're manipulating
+  // NOTE: Both crop AND highlight keyframes can be selected simultaneously
+  // when they align with the playhead position
   useEffect(() => {
     if (!videoUrl) return;
 
@@ -292,29 +294,50 @@ function App() {
       Math.abs(kf.frame - currentFrame) <= FRAME_TOLERANCE
     );
 
-    // Update selection based on what's at the playhead position
-    if (cropKeyframeIndex !== -1) {
-      // Prioritize crop keyframes
-      if (selectedCropKeyframeIndex !== cropKeyframeIndex || selectedLayer !== 'crop') {
+    const hasCropKeyframe = cropKeyframeIndex !== -1;
+    const hasHighlightKeyframe = highlightKeyframeIndex !== -1 && isHighlightEnabled;
+
+    // Update crop selection independently
+    if (hasCropKeyframe) {
+      if (selectedCropKeyframeIndex !== cropKeyframeIndex) {
         setSelectedCropKeyframeIndex(cropKeyframeIndex);
-        setSelectedLayer('crop');
-        setSelectedHighlightKeyframeIndex(null);
-      }
-    } else if (highlightKeyframeIndex !== -1 && isHighlightEnabled) {
-      // Select highlight keyframe if no crop keyframe
-      if (selectedHighlightKeyframeIndex !== highlightKeyframeIndex || selectedLayer !== 'highlight') {
-        setSelectedHighlightKeyframeIndex(highlightKeyframeIndex);
-        setSelectedLayer('highlight');
-        setSelectedCropKeyframeIndex(null);
       }
     } else {
-      // No keyframe at current position - deselect
-      if (selectedCropKeyframeIndex !== null || selectedHighlightKeyframeIndex !== null) {
+      if (selectedCropKeyframeIndex !== null) {
         setSelectedCropKeyframeIndex(null);
-        setSelectedHighlightKeyframeIndex(null);
-        setSelectedLayer('playhead');
       }
     }
+
+    // Update highlight selection independently
+    if (hasHighlightKeyframe) {
+      if (selectedHighlightKeyframeIndex !== highlightKeyframeIndex) {
+        setSelectedHighlightKeyframeIndex(highlightKeyframeIndex);
+      }
+    } else {
+      if (selectedHighlightKeyframeIndex !== null) {
+        setSelectedHighlightKeyframeIndex(null);
+      }
+    }
+
+    // Update selected layer based on what's available
+    // Only change layer if current layer has no keyframe but another does
+    if (hasCropKeyframe && hasHighlightKeyframe) {
+      // Both have keyframes - keep current layer selection, but ensure it's a keyframe layer
+      if (selectedLayer === 'playhead') {
+        setSelectedLayer('crop'); // Default to crop when coming from playhead
+      }
+    } else if (hasCropKeyframe && !hasHighlightKeyframe) {
+      // Only crop has keyframe
+      if (selectedLayer !== 'crop') {
+        setSelectedLayer('crop');
+      }
+    } else if (!hasCropKeyframe && hasHighlightKeyframe) {
+      // Only highlight has keyframe
+      if (selectedLayer !== 'highlight') {
+        setSelectedLayer('highlight');
+      }
+    }
+    // If neither has keyframe, don't change selectedLayer
   }, [currentTime, keyframes, highlightKeyframes, framerate, isHighlightEnabled, videoUrl, selectedCropKeyframeIndex, selectedHighlightKeyframeIndex, selectedLayer]);
 
   // Handler functions for copy/paste (defined BEFORE useEffect to avoid initialization errors)

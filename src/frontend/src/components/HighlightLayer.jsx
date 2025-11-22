@@ -28,7 +28,9 @@ export default function HighlightLayer({
   sourceTimeToVisualTime = (t) => t,
   visualTimeToSourceTime = (t) => t,
   framerate = 30,
-  timelineScale = 1
+  timelineScale = 1,
+  trimRange = null,
+  edgePadding = 0
 }) {
   const { isEndKeyframeExplicit, copiedHighlight, isEnabled, highlightDuration } = useHighlightContext();
 
@@ -86,10 +88,14 @@ export default function HighlightLayer({
     if (!sliderTrackRef.current || !onDurationChange) return;
 
     const rect = sliderTrackRef.current.getBoundingClientRect();
-    const mouseX = Math.max(0, Math.min(clientX - rect.left, rect.width));
 
-    // Convert mouse X position to percentage of timeline width
-    const percentage = (mouseX / rect.width) * 100;
+    // Account for edge padding - usable area starts at edgePadding and ends at width - edgePadding
+    const usableWidth = rect.width - (edgePadding * 2);
+    const mouseX = clientX - rect.left - edgePadding;
+
+    // Clamp to usable area
+    const clampedX = Math.max(0, Math.min(mouseX, usableWidth));
+    const percentage = (clampedX / usableWidth) * 100;
 
     // Convert percentage to visual time
     const visualTime = (percentage / 100) * timelineDuration;
@@ -150,8 +156,10 @@ export default function HighlightLayer({
             <div
               className="absolute top-0 bottom-0 bg-orange-500/20 border-r-2 border-orange-400"
               style={{
-                left: 0,
-                width: `${highlightEndPosition}%`
+                left: `${edgePadding}px`,
+                width: edgePadding > 0
+                  ? `calc((100% - ${edgePadding * 2}px) * ${highlightEndPosition / 100})`
+                  : `${highlightEndPosition}%`
               }}
             />
           )}
@@ -174,21 +182,40 @@ export default function HighlightLayer({
             const position = frameToPixel(keyframe.frame);
             const keyframeTime = frameToTime(keyframe.frame, framerate);
             const isAtCurrentTime = Math.abs(keyframeTime - currentTime) < 0.01;
-            const isStartKeyframe = keyframe.frame === 0;
-            const highlightEndFrame = Math.round(highlightDuration * framerate);
-            const isEndKeyframe = keyframe.frame === highlightEndFrame;
-            const isAtStartTime = Math.abs(currentTime) < 0.01;
+
+            // Calculate effective start/end based on trimRange
+            // After trimming, keyframes are reconstituted at trim boundaries
+            // For highlight, the effective end is the minimum of highlightDuration and trimRange.end
+            const effectiveStartTime = trimRange?.start ?? 0;
+            const effectiveEndTime = trimRange ? Math.min(highlightDuration, trimRange.end) : highlightDuration;
+            const effectiveStartFrame = Math.round(effectiveStartTime * framerate);
+            const effectiveEndFrame = Math.round(effectiveEndTime * framerate);
+
+            // Check if this is a boundary keyframe (at effective start or end)
+            // Use tolerance of 1 frame to handle floating point precision issues
+            const FRAME_TOLERANCE = 1;
+            const isStartKeyframe = Math.abs(keyframe.frame - effectiveStartFrame) <= FRAME_TOLERANCE;
+            const isEndKeyframe = Math.abs(keyframe.frame - effectiveEndFrame) <= FRAME_TOLERANCE;
+            // Also consider the last keyframe in the array as the end keyframe (fallback for edge cases)
+            const isLastKeyframe = index === keyframes.length - 1 && keyframe.origin === 'permanent';
+            const isEffectiveEndKeyframe = isEndKeyframe || isLastKeyframe;
+
+            const isAtStartTime = Math.abs(currentTime - effectiveStartTime) < 0.01;
             const isSelected = selectedKeyframeIndex === index;
             const isPermanent = keyframe.origin === 'permanent';
 
             const shouldHighlight = isAtCurrentTime ||
-                                    (isEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
+                                    (isEffectiveEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
 
             return (
               <div
                 key={index}
                 className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
-                style={{ left: `${position}%` }}
+                style={{
+                  left: edgePadding > 0
+                    ? `calc(${edgePadding}px + (100% - ${edgePadding * 2}px) * ${position / 100})`
+                    : `${position}%`
+                }}
               >
                 {/* Hit area */}
                 <div className="absolute -top-5 -bottom-4 -left-4 -right-4" />
@@ -197,9 +224,9 @@ export default function HighlightLayer({
                 {onKeyframeCopy && (
                   <button
                     className={`absolute -top-5 left-1/2 transform transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1.5 z-50 ${
-                      isPermanent && index === 0
+                      isPermanent && isStartKeyframe
                         ? '-translate-x-[20%]'
-                        : isPermanent && index === keyframes.length - 1
+                        : isPermanent && isEffectiveEndKeyframe
                         ? '-translate-x-[80%]'
                         : '-translate-x-1/2'
                     } ${isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -225,7 +252,7 @@ export default function HighlightLayer({
                   }`}
                   onClick={() => onKeyframeClick(keyframeTime, index)}
                   title={`Highlight keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
-                    isEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
+                    isEffectiveEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
                   }${isSelected ? ' [SELECTED]' : ''}`}
                 />
 
@@ -270,15 +297,25 @@ export default function HighlightLayer({
             className="absolute inset-0 cursor-pointer"
             onMouseDown={handleSliderMouseDown}
           >
-            {/* Slider background track */}
-            <div className="absolute inset-y-0 left-0 right-0 flex items-center">
+            {/* Slider background track - with edge padding */}
+            <div
+              className="absolute inset-y-0 flex items-center"
+              style={{
+                left: `${edgePadding}px`,
+                right: `${edgePadding}px`
+              }}
+            >
               <div className="w-full h-1.5 bg-gray-700 rounded-full" />
             </div>
 
             {/* Slider thumb - positioned at highlight end position */}
             <div
               className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 pointer-events-none"
-              style={{ left: `${highlightEndPosition}%` }}
+              style={{
+                left: edgePadding > 0
+                  ? `calc(${edgePadding}px + (100% - ${edgePadding * 2}px) * ${highlightEndPosition / 100})`
+                  : `${highlightEndPosition}%`
+              }}
             >
               <div
                 className={`w-4 h-4 bg-orange-500 rounded-full border-2 border-white shadow-lg transition-transform ${
@@ -289,8 +326,13 @@ export default function HighlightLayer({
 
             {/* Active track (filled portion) */}
             <div
-              className="absolute inset-y-0 left-0 flex items-center pointer-events-none"
-              style={{ width: `${highlightEndPosition}%` }}
+              className="absolute inset-y-0 flex items-center pointer-events-none"
+              style={{
+                left: `${edgePadding}px`,
+                width: edgePadding > 0
+                  ? `calc((100% - ${edgePadding * 2}px) * ${highlightEndPosition / 100})`
+                  : `${highlightEndPosition}%`
+              }}
             >
               <div className="w-full h-1.5 bg-orange-500 rounded-full" />
             </div>
