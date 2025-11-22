@@ -27,3 +27,8 @@ weights/
 # FFmpeg/x265 two-pass encoding temporary files
 x265_2pass.log*
 ffmpeg2pass-*.log
+
+# RIFE frame interpolation (cloned from external repo)
+# Run ./scripts/setup_rife.sh to install
+app/ai_upscaler/rife/*
+!app/ai_upscaler/rife/.gitkeep
