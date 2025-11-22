@@ -120,6 +120,36 @@ except ImportError as e:
     print("  This is normal for the first setup - dependencies will be installed.")
 EOF
 
+# Verify frame interpolation capabilities
+echo ""
+echo "Checking frame interpolation capabilities..."
+python << 'EOF'
+import sys
+sys.path.insert(0, 'app/ai_upscaler')
+try:
+    from frame_interpolator import get_frame_interpolator, InterpolationBackend
+
+    interpolator = get_frame_interpolator()
+    info = interpolator.get_backend_info()
+
+    backend = info['backend']
+    quality = info['quality_tier']
+
+    if backend == 'rife_cuda':
+        print(f"✓ Frame interpolation: RIFE CUDA ({info['cuda_device']})")
+        print("  Quality tier: best")
+    elif backend == 'rife_ncnn':
+        print(f"✓ Frame interpolation: RIFE ncnn ({info['vulkan_device']})")
+        print("  Quality tier: high")
+    else:
+        print("⚠ Frame interpolation: FFmpeg minterpolate (CPU fallback)")
+        print("  Quality tier: standard")
+        print("  For better quality, run: ./scripts/setup_rife.sh")
+except Exception as e:
+    print(f"⚠ Frame interpolation check skipped: {e}")
+    print("  Using FFmpeg minterpolate fallback")
+EOF
+
 echo ""
 echo "✓ Setup complete!"
 echo ""
@@ -130,5 +160,15 @@ echo ""
 echo "Note: Make sure FFmpeg is installed on your system"
 echo "  Ubuntu/Debian: sudo apt-get install ffmpeg"
 echo "  macOS: brew install ffmpeg"
+echo ""
+echo "==========================================="
+echo "Optional: High-Quality Slow Motion (RIFE)"
+echo "==========================================="
+echo "For best slow motion quality, install RIFE frame interpolation:"
+echo "  cd .. && ./scripts/setup_rife.sh"
+echo ""
+echo "RIFE provides significantly better quality than FFmpeg's"
+echo "minterpolate filter. Without RIFE, the system will fall back"
+echo "to minterpolate automatically."
 echo ""
 echo "For AI upscaling troubleshooting, see INSTALL_AI_DEPENDENCIES.md"
