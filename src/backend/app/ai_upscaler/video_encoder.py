@@ -245,15 +245,16 @@ class VideoEncoder:
                         )
 
                         # Audio: trim using original source times and slow down with atempo=0.5
-                        atempo_filter = self.build_atempo_filter(speed)
-                        audio_filter_parts.append(
-                            f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,"
-                            f"{atempo_filter}[a{i}]"
-                        )
+                        if include_audio:
+                            atempo_filter = self.build_atempo_filter(speed)
+                            audio_filter_parts.append(
+                                f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,"
+                                f"{atempo_filter}[a{i}]"
+                            )
+                            audio_output_labels.append(f"[a{i}]")
 
                         expected_output_frames += segment_input_frames * 2
                         output_labels.append(f"[v{i}]")
-                        audio_output_labels.append(f"[a{i}]")
                     else:
                         # For other speeds or normal: trim and optionally adjust PTS
                         logger.info(f"Segment {i}: source {start_time:.2f}s-{end_time:.2f}s @ {speed}x speed")
@@ -267,30 +268,33 @@ class VideoEncoder:
                         )
 
                         # Audio: build atempo filter for speed adjustment using original source times
-                        atempo_filter = self.build_atempo_filter(speed)
-                        if atempo_filter:
-                            logger.info(f"  → Applying {atempo_filter} to audio")
-                            audio_filter_parts.append(
-                                f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,"
-                                f"{atempo_filter}[a{i}]"
-                            )
-                        else:
-                            # No atempo needed for 1.0x speed
-                            audio_filter_parts.append(
-                                f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS[a{i}]"
-                            )
+                        if include_audio:
+                            atempo_filter = self.build_atempo_filter(speed)
+                            if atempo_filter:
+                                logger.info(f"  → Applying {atempo_filter} to audio")
+                                audio_filter_parts.append(
+                                    f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,"
+                                    f"{atempo_filter}[a{i}]"
+                                )
+                            else:
+                                # No atempo needed for 1.0x speed
+                                audio_filter_parts.append(
+                                    f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS[a{i}]"
+                                )
+                            audio_output_labels.append(f"[a{i}]")
 
                         expected_output_frames += segment_input_frames
                         output_labels.append(f"[v{i}]")
-                        audio_output_labels.append(f"[a{i}]")
 
                 # Concatenate all video segments
                 concat_inputs = ''.join(output_labels)
                 concat_filter = f'{concat_inputs}concat=n={len(segments)}:v=1:a=0'
 
-                # Concatenate all audio segments
-                audio_concat_inputs = ''.join(audio_output_labels)
-                audio_concat_filter = f'{audio_concat_inputs}concat=n={len(segments)}:v=0:a=1'
+                # Concatenate all audio segments (only if audio is included)
+                audio_concat_filter = None
+                if include_audio and audio_output_labels:
+                    audio_concat_inputs = ''.join(audio_output_labels)
+                    audio_concat_filter = f'{audio_concat_inputs}concat=n={len(audio_output_labels)}:v=0:a=1'
 
                 # Apply frame interpolation after concatenation if needed
                 if needs_interpolation:
@@ -301,14 +305,24 @@ class VideoEncoder:
 
                     # Combine video and audio filters
                     all_filters = ';'.join(filter_parts + audio_filter_parts)
-                    filter_complex = f'{all_filters};{concat_filter}[concat];[concat]minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none[outv];{audio_concat_filter}[outa]'
+                    if audio_concat_filter:
+                        filter_complex = f'{all_filters};{concat_filter}[concat];[concat]minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none[outv];{audio_concat_filter}[outa]'
+                    else:
+                        # Video only - no audio filters
+                        video_filters = ';'.join(filter_parts)
+                        filter_complex = f'{video_filters};{concat_filter}[concat];[concat]minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none[outv]'
 
                     expected_output_frames = int(expected_output_frames * interpolation_ratio)
                     logger.info(f"Expected output frames after interpolation: {expected_output_frames}")
                 else:
                     # Combine video and audio filters
-                    all_filters = ';'.join(filter_parts + audio_filter_parts)
-                    filter_complex = f'{all_filters};{concat_filter}[outv];{audio_concat_filter}[outa]'
+                    if audio_concat_filter:
+                        all_filters = ';'.join(filter_parts + audio_filter_parts)
+                        filter_complex = f'{all_filters};{concat_filter}[outv];{audio_concat_filter}[outa]'
+                    else:
+                        # Video only - no audio filters
+                        video_filters = ';'.join(filter_parts)
+                        filter_complex = f'{video_filters};{concat_filter}[outv]'
 
                 logger.info(f"Expected output frames: {expected_output_frames}")
                 logger.info(f"Filter complex: {filter_complex}")
