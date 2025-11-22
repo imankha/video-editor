@@ -32,7 +32,6 @@ export default function HighlightLayer({
 }) {
   const { isEndKeyframeExplicit, copiedHighlight, isEnabled, highlightDuration } = useHighlightContext();
 
-  const [hoveredKeyframeIndex, setHoveredKeyframeIndex] = React.useState(null);
   const [isDragging, setIsDragging] = React.useState(false);
   const trackRef = React.useRef(null);
   const sliderTrackRef = React.useRef(null);
@@ -50,37 +49,7 @@ export default function HighlightLayer({
   };
 
   /**
-   * Handle mouse move to determine which keyframe is closest to cursor
-   */
-  const handleTrackMouseMove = (e) => {
-    if (!trackRef.current || keyframes.length === 0 || !isEnabled) return;
-
-    const rect = trackRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mousePercent = (mouseX / rect.width) * 100;
-
-    let closestIndex = null;
-    let minDistance = Infinity;
-
-    keyframes.forEach((keyframe, index) => {
-      const keyframePercent = frameToPixel(keyframe.frame);
-      const distance = Math.abs(mousePercent - keyframePercent);
-
-      if (distance < 3 && distance < minDistance) {
-        minDistance = distance;
-        closestIndex = index;
-      }
-    });
-
-    setHoveredKeyframeIndex(closestIndex);
-  };
-
-  const handleTrackMouseLeave = () => {
-    setHoveredKeyframeIndex(null);
-  };
-
-  /**
-   * Handle click on keyframes track to paste highlight at clicked time
+   * Handle click on keyframes track to paste highlight at current playhead position
    */
   const handleTrackClick = (e) => {
     // Select this layer when clicking on it
@@ -95,16 +64,9 @@ export default function HighlightLayer({
       return;
     }
 
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const percentX = (clickX / rect.width) * 100;
-
-    const visualTime = (percentX / 100) * timelineDuration;
-    const sourceTime = visualTimeToSourceTime(visualTime);
-    const time = Math.max(0, Math.min(sourceTime, duration));
-
-    console.log('[HighlightLayer] Paste highlight at time:', time);
-    onKeyframePaste(time);
+    // Paste at current playhead position (not click position)
+    console.log('[HighlightLayer] Paste highlight at current time:', currentTime);
+    onKeyframePaste(currentTime);
   };
 
   /**
@@ -179,8 +141,6 @@ export default function HighlightLayer({
             isEnabled && copiedHighlight ? 'cursor-copy' : ''
           } ${!isEnabled ? 'opacity-50' : ''}`}
           onClick={handleTrackClick}
-          onMouseMove={handleTrackMouseMove}
-          onMouseLeave={handleTrackMouseLeave}
         >
           {/* Background track */}
           <div className="absolute inset-0 bg-orange-900 bg-opacity-10 rounded-r-lg" />
@@ -224,8 +184,6 @@ export default function HighlightLayer({
             const shouldHighlight = isAtCurrentTime ||
                                     (isEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
 
-            const isHovered = hoveredKeyframeIndex === index;
-
             return (
               <div
                 key={index}
@@ -235,7 +193,7 @@ export default function HighlightLayer({
                 {/* Hit area */}
                 <div className="absolute -top-5 -bottom-4 -left-4 -right-4" />
 
-                {/* Copy button (shown on hover or when selected) */}
+                {/* Copy button (shown when selected) */}
                 {onKeyframeCopy && (
                   <button
                     className={`absolute -top-5 left-1/2 transform transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1.5 z-50 ${
@@ -244,7 +202,7 @@ export default function HighlightLayer({
                         : isPermanent && index === keyframes.length - 1
                         ? '-translate-x-[80%]'
                         : '-translate-x-1/2'
-                    } ${(isHovered || isSelected) ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    } ${isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none'
                     }`}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -271,12 +229,12 @@ export default function HighlightLayer({
                   }${isSelected ? ' [SELECTED]' : ''}`}
                 />
 
-                {/* Delete button (shown on hover or when selected, but not for permanent keyframes) */}
+                {/* Delete button (shown when selected, but not for permanent keyframes) */}
                 {keyframes.length > 2 &&
                  !isPermanent && (
                   <button
                     className={`absolute top-4 left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 z-50 ${
-                      (isHovered || isSelected) ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                      isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none'
                     }`}
                     onClick={(e) => {
                       e.stopPropagation();
