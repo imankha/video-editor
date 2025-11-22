@@ -368,5 +368,132 @@ class TestFFmpegCodecOverrides:
             assert upscaler.ffmpeg_crf == '18'
 
 
+class TestFrameInterpolator:
+    """Test frame interpolation module with tiered GPU fallback"""
+
+    def test_gpu_capabilities_detection(self):
+        """Test GPU capabilities detection returns proper structure"""
+        from app.ai_upscaler.frame_interpolator import GPUCapabilities
+
+        caps = GPUCapabilities()
+        assert hasattr(caps, 'has_cuda')
+        assert hasattr(caps, 'has_vulkan')
+        assert hasattr(caps, 'cuda_device_name')
+        assert hasattr(caps, 'vulkan_device_name')
+        assert hasattr(caps, 'rife_cuda_available')
+        assert hasattr(caps, 'rife_ncnn_available')
+
+    def test_interpolation_backend_enum(self):
+        """Test interpolation backend enum values"""
+        from app.ai_upscaler.frame_interpolator import InterpolationBackend
+
+        assert InterpolationBackend.RIFE_CUDA.value == "rife_cuda"
+        assert InterpolationBackend.RIFE_NCNN.value == "rife_ncnn"
+        assert InterpolationBackend.MINTERPOLATE.value == "minterpolate"
+
+    @patch('torch.cuda.is_available', return_value=False)
+    @patch('shutil.which', return_value=None)
+    def test_frame_interpolator_fallback_to_minterpolate(self, mock_which, mock_cuda):
+        """Test frame interpolator falls back to minterpolate when no GPU available"""
+        from app.ai_upscaler.frame_interpolator import FrameInterpolator, InterpolationBackend
+
+        # Reset singleton to force re-detection
+        FrameInterpolator._capabilities = None
+        FrameInterpolator._selected_backend = None
+
+        interpolator = FrameInterpolator()
+
+        # Should fallback to minterpolate
+        assert interpolator.backend == InterpolationBackend.MINTERPOLATE
+
+        # Backend info should indicate fallback
+        info = interpolator.get_backend_info()
+        assert info['is_fallback'] == True
+        assert info['quality_tier'] == 'standard'
+
+    @patch('torch.cuda.is_available', return_value=True)
+    @patch('torch.cuda.get_device_name', return_value='NVIDIA GeForce RTX 3080')
+    def test_frame_interpolator_detects_cuda(self, mock_name, mock_cuda):
+        """Test frame interpolator detects CUDA"""
+        from app.ai_upscaler.frame_interpolator import FrameInterpolator
+
+        # Reset singleton
+        FrameInterpolator._capabilities = None
+        FrameInterpolator._selected_backend = None
+
+        interpolator = FrameInterpolator()
+
+        assert interpolator.capabilities.has_cuda == True
+        assert 'RTX 3080' in interpolator.capabilities.cuda_device_name
+
+    def test_minterpolate_filter_high_quality(self):
+        """Test minterpolate filter with high quality settings"""
+        from app.ai_upscaler.frame_interpolator import FrameInterpolator
+
+        # Reset singleton
+        FrameInterpolator._capabilities = None
+        FrameInterpolator._selected_backend = None
+
+        interpolator = FrameInterpolator()
+        filter_str = interpolator.get_minterpolate_filter(60, high_quality=True)
+
+        assert 'minterpolate=fps=60' in filter_str
+        assert 'mi_mode=mci' in filter_str
+        assert 'mc_mode=aobmc' in filter_str
+        assert 'vsbmc=1' in filter_str
+        assert 'scd=fdiff' in filter_str
+
+    def test_minterpolate_filter_fast(self):
+        """Test minterpolate filter with fast settings"""
+        from app.ai_upscaler.frame_interpolator import FrameInterpolator
+
+        interpolator = FrameInterpolator()
+        filter_str = interpolator.get_minterpolate_filter(60, high_quality=False)
+
+        assert 'minterpolate=fps=60' in filter_str
+        assert 'mi_mode=blend' in filter_str
+
+    def test_backend_info_structure(self):
+        """Test backend info returns complete structure"""
+        from app.ai_upscaler.frame_interpolator import FrameInterpolator
+
+        interpolator = FrameInterpolator()
+        info = interpolator.get_backend_info()
+
+        assert 'backend' in info
+        assert 'has_cuda' in info
+        assert 'has_vulkan' in info
+        assert 'cuda_device' in info
+        assert 'vulkan_device' in info
+        assert 'is_fallback' in info
+        assert 'quality_tier' in info
+
+
+class TestVideoEncoderMinterpolate:
+    """Test video encoder minterpolate settings"""
+
+    def test_get_minterpolate_filter_high_quality(self):
+        """Test VideoEncoder returns high quality minterpolate filter"""
+        with patch('torch.cuda.is_available', return_value=False):
+            from app.ai_upscaler.video_encoder import VideoEncoder
+
+            filter_str = VideoEncoder._get_minterpolate_filter(60, high_quality=True)
+
+            assert 'fps=60' in filter_str
+            assert 'mi_mode=mci' in filter_str
+            assert 'vsbmc=1' in filter_str
+            assert 'scd=fdiff' in filter_str
+
+    def test_get_minterpolate_filter_fast(self):
+        """Test VideoEncoder returns fast minterpolate filter"""
+        with patch('torch.cuda.is_available', return_value=False):
+            from app.ai_upscaler.video_encoder import VideoEncoder
+
+            filter_str = VideoEncoder._get_minterpolate_filter(60, high_quality=False)
+
+            assert 'fps=60' in filter_str
+            assert 'mi_mode=blend' in filter_str
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

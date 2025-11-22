@@ -2,7 +2,7 @@
 Video Encoding Module
 
 Handles FFmpeg-based video encoding with:
-- Frame interpolation support
+- Frame interpolation support (RIFE CUDA/ncnn or FFmpeg minterpolate)
 - Segment speed adjustments
 - Audio handling
 - Multi-pass encoding
@@ -13,9 +13,16 @@ import subprocess
 import logging
 import os
 import re
+import shutil
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
+
+from .frame_interpolator import (
+    get_frame_interpolator,
+    InterpolationBackend,
+    FrameInterpolator
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +114,39 @@ class VideoEncoder:
                 filters.append(f"atempo={remaining_speed}")
 
         return ','.join(filters)
+
+    @staticmethod
+    def _get_minterpolate_filter(target_fps: float, high_quality: bool = True) -> str:
+        """
+        Get FFmpeg minterpolate filter string with optimized settings.
+
+        Args:
+            target_fps: Target frames per second
+            high_quality: Use high-quality settings (slower but better)
+
+        Returns:
+            FFmpeg minterpolate filter string
+        """
+        if high_quality:
+            # Best quality minterpolate settings:
+            # - mi_mode=mci: Motion compensated interpolation (best quality)
+            # - mc_mode=aobmc: Adaptive overlapped block motion compensation
+            # - me_mode=bidir: Bidirectional motion estimation
+            # - vsbmc=1: Variable-size block motion compensation (improves quality)
+            # - scd=fdiff: Scene change detection using frame difference
+            # - scd_threshold=10: Threshold for scene change detection
+            return (
+                f"minterpolate=fps={target_fps}:"
+                f"mi_mode=mci:"
+                f"mc_mode=aobmc:"
+                f"me_mode=bidir:"
+                f"vsbmc=1:"
+                f"scd=fdiff:"
+                f"scd_threshold=10"
+            )
+        else:
+            # Faster but lower quality - simple blend
+            return f"minterpolate=fps={target_fps}:mi_mode=blend"
 
     def create_video_from_frames(
         self,
@@ -234,13 +274,26 @@ class VideoEncoder:
                         if frames_pretrimmed:
                             logger.info(f"  → Video trim adjusted: {video_start:.2f}s-{video_end:.2f}s (frames pre-trimmed)")
                         logger.info(f"  → Input frames: {segment_input_frames}, Output frames (2x): {segment_input_frames * 2}")
-                        logger.info(f"  → Using minterpolate with motion compensation")
+
+                        # Get interpolation backend info
+                        interpolator = get_frame_interpolator()
+                        backend_info = interpolator.get_backend_info()
+                        logger.info(f"  → Interpolation backend: {backend_info['backend']} (quality: {backend_info['quality_tier']})")
+
+                        if backend_info['is_fallback']:
+                            logger.info(f"  → Using minterpolate with enhanced motion compensation")
+                        else:
+                            logger.info(f"  → Note: RIFE available for higher quality (use pre-processing for best results)")
+
                         logger.info(f"  → Applying atempo=0.5 to audio for slow motion")
+
+                        # Get the minterpolate filter with improved settings
+                        minterpolate_filter = self._get_minterpolate_filter(fps * 2)
 
                         # Trim video using adjusted times, reset PTS, interpolate to double FPS
                         filter_parts.append(
                             f"[0:v]trim=start={video_start}:end={video_end},setpts=PTS-STARTPTS,"
-                            f"minterpolate=fps={fps*2}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none,"
+                            f"{minterpolate_filter},"
                             f"setpts=PTS*2[v{i}]"
                         )
 
@@ -303,14 +356,15 @@ class VideoEncoder:
                     logger.info("=" * 60)
                     logger.info(f"Interpolating concatenated segments from {original_fps}fps to {fps}fps")
 
-                    # Combine video and audio filters
+                    # Combine video and audio filters with improved minterpolate
+                    minterpolate_filter = self._get_minterpolate_filter(fps)
                     all_filters = ';'.join(filter_parts + audio_filter_parts)
                     if audio_concat_filter:
-                        filter_complex = f'{all_filters};{concat_filter}[concat];[concat]minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none[outv];{audio_concat_filter}[outa]'
+                        filter_complex = f'{all_filters};{concat_filter}[concat];[concat]{minterpolate_filter}[outv];{audio_concat_filter}[outa]'
                     else:
                         # Video only - no audio filters
                         video_filters = ';'.join(filter_parts)
-                        filter_complex = f'{video_filters};{concat_filter}[concat];[concat]minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none[outv]'
+                        filter_complex = f'{video_filters};{concat_filter}[concat];[concat]{minterpolate_filter}[outv]'
 
                     expected_output_frames = int(expected_output_frames * interpolation_ratio)
                     logger.info(f"Expected output frames after interpolation: {expected_output_frames}")
@@ -368,8 +422,14 @@ class VideoEncoder:
             logger.info("=" * 60)
             logger.info(f"Interpolating {input_frame_count} frames @ {original_fps}fps → {int(input_frame_count * interpolation_ratio)} frames @ {fps}fps")
 
-            # Create video filter with minterpolate
-            trim_filter = f"minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none"
+            # Get interpolation backend info and log it
+            interpolator = get_frame_interpolator()
+            backend_info = interpolator.get_backend_info()
+            logger.info(f"Interpolation backend: {backend_info['backend']} (quality: {backend_info['quality_tier']})")
+
+            # Create video filter with improved minterpolate settings
+            minterpolate_filter = self._get_minterpolate_filter(fps)
+            trim_filter = minterpolate_filter
             expected_output_frames = int(input_frame_count * interpolation_ratio)
 
             logger.info(f"Motion interpolation filter: {trim_filter}")
@@ -381,7 +441,9 @@ class VideoEncoder:
             logger.info("=" * 60)
             logger.info(f"Combining trim and interpolation filters")
 
-            trim_filter = f"{trim_filter},minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:scd=none"
+            # Get improved minterpolate settings
+            minterpolate_filter = self._get_minterpolate_filter(fps)
+            trim_filter = f"{trim_filter},{minterpolate_filter}"
             expected_output_frames = int(expected_output_frames * interpolation_ratio)
 
             logger.info(f"Combined filter: {trim_filter}")
@@ -675,3 +737,95 @@ class VideoEncoder:
         except Exception as e:
             logger.error(f"FFmpeg encoding failed: {e}")
             raise RuntimeError(f"Video encoding failed: {e}")
+
+    def interpolate_frames_for_slowmo(
+        self,
+        frames_dir: Path,
+        speed: float,
+        fps: float,
+        progress_callback=None
+    ) -> tuple[Path, bool]:
+        """
+        Interpolate frames for slowmo using best available backend.
+
+        Tries backends in order: RIFE CUDA → RIFE ncnn → minterpolate fallback
+
+        Args:
+            frames_dir: Directory containing input frames
+            speed: Speed multiplier (e.g., 0.5 for half speed)
+            fps: Original FPS
+            progress_callback: Optional callback(current, total, message, phase)
+
+        Returns:
+            Tuple of (output_frames_dir, used_rife)
+            - output_frames_dir: Directory with interpolated frames (or original if fallback)
+            - used_rife: True if RIFE was used, False if minterpolate should be used
+        """
+        # Calculate multiplier (0.5x speed = 2x frames needed)
+        multiplier = int(1 / speed)
+
+        if multiplier < 2:
+            logger.info(f"Speed {speed}x doesn't require interpolation (multiplier={multiplier})")
+            return frames_dir, False
+
+        # Get the frame interpolator
+        interpolator = get_frame_interpolator()
+        backend = interpolator.backend
+
+        logger.info("=" * 60)
+        logger.info("SLOWMO FRAME INTERPOLATION")
+        logger.info("=" * 60)
+        logger.info(f"Speed: {speed}x → Frame multiplier: {multiplier}x")
+        logger.info(f"Backend: {backend.value}")
+        logger.info(f"Backend info: {interpolator.get_backend_info()}")
+
+        # If minterpolate backend, signal to use FFmpeg filter instead
+        if backend == InterpolationBackend.MINTERPOLATE:
+            logger.info("Using FFmpeg minterpolate filter (no GPU interpolation available)")
+            logger.info("=" * 60)
+            return frames_dir, False
+
+        # Create output directory for interpolated frames
+        interpolated_dir = frames_dir.parent / f"{frames_dir.name}_interpolated"
+        interpolated_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Input frames dir: {frames_dir}")
+        logger.info(f"Output frames dir: {interpolated_dir}")
+
+        # Wrap progress callback
+        def rife_progress(current, total, message):
+            if progress_callback:
+                progress_callback(current, total, message, phase='rife_interpolation')
+
+        try:
+            success = interpolator.interpolate_frames(
+                input_frames_dir=frames_dir,
+                output_frames_dir=interpolated_dir,
+                multiplier=multiplier,
+                fps=fps,
+                progress_callback=rife_progress
+            )
+
+            if success:
+                logger.info(f"✓ RIFE interpolation complete: {multiplier}x frames generated")
+                logger.info("=" * 60)
+                return interpolated_dir, True
+            else:
+                logger.warning("RIFE interpolation returned False, falling back to minterpolate")
+                # Clean up empty directory
+                if interpolated_dir.exists() and not any(interpolated_dir.iterdir()):
+                    interpolated_dir.rmdir()
+                return frames_dir, False
+
+        except Exception as e:
+            logger.error(f"RIFE interpolation failed: {e}")
+            logger.warning("Falling back to FFmpeg minterpolate")
+            # Clean up on failure
+            if interpolated_dir.exists():
+                shutil.rmtree(interpolated_dir, ignore_errors=True)
+            return frames_dir, False
+
+    def get_interpolation_backend_info(self) -> dict:
+        """Get information about the interpolation backend being used"""
+        interpolator = get_frame_interpolator()
+        return interpolator.get_backend_info()
