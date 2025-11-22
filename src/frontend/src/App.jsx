@@ -277,11 +277,20 @@ function App() {
 
     const currentFrame = Math.round(currentTime * framerate);
 
-    // Check for crop keyframe at current position
-    const cropKeyframeIndex = keyframes.findIndex(kf => kf.frame === currentFrame);
+    // Frame tolerance for selection - approximately 5 pixels on each side
+    // At typical timeline widths (800-1000px) and video lengths (10-30s at 30fps),
+    // 2 frames provides roughly 5 pixels of visual tolerance
+    const FRAME_TOLERANCE = 2;
 
-    // Check for highlight keyframe at current position
-    const highlightKeyframeIndex = highlightKeyframes.findIndex(kf => kf.frame === currentFrame);
+    // Check for crop keyframe within tolerance of current position
+    const cropKeyframeIndex = keyframes.findIndex(kf =>
+      Math.abs(kf.frame - currentFrame) <= FRAME_TOLERANCE
+    );
+
+    // Check for highlight keyframe within tolerance of current position
+    const highlightKeyframeIndex = highlightKeyframes.findIndex(kf =>
+      Math.abs(kf.frame - currentFrame) <= FRAME_TOLERANCE
+    );
 
     // Update selection based on what's at the playhead position
     if (cropKeyframeIndex !== -1) {
@@ -318,8 +327,7 @@ function App() {
   const handlePasteCrop = (time = currentTime) => {
     if (videoUrl && copiedCrop) {
       pasteCropKeyframe(time, duration);
-      // Move playhead to the pasted keyframe location
-      seek(time);
+      // Note: Don't move playhead - paste happens at current playhead position
     }
   };
 
@@ -333,7 +341,7 @@ function App() {
   const handlePasteHighlight = (time = currentTime) => {
     if (videoUrl && copiedHighlight && isHighlightEnabled) {
       pasteHighlightKeyframe(time, duration);
-      seek(time);
+      // Note: Don't move playhead - paste happens at current playhead position
     }
   };
 

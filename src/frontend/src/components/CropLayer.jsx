@@ -31,8 +31,6 @@ export default function CropLayer({
   // Get isEndKeyframeExplicit and copiedCrop from context
   const { isEndKeyframeExplicit, copiedCrop } = useCropContext();
 
-  // Track which keyframe index should show buttons (closest to mouse)
-  const [hoveredKeyframeIndex, setHoveredKeyframeIndex] = React.useState(null);
   const trackRef = React.useRef(null);
 
   // Use visual duration if provided, otherwise fall back to source duration
@@ -52,44 +50,7 @@ export default function CropLayer({
   };
 
   /**
-   * Handle mouse move to determine which keyframe is closest to cursor
-   * This prevents overlapping hit areas from showing wrong keyframe's buttons
-   */
-  const handleTrackMouseMove = (e) => {
-    if (!trackRef.current || keyframes.length === 0) return;
-
-    const rect = trackRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mousePercent = (mouseX / rect.width) * 100;
-
-    // Find the keyframe closest to the mouse position
-    let closestIndex = null;
-    let minDistance = Infinity;
-
-    keyframes.forEach((keyframe, index) => {
-      const keyframePercent = frameToPixel(keyframe.frame);
-      const distance = Math.abs(mousePercent - keyframePercent);
-
-      // Only consider keyframes within a reasonable hit area (about 2% of timeline width)
-      // This corresponds roughly to the -left-4 -right-4 area
-      if (distance < 3 && distance < minDistance) {
-        minDistance = distance;
-        closestIndex = index;
-      }
-    });
-
-    setHoveredKeyframeIndex(closestIndex);
-  };
-
-  /**
-   * Handle mouse leave to clear hovered keyframe
-   */
-  const handleTrackMouseLeave = () => {
-    setHoveredKeyframeIndex(null);
-  };
-
-  /**
-   * Handle click on keyframes track to paste crop at clicked time
+   * Handle click on keyframes track to paste crop at current playhead position
    */
   const handleTrackClick = (e) => {
     // Select this layer when clicking on it
@@ -105,21 +66,9 @@ export default function CropLayer({
       return;
     }
 
-    // Calculate time from click position
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const percentX = (clickX / rect.width) * 100;
-
-    // Convert percentage to visual time
-    const visualTime = (percentX / 100) * timelineDuration;
-    // Convert visual time to source time
-    const sourceTime = visualTimeToSourceTime(visualTime);
-
-    // Clamp to valid range
-    const time = Math.max(0, Math.min(sourceTime, duration));
-
-    console.log('[CropLayer] Paste crop at time:', time);
-    onKeyframePaste(time);
+    // Paste at current playhead position (not click position)
+    console.log('[CropLayer] Paste crop at current time:', currentTime);
+    onKeyframePaste(currentTime);
   };
 
   return (
@@ -131,8 +80,6 @@ export default function CropLayer({
         ref={trackRef}
         className={`absolute inset-0 rounded-r-lg ${copiedCrop ? 'cursor-copy' : ''}`}
         onClick={handleTrackClick}
-        onMouseMove={handleTrackMouseMove}
-        onMouseLeave={handleTrackMouseLeave}
       >
         {/* Background track */}
         <div className="absolute inset-0 bg-blue-900 bg-opacity-10 rounded-r-lg" />
@@ -163,9 +110,6 @@ export default function CropLayer({
           const shouldHighlight = isAtCurrentTime ||
                                   (isEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
 
-          // Check if this keyframe should show its buttons (closest to mouse)
-          const isHovered = hoveredKeyframeIndex === index;
-
           return (
             <div
               key={index}
@@ -175,7 +119,7 @@ export default function CropLayer({
               {/* Invisible hit area that keeps buttons visible when moving mouse between elements */}
               <div className="absolute -top-5 -bottom-4 -left-4 -right-4" />
 
-              {/* Copy button (shown on hover or when selected, above keyframe) - z-50 to appear above all UI including playhead */}
+              {/* Copy button (shown when selected, above keyframe) - z-50 to appear above all UI including playhead */}
               {onKeyframeCopy && (
                 <button
                   className={`absolute -top-5 left-1/2 transform transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1.5 z-50 ${
@@ -184,7 +128,7 @@ export default function CropLayer({
                       : isPermanent && index === keyframes.length - 1
                       ? '-translate-x-[80%]'
                       : '-translate-x-1/2'
-                  } ${(isHovered || isSelected) ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  } ${isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none'
                   }`}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -211,12 +155,12 @@ export default function CropLayer({
                 }${isSelected ? ' [SELECTED]' : ''}`}
               />
 
-              {/* Delete button (shown on hover or when selected, but not for permanent keyframes) - z-50 to appear above all UI including playhead */}
+              {/* Delete button (shown when selected, but not for permanent keyframes) - z-50 to appear above all UI including playhead */}
               {keyframes.length > 2 &&
                !isPermanent && (
                 <button
                   className={`absolute top-4 left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 z-50 ${
-                    (isHovered || isSelected) ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none'
                   }`}
                   onClick={(e) => {
                     e.stopPropagation();
