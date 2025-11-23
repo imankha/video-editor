@@ -17,7 +17,7 @@ import useKeyframes from './useKeyframes';
  * - 'user': User-created keyframes via drag/edit operations
  * - 'trim': Auto-created keyframes when trimming segments
  */
-export default function useCrop(videoMetadata) {
+export default function useCrop(videoMetadata, trimRange = null) {
   const [aspectRatio, setAspectRatio] = useState('9:16'); // '16:9', '9:16'
   const [framerate] = useState(30); // Default framerate - TODO: extract from video
 
@@ -74,13 +74,17 @@ export default function useCrop(videoMetadata) {
    * Creates permanent keyframes at start (frame=0) and end (frame=totalFrames)
    * End keyframe initially mirrors start until explicitly modified
    * Also reinitializes if keyframes are stale (end frame doesn't match current video duration)
+   * NOTE: Uses trimRange.end if trimming is active, otherwise uses original duration
    */
   useEffect(() => {
     if (videoMetadata?.width && videoMetadata?.height && videoMetadata?.duration) {
-      const totalFrames = timeToFrame(videoMetadata.duration, framerate);
+      // Use trimmed end if available, otherwise use original duration
+      const effectiveDuration = trimRange?.end ?? videoMetadata.duration;
+      const totalFrames = timeToFrame(effectiveDuration, framerate);
 
-      // Check if we need to initialize
-      if (keyframeManager.needsInitialization(totalFrames)) {
+      // Check if we need to initialize (only on first load, not after trim)
+      // Skip initialization if trimRange is set - trim operations handle their own keyframe management
+      if (!trimRange && keyframeManager.needsInitialization(totalFrames)) {
         const defaultCrop = calculateDefaultCrop(
           videoMetadata.width,
           videoMetadata.height,
@@ -93,7 +97,7 @@ export default function useCrop(videoMetadata) {
         keyframeManager.initializeKeyframes(defaultCrop, totalFrames);
       }
     }
-  }, [videoMetadata, aspectRatio, keyframeManager, calculateDefaultCrop, framerate]);
+  }, [videoMetadata, aspectRatio, keyframeManager, calculateDefaultCrop, framerate, trimRange]);
 
   /**
    * Update aspect ratio and recalculate all keyframes

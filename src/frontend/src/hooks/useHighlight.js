@@ -17,7 +17,7 @@ import useKeyframes from './useKeyframes';
  * - 'user': User-created keyframes via drag/edit operations
  * - 'trim': Auto-created keyframes when trimming segments
  */
-export default function useHighlight(videoMetadata) {
+export default function useHighlight(videoMetadata, trimRange = null) {
   const [framerate] = useState(30);
   const [isEnabled, setIsEnabled] = useState(false); // Highlight layer is disabled by default
   const [highlightDuration, setHighlightDuration] = useState(3); // Default 3 seconds
@@ -66,14 +66,16 @@ export default function useHighlight(videoMetadata) {
    * Auto-initialize keyframes when metadata loads
    * Creates permanent keyframes at start (frame=0) and end (frame=highlightDurationFrames)
    * Default highlight duration is 3 seconds, not entire video
+   * NOTE: Skips initialization if trimRange is set - trim operations handle their own keyframe management
    */
   useEffect(() => {
     if (videoMetadata?.width && videoMetadata?.height && videoMetadata?.duration) {
       const highlightEndTime = Math.min(highlightDuration, videoMetadata.duration);
       const highlightEndFrame = timeToFrame(highlightEndTime, framerate);
 
-      // Check if we need to initialize
-      if (keyframeManager.needsInitialization(highlightEndFrame)) {
+      // Check if we need to initialize (only on first load, not after trim)
+      // Skip initialization if trimRange is set - trim operations handle their own keyframe management
+      if (!trimRange && keyframeManager.needsInitialization(highlightEndFrame)) {
         const defaultHighlight = calculateDefaultHighlight(
           videoMetadata.width,
           videoMetadata.height
@@ -84,7 +86,7 @@ export default function useHighlight(videoMetadata) {
         keyframeManager.initializeKeyframes(defaultHighlight, highlightEndFrame);
       }
     }
-  }, [videoMetadata, calculateDefaultHighlight, framerate, highlightDuration, keyframeManager]);
+  }, [videoMetadata, calculateDefaultHighlight, framerate, highlightDuration, keyframeManager, trimRange]);
 
   /**
    * Update highlight duration (adjusts the end keyframe)

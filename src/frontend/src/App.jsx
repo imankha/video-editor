@@ -101,7 +101,7 @@ function App() {
     getCropDataAtTime,
     getKeyframesForExport,
     reset: resetCrop,
-  } = useCrop(metadata);
+  } = useCrop(metadata, trimRange);
 
   // Highlight hook - for highlighting specific players
   const {
@@ -124,7 +124,7 @@ function App() {
     getHighlightDataAtTime,
     getKeyframesForExport: getHighlightKeyframesForExport,
     reset: resetHighlight,
-  } = useHighlight(metadata);
+  } = useHighlight(metadata, trimRange);
 
   // Zoom hook
   const {
