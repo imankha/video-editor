@@ -120,11 +120,13 @@ export default function CropLayer({
           const isSelected = selectedKeyframeIndex === index;
           const isPermanent = keyframe.origin === 'permanent';
 
-          // Highlight keyframe if:
+          // Highlight keyframe if no other keyframe is selected AND:
           // 1. At current time, OR
           // 2. This is end keyframe, end hasn't been explicitly set, and we're at start time
-          const shouldHighlight = isAtCurrentTime ||
-                                  (isEffectiveEndKeyframe && !isEndKeyframeExplicit && isAtStartTime);
+          const shouldHighlight = selectedKeyframeIndex === null && (
+            isAtCurrentTime ||
+            (isEffectiveEndKeyframe && !isEndKeyframeExplicit && isAtStartTime)
+          );
 
           return (
             <div
