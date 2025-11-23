@@ -82,7 +82,7 @@ export default function ThreePositionToggle({
 
       {/* Sliding indicator (white dot) */}
       <span
-        className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${translateClass}`}
+        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${translateClass}`}
       />
     </div>
   );
