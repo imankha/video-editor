@@ -95,9 +95,6 @@ export default function useCrop(videoMetadata, trimRange = null) {
           aspectRatio
         );
 
-        console.log('[useCrop] Auto-initializing permanent keyframes at frame=0 and frame=' + totalFrames, defaultCrop);
-        console.log('[useCrop] End keyframe will mirror start until explicitly modified');
-
         initializeKeyframes(defaultCrop, totalFrames);
       }
     }
@@ -108,7 +105,6 @@ export default function useCrop(videoMetadata, trimRange = null) {
    * If end keyframe hasn't been explicitly set, both start and end get same values
    */
   const updateAspectRatio = useCallback((newRatio) => {
-    console.log('[useCrop] Updating aspect ratio to:', newRatio);
     setAspectRatio(newRatio);
 
     // Recalculate all keyframes with new aspect ratio
@@ -155,7 +151,6 @@ export default function useCrop(videoMetadata, trimRange = null) {
         };
       });
 
-      console.log('[useCrop] Updated keyframes for new aspect ratio (isEndExplicit:', keyframeManager.isEndKeyframeExplicit, ')');
     }
   }, [keyframeManager, videoMetadata, calculateDefaultCrop, framerate]);
 

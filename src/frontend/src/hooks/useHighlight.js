@@ -85,8 +85,6 @@ export default function useHighlight(videoMetadata, trimRange = null) {
           videoMetadata.height
         );
 
-        console.log('[useHighlight] Auto-initializing permanent keyframes at frame=0 and frame=' + highlightEndFrame, defaultHighlight);
-
         initializeKeyframes(defaultHighlight, highlightEndFrame);
       }
     }
@@ -118,8 +116,6 @@ export default function useHighlight(videoMetadata, trimRange = null) {
 
     // Remove null entries (keyframes past the end)
     const filtered = keyframeManager.keyframes.filter(kf => kf !== null);
-
-    console.log('[useHighlight] Updated highlight duration to', clampedDuration, 'seconds');
   }, [framerate, keyframeManager]);
 
   /**
@@ -131,9 +127,7 @@ export default function useHighlight(videoMetadata, trimRange = null) {
       // When enabling, ensure duration is at least 3s if it's currently 0 or very small
       if (newEnabled && highlightDuration < 0.5) {
         setHighlightDuration(3);
-        console.log('[useHighlight] Reset highlight duration to 3s on enable');
       }
-      console.log('[useHighlight] Highlight layer toggled:', newEnabled);
       return newEnabled;
     });
   }, [highlightDuration]);
@@ -170,7 +164,6 @@ export default function useHighlight(videoMetadata, trimRange = null) {
    * Reset all highlight state
    */
   const reset = useCallback(() => {
-    console.log('[useHighlight] Resetting highlight state');
     keyframeManager.reset();
     setIsEnabled(false);
     setHighlightDuration(3);
