@@ -134,6 +134,22 @@ export default function HighlightLayer({
   // Calculate the highlight end position on timeline
   const highlightEndPosition = frameToPixel(Math.round(highlightDuration * framerate));
 
+  // Debug logging for keyframe rendering
+  React.useEffect(() => {
+    if (isEnabled && keyframes.length > 0) {
+      console.log('[HighlightLayer] Rendering keyframes:', keyframes.map((kf, idx) => ({
+        index: idx,
+        frame: kf.frame,
+        sourceTime: frameToTime(kf.frame, framerate),
+        position: frameToPixel(kf.frame),
+        origin: kf.origin
+      })));
+      console.log('[HighlightLayer] trimRange:', trimRange);
+      console.log('[HighlightLayer] selectedKeyframeIndex:', selectedKeyframeIndex);
+      console.log('[HighlightLayer] highlightDuration:', highlightDuration);
+    }
+  }, [isEnabled, keyframes, trimRange, selectedKeyframeIndex, highlightDuration, framerate]);
+
   return (
     <div className={`relative bg-gray-800/95 border-t border-gray-700/50 rounded-r-lg transition-all ${
       isLayerSelected ? 'ring-2 ring-orange-400 ring-opacity-75' : ''

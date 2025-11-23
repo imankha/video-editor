@@ -32,6 +32,9 @@ function App() {
   const [selectedCropKeyframeIndex, setSelectedCropKeyframeIndex] = useState(null);
   const [selectedHighlightKeyframeIndex, setSelectedHighlightKeyframeIndex] = useState(null);
 
+  // Ref to track if a keyframe was just manually selected (to prevent race condition with auto-selection)
+  const manualHighlightSelectionRef = useRef(null);
+
   // Segments hook (defined early so we can pass getSegmentAtTime and clampToVisibleRange to useVideo)
   const {
     boundaries: segmentBoundaries,
@@ -222,8 +225,21 @@ function App() {
 
   // Debug: Log keyframes changes
   useEffect(() => {
-    console.log('[App] Keyframes changed:', keyframes);
-  }, [keyframes]);
+    console.log('[App] Crop keyframes changed:', keyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / framerate,
+      origin: kf.origin
+    })));
+  }, [keyframes, framerate]);
+
+  // Debug: Log highlight keyframes changes
+  useEffect(() => {
+    console.log('[App] Highlight keyframes changed:', highlightKeyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / highlightFramerate,
+      origin: kf.origin
+    })));
+  }, [highlightKeyframes, highlightFramerate]);
 
   // Debug: Log currentCropState changes (disabled - too spammy)
   // useEffect(() => {
@@ -297,6 +313,12 @@ function App() {
     const hasCropKeyframe = cropKeyframeIndex !== -1;
     const hasHighlightKeyframe = highlightKeyframeIndex !== -1 && isHighlightEnabled;
 
+    // Debug logging for highlight selection
+    console.log('[App] Auto-selection effect - currentTime:', currentTime, 'currentFrame:', currentFrame);
+    console.log('[App] Auto-selection effect - highlight keyframes:', highlightKeyframes.map(kf => kf.frame));
+    console.log('[App] Auto-selection effect - highlightKeyframeIndex:', highlightKeyframeIndex, 'hasHighlightKeyframe:', hasHighlightKeyframe);
+    console.log('[App] Auto-selection effect - current selectedHighlightKeyframeIndex:', selectedHighlightKeyframeIndex);
+
     // Update crop selection independently
     if (hasCropKeyframe) {
       if (selectedCropKeyframeIndex !== cropKeyframeIndex) {
@@ -309,13 +331,33 @@ function App() {
     }
 
     // Update highlight selection independently
+    // BUG FIX: Check if a manual selection was made recently (within 500ms)
+    // This prevents the auto-selection from clearing a manually-selected keyframe
+    // before the video finishes seeking to that position
+    const manualSelectionAge = manualHighlightSelectionRef.current
+      ? Date.now() - manualHighlightSelectionRef.current.time
+      : Infinity;
+    const hasRecentManualSelection = manualSelectionAge < 500;
+
     if (hasHighlightKeyframe) {
       if (selectedHighlightKeyframeIndex !== highlightKeyframeIndex) {
+        console.log('[App] Auto-selection: SETTING highlight selection to', highlightKeyframeIndex);
         setSelectedHighlightKeyframeIndex(highlightKeyframeIndex);
+        // Clear the manual selection ref since we've successfully synced
+        if (manualHighlightSelectionRef.current?.index === highlightKeyframeIndex) {
+          console.log('[App] Auto-selection: clearing manualHighlightSelectionRef (synced)');
+          manualHighlightSelectionRef.current = null;
+        }
       }
     } else {
       if (selectedHighlightKeyframeIndex !== null) {
-        setSelectedHighlightKeyframeIndex(null);
+        // BUG FIX: Don't clear if we have a recent manual selection
+        if (hasRecentManualSelection) {
+          console.log('[App] Auto-selection: PRESERVING manual highlight selection', selectedHighlightKeyframeIndex, '(manual selection age:', manualSelectionAge + 'ms)');
+        } else {
+          console.log('[App] Auto-selection: CLEARING highlight selection (was', selectedHighlightKeyframeIndex + ')');
+          setSelectedHighlightKeyframeIndex(null);
+        }
       }
     }
 
@@ -537,6 +579,159 @@ function App() {
     toggleTrimSegment(segmentIndex);
   };
 
+  /**
+   * Coordinated de-trim handler for start
+   * This function ensures keyframes are properly reconstituted when un-trimming from start:
+   * 1. Gets the keyframe data at the current trim boundary
+   * 2. Deletes the keyframe at the trim boundary
+   * 3. Reconstitutes the keyframe at frame 0
+   * 4. Calls the original detrimStart function
+   */
+  const handleDetrimStart = () => {
+    if (!trimRange || !duration) return;
+
+    console.log('========== DETRIM START OPERATION ==========');
+    console.log('[App] handleDetrimStart - current trimRange:', trimRange);
+    console.log('[App] handleDetrimStart - BEFORE crop keyframes:', keyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / framerate,
+      origin: kf.origin
+    })));
+    console.log('[App] handleDetrimStart - BEFORE highlight keyframes:', highlightKeyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / highlightFramerate,
+      origin: kf.origin
+    })));
+
+    // The current trim boundary is trimRange.start
+    const boundaryTime = trimRange.start;
+    const boundaryFrame = Math.round(boundaryTime * framerate);
+
+    // ========== CROP KEYFRAMES ==========
+    // Get data from keyframe at the trim boundary
+    const cropDataAtBoundary = getCropDataAtTime(boundaryTime);
+    console.log('[App] handleDetrimStart - crop data at boundary:', boundaryTime, cropDataAtBoundary);
+
+    // Delete the keyframe at the trim boundary (if it exists and is not frame 0)
+    if (boundaryFrame > 0) {
+      const cropKfAtBoundary = keyframes.find(kf => kf.frame === boundaryFrame);
+      if (cropKfAtBoundary && cropKfAtBoundary.origin === 'permanent') {
+        console.log('[App] handleDetrimStart - deleting crop keyframe at frame:', boundaryFrame);
+        // We need to delete this keyframe - use a small range around it
+        deleteKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
+      }
+    }
+
+    // Reconstitute the keyframe at frame 0
+    if (cropDataAtBoundary) {
+      console.log('[App] handleDetrimStart - reconstituting crop keyframe at frame 0');
+      addOrUpdateKeyframe(0, cropDataAtBoundary, duration, 'permanent');
+    }
+
+    // ========== HIGHLIGHT KEYFRAMES ==========
+    // Get data from keyframe at the trim boundary
+    const highlightDataAtBoundary = getHighlightDataAtTime(boundaryTime);
+    console.log('[App] handleDetrimStart - highlight data at boundary:', boundaryTime, highlightDataAtBoundary);
+
+    // Delete the keyframe at the trim boundary (if it exists and is not frame 0)
+    if (boundaryFrame > 0) {
+      const highlightKfAtBoundary = highlightKeyframes.find(kf => kf.frame === boundaryFrame);
+      if (highlightKfAtBoundary && highlightKfAtBoundary.origin === 'permanent') {
+        console.log('[App] handleDetrimStart - deleting highlight keyframe at frame:', boundaryFrame);
+        deleteHighlightKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
+      }
+    }
+
+    // Reconstitute the keyframe at frame 0
+    if (highlightDataAtBoundary) {
+      console.log('[App] handleDetrimStart - reconstituting highlight keyframe at frame 0');
+      addOrUpdateHighlightKeyframe(0, highlightDataAtBoundary, duration, 'permanent');
+    }
+
+    // Call the original detrimStart function to update trimRange
+    console.log('[App] handleDetrimStart - calling detrimStart()');
+    detrimStart();
+
+    console.log('========== DETRIM START OPERATION COMPLETE ==========');
+  };
+
+  /**
+   * Coordinated de-trim handler for end
+   * This function ensures keyframes are properly reconstituted when un-trimming from end:
+   * 1. Gets the keyframe data at the current trim boundary
+   * 2. Deletes the keyframe at the trim boundary
+   * 3. Reconstitutes the keyframe at the original end position
+   * 4. Calls the original detrimEnd function
+   */
+  const handleDetrimEnd = () => {
+    if (!trimRange || !duration) return;
+
+    console.log('========== DETRIM END OPERATION ==========');
+    console.log('[App] handleDetrimEnd - current trimRange:', trimRange);
+    console.log('[App] handleDetrimEnd - BEFORE crop keyframes:', keyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / framerate,
+      origin: kf.origin
+    })));
+    console.log('[App] handleDetrimEnd - BEFORE highlight keyframes:', highlightKeyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / highlightFramerate,
+      origin: kf.origin
+    })));
+
+    // The current trim boundary is trimRange.end
+    const boundaryTime = trimRange.end;
+    const boundaryFrame = Math.round(boundaryTime * framerate);
+    const endFrame = Math.round(duration * framerate);
+
+    // ========== CROP KEYFRAMES ==========
+    // Get data from keyframe at the trim boundary
+    const cropDataAtBoundary = getCropDataAtTime(boundaryTime);
+    console.log('[App] handleDetrimEnd - crop data at boundary:', boundaryTime, cropDataAtBoundary);
+
+    // Delete the keyframe at the trim boundary (if it exists and is not the end frame)
+    if (boundaryFrame < endFrame) {
+      const cropKfAtBoundary = keyframes.find(kf => kf.frame === boundaryFrame);
+      if (cropKfAtBoundary && cropKfAtBoundary.origin === 'permanent') {
+        console.log('[App] handleDetrimEnd - deleting crop keyframe at frame:', boundaryFrame);
+        deleteKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
+      }
+    }
+
+    // Reconstitute the keyframe at the original end
+    if (cropDataAtBoundary) {
+      console.log('[App] handleDetrimEnd - reconstituting crop keyframe at end frame:', endFrame);
+      addOrUpdateKeyframe(duration, cropDataAtBoundary, duration, 'permanent');
+    }
+
+    // ========== HIGHLIGHT KEYFRAMES ==========
+    // Get data from keyframe at the trim boundary
+    const highlightDataAtBoundary = getHighlightDataAtTime(boundaryTime);
+    const highlightEndFrame = Math.round(highlightDuration * highlightFramerate);
+    console.log('[App] handleDetrimEnd - highlight data at boundary:', boundaryTime, highlightDataAtBoundary);
+
+    // Delete the keyframe at the trim boundary (if it exists and is not the highlight end frame)
+    if (boundaryFrame < highlightEndFrame) {
+      const highlightKfAtBoundary = highlightKeyframes.find(kf => kf.frame === boundaryFrame);
+      if (highlightKfAtBoundary && highlightKfAtBoundary.origin === 'permanent') {
+        console.log('[App] handleDetrimEnd - deleting highlight keyframe at frame:', boundaryFrame);
+        deleteHighlightKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
+      }
+    }
+
+    // Reconstitute the keyframe at the highlight end
+    if (highlightDataAtBoundary && boundaryTime < highlightDuration) {
+      console.log('[App] handleDetrimEnd - reconstituting highlight keyframe at highlightDuration:', highlightDuration);
+      addOrUpdateHighlightKeyframe(highlightDuration, highlightDataAtBoundary, duration, 'permanent');
+    }
+
+    // Call the original detrimEnd function to update trimRange
+    console.log('[App] handleDetrimEnd - calling detrimEnd()');
+    detrimEnd();
+
+    console.log('========== DETRIM END OPERATION COMPLETE ==========');
+  };
+
   // Keyboard handler: Space bar toggles play/pause
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -735,6 +930,19 @@ function App() {
 
   // Handle highlight keyframe click (seek and select)
   const handleHighlightKeyframeClick = (time, index) => {
+    console.log('[App] handleHighlightKeyframeClick - time:', time, 'index:', index);
+    console.log('[App] handleHighlightKeyframeClick - keyframes:', highlightKeyframes.map(kf => ({
+      frame: kf.frame,
+      time: kf.frame / highlightFramerate,
+      origin: kf.origin
+    })));
+    console.log('[App] handleHighlightKeyframeClick - trimRange:', trimRange);
+
+    // Set manual selection ref to prevent auto-selection from clearing this selection
+    // while the video is seeking to the new position
+    manualHighlightSelectionRef.current = { index, time: Date.now() };
+    console.log('[App] handleHighlightKeyframeClick - set manualHighlightSelectionRef:', manualHighlightSelectionRef.current);
+
     seek(time);
     setSelectedHighlightKeyframeIndex(index);
     setSelectedLayer('highlight');
@@ -1052,8 +1260,8 @@ function App() {
                     onSegmentTrim={handleTrimSegment}
                     trimRange={trimRange}
                     trimHistory={trimHistory}
-                    onDetrimStart={detrimStart}
-                    onDetrimEnd={detrimEnd}
+                    onDetrimStart={handleDetrimStart}
+                    onDetrimEnd={handleDetrimEnd}
                     sourceTimeToVisualTime={sourceTimeToVisualTime}
                     visualTimeToSourceTime={visualTimeToSourceTime}
                     timelineZoom={timelineZoom}
