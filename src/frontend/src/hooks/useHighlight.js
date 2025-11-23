@@ -62,6 +62,10 @@ export default function useHighlight(videoMetadata, trimRange = null) {
     };
   }, []);
 
+  // Extract stable references from keyframeManager to avoid dependency array issues
+  // Using the object directly would cause re-runs on every render
+  const { needsInitialization, initializeKeyframes } = keyframeManager;
+
   /**
    * Auto-initialize keyframes when metadata loads
    * Creates permanent keyframes at start (frame=0) and end (frame=highlightDurationFrames)
@@ -75,7 +79,7 @@ export default function useHighlight(videoMetadata, trimRange = null) {
 
       // Check if we need to initialize (only on first load, not after trim)
       // Skip initialization if trimRange is set - trim operations handle their own keyframe management
-      if (!trimRange && keyframeManager.needsInitialization(highlightEndFrame)) {
+      if (!trimRange && needsInitialization(highlightEndFrame)) {
         const defaultHighlight = calculateDefaultHighlight(
           videoMetadata.width,
           videoMetadata.height
@@ -83,10 +87,10 @@ export default function useHighlight(videoMetadata, trimRange = null) {
 
         console.log('[useHighlight] Auto-initializing permanent keyframes at frame=0 and frame=' + highlightEndFrame, defaultHighlight);
 
-        keyframeManager.initializeKeyframes(defaultHighlight, highlightEndFrame);
+        initializeKeyframes(defaultHighlight, highlightEndFrame);
       }
     }
-  }, [videoMetadata, calculateDefaultHighlight, framerate, highlightDuration, keyframeManager, trimRange]);
+  }, [videoMetadata, calculateDefaultHighlight, framerate, highlightDuration, needsInitialization, initializeKeyframes, trimRange]);
 
   /**
    * Update highlight duration (adjusts the end keyframe)

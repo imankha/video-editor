@@ -69,6 +69,10 @@ export default function useCrop(videoMetadata, trimRange = null) {
     };
   }, []);
 
+  // Extract stable references from keyframeManager to avoid dependency array issues
+  // Using the object directly would cause re-runs on every render
+  const { needsInitialization, initializeKeyframes } = keyframeManager;
+
   /**
    * Auto-initialize keyframes when metadata loads
    * Creates permanent keyframes at start (frame=0) and end (frame=totalFrames)
@@ -84,7 +88,7 @@ export default function useCrop(videoMetadata, trimRange = null) {
 
       // Check if we need to initialize (only on first load, not after trim)
       // Skip initialization if trimRange is set - trim operations handle their own keyframe management
-      if (!trimRange && keyframeManager.needsInitialization(totalFrames)) {
+      if (!trimRange && needsInitialization(totalFrames)) {
         const defaultCrop = calculateDefaultCrop(
           videoMetadata.width,
           videoMetadata.height,
@@ -94,10 +98,10 @@ export default function useCrop(videoMetadata, trimRange = null) {
         console.log('[useCrop] Auto-initializing permanent keyframes at frame=0 and frame=' + totalFrames, defaultCrop);
         console.log('[useCrop] End keyframe will mirror start until explicitly modified');
 
-        keyframeManager.initializeKeyframes(defaultCrop, totalFrames);
+        initializeKeyframes(defaultCrop, totalFrames);
       }
     }
-  }, [videoMetadata, aspectRatio, keyframeManager, calculateDefaultCrop, framerate, trimRange]);
+  }, [videoMetadata, aspectRatio, needsInitialization, initializeKeyframes, calculateDefaultCrop, framerate, trimRange]);
 
   /**
    * Update aspect ratio and recalculate all keyframes
