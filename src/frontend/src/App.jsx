@@ -16,6 +16,7 @@ import CompareModelsButton from './components/CompareModelsButton';
 import DebugInfo from './components/DebugInfo';
 import { CropProvider } from './contexts/CropContext';
 import { HighlightProvider } from './contexts/HighlightContext';
+import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
 
 // Feature flags for experimental features
 // Set to true to enable model comparison UI (for A/B testing different AI models)
@@ -147,23 +148,19 @@ function App() {
   } = useTimelineZoom();
 
   // Frame tolerance for selection - approximately 5 pixels on each side
-  // At typical timeline widths (800-1000px) and video lengths (10-30s at 30fps),
-  // 2 frames provides roughly 5 pixels of visual tolerance
-  const FRAME_TOLERANCE = 2;
-
   // Derived selection state - computed from playhead position and keyframes
   // This eliminates race conditions between auto-selection and manual selection
   const selectedCropKeyframeIndex = useMemo(() => {
     if (!videoUrl) return null;
     const currentFrame = Math.round(currentTime * framerate);
-    const index = keyframes.findIndex(kf => Math.abs(kf.frame - currentFrame) <= FRAME_TOLERANCE);
+    const index = findKeyframeIndexNearFrame(keyframes, currentFrame, FRAME_TOLERANCE);
     return index !== -1 ? index : null;
   }, [videoUrl, currentTime, framerate, keyframes]);
 
   const selectedHighlightKeyframeIndex = useMemo(() => {
     if (!videoUrl || !isHighlightEnabled) return null;
     const currentFrame = Math.round(currentTime * highlightFramerate);
-    const index = highlightKeyframes.findIndex(kf => Math.abs(kf.frame - currentFrame) <= FRAME_TOLERANCE);
+    const index = findKeyframeIndexNearFrame(highlightKeyframes, currentFrame, FRAME_TOLERANCE);
     return index !== -1 ? index : null;
   }, [videoUrl, currentTime, highlightFramerate, highlightKeyframes, isHighlightEnabled]);
 
