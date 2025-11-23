@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { timeToFrame, frameToTime } from '../utils/videoUtils';
+import { findKeyframeIndexAtFrame, findKeyframeAtFrame, hasKeyframeAtFrame } from '../utils/keyframeUtils';
 
 /**
  * Shared keyframe management hook
@@ -87,7 +88,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
 
     setKeyframes(prev => {
       // Check if keyframe exists at this frame
-      const existingIndex = prev.findIndex(kf => kf.frame === frame);
+      const existingIndex = findKeyframeIndexAtFrame(prev, frame);
 
       let updated;
       if (existingIndex >= 0) {
@@ -106,7 +107,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
       // If updating start keyframe and end hasn't been explicitly set, mirror to end
       if (isStartKeyframe && !isEndKeyframeExplicit && endFrame !== null) {
         console.log('[useKeyframes] Mirroring start keyframe to end (end not yet explicit)');
-        const endKeyframeIndex = updated.findIndex(kf => kf.frame === endFrame);
+        const endKeyframeIndex = findKeyframeIndexAtFrame(updated, endFrame);
         if (endKeyframeIndex >= 0) {
           updated[endKeyframeIndex] = {
             ...data,
@@ -140,7 +141,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
 
     setKeyframes(prev => {
       // Find the keyframe at this frame
-      const keyframeToRemove = prev.find(kf => kf.frame === frame);
+      const keyframeToRemove = findKeyframeAtFrame(prev, frame);
 
       if (!keyframeToRemove) {
         console.log('[useKeyframes] No keyframe found at frame', frame);
@@ -178,7 +179,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
    */
   const hasKeyframeAt = useCallback((time) => {
     const frame = timeToFrame(time, framerate);
-    return keyframes.some(kf => kf.frame === frame);
+    return hasKeyframeAtFrame(keyframes, frame);
   }, [keyframes, framerate]);
 
   /**
@@ -186,7 +187,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
    */
   const getKeyframeAt = useCallback((time) => {
     const frame = timeToFrame(time, framerate);
-    return keyframes.find(kf => kf.frame === frame);
+    return findKeyframeAtFrame(keyframes, frame);
   }, [keyframes, framerate]);
 
   /**
@@ -255,11 +256,13 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
     setKeyframes(prev => {
       const filtered = prev.filter(kf => {
         // Keep keyframes outside the range
-        if (kf.frame < startFrame || kf.frame > endFrame) {
+        // Use <= for startFrame to preserve keyframes at the new trim boundary
+        // Use > for endFrame to delete keyframes at the old boundary being removed
+        if (kf.frame <= startFrame || kf.frame > endFrame) {
           return true;
         }
 
-        // DELETE all keyframes in the trimmed range, including permanent ones
+        // DELETE keyframes inside the trimmed range (including the old end boundary)
         // Permanent keyframes will reconstitute at the trim boundary
         console.log('[useKeyframes] Deleting keyframe at frame', kf.frame, 'origin:', kf.origin);
         return false;
