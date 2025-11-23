@@ -59,14 +59,8 @@ export default function SegmentLayer({
    * Handle click to add boundary
    */
   const handleTrackClick = (e) => {
-    console.log('[SegmentLayer] Click detected on:', e.target.className);
-    console.log('[SegmentLayer] Click target tag:', e.target.tagName);
-
     // Don't add boundary if clicking on a button
-    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
-      console.log('[SegmentLayer] Click ignored - clicked on a button');
-      return;
-    }
+    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
 
     // Calculate position from currentTarget (the track container)
     const rect = e.currentTarget.getBoundingClientRect();
@@ -74,7 +68,6 @@ export default function SegmentLayer({
     const percentX = (clickX / rect.width) * 100;
     const time = pixelToTime(percentX);
 
-    console.log('[SegmentLayer] Adding boundary at time:', time, 'seconds');
     onAddBoundary(time);
   };
 

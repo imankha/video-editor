@@ -32,7 +32,6 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
    * @param {number} endFrame - End frame number
    */
   const initializeKeyframes = useCallback((defaultData, endFrame) => {
-    console.log('[useKeyframes] Initializing keyframes at frame=0 and frame=' + endFrame, defaultData);
     setIsEndKeyframeExplicit(false);
     setKeyframes([
       {
@@ -72,8 +71,6 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
     const frame = timeToFrame(time, framerate);
     const endFrame = getEndFrame ? getEndFrame(totalFrames) : totalFrames;
 
-    console.log('[useKeyframes] Adding/updating keyframe at time', time, '(frame', frame + '), origin:', origin);
-
     // Determine if this is a boundary keyframe
     const isEndKeyframe = endFrame !== null && frame === endFrame;
     const isStartKeyframe = frame === 0;
@@ -82,7 +79,6 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
     const actualOrigin = (isStartKeyframe || isEndKeyframe) ? 'permanent' : origin;
 
     if (isEndKeyframe) {
-      console.log('[useKeyframes] End keyframe explicitly set by user');
       setIsEndKeyframeExplicit(true);
     }
 
@@ -94,19 +90,16 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
       if (existingIndex >= 0) {
         // Update existing keyframe - preserve origin if updating permanent keyframe
         const preservedOrigin = prev[existingIndex].origin === 'permanent' ? 'permanent' : actualOrigin;
-        console.log('[useKeyframes] UPDATING existing keyframe at frame', frame, 'origin:', prev[existingIndex].origin, '->', preservedOrigin);
         updated = [...prev];
         updated[existingIndex] = { ...data, frame, origin: preservedOrigin };
       } else {
         // Add new keyframe and sort by frame
-        console.log('[useKeyframes] CREATING new keyframe at frame', frame, 'origin:', actualOrigin);
         const newKeyframes = [...prev, { ...data, frame, origin: actualOrigin }];
         updated = newKeyframes.sort((a, b) => a.frame - b.frame);
       }
 
       // If updating start keyframe and end hasn't been explicitly set, mirror to end
       if (isStartKeyframe && !isEndKeyframeExplicit && endFrame !== null) {
-        console.log('[useKeyframes] Mirroring start keyframe to end (end not yet explicit)');
         const endKeyframeIndex = findKeyframeIndexAtFrame(updated, endFrame);
         if (endKeyframeIndex >= 0) {
           updated[endKeyframeIndex] = {
@@ -137,30 +130,18 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
     const frame = timeToFrame(time, framerate);
     const endFrame = getEndFrame ? getEndFrame(totalFrames) : totalFrames;
 
-    console.log('[useKeyframes] Attempting to remove keyframe at time:', time, '(frame', frame + ')');
-
     setKeyframes(prev => {
       // Find the keyframe at this frame
       const keyframeToRemove = findKeyframeAtFrame(prev, frame);
 
-      if (!keyframeToRemove) {
-        console.log('[useKeyframes] No keyframe found at frame', frame);
-        return prev;
-      }
+      if (!keyframeToRemove) return prev;
 
       // Don't allow removing permanent keyframes
-      if (keyframeToRemove.origin === 'permanent') {
-        console.log('[useKeyframes] Cannot remove permanent keyframe at frame', frame);
-        return prev;
-      }
+      if (keyframeToRemove.origin === 'permanent') return prev;
 
       // Don't allow removing if it would leave less than 2 keyframes
-      if (prev.length <= 2) {
-        console.log('[useKeyframes] Cannot remove - must have at least 2 keyframes');
-        return prev;
-      }
+      if (prev.length <= 2) return prev;
 
-      console.log('[useKeyframes] Removing keyframe at frame', frame, 'origin:', keyframeToRemove.origin);
       return prev.filter(kf => kf.frame !== frame);
     });
   }, [framerate, getEndFrame]);
@@ -207,10 +188,8 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
           }
         });
         setCopiedData(data);
-        console.log('[useKeyframes] Copied interpolated data at time', time);
         return true;
       }
-      console.log('[useKeyframes] No data to copy at time', time);
       return false;
     }
 
@@ -222,7 +201,6 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
       }
     });
     setCopiedData(data);
-    console.log('[useKeyframes] Copied keyframe at time', time);
     return true;
   }, [getKeyframeAt, interpolate]);
 
@@ -230,12 +208,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
    * Paste the copied data at the specified time
    */
   const pasteKeyframe = useCallback((time, totalFrames) => {
-    if (!copiedData) {
-      console.log('[useKeyframes] No data to paste');
-      return false;
-    }
-
-    console.log('[useKeyframes] Pasting data at time', time);
+    if (!copiedData) return false;
     addOrUpdateKeyframe(time, copiedData, totalFrames);
     return true;
   }, [copiedData, addOrUpdateKeyframe]);
@@ -251,25 +224,13 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
     const endFrame = timeToFrame(endTime, framerate);
     const endKeyframeValue = getEndFrame ? getEndFrame(totalFrames) : totalFrames;
 
-    console.log('[useKeyframes] Deleting keyframes in range:', startTime, '-', endTime, '(frames', startFrame, '-', endFrame + ')');
-
     setKeyframes(prev => {
       const filtered = prev.filter(kf => {
         // Keep keyframes outside the range
         // Use <= for startFrame to preserve keyframes at the new trim boundary
         // Use > for endFrame to delete keyframes at the old boundary being removed
-        if (kf.frame <= startFrame || kf.frame > endFrame) {
-          return true;
-        }
-
-        // DELETE keyframes inside the trimmed range (including the old end boundary)
-        // Permanent keyframes will reconstitute at the trim boundary
-        console.log('[useKeyframes] Deleting keyframe at frame', kf.frame, 'origin:', kf.origin);
-        return false;
+        return kf.frame <= startFrame || kf.frame > endFrame;
       });
-
-      const deletedCount = prev.length - filtered.length;
-      console.log('[useKeyframes] Deleted', deletedCount, 'keyframe(s), kept', filtered.length, 'keyframe(s)');
 
       return filtered;
     });
@@ -298,16 +259,7 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
    * Called when trim range is cleared
    */
   const cleanupTrimKeyframes = useCallback(() => {
-    setKeyframes(prev => {
-      const filtered = prev.filter(kf => kf.origin !== 'trim');
-      const removedCount = prev.length - filtered.length;
-
-      if (removedCount > 0) {
-        console.log('[useKeyframes] Cleaned up', removedCount, 'trim-related keyframe(s)');
-      }
-
-      return filtered;
-    });
+    setKeyframes(prev => prev.filter(kf => kf.origin !== 'trim'));
   }, []);
 
   /**
@@ -339,7 +291,6 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
    * Reset all state
    */
   const reset = useCallback(() => {
-    console.log('[useKeyframes] Resetting state');
     setKeyframes([]);
     setIsEndKeyframeExplicit(false);
     setCopiedData(null);
