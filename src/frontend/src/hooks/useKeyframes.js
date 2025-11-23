@@ -254,12 +254,13 @@ export default function useKeyframes({ interpolateFn, framerate = 30, getEndFram
 
     setKeyframes(prev => {
       const filtered = prev.filter(kf => {
-        // Keep keyframes outside the range
-        if (kf.frame < startFrame || kf.frame > endFrame) {
+        // Keep keyframes outside the range (use inclusive boundary check to preserve boundary keyframes)
+        // This ensures keyframes at the exact trim boundary are NOT deleted
+        if (kf.frame <= startFrame || kf.frame >= endFrame) {
           return true;
         }
 
-        // DELETE all keyframes in the trimmed range, including permanent ones
+        // DELETE keyframes strictly inside the trimmed range
         // Permanent keyframes will reconstitute at the trim boundary
         console.log('[useKeyframes] Deleting keyframe at frame', kf.frame, 'origin:', kf.origin);
         return false;
