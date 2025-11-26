@@ -1,14 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import { timeToFrame } from '../utils/videoUtils';
 import { interpolateCropSpline } from '../utils/splineInterpolation';
-import useKeyframes from './useKeyframes';
+import useKeyframeController from './useKeyframeController';
 
 /**
  * Custom hook for managing crop tool state and keyframes
  * Crop tool is ALWAYS active when video is loaded
  *
  * REFACTORED ARCHITECTURE:
- * - Uses shared useKeyframes hook for all keyframe management
+ * - Uses useKeyframeController (state machine) for all keyframe management
  * - Keyframes are tied to FRAME NUMBERS, not time
  * - Each keyframe has an 'origin' field: 'permanent', 'user', or 'trim'
  *
@@ -25,7 +25,7 @@ export default function useCrop(videoMetadata, trimRange = null) {
   const cropDataKeys = ['x', 'y', 'width', 'height'];
 
   // Initialize shared keyframe management
-  const keyframeManager = useKeyframes({
+  const keyframeManager = useKeyframeController({
     interpolateFn: interpolateCropSpline,
     framerate,
     getEndFrame: (duration) => duration ? timeToFrame(duration, framerate) : null

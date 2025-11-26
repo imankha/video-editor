@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import useKeyframes from './useKeyframes';
+
 import useKeyframeController from './useKeyframeController';
 
 /**
@@ -32,7 +32,7 @@ describe('Keyframe Integration Tests', () => {
   describe('trim and keyframe interaction', () => {
     it('simulates full trim workflow: trim start of video', () => {
       const { result } = renderHook(() =>
-        useKeyframes({
+        useKeyframeController({
           interpolateFn: mockCropInterpolate,
           framerate: 30,
           getEndFrame: (total) => total
@@ -68,7 +68,7 @@ describe('Keyframe Integration Tests', () => {
 
     it('simulates full trim workflow: trim end of video', () => {
       const { result } = renderHook(() =>
-        useKeyframes({
+        useKeyframeController({
           interpolateFn: mockCropInterpolate,
           framerate: 30,
           getEndFrame: (total) => total
@@ -104,7 +104,7 @@ describe('Keyframe Integration Tests', () => {
 
     it('simulates trim with boundary keyframe creation', () => {
       const { result } = renderHook(() =>
-        useKeyframes({
+        useKeyframeController({
           interpolateFn: mockCropInterpolate,
           framerate: 30,
           getEndFrame: (total) => total
@@ -133,7 +133,7 @@ describe('Keyframe Integration Tests', () => {
 
     it('preserves permanent keyframes origin after operations', () => {
       const { result } = renderHook(() =>
-        useKeyframes({
+        useKeyframeController({
           interpolateFn: mockCropInterpolate,
           framerate: 30,
           getEndFrame: (total) => total
@@ -169,7 +169,7 @@ describe('Keyframe Integration Tests', () => {
   describe('detrim scenarios', () => {
     it('cleanup trim keyframes restores to clean state', () => {
       const { result } = renderHook(() =>
-        useKeyframes({
+        useKeyframeController({
           interpolateFn: mockCropInterpolate,
           framerate: 30,
           getEndFrame: (total) => total
@@ -208,7 +208,7 @@ describe('Keyframe Integration Tests', () => {
   describe('multi-operation sequences', () => {
     it('handles add -> update -> remove sequence', () => {
       const { result } = renderHook(() =>
-        useKeyframes({
+        useKeyframeController({
           interpolateFn: mockCropInterpolate,
           framerate: 30,
           getEndFrame: (total) => total
@@ -234,14 +234,14 @@ describe('Keyframe Integration Tests', () => {
 
       // Remove
       act(() => {
-        result.current.removeKeyframe(1.0, 90);
+        result.current.removeKeyframe(1.0);
       });
       expect(result.current.keyframes.length).toBe(2);
     });
 
     it('handles copy from start -> paste at middle -> delete middle sequence', () => {
       const { result } = renderHook(() =>
-        useKeyframes({
+        useKeyframeController({
           interpolateFn: mockCropInterpolate,
           framerate: 30,
           getEndFrame: (total) => total
@@ -267,7 +267,7 @@ describe('Keyframe Integration Tests', () => {
 
       // Delete middle
       act(() => {
-        result.current.removeKeyframe(1.5, 90);
+        result.current.removeKeyframe(1.5);
       });
 
       expect(result.current.keyframes.length).toBe(2);
@@ -275,7 +275,7 @@ describe('Keyframe Integration Tests', () => {
 
     it('handles multiple adds maintaining sort order', () => {
       const { result } = renderHook(() =>
-        useKeyframes({
+        useKeyframeController({
           interpolateFn: mockCropInterpolate,
           framerate: 30,
           getEndFrame: (total) => total
@@ -315,7 +315,7 @@ describe('Keyframe Integration Tests', () => {
   describe('edge cases', () => {
     it('handles keyframe at exact frame boundaries', () => {
       const { result } = renderHook(() =>
-        useKeyframes({
+        useKeyframeController({
           interpolateFn: mockCropInterpolate,
           framerate: 30,
           getEndFrame: (total) => total
@@ -338,7 +338,7 @@ describe('Keyframe Integration Tests', () => {
 
     it('handles very close keyframes', () => {
       const { result } = renderHook(() =>
-        useKeyframes({
+        useKeyframeController({
           interpolateFn: mockCropInterpolate,
           framerate: 30,
           getEndFrame: (total) => total
@@ -366,7 +366,7 @@ describe('Keyframe Integration Tests', () => {
 
     it('handles empty delete range', () => {
       const { result } = renderHook(() =>
-        useKeyframes({
+        useKeyframeController({
           interpolateFn: mockCropInterpolate,
           framerate: 30,
           getEndFrame: (total) => total
@@ -389,7 +389,7 @@ describe('Keyframe Integration Tests', () => {
 
     it('preserves data integrity after multiple operations', () => {
       const { result } = renderHook(() =>
-        useKeyframes({
+        useKeyframeController({
           interpolateFn: mockCropInterpolate,
           framerate: 30,
           getEndFrame: (total) => total
@@ -428,97 +428,4 @@ describe('Keyframe Integration Tests', () => {
     });
   });
 
-  // ============================================================================
-  // COMPARISON: useKeyframes vs useKeyframeController
-  // ============================================================================
-
-  describe('useKeyframes and useKeyframeController parity', () => {
-    it('both hooks produce same keyframes after initialization', () => {
-      const { result: oldHook } = renderHook(() =>
-        useKeyframes({
-          interpolateFn: mockCropInterpolate,
-          framerate: 30,
-          getEndFrame: (total) => total
-        })
-      );
-
-      const { result: newHook } = renderHook(() =>
-        useKeyframeController({
-          interpolateFn: mockCropInterpolate,
-          framerate: 30,
-          getEndFrame: (total) => total
-        })
-      );
-
-      act(() => {
-        oldHook.current.initializeKeyframes({ x: 100, y: 100 }, 90);
-        newHook.current.initializeKeyframes({ x: 100, y: 100 }, 90);
-      });
-
-      expect(oldHook.current.keyframes).toEqual(newHook.current.keyframes);
-    });
-
-    it('both hooks produce same result after add operation', () => {
-      const { result: oldHook } = renderHook(() =>
-        useKeyframes({
-          interpolateFn: mockCropInterpolate,
-          framerate: 30,
-          getEndFrame: (total) => total
-        })
-      );
-
-      const { result: newHook } = renderHook(() =>
-        useKeyframeController({
-          interpolateFn: mockCropInterpolate,
-          framerate: 30,
-          getEndFrame: (total) => total
-        })
-      );
-
-      act(() => {
-        oldHook.current.initializeKeyframes({ x: 100, y: 100 }, 90);
-        newHook.current.initializeKeyframes({ x: 100, y: 100 }, 90);
-      });
-
-      act(() => {
-        oldHook.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150 }, 90, 'user');
-        newHook.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150 }, 90, 'user');
-      });
-
-      expect(oldHook.current.keyframes).toEqual(newHook.current.keyframes);
-    });
-
-    it('both hooks produce same export format', () => {
-      const { result: oldHook } = renderHook(() =>
-        useKeyframes({
-          interpolateFn: mockCropInterpolate,
-          framerate: 30,
-          getEndFrame: (total) => total
-        })
-      );
-
-      const { result: newHook } = renderHook(() =>
-        useKeyframeController({
-          interpolateFn: mockCropInterpolate,
-          framerate: 30,
-          getEndFrame: (total) => total
-        })
-      );
-
-      act(() => {
-        oldHook.current.initializeKeyframes({ x: 100, y: 100, width: 200, height: 300 }, 90);
-        newHook.current.initializeKeyframes({ x: 100, y: 100, width: 200, height: 300 }, 90);
-      });
-
-      act(() => {
-        oldHook.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150, width: 200, height: 300 }, 90, 'user');
-        newHook.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150, width: 200, height: 300 }, 90, 'user');
-      });
-
-      const oldExport = oldHook.current.getKeyframesForExport(['x', 'y', 'width', 'height']);
-      const newExport = newHook.current.getKeyframesForExport(['x', 'y', 'width', 'height']);
-
-      expect(oldExport).toEqual(newExport);
-    });
-  });
 });
