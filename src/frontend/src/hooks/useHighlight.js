@@ -1,14 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import { timeToFrame } from '../utils/videoUtils';
 import { interpolateHighlightSpline } from '../utils/splineInterpolation';
-import useKeyframes from './useKeyframes';
+import useKeyframeController from './useKeyframeController';
 
 /**
  * Custom hook for managing highlight ellipse state and keyframes
  * Highlight ellipses help viewers identify which player is being highlighted
  *
  * REFACTORED ARCHITECTURE:
- * - Uses shared useKeyframes hook for all keyframe management
+ * - Uses useKeyframeController (state machine) for all keyframe management
  * - Keyframes are tied to FRAME NUMBERS, not time
  * - Each keyframe has an 'origin' field: 'permanent', 'user', or 'trim'
  *
@@ -26,7 +26,7 @@ export default function useHighlight(videoMetadata, trimRange = null) {
   const highlightDataKeys = ['x', 'y', 'radiusX', 'radiusY', 'opacity', 'color'];
 
   // Initialize shared keyframe management
-  const keyframeManager = useKeyframes({
+  const keyframeManager = useKeyframeController({
     interpolateFn: interpolateHighlightSpline,
     framerate,
     getEndFrame: (duration) => {
