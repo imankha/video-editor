@@ -30,6 +30,9 @@ function App() {
 
   // Layer selection state for arrow key navigation
   const [selectedLayer, setSelectedLayer] = useState('playhead'); // 'playhead' | 'crop' | 'highlight'
+
+  // Audio state - synced between export settings and playback
+  const [includeAudio, setIncludeAudio] = useState(true);
   // NOTE: selectedCropKeyframeIndex and selectedHighlightKeyframeIndex are now derived via useMemo
   // (defined after hooks that provide keyframes and currentTime)
 
@@ -181,6 +184,14 @@ function App() {
       initializeSegments(duration);
     }
   }, [duration, initializeSegments]);
+
+  // Sync video mute state with export audio setting
+  // When user turns off audio in export settings, also mute playback preview
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = !includeAudio;
+    }
+  }, [includeAudio, videoRef]);
 
   // DERIVED STATE: Single source of truth
   // - If dragging: show live preview (dragCrop)
@@ -1123,6 +1134,8 @@ function App() {
                 isHighlightEnabled={isHighlightEnabled}
                 segmentData={getSegmentExportData()}
                 disabled={!videoFile}
+                includeAudio={includeAudio}
+                onIncludeAudioChange={setIncludeAudio}
               />
             </div>
           )}
