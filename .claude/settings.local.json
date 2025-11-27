@@ -10,7 +10,8 @@
       "Bash(npm run test:*)",
       "Bash(npm install:*)",
       "Bash(node node_modules/vitest/vitest.mjs run:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []
