@@ -27,12 +27,11 @@ const HIGHLIGHT_EFFECT_COLORS = ['bg-blue-600', 'bg-yellow-600', 'bg-purple-600'
  * Always uses AI upscaling with ESRGAN at 30fps for best quality
  * Automatically downloads the exported video
  */
-export default function ExportButton({ videoFile, cropKeyframes, highlightKeyframes = [], isHighlightEnabled = false, segmentData, disabled }) {
+export default function ExportButton({ videoFile, cropKeyframes, highlightKeyframes = [], isHighlightEnabled = false, segmentData, disabled, includeAudio, onIncludeAudioChange }) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState(null);
-  const [includeAudio, setIncludeAudio] = useState(true);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
   const [highlightEffectPosition, setHighlightEffectPosition] = useState(0);
   const wsRef = useRef(null);
@@ -50,15 +49,15 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
 
   // Auto-disable audio when slow motion is detected (unless user has explicitly set audio)
   useEffect(() => {
-    if (!audioExplicitlySet && segmentData && segmentData.segments) {
+    if (!audioExplicitlySet && segmentData && segmentData.segments && onIncludeAudioChange) {
       // Check if any segment has slow motion (speed < 1)
       const hasSlowMotion = segmentData.segments.some(segment => segment.speed < 1);
       if (hasSlowMotion && includeAudio) {
         console.log('[ExportButton] Auto-disabling audio due to slow motion');
-        setIncludeAudio(false);
+        onIncludeAudioChange(false);
       }
     }
-  }, [segmentData, audioExplicitlySet, includeAudio]);
+  }, [segmentData, audioExplicitlySet, includeAudio, onIncludeAudioChange]);
 
   /**
    * Connect to WebSocket for real-time progress updates
@@ -266,7 +265,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
           </div>
           <button
             onClick={() => {
-              setIncludeAudio(!includeAudio);
+              onIncludeAudioChange(!includeAudio);
               setAudioExplicitlySet(true);
             }}
             disabled={isExporting}
