@@ -1,7 +1,8 @@
-import { Circle, Trash2, Copy, Eye, EyeOff } from 'lucide-react';
+import { Circle, Eye, EyeOff } from 'lucide-react';
 import React from 'react';
 import { useHighlightContext } from '../contexts/HighlightContext';
 import { frameToTime } from '../utils/videoUtils';
+import { KeyframeMarker } from './timeline/KeyframeMarker';
 
 /**
  * HighlightLayer component - displays highlight keyframes on the timeline
@@ -214,71 +215,25 @@ export default function HighlightLayer({
             );
 
             return (
-              <div
+              <KeyframeMarker
                 key={keyframe.frame}
-                className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
-                style={{
-                  left: edgePadding > 0
-                    ? `calc(${edgePadding}px + (100% - ${edgePadding * 2}px) * ${position / 100})`
-                    : `${position}%`
-                }}
-              >
-                {/* Hit area */}
-                <div className="absolute -top-5 -bottom-4 -left-4 -right-4" />
-
-                {/* Copy button (shown when selected) */}
-                {onKeyframeCopy && (
-                  <button
-                    className={`absolute -top-5 left-1/2 transform transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1.5 z-50 ${
-                      isPermanent && isStartKeyframe
-                        ? '-translate-x-[20%]'
-                        : isPermanent && isEffectiveEndKeyframe
-                        ? '-translate-x-[80%]'
-                        : '-translate-x-1/2'
-                    } ${isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onKeyframeCopy(keyframeTime);
-                    }}
-                    title="Copy keyframe"
-                  >
-                    <Copy size={13} />
-                  </button>
-                )}
-
-                {/* Diamond keyframe indicator */}
-                <div
-                  className={`w-3 h-3 transform rotate-45 cursor-pointer transition-all ${
-                    isSelected
-                      ? 'bg-orange-300 scale-150 ring-2 ring-orange-200'
-                      : shouldHighlight
-                      ? 'bg-orange-400 scale-125'
-                      : 'bg-orange-500 hover:bg-orange-400'
-                  }`}
-                  onClick={() => onKeyframeClick(keyframeTime, index)}
-                  title={`Highlight keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
-                    isEffectiveEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
-                  }${isSelected ? ' [SELECTED]' : ''}`}
-                />
-
-                {/* Delete button (shown when selected, but not for permanent keyframes) */}
-                {keyframes.length > 2 &&
-                 !isPermanent && (
-                  <button
-                    className={`absolute top-4 left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 z-50 ${
-                      isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onKeyframeDelete(keyframeTime, duration);
-                    }}
-                    title="Delete keyframe"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                )}
-              </div>
+                position={position}
+                colorScheme="orange"
+                isSelected={isSelected}
+                shouldHighlight={shouldHighlight}
+                isPermanent={isPermanent}
+                isStartKeyframe={isStartKeyframe}
+                isEndKeyframe={isEffectiveEndKeyframe}
+                onClick={() => onKeyframeClick(keyframeTime, index)}
+                onCopy={onKeyframeCopy ? () => onKeyframeCopy(keyframeTime) : undefined}
+                onDelete={keyframes.length > 2 && !isPermanent ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
+                tooltip={`Highlight keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
+                  isEffectiveEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
+                }${isSelected ? ' [SELECTED]' : ''}`}
+                edgePadding={edgePadding}
+                showCopyButton={!!onKeyframeCopy}
+                showDeleteButton={keyframes.length > 2 && !isPermanent}
+              />
             );
           })}
         </div>
