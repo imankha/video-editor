@@ -14,429 +14,92 @@ This spec defines the implementation of a two-phase editing workflow: **Framing 
 
 ---
 
+## Implementation Progress
+
+### ✅ Completed Prep Refactors
+
+| Step | Commit | Description | Files Created/Modified |
+|------|--------|-------------|------------------------|
+| **Prep 1** | `5b5bbe7` | Timeline extraction | `TimelineBase.jsx`, `timeline/index.js`, mode stubs |
+| **Prep 3** | `f7024a4` | KeyframeMarker extraction | `KeyframeMarker.jsx`, updated CropLayer & HighlightLayer |
+| **Prep 6** | `bff516b` | Export & metadata utilities | `ExportProgress.jsx`, `videoMetadata.js` |
+
+### Current File Structure (After Prep Refactors)
+
+```
+src/frontend/src/
+├── components/
+│   ├── timeline/                    ✅ CREATED
+│   │   ├── TimelineBase.jsx         ✅ 359 lines - shared foundation
+│   │   ├── KeyframeMarker.jsx       ✅ 113 lines - shared keyframe marker
+│   │   └── index.js                 ✅ exports both
+│   ├── shared/
+│   │   ├── ExportProgress.jsx       ✅ 41 lines - progress UI
+│   │   └── index.js                 ✅ re-exports shared components
+│   ├── Timeline.jsx                 ✅ REFACTORED to use TimelineBase
+│   ├── CropLayer.jsx                ✅ REFACTORED to use KeyframeMarker
+│   ├── HighlightLayer.jsx           ✅ REFACTORED to use KeyframeMarker
+│   ├── ExportButton.jsx             ✅ SIMPLIFIED, uses ExportProgress
+│   └── VideoPlayer.jsx              ✅ SIMPLIFIED
+├── modes/
+│   ├── framing/
+│   │   └── index.js                 ✅ stub (ready for components)
+│   └── overlay/
+│       └── index.js                 ✅ stub (ready for components)
+├── hooks/
+│   └── useHighlight.js              ✅ ENHANCED
+└── utils/
+    └── videoMetadata.js             ✅ 55 lines - metadata extraction
+```
+
+### Remaining Work
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1: Move files to mode dirs | 🔲 Pending | Move hooks/layers to `modes/framing/` and `modes/overlay/` |
+| Phase 2: Mode containers | 🔲 Pending | Create `FramingMode.jsx`, `OverlayMode.jsx` |
+| Phase 3: Mode switcher | 🔲 Pending | Add `ModeSwitcher.jsx`, mode state in App.jsx |
+| Phase 4: Transitions | 🔲 Pending | Implement render-based mode transition, backend endpoint |
+| Phase 5: Mode exports | 🔲 Pending | Create `FramingExport.jsx`, `OverlayExport.jsx` |
+| Phase 6: Cleanup | 🔲 Pending | Remove old files, polish |
+
+---
+
 ## Complexity Analysis
 
-### Overall Assessment: **MEDIUM-HIGH**
+### Overall Assessment: **MEDIUM** (reduced from MEDIUM-HIGH)
 
-The full implementation touches many files and introduces new patterns. However, it can be **significantly de-risked** by doing prep refactors first.
+The prep refactors are complete. Remaining work is primarily assembly of existing building blocks.
 
 ### Complexity Breakdown
 
-| Component | Complexity | Risk | Notes |
-|-----------|------------|------|-------|
-| File reorganization | Low | Medium | Mechanical but many imports to update |
-| Timeline extraction | Medium | Low | Logic extraction, no behavior change |
-| Mode state in App.jsx | Medium | Medium | New state, conditional rendering |
-| Mode transition logic | Medium | Medium | Render step, error handling |
-| Backend endpoint | Low | Low | Reuses existing code |
-| Video source enforcement | Low | Low | Just state rules |
-
-### What Makes It Complex
-
-1. **Big bang risk** - Changing files + adding features simultaneously is risky
-2. **Timeline.jsx is 540 lines** - Hard to refactor and add features at once
-3. **ExportButton.jsx has export logic** - Need to extract before splitting
-4. **Many import paths change** - File moves break things
-
-### How to Make It Easier
-
-**Strategy: Prep refactors create building blocks, then assembly is simple.**
-
-If we extract shared components FIRST (no behavior changes), then mode switching becomes:
-- Import `TimelineBase` instead of `Timeline`
-- Import `FramingExport` instead of `ExportButton`
-- Add mode state and conditional rendering
-
----
-
-## Prep Refactor Phase (Do First, Zero Feature Changes)
-
-**Goal:** Extract shared components and reorganize files WITHOUT changing any behavior. App should work identically after each step. Each step is independently deployable.
-
-### Prep 1: Create Directory Structure (30 min)
-
-Create empty directories and index files. No file moves yet.
-
-```bash
-# Create mode directories
-mkdir -p src/frontend/src/modes/framing/{hooks,layers,overlays,contexts}
-mkdir -p src/frontend/src/modes/overlay/{hooks,layers,overlays,contexts}
-mkdir -p src/frontend/src/components/timeline
-mkdir -p src/frontend/src/components/shared
-
-# Create index.js files for clean imports later
-touch src/frontend/src/modes/framing/index.js
-touch src/frontend/src/modes/overlay/index.js
-touch src/frontend/src/components/timeline/index.js
-touch src/frontend/src/components/shared/index.js
-```
-
-**Verification:** App builds and runs unchanged.
-
----
-
-### Prep 2: Extract TimelineBase (2-3 hours)
-
-**Current:** `Timeline.jsx` (540 lines) has playhead logic + all layers inline.
-
-**Goal:** Extract playhead/scrubbing logic into `TimelineBase.jsx`. Timeline.jsx becomes a thin wrapper.
-
-**File: `src/frontend/src/components/timeline/TimelineBase.jsx`**
-
-Extract from Timeline.jsx:
-- `getTimeFromPosition()` function
-- `handleMouseDown/Move/Up/Leave` handlers
-- `isDragging`, `hoverTime`, `hoverX` state
-- Wheel zoom handling
-- Scroll sync logic
-- Auto-scroll to playhead
-- Time display rendering
-- Playhead line rendering
-
-```jsx
-/**
- * Shared timeline foundation.
- * Extracted from Timeline.jsx - handles playhead, scrubbing, zoom.
- * Mode-specific layers passed as children.
- */
-export function TimelineBase({
-  currentTime,
-  duration,
-  visualDuration,
-  onSeek,
-  timelineZoom,
-  timelineScale,
-  onTimelineZoomByWheel,
-  sourceTimeToVisualTime,
-  visualTimeToSourceTime,
-  selectedLayer,
-  layerLabels,      // ReactNode - mode provides its own labels
-  children,         // ReactNode - mode-specific layers
-  totalLayerHeight, // number - for playhead line height
-}) {
-  // ... extracted logic from Timeline.jsx lines 104-253
-}
-```
-
-**File: `src/frontend/src/components/Timeline.jsx`** (modified)
-
-After extraction, Timeline.jsx becomes:
-
-```jsx
-import { TimelineBase } from './timeline/TimelineBase';
-import CropLayer from './CropLayer';
-import SegmentLayer from './SegmentLayer';
-import HighlightLayer from './HighlightLayer';
-
-export function Timeline(props) {
-  const layerLabels = (
-    <>
-      {/* Existing label JSX from lines 276-336 */}
-    </>
-  );
-
-  return (
-    <TimelineBase
-      {...timelineBaseProps}
-      layerLabels={layerLabels}
-      totalLayerHeight={calculateHeight()}
-    >
-      <CropLayer {...cropProps} />
-      {segments.length > 0 && <SegmentLayer {...segmentProps} />}
-      <HighlightLayer {...highlightProps} />
-    </TimelineBase>
-  );
-}
-```
-
-**Verification:**
-- App works identically
-- Timeline looks and behaves the same
-- Playhead scrubbing works
-- Zoom works
-- All layers render correctly
-
----
-
-### Prep 3: Extract KeyframeMarker (1 hour)
-
-**Current:** CropLayer and HighlightLayer both render keyframe markers with similar code.
-
-**Goal:** Single `KeyframeMarker` component used by both.
-
-**File: `src/frontend/src/components/timeline/KeyframeMarker.jsx`**
-
-```jsx
-/**
- * Reusable keyframe marker for timeline layers.
- * Supports different shapes and colors for each layer type.
- */
-export function KeyframeMarker({
-  position,           // 0-100 percentage
-  shape = 'diamond',  // 'diamond' | 'circle'
-  colorClass = 'bg-yellow-500',
-  selectedColorClass = 'bg-yellow-300',
-  isSelected = false,
-  isPermanent = false,
-  onClick,
-  onContextMenu,      // For right-click delete/copy
-  tooltip,
-  edgePadding = 20,
-}) {
-  const shapeClasses = {
-    diamond: 'rotate-45 w-3 h-3',
-    circle: 'rounded-full w-3 h-3',
-  };
-
-  return (
-    <div
-      className={`absolute top-1/2 -translate-y-1/2 transform -translate-x-1/2
-        cursor-pointer transition-all z-20
-        ${shapeClasses[shape]}
-        ${isSelected ? `${selectedColorClass} ring-2 ring-white scale-125` : colorClass}
-        ${isPermanent ? 'opacity-60' : 'opacity-100'}
-      `}
-      style={{
-        left: `calc(${edgePadding}px + (100% - ${edgePadding * 2}px) * ${position / 100})`
-      }}
-      onClick={onClick}
-      onContextMenu={onContextMenu}
-      title={tooltip}
-    />
-  );
-}
-```
-
-**Update CropLayer.jsx and HighlightLayer.jsx** to use `KeyframeMarker` instead of inline rendering.
-
-**Verification:**
-- Crop keyframes render as yellow diamonds
-- Highlight keyframes render as orange circles
-- Selection highlighting works
-- Click to seek works
-- Right-click context menu works
-
----
-
-### Prep 4: Extract ExportProgress (1 hour)
-
-**Current:** ExportButton.jsx has progress UI inline (lines 338-360).
-
-**Goal:** Extract progress display so both FramingExport and OverlayExport can use it.
-
-**File: `src/frontend/src/components/shared/ExportProgress.jsx`**
-
-```jsx
-/**
- * Shared export progress display.
- * Shows spinner, percentage, message, and progress bar.
- */
-export function ExportProgress({
-  isExporting,
-  progress,
-  progressMessage,
-  label = 'AI Upscaling',
-}) {
-  if (!isExporting) return null;
-
-  return (
-    <>
-      <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
-        <div className="flex items-center gap-2 mb-2">
-          <Loader className="animate-spin" size={18} />
-          <span className="font-medium">{label}... {progress}%</span>
-        </div>
-        {progressMessage && (
-          <div className="text-xs opacity-80 mb-2">
-            {progressMessage}
-          </div>
-        )}
-      </div>
-
-      <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-        <div
-          className="bg-green-600 h-full transition-all duration-300"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-    </>
-  );
-}
-```
-
-**Update ExportButton.jsx** to use `<ExportProgress ... />`.
-
-**Verification:** Export progress looks identical during export.
-
----
-
-### Prep 5: Extract videoMetadata utility (30 min)
-
-**Current:** Video metadata extraction is inline in useVideo.js.
-
-**Goal:** Reusable function for both modes.
-
-**File: `src/frontend/src/utils/videoMetadata.js`**
-
-```javascript
-/**
- * Extract metadata from a video File or Blob.
- * Used by both Framing (original upload) and Overlay (rendered video).
- */
-export async function extractVideoMetadata(videoSource) {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-
-    const cleanup = () => {
-      URL.revokeObjectURL(video.src);
-      video.remove();
-    };
-
-    video.onloadedmetadata = () => {
-      const metadata = {
-        width: video.videoWidth,
-        height: video.videoHeight,
-        duration: video.duration,
-        fileName: videoSource.name || 'rendered_video.mp4',
-        size: videoSource.size,
-        format: videoSource.type?.split('/')[1] || 'mp4',
-      };
-      cleanup();
-      resolve(metadata);
-    };
-
-    video.onerror = (e) => {
-      cleanup();
-      reject(new Error('Failed to load video metadata'));
-    };
-
-    video.src = URL.createObjectURL(videoSource);
-  });
-}
-```
-
-**Update useVideo.js** to use this utility (optional - can keep inline too).
-
-**Verification:** Video metadata displays correctly after upload.
-
----
-
-### Prep 6: Make VideoPlayer overlay-agnostic (1 hour)
-
-**Current:** VideoPlayer.jsx has hardcoded CropOverlay and HighlightOverlay.
-
-**Goal:** Accept overlays as props so modes can provide their own.
-
-**Current code (VideoPlayer.jsx):**
-```jsx
-{showCropOverlay && currentCrop && (
-  <CropOverlay ... />
-)}
-{showHighlightOverlay && isHighlightEnabled && currentHighlight && (
-  <HighlightOverlay ... />
-)}
-```
-
-**New code:**
-```jsx
-export function VideoPlayer({
-  // ... existing props
-  overlays = [],  // Array of ReactNode overlays to render
-}) {
-  return (
-    <div className="video-container ...">
-      <video ... />
-
-      {/* Render any overlays passed by the mode */}
-      {overlays}
-    </div>
-  );
-}
-```
-
-**Update App.jsx** to pass overlays:
-```jsx
-<VideoPlayer
-  ...
-  overlays={[
-    showCropOverlay && currentCrop && <CropOverlay key="crop" ... />,
-    showHighlightOverlay && isHighlightEnabled && currentHighlight && <HighlightOverlay key="highlight" ... />,
-  ].filter(Boolean)}
-/>
-```
-
-**Verification:** Crop and highlight overlays still render and are interactive.
-
----
-
-### Prep 7: Add index.js re-exports (30 min)
-
-Create clean import paths for when we move files.
-
-**File: `src/frontend/src/components/timeline/index.js`**
-```javascript
-export { TimelineBase } from './TimelineBase';
-export { KeyframeMarker } from './KeyframeMarker';
-export { LayerLabel } from './LayerLabel';
-// Export other timeline components as they're created
-```
-
-**File: `src/frontend/src/components/shared/index.js`**
-```javascript
-export { ExportProgress } from './ExportProgress';
-export { default as Controls } from '../Controls';
-export { default as FileUpload } from '../FileUpload';
-// etc.
-```
-
-**Verification:** Can import from index files.
-
----
-
-### Prep Refactor Summary
-
-| Step | Time | Risk | Independently Deployable? |
-|------|------|------|--------------------------|
-| 1. Create directories | 30 min | None | Yes |
-| 2. Extract TimelineBase | 2-3 hrs | Low | Yes |
-| 3. Extract KeyframeMarker | 1 hr | Low | Yes |
-| 4. Extract ExportProgress | 1 hr | Low | Yes |
-| 5. Extract videoMetadata | 30 min | None | Yes |
-| 6. VideoPlayer overlay prop | 1 hr | Low | Yes |
-| 7. Add index re-exports | 30 min | None | Yes |
-
-**Total Prep Time: ~7-8 hours**
-
-**After Prep Completion:**
-- App works exactly the same
-- Shared components exist and are tested
-- Directory structure is ready
-- Mode implementation becomes assembly, not extraction
-
----
-
-### Why This Approach Works
-
-**Before Prep:**
-```
-Mode switching requires:
-- Extracting TimelineBase (risky refactor)
-- Extracting ExportProgress (risky refactor)
-- Moving files (breaks imports)
-- Adding mode state (new feature)
-- All at once = high risk
-```
-
-**After Prep:**
-```
-Mode switching requires:
-- Import existing TimelineBase ✓
-- Import existing ExportProgress ✓
-- Move files to prepared directories ✓
-- Add mode state (isolated change)
-- One thing at a time = low risk
-```
+| Component | Complexity | Risk | Status |
+|-----------|------------|------|--------|
+| ~~Timeline extraction~~ | ~~Medium~~ | ~~Low~~ | ✅ **DONE** - TimelineBase created |
+| ~~Export progress extraction~~ | ~~Low~~ | ~~Low~~ | ✅ **DONE** - ExportProgress created |
+| ~~Keyframe marker extraction~~ | ~~Low~~ | ~~Low~~ | ✅ **DONE** - KeyframeMarker created |
+| ~~Video metadata utility~~ | ~~Low~~ | ~~Low~~ | ✅ **DONE** - videoMetadata.js created |
+| File reorganization | Low | Medium | 🔲 Pending - mechanical imports update |
+| Mode state in App.jsx | Medium | Medium | 🔲 Pending |
+| Mode transition logic | Medium | Medium | 🔲 Pending |
+| Backend endpoint | Low | Low | 🔲 Pending |
+
+### ~~What Makes It Complex~~ Risks Mitigated
+
+1. ~~**Big bang risk**~~ → Building blocks extracted, assembly is incremental
+2. ~~**Timeline.jsx is 540 lines**~~ → TimelineBase (359 lines) extracted, Timeline now composes from it
+3. ~~**ExportButton.jsx has export logic**~~ → ExportProgress extracted, ExportButton simplified
+4. **Many import paths change** - Still applies to Phase 1 file moves
+
+### How to Proceed
+
+**Prep refactors COMPLETE.** Mode switching now becomes:
+- ✅ TimelineBase available - mode timelines will compose from it
+- ✅ ExportProgress available - mode exports will use it
+- ✅ KeyframeMarker available - both CropLayer and HighlightLayer already use it
+- ✅ videoMetadata.js available - will be used by overlay mode for rendered video
+- 🔲 Create mode containers (FramingMode, OverlayMode)
+- 🔲 Add mode state and ModeSwitcher UI
 
 ---
 
@@ -686,34 +349,35 @@ async def export_framing_only(
 
 ---
 
-## 3. DRY Timeline Architecture
+## 3. DRY Timeline Architecture ✅ IMPLEMENTED
 
-### 3.1 Problem: Current Timeline is Monolithic
+### 3.1 Problem: ~~Current Timeline is Monolithic~~ SOLVED
 
-The current `Timeline.jsx` (540 lines) contains:
-- Playhead/scrubber logic
-- Layer label rendering
-- All layer components inline
-- Mode-agnostic but tightly coupled
+~~The current `Timeline.jsx` (540 lines) contains:~~
+- ~~Playhead/scrubber logic~~
+- ~~Layer label rendering~~
+- ~~All layer components inline~~
+- ~~Mode-agnostic but tightly coupled~~
 
-### 3.2 Solution: Extract Shared Base Components
+**Status:** TimelineBase extracted, Timeline.jsx now composes from shared foundation.
 
-Create a shared foundation that both modes use:
+### 3.2 Solution: Extract Shared Base Components ✅ DONE
+
+**Actual structure created:**
 
 ```
 src/frontend/src/components/
-├── timeline/                          # NEW: Timeline module
-│   ├── TimelineBase.jsx               # Shared: playhead, scrubber, zoom
-│   ├── TimelineTrack.jsx              # Shared: generic track container
-│   ├── PlayheadTrack.jsx              # Shared: video progress bar
-│   ├── KeyframeMarker.jsx             # Shared: diamond/circle markers
-│   ├── LayerLabel.jsx                 # Shared: left-side layer icons
-│   └── index.js                       # Re-exports
+├── timeline/                          ✅ CREATED
+│   ├── TimelineBase.jsx               ✅ 359 lines - shared foundation
+│   ├── KeyframeMarker.jsx             ✅ 113 lines - shared markers
+│   └── index.js                       ✅ re-exports
 ```
 
-### 3.3 TimelineBase Component (Shared)
+### 3.3 TimelineBase Component ✅ IMPLEMENTED
 
 **File: `src/frontend/src/components/timeline/TimelineBase.jsx`**
+
+Actual implementation signature (359 lines total):
 
 ```jsx
 /**
@@ -722,121 +386,75 @@ src/frontend/src/components/
  * Does NOT handle: mode-specific layers (passed as children).
  */
 export function TimelineBase({
-  // Time/duration
   currentTime,
   duration,
   visualDuration,
   onSeek,
-
-  // Zoom/scroll
-  timelineZoom,
-  timelineScale,
+  sourceTimeToVisualTime = (t) => t,
+  visualTimeToSourceTime = (t) => t,
+  timelineZoom = 100,
   onTimelineZoomByWheel,
-  timelineScrollPosition,
+  timelineScale = 1,
+  timelineScrollPosition = 0,
   onTimelineScrollPositionChange,
+  selectedLayer = 'playhead',
+  onLayerSelect,
+  layerLabels,                    // Mode-specific layer labels
+  children,                       // Mode-specific timeline layers
+  totalLayerHeight = '9.5rem',
+  trimRange = null,
+  onDetrimStart,
+  onDetrimEnd,
+}) { /* ... 359 lines of implementation */ }
 
-  // Conversion functions
-  sourceTimeToVisualTime,
-  visualTimeToSourceTime,
-
-  // Mode-specific layers passed as children
-  children,
-
-  // Layer labels (rendered in fixed left column)
-  layerLabels,
-}) {
-  const timelineRef = useRef(null);
-  const scrollContainerRef = useRef(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [hoverTime, setHoverTime] = useState(null);
-
-  // ... shared scrubbing/zoom logic (extracted from current Timeline.jsx)
-
-  return (
-    <div className="timeline-container py-4">
-      {/* Time labels */}
-      <TimeDisplay
-        currentTime={sourceTimeToVisualTime(currentTime)}
-        duration={visualDuration || duration}
-        zoom={timelineZoom}
-      />
-
-      <div className="relative">
-        {/* Fixed layer labels on the left */}
-        <div className="absolute left-0 top-0 w-32 z-10">
-          {layerLabels}
-        </div>
-
-        {/* Scrollable timeline tracks container */}
-        <div ref={scrollContainerRef} className="ml-32 overflow-x-auto">
-          <div style={{ width: timelineScale > 1 ? `${timelineScale * 100}%` : '100%' }}>
-            {/* Playhead track (always present) */}
-            <PlayheadTrack
-              ref={timelineRef}
-              progress={progress}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseLeave={handleMouseLeave}
-              hoverTime={hoverTime}
-            />
-
-            {/* Unified playhead line */}
-            <Playhead progress={progress} height={totalHeight} />
-
-            {/* Mode-specific layers (passed as children) */}
-            {children}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// Exports edge padding constant for layer components
+export const EDGE_PADDING = 20;
 ```
 
-### 3.4 KeyframeMarker Component (Shared)
+**Key features implemented:**
+- Unified playhead extending through all layers
+- Edge padding (20px) for easier keyframe selection
+- Source/visual time conversion for speed changes
+- Auto-scroll to keep playhead visible when zoomed
+- Trim undo buttons in padding areas
+- Mousewheel zoom when playhead layer selected
+
+### 3.4 KeyframeMarker Component ✅ IMPLEMENTED
 
 **File: `src/frontend/src/components/timeline/KeyframeMarker.jsx`**
 
-Both CropLayer and HighlightLayer use similar keyframe markers. Extract:
+Actual implementation (113 lines):
 
 ```jsx
 /**
  * Reusable keyframe marker for timeline layers.
- * Used by CropLayer (diamond), HighlightLayer (circle), and future layers.
+ * Supports different color schemes for each layer type (crop, highlight, etc.)
+ * Used by CropLayer (blue/yellow) and HighlightLayer (orange).
  */
 export function KeyframeMarker({
-  position,           // 0-100 percentage
-  shape = 'diamond',  // 'diamond' | 'circle' | 'square'
-  color = 'yellow',   // Tailwind color name
+  position,              // 0-100 percentage position on timeline
+  colorScheme = 'blue',  // 'blue' (crop) | 'orange' (highlight)
   isSelected = false,
+  shouldHighlight = false,
   isPermanent = false,
+  isStartKeyframe = false,
+  isEndKeyframe = false,
   onClick,
-  onDelete,
   onCopy,
+  onDelete,
   tooltip,
-}) {
-  const shapes = {
-    diamond: 'rotate-45 w-3 h-3',
-    circle: 'rounded-full w-3 h-3',
-    square: 'w-3 h-3',
-  };
-
-  return (
-    <div
-      className={`absolute transform -translate-x-1/2 cursor-pointer
-        ${shapes[shape]}
-        ${isSelected ? `bg-${color}-300 ring-2 ring-white` : `bg-${color}-500`}
-        ${isPermanent ? 'opacity-50' : 'opacity-100'}
-      `}
-      style={{ left: `${position}%` }}
-      onClick={onClick}
-      title={tooltip}
-    >
-      {/* Context menu for delete/copy */}
-    </div>
-  );
-}
+  edgePadding = 0,
+  showCopyButton = true,
+  showDeleteButton = true,
+}) { /* ... implementation */ }
 ```
+
+**Key features:**
+- Color schemes: `blue` (crop layer) and `orange` (highlight layer)
+- Copy button above keyframe (adjusts position for edge keyframes)
+- Delete button below keyframe
+- Edge padding support for proper positioning
+- Hover states and selection ring
 
 ### 3.5 Mode-Specific Timeline Wrappers
 
@@ -927,11 +545,11 @@ Both modes use keyframe-based editing. The existing `useKeyframeController.js` i
 
 **Extract from current hooks:**
 
-| Current Location | Extract To | Used By |
-|-----------------|------------|---------|
-| `useCrop.js` interpolation | `useKeyframeController.js` | Already done |
-| `useHighlight.js` interpolation | `useKeyframeController.js` | Already done |
-| Video metadata extraction | `utils/videoMetadata.js` | Both modes |
+| Current Location | Extract To | Status |
+|-----------------|------------|--------|
+| `useCrop.js` interpolation | `useKeyframeController.js` | ✅ Already done |
+| `useHighlight.js` interpolation | `useKeyframeController.js` | ✅ Already done |
+| Video metadata extraction | `utils/videoMetadata.js` | ✅ **IMPLEMENTED** |
 
 ### 4.2 Shared UI Components
 
@@ -942,38 +560,64 @@ Both modes use keyframe-based editing. The existing `useKeyframeController.js` i
 
 **Extract to shared:**
 
-| Current Location | Extract To | Reason |
+| Current Location | Extract To | Status |
 |-----------------|------------|--------|
-| `VideoPlayer.jsx` video element | `components/shared/VideoElement.jsx` | Both modes need video display |
-| Overlay base (drag/resize) | `components/shared/DraggableOverlay.jsx` | CropOverlay & HighlightOverlay share logic |
-| Export progress UI | `components/shared/ExportProgress.jsx` | Both modes export |
+| `VideoPlayer.jsx` video element | `components/shared/VideoElement.jsx` | 🔲 Future (optional) |
+| Overlay base (drag/resize) | `components/shared/DraggableOverlay.jsx` | 🔲 Future (optional) |
+| Export progress UI | `components/shared/ExportProgress.jsx` | ✅ **IMPLEMENTED** |
 
-### 4.3 Shared Utilities
+### 4.3 Shared Utilities ✅ IMPLEMENTED
 
-**File: `src/frontend/src/utils/videoMetadata.js`** (NEW)
+**File: `src/frontend/src/utils/videoMetadata.js`**
+
+Actual implementation (55 lines):
 
 ```javascript
 /**
- * Extract metadata from video file or blob
- * Used by both Framing (original upload) and Overlay (rendered/uploaded)
+ * Extract metadata from a video File or Blob.
+ * Used by both Framing (original upload) and Overlay (rendered video).
  */
 export async function extractVideoMetadata(videoSource) {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.preload = 'metadata';
+    const url = URL.createObjectURL(videoSource);
+
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      video.remove();
+    };
+
+    // 10 second timeout
+    const timeoutId = setTimeout(() => {
+      if (video.readyState === 0) {
+        cleanup();
+        reject(new Error('Video metadata loading timed out'));
+      }
+    }, 10000);
 
     video.onloadedmetadata = () => {
-      resolve({
+      clearTimeout(timeoutId);
+      const metadata = {
         width: video.videoWidth,
         height: video.videoHeight,
         duration: video.duration,
-        // ... framerate detection
-      });
-      URL.revokeObjectURL(video.src);
+        aspectRatio: video.videoWidth / video.videoHeight,
+        fileName: videoSource.name || 'rendered_video.mp4',
+        size: videoSource.size,
+        format: videoSource.type?.split('/')[1] || 'mp4',
+      };
+      cleanup();
+      resolve(metadata);
     };
 
-    video.onerror = reject;
-    video.src = URL.createObjectURL(videoSource);
+    video.onerror = () => {
+      clearTimeout(timeoutId);
+      cleanup();
+      reject(new Error('Failed to load video metadata'));
+    };
+
+    video.src = url;
   });
 }
 ```
@@ -1445,9 +1089,16 @@ export function OverlayMode({
 
 ---
 
-## 9. Implementation Phases (After Prep Refactor)
+## 9. Implementation Phases
 
-**Prerequisite:** Complete all Prep Refactor steps first. This dramatically reduces risk.
+### ✅ Prep Refactor: COMPLETE
+
+All prerequisite prep refactors have been completed:
+- **Prep 1** (`5b5bbe7`): TimelineBase extraction, mode directory stubs
+- **Prep 3** (`f7024a4`): KeyframeMarker extraction
+- **Prep 6** (`bff516b`): ExportProgress, videoMetadata utilities
+
+The building blocks are in place. The remaining phases now have low-to-medium risk.
 
 ### Phase 1: Move Files to Mode Directories (2-3 hours)
 
@@ -1674,17 +1325,17 @@ const returnToFraming = () => {
 
 ### Implementation Summary
 
-| Phase | Time | Risk | Can Ship After? |
-|-------|------|------|-----------------|
-| Prep Refactor | 7-8 hrs | None-Low | Yes (no changes) |
-| 1. Move files | 2-3 hrs | Low | Yes (no changes) |
-| 2. Mode containers | 2-3 hrs | Low | Yes (hidden) |
-| 3. Mode switcher | 2-3 hrs | Low | Yes (feature flag) |
-| 4. Transitions | 3-4 hrs | Medium | Yes (feature complete) |
-| 5. Mode exports | 2 hrs | Low | Yes (polish) |
-| 6. Cleanup | 2 hrs | Low | Yes (final) |
+| Phase | Status | Risk | Notes |
+|-------|--------|------|-------|
+| ~~Prep Refactor~~ | ✅ **DONE** | N/A | TimelineBase, KeyframeMarker, ExportProgress, videoMetadata |
+| 1. Move files | 🔲 Pending | Low | Move hooks/layers to mode directories |
+| 2. Mode containers | 🔲 Pending | Low | Create FramingMode.jsx, OverlayMode.jsx |
+| 3. Mode switcher | 🔲 Pending | Low | ModeSwitcher UI, mode state in App.jsx |
+| 4. Transitions | 🔲 Pending | Medium | Backend endpoint, async transition logic |
+| 5. Mode exports | 🔲 Pending | Low | FramingExport, OverlayExport components |
+| 6. Cleanup | 🔲 Pending | Low | Remove old files, polish |
 
-**Total: ~20-25 hours** (including prep)
+**Remaining work: ~12-17 hours** (prep refactor complete)
 
 **Compared to "big bang" approach:** ~15-20 hours but HIGH risk
 
