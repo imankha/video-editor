@@ -16,16 +16,17 @@ This spec defines the implementation of a two-phase editing workflow: **Framing 
 
 ## Implementation Progress
 
-### ✅ Completed Prep Refactors & Phase 1
+### ✅ Completed Prep Refactors, Phase 1 & Phase 2
 
 | Step | Commit | Description | Files Created/Modified |
 |------|--------|-------------|------------------------|
 | **Prep 1** | `5b5bbe7` | Timeline extraction | `TimelineBase.jsx`, `timeline/index.js`, mode stubs |
 | **Prep 3** | `f7024a4` | KeyframeMarker extraction | `KeyframeMarker.jsx`, updated CropLayer & HighlightLayer |
 | **Prep 6** | `bff516b` | Export & metadata utilities | `ExportProgress.jsx`, `videoMetadata.js` |
-| **Phase 1** | (current) | Move files to mode directories | Moved hooks, layers, overlays, contexts to `modes/` |
+| **Phase 1** | `e7cb678` | Move files to mode directories | Moved hooks, layers, overlays, contexts to `modes/` |
+| **Phase 2** | (current) | Create mode containers | `FramingMode.jsx`, `OverlayMode.jsx`, `FramingTimeline.jsx`, `OverlayTimeline.jsx` |
 
-### Current File Structure (After Phase 1)
+### Current File Structure (After Phase 2)
 
 ```
 src/frontend/src/
@@ -37,13 +38,15 @@ src/frontend/src/
 │   ├── shared/
 │   │   ├── ExportProgress.jsx       ✅ 41 lines
 │   │   └── index.js
-│   ├── Timeline.jsx                 ✅ Imports from modes/
+│   ├── Timeline.jsx                 ✅ Imports from modes/ (to be replaced in Phase 6)
 │   ├── ExportButton.jsx
 │   ├── VideoPlayer.jsx
 │   └── ... (shared UI components)
 ├── modes/
-│   ├── framing/                     ✅ PHASE 1 COMPLETE
+│   ├── framing/                     ✅ PHASE 2 COMPLETE
 │   │   ├── index.js                 ✅ Re-exports all framing components
+│   │   ├── FramingMode.jsx          ✅ NEW: Mode container
+│   │   ├── FramingTimeline.jsx      ✅ NEW: TimelineBase + CropLayer + SegmentLayer
 │   │   ├── hooks/
 │   │   │   ├── useCrop.js           ✅ Moved from hooks/
 │   │   │   └── useSegments.js       ✅ Moved from hooks/
@@ -54,8 +57,10 @@ src/frontend/src/
 │   │   │   └── CropOverlay.jsx      ✅ Moved from components/
 │   │   └── contexts/
 │   │       └── CropContext.jsx      ✅ Moved from contexts/
-│   └── overlay/                     ✅ PHASE 1 COMPLETE
+│   └── overlay/                     ✅ PHASE 2 COMPLETE
 │       ├── index.js                 ✅ Re-exports all overlay components
+│       ├── OverlayMode.jsx          ✅ NEW: Mode container
+│       ├── OverlayTimeline.jsx      ✅ NEW: TimelineBase + HighlightLayer
 │       ├── hooks/
 │       │   └── useHighlight.js      ✅ Moved from hooks/
 │       ├── layers/
@@ -82,7 +87,7 @@ src/frontend/src/
 | Phase | Status | Description |
 |-------|--------|-------------|
 | ~~Phase 1: Move files to mode dirs~~ | ✅ **COMPLETE** | Files moved to `modes/framing/` and `modes/overlay/` |
-| Phase 2: Mode containers | 🔲 Pending | Create `FramingMode.jsx`, `OverlayMode.jsx` |
+| ~~Phase 2: Mode containers~~ | ✅ **COMPLETE** | Created `FramingMode.jsx`, `OverlayMode.jsx`, `FramingTimeline.jsx`, `OverlayTimeline.jsx` |
 | Phase 3: Mode switcher | 🔲 Pending | Add `ModeSwitcher.jsx`, mode state in App.jsx |
 | Phase 4: Transitions | 🔲 Pending | Implement render-based mode transition, backend endpoint |
 | Phase 5: Mode exports | 🔲 Pending | Create `FramingExport.jsx`, `OverlayExport.jsx` |
@@ -118,15 +123,17 @@ The prep refactors are complete. Remaining work is primarily assembly of existin
 
 ### How to Proceed
 
-**Prep refactors + Phase 1 COMPLETE.** Mode switching now becomes:
-- ✅ TimelineBase available - mode timelines will compose from it
+**Prep refactors + Phase 1 + Phase 2 COMPLETE.** Mode switching now becomes:
+- ✅ TimelineBase available - mode timelines compose from it
 - ✅ ExportProgress available - mode exports will use it
 - ✅ KeyframeMarker available - both CropLayer and HighlightLayer already use it
 - ✅ videoMetadata.js available - will be used by overlay mode for rendered video
 - ✅ Files organized by mode - `modes/framing/` and `modes/overlay/` directories populated
 - ✅ Re-export index files created - clean imports from `./modes/framing` and `./modes/overlay`
-- 🔲 **Next: Phase 2** - Create mode containers (FramingMode.jsx, OverlayMode.jsx)
-- 🔲 **Then: Phase 3** - Add mode state and ModeSwitcher UI
+- ✅ Mode containers created - `FramingMode.jsx`, `OverlayMode.jsx` wrap providers and render timelines
+- ✅ Mode timelines created - `FramingTimeline.jsx`, `OverlayTimeline.jsx` compose from TimelineBase
+- 🔲 **Next: Phase 3** - Add mode state and ModeSwitcher UI
+- 🔲 **Then: Phase 4** - Implement render-based mode transition
 
 ---
 
@@ -1253,59 +1260,33 @@ contexts/HighlightContext.jsx   → modes/overlay/contexts/HighlightContext.jsx
 
 ---
 
-### Phase 2: Create Mode Container Components (2-3 hours)
+### Phase 2: Create Mode Container Components (2-3 hours) ✅ COMPLETE
 
 **Goal:** Create FramingMode.jsx and OverlayMode.jsx that encapsulate mode-specific logic.
 
-**File: `modes/framing/FramingMode.jsx`**
-- Import useCrop, useSegments from local hooks
-- Import CropLayer, SegmentLayer from local layers
-- Import CropOverlay from local overlays
-- Wrap with CropProvider
-- Render FramingTimeline (uses TimelineBase)
+**Status:** Components created. They currently accept props from App.jsx (minimal App.jsx changes). In Phase 3, App.jsx will wire up these components with conditional rendering.
 
-**File: `modes/overlay/OverlayMode.jsx`**
-- Import useHighlight from local hooks
-- Import HighlightLayer from local layers
-- Import HighlightOverlay from local overlays
-- Wrap with HighlightProvider
-- Render OverlayTimeline (uses TimelineBase)
+**Created: `modes/framing/FramingMode.jsx`**
+- Wraps content with `CropProvider`
+- Renders `CropOverlay` on the video
+- Renders `FramingTimeline` (Crop + Segment layers)
+- Accepts props from App.jsx including: `videoRef`, `videoUrl`, `metadata`, `cropContextValue`, `currentCropState`, all crop/segment handlers
 
-**File: `modes/framing/FramingTimeline.jsx`**
-```jsx
-// Thin wrapper using TimelineBase
-import { TimelineBase } from '../../components/timeline';
-import CropLayer from './layers/CropLayer';
-import SegmentLayer from './layers/SegmentLayer';
+**Created: `modes/overlay/OverlayMode.jsx`**
+- Wraps content with `HighlightProvider`
+- Renders `HighlightOverlay` on the video
+- Renders `OverlayTimeline` (Highlight layer only)
+- Accepts props from App.jsx including: `videoRef`, `videoUrl`, `metadata`, `highlightContextValue`, `currentHighlightState`, all highlight handlers
 
-export function FramingTimeline(props) {
-  return (
-    <TimelineBase {...baseProps}>
-      <CropLayer {...cropProps} />
-      <SegmentLayer {...segmentProps} />
-    </TimelineBase>
-  );
-}
-```
+**Created: `modes/framing/FramingTimeline.jsx`**
+- Thin wrapper using TimelineBase with CropLayer + SegmentLayer
+- Layer labels: Video, Crop, Segments (if segments exist)
 
-**File: `modes/overlay/OverlayTimeline.jsx`**
-```jsx
-// Thin wrapper using TimelineBase
-import { TimelineBase } from '../../components/timeline';
-import HighlightLayer from './layers/HighlightLayer';
+**Created: `modes/overlay/OverlayTimeline.jsx`**
+- Thin wrapper using TimelineBase with HighlightLayer
+- Layer labels: Video, Highlight (with enable/disable toggle)
 
-export function OverlayTimeline(props) {
-  return (
-    <TimelineBase {...baseProps}>
-      <HighlightLayer {...highlightProps} />
-    </TimelineBase>
-  );
-}
-```
-
-**Verification:**
-- Can render FramingMode in App.jsx and app works
-- Can render OverlayMode in App.jsx and highlight works
+**Verification:** ✅ Build passes. Components exported from index.js files.
 
 **Risk:** Low (composition of existing pieces)
 
@@ -1313,43 +1294,76 @@ export function OverlayTimeline(props) {
 
 ### Phase 3: Add Mode State and Switcher (2-3 hours)
 
-**Goal:** Add mode toggle UI and conditional rendering in App.jsx.
+**Goal:** Add mode toggle UI and conditional rendering in App.jsx. Wire up FramingMode and OverlayMode components created in Phase 2.
 
 **Create: `components/shared/ModeSwitcher.jsx`**
 - Two-tab toggle: Framing | Overlay
 - Visual indication of current mode
-- Disabled states when appropriate
+- Disabled states when appropriate (e.g., Overlay disabled if no video)
+- Place in header area near FileUpload
 
 **Update: `App.jsx`**
+
+1. Add mode state:
 ```jsx
-const [editorMode, setEditorMode] = useState('framing');
-
-// Separate state for overlay video (NOT the framing video)
-const [overlayVideoFile, setOverlayVideoFile] = useState(null);
-const [overlayVideoUrl, setOverlayVideoUrl] = useState(null);
-const [overlayVideoMetadata, setOverlayVideoMetadata] = useState(null);
-
-return (
-  <>
-    <ModeSwitcher mode={editorMode} onChange={setEditorMode} />
-
-    {editorMode === 'framing' ? (
-      <FramingMode ... />
-    ) : (
-      <OverlayMode videoFile={overlayVideoFile} ... />
-    )}
-  </>
-);
+const [editorMode, setEditorMode] = useState('framing'); // 'framing' | 'overlay'
 ```
 
-**At this point:** Can toggle between modes, but no transition logic yet. Overlay mode will be empty (no video).
+2. Import new components:
+```jsx
+import { FramingMode } from './modes/framing';
+import { OverlayMode } from './modes/overlay';
+```
+
+3. Replace current Timeline + overlay rendering with conditional mode rendering:
+```jsx
+{editorMode === 'framing' ? (
+  <FramingMode
+    videoRef={videoRef}
+    videoUrl={videoUrl}
+    metadata={metadata}
+    currentTime={currentTime}
+    duration={duration}
+    cropContextValue={cropContextValue}
+    currentCropState={currentCropState}
+    aspectRatio={aspectRatio}
+    cropKeyframes={keyframes}
+    // ... all framing props (see FramingMode.jsx for full list)
+  />
+) : (
+  <OverlayMode
+    videoRef={videoRef}
+    videoUrl={videoUrl}  // For now, same video. Phase 4 adds separate overlay video.
+    metadata={metadata}
+    currentTime={currentTime}
+    duration={duration}
+    highlightContextValue={highlightContextValue}
+    currentHighlightState={currentHighlightState}
+    // ... all overlay props (see OverlayMode.jsx for full list)
+  />
+)}
+```
+
+4. Keep shared components outside the conditional:
+   - VideoPlayer (but overlays come from mode components)
+   - Controls (play/pause/step)
+   - ExportButton (for now - Phase 5 splits this)
+
+**Key Decision for Phase 3:**
+- Both modes share the SAME video for now (the uploaded framing video)
+- This allows testing mode switching without Phase 4's render-based transition
+- Phase 4 will add separate `overlayVideoFile` state and the transition logic
+
+**At this point:** Can toggle between modes. Framing shows crop+segment timeline. Overlay shows highlight timeline. Both use same video.
 
 **Verification:**
 - Mode toggle switches UI
-- Framing mode works as before
-- Overlay mode shows empty state
+- Framing mode: crop overlay + crop/segment timeline layers visible
+- Overlay mode: highlight overlay + highlight timeline layer visible
+- Video playback works in both modes
+- Export still works (uses current mode's keyframes)
 
-**Risk:** Low (UI only, no complex logic)
+**Risk:** Low (UI wiring, no complex logic)
 
 ---
 
@@ -1448,13 +1462,13 @@ const returnToFraming = () => {
 |-------|--------|------|-------|
 | ~~Prep Refactor~~ | ✅ **DONE** | N/A | TimelineBase, KeyframeMarker, ExportProgress, videoMetadata |
 | ~~1. Move files~~ | ✅ **DONE** | N/A | Files moved to `modes/framing/` and `modes/overlay/` |
-| 2. Mode containers | 🔲 Pending | Low | Create FramingMode.jsx, OverlayMode.jsx |
+| ~~2. Mode containers~~ | ✅ **DONE** | N/A | Created FramingMode.jsx, OverlayMode.jsx, FramingTimeline.jsx, OverlayTimeline.jsx |
 | 3. Mode switcher | 🔲 Pending | Low | ModeSwitcher UI, mode state in App.jsx |
 | 4. Transitions | 🔲 Pending | Medium | Backend endpoint, async transition logic |
 | 5. Mode exports | 🔲 Pending | Low | FramingExport, OverlayExport components |
 | 6. Cleanup | 🔲 Pending | Low | Remove old files, polish |
 
-**Remaining work: ~10-14 hours** (prep refactor + Phase 1 complete)
+**Remaining work: ~8-11 hours** (prep refactor + Phase 1 + Phase 2 complete)
 
 **Compared to "big bang" approach:** Would have been ~15-20 hours with HIGH risk
 

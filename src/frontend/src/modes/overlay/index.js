@@ -1,4 +1,12 @@
 // Overlay mode exports
+// Mode Container
+export { OverlayMode } from './OverlayMode';
+export { default as OverlayModeDefault } from './OverlayMode';
+
+// Timeline
+export { OverlayTimeline } from './OverlayTimeline';
+export { default as OverlayTimelineDefault } from './OverlayTimeline';
+
 // Hooks
 export { default as useHighlight } from './hooks/useHighlight';
 
