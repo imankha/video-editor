@@ -1,26 +1,16 @@
 import React, { useState, useRef, useCallback } from 'react';
-import CropOverlay from './CropOverlay';
-import HighlightOverlay from './HighlightOverlay';
 
 /**
  * VideoPlayer component - Displays the video element with zoom and pan support
+ *
+ * This component is overlay-agnostic - modes pass their own overlays as children.
+ *
  * @param {Object} props
  * @param {React.RefObject} props.videoRef - Ref to video element
  * @param {string} props.videoUrl - Video source URL
  * @param {Object} props.handlers - Video element event handlers
  * @param {Function} props.onFileSelect - Callback for file upload via drag-and-drop
- * @param {Object} props.videoMetadata - Video metadata (width, height, duration)
- * @param {boolean} props.showCropOverlay - Whether to show crop overlay
- * @param {Object} props.currentCrop - Current crop rectangle data
- * @param {string} props.aspectRatio - Aspect ratio for crop
- * @param {Function} props.onCropChange - Callback when crop changes
- * @param {Function} props.onCropComplete - Callback when crop change is complete
- * @param {number|null} props.selectedKeyframeIndex - Index of selected crop keyframe (for debug display)
- * @param {boolean} props.showHighlightOverlay - Whether to show highlight overlay
- * @param {Object} props.currentHighlight - Current highlight circle data
- * @param {boolean} props.isHighlightEnabled - Whether highlight layer is enabled
- * @param {Function} props.onHighlightChange - Callback when highlight changes
- * @param {Function} props.onHighlightComplete - Callback when highlight change is complete
+ * @param {React.ReactNode[]} props.overlays - Array of overlay components to render over video
  * @param {number} props.zoom - Zoom level (1 = 100%)
  * @param {Object} props.panOffset - Pan offset {x, y}
  * @param {Function} props.onZoomChange - Callback when zoom changes (wheel)
@@ -31,18 +21,7 @@ export function VideoPlayer({
   videoUrl,
   handlers,
   onFileSelect,
-  videoMetadata,
-  showCropOverlay = false,
-  currentCrop,
-  aspectRatio,
-  onCropChange,
-  onCropComplete,
-  selectedKeyframeIndex = null,
-  showHighlightOverlay = false,
-  currentHighlight,
-  isHighlightEnabled = false,
-  onHighlightChange,
-  onHighlightComplete,
+  overlays = [],
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   onZoomChange,
@@ -197,34 +176,8 @@ export function VideoPlayer({
             />
           </div>
 
-          {/* Crop Overlay */}
-          {showCropOverlay && currentCrop && videoMetadata && (
-            <CropOverlay
-              videoRef={videoRef}
-              videoMetadata={videoMetadata}
-              currentCrop={currentCrop}
-              aspectRatio={aspectRatio}
-              onCropChange={onCropChange}
-              onCropComplete={onCropComplete}
-              zoom={zoom}
-              panOffset={panOffset}
-              selectedKeyframeIndex={selectedKeyframeIndex}
-            />
-          )}
-
-          {/* Highlight Overlay */}
-          {showHighlightOverlay && currentHighlight && videoMetadata && (
-            <HighlightOverlay
-              videoRef={videoRef}
-              videoMetadata={videoMetadata}
-              currentHighlight={currentHighlight}
-              onHighlightChange={onHighlightChange}
-              onHighlightComplete={onHighlightComplete}
-              isEnabled={isHighlightEnabled}
-              zoom={zoom}
-              panOffset={panOffset}
-            />
-          )}
+          {/* Render any overlays passed by the mode */}
+          {overlays}
         </div>
       ) : (
         <div

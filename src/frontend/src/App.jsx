@@ -6,6 +6,8 @@ import useZoom from './hooks/useZoom';
 import useTimelineZoom from './hooks/useTimelineZoom';
 import { useSegments } from './hooks/useSegments';
 import { VideoPlayer } from './components/VideoPlayer';
+import CropOverlay from './components/CropOverlay';
+import HighlightOverlay from './components/HighlightOverlay';
 import { Timeline } from './components/Timeline';
 import { Controls } from './components/Controls';
 import { FileUpload } from './components/FileUpload';
@@ -1034,18 +1036,35 @@ function App() {
             videoUrl={videoUrl}
             handlers={handlers}
             onFileSelect={handleFileSelect}
-            videoMetadata={metadata}
-            showCropOverlay={!!videoUrl}
-            currentCrop={currentCropState}
-            aspectRatio={aspectRatio}
-            onCropChange={handleCropChange}
-            onCropComplete={handleCropComplete}
-            selectedKeyframeIndex={selectedCropKeyframeIndex}
-            showHighlightOverlay={!!videoUrl}
-            currentHighlight={currentHighlightState}
-            isHighlightEnabled={isHighlightEnabled}
-            onHighlightChange={handleHighlightChange}
-            onHighlightComplete={handleHighlightComplete}
+            overlays={[
+              videoUrl && currentCropState && metadata && (
+                <CropOverlay
+                  key="crop"
+                  videoRef={videoRef}
+                  videoMetadata={metadata}
+                  currentCrop={currentCropState}
+                  aspectRatio={aspectRatio}
+                  onCropChange={handleCropChange}
+                  onCropComplete={handleCropComplete}
+                  zoom={zoom}
+                  panOffset={panOffset}
+                  selectedKeyframeIndex={selectedCropKeyframeIndex}
+                />
+              ),
+              videoUrl && currentHighlightState && metadata && (
+                <HighlightOverlay
+                  key="highlight"
+                  videoRef={videoRef}
+                  videoMetadata={metadata}
+                  currentHighlight={currentHighlightState}
+                  onHighlightChange={handleHighlightChange}
+                  onHighlightComplete={handleHighlightComplete}
+                  isEnabled={isHighlightEnabled}
+                  zoom={zoom}
+                  panOffset={panOffset}
+                />
+              ),
+            ].filter(Boolean)}
             zoom={zoom}
             panOffset={panOffset}
             onZoomChange={zoomByWheel}

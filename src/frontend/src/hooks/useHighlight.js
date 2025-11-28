@@ -67,37 +67,50 @@ export default function useHighlight(videoMetadata, trimRange = null) {
   const { needsInitialization, initializeKeyframes } = keyframeManager;
 
   /**
-   * Auto-initialize keyframes when metadata loads or when highlight is enabled
+   * Auto-initialize keyframes when highlight is ENABLED (lazy initialization)
    * Creates permanent keyframes at start and end of highlight duration
    * Default highlight duration is 3 seconds, not entire video
    *
-   * When trimRange is set, start keyframe is at trim boundary, end keyframe
-   * stays at highlightDuration (not relative to trim boundary)
+   * LAZY INITIALIZATION:
+   * - Only initialize when isEnabled becomes true
+   * - This ensures keyframes are created at the correct position AFTER any trimming
+   * - Prevents the bug where keyframes are created at frame 0, then user trims,
+   *   leaving the start keyframe in the invisible trimmed region
+   *
+   * INITIALIZATION RULES:
+   * 1. Only initialize when enabled AND no keyframes exist
+   *    - Start frame is at trim boundary (if trimmed) so keyframes are visible
+   * 2. Only update for stale end frame if NOT in trim mode
+   *    - This preserves user keyframes during trim operations
    */
   useEffect(() => {
+    // Lazy initialization: only when highlight is enabled
+    if (!isEnabled) return;
+
     if (videoMetadata?.width && videoMetadata?.height && videoMetadata?.duration) {
-      // Start frame is at trim boundary (or 0 if no trim)
+      // Start frame at trim boundary (or 0 if no trim) so highlight is visible
       const visibleStart = trimRange?.start ?? 0;
       const startFrame = timeToFrame(visibleStart, framerate);
 
-      // End frame is always at highlightDuration from video start (not from trim)
       const highlightEndTime = Math.min(highlightDuration, videoMetadata.duration);
       const highlightEndFrame = timeToFrame(highlightEndTime, framerate);
 
-      // Only initialize if some highlight is visible (end > start)
-      // Check needsInitialization OR if keyframes exist but start is wrong (after trim)
       const keyframes = keyframeManager.keyframes;
-      const currentStartFrame = keyframes.length > 0 ? keyframes[0].frame : null;
-      const needsInit = needsInitialization(highlightEndFrame) ||
-        (keyframes.length > 0 && currentStartFrame !== startFrame && startFrame > 0);
+      const neverInitialized = keyframes.length === 0;
+      const endFrameStale = keyframes.length > 0 &&
+        keyframes[keyframes.length - 1].frame !== highlightEndFrame;
 
-      if (highlightEndFrame > startFrame && needsInit) {
+      // Initialize if never done before, or update stale end frame (only if not trimming)
+      const shouldInitialize = neverInitialized || (!trimRange && endFrameStale);
+
+      // Only initialize if there's a valid range (end > start)
+      if (shouldInitialize && highlightEndFrame > startFrame) {
         const defaultHighlight = calculateDefaultHighlight(
           videoMetadata.width,
           videoMetadata.height
         );
 
-        // Single dispatch with startFrame parameter - handles both trim and no-trim cases
+        // Use dispatch directly to pass startFrame for proper placement
         keyframeManager.dispatch({
           type: 'INITIALIZE',
           payload: {
@@ -109,7 +122,7 @@ export default function useHighlight(videoMetadata, trimRange = null) {
         });
       }
     }
-  }, [videoMetadata, calculateDefaultHighlight, framerate, highlightDuration, needsInitialization, keyframeManager, trimRange, isEnabled]);
+  }, [isEnabled, videoMetadata, calculateDefaultHighlight, framerate, highlightDuration, trimRange, keyframeManager]);
 
   /**
    * Update highlight duration (adjusts the end keyframe)
