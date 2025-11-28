@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import versionInfo from '../version.json';
+import versionInfo from '../../../version.json';
 
 /**
  * CropOverlay component - renders a draggable/resizable crop rectangle

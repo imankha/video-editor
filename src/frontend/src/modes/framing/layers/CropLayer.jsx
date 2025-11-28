@@ -1,8 +1,8 @@
 import { Crop } from 'lucide-react';
 import React from 'react';
 import { useCropContext } from '../contexts/CropContext';
-import { frameToTime } from '../utils/videoUtils';
-import { KeyframeMarker } from './timeline/KeyframeMarker';
+import { frameToTime } from '../../../utils/videoUtils';
+import { KeyframeMarker } from '../../../components/timeline/KeyframeMarker';
 
 /**
  * CropLayer component - displays crop keyframes on the timeline

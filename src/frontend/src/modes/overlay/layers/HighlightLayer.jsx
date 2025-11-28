@@ -1,8 +1,8 @@
 import { Circle, Eye, EyeOff } from 'lucide-react';
 import React from 'react';
 import { useHighlightContext } from '../contexts/HighlightContext';
-import { frameToTime } from '../utils/videoUtils';
-import { KeyframeMarker } from './timeline/KeyframeMarker';
+import { frameToTime } from '../../../utils/videoUtils';
+import { KeyframeMarker } from '../../../components/timeline/KeyframeMarker';
 
 /**
  * HighlightLayer component - displays highlight keyframes on the timeline

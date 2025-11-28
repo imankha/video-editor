@@ -1,13 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useVideo } from './hooks/useVideo';
-import useCrop from './hooks/useCrop';
-import useHighlight from './hooks/useHighlight';
 import useZoom from './hooks/useZoom';
 import useTimelineZoom from './hooks/useTimelineZoom';
-import { useSegments } from './hooks/useSegments';
 import { VideoPlayer } from './components/VideoPlayer';
-import CropOverlay from './components/CropOverlay';
-import HighlightOverlay from './components/HighlightOverlay';
 import { Timeline } from './components/Timeline';
 import { Controls } from './components/Controls';
 import { FileUpload } from './components/FileUpload';
@@ -16,8 +11,9 @@ import ZoomControls from './components/ZoomControls';
 import ExportButton from './components/ExportButton';
 import CompareModelsButton from './components/CompareModelsButton';
 import DebugInfo from './components/DebugInfo';
-import { CropProvider } from './contexts/CropContext';
-import { HighlightProvider } from './contexts/HighlightContext';
+// Mode-specific imports
+import { useCrop, useSegments, CropOverlay, CropProvider } from './modes/framing';
+import { useHighlight, HighlightOverlay, HighlightProvider } from './modes/overlay';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
 
 // Feature flags for experimental features

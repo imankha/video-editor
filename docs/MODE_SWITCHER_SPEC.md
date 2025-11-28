@@ -16,47 +16,72 @@ This spec defines the implementation of a two-phase editing workflow: **Framing 
 
 ## Implementation Progress
 
-### ✅ Completed Prep Refactors
+### ✅ Completed Prep Refactors & Phase 1
 
 | Step | Commit | Description | Files Created/Modified |
 |------|--------|-------------|------------------------|
 | **Prep 1** | `5b5bbe7` | Timeline extraction | `TimelineBase.jsx`, `timeline/index.js`, mode stubs |
 | **Prep 3** | `f7024a4` | KeyframeMarker extraction | `KeyframeMarker.jsx`, updated CropLayer & HighlightLayer |
 | **Prep 6** | `bff516b` | Export & metadata utilities | `ExportProgress.jsx`, `videoMetadata.js` |
+| **Phase 1** | (current) | Move files to mode directories | Moved hooks, layers, overlays, contexts to `modes/` |
 
-### Current File Structure (After Prep Refactors)
+### Current File Structure (After Phase 1)
 
 ```
 src/frontend/src/
 ├── components/
-│   ├── timeline/                    ✅ CREATED
-│   │   ├── TimelineBase.jsx         ✅ 359 lines - shared foundation
-│   │   ├── KeyframeMarker.jsx       ✅ 113 lines - shared keyframe marker
-│   │   └── index.js                 ✅ exports both
+│   ├── timeline/                    ✅ Shared timeline foundation
+│   │   ├── TimelineBase.jsx         ✅ 359 lines
+│   │   ├── KeyframeMarker.jsx       ✅ 113 lines
+│   │   └── index.js
 │   ├── shared/
-│   │   ├── ExportProgress.jsx       ✅ 41 lines - progress UI
-│   │   └── index.js                 ✅ re-exports shared components
-│   ├── Timeline.jsx                 ✅ REFACTORED to use TimelineBase
-│   ├── CropLayer.jsx                ✅ REFACTORED to use KeyframeMarker
-│   ├── HighlightLayer.jsx           ✅ REFACTORED to use KeyframeMarker
-│   ├── ExportButton.jsx             ✅ SIMPLIFIED, uses ExportProgress
-│   └── VideoPlayer.jsx              ✅ SIMPLIFIED
+│   │   ├── ExportProgress.jsx       ✅ 41 lines
+│   │   └── index.js
+│   ├── Timeline.jsx                 ✅ Imports from modes/
+│   ├── ExportButton.jsx
+│   ├── VideoPlayer.jsx
+│   └── ... (shared UI components)
 ├── modes/
-│   ├── framing/
-│   │   └── index.js                 ✅ stub (ready for components)
-│   └── overlay/
-│       └── index.js                 ✅ stub (ready for components)
-├── hooks/
-│   └── useHighlight.js              ✅ ENHANCED
-└── utils/
-    └── videoMetadata.js             ✅ 55 lines - metadata extraction
+│   ├── framing/                     ✅ PHASE 1 COMPLETE
+│   │   ├── index.js                 ✅ Re-exports all framing components
+│   │   ├── hooks/
+│   │   │   ├── useCrop.js           ✅ Moved from hooks/
+│   │   │   └── useSegments.js       ✅ Moved from hooks/
+│   │   ├── layers/
+│   │   │   ├── CropLayer.jsx        ✅ Moved from components/
+│   │   │   └── SegmentLayer.jsx     ✅ Moved from components/
+│   │   ├── overlays/
+│   │   │   └── CropOverlay.jsx      ✅ Moved from components/
+│   │   └── contexts/
+│   │       └── CropContext.jsx      ✅ Moved from contexts/
+│   └── overlay/                     ✅ PHASE 1 COMPLETE
+│       ├── index.js                 ✅ Re-exports all overlay components
+│       ├── hooks/
+│       │   └── useHighlight.js      ✅ Moved from hooks/
+│       ├── layers/
+│       │   └── HighlightLayer.jsx   ✅ Moved from components/
+│       ├── overlays/
+│       │   └── HighlightOverlay.jsx ✅ Moved from components/
+│       └── contexts/
+│           └── HighlightContext.jsx ✅ Moved from contexts/
+├── hooks/                           ✅ Only SHARED hooks remain
+│   ├── useKeyframeController.js
+│   ├── useVideo.js
+│   ├── useZoom.js
+│   ├── useTimelineZoom.js
+│   └── useTimeline.js
+├── utils/
+│   ├── videoMetadata.js
+│   ├── videoUtils.js
+│   └── splineInterpolation.js
+└── App.jsx                          ✅ Updated imports from modes/
 ```
 
 ### Remaining Work
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| Phase 1: Move files to mode dirs | 🔲 Pending | Move hooks/layers to `modes/framing/` and `modes/overlay/` |
+| ~~Phase 1: Move files to mode dirs~~ | ✅ **COMPLETE** | Files moved to `modes/framing/` and `modes/overlay/` |
 | Phase 2: Mode containers | 🔲 Pending | Create `FramingMode.jsx`, `OverlayMode.jsx` |
 | Phase 3: Mode switcher | 🔲 Pending | Add `ModeSwitcher.jsx`, mode state in App.jsx |
 | Phase 4: Transitions | 🔲 Pending | Implement render-based mode transition, backend endpoint |
@@ -79,27 +104,29 @@ The prep refactors are complete. Remaining work is primarily assembly of existin
 | ~~Export progress extraction~~ | ~~Low~~ | ~~Low~~ | ✅ **DONE** - ExportProgress created |
 | ~~Keyframe marker extraction~~ | ~~Low~~ | ~~Low~~ | ✅ **DONE** - KeyframeMarker created |
 | ~~Video metadata utility~~ | ~~Low~~ | ~~Low~~ | ✅ **DONE** - videoMetadata.js created |
-| File reorganization | Low | Medium | 🔲 Pending - mechanical imports update |
-| Mode state in App.jsx | Medium | Medium | 🔲 Pending |
-| Mode transition logic | Medium | Medium | 🔲 Pending |
-| Backend endpoint | Low | Low | 🔲 Pending |
+| ~~File reorganization~~ | ~~Low~~ | ~~Medium~~ | ✅ **DONE** - Phase 1 complete |
+| Mode state in App.jsx | Medium | Medium | 🔲 Pending (Phase 3) |
+| Mode transition logic | Medium | Medium | 🔲 Pending (Phase 4) |
+| Backend endpoint | Low | Low | 🔲 Pending (Phase 4) |
 
 ### ~~What Makes It Complex~~ Risks Mitigated
 
 1. ~~**Big bang risk**~~ → Building blocks extracted, assembly is incremental
 2. ~~**Timeline.jsx is 540 lines**~~ → TimelineBase (359 lines) extracted, Timeline now composes from it
 3. ~~**ExportButton.jsx has export logic**~~ → ExportProgress extracted, ExportButton simplified
-4. **Many import paths change** - Still applies to Phase 1 file moves
+4. ~~**Many import paths change**~~ → Phase 1 complete, all imports updated, build verified
 
 ### How to Proceed
 
-**Prep refactors COMPLETE.** Mode switching now becomes:
+**Prep refactors + Phase 1 COMPLETE.** Mode switching now becomes:
 - ✅ TimelineBase available - mode timelines will compose from it
 - ✅ ExportProgress available - mode exports will use it
 - ✅ KeyframeMarker available - both CropLayer and HighlightLayer already use it
 - ✅ videoMetadata.js available - will be used by overlay mode for rendered video
-- 🔲 Create mode containers (FramingMode, OverlayMode)
-- 🔲 Add mode state and ModeSwitcher UI
+- ✅ Files organized by mode - `modes/framing/` and `modes/overlay/` directories populated
+- ✅ Re-export index files created - clean imports from `./modes/framing` and `./modes/overlay`
+- 🔲 **Next: Phase 2** - Create mode containers (FramingMode.jsx, OverlayMode.jsx)
+- 🔲 **Then: Phase 3** - Add mode state and ModeSwitcher UI
 
 ---
 
@@ -346,6 +373,98 @@ async def export_framing_only(
     # Apply crop, trim, speed only
     # Return H.264 encoded video at source resolution
 ```
+
+### 2.5 Overlay Preview Architecture (Client-Side)
+
+**Key Principle:** Overlay preview is 100% client-side. No backend calls during overlay editing.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    OVERLAY MODE PREVIEW                         │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                    Video Container                       │   │
+│  │  ┌─────────────────────────────────────────────────┐    │   │
+│  │  │  <video> element                                │    │   │
+│  │  │  (plays framed video OR uploaded video)         │    │   │
+│  │  └─────────────────────────────────────────────────┘    │   │
+│  │  ┌─────────────────────────────────────────────────┐    │   │
+│  │  │  <HighlightOverlay> (SVG layer)                 │    │   │
+│  │  │  - Renders highlight ellipse at current time    │    │   │
+│  │  │  - Interpolates position from keyframes         │    │   │
+│  │  │  - Pure client-side rendering                   │    │   │
+│  │  └─────────────────────────────────────────────────┘    │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Preview updates in real-time as user:                          │
+│  - Drags highlight ellipse → creates keyframe → re-renders      │
+│  - Scrubs timeline → interpolates ellipse position              │
+│  - Plays video → ellipse animates smoothly                      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Why this works:**
+- `HighlightOverlay` is already a client-side SVG component
+- It reads `currentHighlight` from `useHighlight` hook (interpolated from keyframes)
+- During playback, `currentTime` updates → highlight position updates → SVG re-renders
+- Zero backend involvement during preview
+
+### 2.6 Export Architecture (Two Options)
+
+**Option A: Two-Phase Export (Current Spec)**
+```
+Framing Mode ──► /api/export/frame-only ──► Intermediate Video
+                                                    │
+                                                    ▼
+                                            Overlay Mode
+                                                    │
+                                                    ▼
+                            /api/export (existing) ──► Final Video
+                            with overlay keyframes
+```
+- Pros: Memory isolation, simpler overlay timeline (matches rendered duration)
+- Cons: Two backend calls, intermediate file storage
+
+**Option B: Single-Pass Export (Recommended for final export)**
+```
+Overlay Mode ──► /api/export (enhanced) ──► Final Video
+                 │
+                 ├── Original video
+                 ├── Framing keyframes (crop/trim/speed)
+                 └── Overlay keyframes (highlight positions)
+```
+- Pros: Single backend call, no intermediate file
+- Cons: Backend must handle both transformations
+
+**Recommended Hybrid Approach:**
+1. **Framing → Overlay transition**: Use `/api/export/frame-only` to create intermediate video
+   - This establishes memory isolation between modes
+   - Overlay timeline matches the framed video duration (after trim/speed)
+
+2. **Final Export from Overlay**: Existing `/api/export` endpoint
+   - Takes the intermediate video (already has crop/trim/speed applied)
+   - Adds highlight overlays via FFmpeg drawtext/overlay filters
+   - Optionally applies AI upscaling
+
+**Backend: Highlight Overlay Rendering**
+
+The existing export endpoint already supports highlight keyframes. The backend renders highlights by:
+
+```python
+# In export processing (simplified)
+def render_highlights(video_path, highlight_keyframes):
+    """
+    Render highlight overlays using FFmpeg.
+
+    Highlights are rendered as semi-transparent ellipses that track
+    position across keyframes using linear interpolation.
+    """
+    # Generate FFmpeg drawtext/overlay commands for each frame
+    # Interpolate highlight position between keyframes
+    # Apply as overlay filter in FFmpeg pipeline
+```
+
+**No new backend endpoint needed for overlay export** - the existing endpoint handles it.
 
 ---
 
@@ -1328,18 +1447,18 @@ const returnToFraming = () => {
 | Phase | Status | Risk | Notes |
 |-------|--------|------|-------|
 | ~~Prep Refactor~~ | ✅ **DONE** | N/A | TimelineBase, KeyframeMarker, ExportProgress, videoMetadata |
-| 1. Move files | 🔲 Pending | Low | Move hooks/layers to mode directories |
+| ~~1. Move files~~ | ✅ **DONE** | N/A | Files moved to `modes/framing/` and `modes/overlay/` |
 | 2. Mode containers | 🔲 Pending | Low | Create FramingMode.jsx, OverlayMode.jsx |
 | 3. Mode switcher | 🔲 Pending | Low | ModeSwitcher UI, mode state in App.jsx |
 | 4. Transitions | 🔲 Pending | Medium | Backend endpoint, async transition logic |
 | 5. Mode exports | 🔲 Pending | Low | FramingExport, OverlayExport components |
 | 6. Cleanup | 🔲 Pending | Low | Remove old files, polish |
 
-**Remaining work: ~12-17 hours** (prep refactor complete)
+**Remaining work: ~10-14 hours** (prep refactor + Phase 1 complete)
 
-**Compared to "big bang" approach:** ~15-20 hours but HIGH risk
+**Compared to "big bang" approach:** Would have been ~15-20 hours with HIGH risk
 
-The prep refactor adds ~7 hours but converts a high-risk project into a series of low-risk incremental changes. Each phase is independently deployable and testable.
+The prep refactor + Phase 1 approach converted a high-risk project into a series of low-risk incremental changes. Each phase is independently deployable and testable. Phase 1 file moves are now complete and verified.
 
 ---
 

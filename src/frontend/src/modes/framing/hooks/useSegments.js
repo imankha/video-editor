@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { flushSync } from 'react-dom';
-import { timeToFrame, frameToTime } from '../utils/videoUtils';
+import { timeToFrame, frameToTime } from '../../../utils/videoUtils';
 
 /**
  * Hook to manage video segments with speed control and trimming

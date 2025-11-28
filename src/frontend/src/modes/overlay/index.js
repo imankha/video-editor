@@ -1,2 +1,13 @@
 // Overlay mode exports
-// Will be populated as components are moved/created
+// Hooks
+export { default as useHighlight } from './hooks/useHighlight';
+
+// Layers
+export { default as HighlightLayer } from './layers/HighlightLayer';
+
+// Overlays
+export { default as HighlightOverlay } from './overlays/HighlightOverlay';
+
+// Contexts
+export { HighlightProvider, useHighlightContext } from './contexts/HighlightContext';
+export { default as HighlightContext } from './contexts/HighlightContext';

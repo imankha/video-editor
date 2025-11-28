@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
-import { timeToFrame } from '../utils/videoUtils';
-import { interpolateHighlightSpline } from '../utils/splineInterpolation';
-import useKeyframeController from './useKeyframeController';
+import { timeToFrame } from '../../../utils/videoUtils';
+import { interpolateHighlightSpline } from '../../../utils/splineInterpolation';
+import useKeyframeController from '../../../hooks/useKeyframeController';
 
 /**
  * Custom hook for managing highlight ellipse state and keyframes
