@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS users (
+  uid TEXT PRIMARY KEY,
+  stripe_customer_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS wallet (
+  uid TEXT UNIQUE,
+  balance_cents INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  uid TEXT,
+  change_cents INTEGER,
+  reason TEXT,
+  ts DATETIME DEFAULT CURRENT_TIMESTAMP
+);

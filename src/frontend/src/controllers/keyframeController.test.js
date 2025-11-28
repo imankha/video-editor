@@ -417,7 +417,7 @@ describe('keyframeController', () => {
       expect(newState.machineState).toBe(KeyframeStates.TRIMMING);
     });
 
-    it('preserves keyframes at start boundary', () => {
+    it('deletes all keyframes in range inclusive of boundaries', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
@@ -432,13 +432,18 @@ describe('keyframeController', () => {
         framerate: 30
       };
 
-      // Start boundary at 30, should preserve frame 30
+      // Delete range includes both boundaries (caller reconstitutes as needed)
       const newState = keyframeReducer(state, actions.deleteKeyframesInRange(30, 65));
 
-      expect(newState.keyframes.find(kf => kf.frame === 30)).toBeDefined();
+      // Frame 30 is deleted (within range) - caller must reconstitute if needed
+      expect(newState.keyframes.find(kf => kf.frame === 30)).toBeUndefined();
+      expect(newState.keyframes.find(kf => kf.frame === 60)).toBeUndefined();
+      // Frames outside range are kept
+      expect(newState.keyframes.find(kf => kf.frame === 0)).toBeDefined();
+      expect(newState.keyframes.find(kf => kf.frame === 90)).toBeDefined();
     });
 
-    it('deletes keyframes at end boundary (old end being removed)', () => {
+    it('deletes keyframes at end of range', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
@@ -453,10 +458,14 @@ describe('keyframeController', () => {
         framerate: 30
       };
 
-      // End boundary at 60, should delete frame 60
+      // Delete range 25-60, both 30 and 60 should be deleted
       const newState = keyframeReducer(state, actions.deleteKeyframesInRange(25, 60));
 
+      expect(newState.keyframes.find(kf => kf.frame === 30)).toBeUndefined();
       expect(newState.keyframes.find(kf => kf.frame === 60)).toBeUndefined();
+      // Frames outside range are kept
+      expect(newState.keyframes.find(kf => kf.frame === 0)).toBeDefined();
+      expect(newState.keyframes.find(kf => kf.frame === 90)).toBeDefined();
     });
   });
 

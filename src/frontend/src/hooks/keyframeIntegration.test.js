@@ -57,11 +57,12 @@ describe('Keyframe Integration Tests', () => {
         result.current.deleteKeyframesInRange(0, 1.0);
       });
 
-      // Keyframe at frame 0 should be preserved (at boundary)
-      // Keyframes at frame 15 and 30 should be deleted
+      // All keyframes in range [0, 30] are deleted (inclusive)
+      // Caller is responsible for reconstituting boundary keyframes
       const remainingFrames = result.current.keyframes.map(kf => kf.frame);
-      expect(remainingFrames).toContain(0); // Preserved at boundary
+      expect(remainingFrames).not.toContain(0); // Deleted (was at start of range)
       expect(remainingFrames).not.toContain(15); // Deleted
+      expect(remainingFrames).not.toContain(30); // Deleted (was at end of range)
       expect(remainingFrames).toContain(60); // Outside range
       expect(remainingFrames).toContain(90); // Outside range
     });
@@ -93,13 +94,14 @@ describe('Keyframe Integration Tests', () => {
         result.current.deleteKeyframesInRange(2.0, 3.0);
       });
 
-      // Keyframe at frame 60 should be preserved (at boundary)
-      // Keyframes at frame 75 and 90 should be deleted
+      // All keyframes in range [60, 90] are deleted (inclusive)
+      // Caller is responsible for reconstituting boundary keyframes
       const remainingFrames = result.current.keyframes.map(kf => kf.frame);
       expect(remainingFrames).toContain(0);
       expect(remainingFrames).toContain(30);
-      expect(remainingFrames).toContain(60); // Preserved at boundary
+      expect(remainingFrames).not.toContain(60); // Deleted (was at start of range)
       expect(remainingFrames).not.toContain(75); // Deleted
+      expect(remainingFrames).not.toContain(90); // Deleted (was at end of range)
     });
 
     it('simulates trim with boundary keyframe creation', () => {

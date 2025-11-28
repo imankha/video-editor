@@ -1,0 +1,17 @@
+name = "wallet-api"
+compatibility_date = "2025-01-01"
+account_id = "{{CLOUDFLARE_ACCOUNT_ID}}"
+main = "src/worker-entry.js"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wallet-db"
+database_id = "{{D1_DATABASE_ID}}"
+
+[vars]
+PAGES_URL = "https://{{YOUR_PAGES_SUBDOMAIN}}.pages.dev"
+SUCCESS_URL = "https://{{YOUR_DOMAIN}}/success"
+CANCEL_URL = "https://{{YOUR_DOMAIN}}/cancel"
+
+[env.production]
+route = "api.{{YOUR_DOMAIN}}/*"

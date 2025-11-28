@@ -357,7 +357,7 @@ describe('useKeyframeController hook', () => {
       expect(result.current.machineState).toBe(KeyframeStates.TRIMMING);
     });
 
-    it('preserves keyframes at start boundary', () => {
+    it('deletes all keyframes in range inclusive of boundaries', () => {
       const { result } = renderHook(() =>
         useKeyframeController({
           interpolateFn: mockInterpolateFn,
@@ -376,12 +376,17 @@ describe('useKeyframeController hook', () => {
       });
 
       act(() => {
-        // Start boundary exactly at frame 30 (1.0s)
+        // Delete range [30, 75] (1.0s to 2.5s at 30fps)
         result.current.deleteKeyframesInRange(1.0, 2.5);
       });
 
-      // Frame 30 should be preserved (at boundary)
-      expect(result.current.keyframes.find(kf => kf.frame === 30)).toBeDefined();
+      // All keyframes in range are deleted (inclusive)
+      // Caller is responsible for reconstituting boundary keyframes
+      expect(result.current.keyframes.find(kf => kf.frame === 30)).toBeUndefined();
+      expect(result.current.keyframes.find(kf => kf.frame === 60)).toBeUndefined();
+      // Keyframes outside range are preserved
+      expect(result.current.keyframes.find(kf => kf.frame === 0)).toBeDefined();
+      expect(result.current.keyframes.find(kf => kf.frame === 90)).toBeDefined();
     });
 
     it('deletes keyframes at end boundary (old end being removed)', () => {

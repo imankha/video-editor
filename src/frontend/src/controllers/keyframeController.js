@@ -150,13 +150,13 @@ function determineOrigin(frame, endFrame, requestedOrigin) {
 export function keyframeReducer(state, action) {
   switch (action.type) {
     case ActionTypes.INITIALIZE: {
-      const { defaultData, endFrame, framerate } = action.payload;
+      const { defaultData, endFrame, framerate, startFrame = 0 } = action.payload;
 
       return {
         ...state,
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', ...defaultData },
+          { frame: startFrame, origin: 'permanent', ...defaultData },
           { frame: endFrame, origin: 'permanent', ...defaultData }
         ],
         isEndKeyframeExplicit: false,
@@ -239,11 +239,12 @@ export function keyframeReducer(state, action) {
       const { startFrame, endFrame: rangeEndFrame } = action.payload;
       const { keyframes } = state;
 
-      // Filter keyframes: keep those outside the range
-      // Use <= for startFrame to preserve keyframes at the new trim boundary
-      // Use > for endFrame to delete keyframes at the old boundary being removed
+      // Filter keyframes: keep those OUTSIDE the range (exclusive on both ends)
+      // Delete keyframes where: startFrame <= frame <= rangeEndFrame
+      // This ensures both the start and end of the trimmed region are deleted
+      // The caller is responsible for reconstituting permanent keyframes at new boundaries
       const filtered = keyframes.filter(kf => {
-        return kf.frame <= startFrame || kf.frame > rangeEndFrame;
+        return kf.frame < startFrame || kf.frame > rangeEndFrame;
       });
 
       return {
