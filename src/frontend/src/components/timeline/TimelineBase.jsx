@@ -1,4 +1,5 @@
 import React from 'react';
+import { Undo2 } from 'lucide-react';
 import { formatTimeSimple } from '../../utils/timeFormat';
 
 /**
@@ -329,8 +330,6 @@ export function TimelineBase({
  * Trim undo button component - used for start/end trim indicators
  */
 function TrimUndoButton({ position, trimAmount, totalLayerHeight, edgePadding, onClick }) {
-  const { Undo2 } = require('lucide-react');
-
   const isStart = position === 'start';
   const style = {
     width: '16px',

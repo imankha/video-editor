@@ -67,28 +67,49 @@ export default function useHighlight(videoMetadata, trimRange = null) {
   const { needsInitialization, initializeKeyframes } = keyframeManager;
 
   /**
-   * Auto-initialize keyframes when metadata loads
-   * Creates permanent keyframes at start (frame=0) and end (frame=highlightDurationFrames)
+   * Auto-initialize keyframes when metadata loads or when highlight is enabled
+   * Creates permanent keyframes at start and end of highlight duration
    * Default highlight duration is 3 seconds, not entire video
-   * NOTE: Skips initialization if trimRange is set - trim operations handle their own keyframe management
+   *
+   * When trimRange is set, start keyframe is at trim boundary, end keyframe
+   * stays at highlightDuration (not relative to trim boundary)
    */
   useEffect(() => {
     if (videoMetadata?.width && videoMetadata?.height && videoMetadata?.duration) {
+      // Start frame is at trim boundary (or 0 if no trim)
+      const visibleStart = trimRange?.start ?? 0;
+      const startFrame = timeToFrame(visibleStart, framerate);
+
+      // End frame is always at highlightDuration from video start (not from trim)
       const highlightEndTime = Math.min(highlightDuration, videoMetadata.duration);
       const highlightEndFrame = timeToFrame(highlightEndTime, framerate);
 
-      // Check if we need to initialize (only on first load, not after trim)
-      // Skip initialization if trimRange is set - trim operations handle their own keyframe management
-      if (!trimRange && needsInitialization(highlightEndFrame)) {
+      // Only initialize if some highlight is visible (end > start)
+      // Check needsInitialization OR if keyframes exist but start is wrong (after trim)
+      const keyframes = keyframeManager.keyframes;
+      const currentStartFrame = keyframes.length > 0 ? keyframes[0].frame : null;
+      const needsInit = needsInitialization(highlightEndFrame) ||
+        (keyframes.length > 0 && currentStartFrame !== startFrame && startFrame > 0);
+
+      if (highlightEndFrame > startFrame && needsInit) {
         const defaultHighlight = calculateDefaultHighlight(
           videoMetadata.width,
           videoMetadata.height
         );
 
-        initializeKeyframes(defaultHighlight, highlightEndFrame);
+        // Single dispatch with startFrame parameter - handles both trim and no-trim cases
+        keyframeManager.dispatch({
+          type: 'INITIALIZE',
+          payload: {
+            defaultData: defaultHighlight,
+            endFrame: highlightEndFrame,
+            startFrame: startFrame,
+            framerate
+          }
+        });
       }
     }
-  }, [videoMetadata, calculateDefaultHighlight, framerate, highlightDuration, needsInitialization, initializeKeyframes, trimRange]);
+  }, [videoMetadata, calculateDefaultHighlight, framerate, highlightDuration, needsInitialization, keyframeManager, trimRange, isEnabled]);
 
   /**
    * Update highlight duration (adjusts the end keyframe)
