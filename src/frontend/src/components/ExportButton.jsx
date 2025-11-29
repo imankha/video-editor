@@ -25,19 +25,38 @@ const HIGHLIGHT_EFFECT_COLORS = ['bg-blue-600', 'bg-yellow-600', 'bg-purple-600'
 
 /**
  * ExportButton component - handles video export with AI upscaling
- * Always uses AI upscaling with ESRGAN at 30fps for best quality
- * Automatically downloads the exported video
+ *
+ * Behavior varies by mode:
+ * - Framing mode: Shows audio toggle, exports and transitions to Overlay mode
+ * - Overlay mode: Shows highlight effect toggle, exports final video with download
  */
-export default function ExportButton({ videoFile, cropKeyframes, highlightKeyframes = [], isHighlightEnabled = false, segmentData, disabled, includeAudio, onIncludeAudioChange }) {
+export default function ExportButton({
+  videoFile,
+  cropKeyframes,
+  highlightKeyframes = [],
+  isHighlightEnabled = false,
+  segmentData,
+  disabled,
+  includeAudio,
+  onIncludeAudioChange,
+  highlightEffectType = 'original',       // 'brightness_boost' | 'original' | 'dark_overlay'
+  onHighlightEffectTypeChange,            // Callback to change effect type (updates preview too)
+  editorMode = 'framing',      // 'framing' | 'overlay'
+  onProceedToOverlay,          // Callback when framing export completes (receives blob)
+}) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState(null);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
-  const [highlightEffectPosition, setHighlightEffectPosition] = useState(0);
   const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
+
+  // Map effect type to toggle position
+  const effectTypeToPosition = { 'brightness_boost': 0, 'original': 1, 'dark_overlay': 2 };
+  const positionToEffectType = ['brightness_boost', 'original', 'dark_overlay'];
+  const highlightEffectPosition = effectTypeToPosition[highlightEffectType] ?? 1;
 
   // Cleanup WebSocket on unmount
   useEffect(() => {
@@ -106,10 +125,16 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
       return;
     }
 
-    if (!cropKeyframes || cropKeyframes.length === 0) {
-      setError('No crop keyframes defined. Please add at least one crop keyframe.');
-      return;
+    // Mode-specific validation
+    if (editorMode === 'framing') {
+      // Framing mode requires crop keyframes
+      if (!cropKeyframes || cropKeyframes.length === 0) {
+        setError('No crop keyframes defined. Please add at least one crop keyframe.');
+        return;
+      }
     }
+    // Overlay mode: No crop validation needed (crop already baked in)
+    // Highlights are optional - export works with or without them
 
     setIsExporting(true);
     setProgress(0);
@@ -122,38 +147,55 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
     exportIdRef.current = exportId;
 
     try {
-      // Prepare form data with fixed export settings
+      // Prepare form data based on mode
       const formData = new FormData();
       formData.append('video', videoFile);
-      formData.append('keyframes_json', JSON.stringify(cropKeyframes));
-      formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
       formData.append('export_id', exportId);
-      formData.append('export_mode', EXPORT_CONFIG.exportMode);
       formData.append('include_audio', includeAudio ? 'true' : 'false');
 
-      // Add segment data if available (only if speed changes or trimming exist)
-      if (segmentData) {
-        console.log('=== EXPORT: Sending segment data to backend ===');
-        console.log(JSON.stringify(segmentData, null, 2));
-        console.log('==============================================');
-        formData.append('segment_data_json', JSON.stringify(segmentData));
-      } else {
-        console.log('=== EXPORT: No segment data to send ===');
-      }
+      let endpoint;
 
-      // Add highlight keyframes if available
-      if (highlightKeyframes && highlightKeyframes.length > 0) {
-        console.log('=== EXPORT: Sending highlight keyframes to backend ===');
-        console.log(JSON.stringify(highlightKeyframes, null, 2));
-        console.log('==============================================');
-        formData.append('highlight_keyframes_json', JSON.stringify(highlightKeyframes));
-        formData.append('highlight_effect_type', HIGHLIGHT_EFFECT_STYLES[highlightEffectPosition]);
-      } else {
-        console.log('=== EXPORT: No highlight keyframes to send (layer disabled or empty) ===');
-      }
+      if (editorMode === 'framing') {
+        // Framing mode: Use AI upscale endpoint with crop/trim/speed
+        endpoint = 'http://localhost:8000/api/export/upscale';
 
-      // Use optimized AI upscale endpoint (raw ESRGAN + H.264 fast CRF 18)
-      const endpoint = 'http://localhost:8000/api/export/upscale';
+        formData.append('keyframes_json', JSON.stringify(cropKeyframes));
+        formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
+        formData.append('export_mode', EXPORT_CONFIG.exportMode);
+
+        // Add segment data if available (only if speed changes or trimming exist)
+        if (segmentData) {
+          console.log('=== EXPORT: Sending segment data to backend ===');
+          console.log(JSON.stringify(segmentData, null, 2));
+          console.log('==============================================');
+          formData.append('segment_data_json', JSON.stringify(segmentData));
+        } else {
+          console.log('=== EXPORT: No segment data to send ===');
+        }
+
+        // Add highlight keyframes if available (for framing mode that also has highlights)
+        if (highlightKeyframes && highlightKeyframes.length > 0) {
+          console.log('=== EXPORT: Sending highlight keyframes to backend ===');
+          console.log(JSON.stringify(highlightKeyframes, null, 2));
+          console.log('==============================================');
+          formData.append('highlight_keyframes_json', JSON.stringify(highlightKeyframes));
+          formData.append('highlight_effect_type', highlightEffectType);
+        }
+      } else {
+        // Overlay mode: Use simple overlay endpoint (no crop, no AI, no trim)
+        endpoint = 'http://localhost:8000/api/export/overlay';
+
+        // Add highlight keyframes and effect type
+        if (highlightKeyframes && highlightKeyframes.length > 0) {
+          console.log('=== OVERLAY EXPORT: Sending highlight keyframes ===');
+          console.log(JSON.stringify(highlightKeyframes, null, 2));
+          console.log('==============================================');
+          formData.append('highlight_keyframes_json', JSON.stringify(highlightKeyframes));
+        } else {
+          console.log('=== OVERLAY EXPORT: No highlight keyframes (will pass through video) ===');
+        }
+        formData.append('highlight_effect_type', highlightEffectType);
+      }
 
       // Connect WebSocket for real-time progress updates
       connectWebSocket(exportId);
@@ -186,8 +228,16 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
         }
       );
 
-      // Create download link and trigger download
+      // Create blob from response
       const blob = new Blob([response.data], { type: 'video/mp4' });
+
+      // Close WebSocket
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
+      // Download the video
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -196,22 +246,36 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
       link.click();
       document.body.removeChild(link);
 
-      // Clean up
+      // Clean up download URL
       window.URL.revokeObjectURL(url);
 
-      // Close WebSocket
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      // In Framing mode, also transition to Overlay mode with the exported video
+      if (editorMode === 'framing' && onProceedToOverlay) {
+        setProgress(100);
+        setProgressMessage('Loading into Overlay mode...');
 
-      setProgress(100);
-      setProgressMessage('Export complete!');
-      setTimeout(() => {
-        setIsExporting(false);
-        setProgress(0);
-        setProgressMessage('');
-      }, 2000);
+        try {
+          await onProceedToOverlay(blob);
+          setIsExporting(false);
+          setProgress(0);
+          setProgressMessage('');
+        } catch (err) {
+          console.error('Failed to transition to overlay:', err);
+          // Don't show error - download already succeeded
+          setIsExporting(false);
+          setProgress(0);
+          setProgressMessage('');
+        }
+      } else {
+        // Overlay mode - just show success
+        setProgress(100);
+        setProgressMessage('Export complete!');
+        setTimeout(() => {
+          setIsExporting(false);
+          setProgress(0);
+          setProgressMessage('');
+        }, 2000);
+      }
 
     } catch (err) {
       console.error('Export failed:', err);
@@ -250,68 +314,80 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
     }
   };
 
+  // Determine button text based on mode
+  const isFramingMode = editorMode === 'framing';
+
   return (
     <div className="space-y-3">
       {/* Export Settings */}
       <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
-        <div className="text-sm font-medium text-gray-300 mb-3">Export Settings</div>
+        <div className="text-sm font-medium text-gray-300 mb-3">
+          {isFramingMode ? 'Framing Settings' : 'Overlay Settings'}
+        </div>
 
-        {/* Audio Toggle */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-gray-200">Audio</span>
-            <span className="text-xs text-gray-400">
-              {includeAudio ? 'Include audio in export' : 'Export video only'}
-            </span>
+        {/* Audio Toggle - Framing mode only */}
+        {isFramingMode && (
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-gray-200">Audio</span>
+              <span className="text-xs text-gray-400">
+                {includeAudio ? 'Include audio in export' : 'Export video only'}
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                onIncludeAudioChange(!includeAudio);
+                setAudioExplicitlySet(true);
+              }}
+              disabled={isExporting}
+              className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                includeAudio ? 'bg-blue-600' : 'bg-gray-600'
+              } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              role="switch"
+              aria-checked={includeAudio}
+              aria-label="Toggle audio"
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                  includeAudio ? 'translate-x-8' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
-          <button
-            onClick={() => {
-              onIncludeAudioChange(!includeAudio);
-              setAudioExplicitlySet(true);
-            }}
-            disabled={isExporting}
-            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-              includeAudio ? 'bg-blue-600' : 'bg-gray-600'
-            } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-            role="switch"
-            aria-checked={includeAudio}
-            aria-label="Toggle audio"
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                includeAudio ? 'translate-x-8' : 'translate-x-1'
-              }`}
+        )}
+
+        {/* Highlight Effect Style - Overlay mode only */}
+        {!isFramingMode && (
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-gray-200">Highlight Effect</span>
+              <span className="text-xs text-gray-400">
+                {!isHighlightEnabled
+                  ? 'Enable highlight layer'
+                  : HIGHLIGHT_EFFECT_LABELS[highlightEffectPosition]}
+              </span>
+            </div>
+
+            <ThreePositionToggle
+              value={highlightEffectPosition}
+              onChange={(pos) => onHighlightEffectTypeChange?.(positionToEffectType[pos])}
+              colors={HIGHLIGHT_EFFECT_COLORS}
+              labels={HIGHLIGHT_EFFECT_LABELS}
+              disabled={isExporting || !isHighlightEnabled}
             />
-          </button>
-        </div>
-
-        {/* Highlight Effect Style */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-gray-200">Highlight Effect</span>
-            <span className="text-xs text-gray-400">
-              {!isHighlightEnabled
-                ? 'Enable highlight layer'
-                : HIGHLIGHT_EFFECT_LABELS[highlightEffectPosition]}
-            </span>
           </div>
-
-          <ThreePositionToggle
-            value={highlightEffectPosition}
-            onChange={setHighlightEffectPosition}
-            colors={HIGHLIGHT_EFFECT_COLORS}
-            labels={HIGHLIGHT_EFFECT_LABELS}
-            disabled={isExporting || !isHighlightEnabled}
-          />
-        </div>
+        )}
 
         {/* Export Info */}
         <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
-          AI upscaling at {EXPORT_CONFIG.targetFps}fps (H.264)
+          {isFramingMode
+            ? `Renders crop/trim/speed with AI upscaling at ${EXPORT_CONFIG.targetFps}fps`
+            : `Applies highlight overlay (H.264)`
+          }
         </div>
       </div>
 
-      {/* Export Button */}
+      {/* Single Export button for both modes */}
       <button
         onClick={handleExport}
         disabled={disabled || isExporting || !videoFile}
@@ -339,7 +415,7 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
         isExporting={isExporting}
         progress={progress}
         progressMessage={progressMessage}
-        label="AI Upscaling"
+        label={isFramingMode ? "AI Upscaling" : "Overlay Export"}
       />
 
       {/* Error message */}

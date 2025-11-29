@@ -1,9 +1,9 @@
 import React from 'react';
 import { Film, Crop, Split, Circle, Eye, EyeOff } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from './timeline/TimelineBase';
-import CropLayer from './CropLayer';
-import HighlightLayer from './HighlightLayer';
-import SegmentLayer from './SegmentLayer';
+// Mode-specific layer imports
+import { CropLayer, SegmentLayer } from '../modes/framing';
+import { HighlightLayer } from '../modes/overlay';
 
 /**
  * Timeline component - Shows timeline with playhead, scrubber, and all layers.
