@@ -1,14 +1,15 @@
 import React from 'react';
 import { HighlightProvider } from './contexts/HighlightContext';
-import HighlightOverlay from './overlays/HighlightOverlay';
 import OverlayTimeline from './OverlayTimeline';
 
 /**
  * OverlayMode - Container component for Overlay mode.
  *
  * This component encapsulates all overlay-specific UI and logic:
- * - HighlightOverlay for highlight ellipse preview/editing
  * - OverlayTimeline for highlight keyframes
+ *
+ * NOTE: HighlightOverlay is rendered by App.jsx inside VideoPlayer for correct positioning.
+ * The overlay needs to be inside the video-container for absolute positioning to work.
  *
  * KEY PRINCIPLE: Overlay preview is 100% client-side. No backend calls during editing.
  * The HighlightOverlay renders as an SVG layer that:
@@ -73,19 +74,7 @@ export function OverlayMode({
 }) {
   return (
     <HighlightProvider value={highlightContextValue}>
-      {/* Render HighlightOverlay if video is loaded, highlight state exists, and enabled */}
-      {videoUrl && currentHighlightState && metadata && (
-        <HighlightOverlay
-          videoRef={videoRef}
-          videoMetadata={metadata}
-          currentHighlight={currentHighlightState}
-          onHighlightChange={onHighlightChange}
-          onHighlightComplete={onHighlightComplete}
-          isEnabled={isHighlightEnabled}
-          zoom={zoom}
-          panOffset={panOffset}
-        />
-      )}
+      {/* NOTE: HighlightOverlay is rendered by App.jsx inside VideoPlayer */}
 
       {/* OverlayTimeline */}
       {videoUrl && (

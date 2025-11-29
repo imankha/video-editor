@@ -25,10 +25,23 @@ const HIGHLIGHT_EFFECT_COLORS = ['bg-blue-600', 'bg-yellow-600', 'bg-purple-600'
 
 /**
  * ExportButton component - handles video export with AI upscaling
- * Always uses AI upscaling with ESRGAN at 30fps for best quality
- * Automatically downloads the exported video
+ *
+ * Behavior varies by mode:
+ * - Framing mode: Shows audio toggle, exports and transitions to Overlay mode
+ * - Overlay mode: Shows highlight effect toggle, exports final video with download
  */
-export default function ExportButton({ videoFile, cropKeyframes, highlightKeyframes = [], isHighlightEnabled = false, segmentData, disabled, includeAudio, onIncludeAudioChange }) {
+export default function ExportButton({
+  videoFile,
+  cropKeyframes,
+  highlightKeyframes = [],
+  isHighlightEnabled = false,
+  segmentData,
+  disabled,
+  includeAudio,
+  onIncludeAudioChange,
+  editorMode = 'framing',      // 'framing' | 'overlay'
+  onProceedToOverlay,          // Callback when framing export completes (receives blob)
+}) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
@@ -186,8 +199,16 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
         }
       );
 
-      // Create download link and trigger download
+      // Create blob from response
       const blob = new Blob([response.data], { type: 'video/mp4' });
+
+      // Close WebSocket
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
+      // Download the video
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -196,22 +217,36 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
       link.click();
       document.body.removeChild(link);
 
-      // Clean up
+      // Clean up download URL
       window.URL.revokeObjectURL(url);
 
-      // Close WebSocket
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      // In Framing mode, also transition to Overlay mode with the exported video
+      if (editorMode === 'framing' && onProceedToOverlay) {
+        setProgress(100);
+        setProgressMessage('Loading into Overlay mode...');
 
-      setProgress(100);
-      setProgressMessage('Export complete!');
-      setTimeout(() => {
-        setIsExporting(false);
-        setProgress(0);
-        setProgressMessage('');
-      }, 2000);
+        try {
+          await onProceedToOverlay(blob);
+          setIsExporting(false);
+          setProgress(0);
+          setProgressMessage('');
+        } catch (err) {
+          console.error('Failed to transition to overlay:', err);
+          // Don't show error - download already succeeded
+          setIsExporting(false);
+          setProgress(0);
+          setProgressMessage('');
+        }
+      } else {
+        // Overlay mode - just show success
+        setProgress(100);
+        setProgressMessage('Export complete!');
+        setTimeout(() => {
+          setIsExporting(false);
+          setProgress(0);
+          setProgressMessage('');
+        }, 2000);
+      }
 
     } catch (err) {
       console.error('Export failed:', err);
@@ -250,68 +285,80 @@ export default function ExportButton({ videoFile, cropKeyframes, highlightKeyfra
     }
   };
 
+  // Determine button text based on mode
+  const isFramingMode = editorMode === 'framing';
+
   return (
     <div className="space-y-3">
       {/* Export Settings */}
       <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
-        <div className="text-sm font-medium text-gray-300 mb-3">Export Settings</div>
+        <div className="text-sm font-medium text-gray-300 mb-3">
+          {isFramingMode ? 'Framing Settings' : 'Overlay Settings'}
+        </div>
 
-        {/* Audio Toggle */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-gray-200">Audio</span>
-            <span className="text-xs text-gray-400">
-              {includeAudio ? 'Include audio in export' : 'Export video only'}
-            </span>
+        {/* Audio Toggle - Framing mode only */}
+        {isFramingMode && (
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-gray-200">Audio</span>
+              <span className="text-xs text-gray-400">
+                {includeAudio ? 'Include audio in export' : 'Export video only'}
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                onIncludeAudioChange(!includeAudio);
+                setAudioExplicitlySet(true);
+              }}
+              disabled={isExporting}
+              className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                includeAudio ? 'bg-blue-600' : 'bg-gray-600'
+              } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              role="switch"
+              aria-checked={includeAudio}
+              aria-label="Toggle audio"
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                  includeAudio ? 'translate-x-8' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
-          <button
-            onClick={() => {
-              onIncludeAudioChange(!includeAudio);
-              setAudioExplicitlySet(true);
-            }}
-            disabled={isExporting}
-            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-              includeAudio ? 'bg-blue-600' : 'bg-gray-600'
-            } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-            role="switch"
-            aria-checked={includeAudio}
-            aria-label="Toggle audio"
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                includeAudio ? 'translate-x-8' : 'translate-x-1'
-              }`}
+        )}
+
+        {/* Highlight Effect Style - Overlay mode only */}
+        {!isFramingMode && (
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-gray-200">Highlight Effect</span>
+              <span className="text-xs text-gray-400">
+                {!isHighlightEnabled
+                  ? 'Enable highlight layer'
+                  : HIGHLIGHT_EFFECT_LABELS[highlightEffectPosition]}
+              </span>
+            </div>
+
+            <ThreePositionToggle
+              value={highlightEffectPosition}
+              onChange={setHighlightEffectPosition}
+              colors={HIGHLIGHT_EFFECT_COLORS}
+              labels={HIGHLIGHT_EFFECT_LABELS}
+              disabled={isExporting || !isHighlightEnabled}
             />
-          </button>
-        </div>
-
-        {/* Highlight Effect Style */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-gray-200">Highlight Effect</span>
-            <span className="text-xs text-gray-400">
-              {!isHighlightEnabled
-                ? 'Enable highlight layer'
-                : HIGHLIGHT_EFFECT_LABELS[highlightEffectPosition]}
-            </span>
           </div>
-
-          <ThreePositionToggle
-            value={highlightEffectPosition}
-            onChange={setHighlightEffectPosition}
-            colors={HIGHLIGHT_EFFECT_COLORS}
-            labels={HIGHLIGHT_EFFECT_LABELS}
-            disabled={isExporting || !isHighlightEnabled}
-          />
-        </div>
+        )}
 
         {/* Export Info */}
         <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
-          AI upscaling at {EXPORT_CONFIG.targetFps}fps (H.264)
+          {isFramingMode
+            ? `Renders crop/trim/speed at ${EXPORT_CONFIG.targetFps}fps`
+            : `AI upscaling at ${EXPORT_CONFIG.targetFps}fps (H.264)`
+          }
         </div>
       </div>
 
-      {/* Export Button */}
+      {/* Single Export button for both modes */}
       <button
         onClick={handleExport}
         disabled={disabled || isExporting || !videoFile}

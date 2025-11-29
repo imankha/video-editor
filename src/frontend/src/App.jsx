@@ -3,7 +3,6 @@ import { useVideo } from './hooks/useVideo';
 import useZoom from './hooks/useZoom';
 import useTimelineZoom from './hooks/useTimelineZoom';
 import { VideoPlayer } from './components/VideoPlayer';
-import { Timeline } from './components/Timeline';
 import { Controls } from './components/Controls';
 import { FileUpload } from './components/FileUpload';
 import AspectRatioSelector from './components/AspectRatioSelector';
@@ -11,10 +10,12 @@ import ZoomControls from './components/ZoomControls';
 import ExportButton from './components/ExportButton';
 import CompareModelsButton from './components/CompareModelsButton';
 import DebugInfo from './components/DebugInfo';
+import { ModeSwitcher } from './components/shared/ModeSwitcher';
 // Mode-specific imports
-import { useCrop, useSegments, CropOverlay, CropProvider } from './modes/framing';
-import { useHighlight, HighlightOverlay, HighlightProvider } from './modes/overlay';
+import { useCrop, useSegments, FramingMode, CropOverlay, CropProvider } from './modes/framing';
+import { useHighlight, OverlayMode, HighlightOverlay, HighlightProvider } from './modes/overlay';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
+import { extractVideoMetadata } from './utils/videoMetadata';
 
 // Feature flags for experimental features
 // Set to true to enable model comparison UI (for A/B testing different AI models)
@@ -26,10 +27,19 @@ function App() {
   const [dragCrop, setDragCrop] = useState(null);
   const [dragHighlight, setDragHighlight] = useState(null);
 
+  // Editor mode state ('framing' | 'overlay')
+  const [editorMode, setEditorMode] = useState('framing');
+
+  // Overlay mode video state (SEPARATE from framing video)
+  // This is either: 1) Rendered output from Framing, or 2) Fresh upload for Overlay
+  const [overlayVideoFile, setOverlayVideoFile] = useState(null);
+  const [overlayVideoUrl, setOverlayVideoUrl] = useState(null);
+  const [overlayVideoMetadata, setOverlayVideoMetadata] = useState(null);
+
   // Layer selection state for arrow key navigation
   const [selectedLayer, setSelectedLayer] = useState('playhead'); // 'playhead' | 'crop' | 'highlight'
 
-  // Audio state - synced between export settings and playback
+  // Audio state - synced between export settings and playback (Framing mode only)
   const [includeAudio, setIncludeAudio] = useState(true);
   // NOTE: selectedCropKeyframeIndex and selectedHighlightKeyframeIndex are now derived via useMemo
   // (defined after hooks that provide keyframes and currentTime)
@@ -79,7 +89,12 @@ function App() {
     stepBackward,
     restart,
     handlers,
-  } = useVideo(getSegmentAtTime, clampToVisibleRange);
+  // NOTE: Only pass segment functions in Framing mode. In Overlay mode, the rendered
+  // video doesn't have segments/trimming, so we pass null to avoid incorrect playback behavior.
+  } = useVideo(
+    editorMode === 'framing' ? getSegmentAtTime : null,
+    editorMode === 'framing' ? clampToVisibleRange : null
+  );
 
   // Crop hook - always active when video loaded
   const {
@@ -103,6 +118,12 @@ function App() {
   } = useCrop(metadata, trimRange);
 
   // Highlight hook - for highlighting specific players
+  // NOTE: In Overlay mode, use overlay video metadata; no trimRange in overlay mode
+  const effectiveHighlightMetadata = editorMode === 'overlay' && overlayVideoMetadata
+    ? overlayVideoMetadata
+    : metadata;
+  const effectiveHighlightTrimRange = editorMode === 'overlay' ? null : trimRange;
+
   const {
     keyframes: highlightKeyframes,
     isEndKeyframeExplicit: isHighlightEndKeyframeExplicit,
@@ -123,7 +144,7 @@ function App() {
     getHighlightDataAtTime,
     getKeyframesForExport: getHighlightKeyframesForExport,
     reset: resetHighlight,
-  } = useHighlight(metadata, trimRange);
+  } = useHighlight(effectiveHighlightMetadata, effectiveHighlightTrimRange);
 
   // Zoom hook
   const {
@@ -793,6 +814,57 @@ function App() {
     seek(newDuration);
   };
 
+  /**
+   * Handle transition from Framing to Overlay mode
+   * Called when user exports from Framing mode
+   * @param {Blob} renderedVideoBlob - The rendered video from framing export
+   */
+  const handleProceedToOverlay = async (renderedVideoBlob) => {
+    try {
+      // Create URL for the rendered video
+      const url = URL.createObjectURL(renderedVideoBlob);
+
+      // Extract metadata from the rendered video
+      const meta = await extractVideoMetadata(renderedVideoBlob);
+
+      // Clean up old overlay video URL if exists
+      if (overlayVideoUrl) {
+        URL.revokeObjectURL(overlayVideoUrl);
+      }
+
+      // Set overlay video state
+      setOverlayVideoFile(renderedVideoBlob);
+      setOverlayVideoUrl(url);
+      setOverlayVideoMetadata(meta);
+
+      // Reset highlight keyframes for fresh start in overlay mode
+      resetHighlight();
+
+      // Switch to overlay mode
+      setEditorMode('overlay');
+
+      // Wait for video element to load the new source, then seek to beginning
+      // Use a small delay to allow React to update and video to start loading
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.currentTime = 0;
+          // Also pause to ensure it's ready to play from the start
+          videoRef.current.pause();
+        }
+      }, 100);
+
+      console.log('[App] Transitioned to Overlay mode with rendered video:', {
+        width: meta.width,
+        height: meta.height,
+        duration: meta.duration,
+        aspectRatio: meta.aspectRatio,
+      });
+    } catch (err) {
+      console.error('[App] Failed to transition to Overlay mode:', err);
+      throw err; // Re-throw so ExportButton can show error
+    }
+  };
+
   // Prepare crop context value
   const cropContextValue = useMemo(() => ({
     keyframes,
@@ -964,7 +1036,14 @@ function App() {
               Share your player's brilliance
             </p>
           </div>
-          <FileUpload onFileSelect={handleFileSelect} isLoading={isLoading} />
+          <div className="flex items-center gap-4">
+            <ModeSwitcher
+              mode={editorMode}
+              onModeChange={setEditorMode}
+              disabled={!videoUrl}
+            />
+            <FileUpload onFileSelect={handleFileSelect} isLoading={isLoading} />
+          </div>
         </div>
 
         {/* Error Message */}
@@ -1009,10 +1088,13 @@ function App() {
           {/* Controls Bar */}
           {videoUrl && (
             <div className="mb-6 flex gap-4 items-center">
-              <AspectRatioSelector
-                aspectRatio={aspectRatio}
-                onAspectRatioChange={updateAspectRatio}
-              />
+              {/* AspectRatioSelector only visible in Framing mode */}
+              {editorMode === 'framing' && (
+                <AspectRatioSelector
+                  aspectRatio={aspectRatio}
+                  onAspectRatioChange={updateAspectRatio}
+                />
+              )}
               <div className="ml-auto">
                 <ZoomControls
                   zoom={zoom}
@@ -1026,14 +1108,16 @@ function App() {
             </div>
           )}
 
-          {/* Video Player */}
+          {/* Video Player with mode-specific overlays */}
+          {/* In Overlay mode, use overlay video if available */}
           <VideoPlayer
             videoRef={videoRef}
-            videoUrl={videoUrl}
+            videoUrl={editorMode === 'overlay' && overlayVideoUrl ? overlayVideoUrl : videoUrl}
             handlers={handlers}
             onFileSelect={handleFileSelect}
             overlays={[
-              videoUrl && currentCropState && metadata && (
+              // Framing mode overlay (CropOverlay)
+              editorMode === 'framing' && videoUrl && currentCropState && metadata && (
                 <CropOverlay
                   key="crop"
                   videoRef={videoRef}
@@ -1047,11 +1131,12 @@ function App() {
                   selectedKeyframeIndex={selectedCropKeyframeIndex}
                 />
               ),
-              videoUrl && currentHighlightState && metadata && (
+              // Overlay mode overlay (HighlightOverlay) - uses overlay video metadata
+              editorMode === 'overlay' && overlayVideoUrl && currentHighlightState && overlayVideoMetadata && (
                 <HighlightOverlay
                   key="highlight"
                   videoRef={videoRef}
-                  videoMetadata={metadata}
+                  videoMetadata={overlayVideoMetadata}
                   currentHighlight={currentHighlightState}
                   onHighlightChange={handleHighlightChange}
                   onHighlightComplete={handleHighlightComplete}
@@ -1067,70 +1152,122 @@ function App() {
             onPanChange={updatePan}
           />
 
-          {/* Timeline */}
-          {videoUrl && (
-            <div className="mt-6">
-              <CropProvider value={cropContextValue}>
-                <HighlightProvider value={highlightContextValue}>
-                  <Timeline
-                    currentTime={currentTime}
-                    duration={duration}
-                    visualDuration={visualDuration || duration}
-                    sourceDuration={sourceDuration || duration}
-                    trimmedDuration={trimmedDuration || 0}
-                    onSeek={seek}
-                    cropKeyframes={keyframes}
-                    framerate={framerate}
-                    isCropActive={true}
-                    onCropKeyframeClick={handleKeyframeClick}
-                    onCropKeyframeDelete={handleKeyframeDelete}
-                    onCropKeyframeCopy={handleCopyCrop}
-                    onCropKeyframePaste={handlePasteCrop}
-                    selectedCropKeyframeIndex={selectedCropKeyframeIndex}
-                    highlightKeyframes={highlightKeyframes}
-                    highlightFramerate={highlightFramerate}
-                    isHighlightActive={true}
-                    onHighlightKeyframeClick={handleHighlightKeyframeClick}
-                    onHighlightKeyframeDelete={handleHighlightKeyframeDelete}
-                    onHighlightKeyframeCopy={handleCopyHighlight}
-                    onHighlightKeyframePaste={handlePasteHighlight}
-                    selectedHighlightKeyframeIndex={selectedHighlightKeyframeIndex}
-                    onHighlightToggleEnabled={toggleHighlightEnabled}
-                    onHighlightDurationChange={handleHighlightDurationChange}
-                    selectedLayer={selectedLayer}
-                    onLayerSelect={setSelectedLayer}
-                    segments={segments}
-                    segmentBoundaries={segmentBoundaries}
-                    segmentVisualLayout={segmentVisualLayout}
-                    isSegmentActive={true}
-                    onAddSegmentBoundary={addSegmentBoundary}
-                    onRemoveSegmentBoundary={removeSegmentBoundary}
-                    onSegmentSpeedChange={setSegmentSpeed}
-                    onSegmentTrim={handleTrimSegment}
-                    trimRange={trimRange}
-                    trimHistory={trimHistory}
-                    onDetrimStart={handleDetrimStart}
-                    onDetrimEnd={handleDetrimEnd}
-                    sourceTimeToVisualTime={sourceTimeToVisualTime}
-                    visualTimeToSourceTime={visualTimeToSourceTime}
-                    timelineZoom={timelineZoom}
-                    onTimelineZoomByWheel={timelineZoomByWheel}
-                    timelineScale={getTimelineScale()}
-                    timelineScrollPosition={timelineScrollPosition}
-                    onTimelineScrollPositionChange={updateTimelineScrollPosition}
-                  />
-                </HighlightProvider>
-              </CropProvider>
+          {/* Mode-specific content (overlays + timelines) */}
+          {videoUrl && editorMode === 'framing' && (
+            <FramingMode
+              videoRef={videoRef}
+              videoUrl={videoUrl}
+              metadata={metadata}
+              currentTime={currentTime}
+              duration={duration}
+              cropContextValue={cropContextValue}
+              currentCropState={currentCropState}
+              aspectRatio={aspectRatio}
+              cropKeyframes={keyframes}
+              framerate={framerate}
+              selectedCropKeyframeIndex={selectedCropKeyframeIndex}
+              copiedCrop={copiedCrop}
+              onCropChange={handleCropChange}
+              onCropComplete={handleCropComplete}
+              onCropKeyframeClick={handleKeyframeClick}
+              onCropKeyframeDelete={handleKeyframeDelete}
+              onCropKeyframeCopy={handleCopyCrop}
+              onCropKeyframePaste={handlePasteCrop}
+              zoom={zoom}
+              panOffset={panOffset}
+              segments={segments}
+              segmentBoundaries={segmentBoundaries}
+              segmentVisualLayout={segmentVisualLayout}
+              visualDuration={visualDuration || duration}
+              trimRange={trimRange}
+              trimHistory={trimHistory}
+              onAddSegmentBoundary={addSegmentBoundary}
+              onRemoveSegmentBoundary={removeSegmentBoundary}
+              onSegmentSpeedChange={setSegmentSpeed}
+              onSegmentTrim={handleTrimSegment}
+              onDetrimStart={handleDetrimStart}
+              onDetrimEnd={handleDetrimEnd}
+              sourceTimeToVisualTime={sourceTimeToVisualTime}
+              visualTimeToSourceTime={visualTimeToSourceTime}
+              selectedLayer={selectedLayer}
+              onLayerSelect={setSelectedLayer}
+              onSeek={seek}
+              timelineZoom={timelineZoom}
+              onTimelineZoomByWheel={timelineZoomByWheel}
+              timelineScale={getTimelineScale()}
+              timelineScrollPosition={timelineScrollPosition}
+              onTimelineScrollPositionChange={updateTimelineScrollPosition}
+            />
+          )}
+
+          {/* Overlay mode requires overlayVideoUrl (rendered from Framing) */}
+          {overlayVideoUrl && editorMode === 'overlay' && (
+            <OverlayMode
+              videoRef={videoRef}
+              videoUrl={overlayVideoUrl}
+              metadata={overlayVideoMetadata}
+              currentTime={currentTime}
+              duration={overlayVideoMetadata?.duration || duration}
+              highlightContextValue={highlightContextValue}
+              currentHighlightState={currentHighlightState}
+              isHighlightEnabled={isHighlightEnabled}
+              highlightKeyframes={highlightKeyframes}
+              highlightFramerate={highlightFramerate}
+              highlightDuration={highlightDuration}
+              selectedHighlightKeyframeIndex={selectedHighlightKeyframeIndex}
+              copiedHighlight={copiedHighlight}
+              onHighlightChange={handleHighlightChange}
+              onHighlightComplete={handleHighlightComplete}
+              onHighlightKeyframeClick={handleHighlightKeyframeClick}
+              onHighlightKeyframeDelete={handleHighlightKeyframeDelete}
+              onHighlightKeyframeCopy={handleCopyHighlight}
+              onHighlightKeyframePaste={handlePasteHighlight}
+              onHighlightToggleEnabled={toggleHighlightEnabled}
+              onHighlightDurationChange={handleHighlightDurationChange}
+              zoom={zoom}
+              panOffset={panOffset}
+              visualDuration={overlayVideoMetadata?.duration || duration}
+              selectedLayer={selectedLayer}
+              onLayerSelect={setSelectedLayer}
+              onSeek={seek}
+              // NOTE: Overlay mode uses identity functions - no segment transformations
+              // The overlay video is a fresh render without speed/trim segments
+              sourceTimeToVisualTime={(t) => t}
+              visualTimeToSourceTime={(t) => t}
+              timelineZoom={timelineZoom}
+              onTimelineZoomByWheel={timelineZoomByWheel}
+              timelineScale={getTimelineScale()}
+              timelineScrollPosition={timelineScrollPosition}
+              onTimelineScrollPositionChange={updateTimelineScrollPosition}
+              trimRange={null}  // No trimming in overlay mode
+            />
+          )}
+
+          {/* Message when in Overlay mode but no overlay video */}
+          {editorMode === 'overlay' && !overlayVideoUrl && videoUrl && (
+            <div className="mt-6 bg-purple-900/30 border border-purple-500/50 rounded-lg p-6 text-center">
+              <p className="text-purple-200 font-medium mb-2">
+                No overlay video available
+              </p>
+              <p className="text-purple-300/70 text-sm mb-4">
+                Export from Framing mode first to create a video for overlay editing.
+              </p>
+              <button
+                onClick={() => setEditorMode('framing')}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Switch to Framing Mode
+              </button>
             </div>
           )}
 
-          {/* Controls */}
-          {videoUrl && (
+          {/* Controls - show for current mode's video */}
+          {((editorMode === 'framing' && videoUrl) || (editorMode === 'overlay' && overlayVideoUrl)) && (
             <div className="mt-6">
               <Controls
                 isPlaying={isPlaying}
                 currentTime={currentTime}
-                duration={duration}
+                duration={editorMode === 'overlay' ? (overlayVideoMetadata?.duration || duration) : duration}
                 onTogglePlay={togglePlay}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
@@ -1139,18 +1276,20 @@ function App() {
             </div>
           )}
 
-          {/* Export Button */}
-          {videoUrl && (
+          {/* Export Button - show for current mode's video */}
+          {((editorMode === 'framing' && videoUrl) || (editorMode === 'overlay' && overlayVideoUrl)) && (
             <div className="mt-6">
               <ExportButton
-                videoFile={videoFile}
-                cropKeyframes={getFilteredKeyframesForExport}
-                highlightKeyframes={getFilteredHighlightKeyframesForExport}
-                isHighlightEnabled={isHighlightEnabled}
-                segmentData={getSegmentExportData()}
-                disabled={!videoFile}
+                videoFile={editorMode === 'overlay' ? overlayVideoFile : videoFile}
+                cropKeyframes={editorMode === 'framing' ? getFilteredKeyframesForExport : []}
+                highlightKeyframes={editorMode === 'overlay' ? getFilteredHighlightKeyframesForExport : []}
+                isHighlightEnabled={editorMode === 'overlay' && isHighlightEnabled}
+                segmentData={editorMode === 'framing' ? getSegmentExportData() : null}
+                disabled={editorMode === 'framing' ? !videoFile : !overlayVideoFile}
                 includeAudio={includeAudio}
                 onIncludeAudioChange={setIncludeAudio}
+                editorMode={editorMode}
+                onProceedToOverlay={handleProceedToOverlay}
               />
             </div>
           )}

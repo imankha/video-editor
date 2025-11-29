@@ -1,6 +1,7 @@
 // Shared component exports
 // Components in shared/ directory
 export { ExportProgress } from './ExportProgress';
+export { ModeSwitcher } from './ModeSwitcher';
 
 // Re-exports from parent components/ directory for cleaner imports
 export { Controls } from '../Controls';

@@ -54,11 +54,12 @@ export function FramingTimeline({
 }) {
   // Calculate total layer height for playhead line
   const getTotalLayerHeight = () => {
-    // Base: Video track (12) + Crop layer (12) = 24 + gaps
+    // Base: Video track (h-12=3rem) + gap (mt-1=0.25rem) + Crop layer (h-12=3rem)
     let height = '6.5rem'; // Default: Video + Crop only
 
     if (segments.length > 0) {
-      height = '100%'; // Full height with segments
+      // Add: gap (0.25rem) + Segment layer (h-20=5rem) = 5.25rem more
+      height = '11.75rem';
     }
 
     return height;
@@ -89,7 +90,7 @@ export function FramingTimeline({
 
       {/* Segment Layer Label (only if segments exist) */}
       {segments.length > 0 && (
-        <div className="mt-1 h-16 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 rounded-bl-lg">
+        <div className="mt-1 h-20 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 rounded-bl-lg">
           <Split size={18} className="text-purple-400" />
         </div>
       )}

@@ -1,14 +1,15 @@
 import React from 'react';
 import { CropProvider } from './contexts/CropContext';
-import CropOverlay from './overlays/CropOverlay';
 import FramingTimeline from './FramingTimeline';
 
 /**
  * FramingMode - Container component for Framing mode.
  *
  * This component encapsulates all framing-specific UI and logic:
- * - CropOverlay for video crop preview/editing
  * - FramingTimeline for crop and segment keyframes
+ *
+ * NOTE: CropOverlay is rendered by App.jsx inside VideoPlayer for correct positioning.
+ * The overlay needs to be inside the video-container for absolute positioning to work.
  *
  * Currently accepts props from App.jsx for minimal changes during Phase 2.
  * In Phase 3+, state management (useCrop, useSegments, useZoom) will move here.
@@ -75,20 +76,7 @@ export function FramingMode({
 }) {
   return (
     <CropProvider value={cropContextValue}>
-      {/* Render CropOverlay if video is loaded and crop state exists */}
-      {videoUrl && currentCropState && metadata && (
-        <CropOverlay
-          videoRef={videoRef}
-          videoMetadata={metadata}
-          currentCrop={currentCropState}
-          aspectRatio={aspectRatio}
-          onCropChange={onCropChange}
-          onCropComplete={onCropComplete}
-          zoom={zoom}
-          panOffset={panOffset}
-          selectedKeyframeIndex={selectedCropKeyframeIndex}
-        />
-      )}
+      {/* NOTE: CropOverlay is rendered by App.jsx inside VideoPlayer */}
 
       {/* FramingTimeline */}
       {videoUrl && (
