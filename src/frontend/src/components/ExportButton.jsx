@@ -39,6 +39,8 @@ export default function ExportButton({
   disabled,
   includeAudio,
   onIncludeAudioChange,
+  highlightEffectType = 'original',       // 'brightness_boost' | 'original' | 'dark_overlay'
+  onHighlightEffectTypeChange,            // Callback to change effect type (updates preview too)
   editorMode = 'framing',      // 'framing' | 'overlay'
   onProceedToOverlay,          // Callback when framing export completes (receives blob)
 }) {
@@ -47,10 +49,14 @@ export default function ExportButton({
   const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState(null);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
-  const [highlightEffectPosition, setHighlightEffectPosition] = useState(0);
   const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
+
+  // Map effect type to toggle position
+  const effectTypeToPosition = { 'brightness_boost': 0, 'original': 1, 'dark_overlay': 2 };
+  const positionToEffectType = ['brightness_boost', 'original', 'dark_overlay'];
+  const highlightEffectPosition = effectTypeToPosition[highlightEffectType] ?? 1;
 
   // Cleanup WebSocket on unmount
   useEffect(() => {
@@ -119,10 +125,16 @@ export default function ExportButton({
       return;
     }
 
-    if (!cropKeyframes || cropKeyframes.length === 0) {
-      setError('No crop keyframes defined. Please add at least one crop keyframe.');
-      return;
+    // Mode-specific validation
+    if (editorMode === 'framing') {
+      // Framing mode requires crop keyframes
+      if (!cropKeyframes || cropKeyframes.length === 0) {
+        setError('No crop keyframes defined. Please add at least one crop keyframe.');
+        return;
+      }
     }
+    // Overlay mode: No crop validation needed (crop already baked in)
+    // Highlights are optional - export works with or without them
 
     setIsExporting(true);
     setProgress(0);
@@ -135,38 +147,55 @@ export default function ExportButton({
     exportIdRef.current = exportId;
 
     try {
-      // Prepare form data with fixed export settings
+      // Prepare form data based on mode
       const formData = new FormData();
       formData.append('video', videoFile);
-      formData.append('keyframes_json', JSON.stringify(cropKeyframes));
-      formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
       formData.append('export_id', exportId);
-      formData.append('export_mode', EXPORT_CONFIG.exportMode);
       formData.append('include_audio', includeAudio ? 'true' : 'false');
 
-      // Add segment data if available (only if speed changes or trimming exist)
-      if (segmentData) {
-        console.log('=== EXPORT: Sending segment data to backend ===');
-        console.log(JSON.stringify(segmentData, null, 2));
-        console.log('==============================================');
-        formData.append('segment_data_json', JSON.stringify(segmentData));
-      } else {
-        console.log('=== EXPORT: No segment data to send ===');
-      }
+      let endpoint;
 
-      // Add highlight keyframes if available
-      if (highlightKeyframes && highlightKeyframes.length > 0) {
-        console.log('=== EXPORT: Sending highlight keyframes to backend ===');
-        console.log(JSON.stringify(highlightKeyframes, null, 2));
-        console.log('==============================================');
-        formData.append('highlight_keyframes_json', JSON.stringify(highlightKeyframes));
-        formData.append('highlight_effect_type', HIGHLIGHT_EFFECT_STYLES[highlightEffectPosition]);
-      } else {
-        console.log('=== EXPORT: No highlight keyframes to send (layer disabled or empty) ===');
-      }
+      if (editorMode === 'framing') {
+        // Framing mode: Use AI upscale endpoint with crop/trim/speed
+        endpoint = 'http://localhost:8000/api/export/upscale';
 
-      // Use optimized AI upscale endpoint (raw ESRGAN + H.264 fast CRF 18)
-      const endpoint = 'http://localhost:8000/api/export/upscale';
+        formData.append('keyframes_json', JSON.stringify(cropKeyframes));
+        formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
+        formData.append('export_mode', EXPORT_CONFIG.exportMode);
+
+        // Add segment data if available (only if speed changes or trimming exist)
+        if (segmentData) {
+          console.log('=== EXPORT: Sending segment data to backend ===');
+          console.log(JSON.stringify(segmentData, null, 2));
+          console.log('==============================================');
+          formData.append('segment_data_json', JSON.stringify(segmentData));
+        } else {
+          console.log('=== EXPORT: No segment data to send ===');
+        }
+
+        // Add highlight keyframes if available (for framing mode that also has highlights)
+        if (highlightKeyframes && highlightKeyframes.length > 0) {
+          console.log('=== EXPORT: Sending highlight keyframes to backend ===');
+          console.log(JSON.stringify(highlightKeyframes, null, 2));
+          console.log('==============================================');
+          formData.append('highlight_keyframes_json', JSON.stringify(highlightKeyframes));
+          formData.append('highlight_effect_type', highlightEffectType);
+        }
+      } else {
+        // Overlay mode: Use simple overlay endpoint (no crop, no AI, no trim)
+        endpoint = 'http://localhost:8000/api/export/overlay';
+
+        // Add highlight keyframes and effect type
+        if (highlightKeyframes && highlightKeyframes.length > 0) {
+          console.log('=== OVERLAY EXPORT: Sending highlight keyframes ===');
+          console.log(JSON.stringify(highlightKeyframes, null, 2));
+          console.log('==============================================');
+          formData.append('highlight_keyframes_json', JSON.stringify(highlightKeyframes));
+        } else {
+          console.log('=== OVERLAY EXPORT: No highlight keyframes (will pass through video) ===');
+        }
+        formData.append('highlight_effect_type', highlightEffectType);
+      }
 
       // Connect WebSocket for real-time progress updates
       connectWebSocket(exportId);
@@ -341,7 +370,7 @@ export default function ExportButton({
 
             <ThreePositionToggle
               value={highlightEffectPosition}
-              onChange={setHighlightEffectPosition}
+              onChange={(pos) => onHighlightEffectTypeChange?.(positionToEffectType[pos])}
               colors={HIGHLIGHT_EFFECT_COLORS}
               labels={HIGHLIGHT_EFFECT_LABELS}
               disabled={isExporting || !isHighlightEnabled}
@@ -352,8 +381,8 @@ export default function ExportButton({
         {/* Export Info */}
         <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
           {isFramingMode
-            ? `Renders crop/trim/speed at ${EXPORT_CONFIG.targetFps}fps`
-            : `AI upscaling at ${EXPORT_CONFIG.targetFps}fps (H.264)`
+            ? `Renders crop/trim/speed with AI upscaling at ${EXPORT_CONFIG.targetFps}fps`
+            : `Applies highlight overlay (H.264)`
           }
         </div>
       </div>
@@ -386,7 +415,7 @@ export default function ExportButton({
         isExporting={isExporting}
         progress={progress}
         progressMessage={progressMessage}
-        label="AI Upscaling"
+        label={isFramingMode ? "AI Upscaling" : "Overlay Export"}
       />
 
       {/* Error message */}

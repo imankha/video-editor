@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel
 from datetime import datetime
 import ffmpeg
@@ -1359,6 +1360,241 @@ async def export_with_upscale_comparison(
         if os.path.exists(temp_dir):
             import shutil
             shutil.rmtree(temp_dir)
+
+
+@app.post("/api/export/overlay")
+async def export_overlay_only(
+    video: UploadFile = File(...),
+    export_id: str = Form(...),
+    highlight_keyframes_json: str = Form(None),
+    highlight_effect_type: str = Form("original"),
+    include_audio: str = Form("true")
+):
+    """
+    Export video with highlight overlays ONLY - no cropping, no AI upscaling, no trimming.
+
+    This is a fast export endpoint for Overlay mode where:
+    - The video has already been cropped/trimmed during Framing export
+    - We just need to composite highlight effects on top
+
+    Args:
+        video: Video file to process (already cropped/trimmed from Framing)
+        export_id: Unique ID for tracking export progress
+        highlight_keyframes_json: JSON array of highlight keyframes
+        highlight_effect_type: "brightness_boost", "original", or "dark_overlay"
+        include_audio: Include audio in export - "true" or "false"
+
+    Returns:
+        Video file with highlight overlays applied
+    """
+    import cv2
+    import numpy as np
+    from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
+
+    # Initialize progress tracking
+    export_progress[export_id] = {
+        "progress": 5,
+        "message": "Starting overlay export...",
+        "status": "processing"
+    }
+
+    include_audio_bool = include_audio.lower() == "true"
+    logger.info(f"[Overlay Export] Audio: {'Include' if include_audio_bool else 'Exclude'}")
+    logger.info(f"[Overlay Export] Effect type: {highlight_effect_type}")
+
+    # Parse highlight keyframes
+    highlight_keyframes = []
+    if highlight_keyframes_json:
+        try:
+            highlight_data = json.loads(highlight_keyframes_json)
+            highlight_keyframes = [
+                {
+                    'time': kf['time'],
+                    'x': kf['x'],
+                    'y': kf['y'],
+                    'radiusX': kf['radiusX'],
+                    'radiusY': kf['radiusY'],
+                    'opacity': kf['opacity'],
+                    'color': kf['color']
+                }
+                for kf in highlight_data
+            ]
+            logger.info(f"[Overlay Export] Received {len(highlight_keyframes)} highlight keyframes")
+        except (json.JSONDecodeError, KeyError) as e:
+            raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {str(e)}")
+    else:
+        logger.info("[Overlay Export] No highlight keyframes - will pass through video unchanged")
+
+    # Create temp directory
+    temp_dir = tempfile.mkdtemp()
+    input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex}{Path(video.filename).suffix}")
+    output_path = os.path.join(temp_dir, f"overlay_{uuid.uuid4().hex}.mp4")
+    frames_dir = os.path.join(temp_dir, "frames")
+    os.makedirs(frames_dir, exist_ok=True)
+
+    try:
+        # Save uploaded file
+        with open(input_path, 'wb') as f:
+            content = await video.read()
+            f.write(content)
+
+        # Update progress
+        progress_data = {"progress": 10, "message": "Processing video...", "status": "processing"}
+        export_progress[export_id] = progress_data
+        await manager.send_progress(export_id, progress_data)
+
+        # Open video with OpenCV
+        cap = cv2.VideoCapture(input_path)
+        if not cap.isOpened():
+            raise HTTPException(status_code=400, detail="Could not open video file")
+
+        # Get video properties
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        duration = frame_count / fps if fps > 0 else 0
+
+        logger.info(f"[Overlay Export] Video: {width}x{height} @ {fps}fps, {frame_count} frames, {duration:.2f}s")
+
+        # If no highlights, just copy the video (fast path)
+        if not highlight_keyframes:
+            cap.release()
+            logger.info("[Overlay Export] No highlights - copying video directly")
+
+            # Just copy the file
+            import shutil
+            shutil.copy(input_path, output_path)
+
+            progress_data = {"progress": 100, "message": "Export complete!", "status": "complete"}
+            export_progress[export_id] = progress_data
+            await manager.send_progress(export_id, progress_data)
+
+            return FileResponse(
+                output_path,
+                media_type='video/mp4',
+                filename=f"overlay_{video.filename}",
+                background=None
+            )
+
+        # Process frames with highlights
+        original_size = (width, height)
+        frame_paths = []
+        frame_idx = 0
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            current_time = frame_idx / fps
+
+            # Interpolate highlight at current time
+            highlight = KeyframeInterpolator.interpolate_highlight(highlight_keyframes, current_time)
+
+            # Render highlight if we have one
+            if highlight is not None:
+                frame = KeyframeInterpolator.render_highlight_on_frame(
+                    frame,
+                    highlight,
+                    original_size,
+                    crop=None,  # No crop - video is already cropped
+                    effect_type=highlight_effect_type
+                )
+
+            # Save frame
+            frame_path = os.path.join(frames_dir, f"frame_{frame_idx:06d}.png")
+            cv2.imwrite(frame_path, frame)
+            frame_paths.append(frame_path)
+
+            frame_idx += 1
+
+            # Update progress (10-80% for frame processing)
+            if frame_idx % 30 == 0:  # Update every second at 30fps
+                progress = 10 + int((frame_idx / frame_count) * 70)
+                progress_data = {
+                    "progress": progress,
+                    "message": f"Processing frame {frame_idx}/{frame_count}...",
+                    "status": "processing"
+                }
+                export_progress[export_id] = progress_data
+                await manager.send_progress(export_id, progress_data)
+
+        cap.release()
+        logger.info(f"[Overlay Export] Processed {frame_idx} frames")
+
+        # Update progress
+        progress_data = {"progress": 80, "message": "Encoding video...", "status": "processing"}
+        export_progress[export_id] = progress_data
+        await manager.send_progress(export_id, progress_data)
+
+        # Encode with FFmpeg
+        ffmpeg_cmd = [
+            'ffmpeg', '-y',
+            '-framerate', str(fps),
+            '-i', os.path.join(frames_dir, 'frame_%06d.png'),
+        ]
+
+        # Add audio from original if requested
+        if include_audio_bool:
+            ffmpeg_cmd.extend(['-i', input_path, '-map', '0:v', '-map', '1:a?'])
+
+        ffmpeg_cmd.extend([
+            '-c:v', 'libx264',
+            '-preset', 'medium',
+            '-crf', '18',
+            '-pix_fmt', 'yuv420p',
+        ])
+
+        if include_audio_bool:
+            ffmpeg_cmd.extend(['-c:a', 'aac', '-b:a', '192k'])
+
+        ffmpeg_cmd.append(output_path)
+
+        logger.info(f"[Overlay Export] FFmpeg command: {' '.join(ffmpeg_cmd)}")
+
+        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(f"[Overlay Export] FFmpeg error: {result.stderr}")
+            raise HTTPException(status_code=500, detail=f"FFmpeg encoding failed: {result.stderr}")
+
+        # Update progress - complete
+        progress_data = {"progress": 100, "message": "Export complete!", "status": "complete"}
+        export_progress[export_id] = progress_data
+        await manager.send_progress(export_id, progress_data)
+
+        logger.info(f"[Overlay Export] Complete: {output_path}")
+
+        # Define cleanup function to run after response is sent
+        def cleanup_temp_dir():
+            import shutil
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+                logger.info(f"[Overlay Export] Cleaned up temp directory: {temp_dir}")
+
+        return FileResponse(
+            output_path,
+            media_type='video/mp4',
+            filename=f"overlay_{video.filename}",
+            background=BackgroundTask(cleanup_temp_dir)
+        )
+
+    except HTTPException:
+        # Cleanup on HTTP exception
+        import shutil
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        raise
+    except Exception as e:
+        logger.error(f"[Overlay Export] Failed: {str(e)}", exc_info=True)
+        error_data = {"progress": 0, "message": f"Export failed: {str(e)}", "status": "error"}
+        export_progress[export_id] = error_data
+        await manager.send_progress(export_id, error_data)
+        # Cleanup on error
+        import shutil
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        raise HTTPException(status_code=500, detail=f"Overlay export failed: {str(e)}")
 
 
 if __name__ == "__main__":

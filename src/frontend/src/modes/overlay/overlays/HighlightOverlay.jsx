@@ -12,6 +12,7 @@ export default function HighlightOverlay({
   onHighlightChange,
   onHighlightComplete,
   isEnabled = false,
+  effectType = 'original',  // 'brightness_boost' | 'original' | 'dark_overlay'
   zoom = 1,
   panOffset = { x: 0, y: 0 }
 }) {
@@ -252,6 +253,10 @@ export default function HighlightOverlay({
   const fillColor = currentHighlight.color || '#FFFF00';
   const strokeColor = fillColor;
 
+  // Calculate container dimensions for dark_overlay effect
+  const containerWidth = videoDisplayRect.offsetX * 2 + videoDisplayRect.width;
+  const containerHeight = videoDisplayRect.offsetY * 2 + videoDisplayRect.height;
+
   return (
     <div
       ref={overlayRef}
@@ -269,17 +274,75 @@ export default function HighlightOverlay({
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{ position: 'absolute', top: 0, left: 0 }}
       >
-        {/* Main highlight ellipse */}
+        {/* Define masks and filters for different effects */}
+        <defs>
+          {/* Mask for dark_overlay effect - ellipse is transparent, rest is dark */}
+          <mask id="highlight-mask">
+            <rect width="100%" height="100%" fill="white" />
+            <ellipse
+              cx={screenHighlight.x}
+              cy={screenHighlight.y}
+              rx={screenHighlight.radiusX}
+              ry={screenHighlight.radiusY}
+              fill="black"
+            />
+          </mask>
+        </defs>
+
+        {/* Dark overlay effect - darken everything outside the ellipse */}
+        {effectType === 'dark_overlay' && (
+          <rect
+            x="0"
+            y="0"
+            width="100%"
+            height="100%"
+            fill="black"
+            fillOpacity="0.4"
+            mask="url(#highlight-mask)"
+            className="pointer-events-none"
+          />
+        )}
+
+        {/* Brightness boost effect - brighter fill inside ellipse */}
+        {effectType === 'brightness_boost' && (
+          <ellipse
+            cx={screenHighlight.x}
+            cy={screenHighlight.y}
+            rx={screenHighlight.radiusX}
+            ry={screenHighlight.radiusY}
+            fill="white"
+            fillOpacity="0.3"
+            className="pointer-events-none"
+          />
+        )}
+
+        {/* Original effect - colored ellipse with outline */}
+        {effectType === 'original' && (
+          <ellipse
+            cx={screenHighlight.x}
+            cy={screenHighlight.y}
+            rx={screenHighlight.radiusX}
+            ry={screenHighlight.radiusY}
+            fill={fillColor}
+            fillOpacity={currentHighlight.opacity}
+            stroke={strokeColor}
+            strokeWidth="3"
+            strokeOpacity="0.6"
+            className="pointer-events-none"
+          />
+        )}
+
+        {/* Interactive ellipse for dragging (always visible as outline) */}
         <ellipse
           cx={screenHighlight.x}
           cy={screenHighlight.y}
           rx={screenHighlight.radiusX}
           ry={screenHighlight.radiusY}
-          fill={fillColor}
-          fillOpacity={currentHighlight.opacity}
-          stroke={strokeColor}
-          strokeWidth="3"
+          fill="transparent"
+          stroke={effectType === 'original' ? 'transparent' : strokeColor}
+          strokeWidth={effectType === 'original' ? '0' : '2'}
           strokeOpacity="0.6"
+          strokeDasharray={effectType !== 'original' ? '5,5' : 'none'}
           className="pointer-events-auto cursor-move"
           onMouseDown={handleEllipseMouseDown}
         />

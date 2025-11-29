@@ -41,6 +41,11 @@ function App() {
 
   // Audio state - synced between export settings and playback (Framing mode only)
   const [includeAudio, setIncludeAudio] = useState(true);
+
+  // Highlight effect type - controls both client-side preview and export
+  // 'brightness_boost' | 'original' | 'dark_overlay'
+  const [highlightEffectType, setHighlightEffectType] = useState('original');
+
   // NOTE: selectedCropKeyframeIndex and selectedHighlightKeyframeIndex are now derived via useMemo
   // (defined after hooks that provide keyframes and currentTime)
 
@@ -775,7 +780,8 @@ function App() {
 
   // Handle highlight complete (create keyframe and clear drag state)
   const handleHighlightComplete = (highlightData) => {
-    const frame = Math.round(currentTime * framerate);
+    // NOTE: Must use highlightFramerate (not crop framerate) since highlight keyframes use highlight framerate
+    const frame = Math.round(currentTime * highlightFramerate);
     const isUpdate = highlightKeyframes.some(kf => kf.frame === frame);
     console.log(`[App] Highlight ${isUpdate ? 'update' : 'add'} at ${currentTime.toFixed(2)}s (frame ${frame}): pos=(${highlightData.x},${highlightData.y}), r=${highlightData.radiusX}x${highlightData.radiusY}`);
 
@@ -1141,6 +1147,7 @@ function App() {
                   onHighlightChange={handleHighlightChange}
                   onHighlightComplete={handleHighlightComplete}
                   isEnabled={isHighlightEnabled}
+                  effectType={highlightEffectType}
                   zoom={zoom}
                   panOffset={panOffset}
                 />
@@ -1288,6 +1295,8 @@ function App() {
                 disabled={editorMode === 'framing' ? !videoFile : !overlayVideoFile}
                 includeAudio={includeAudio}
                 onIncludeAudioChange={setIncludeAudio}
+                highlightEffectType={highlightEffectType}
+                onHighlightEffectTypeChange={setHighlightEffectType}
                 editorMode={editorMode}
                 onProceedToOverlay={handleProceedToOverlay}
               />

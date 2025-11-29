@@ -92,41 +92,78 @@ src/frontend/src/
 | ~~Phase 1: Move files to mode dirs~~ | ✅ **COMPLETE** | Files moved to `modes/framing/` and `modes/overlay/` |
 | ~~Phase 2: Mode containers~~ | ✅ **COMPLETE** | Created `FramingMode.jsx`, `OverlayMode.jsx`, `FramingTimeline.jsx`, `OverlayTimeline.jsx` |
 | ~~Phase 3: Mode switcher~~ | ✅ **COMPLETE** | Added `ModeSwitcher.jsx`, mode state in App.jsx, conditional rendering |
-| ~~Phase 4: Transitions~~ | ⚠️ **PARTIAL** | Overlay video state, mode-specific export settings, Proceed to Overlay flow - **BUG: Export validation is mode-unaware** |
-| **Phase 4.5: Fix Export Validation** | 🔲 **REQUIRED** | ExportButton validation must be mode-aware (see Known Issues below) |
-| Phase 5: Mode exports | 🔲 Pending | Create `FramingExport.jsx`, `OverlayExport.jsx` (optional refinement) |
+| ~~Phase 4: Transitions~~ | ✅ **COMPLETE** | Overlay video state, mode-specific export settings, Proceed to Overlay flow |
+| ~~Phase 4.5: Fix Export Validation~~ | ✅ **COMPLETE** | ExportButton validation is now mode-aware |
+| ~~Phase 5: Overlay Export Refactor~~ | ✅ **COMPLETE** | New `/api/export/overlay` endpoint, client-side effect preview, highlight effect toggle |
 | Phase 6: Cleanup | 🔲 Pending | Remove old files, polish |
 
 ---
 
-## Known Issues (Phase 4.5)
+## Phase 5 Implementation Details - ✅ COMPLETE
 
-### Issue: Overlay Export Fails with "No crop keyframes defined"
+### New Backend Endpoint: `/api/export/overlay`
+**File:** `src/backend/app/main.py` (lines 1364-1597)
 
-**Symptom:** When user tries to export from Overlay mode, they get error: "No crop keyframes defined. Please add at least one crop keyframe."
+A lightweight export endpoint for Overlay mode that:
+- Takes pre-cropped video (from Framing export)
+- Composites highlight overlays using `KeyframeInterpolator.render_highlight_on_frame`
+- NO crop keyframes required
+- NO AI upscaling
+- NO trimming/speed changes
+- Supports all 3 effect types: `brightness_boost`, `original`, `dark_overlay`
+- Uses `BackgroundTask` for proper temp directory cleanup after streaming
 
-**Root Cause:** `ExportButton.jsx` validates `cropKeyframes` regardless of mode. In Overlay mode, crop keyframes are intentionally empty (crop was already applied during the Framing→Overlay render).
+### Client-Side Highlight Effect Preview
+**File:** `src/frontend/src/modes/overlay/overlays/HighlightOverlay.jsx`
 
-**Current Code (ExportButton.jsx lines 122-125):**
+Added `effectType` prop with 3 visual effects:
+- **brightness_boost**: White semi-transparent overlay inside ellipse
+- **original**: Yellow ellipse with outline (existing behavior)
+- **dark_overlay**: Dark mask outside ellipse using SVG mask
+
+### Shared State Architecture
+**File:** `src/frontend/src/App.jsx`
+
+- Added `highlightEffectType` state (line 47)
+- Passed to `HighlightOverlay` for real-time preview
+- Passed to `ExportButton` for export
+- Changing the effect toggle immediately updates the video preview
+
+### ExportButton Mode-Aware Routing
+**File:** `src/frontend/src/components/ExportButton.jsx`
+
+- **Framing mode**: Uses `/api/export/upscale` (with crop, AI, trim/speed)
+- **Overlay mode**: Uses `/api/export/overlay` (just highlights)
+
+---
+
+## Known Issues (Phase 4.5) - ✅ RESOLVED
+
+### ~~Issue: Overlay Export Fails with "No crop keyframes defined"~~ FIXED
+
+**Symptom:** ~~When user tries to export from Overlay mode, they get error: "No crop keyframes defined. Please add at least one crop keyframe."~~
+
+**Root Cause:** ~~`ExportButton.jsx` validates `cropKeyframes` regardless of mode. In Overlay mode, crop keyframes are intentionally empty (crop was already applied during the Framing→Overlay render).~~
+
+**Fix Applied (ExportButton.jsx lines 122-131):**
 ```javascript
-if (!cropKeyframes || cropKeyframes.length === 0) {
-  setError('No crop keyframes defined. Please add at least one crop keyframe.');
-  return;
+// Mode-specific validation
+if (editorMode === 'framing') {
+  // Framing mode requires crop keyframes
+  if (!cropKeyframes || cropKeyframes.length === 0) {
+    setError('No crop keyframes defined. Please add at least one crop keyframe.');
+    return;
+  }
 }
+// Overlay mode: No crop validation needed (crop already baked in)
+// Highlights are optional - export works with or without them
 ```
 
-**Required Fix:** Mode-aware validation:
-- **Framing mode**: Require `cropKeyframes.length > 0`
-- **Overlay mode**: Skip crop validation entirely (crop already baked in); optionally validate `highlightKeyframes` if highlight is enabled
-
-**Files to Modify:**
-1. `src/frontend/src/components/ExportButton.jsx` - Add mode-aware validation
-
-**Test Cases:**
-1. Framing mode with no crop keyframes → Should show error
-2. Framing mode with crop keyframes → Should export successfully
-3. Overlay mode with no highlight keyframes → Should export successfully (highlights are optional)
-4. Overlay mode with highlight keyframes → Should export successfully with highlights
+**Test Cases (all passing):**
+1. ✅ Framing mode with no crop keyframes → Shows error
+2. ✅ Framing mode with crop keyframes → Exports successfully
+3. ✅ Overlay mode with no highlight keyframes → Exports successfully (highlights are optional)
+4. ✅ Overlay mode with highlight keyframes → Exports successfully with highlights
 
 ---
 
@@ -1549,14 +1586,49 @@ if (editorMode === 'framing') {
 | ~~1. Move files~~ | ✅ **DONE** | N/A | Files moved to `modes/framing/` and `modes/overlay/` |
 | ~~2. Mode containers~~ | ✅ **DONE** | N/A | Created FramingMode.jsx, OverlayMode.jsx, FramingTimeline.jsx, OverlayTimeline.jsx |
 | ~~3. Mode switcher~~ | ✅ **DONE** | N/A | ModeSwitcher UI, mode state in App.jsx, conditional rendering |
-| ~~4. Transitions~~ | ⚠️ **PARTIAL** | N/A | Overlay video state, mode-specific export - **BUG in export validation** |
-| **4.5. Fix Export Validation** | 🔲 **REQUIRED** | Low | Make validation mode-aware (see above) |
-| 5. Mode exports | 🔲 Optional | Low | FramingExport, OverlayExport components (currently in ExportButton) |
-| 6. Cleanup | 🔲 Optional | Low | Remove old files, polish |
+| ~~4. Transitions~~ | ✅ **DONE** | N/A | Overlay video state, mode-specific export |
+| ~~4.5. Fix Export Validation~~ | ✅ **DONE** | N/A | Validation is now mode-aware |
+| ~~5. Overlay Export Refactor~~ | ✅ **DONE** | N/A | `/api/export/overlay` endpoint, client-side effect preview, highlight effect toggle |
+| 6. Cleanup | 🔲 Optional | Low | Remove old files, polish (see below) |
 
-**Current State:** The Framing → Overlay workflow is 95% functional. The only blocking issue is that Overlay export incorrectly validates crop keyframes.
+**Current State:** The Framing → Overlay workflow is **100% functional and tested**.
 
-**After Phase 4.5, the full workflow will work:**
+---
+
+## Phase 6: Cleanup (Optional)
+
+Phase 6 is optional polish work. The Mode Switcher feature is fully functional without it.
+
+### Potential Cleanup Tasks
+
+1. **Remove unused imports** - Scan for any unused imports after the refactor
+2. **Consolidate duplicate code** - Look for any duplicate patterns between modes
+3. **Update comments/JSDoc** - Ensure comments reflect the new architecture
+4. **Performance audit** - Profile for any unnecessary re-renders
+5. **Test edge cases**:
+   - Very short videos (< 1 second)
+   - Very long videos (> 10 minutes)
+   - Multiple mode switches without export
+   - Export cancellation handling
+
+### Files to Review
+
+```
+src/frontend/src/
+├── App.jsx                          # Main orchestrator - verify no dead code
+├── components/ExportButton.jsx      # Verify both mode paths work
+├── modes/framing/                   # Framing-specific code
+├── modes/overlay/                   # Overlay-specific code
+└── hooks/                           # Shared hooks
+
+src/backend/app/
+├── main.py                          # New /api/export/overlay endpoint
+└── ai_upscaler/                     # Verify KeyframeInterpolator usage
+```
+
+### Estimated Effort: 1-2 hours (low priority)
+
+**The full workflow now works:**
 1. Upload video in Framing mode
 2. Edit crop, trim, speed, audio settings
 3. Click "Export" to render, download, and transition to Overlay mode
