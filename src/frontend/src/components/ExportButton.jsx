@@ -151,7 +151,6 @@ export default function ExportButton({
       const formData = new FormData();
       formData.append('video', videoFile);
       formData.append('export_id', exportId);
-      formData.append('include_audio', includeAudio ? 'true' : 'false');
 
       let endpoint;
 
@@ -160,10 +159,12 @@ export default function ExportButton({
         endpoint = 'http://localhost:8000/api/export/upscale';
 
         formData.append('keyframes_json', JSON.stringify(cropKeyframes));
+        // Audio setting only applies to framing export (overlay preserves whatever audio is in input)
+        formData.append('include_audio', includeAudio ? 'true' : 'false');
         formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
         formData.append('export_mode', EXPORT_CONFIG.exportMode);
 
-        // Add segment data if available (only if speed changes or trimming exist)
+        // Add segment data if available (speed/trim)
         if (segmentData) {
           console.log('=== EXPORT: Sending segment data to backend ===');
           console.log(JSON.stringify(segmentData, null, 2));
@@ -172,15 +173,8 @@ export default function ExportButton({
         } else {
           console.log('=== EXPORT: No segment data to send ===');
         }
-
-        // Add highlight keyframes if available (for framing mode that also has highlights)
-        if (highlightKeyframes && highlightKeyframes.length > 0) {
-          console.log('=== EXPORT: Sending highlight keyframes to backend ===');
-          console.log(JSON.stringify(highlightKeyframes, null, 2));
-          console.log('==============================================');
-          formData.append('highlight_keyframes_json', JSON.stringify(highlightKeyframes));
-          formData.append('highlight_effect_type', highlightEffectType);
-        }
+        // Note: Highlight keyframes are NOT sent during framing export.
+        // They are handled separately in Overlay mode after the video is cropped/upscaled.
       } else {
         // Overlay mode: Use simple overlay endpoint (no crop, no AI, no trim)
         endpoint = 'http://localhost:8000/api/export/overlay';

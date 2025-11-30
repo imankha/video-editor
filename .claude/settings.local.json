@@ -12,7 +12,9 @@
       "Bash(node node_modules/vitest/vitest.mjs run:*)",
       "Bash(rm:*)",
       "Bash(npm run build:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(timeout 10 python:*)",
+      "Bash(python -m py_compile:*)"
     ],
     "deny": [],
     "ask": []

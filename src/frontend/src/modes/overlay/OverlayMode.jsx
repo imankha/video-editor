@@ -17,8 +17,8 @@ import OverlayTimeline from './OverlayTimeline';
  * - Interpolates position from keyframes
  * - Updates in real-time during playback
  *
- * Currently accepts props from App.jsx for minimal changes during Phase 2.
- * In Phase 3+, state management (useHighlight) will move here.
+ * State management (useHighlight) lives in App.jsx for coordinated access
+ * across modes. This component receives state via props and context.
  *
  * @example
  * <OverlayMode

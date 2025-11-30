@@ -1,4 +1,3 @@
-import { Circle, Eye, EyeOff } from 'lucide-react';
 import React from 'react';
 import { useHighlightContext } from '../contexts/HighlightContext';
 import { frameToTime } from '../../../utils/videoUtils';

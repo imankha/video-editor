@@ -1,4 +1,3 @@
-import { Crop } from 'lucide-react';
 import React from 'react';
 import { useCropContext } from '../contexts/CropContext';
 import { frameToTime } from '../../../utils/videoUtils';

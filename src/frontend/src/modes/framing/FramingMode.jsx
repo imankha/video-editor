@@ -11,8 +11,8 @@ import FramingTimeline from './FramingTimeline';
  * NOTE: CropOverlay is rendered by App.jsx inside VideoPlayer for correct positioning.
  * The overlay needs to be inside the video-container for absolute positioning to work.
  *
- * Currently accepts props from App.jsx for minimal changes during Phase 2.
- * In Phase 3+, state management (useCrop, useSegments, useZoom) will move here.
+ * State management (useCrop, useSegments, useZoom) lives in App.jsx for coordinated
+ * access across modes. This component receives state via props and context.
  *
  * @example
  * <FramingMode

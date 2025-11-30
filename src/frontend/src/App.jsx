@@ -12,8 +12,8 @@ import CompareModelsButton from './components/CompareModelsButton';
 import DebugInfo from './components/DebugInfo';
 import { ModeSwitcher } from './components/shared/ModeSwitcher';
 // Mode-specific imports
-import { useCrop, useSegments, FramingMode, CropOverlay, CropProvider } from './modes/framing';
-import { useHighlight, OverlayMode, HighlightOverlay, HighlightProvider } from './modes/overlay';
+import { useCrop, useSegments, FramingMode, CropOverlay } from './modes/framing';
+import { useHighlight, OverlayMode, HighlightOverlay } from './modes/overlay';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
 import { extractVideoMetadata } from './utils/videoMetadata';
 
@@ -966,7 +966,9 @@ function App() {
 
   /**
    * Get filtered highlight keyframes for export
-   * Includes keyframes within trim range PLUS surrounding keyframes for proper interpolation
+   *
+   * In FRAMING mode: Filters keyframes based on trim range (includes surrounding keyframes for interpolation)
+   * In OVERLAY mode: Returns ALL keyframes (overlay video is already trimmed, so no filtering needed)
    */
   const getFilteredHighlightKeyframesForExport = useMemo(() => {
     if (!isHighlightEnabled) {
@@ -974,6 +976,14 @@ function App() {
     }
 
     const allKeyframes = getHighlightKeyframesForExport();
+
+    // In overlay mode, return all keyframes - the video is already trimmed,
+    // and highlight keyframes are on the new video's timeline
+    if (editorMode === 'overlay') {
+      return allKeyframes;
+    }
+
+    // Framing mode: Apply trim filtering
     const segmentData = getSegmentExportData();
 
     // If no trimming, return all keyframes
@@ -1016,18 +1026,8 @@ function App() {
       ...(firstAfterTrimEnd ? [firstAfterTrimEnd] : [])
     ];
 
-    // Debug log (disabled - too spammy)
-    // console.log('[App] Filtered highlight keyframes for export:', {
-    //   original: allKeyframes.length,
-    //   filtered: filtered.length,
-    //   trimStart,
-    //   trimEnd,
-    //   includedBefore: !!lastBeforeTrimStart,
-    //   includedAfter: !!firstAfterTrimEnd
-    // });
-
     return filtered;
-  }, [isHighlightEnabled, getHighlightKeyframesForExport, getSegmentExportData, duration]);
+  }, [isHighlightEnabled, getHighlightKeyframesForExport, getSegmentExportData, duration, editorMode]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
