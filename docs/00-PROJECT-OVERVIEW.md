@@ -1,298 +1,219 @@
-# Video Editor - Development Plan
+# Player Highlighter - Development Plan
 
-**Development Context**: Solo development using Claude Code  
-**Approach**: Risk-first, feature-complete phases, then deployment phases
+**Product**: Browser-based video editor for creating soccer highlight clips
+**Development Context**: Solo development using Claude Code
+**Approach**: AI-first documentation, risk-first development, iterative phases
 
 ---
 
-## Development Philosophy
+## Product Vision
 
-This specification is optimized for AI-assisted development. Each phase has clear, concrete deliverables that can be implemented incrementally. The specs prioritize:
+A specialized video editor that helps soccer content creators produce professional highlight clips by:
+1. **Framing Mode**: Crop, trim, and speed-adjust raw game footage to follow the action
+2. **Overlay Mode**: Add visual effects that help viewers appreciate the player's skill (highlights, text, ball effects, tactical visualizations)
+3. **AI Upscaling**: Enhance output quality with super-resolution models
 
-- **Risk Front-loading**: Complex/novel features (crop keyframes) built first
-- **MVP Completeness**: Essential features (import/export) included early
-- **AI-Friendly Structure**: Clear technical requirements, data models, and algorithms
-- **Incremental Validation**: Each phase produces testable, working software
+The workflow is: **Upload** → **Frame** → **Overlay** → **Export**
+
+---
+
+## Current State (November 2025)
+
+### Completed Features
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Video Loading | COMPLETE | Drag & drop, file validation, metadata extraction |
+| Video Playback | COMPLETE | HTML5 player, controls, frame-accurate seeking |
+| Crop Keyframes | COMPLETE | Animated cropping with interpolation, aspect ratio presets |
+| Speed Regions | COMPLETE | Segment-based speed control (0.1x to 10x) |
+| Trimming | COMPLETE | Segment-based trim from start/end, de-trim |
+| Export Pipeline | COMPLETE | FFmpeg encoding with crop/speed/trim applied |
+| Framing Mode | COMPLETE | Full crop + trim + speed workflow |
+| Overlay Mode | COMPLETE | Highlight layer with keyframes (basic) |
+| AI Upscaling | EXPERIMENTAL | HAT/SwinIR models, RIFE frame interpolation |
+
+### Architecture
+
+```
+src/
+├── frontend/                 # React 18 + Vite + Tailwind
+│   └── src/
+│       ├── modes/
+│       │   ├── framing/      # Crop + Segments + Speed
+│       │   └── overlay/      # Highlight effects
+│       ├── components/       # Shared UI components
+│       ├── hooks/            # State management hooks
+│       └── utils/            # Utilities & algorithms
+│
+└── backend/                  # FastAPI + Python
+    └── app/
+        ├── routers/          # API endpoints (export, health)
+        ├── ai_upscaler/      # Super-resolution models
+        └── interpolation.py  # Crop keyframe interpolation
+```
 
 ---
 
 ## Phase Structure
 
-### Development Phases (Feature Building)
+### COMPLETED PHASES (Reference Only)
 
-| Phase | Name | Core Concept | Key Risk/Value |
-|-------|------|--------------|----------------|
-| **1** | Foundation | Basic playback & architecture | Establishes core patterns |
-| **2** | Crop Keyframes | Animated crop system | **HIGHEST RISK** - Novel feature |
-| **3** | Import/Export | File management | **MVP ESSENTIAL** - System validation |
-| **4** | Speed Controls | Variable playback | Complex video processing |
-| **5** | Timeline Editing | Trim & multi-clip | Professional editing features |
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Foundation | COMPLETE |
+| 2 | Crop Keyframes | COMPLETE |
+| 3 | Import/Export | COMPLETE |
+| 4 | Speed Controls | COMPLETE |
+| 5 | Trimming | COMPLETE |
 
-### Deployment Phases (Production Readiness)
-
-| Phase | Name | Core Concept | Focus |
-|-------|------|--------------|-------|
-| **6** | Build Pipeline | Automated builds | CI/CD setup |
-| **7** | Environment Setup | Multi-environment deploy | Dev/Staging/Prod |
-| **8** | Cross-Platform | Multi-device testing | Responsive + browser testing |
+See individual phase docs for implementation details (useful as reference for similar features).
 
 ---
 
-## Phase 1: Foundation
-**Core Concept**: Reliable playback with solid architecture
+### ACTIVE DEVELOPMENT PHASES
 
-### Features
-- Video file loading (drag & drop)
-- HTML5 video player with controls
-- Timeline scrubber with playhead
-- Frame-accurate seeking
-- Time display and navigation
-- Core state management architecture
+#### Phase A: Multi-Clip + Transitions (NEXT)
+**Goal**: Support multiple video clips in Framing mode with transitions
 
-### Deliverable
-Working video player that can load and play files with accurate timeline navigation.
+**Features**:
+- Import multiple video files
+- Clip layer shows each clip as a region
+- Drag to reorder clips on the timeline
+- Click between clips to set transitions (cut, fade, dissolve)
+- Per-clip crop keyframes, speed regions, and trim
+- Delete unwanted clips
 
----
-
-## Phase 2: Crop Keyframes
-**Core Concept**: Keyframe-based animated cropping  
-**Risk Level**: HIGH - This is the novel feature
-
-### Why Front-loaded
-This is the biggest technical risk and most unique feature. Testing early validates:
-- Keyframe interpolation algorithms
-- Crop overlay rendering performance
-- Resize handle interaction patterns
-- Different crop sizes at different frames
-
-### Features
-- Crop overlay with 8 resize handles
-- Keyframe creation on timeline
-- Keyframe-to-keyframe interpolation
-- Different crop dimensions per keyframe
-- Visual crop track on timeline
-- Properties panel for numeric crop input
-- Preset crop positions (9-point grid)
-
-### Technical Challenges
-- Smooth interpolation between different aspect ratios
-- Real-time crop preview during playback
-- Handle collision detection and snapping
-- Bezier/linear/spring easing options
-
-### Deliverable
-Video player with fully functional animated crop system where users can set different crop rectangles at different time points with smooth transitions.
+**Why Important**: Users often have multiple angles or segments they want to combine into a single highlight.
 
 ---
 
-## Phase 3: Import/Export
-**Core Concept**: Complete file I/O system  
-**MVP Status**: ESSENTIAL
+#### Phase B: Overlay Mode Expansion (THEN)
+**Goal**: Rich overlay system for soccer-specific visualizations
 
-### Why Front-loaded
-Export validates the entire processing pipeline:
-- Tests crop rendering
-- Tests video encoding
-- Validates timeline state
-- Proves system viability
+**Planned Overlay Types**:
 
-### Import Features
-- Drag & drop video files
-- File browser selection
-- Format validation (MP4, MOV, WebM)
-- Error handling for corrupt/unsupported files
-- Video metadata extraction
+| Type | Description |
+|------|-------------|
+| Highlight (existing) | Elliptical spotlight with brightness/color effects |
+| Text | Labels, player names, stats, timestamps |
+| Ball Effects | Brightness boost on ball, motion blur trails |
+| Scan Indicator | Show when dribbler looks up (head movement) |
+| Space Visualization | Show space created by dribble/movement |
+| Defender Markers | X marks on beaten defenders |
+| Through Ball Lines | Show passing lanes and beaten defenders |
 
-### Export Features
-- Export dialog with settings
-- Format selection (MP4, WebM)
-- Quality presets (Fast, Balanced, High)
-- Resolution options
-- Progress tracking with cancel
-- Background processing
-- Export preview/validation
+**Architecture Goals**:
+- Common interface for all overlay layer types
+- Click-to-edit properties dialog (not in main UI)
+- Per-layer: visibility toggle, opacity, z-order
+- Keyframe animation for all layer types
+- Consistent add/edit/delete workflow
 
-### Technical Requirements
-- FFmpeg integration for encoding
-- Stream-based processing for memory efficiency
-- Frame-by-frame crop application
-- Audio preservation
-- Error recovery
-
-### Deliverable
-Complete file I/O: users can import video, edit with crops, and export finished video with all effects applied.
+**Why Important**: These visualizations are the core value proposition - they help viewers appreciate the soccer skill being demonstrated.
 
 ---
 
-## Phase 4: Speed Controls
-**Core Concept**: Variable playback speed with smooth transitions
+#### Phase C: Deployment (FINALLY)
+**Goal**: Production deployment with Cloudflare + RunPod
 
-### Features
-- Speed control tool
-- Speed regions on dedicated timeline track
-- Draggable speed region edges
-- Speed multiplier: 0.1x to 10x
-- Properties panel for numeric speed input
-- Speed preset buttons (0.5x, 1x, 2x, etc.)
-- No region overlap (auto-snap)
+**Infrastructure**:
+- Frontend: Cloudflare Pages (static React/Vite)
+- Edge API: Cloudflare Workers
+- Database: Cloudflare D1 (wallet/credits)
+- Storage: Cloudflare R2 (video files)
+- GPU Compute: RunPod (AI upscaling jobs)
+- Payments: Stripe (prepaid credits)
 
-### Technical Requirements
-- Video seek rate adjustment
-- Audio pitch preservation option
-- Speed transition rendering
-- Timeline sync during variable speed playback
+**Environments**:
+| Environment | Purpose | Backend |
+|-------------|---------|---------|
+| Local | Fast development | Local Python/FFmpeg |
+| Staging | Integration testing | Cloudflare + RunPod (test) |
+| Production | Live users | Cloudflare + RunPod (prod) |
 
-### Deliverable
-Video player with working speed regions where different sections of video play at different speeds with smooth transitions.
+**Build Scripts Needed**:
+- `npm run build:local` - Development mode
+- `npm run build:staging` - Deploy to staging
+- `npm run build:prod` - Deploy to production
 
----
-
-## Phase 5: Timeline Editing
-**Core Concept**: Professional trim and multi-clip editing
-
-### Features
-- Trim handles (start/end)
-- Apply trim operation
-- Scissors tool for splitting clips
-- Multi-clip support on single track
-- Timeline zoom controls
-- Snap-to-grid behavior
-- Clip selection and deletion
-
-### Note on Scope
-Multi-clip support is included but kept simple:
-- Single video track only (no multi-track)
-- Sequential clips (no overlap)
-- Basic transitions between clips
-- Simplified clip management
-
-### Deliverable
-Professional timeline editor where users can trim, split, and arrange multiple video clips with speed and crop effects applied to each.
+See `cloudflare_runpod_deploy_package/` for Terraform and Wrangler configs.
 
 ---
 
-## Phase 6: Build Pipeline
-**Core Concept**: Automated build and deployment system
+## Key Technical Decisions
 
-### Features
-- Build configuration for production
-- Minification and optimization
-- Source maps for debugging
-- Environment variable management
-- Build artifact generation
-- Version tagging
-- Basic CI/CD setup
+### What's Included
+- Single video track (multi-clip on one track)
+- Sequential clip arrangement (no overlap)
+- Keyframe-based animation for all effects
+- FFmpeg for video processing
+- AI upscaling as optional enhancement
 
-### Deliverable
-Automated build system that produces optimized production bundles.
-
----
-
-## Phase 7: Environment Setup
-**Core Concept**: Multiple deployment environments
-
-### Features
-- Local development environment
-- Staging environment
-- Production environment
-- Environment-specific configuration
-- Database/storage setup (if needed)
-- API endpoint configuration
-- Deployment scripts
-
-### Deliverable
-Complete environment infrastructure for development, testing, and production.
-
----
-
-## Phase 8: Cross-Platform
-**Core Concept**: Test and optimize for different devices
-
-### Features
-- Responsive design testing
-- Browser compatibility testing (Chrome, Firefox, Safari, Edge)
-- Mobile device testing
-- Performance profiling on different hardware
-- Screen size optimization
-- Touch interaction testing
-- Accessibility testing
-
-### Deliverable
-Fully tested application working across multiple browsers and devices with documented compatibility matrix.
-
----
-
-## Key Decisions
-
-### What's NOT Included
-- Keyboard shortcuts (unnecessary)
-- Undo/redo until later (if needed)
-- Auto-save (manual save sufficient initially)
-- Multi-track timeline (single track sufficient)
-- Complex transitions (basic cuts only)
-- Audio editing features
+### What's NOT Included (Scope Limits)
+- Multi-track timeline (audio separate from video)
+- Complex transitions (keep it simple: cut, fade)
+- Real-time collaboration
+- Cloud storage of projects (local-first)
+- Undo/redo (not prioritized)
 
 ### Development Environment
-- Local development only until Phase 6
-- No deployment concerns until feature-complete
-- Testing on single browser during development
-- Cross-browser testing in Phase 8
+- Local Python backend for fast iteration
+- Deployment abstracted to later phase
+- Single browser testing during development
 
 ---
 
-## Success Criteria by Phase
+## Success Criteria
 
-### Phase 1: Foundation
-- Can load and play video files
-- Timeline scrubbing is smooth and accurate
-- Frame-accurate seeking works
+### Phase A (Multi-Clip)
+- [ ] Can import multiple videos
+- [ ] Clips shown as regions on clip layer
+- [ ] Can drag to reorder clips
+- [ ] Transitions render correctly in export
+- [ ] Per-clip effects (crop/speed/trim) work
 
-### Phase 2: Crop Keyframes
-- Can create keyframes at any timeline position
-- Different crop sizes interpolate smoothly
-- Handles are responsive and intuitive
-- Playback shows crop effect in real-time
+### Phase B (Overlay Expansion)
+- [ ] Common layer interface working
+- [ ] At least 3 overlay types implemented
+- [ ] Properties dialog for layer editing
+- [ ] Keyframe animation for all layers
+- [ ] Export includes all overlay effects
 
-### Phase 3: Import/Export
-- Can import multiple video formats
-- Export produces valid video files
-- Crop effects render correctly in export
-- Progress tracking works accurately
-
-### Phase 4: Speed Controls
-- Speed regions affect playback
-- Speed changes are smooth
-- Audio pitch preservation works
-- Export includes speed effects
-
-### Phase 5: Timeline Editing
-- Can trim clips accurately
-- Scissors tool splits cleanly
-- Multiple clips can be arranged
-- All effects work on individual clips
-
-### Phase 6-8: Deployment
-- Builds complete successfully
-- Environments deploy cleanly
-- Cross-platform testing passes
+### Phase C (Deployment)
+- [ ] Staging environment deployed
+- [ ] Production environment deployed
+- [ ] Stripe integration working
+- [ ] RunPod GPU jobs executing
+- [ ] Instant video download working (no long-term storage)
 
 ---
 
 ## File Structure
 
 ```
-video-editor-specs/
-├── 00-PROJECT-OVERVIEW.md (this file)
-├── 01-PHASE-FOUNDATION.md
-├── 02-PHASE-CROP-KEYFRAMES.md
-├── 03-PHASE-IMPORT-EXPORT.md
-├── 04-PHASE-SPEED-CONTROLS.md
-├── 05-PHASE-TIMELINE-EDITING.md
-├── 06-PHASE-BUILD-PIPELINE.md
-├── 07-PHASE-ENVIRONMENT-SETUP.md
-├── 08-PHASE-CROSS-PLATFORM.md
-├── TECHNICAL-REFERENCE.md
-└── AI-IMPLEMENTATION-GUIDE.md
+docs/
+├── 00-PROJECT-OVERVIEW.md          # This file
+├── README.md                        # Quick reference
+├── QUICK_START.md                   # Development setup
+├── TECHNICAL-REFERENCE.md           # Patterns & algorithms
+├── AI-IMPLEMENTATION-GUIDE.md       # AI coding workflow
+│
+├── COMPLETED/                       # Reference docs for completed features
+│   ├── 01-PHASE-FOUNDATION.md
+│   ├── 02-PHASE-CROP-KEYFRAMES.md
+│   ├── 03-PHASE-IMPORT-EXPORT.md
+│   ├── 04-PHASE-SPEED-CONTROLS.md
+│   └── 05-PHASE-TRIMMING.md
+│
+├── ACTIVE/                          # Current development specs
+│   ├── PHASE-A-MULTI-CLIP.md
+│   ├── PHASE-B-OVERLAY-EXPANSION.md
+│   └── PHASE-C-DEPLOYMENT.md
+│
+└── REFERENCE/                       # Supplementary docs
+    ├── AI-UPSCALING.md
+    └── SR_MODEL_TESTING.md
 ```
 
 ---
@@ -301,10 +222,26 @@ video-editor-specs/
 
 Each phase spec includes:
 - Exact component requirements
-- Complete data models
-- Algorithm specifications
+- Complete data models (TypeScript interfaces)
+- Algorithm specifications (pseudocode)
 - API contracts
 - Testing requirements
-- Clear acceptance criteria
+- Acceptance criteria
 
-Specs are written to minimize ambiguity and maximize implementation success with AI coding assistants like Claude Code.
+Specs are written to minimize ambiguity and maximize implementation success with AI coding assistants.
+
+**Prompting Strategy**:
+1. Read the phase spec fully
+2. Identify the smallest implementable unit
+3. Implement incrementally with tests
+4. Validate against acceptance criteria
+5. Move to next unit
+
+---
+
+## Quick Links
+
+- **Start Here**: [README.md](README.md)
+- **Setup**: [QUICK_START.md](QUICK_START.md)
+- **Technical Details**: [TECHNICAL-REFERENCE.md](TECHNICAL-REFERENCE.md)
+- **Deployment Plan**: `cloudflare_runpod_deploy_package/README.md`
