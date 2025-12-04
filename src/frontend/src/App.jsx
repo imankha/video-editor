@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useVideo } from './hooks/useVideo';
 import useZoom from './hooks/useZoom';
 import useTimelineZoom from './hooks/useTimelineZoom';
+import { useClipManager } from './hooks/useClipManager';
 import { VideoPlayer } from './components/VideoPlayer';
 import { Controls } from './components/Controls';
 import { FileUpload } from './components/FileUpload';
+import { ClipSelectorSidebar } from './components/ClipSelectorSidebar';
 import AspectRatioSelector from './components/AspectRatioSelector';
 import ZoomControls from './components/ZoomControls';
 import ExportButton from './components/ExportButton';
@@ -49,6 +51,24 @@ function App() {
   // NOTE: selectedCropKeyframeIndex and selectedHighlightKeyframeIndex are now derived via useMemo
   // (defined after hooks that provide keyframes and currentTime)
 
+  // Multi-clip management hook
+  const {
+    clips,
+    selectedClipId,
+    selectedClip,
+    hasClips,
+    globalAspectRatio,
+    globalTransition,
+    addClip,
+    deleteClip,
+    selectClip,
+    reorderClips,
+    updateClipData,
+    setGlobalAspectRatio,
+    setGlobalTransition,
+    getExportData: getClipExportData,
+  } = useClipManager();
+
   // Segments hook (defined early so we can pass getSegmentAtTime and clampToVisibleRange to useVideo)
   const {
     boundaries: segmentBoundaries,
@@ -60,6 +80,7 @@ function App() {
     framerate: segmentFramerate,
     trimRange,  // NEW: Watch for trim range changes
     trimHistory,  // NEW: Trim history for de-trim buttons
+    segmentSpeeds,  // Speed settings by segment index
     initializeWithDuration: initializeSegments,
     reset: resetSegments,
     addBoundary: addSegmentBoundary,
@@ -191,16 +212,248 @@ function App() {
     return index !== -1 ? index : null;
   }, [videoUrl, currentTime, highlightFramerate, highlightKeyframes, isHighlightEnabled]);
 
+  /**
+   * Clips with current clip's live state merged.
+   * Since clip state (keyframes, segments) is managed in useCrop/useSegments hooks,
+   * we need to merge the current clip's live state before export.
+   */
+  const clipsWithCurrentState = useMemo(() => {
+    if (!hasClips || !clips || !selectedClipId) return clips;
+
+    // Helper to convert frame-based keyframes to time-based for export
+    const convertKeyframesToTime = (keyframes, clipFramerate) => {
+      if (!keyframes || !Array.isArray(keyframes)) return [];
+      return keyframes.map(kf => {
+        // If already has 'time', it's already converted
+        if (kf.time !== undefined) return kf;
+        // Convert frame to time
+        const time = kf.frame / clipFramerate;
+        const { frame, ...rest } = kf;
+        return { time, ...rest };
+      });
+    };
+
+    // Helper to calculate default crop for a given aspect ratio
+    const calculateDefaultCrop = (sourceWidth, sourceHeight, targetAspectRatio) => {
+      if (!sourceWidth || !sourceHeight) {
+        return { x: 0, y: 0, width: 0, height: 0 };
+      }
+      const [ratioW, ratioH] = targetAspectRatio.split(':').map(Number);
+      const targetRatio = ratioW / ratioH;
+      const videoRatio = sourceWidth / sourceHeight;
+
+      let cropWidth, cropHeight;
+      if (videoRatio > targetRatio) {
+        cropHeight = sourceHeight;
+        cropWidth = cropHeight * targetRatio;
+      } else {
+        cropWidth = sourceWidth;
+        cropHeight = cropWidth / targetRatio;
+      }
+
+      const x = (sourceWidth - cropWidth) / 2;
+      const y = (sourceHeight - cropHeight) / 2;
+
+      return {
+        x: Math.round(x),
+        y: Math.round(y),
+        width: Math.round(cropWidth),
+        height: Math.round(cropHeight)
+      };
+    };
+
+    // Use getKeyframesForExport() for current clip (proper conversion)
+    const currentClipExportKeyframes = getKeyframesForExport();
+
+    // Debug logging
+    console.log('[clipsWithCurrentState] Building export state:');
+    console.log('  - selectedClipId:', selectedClipId);
+    console.log('  - currentClipExportKeyframes:', currentClipExportKeyframes?.length, currentClipExportKeyframes);
+    console.log('  - segmentSpeeds:', segmentSpeeds);
+
+    return clips.map(clip => {
+      if (clip.id === selectedClipId) {
+        // Current clip: use live state from hooks
+        const result = {
+          ...clip,
+          cropKeyframes: currentClipExportKeyframes,
+          segments: {
+            boundaries: segmentBoundaries,
+            segmentSpeeds: segmentSpeeds,
+            trimRange: trimRange
+          },
+          trimRange: trimRange
+        };
+        console.log(`  - Clip ${clip.id} (CURRENT):`, result.cropKeyframes?.length, 'keyframes, speeds:', result.segments.segmentSpeeds);
+        return result;
+      }
+      // Other clips: convert saved keyframes from frame to time
+      let convertedKeyframes = convertKeyframesToTime(clip.cropKeyframes, clip.framerate || 30);
+
+      // FIX: If no keyframes were saved (race condition on fast clip add),
+      // generate default keyframes based on clip dimensions and global aspect ratio
+      if (convertedKeyframes.length === 0 && clip.sourceWidth && clip.sourceHeight && clip.duration) {
+        const defaultCrop = calculateDefaultCrop(clip.sourceWidth, clip.sourceHeight, globalAspectRatio);
+        convertedKeyframes = [
+          { time: 0, ...defaultCrop },
+          { time: clip.duration, ...defaultCrop }
+        ];
+        console.log(`  - Clip ${clip.id} (saved): EMPTY keyframes - generated defaults:`, convertedKeyframes);
+      } else {
+        console.log(`  - Clip ${clip.id} (saved): raw=${clip.cropKeyframes?.length}, converted=${convertedKeyframes?.length} keyframes, segments:`, clip.segments);
+      }
+
+      return {
+        ...clip,
+        cropKeyframes: convertedKeyframes
+      };
+    });
+  }, [clips, selectedClipId, getKeyframesForExport, segmentBoundaries, segmentSpeeds, trimRange, hasClips, globalAspectRatio]);
+
+  /**
+   * Save current clip's state before switching
+   */
+  const saveCurrentClipState = useCallback(() => {
+    if (!selectedClipId) {
+      console.log('[App] saveCurrentClipState: No selectedClipId, skipping');
+      return;
+    }
+
+    // Save current segment state including speeds
+    const segmentState = {
+      boundaries: segmentBoundaries,
+      segmentSpeeds: segmentSpeeds,
+      trimRange: trimRange,
+    };
+
+    console.log('[App] saveCurrentClipState for clip:', selectedClipId);
+    console.log('  - keyframes to save:', keyframes?.length, keyframes);
+    console.log('  - segmentState:', segmentState);
+
+    // Save current crop keyframes
+    updateClipData(selectedClipId, {
+      segments: segmentState,
+      cropKeyframes: keyframes,
+      trimRange: trimRange
+    });
+
+    console.log('[App] Saved state for clip:', selectedClipId);
+  }, [selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, keyframes, updateClipData]);
+
+  /**
+   * Handle file selection - adds clip to clip manager
+   */
   const handleFileSelect = async (file) => {
-    // Reset all state before loading new video
+    try {
+      // Extract metadata first
+      const videoMetadata = await extractVideoMetadata(file);
+
+      // Add clip to the clip manager
+      const newClipId = addClip(file, videoMetadata);
+
+      console.log('[App] handleFileSelect: hasClips=', hasClips, 'clips.length=', clips.length, 'selectedClipId=', selectedClipId);
+
+      // If this is the first clip, load it immediately
+      if (!hasClips || clips.length === 0) {
+        console.log('[App] First clip - no state to save');
+        // Reset all state for fresh start
+        resetSegments();
+        resetCrop();
+        resetHighlight();
+        setSelectedLayer('playhead');
+        setVideoFile(file);
+        await loadVideo(file);
+      } else {
+        console.log('[App] Additional clip - saving state for clip:', selectedClipId);
+        // Additional clips - save current state first
+        saveCurrentClipState();
+
+        // Then select and load the new clip
+        selectClip(newClipId);
+        resetSegments();
+        resetCrop();
+        resetHighlight();
+        setSelectedLayer('playhead');
+        setVideoFile(file);
+        await loadVideo(file);
+      }
+
+      console.log('[App] Added clip:', newClipId, file.name);
+    } catch (err) {
+      console.error('[App] Failed to add clip:', err);
+    }
+  };
+
+  /**
+   * Handle clip selection from sidebar
+   */
+  const handleSelectClip = useCallback(async (clipId) => {
+    if (clipId === selectedClipId) return;
+
+    // Save current clip's state
+    saveCurrentClipState();
+
+    // Find the clip to load
+    const clip = clips.find(c => c.id === clipId);
+    if (!clip) {
+      console.error('[App] Clip not found:', clipId);
+      return;
+    }
+
+    // Select the new clip
+    selectClip(clipId);
+
+    // Reset hooks and load new clip's video
     resetSegments();
     resetCrop();
     resetHighlight();
-    // Reset layer selection (keyframe selection is derived automatically)
     setSelectedLayer('playhead');
-    setVideoFile(file);
-    await loadVideo(file);
-  };
+    setVideoFile(clip.file);
+    await loadVideo(clip.file);
+
+    // TODO: Restore saved segment/crop state for this clip
+    // This requires modifying useSegments and useCrop to accept initial state
+
+    console.log('[App] Switched to clip:', clipId, clip.fileName);
+  }, [selectedClipId, saveCurrentClipState, clips, selectClip, resetSegments, resetCrop, resetHighlight, loadVideo]);
+
+  /**
+   * Handle clip deletion from sidebar
+   */
+  const handleDeleteClip = useCallback((clipId) => {
+    const clipToDelete = clips.find(c => c.id === clipId);
+    if (!clipToDelete) return;
+
+    // If deleting the currently selected clip, need to handle differently
+    if (clipId === selectedClipId) {
+      // Find another clip to select
+      const remainingClips = clips.filter(c => c.id !== clipId);
+
+      if (remainingClips.length > 0) {
+        // Select the first remaining clip
+        handleSelectClip(remainingClips[0].id);
+      } else {
+        // No more clips - reset everything
+        resetSegments();
+        resetCrop();
+        resetHighlight();
+        setVideoFile(null);
+        // Clear video - loadVideo with null will handle cleanup
+      }
+    }
+
+    // Delete the clip
+    deleteClip(clipId);
+
+    console.log('[App] Deleted clip:', clipId, clipToDelete.fileName);
+  }, [clips, selectedClipId, handleSelectClip, deleteClip, resetSegments, resetCrop, resetHighlight]);
+
+  /**
+   * Handle adding a new clip from sidebar
+   */
+  const handleAddClipFromSidebar = useCallback((file) => {
+    handleFileSelect(file);
+  }, []);
 
   // Initialize segments when video duration is available
   useEffect(() => {
@@ -1030,27 +1283,43 @@ function App() {
   }, [isHighlightEnabled, getHighlightKeyframesForExport, getSegmentExportData, duration, editorMode]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-bold text-white mb-2">
-              Player Highlighter
-            </h1>
-            <p className="text-gray-400">
-              Share your player's brilliance
-            </p>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
+      {/* Sidebar - only show when clips exist */}
+      {hasClips && clips.length > 0 && editorMode === 'framing' && (
+        <ClipSelectorSidebar
+          clips={clips}
+          selectedClipId={selectedClipId}
+          onSelectClip={handleSelectClip}
+          onAddClip={handleAddClipFromSidebar}
+          onDeleteClip={handleDeleteClip}
+          onReorderClips={reorderClips}
+          globalTransition={globalTransition}
+          onTransitionChange={setGlobalTransition}
+        />
+      )}
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto">
+        <div className="container mx-auto px-4 py-8">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-4xl font-bold text-white mb-2">
+                Player Highlighter
+              </h1>
+              <p className="text-gray-400">
+                Share your player's brilliance
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <ModeSwitcher
+                mode={editorMode}
+                onModeChange={setEditorMode}
+                disabled={!videoUrl}
+              />
+              <FileUpload onFileSelect={handleFileSelect} isLoading={isLoading} />
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <ModeSwitcher
-              mode={editorMode}
-              onModeChange={setEditorMode}
-              disabled={!videoUrl}
-            />
-            <FileUpload onFileSelect={handleFileSelect} isLoading={isLoading} />
-          </div>
-        </div>
 
         {/* Error Message */}
         {error && (
@@ -1095,10 +1364,11 @@ function App() {
           {videoUrl && (
             <div className="mb-6 flex gap-4 items-center">
               {/* AspectRatioSelector only visible in Framing mode */}
+              {/* Uses global aspect ratio that applies to all clips */}
               {editorMode === 'framing' && (
                 <AspectRatioSelector
-                  aspectRatio={aspectRatio}
-                  onAspectRatioChange={updateAspectRatio}
+                  aspectRatio={hasClips ? globalAspectRatio : aspectRatio}
+                  onAspectRatioChange={hasClips ? setGlobalAspectRatio : updateAspectRatio}
                 />
               )}
               <div className="ml-auto">
@@ -1299,6 +1569,10 @@ function App() {
                 onHighlightEffectTypeChange={setHighlightEffectType}
                 editorMode={editorMode}
                 onProceedToOverlay={handleProceedToOverlay}
+                // Multi-clip props (use clipsWithCurrentState to include current clip's live keyframes)
+                clips={editorMode === 'framing' && hasClips ? clipsWithCurrentState : null}
+                globalAspectRatio={globalAspectRatio}
+                globalTransition={globalTransition}
               />
             </div>
           )}
@@ -1359,6 +1633,7 @@ function App() {
           </div>
         )}
 
+        </div>
       </div>
 
       {/* Debug Info - Shows current branch and commit */}

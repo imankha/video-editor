@@ -436,6 +436,29 @@ class AIVideoUpscaler:
         original_fps = cap.get(cv2.CAP_PROP_FPS)
         original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        # Verify actual readable frame count (CAP_PROP_FRAME_COUNT can be inaccurate)
+        # Check if last reported frame is actually readable
+        if video_total_frames > 0:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, video_total_frames - 1)
+            ret, _ = cap.read()
+            if not ret:
+                # Binary search for actual last readable frame
+                logger.warning(f"CAP_PROP_FRAME_COUNT reports {video_total_frames} frames but last frame unreadable, probing...")
+                low, high = 0, video_total_frames - 1
+                actual_last = 0
+                while low <= high:
+                    mid = (low + high) // 2
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
+                    ret, _ = cap.read()
+                    if ret:
+                        actual_last = mid
+                        low = mid + 1
+                    else:
+                        high = mid - 1
+                video_total_frames = actual_last + 1
+                logger.info(f"Actual readable frame count: {video_total_frames}")
+
         duration = video_total_frames / original_fps
         cap.release()
 
@@ -446,9 +469,16 @@ class AIVideoUpscaler:
         # This optimization avoids upscaling frames that get thrown away during encoding!
         if segment_data and 'trim_start' in segment_data:
             start_frame = int(segment_data['trim_start'] * original_fps)
-            end_frame = int(segment_data.get('trim_end', duration) * original_fps)
+            # Cap end_frame to actual video frame count to prevent reading non-existent frames
+            end_frame = min(
+                int(segment_data.get('trim_end', duration) * original_fps),
+                video_total_frames
+            )
+            # Also cap start_frame just in case
+            start_frame = min(start_frame, video_total_frames - 1)
             total_frames = end_frame - start_frame
             logger.info(f"Trim optimization: Processing only frames {start_frame}-{end_frame} ({total_frames} frames)")
+            logger.info(f"Video has {video_total_frames} total frames")
             logger.info(f"Skipping {start_frame + (video_total_frames - end_frame)} frames that would be discarded!")
         else:
             start_frame = 0

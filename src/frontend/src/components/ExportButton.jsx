@@ -29,6 +29,11 @@ const HIGHLIGHT_EFFECT_COLORS = ['bg-blue-600', 'bg-yellow-600', 'bg-purple-600'
  * Behavior varies by mode:
  * - Framing mode: Shows audio toggle, exports and transitions to Overlay mode
  * - Overlay mode: Shows highlight effect toggle, exports final video with download
+ *
+ * Multi-clip support:
+ * - When clips array is provided, exports all clips with transitions
+ * - Each clip has its own segments and crop keyframes
+ * - Global aspect ratio and transition settings apply to all clips
  */
 export default function ExportButton({
   videoFile,
@@ -43,6 +48,10 @@ export default function ExportButton({
   onHighlightEffectTypeChange,            // Callback to change effect type (updates preview too)
   editorMode = 'framing',      // 'framing' | 'overlay'
   onProceedToOverlay,          // Callback when framing export completes (receives blob)
+  // Multi-clip props
+  clips = null,                // Array of clip objects for multi-clip export
+  globalAspectRatio = '9:16',  // Shared aspect ratio for all clips
+  globalTransition = null,     // Transition settings { type, duration }
 }) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -155,23 +164,62 @@ export default function ExportButton({
       let endpoint;
 
       if (editorMode === 'framing') {
-        // Framing mode: Use AI upscale endpoint with crop/trim/speed
-        endpoint = 'http://localhost:8000/api/export/upscale';
+        // Check if this is a multi-clip export
+        const isMultiClip = clips && clips.length > 1;
 
-        formData.append('keyframes_json', JSON.stringify(cropKeyframes));
-        // Audio setting only applies to framing export (overlay preserves whatever audio is in input)
-        formData.append('include_audio', includeAudio ? 'true' : 'false');
-        formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
-        formData.append('export_mode', EXPORT_CONFIG.exportMode);
+        if (isMultiClip) {
+          // Multi-clip export: Use multi-clip endpoint
+          endpoint = 'http://localhost:8000/api/export/multi-clip';
 
-        // Add segment data if available (speed/trim)
-        if (segmentData) {
-          console.log('=== EXPORT: Sending segment data to backend ===');
-          console.log(JSON.stringify(segmentData, null, 2));
-          console.log('==============================================');
-          formData.append('segment_data_json', JSON.stringify(segmentData));
+          // Append all clip files
+          clips.forEach((clip, index) => {
+            formData.append(`video_${index}`, clip.file);
+          });
+
+          // Build multi-clip export data
+          const multiClipData = {
+            clips: clips.map((clip, index) => ({
+              clipIndex: index,
+              fileName: clip.fileName,
+              duration: clip.duration,
+              sourceWidth: clip.sourceWidth,
+              sourceHeight: clip.sourceHeight,
+              segments: clip.segments,
+              cropKeyframes: clip.cropKeyframes,
+              trimRange: clip.trimRange
+            })),
+            globalAspectRatio: globalAspectRatio,
+            transition: globalTransition || { type: 'cut', duration: 0.5 }
+          };
+
+          console.log('=== MULTI-CLIP EXPORT: Sending clip data to backend ===');
+          console.log(JSON.stringify(multiClipData, null, 2));
+          console.log('=======================================================');
+
+          formData.append('multi_clip_data_json', JSON.stringify(multiClipData));
+          formData.append('include_audio', includeAudio ? 'true' : 'false');
+          formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
+          formData.append('export_mode', EXPORT_CONFIG.exportMode);
+
         } else {
-          console.log('=== EXPORT: No segment data to send ===');
+          // Single clip export: Use existing AI upscale endpoint
+          endpoint = 'http://localhost:8000/api/export/upscale';
+
+          formData.append('keyframes_json', JSON.stringify(cropKeyframes));
+          // Audio setting only applies to framing export (overlay preserves whatever audio is in input)
+          formData.append('include_audio', includeAudio ? 'true' : 'false');
+          formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
+          formData.append('export_mode', EXPORT_CONFIG.exportMode);
+
+          // Add segment data if available (speed/trim)
+          if (segmentData) {
+            console.log('=== EXPORT: Sending segment data to backend ===');
+            console.log(JSON.stringify(segmentData, null, 2));
+            console.log('==============================================');
+            formData.append('segment_data_json', JSON.stringify(segmentData));
+          } else {
+            console.log('=== EXPORT: No segment data to send ===');
+          }
         }
         // Note: Highlight keyframes are NOT sent during framing export.
         // They are handled separately in Overlay mode after the video is cropped/upscaled.

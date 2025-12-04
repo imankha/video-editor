@@ -637,6 +637,7 @@ export function useSegments() {
     userSplits,          // NEW: User-created splits (explicit)
     trimRange,           // NEW: Explicit trim range
     trimHistory,         // NEW: Trim history for de-trim functionality
+    segmentSpeeds,       // Speed settings by segment index
     segments,
     sourceDuration: duration,
     framerate,

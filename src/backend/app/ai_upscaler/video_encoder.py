@@ -210,6 +210,11 @@ class VideoEncoder:
         expected_output_frames = input_frame_count
         trim_filter = None
 
+        # Initialize trim/segment variables (may be overwritten if segment_data exists)
+        frames_pretrimmed = False
+        trim_start = 0
+        trim_end = None
+
         # Determine input framerate for FFmpeg (use original FPS to maintain correct timing)
         input_framerate = original_fps
 

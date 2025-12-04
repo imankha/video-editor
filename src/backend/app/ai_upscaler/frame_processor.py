@@ -76,6 +76,18 @@ class FrameProcessor:
         cap = cv2.VideoCapture(video_path)
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = cap.read()
+
+        # If frame read fails, try falling back to earlier frames
+        # This handles cases where CAP_PROP_FRAME_COUNT is inaccurate
+        if not ret and frame_number > 0:
+            # Try up to 5 frames back
+            for fallback in range(1, min(6, frame_number + 1)):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number - fallback)
+                ret, frame = cap.read()
+                if ret:
+                    logger.warning(f"Frame {frame_number} unreadable, using frame {frame_number - fallback} as fallback")
+                    break
+
         cap.release()
 
         if not ret:

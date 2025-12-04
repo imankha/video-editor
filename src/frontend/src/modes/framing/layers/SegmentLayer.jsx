@@ -23,7 +23,8 @@ export default function SegmentLayer({
   segmentVisualLayout = [], // Pre-calculated visual positions from hook
   sourceTimeToVisualTime = (t) => t, // Convert source time to visual time
   visualTimeToSourceTime = (t) => t,  // Convert visual time to source time
-  timelineScale = 1
+  timelineScale = 1,
+  edgePadding = 20  // Matches TimelineBase EDGE_PADDING
 }) {
   const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(null);
 
@@ -57,6 +58,7 @@ export default function SegmentLayer({
 
   /**
    * Handle click to add boundary
+   * Accounts for edge padding and snaps to playhead if click is near it
    */
   const handleTrackClick = (e) => {
     // Don't add boundary if clicking on a button
@@ -64,9 +66,24 @@ export default function SegmentLayer({
 
     // Calculate position from currentTarget (the track container)
     const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const percentX = (clickX / rect.width) * 100;
-    const time = pixelToTime(percentX);
+
+    // Account for edge padding - usable area starts at edgePadding and ends at width - edgePadding
+    const usableWidth = rect.width - (edgePadding * 2);
+    const x = e.clientX - rect.left - edgePadding;
+
+    // Clamp x to usable area and convert to percentage
+    const clampedX = Math.max(0, Math.min(x, usableWidth));
+    const percentX = (clampedX / usableWidth) * 100;
+    const clickTime = pixelToTime(percentX);
+
+    // Snap to playhead if click is near the playhead position (within ~10px)
+    const playheadVisualTime = sourceTimeToVisualTime(currentTime);
+    const effectiveDuration = visualDuration || duration;
+    const playheadPercent = effectiveDuration > 0 ? (playheadVisualTime / effectiveDuration) * 100 : 0;
+    const playheadX = (playheadPercent / 100) * usableWidth;
+    const snapThreshold = 10; // pixels
+
+    const time = Math.abs(clampedX - playheadX) < snapThreshold ? currentTime : clickTime;
 
     onAddBoundary(time);
   };
