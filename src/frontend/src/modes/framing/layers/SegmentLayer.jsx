@@ -1,5 +1,6 @@
 import { Trash2 } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
+import { PLAYHEAD_WIDTH_PX } from '../../../components/timeline/TimelineBase';
 
 /**
  * SegmentLayer component - displays video segments with speed control and trimming
@@ -28,14 +29,6 @@ export default function SegmentLayer({
 }) {
   const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(null);
   const segmentTrackRef = useRef(null);
-
-  // Debug: measure container width
-  useEffect(() => {
-    if (segmentTrackRef.current) {
-      const rect = segmentTrackRef.current.getBoundingClientRect();
-      console.log('[SegmentLayer] Container width:', rect.width, 'px');
-    }
-  }, [boundaries]);
 
   if (!duration) return null;
 
@@ -99,18 +92,6 @@ export default function SegmentLayer({
     // If click is within threshold of playhead (in visual time), snap to exact currentTime
     const shouldSnap = Math.abs(clickVisualTime - playheadVisualTime) < timeThreshold;
     const time = shouldSnap ? currentTime : clickTime;
-
-    // Debug: log snap decision
-    const playheadX = (playheadVisualTime / effectiveDuration) * usableWidth;
-    const distancePx = Math.abs(clampedX - playheadX);
-    console.log(`[SegmentLayer] Boundary added:`, {
-      distanceToPlayhead: `${distancePx.toFixed(1)}px`,
-      snapped: shouldSnap,
-      threshold: `${pixelThreshold}px (${timeThreshold.toFixed(3)}s)`,
-      clickTime: clickTime.toFixed(3),
-      currentTime: currentTime.toFixed(3),
-      finalTime: time.toFixed(3)
-    });
 
     onAddBoundary(time);
   };
@@ -231,58 +212,23 @@ export default function SegmentLayer({
           const position = sourceTimeToPixel(time);
           const isStart = Math.abs(time) < 0.01;
           const isEnd = Math.abs(time - duration) < 0.01;
-          const isAtCurrentTime = Math.abs(time - currentTime) < 0.01;
-
-          // Debug: compare boundary position with playhead position
-          if (isAtCurrentTime && !isStart && !isEnd) {
-            const effectiveDuration = visualDuration || duration;
-            const playheadVisualTime = sourceTimeToVisualTime(currentTime);
-            const playheadPercent = effectiveDuration > 0 ? (playheadVisualTime / effectiveDuration) * 100 : 0;
-            const boundaryVisualTime = sourceTimeToVisualTime(time);
-            console.log(`[SegmentLayer] Boundary at currentTime render:`, {
-              boundaryTime: time.toFixed(3),
-              currentTime: currentTime.toFixed(3),
-              boundaryPosition: `${position.toFixed(2)}%`,
-              playheadPercent: `${playheadPercent.toFixed(2)}%`,
-              boundaryVisualTime: boundaryVisualTime.toFixed(3),
-              playheadVisualTime: playheadVisualTime.toFixed(3),
-              effectiveDuration: effectiveDuration.toFixed(3),
-              mismatch: Math.abs(position - playheadPercent) > 0.01 ? 'YES - MISALIGNED!' : 'no'
-            });
-          }
-
-          // Debug logs (disabled - too spammy on every render)
-          // console.log('[SegmentLayer] Rendering boundary:', time, 'isStart:', isStart, 'isEnd:', isEnd);
 
           // Don't show start and end boundaries
           if (isStart || isEnd) {
-            // console.log('[SegmentLayer] Skipping start/end boundary at:', time);
             return null;
           }
 
-          // console.log('[SegmentLayer] Drawing vertical line at:', position, '%');
-
-          // Calculate pixel position to match playhead exactly
-          // Formula: edgePadding + (containerWidth - 2*edgePadding) * (position/100)
-          // But since we don't know exact container width in CSS, we use percentage of usable area
-          // containerWidth = 100%, usableWidth = containerWidth - 2*edgePadding
-          // leftPx = edgePadding + usableWidth * (position/100)
-          // As percentage of full container: leftPx / containerWidth
-          // = (edgePadding + (containerWidth - 2*edgePadding) * position/100) / containerWidth
-          // = edgePadding/containerWidth + (1 - 2*edgePadding/containerWidth) * position/100
-          //
-          // Using segmentTrackRef to get actual width for precise positioning
-          const containerWidth = segmentTrackRef.current?.getBoundingClientRect().width || 1325;
+          // Calculate pixel position to align with playhead center
+          const containerWidth = segmentTrackRef.current?.getBoundingClientRect().width || 0;
           const usableWidth = containerWidth - (edgePadding * 2);
-          // Add 2px to align with playhead center (playhead has w-1 = 4px width, center is +2px from left edge)
-          const leftPx = edgePadding + (usableWidth * position / 100) + 2;
+          const playheadCenterOffset = PLAYHEAD_WIDTH_PX / 2;
+          const leftPx = edgePadding + (usableWidth * position / 100) + playheadCenterOffset;
 
           return (
             <div
               key={index}
               className="absolute top-0 h-full cursor-pointer group z-20"
               style={{
-                // Use calculated pixel position for precise alignment with playhead
                 left: `${leftPx}px`,
                 width: '16px',
                 marginLeft: '-8px'

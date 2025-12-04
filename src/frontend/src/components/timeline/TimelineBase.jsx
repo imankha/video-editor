@@ -59,14 +59,6 @@ export function TimelineBase({
   // Padding at timeline edges for easier keyframe selection (in pixels)
   const EDGE_PADDING = 20;
 
-  // Debug: measure playhead container width (logs on mount and whenever children re-render)
-  React.useEffect(() => {
-    if (layersContainerRef.current) {
-      const rect = layersContainerRef.current.getBoundingClientRect();
-      console.log('[TimelineBase] Layers container width:', rect.width, 'px');
-    }
-  }); // No deps - logs on every render to catch boundary adds
-
   const getTimeFromPosition = (clientX) => {
     if (!timelineRef.current) return 0;
     const rect = timelineRef.current.getBoundingClientRect();
@@ -364,5 +356,6 @@ function TrimUndoButton({ position, trimAmount, totalLayerHeight, edgePadding, o
   );
 }
 
-// Export EDGE_PADDING for use by layer components
+// Export constants for use by layer components
 export const EDGE_PADDING = 20;
+export const PLAYHEAD_WIDTH_PX = 4; // Corresponds to Tailwind w-1 class
