@@ -51,12 +51,21 @@ export function TimelineBase({
 }) {
   const timelineRef = React.useRef(null);
   const scrollContainerRef = React.useRef(null);
+  const layersContainerRef = React.useRef(null);
   const [isDragging, setIsDragging] = React.useState(false);
   const [hoverTime, setHoverTime] = React.useState(null);
   const [hoverX, setHoverX] = React.useState(0);
 
   // Padding at timeline edges for easier keyframe selection (in pixels)
   const EDGE_PADDING = 20;
+
+  // Debug: measure playhead container width (logs on mount and whenever children re-render)
+  React.useEffect(() => {
+    if (layersContainerRef.current) {
+      const rect = layersContainerRef.current.getBoundingClientRect();
+      console.log('[TimelineBase] Layers container width:', rect.width, 'px');
+    }
+  }); // No deps - logs on every render to catch boundary adds
 
   const getTimeFromPosition = (clientX) => {
     if (!timelineRef.current) return 0;
@@ -242,7 +251,7 @@ export function TimelineBase({
             }}
           >
             {/* Timeline layers container with unified playhead */}
-            <div className="relative">
+            <div className="relative" ref={layersContainerRef}>
               {/* Video Timeline Track */}
               <div className={`relative bg-gray-800 h-12 rounded-r-lg transition-all ${
                 selectedLayer === 'playhead' ? 'ring-2 ring-blue-400 ring-opacity-75' : ''

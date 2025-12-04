@@ -43,13 +43,16 @@ export function ClipSelectorSidebar({
   };
 
   /**
-   * Handle file selection
+   * Handle file selection (supports multiple files)
    */
   const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onAddClip(file);
-      // Reset the input so the same file can be selected again
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      // Process each selected file
+      Array.from(files).forEach(file => {
+        onAddClip(file);
+      });
+      // Reset the input so the same files can be selected again
       e.target.value = '';
     }
   };
@@ -219,16 +222,17 @@ export function ClipSelectorSidebar({
           className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
         >
           <Plus size={16} />
-          <span>Add Clip</span>
+          <span>Add</span>
         </button>
 
-        {/* Hidden file input */}
+        {/* Hidden file input (supports multiple files) */}
         <input
           ref={fileInputRef}
           type="file"
           accept="video/*"
           onChange={handleFileChange}
           className="hidden"
+          multiple
         />
       </div>
 

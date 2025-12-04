@@ -1124,6 +1124,42 @@ function App() {
     }
   };
 
+  /**
+   * Handle mode change between Framing and Overlay
+   * When switching back to Framing mode, reload the selected clip's video
+   * to ensure all state is properly restored.
+   */
+  const handleModeChange = useCallback(async (newMode) => {
+    if (newMode === editorMode) return;
+
+    if (newMode === 'framing') {
+      // Switching back to framing mode - need to reload the framing video
+      console.log('[App] Switching back to Framing mode');
+
+      // If we have a selected clip, reload its video
+      if (selectedClip && selectedClip.file) {
+        console.log('[App] Reloading clip:', selectedClip.id, selectedClip.fileName);
+
+        // Set the video file state
+        setVideoFile(selectedClip.file);
+
+        // Reload the video - this will update videoUrl and metadata
+        await loadVideo(selectedClip.file);
+
+        // Seek to the beginning after a short delay to let React update
+        setTimeout(() => {
+          if (videoRef.current) {
+            videoRef.current.currentTime = 0;
+            videoRef.current.pause();
+          }
+        }, 100);
+      }
+    }
+
+    // Set the new mode
+    setEditorMode(newMode);
+  }, [editorMode, selectedClip, loadVideo, videoRef]);
+
   // Prepare crop context value
   const cropContextValue = useMemo(() => ({
     keyframes,
@@ -1314,7 +1350,7 @@ function App() {
             <div className="flex items-center gap-4">
               <ModeSwitcher
                 mode={editorMode}
-                onModeChange={setEditorMode}
+                onModeChange={handleModeChange}
                 disabled={!videoUrl}
               />
               <FileUpload onFileSelect={handleFileSelect} isLoading={isLoading} />
@@ -1365,10 +1401,16 @@ function App() {
             <div className="mb-6 flex gap-4 items-center">
               {/* AspectRatioSelector only visible in Framing mode */}
               {/* Uses global aspect ratio that applies to all clips */}
+              {/* When hasClips, updates BOTH the clips array AND the current clip's live keyframes */}
               {editorMode === 'framing' && (
                 <AspectRatioSelector
                   aspectRatio={hasClips ? globalAspectRatio : aspectRatio}
-                  onAspectRatioChange={hasClips ? setGlobalAspectRatio : updateAspectRatio}
+                  onAspectRatioChange={hasClips ? (newRatio) => {
+                    // Update stored clips' keyframes
+                    setGlobalAspectRatio(newRatio);
+                    // Also update current clip's live keyframes (managed by useCrop)
+                    updateAspectRatio(newRatio);
+                  } : updateAspectRatio}
                 />
               )}
               <div className="ml-auto">
@@ -1530,7 +1572,7 @@ function App() {
                 Export from Framing mode first to create a video for overlay editing.
               </p>
               <button
-                onClick={() => setEditorMode('framing')}
+                onClick={() => handleModeChange('framing')}
                 className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 Switch to Framing Mode
