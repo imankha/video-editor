@@ -1,5 +1,6 @@
 import { Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { PLAYHEAD_WIDTH_PX } from '../../../components/timeline/TimelineBase';
 
 /**
  * SegmentLayer component - displays video segments with speed control and trimming
@@ -23,12 +24,11 @@ export default function SegmentLayer({
   segmentVisualLayout = [], // Pre-calculated visual positions from hook
   sourceTimeToVisualTime = (t) => t, // Convert source time to visual time
   visualTimeToSourceTime = (t) => t,  // Convert visual time to source time
-  timelineScale = 1
+  timelineScale = 1,
+  edgePadding = 20  // Matches TimelineBase EDGE_PADDING
 }) {
   const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(null);
-
-  // Debug log (disabled - too spammy on every render)
-  // console.log('[SegmentLayer] Render - segments:', segments.length, 'visualLayout:', segmentVisualLayout.length);
+  const segmentTrackRef = useRef(null);
 
   if (!duration) return null;
 
@@ -57,6 +57,7 @@ export default function SegmentLayer({
 
   /**
    * Handle click to add boundary
+   * Accounts for edge padding and snaps to playhead if click is near it
    */
   const handleTrackClick = (e) => {
     // Don't add boundary if clicking on a button
@@ -64,9 +65,33 @@ export default function SegmentLayer({
 
     // Calculate position from currentTarget (the track container)
     const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const percentX = (clickX / rect.width) * 100;
-    const time = pixelToTime(percentX);
+
+    // Account for edge padding - usable area starts at edgePadding and ends at width - edgePadding
+    const usableWidth = rect.width - (edgePadding * 2);
+    const x = e.clientX - rect.left - edgePadding;
+
+    // Clamp x to usable area and convert to percentage
+    const clampedX = Math.max(0, Math.min(x, usableWidth));
+    const percentX = (clampedX / usableWidth) * 100;
+    const clickTime = pixelToTime(percentX);
+
+    // Snap to playhead if click is near the playhead position
+    // Use time-based comparison for robustness against scaling/transformation issues
+    const effectiveDuration = visualDuration || duration;
+
+    // Calculate snap threshold in time units (equivalent to ~15px at current scale)
+    const pixelThreshold = 15;
+    const timeThreshold = effectiveDuration > 0
+      ? (pixelThreshold / usableWidth) * effectiveDuration
+      : 0.1; // fallback to 100ms
+
+    // Compare visual times for accurate snapping
+    const clickVisualTime = (percentX / 100) * effectiveDuration;
+    const playheadVisualTime = sourceTimeToVisualTime(currentTime);
+
+    // If click is within threshold of playhead (in visual time), snap to exact currentTime
+    const shouldSnap = Math.abs(clickVisualTime - playheadVisualTime) < timeThreshold;
+    const time = shouldSnap ? currentTime : clickTime;
 
     onAddBoundary(time);
   };
@@ -89,6 +114,7 @@ export default function SegmentLayer({
     <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-20 pb-2">
       {/* Segments track */}
       <div
+        ref={segmentTrackRef}
         className="segment-track absolute inset-x-0 top-0 h-12 cursor-pointer overflow-visible rounded-r-lg"
         onClick={handleTrackClick}
       >
@@ -110,8 +136,9 @@ export default function SegmentLayer({
             key={segment.index}
             className="absolute top-0"
             style={{
-              left: `${visualStartPercent}%`,
-              width: `${visualWidthPercent}%`
+              // Account for edge padding - positions relative to the padded timeline area
+              left: `calc(${edgePadding}px + (100% - ${edgePadding * 2}px) * ${visualStartPercent / 100})`,
+              width: `calc((100% - ${edgePadding * 2}px) * ${visualWidthPercent / 100})`
             }}
           >
             {/* Segment background */}
@@ -185,24 +212,27 @@ export default function SegmentLayer({
           const position = sourceTimeToPixel(time);
           const isStart = Math.abs(time) < 0.01;
           const isEnd = Math.abs(time - duration) < 0.01;
-          const isAtCurrentTime = Math.abs(time - currentTime) < 0.01;
-
-          // Debug logs (disabled - too spammy on every render)
-          // console.log('[SegmentLayer] Rendering boundary:', time, 'isStart:', isStart, 'isEnd:', isEnd);
 
           // Don't show start and end boundaries
           if (isStart || isEnd) {
-            // console.log('[SegmentLayer] Skipping start/end boundary at:', time);
             return null;
           }
 
-          // console.log('[SegmentLayer] Drawing vertical line at:', position, '%');
+          // Calculate pixel position to align with playhead center
+          const containerWidth = segmentTrackRef.current?.getBoundingClientRect().width || 0;
+          const usableWidth = containerWidth - (edgePadding * 2);
+          const playheadCenterOffset = PLAYHEAD_WIDTH_PX / 2;
+          const leftPx = edgePadding + (usableWidth * position / 100) + playheadCenterOffset;
 
           return (
             <div
               key={index}
               className="absolute top-0 h-full cursor-pointer group z-20"
-              style={{ left: `${position}%`, width: '16px', marginLeft: '-8px' }}
+              style={{
+                left: `${leftPx}px`,
+                width: '16px',
+                marginLeft: '-8px'
+              }}
               title={`Boundary at ${time.toFixed(2)}s`}
             >
               {/* Thin visual line centered in hit area */}

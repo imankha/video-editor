@@ -4,6 +4,44 @@ import { interpolateCropSpline } from '../../../utils/splineInterpolation';
 import useKeyframeController from '../../../hooks/useKeyframeController';
 
 /**
+ * Default crop sizes optimized for HD upscaling.
+ * These dimensions maximize resolution quality when upscaling to standard HD formats.
+ *
+ * For aspect ratios not listed here, the crop will be calculated to fit the video.
+ *
+ * To add a new aspect ratio with fixed dimensions:
+ *   'W:H': { width: X, height: Y }
+ */
+const DEFAULT_CROP_SIZES = {
+  '9:16': { width: 205, height: 365 },
+  '16:9': { width: 640, height: 360 },
+};
+
+/**
+ * Calculate the default position for a crop rectangle.
+ * Currently centers the crop in the video frame.
+ *
+ * Future enhancement: This function can be extended to accept segmentation
+ * data and position the crop to center on detected subjects (ball, player clusters).
+ *
+ * @param {number} videoWidth - Video width in pixels
+ * @param {number} videoHeight - Video height in pixels
+ * @param {number} cropWidth - Crop rectangle width
+ * @param {number} cropHeight - Crop rectangle height
+ * @returns {{ x: number, y: number }} - Position of crop rectangle (top-left corner)
+ */
+const calculateDefaultPosition = (videoWidth, videoHeight, cropWidth, cropHeight) => {
+  // Future: Accept segmentationData parameter to find ball/player positions
+  // and calculate position to center on detected subjects
+
+  // Center the crop in the video frame
+  return {
+    x: Math.round((videoWidth - cropWidth) / 2),
+    y: Math.round((videoHeight - cropHeight) / 2)
+  };
+};
+
+/**
  * Custom hook for managing crop tool state and keyframes
  * Crop tool is ALWAYS active when video is loaded
  *
@@ -32,40 +70,51 @@ export default function useCrop(videoMetadata, trimRange = null) {
   });
 
   /**
-   * Calculate the default crop rectangle that fits within video bounds
-   * Returns the largest rectangle with the selected aspect ratio
+   * Calculate the default crop rectangle for initial keyframes.
+   * Uses fixed sizes from DEFAULT_CROP_SIZES when available (optimized for upscaling),
+   * otherwise falls back to fitting the largest rectangle within video bounds.
    */
   const calculateDefaultCrop = useCallback((videoWidth, videoHeight, targetAspectRatio) => {
     if (!videoWidth || !videoHeight) {
       return { x: 0, y: 0, width: 0, height: 0 };
     }
 
-    // Parse aspect ratio (e.g., "16:9" -> 16/9)
-    const [ratioW, ratioH] = targetAspectRatio.split(':').map(Number);
-    const ratio = ratioW / ratioH;
-    const videoRatio = videoWidth / videoHeight;
-
     let cropWidth, cropHeight;
 
-    if (videoRatio > ratio) {
-      // Video is wider - constrain by height
-      cropHeight = videoHeight;
-      cropWidth = cropHeight * ratio;
+    // Check if we have a predefined size for this aspect ratio
+    const predefinedSize = DEFAULT_CROP_SIZES[targetAspectRatio];
+
+    if (predefinedSize) {
+      // Use the predefined size (optimized for upscaling)
+      cropWidth = predefinedSize.width;
+      cropHeight = predefinedSize.height;
     } else {
-      // Video is taller - constrain by width
-      cropWidth = videoWidth;
-      cropHeight = cropWidth / ratio;
+      // Fallback: calculate the largest rectangle that fits the video
+      const [ratioW, ratioH] = targetAspectRatio.split(':').map(Number);
+      const ratio = ratioW / ratioH;
+      const videoRatio = videoWidth / videoHeight;
+
+      if (videoRatio > ratio) {
+        // Video is wider - constrain by height
+        cropHeight = videoHeight;
+        cropWidth = cropHeight * ratio;
+      } else {
+        // Video is taller - constrain by width
+        cropWidth = videoWidth;
+        cropHeight = cropWidth / ratio;
+      }
+
+      cropWidth = Math.round(cropWidth);
+      cropHeight = Math.round(cropHeight);
     }
 
-    // Center the crop rectangle
-    const x = (videoWidth - cropWidth) / 2;
-    const y = (videoHeight - cropHeight) / 2;
+    // Calculate centered position (future: can use segmentation data here)
+    const position = calculateDefaultPosition(videoWidth, videoHeight, cropWidth, cropHeight);
 
     return {
-      x: Math.round(x),
-      y: Math.round(y),
-      width: Math.round(cropWidth),
-      height: Math.round(cropHeight)
+      ...position,
+      width: cropWidth,
+      height: cropHeight
     };
   }, []);
 
@@ -185,6 +234,18 @@ export default function useCrop(videoMetadata, trimRange = null) {
     return keyframeManager.getKeyframesForExport(cropDataKeys);
   }, [keyframeManager]);
 
+  /**
+   * Restore crop keyframes from saved state (for clip switching)
+   */
+  const restoreState = useCallback((savedKeyframes, endFrame) => {
+    if (!savedKeyframes || savedKeyframes.length === 0) {
+      console.log('[useCrop] No keyframes to restore');
+      return;
+    }
+    console.log('[useCrop] Restoring keyframes:', savedKeyframes.length, 'endFrame:', endFrame);
+    keyframeManager.restoreKeyframes(savedKeyframes, endFrame);
+  }, [keyframeManager]);
+
   return {
     // State
     aspectRatio,
@@ -202,6 +263,7 @@ export default function useCrop(videoMetadata, trimRange = null) {
     copyCropKeyframe,
     pasteCropKeyframe,
     reset: keyframeManager.reset,
+    restoreState,
 
     // Queries
     interpolateCrop: keyframeManager.interpolate,

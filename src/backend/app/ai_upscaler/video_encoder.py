@@ -210,6 +210,11 @@ class VideoEncoder:
         expected_output_frames = input_frame_count
         trim_filter = None
 
+        # Initialize trim/segment variables (may be overwritten if segment_data exists)
+        frames_pretrimmed = False
+        trim_start = 0
+        trim_end = None
+
         # Determine input framerate for FFmpeg (use original FPS to maintain correct timing)
         input_framerate = original_fps
 
@@ -339,9 +344,9 @@ class VideoEncoder:
                         expected_output_frames += segment_input_frames
                         output_labels.append(f"[v{i}]")
 
-                # Concatenate all video segments
+                # Concatenate all video segments (use output_labels count since some segments may be skipped)
                 concat_inputs = ''.join(output_labels)
-                concat_filter = f'{concat_inputs}concat=n={len(segments)}:v=1:a=0'
+                concat_filter = f'{concat_inputs}concat=n={len(output_labels)}:v=1:a=0'
 
                 # Concatenate all audio segments (only if audio is included)
                 audio_concat_filter = None
@@ -692,9 +697,11 @@ class VideoEncoder:
                 universal_newlines=True
             )
 
-            # Read stderr line by line to track progress
+            # Read stderr line by line to track progress and capture for error reporting
             last_frame = 0
+            stderr_lines = []
             for line in process.stderr:
+                stderr_lines.append(line)
                 # Parse frame number from FFmpeg output
                 frame_num = self.parse_ffmpeg_progress(line)
                 if frame_num is not None and frame_num > last_frame:
@@ -716,10 +723,11 @@ class VideoEncoder:
             process.wait()
 
             if process.returncode != 0:
-                # Read any remaining output for error reporting
-                _, stderr = process.communicate()
+                # Use captured stderr for error reporting
+                stderr_output = ''.join(stderr_lines)
                 logger.error(f"FFmpeg encoding failed with return code {process.returncode}")
-                raise RuntimeError(f"Video encoding failed: {stderr}")
+                logger.error(f"FFmpeg stderr: {stderr_output[-2000:]}")  # Last 2000 chars
+                raise RuntimeError(f"Video encoding failed: {stderr_output[-1000:]}")
 
             ffmpeg_pass2_end = datetime.now()
             ffmpeg_pass2_duration = (ffmpeg_pass2_end - ffmpeg_pass2_start).total_seconds()

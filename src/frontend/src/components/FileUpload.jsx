@@ -10,9 +10,14 @@ export function FileUpload({ onFileSelect, isLoading }) {
   const fileInputRef = useRef(null);
 
   const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      onFileSelect(file);
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      // Process each selected file
+      Array.from(files).forEach(file => {
+        onFileSelect(file);
+      });
+      // Reset input so same files can be selected again
+      event.target.value = '';
     }
   };
 
@@ -28,6 +33,7 @@ export function FileUpload({ onFileSelect, isLoading }) {
         accept="video/mp4,video/quicktime,video/webm"
         onChange={handleFileChange}
         className="hidden"
+        multiple
       />
       <button
         onClick={handleButtonClick}
@@ -73,7 +79,7 @@ export function FileUpload({ onFileSelect, isLoading }) {
                 d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
               />
             </svg>
-            <span>Upload Video</span>
+            <span>Add</span>
           </>
         )}
       </button>

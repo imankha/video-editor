@@ -51,6 +51,7 @@ export function TimelineBase({
 }) {
   const timelineRef = React.useRef(null);
   const scrollContainerRef = React.useRef(null);
+  const layersContainerRef = React.useRef(null);
   const [isDragging, setIsDragging] = React.useState(false);
   const [hoverTime, setHoverTime] = React.useState(null);
   const [hoverX, setHoverX] = React.useState(0);
@@ -242,7 +243,7 @@ export function TimelineBase({
             }}
           >
             {/* Timeline layers container with unified playhead */}
-            <div className="relative">
+            <div className="relative" ref={layersContainerRef}>
               {/* Video Timeline Track */}
               <div className={`relative bg-gray-800 h-12 rounded-r-lg transition-all ${
                 selectedLayer === 'playhead' ? 'ring-2 ring-blue-400 ring-opacity-75' : ''
@@ -355,5 +356,6 @@ function TrimUndoButton({ position, trimAmount, totalLayerHeight, edgePadding, o
   );
 }
 
-// Export EDGE_PADDING for use by layer components
+// Export constants for use by layer components
 export const EDGE_PADDING = 20;
+export const PLAYHEAD_WIDTH_PX = 4; // Corresponds to Tailwind w-1 class

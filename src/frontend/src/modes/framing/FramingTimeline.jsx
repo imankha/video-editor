@@ -164,6 +164,7 @@ export function FramingTimeline({
             sourceTimeToVisualTime={sourceTimeToVisualTime}
             visualTimeToSourceTime={visualTimeToSourceTime}
             timelineScale={timelineScale}
+            edgePadding={EDGE_PADDING}
           />
         </div>
       )}

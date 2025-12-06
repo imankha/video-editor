@@ -1,33 +1,26 @@
 import React from 'react';
-import { HighlightProvider } from './contexts/HighlightContext';
-import OverlayTimeline from './OverlayTimeline';
+import { Film, Circle } from 'lucide-react';
+import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBase';
+import RegionLayer from '../../components/timeline/RegionLayer';
 
 /**
  * OverlayMode - Container component for Overlay mode.
  *
  * This component encapsulates all overlay-specific UI and logic:
- * - OverlayTimeline for highlight keyframes
+ * - TimelineBase for playhead and video scrubbing
+ * - RegionLayer for highlight regions (reused segment-style UI)
  *
  * NOTE: HighlightOverlay is rendered by App.jsx inside VideoPlayer for correct positioning.
  * The overlay needs to be inside the video-container for absolute positioning to work.
  *
  * KEY PRINCIPLE: Overlay preview is 100% client-side. No backend calls during editing.
  * The HighlightOverlay renders as an SVG layer that:
- * - Renders highlight ellipse at current time
- * - Interpolates position from keyframes
+ * - Renders highlight ellipse when playhead is within an enabled region
+ * - Interpolates position from keyframes (if any)
  * - Updates in real-time during playback
  *
- * State management (useHighlight) lives in App.jsx for coordinated access
- * across modes. This component receives state via props and context.
- *
- * @example
- * <OverlayMode
- *   videoRef={videoRef}
- *   videoUrl={videoUrl}
- *   metadata={metadata}
- *   highlightContextValue={highlightContextValue}
- *   // ... other props
- * />
+ * State management (useHighlightRegions) lives in App.jsx for coordinated access
+ * across modes. This component receives state via props.
  */
 export function OverlayMode({
   // Video props
@@ -36,23 +29,21 @@ export function OverlayMode({
   metadata,
   currentTime,
   duration,
-  // Highlight state (from useHighlight in App.jsx for now)
-  highlightContextValue,
-  currentHighlightState,
-  isHighlightEnabled,
-  highlightKeyframes,
-  highlightFramerate,
-  highlightDuration,
-  selectedHighlightKeyframeIndex,
-  copiedHighlight,
+  // Highlight regions state (from useHighlightRegions in App.jsx)
+  highlightRegions = [],
+  highlightBoundaries = [],
+  highlightKeyframes = [],
+  highlightFramerate = 30,
+  onAddHighlightRegion,
+  onDeleteHighlightRegion,
+  onMoveHighlightRegionStart,
+  onMoveHighlightRegionEnd,
+  onRemoveHighlightKeyframe,
+  onToggleHighlightRegion,
+  onSelectedKeyframeChange,
+  // Highlight interaction
   onHighlightChange,
   onHighlightComplete,
-  onHighlightKeyframeClick,
-  onHighlightKeyframeDelete,
-  onHighlightKeyframeCopy,
-  onHighlightKeyframePaste,
-  onHighlightToggleEnabled,
-  onHighlightDurationChange,
   // Zoom state (from useZoom in App.jsx)
   zoom,
   panOffset,
@@ -72,30 +63,58 @@ export function OverlayMode({
   // Children (allows App.jsx to pass additional content)
   children,
 }) {
-  return (
-    <HighlightProvider value={highlightContextValue}>
-      {/* NOTE: HighlightOverlay is rendered by App.jsx inside VideoPlayer */}
+  // Calculate total layer height for playhead line
+  // Video track (h-12=3rem) + gap (mt-1=0.25rem) + Highlight regions (h-20=5rem)
+  const getTotalLayerHeight = () => {
+    return '8.5rem'; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + padding
+  };
 
-      {/* OverlayTimeline */}
+  /**
+   * Handle region action from RegionLayer
+   */
+  const handleRegionAction = (regionIndex, action, value) => {
+    if (action === 'toggle' && onToggleHighlightRegion) {
+      onToggleHighlightRegion(regionIndex, value);
+    } else if (action === 'delete' && onDeleteHighlightRegion) {
+      onDeleteHighlightRegion(regionIndex);
+    }
+  };
+
+  // Layer labels for the fixed left column (matching FramingTimeline structure)
+  const layerLabels = (
+    <>
+      {/* Video Timeline Label */}
+      <div
+        className={`h-12 flex items-center justify-center border-r border-gray-700 rounded-l-lg transition-colors cursor-pointer ${
+          selectedLayer === 'playhead' ? 'bg-blue-900/50' : 'bg-gray-900 hover:bg-gray-800'
+        }`}
+        onClick={() => onLayerSelect && onLayerSelect('playhead')}
+      >
+        <Film size={18} className={selectedLayer === 'playhead' ? 'text-blue-300' : 'text-blue-400'} />
+      </div>
+
+      {/* Highlight Region Layer Label */}
+      <div
+        className={`mt-1 h-20 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
+          selectedLayer === 'highlight' ? 'bg-orange-900/30' : 'bg-gray-900 hover:bg-gray-800'
+        }`}
+        onClick={() => onLayerSelect && onLayerSelect('highlight')}
+      >
+        <Circle size={18} className={selectedLayer === 'highlight' ? 'text-orange-300' : 'text-orange-400'} />
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Video Timeline with Highlight Regions inside */}
       {videoUrl && (
         <div className="mt-6">
-          <OverlayTimeline
+          <TimelineBase
             currentTime={currentTime}
             duration={duration}
             visualDuration={visualDuration || duration}
             onSeek={onSeek}
-            highlightKeyframes={highlightKeyframes}
-            highlightFramerate={highlightFramerate}
-            isHighlightActive={isHighlightEnabled}
-            onHighlightKeyframeClick={onHighlightKeyframeClick}
-            onHighlightKeyframeDelete={onHighlightKeyframeDelete}
-            onHighlightKeyframeCopy={onHighlightKeyframeCopy}
-            onHighlightKeyframePaste={onHighlightKeyframePaste}
-            selectedHighlightKeyframeIndex={selectedHighlightKeyframeIndex}
-            onHighlightToggleEnabled={onHighlightToggleEnabled}
-            onHighlightDurationChange={onHighlightDurationChange}
-            selectedLayer={selectedLayer}
-            onLayerSelect={onLayerSelect}
             sourceTimeToVisualTime={sourceTimeToVisualTime}
             visualTimeToSourceTime={visualTimeToSourceTime}
             timelineZoom={timelineZoom}
@@ -103,14 +122,49 @@ export function OverlayMode({
             timelineScale={timelineScale}
             timelineScrollPosition={timelineScrollPosition}
             onTimelineScrollPositionChange={onTimelineScrollPositionChange}
+            selectedLayer={selectedLayer}
+            onLayerSelect={onLayerSelect}
+            layerLabels={layerLabels}
+            totalLayerHeight={getTotalLayerHeight()}
             trimRange={trimRange}
-          />
+          >
+            {/* Highlight Regions Layer - inside TimelineBase for proper alignment */}
+            <div className="mt-1">
+              <RegionLayer
+                mode="highlight"
+                regions={highlightRegions}
+                boundaries={highlightBoundaries}
+                keyframes={highlightKeyframes}
+                framerate={highlightFramerate}
+                duration={duration}
+                visualDuration={visualDuration || duration}
+                currentTime={currentTime}
+                onAddRegion={onAddHighlightRegion}
+                onMoveRegionStart={onMoveHighlightRegionStart}
+                onMoveRegionEnd={onMoveHighlightRegionEnd}
+                onRemoveKeyframe={onRemoveHighlightKeyframe}
+                onRegionAction={handleRegionAction}
+                onSelectedKeyframeChange={onSelectedKeyframeChange}
+                sourceTimeToVisualTime={sourceTimeToVisualTime}
+                visualTimeToSourceTime={visualTimeToSourceTime}
+                colorScheme={{
+                  bg: 'bg-orange-900',
+                  hover: 'bg-orange-500',
+                  accent: 'bg-orange-600',
+                  line: 'bg-orange-400',
+                  lineHover: 'bg-orange-300'
+                }}
+                emptyMessage="Click to add a highlight region"
+                edgePadding={EDGE_PADDING}
+              />
+            </div>
+          </TimelineBase>
         </div>
       )}
 
       {/* Allow additional content to be passed in */}
       {children}
-    </HighlightProvider>
+    </>
   );
 }
 

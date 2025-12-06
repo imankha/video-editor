@@ -9,6 +9,7 @@ export { default as OverlayTimelineDefault } from './OverlayTimeline';
 
 // Hooks
 export { default as useHighlight } from './hooks/useHighlight';
+export { default as useHighlightRegions } from './hooks/useHighlightRegions';
 
 // Layers
 export { default as HighlightLayer } from './layers/HighlightLayer';

@@ -63,6 +63,17 @@ export default function useKeyframeController({
     dispatch(actions.reset());
   }, []);
 
+  /**
+   * Restore keyframes from saved state (for clip switching)
+   */
+  const restoreKeyframes = useCallback((savedKeyframes, endFrame) => {
+    if (!savedKeyframes || savedKeyframes.length === 0) {
+      console.warn('[useKeyframeController] No keyframes to restore');
+      return;
+    }
+    dispatch(actions.restoreKeyframes(savedKeyframes, endFrame, framerate));
+  }, [framerate]);
+
   // ============================================================================
   // KEYFRAME OPERATIONS
   // ============================================================================
@@ -256,6 +267,7 @@ export default function useKeyframeController({
     // Initialization
     initializeKeyframes,
     needsInitialization,
+    restoreKeyframes,
 
     // Keyframe operations
     addOrUpdateKeyframe,
