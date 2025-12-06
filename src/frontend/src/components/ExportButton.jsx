@@ -38,7 +38,7 @@ const HIGHLIGHT_EFFECT_COLORS = ['bg-blue-600', 'bg-yellow-600', 'bg-purple-600'
 export default function ExportButton({
   videoFile,
   cropKeyframes,
-  highlightKeyframes = [],
+  highlightRegions = [],  // Array of { start_time, end_time, keyframes: [...] }
   isHighlightEnabled = false,
   segmentData,
   disabled,
@@ -227,14 +227,9 @@ export default function ExportButton({
         // Overlay mode: Use simple overlay endpoint (no crop, no AI, no trim)
         endpoint = 'http://localhost:8000/api/export/overlay';
 
-        // Add highlight keyframes and effect type
-        if (highlightKeyframes && highlightKeyframes.length > 0) {
-          console.log('=== OVERLAY EXPORT: Sending highlight keyframes ===');
-          console.log(JSON.stringify(highlightKeyframes, null, 2));
-          console.log('==============================================');
-          formData.append('highlight_keyframes_json', JSON.stringify(highlightKeyframes));
-        } else {
-          console.log('=== OVERLAY EXPORT: No highlight keyframes (will pass through video) ===');
+        // Add highlight regions (new multi-region format)
+        if (highlightRegions && highlightRegions.length > 0) {
+          formData.append('highlight_regions_json', JSON.stringify(highlightRegions));
         }
         formData.append('highlight_effect_type', highlightEffectType);
       }
@@ -283,7 +278,8 @@ export default function ExportButton({
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `upscaled_${videoFile.name || 'video.mp4'}`;
+      const prefix = editorMode === 'overlay' ? 'overlayed_' : 'upscaled_';
+      link.download = `${prefix}${videoFile.name || 'video.mp4'}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

@@ -93,6 +93,49 @@ export function useSegments() {
   }, []);
 
   /**
+   * Restore segment state from saved data (for clip switching)
+   * @param {Object} savedState - { boundaries, speeds, trimRange }
+   * @param {number} videoDuration - Video duration for validation
+   */
+  const restoreState = useCallback((savedState, videoDuration) => {
+    if (!savedState) {
+      console.log('[useSegments] No state to restore');
+      return;
+    }
+
+    console.log('[useSegments] Restoring state:', savedState);
+
+    // Set duration first
+    if (videoDuration) {
+      setDuration(videoDuration);
+    }
+
+    // Restore user splits from boundaries (filter out 0 and duration)
+    if (savedState.boundaries && Array.isArray(savedState.boundaries)) {
+      const userSplitsFromBoundaries = savedState.boundaries.filter(b =>
+        b > 0.01 && (!videoDuration || Math.abs(b - videoDuration) > 0.01)
+      );
+      setUserSplits(userSplitsFromBoundaries);
+    }
+
+    // Restore segment speeds (check both 'speeds' and 'segmentSpeeds' for compatibility)
+    const speeds = savedState.speeds || savedState.segmentSpeeds;
+    if (speeds && typeof speeds === 'object') {
+      setSegmentSpeeds(speeds);
+    }
+
+    // Restore trim range
+    if (savedState.trimRange) {
+      setTrimRange(savedState.trimRange);
+    } else {
+      setTrimRange(null);
+    }
+
+    // Clear trim history when restoring (we don't persist history)
+    setTrimHistory([]);
+  }, []);
+
+  /**
    * Add a segment boundary at the given time
    */
   const addBoundary = useCallback((time) => {
@@ -650,6 +693,7 @@ export function useSegments() {
     // Actions
     initializeWithDuration,
     reset,
+    restoreState,        // Restore from saved state (for clip switching)
     addBoundary,         // Adds to userSplits
     removeBoundary,      // Removes from userSplits (auto-clears trimRange if needed)
     setSegmentSpeed,

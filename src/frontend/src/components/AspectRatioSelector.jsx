@@ -1,26 +1,47 @@
 /**
- * AspectRatioSelector component - Simple dropdown to select crop aspect ratio
+ * AspectRatioSelector component - Visual icon-based toggle for crop aspect ratio
+ * Displays two clickable rectangle shapes: tall (9:16) and wide (16:9)
  */
 export default function AspectRatioSelector({ aspectRatio, onAspectRatioChange }) {
   const aspectRatios = [
-    { value: '16:9', label: '16:9 Landscape' },
-    { value: '9:16', label: '9:16 Portrait' }
+    { value: '9:16', label: 'Portrait' },
+    { value: '16:9', label: 'Landscape' }
   ];
 
   return (
-    <div className="inline-block">
-      <label className="text-sm text-gray-400 mr-2">Crop Aspect Ratio:</label>
-      <select
-        value={aspectRatio}
-        onChange={(e) => onAspectRatioChange(e.target.value)}
-        className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer hover:bg-gray-700 transition-colors"
-      >
-        {aspectRatios.map((ratio) => (
-          <option key={ratio.value} value={ratio.value}>
-            {ratio.label}
-          </option>
-        ))}
-      </select>
+    <div className="flex items-center gap-2">
+      {aspectRatios.map((ratio) => {
+        const isSelected = aspectRatio === ratio.value;
+        const isTall = ratio.value === '9:16';
+
+        return (
+          <button
+            key={ratio.value}
+            onClick={() => onAspectRatioChange(ratio.value)}
+            className={`
+              relative flex flex-col items-center gap-1 p-2 rounded-lg transition-all
+              ${isSelected
+                ? 'bg-purple-600 ring-2 ring-purple-400'
+                : 'bg-gray-800 hover:bg-gray-700 border border-gray-600'
+              }
+            `}
+            title={`${ratio.value} ${ratio.label}`}
+          >
+            {/* Rectangle icon */}
+            <div
+              className={`
+                border-2 rounded-sm transition-colors
+                ${isSelected ? 'border-white bg-purple-500/30' : 'border-gray-400 bg-gray-700/50'}
+                ${isTall ? 'w-4 h-6' : 'w-6 h-4'}
+              `}
+            />
+            {/* Ratio label */}
+            <span className={`text-xs font-medium ${isSelected ? 'text-white' : 'text-gray-400'}`}>
+              {ratio.value}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

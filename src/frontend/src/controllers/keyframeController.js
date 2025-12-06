@@ -34,6 +34,7 @@ export const ActionTypes = {
   // Lifecycle
   INITIALIZE: 'INITIALIZE',
   RESET: 'RESET',
+  RESTORE_KEYFRAMES: 'RESTORE_KEYFRAMES',
 
   // Keyframe operations
   ADD_KEYFRAME: 'ADD_KEYFRAME',
@@ -167,6 +168,37 @@ export function keyframeReducer(state, action) {
 
     case ActionTypes.RESET: {
       return createInitialState();
+    }
+
+    case ActionTypes.RESTORE_KEYFRAMES: {
+      const { keyframes, endFrame, framerate } = action.payload;
+
+      // Validate keyframes array
+      if (!keyframes || !Array.isArray(keyframes) || keyframes.length < 2) {
+        console.warn('[keyframeController] Cannot restore - invalid keyframes array');
+        return state;
+      }
+
+      // Sort and ensure proper structure
+      const sortedKeyframes = sortKeyframes(keyframes.map(kf => ({
+        ...kf,
+        origin: kf.origin || 'user'
+      })));
+
+      // Determine if end keyframe was explicitly set (not same as start)
+      const startKf = sortedKeyframes[0];
+      const endKf = sortedKeyframes[sortedKeyframes.length - 1];
+      const isEndExplicit = JSON.stringify({ x: startKf.x, y: startKf.y, width: startKf.width, height: startKf.height }) !==
+                           JSON.stringify({ x: endKf.x, y: endKf.y, width: endKf.width, height: endKf.height });
+
+      return {
+        ...state,
+        machineState: KeyframeStates.INITIALIZED,
+        keyframes: sortedKeyframes,
+        isEndKeyframeExplicit: isEndExplicit,
+        endFrame: endFrame || sortedKeyframes[sortedKeyframes.length - 1].frame,
+        framerate: framerate || state.framerate
+      };
     }
 
     case ActionTypes.ADD_KEYFRAME:
@@ -348,6 +380,14 @@ export const actions = {
    */
   reset: () => ({
     type: ActionTypes.RESET
+  }),
+
+  /**
+   * Restore keyframes from saved state (for clip switching)
+   */
+  restoreKeyframes: (keyframes, endFrame, framerate) => ({
+    type: ActionTypes.RESTORE_KEYFRAMES,
+    payload: { keyframes, endFrame, framerate }
   }),
 
   /**

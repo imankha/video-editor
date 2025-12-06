@@ -730,7 +730,8 @@ async def export_with_ai_upscale(
 async def export_overlay_only(
     video: UploadFile = File(...),
     export_id: str = Form(...),
-    highlight_keyframes_json: str = Form(None),
+    highlight_regions_json: str = Form(None),  # New region-based format
+    highlight_keyframes_json: str = Form(None),  # Legacy flat format (deprecated)
     highlight_effect_type: str = Form("original"),
 ):
     """
@@ -740,6 +741,20 @@ async def export_overlay_only(
     cropped/trimmed during Framing export.
 
     Audio from input video is always preserved (audio settings are handled in framing export).
+
+    Highlight format (new region-based):
+    [
+        {
+            "id": "region-123",
+            "start_time": 0,
+            "end_time": 3,
+            "keyframes": [
+                {"time": 0, "x": 100, "y": 200, "radiusX": 50, "radiusY": 80, "opacity": 0.15, "color": "#FFFF00"},
+                ...
+            ]
+        },
+        ...
+    ]
     """
     import cv2
     from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
@@ -753,12 +768,41 @@ async def export_overlay_only(
 
     logger.info(f"[Overlay Export] Effect type: {highlight_effect_type}")
 
-    # Parse highlight keyframes
-    highlight_keyframes = []
-    if highlight_keyframes_json:
+    # Parse highlight regions (new format) or keyframes (legacy format)
+    highlight_regions = []
+
+    if highlight_regions_json:
+        # New region-based format
+        try:
+            regions_data = json.loads(highlight_regions_json)
+            for region in regions_data:
+                highlight_regions.append({
+                    'id': region.get('id', ''),
+                    'start_time': region['start_time'],
+                    'end_time': region['end_time'],
+                    'keyframes': [
+                        {
+                            'time': kf['time'],
+                            'x': kf['x'],
+                            'y': kf['y'],
+                            'radiusX': kf['radiusX'],
+                            'radiusY': kf['radiusY'],
+                            'opacity': kf['opacity'],
+                            'color': kf['color']
+                        }
+                        for kf in region.get('keyframes', [])
+                    ]
+                })
+            logger.info(f"[Overlay Export] Received {len(highlight_regions)} highlight regions:")
+            for region in highlight_regions:
+                logger.info(f"  Region {region['id']}: {region['start_time']:.2f}s - {region['end_time']:.2f}s, {len(region['keyframes'])} keyframes")
+        except (json.JSONDecodeError, KeyError) as e:
+            raise HTTPException(status_code=400, detail=f"Invalid highlight regions JSON: {str(e)}")
+    elif highlight_keyframes_json:
+        # Legacy flat keyframe format - convert to single region covering entire video
         try:
             highlight_data = json.loads(highlight_keyframes_json)
-            highlight_keyframes = [
+            keyframes = [
                 {
                     'time': kf['time'],
                     'x': kf['x'],
@@ -770,9 +814,15 @@ async def export_overlay_only(
                 }
                 for kf in highlight_data
             ]
-            logger.info(f"[Overlay Export] Received {len(highlight_keyframes)} highlight keyframes:")
-            for i, kf in enumerate(highlight_keyframes):
-                logger.info(f"  Keyframe {i}: time={kf['time']:.3f}s, pos=({kf['x']:.1f}, {kf['y']:.1f}), radius=({kf['radiusX']:.1f}, {kf['radiusY']:.1f})")
+            if keyframes:
+                # Create a single region spanning all keyframes
+                highlight_regions.append({
+                    'id': 'legacy',
+                    'start_time': keyframes[0]['time'],
+                    'end_time': keyframes[-1]['time'],
+                    'keyframes': keyframes
+                })
+            logger.info(f"[Overlay Export] Legacy format: {len(keyframes)} keyframes converted to 1 region")
         except (json.JSONDecodeError, KeyError) as e:
             raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {str(e)}")
 
@@ -807,7 +857,7 @@ async def export_overlay_only(
         logger.info(f"[Overlay Export] Video: {width}x{height} @ {fps}fps, {frame_count} frames")
 
         # Fast path: no highlights
-        if not highlight_keyframes:
+        if not highlight_regions:
             cap.release()
             logger.info("[Overlay Export] No highlights - copying video directly")
             import shutil
@@ -820,20 +870,28 @@ async def export_overlay_only(
             return FileResponse(
                 output_path,
                 media_type='video/mp4',
-                filename=f"overlay_{video.filename}",
+                filename=f"overlayed_{video.filename}",
                 background=None
             )
+
+        # Helper function to find region at a given time
+        def get_region_at_time(time):
+            """Find which region (if any) contains the given time."""
+            for region in highlight_regions:
+                if region['start_time'] <= time <= region['end_time']:
+                    return region
+            return None
 
         # Process frames with highlights
         original_size = (width, height)
         frame_idx = 0
 
-        # Log video duration vs keyframe times for debugging
+        # Log video duration vs region times for debugging
         video_duration = frame_count / fps
-        if highlight_keyframes:
-            first_kf_time = highlight_keyframes[0]['time']
-            last_kf_time = highlight_keyframes[-1]['time']
-            logger.info(f"[Overlay Export] Video duration: {video_duration:.3f}s, Keyframe range: {first_kf_time:.3f}s - {last_kf_time:.3f}s")
+        if highlight_regions:
+            logger.info(f"[Overlay Export] Video duration: {video_duration:.3f}s")
+            for region in highlight_regions:
+                logger.info(f"  Region: {region['start_time']:.3f}s - {region['end_time']:.3f}s ({len(region['keyframes'])} keyframes)")
 
         while True:
             ret, frame = cap.read()
@@ -841,14 +899,23 @@ async def export_overlay_only(
                 break
 
             current_time = frame_idx / fps
-            highlight = KeyframeInterpolator.interpolate_highlight(highlight_keyframes, current_time)
+
+            # Find which region (if any) this time belongs to
+            region = get_region_at_time(current_time)
+            highlight = None
+
+            if region and region['keyframes']:
+                # Interpolate highlight within this region's keyframes
+                highlight = KeyframeInterpolator.interpolate_highlight(region['keyframes'], current_time)
 
             # Log first 5 frames and every 30th frame for debugging
             if frame_idx < 5 or frame_idx % 30 == 0:
                 if highlight:
                     logger.info(f"[Overlay Export] Frame {frame_idx} (t={current_time:.3f}s): highlight at ({highlight['x']:.1f}, {highlight['y']:.1f})")
+                elif region:
+                    logger.info(f"[Overlay Export] Frame {frame_idx} (t={current_time:.3f}s): in region but no interpolation")
                 else:
-                    logger.info(f"[Overlay Export] Frame {frame_idx} (t={current_time:.3f}s): NO highlight (interpolate returned None)")
+                    logger.info(f"[Overlay Export] Frame {frame_idx} (t={current_time:.3f}s): not in any region")
 
             if highlight is not None:
                 frame = KeyframeInterpolator.render_highlight_on_frame(
@@ -915,7 +982,7 @@ async def export_overlay_only(
         return FileResponse(
             output_path,
             media_type='video/mp4',
-            filename=f"overlay_{video.filename}",
+            filename=f"overlayed_{video.filename}",
             background=BackgroundTask(cleanup_temp_dir)
         )
 

@@ -234,6 +234,18 @@ export default function useCrop(videoMetadata, trimRange = null) {
     return keyframeManager.getKeyframesForExport(cropDataKeys);
   }, [keyframeManager]);
 
+  /**
+   * Restore crop keyframes from saved state (for clip switching)
+   */
+  const restoreState = useCallback((savedKeyframes, endFrame) => {
+    if (!savedKeyframes || savedKeyframes.length === 0) {
+      console.log('[useCrop] No keyframes to restore');
+      return;
+    }
+    console.log('[useCrop] Restoring keyframes:', savedKeyframes.length, 'endFrame:', endFrame);
+    keyframeManager.restoreKeyframes(savedKeyframes, endFrame);
+  }, [keyframeManager]);
+
   return {
     // State
     aspectRatio,
@@ -251,6 +263,7 @@ export default function useCrop(videoMetadata, trimRange = null) {
     copyCropKeyframe,
     pasteCropKeyframe,
     reset: keyframeManager.reset,
+    restoreState,
 
     // Queries
     interpolateCrop: keyframeManager.interpolate,

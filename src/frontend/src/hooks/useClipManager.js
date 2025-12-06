@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 
 /**
  * useClipManager - Manages the list of clips and their metadata
@@ -119,13 +119,19 @@ export function useClipManager() {
 
     setClips(prev => [...prev, newClip]);
 
-    // If this is the first clip, auto-select it
-    if (clips.length === 0) {
-      setSelectedClipId(id);
-    }
-
     return id;
-  }, [generateClipId, clips.length]);
+  }, [generateClipId]);
+
+  /**
+   * Effect to ensure the first clip is always selected when clips exist
+   * This handles the case where clips are added but none is selected
+   */
+  useEffect(() => {
+    if (clips.length > 0 && !selectedClipId) {
+      // Select the first clip (top of the list)
+      setSelectedClipId(clips[0].id);
+    }
+  }, [clips, selectedClipId]);
 
   /**
    * Delete a clip

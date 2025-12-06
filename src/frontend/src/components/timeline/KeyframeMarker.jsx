@@ -86,7 +86,7 @@ export function KeyframeMarker({
 
       {/* Diamond keyframe indicator */}
       <div
-        className={`w-3 h-3 transform rotate-45 cursor-pointer transition-all ${markerColorClass}`}
+        className={`w-3 h-3 transform rotate-45 transition-all ${markerColorClass} ${onClick ? 'cursor-pointer' : 'pointer-events-none'}`}
         onClick={onClick}
         title={tooltip}
       />
