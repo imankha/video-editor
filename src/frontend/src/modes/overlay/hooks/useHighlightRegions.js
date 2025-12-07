@@ -20,6 +20,7 @@ import { interpolateHighlightSpline } from '../../../utils/splineInterpolation';
 const DEFAULT_REGION_DURATION = 3.0; // seconds
 const MIN_REGION_DURATION = 0.5; // seconds
 const TIME_EPSILON = 0.001; // 1ms tolerance for floating point comparison
+const MIN_KEYFRAME_DISTANCE_FRAMES = 5; // Minimum 5 frames (~0.167s at 30fps) between keyframes
 
 export default function useHighlightRegions(videoMetadata) {
   // Store regions directly (not derived from boundaries)
@@ -328,39 +329,101 @@ export default function useHighlightRegions(videoMetadata) {
   }, [getRegionAtTime]);
 
   /**
+   * Check if time is exactly on a keyframe frame within an enabled region
+   * Only returns true for exact frame match (no threshold)
+   */
+  const isTimeAtRegionKeyframe = useCallback((time) => {
+    const currentFrame = timeToFrame(time, framerate);
+    for (const region of regions) {
+      if (!region.enabled) continue;
+      for (const kf of region.keyframes || []) {
+        if (kf.frame === currentFrame) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [regions, framerate]);
+
+  /**
+   * Get keyframe data if time is exactly on a keyframe frame within an enabled region
+   * Returns the keyframe's highlight data or null (exact frame match only)
+   */
+  const getKeyframeAtTimeInRegion = useCallback((time) => {
+    const currentFrame = timeToFrame(time, framerate);
+    for (const region of regions) {
+      if (!region.enabled) continue;
+      for (const kf of region.keyframes || []) {
+        if (kf.frame === currentFrame) {
+          const { frame, origin, ...data } = kf;
+          return data;
+        }
+      }
+    }
+    return null;
+  }, [regions, framerate]);
+
+  /**
    * Add or update a keyframe at the specified time
    * Only works if time is within an enabled region
+   *
+   * RULES:
+   * 1. If there's a keyframe at the exact current frame → update it
+   * 2. If there's a keyframe within MIN_KEYFRAME_DISTANCE_FRAMES → MOVE it to current frame and update
+   * 3. Otherwise → create new keyframe at current frame
+   *
+   * This ensures the edited keyframe is always at the exact frame the user is viewing,
+   * preventing the "snapping" issue where display shows different position than what was set.
    */
   const addOrUpdateKeyframe = useCallback((time, data) => {
     const region = getRegionAtTime(time);
+
     if (!region || !region.enabled) {
       console.warn('[useHighlightRegions] Cannot add keyframe - not in enabled region');
       return false;
     }
 
-    const frame = timeToFrame(time, framerate);
+    const targetFrame = timeToFrame(time, framerate);
 
     setRegions(prev => prev.map(r => {
       if (r.id !== region.id) return r;
 
-      const existingIndex = r.keyframes.findIndex(kf => kf.frame === frame);
+      // First, check for exact frame match
+      const exactMatchIndex = r.keyframes.findIndex(kf => kf.frame === targetFrame);
 
-      if (existingIndex >= 0) {
-        // Update existing keyframe
+      if (exactMatchIndex >= 0) {
+        // Update existing keyframe at exact frame
         return {
           ...r,
           keyframes: r.keyframes.map((kf, idx) =>
-            idx === existingIndex ? { ...kf, ...data } : kf
+            idx === exactMatchIndex ? { ...kf, ...data } : kf
           )
         };
-      } else {
-        // Add new keyframe and sort
+      }
+
+      // Check for nearby keyframe within MIN_KEYFRAME_DISTANCE_FRAMES
+      const nearbyIndex = r.keyframes.findIndex(kf =>
+        Math.abs(kf.frame - targetFrame) <= MIN_KEYFRAME_DISTANCE_FRAMES
+      );
+
+      if (nearbyIndex >= 0) {
+        // MOVE the nearby keyframe to current frame and update its data
+        // This ensures the keyframe is at the exact frame the user is viewing
+        console.log(`[useHighlightRegions] Moving keyframe from frame ${r.keyframes[nearbyIndex].frame} to ${targetFrame}`);
         return {
           ...r,
-          keyframes: [...r.keyframes, { frame, ...data, origin: 'user' }]
-            .sort((a, b) => a.frame - b.frame)
+          keyframes: r.keyframes.map((kf, idx) =>
+            idx === nearbyIndex ? { ...kf, ...data, frame: targetFrame } : kf
+          ).sort((a, b) => a.frame - b.frame)
         };
       }
+
+      // No nearby keyframe - add new one and sort
+      return {
+        ...r,
+        keyframes: [...r.keyframes, { frame: targetFrame, ...data, origin: 'user' }]
+          .sort((a, b) => a.frame - b.frame)
+      };
     }));
 
     return true;
@@ -527,6 +590,8 @@ export default function useHighlightRegions(videoMetadata) {
     // Queries
     getRegionAtTime,
     isTimeInEnabledRegion,
+    isTimeAtRegionKeyframe,      // Check if at keyframe (larger threshold)
+    getKeyframeAtTimeInRegion,   // Get keyframe data if at keyframe
     getHighlightAtTime,
     getKeyframeAtTime,
     getKeyframesInRegion,

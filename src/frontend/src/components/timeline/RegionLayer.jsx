@@ -257,19 +257,18 @@ export default function RegionLayer({
   };
 
   /**
-   * Determine which keyframe is "selected" based on playhead proximity
-   * Returns the keyframe time if playhead is within threshold, null otherwise
+   * Determine which keyframe is "selected" based on exact frame match
+   * Returns the keyframe time only if playhead is at the exact frame
    */
   const getSelectedKeyframeTime = () => {
     if (mode !== 'highlight' || keyframes.length === 0) return null;
 
-    // Threshold in seconds - if playhead is within this range of a keyframe, it's selected
-    const thresholdSeconds = 0.1; // ~3 frames at 30fps
+    // Convert currentTime to frame for exact match
+    const currentFrame = Math.round(currentTime * framerate);
 
     for (const keyframe of keyframes) {
-      const keyframeTime = frameToTime(keyframe.frame, framerate);
-      if (Math.abs(keyframeTime - currentTime) <= thresholdSeconds) {
-        return keyframeTime;
+      if (keyframe.frame === currentFrame) {
+        return frameToTime(keyframe.frame, framerate);
       }
     }
     return null;
@@ -286,17 +285,23 @@ export default function RegionLayer({
 
   /**
    * Render keyframes for highlight mode
+   * Uses CSS calc() for positioning to match playhead exactly
    */
   const renderKeyframes = () => {
     if (mode !== 'highlight' || keyframes.length === 0) return null;
 
-    return keyframes.map((keyframe) => {
-      const position = frameToPixel(keyframe.frame);
-      const keyframeTime = frameToTime(keyframe.frame, framerate);
+    // Get current frame for exact matching
+    const currentFrame = Math.round(currentTime * framerate);
 
-      // Is this keyframe selected (playhead is near it)?
-      const isSelected = selectedKeyframeTime !== null &&
-        Math.abs(keyframeTime - selectedKeyframeTime) < 0.01;
+    return keyframes.map((keyframe) => {
+      // Is this keyframe selected (playhead is at exact frame)?
+      const isSelected = keyframe.frame === currentFrame;
+
+      // When selected, use currentTime for position so keyframe aligns with playhead
+      // Otherwise use the keyframe's frame time
+      const displayTime = isSelected ? currentTime : frameToTime(keyframe.frame, framerate);
+      const positionPercent = sourceTimeToPixel(displayTime);
+      const keyframeTime = frameToTime(keyframe.frame, framerate);
 
       // Can delete if: user-created (not permanent) AND we have a delete callback
       const canDelete = keyframe.origin !== 'permanent' && onRemoveKeyframe;
@@ -305,26 +310,29 @@ export default function RegionLayer({
       // Click on keyframe: delete it if possible (only for non-permanent keyframes)
       const handleClick = canDelete ? () => onRemoveKeyframe(keyframeTime) : undefined;
 
+      // Use CSS calc() matching playhead positioning formula exactly
+      const leftCalc = `calc(${edgePadding}px + (100% - ${edgePadding * 2}px) * ${positionPercent / 100})`;
+
       return (
-        <KeyframeMarker
+        <div
           key={`kf-${keyframe.frame}`}
-          position={position}
-          colorScheme="orange"
-          isSelected={isSelected}
-          shouldHighlight={isSelected}
-          isPermanent={isPermanent}
-          isStartKeyframe={false}
-          isEndKeyframe={false}
-          onClick={handleClick}
-          onDelete={undefined}
-          tooltip={isPermanent
-            ? `Auto keyframe at ${keyframeTime.toFixed(2)}s`
-            : `Keyframe at ${keyframeTime.toFixed(2)}s (click to delete)`
-          }
-          edgePadding={edgePadding}
-          showCopyButton={false}
-          showDeleteButton={false}
-        />
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-50"
+          style={{ left: leftCalc }}
+        >
+          {/* Diamond keyframe indicator */}
+          <div
+            className={`w-3 h-3 transform rotate-45 transition-all cursor-pointer ${
+              isSelected
+                ? 'bg-orange-300 scale-150 ring-2 ring-orange-200'
+                : 'bg-orange-500 hover:bg-orange-400'
+            }`}
+            onClick={handleClick}
+            title={isPermanent
+              ? `Auto keyframe at ${keyframeTime.toFixed(2)}s`
+              : `Keyframe at ${keyframeTime.toFixed(2)}s (click to delete)`
+            }
+          />
+        </div>
       );
     });
   };
