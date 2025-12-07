@@ -193,7 +193,6 @@ function App() {
     toggleRegionEnabled: toggleHighlightRegion,
     addOrUpdateKeyframe: addHighlightRegionKeyframe,
     removeKeyframe: removeHighlightRegionKeyframe,
-    getRegionAtTime: getHighlightRegionAtTime,
     isTimeInEnabledRegion,
     getHighlightAtTime: getRegionHighlightAtTime,
     getRegionsForExport,
@@ -543,7 +542,7 @@ function App() {
   }, [dragCrop, keyframes, currentTime, interpolateCrop]);
 
   // DERIVED STATE: Current highlight state
-  // Uses the boundary-based system - only show highlight when playhead is in an enabled region
+  // Shows highlight when playhead is in an enabled region
   const currentHighlightState = useMemo(() => {
     // If dragging, show the drag highlight
     if (dragHighlight) {
@@ -562,7 +561,7 @@ function App() {
       return null;
     }
 
-    // Get interpolated highlight from the region at current time
+    // Get interpolated/exact highlight from the region at current time
     const highlight = getRegionHighlightAtTime(currentTime);
     if (!highlight) return null;
 
@@ -1142,20 +1141,18 @@ function App() {
 
   // Handle highlight complete (create/update keyframe in enabled region)
   const handleHighlightComplete = (highlightData) => {
-    // Use selected keyframe time if available, otherwise use current time
-    const targetTime = selectedHighlightKeyframeTime ?? currentTime;
-
-    // Check if target time is within an enabled region
-    if (!isTimeInEnabledRegion(targetTime)) {
+    // Always use currentTime - the keyframe will be created/moved to the exact frame
+    // the user is viewing, ensuring no mismatch between display and data
+    if (!isTimeInEnabledRegion(currentTime)) {
       console.warn('[App] Cannot add highlight keyframe - not in enabled region');
       setDragHighlight(null);
       return;
     }
 
-    const frame = Math.round(targetTime * highlightRegionsFramerate);
-    console.log(`[App] Highlight keyframe at ${targetTime.toFixed(2)}s (frame ${frame}): pos=(${highlightData.x},${highlightData.y}), r=${highlightData.radiusX}x${highlightData.radiusY}`);
+    const frame = Math.round(currentTime * highlightRegionsFramerate);
+    console.log(`[App] Highlight keyframe at ${currentTime.toFixed(2)}s (frame ${frame}): pos=(${highlightData.x},${highlightData.y}), r=${highlightData.radiusX}x${highlightData.radiusY}`);
 
-    addHighlightRegionKeyframe(targetTime, highlightData);
+    addHighlightRegionKeyframe(currentTime, highlightData);
     setDragHighlight(null);
   };
 

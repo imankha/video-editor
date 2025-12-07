@@ -874,25 +874,21 @@ async def export_overlay_only(
                 background=None
             )
 
-        # Helper function to find region at a given time
-        def get_region_at_time(time):
-            """Find which region (if any) contains the given time."""
-            for region in highlight_regions:
-                if region['start_time'] <= time <= region['end_time']:
-                    return region
-            return None
+        # SINGLE-PASS APPROACH: Process all frames, only render highlights where needed
+        # This is simpler and more reliable than segment-based approach
 
-        # Process frames with highlights
-        original_size = (width, height)
-        frame_idx = 0
-
-        # Log video duration vs region times for debugging
         video_duration = frame_count / fps
-        if highlight_regions:
-            logger.info(f"[Overlay Export] Video duration: {video_duration:.3f}s")
-            for region in highlight_regions:
-                logger.info(f"  Region: {region['start_time']:.3f}s - {region['end_time']:.3f}s ({len(region['keyframes'])} keyframes)")
+        logger.info(f"[Overlay Export] Video duration: {video_duration:.3f}s")
 
+        # Sort regions by start time for efficient lookup
+        sorted_regions = sorted(highlight_regions, key=lambda r: r['start_time'])
+        for region in sorted_regions:
+            logger.info(f"  Region: {region['start_time']:.3f}s - {region['end_time']:.3f}s ({len(region['keyframes'])} keyframes)")
+
+        # Process all frames
+        logger.info(f"[Overlay Export] Processing {frame_count} frames...")
+
+        frame_idx = 0
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -900,73 +896,69 @@ async def export_overlay_only(
 
             current_time = frame_idx / fps
 
-            # Find which region (if any) this time belongs to
-            region = get_region_at_time(current_time)
-            highlight = None
+            # Find active region for this frame
+            active_region = None
+            for region in sorted_regions:
+                if region['start_time'] <= current_time <= region['end_time']:
+                    active_region = region
+                    break
 
-            if region and region['keyframes']:
-                # Interpolate highlight within this region's keyframes
-                highlight = KeyframeInterpolator.interpolate_highlight(region['keyframes'], current_time)
+            # Render highlight if in a region
+            if active_region:
+                highlight = KeyframeInterpolator.interpolate_highlight(active_region['keyframes'], current_time)
+                if highlight is not None:
+                    frame = KeyframeInterpolator.render_highlight_on_frame(
+                        frame,
+                        highlight,
+                        (width, height),
+                        crop=None,
+                        effect_type=highlight_effect_type
+                    )
 
-            # Log first 5 frames and every 30th frame for debugging
-            if frame_idx < 5 or frame_idx % 30 == 0:
-                if highlight:
-                    logger.info(f"[Overlay Export] Frame {frame_idx} (t={current_time:.3f}s): highlight at ({highlight['x']:.1f}, {highlight['y']:.1f})")
-                elif region:
-                    logger.info(f"[Overlay Export] Frame {frame_idx} (t={current_time:.3f}s): in region but no interpolation")
-                else:
-                    logger.info(f"[Overlay Export] Frame {frame_idx} (t={current_time:.3f}s): not in any region")
-
-            if highlight is not None:
-                frame = KeyframeInterpolator.render_highlight_on_frame(
-                    frame,
-                    highlight,
-                    original_size,
-                    crop=None,
-                    effect_type=highlight_effect_type
-                )
-
+            # Write frame
             frame_path = os.path.join(frames_dir, f"frame_{frame_idx:06d}.png")
             cv2.imwrite(frame_path, frame)
             frame_idx += 1
 
+            # Update progress
             if frame_idx % 30 == 0:
-                progress = 10 + int((frame_idx / frame_count) * 70)
+                progress = 10 + int((frame_idx / frame_count) * 60)
                 progress_data = {
                     "progress": progress,
-                    "message": f"Processing frame {frame_idx}/{frame_count}...",
+                    "message": f"Processing frames... {frame_idx}/{frame_count}",
                     "status": "processing"
                 }
                 export_progress[export_id] = progress_data
                 await manager.send_progress(export_id, progress_data)
 
         cap.release()
-        logger.info(f"[Overlay Export] Processed {frame_idx} frames")
+        logger.info(f"[Overlay Export] Rendered {frame_idx} frames")
 
-        # Encode with FFmpeg
-        progress_data = {"progress": 80, "message": "Encoding video...", "status": "processing"}
+        # Encode final video with audio from original
+        progress_data = {"progress": 75, "message": "Encoding video...", "status": "processing"}
         export_progress[export_id] = progress_data
         await manager.send_progress(export_id, progress_data)
 
-        # Always preserve audio from input video (audio settings handled in framing export)
         ffmpeg_cmd = [
             'ffmpeg', '-y',
             '-framerate', str(fps),
             '-i', os.path.join(frames_dir, 'frame_%06d.png'),
             '-i', input_path,
             '-map', '0:v',
-            '-map', '1:a?',  # Map audio from input if present
+            '-map', '1:a?',
             '-c:v', 'libx264',
             '-preset', 'medium',
             '-crf', '18',
             '-pix_fmt', 'yuv420p',
-            '-c:a', 'copy',  # Copy audio codec (no re-encoding)
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-shortest',
             output_path
         ]
 
         result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            logger.error(f"[Overlay Export] FFmpeg error: {result.stderr}")
+            logger.error(f"[Overlay Export] Encoding error: {result.stderr}")
             raise HTTPException(status_code=500, detail=f"FFmpeg encoding failed: {result.stderr}")
 
         # Complete

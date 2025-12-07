@@ -23,6 +23,11 @@ export default function HighlightOverlay({
   const [highlightStart, setHighlightStart] = useState(null);
   const overlayRef = useRef(null);
 
+  // Ref to track the latest highlight during drag/resize
+  // This ensures handleMouseUp always has the most recent position,
+  // even if React hasn't re-rendered yet after the last mouse move
+  const latestHighlightRef = useRef(null);
+
   const [videoDisplayRect, setVideoDisplayRect] = useState(null);
 
   /**
@@ -170,6 +175,8 @@ export default function HighlightOverlay({
     const deltaX = (e.clientX - dragStart.x) / videoDisplayRect.scaleX;
     const deltaY = (e.clientY - dragStart.y) / videoDisplayRect.scaleY;
 
+    let constrained;
+
     if (isDragging) {
       const newHighlight = {
         ...highlightStart,
@@ -177,8 +184,7 @@ export default function HighlightOverlay({
         y: highlightStart.y + deltaY
       };
 
-      const constrained = constrainHighlight(newHighlight);
-      onHighlightChange(constrained);
+      constrained = constrainHighlight(newHighlight);
     } else if (isResizing) {
       // Delta-based resizing - much more intuitive
       let newRadiusX = highlightStart.radiusX;
@@ -198,7 +204,12 @@ export default function HighlightOverlay({
         radiusY: newRadiusY
       };
 
-      const constrained = constrainHighlight(newHighlight);
+      constrained = constrainHighlight(newHighlight);
+    }
+
+    if (constrained) {
+      // Store in ref for handleMouseUp to use (avoids stale closure issues)
+      latestHighlightRef.current = constrained;
       onHighlightChange(constrained);
     }
   }, [isDragging, isResizing, resizeHandle, highlightStart, dragStart, videoDisplayRect, constrainHighlight, onHighlightChange]);
@@ -208,13 +219,17 @@ export default function HighlightOverlay({
    */
   const handleMouseUp = useCallback(() => {
     if (isDragging || isResizing) {
+      // Use the ref which has the most recent highlight position
+      // This avoids stale closure issues where currentHighlight prop
+      // hasn't updated yet from the last mouse move
+      const finalHighlight = latestHighlightRef.current || currentHighlight;
       onHighlightComplete({
-        x: round3(currentHighlight.x),
-        y: round3(currentHighlight.y),
-        radiusX: round3(currentHighlight.radiusX),
-        radiusY: round3(currentHighlight.radiusY),
-        opacity: currentHighlight.opacity,
-        color: currentHighlight.color
+        x: round3(finalHighlight.x),
+        y: round3(finalHighlight.y),
+        radiusX: round3(finalHighlight.radiusX),
+        radiusY: round3(finalHighlight.radiusY),
+        opacity: finalHighlight.opacity,
+        color: finalHighlight.color
       });
     }
 
@@ -222,6 +237,7 @@ export default function HighlightOverlay({
     setIsResizing(false);
     setResizeHandle(null);
     setHighlightStart(null);
+    latestHighlightRef.current = null;  // Clear the ref
   }, [isDragging, isResizing, currentHighlight, onHighlightComplete]);
 
   // Attach global mouse handlers
