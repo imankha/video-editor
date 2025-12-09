@@ -26,11 +26,17 @@ Transform the single highlight into multiple highlight regions with arbitrary st
 ### 🔄 In Progress
 - [ ] Keyframe editing within regions
 - [ ] Export format updates for regions
-- [ ] **Framing→Overlay bridge**: Export `.json` with clip timestamps from Framing mode (STEP 1, 5)
-- [ ] **Framing→Overlay bridge**: Pass metadata through App.jsx to OverlayMode (STEP 2)
-- [ ] **Framing→Overlay bridge**: Add `initializeFromClipMetadata()` to useHighlightRegions (STEP 3)
-- [ ] **Framing→Overlay bridge**: Trigger auto-creation in OverlayMode useEffect (STEP 4)
-- [ ] **Framing→Overlay bridge**: Accept `.json` files in Add button (STEP 6)
+
+### ✅ Framing→Overlay Bridge (Completed)
+- [x] **Framing→Overlay bridge**: Build clip metadata with timestamps in ExportButton (STEP 1)
+- [x] **Framing→Overlay bridge**: Pass metadata through App.jsx handleProceedToOverlay (STEP 2)
+- [x] **Framing→Overlay bridge**: Add `initializeFromClipMetadata()` to useHighlightRegions (STEP 3)
+- [x] **Framing→Overlay bridge**: Auto-create regions via useEffect in App.jsx (STEP 4)
+
+### ✅ Chapter Markers (Completed)
+- [x] **Backend**: Embed MP4 chapters during multi-clip concatenation
+- [x] **Backend**: Add `/api/export/chapters` endpoint to extract chapters from video
+- [x] **Behavior**: Overlay mode auto-creates 3-second highlight regions at each chapter start
 
 ---
 

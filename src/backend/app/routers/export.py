@@ -197,19 +197,98 @@ def get_video_duration(video_path: str) -> float:
     return float(probe['format']['duration'])
 
 
+def create_chapter_metadata_file(
+    clip_info: List[Dict[str, Any]],
+    output_path: str
+) -> str:
+    """
+    Create an ffmetadata file with chapter markers for each clip.
+
+    Args:
+        clip_info: List of dicts with 'name', 'start_time', 'end_time'
+        output_path: Directory to write the metadata file
+
+    Returns:
+        Path to the created metadata file
+    """
+    metadata_path = os.path.join(os.path.dirname(output_path), 'chapters.txt')
+
+    with open(metadata_path, 'w', encoding='utf-8') as f:
+        f.write(";FFMETADATA1\n\n")
+
+        for clip in clip_info:
+            # Convert seconds to milliseconds for TIMEBASE=1/1000
+            start_ms = int(clip['start_time'] * 1000)
+            end_ms = int(clip['end_time'] * 1000)
+            title = clip.get('name', f"Clip {clip.get('index', 0) + 1}")
+
+            # Remove file extension from title for cleaner display
+            if '.' in title:
+                title = os.path.splitext(title)[0]
+
+            f.write("[CHAPTER]\n")
+            f.write("TIMEBASE=1/1000\n")
+            f.write(f"START={start_ms}\n")
+            f.write(f"END={end_ms}\n")
+            f.write(f"title={title}\n\n")
+
+    logger.info(f"[Chapters] Created metadata file with {len(clip_info)} chapters: {metadata_path}")
+    return metadata_path
+
+
+def add_chapters_to_video(
+    input_path: str,
+    metadata_path: str,
+    output_path: str
+) -> None:
+    """
+    Add chapter metadata to a video file.
+
+    Args:
+        input_path: Path to the input video
+        metadata_path: Path to the ffmetadata file
+        output_path: Path for the output video with chapters
+    """
+    cmd = [
+        'ffmpeg', '-y',
+        '-i', input_path,
+        '-i', metadata_path,
+        '-map_metadata', '1',
+        '-codec', 'copy',
+        output_path
+    ]
+
+    logger.info(f"[Chapters] Adding chapters: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        logger.error(f"[Chapters] Failed to add chapters: {result.stderr}")
+        # Don't raise - chapters are optional, just log the error
+    else:
+        logger.info(f"[Chapters] Successfully added chapters to {output_path}")
+
+
 def concatenate_clips_with_transition(
     clip_paths: List[str],
     output_path: str,
     transition: Dict[str, Any],
-    include_audio: bool = True
+    include_audio: bool = True,
+    clip_info: Optional[List[Dict[str, Any]]] = None
 ) -> None:
     """
-    Concatenate processed clips with transitions.
+    Concatenate processed clips with transitions and embed chapter markers.
 
     Transition types:
     - "cut": Simple concatenation (no transition effect)
     - "fade": Fade to black between clips
     - "dissolve": Cross-dissolve between clips
+
+    Args:
+        clip_paths: List of paths to processed clip files
+        output_path: Path for the final concatenated output
+        transition: Transition settings {'type': str, 'duration': float}
+        include_audio: Whether to include audio in output
+        clip_info: Optional list of clip info for chapter markers
+                   Each item: {'name': str, 'index': int}
     """
     transition_type = transition.get('type', 'cut')
     transition_duration = transition.get('duration', 0.5)
@@ -263,7 +342,59 @@ def concatenate_clips_with_transition(
     else:
         # Default to cut for unknown transition types
         logger.warning(f"[Multi-Clip] Unknown transition type '{transition_type}', falling back to cut")
-        concatenate_clips_with_transition(clip_paths, output_path, {'type': 'cut'}, include_audio)
+        concatenate_clips_with_transition(clip_paths, output_path, {'type': 'cut'}, include_audio, clip_info)
+        return  # Chapter embedding already done in recursive call
+
+    # Add chapter markers if clip info is provided
+    if clip_info and len(clip_info) > 1:
+        try:
+            # Get actual durations of processed clips
+            durations = [get_video_duration(path) for path in clip_paths]
+
+            # Calculate chapter timestamps accounting for transitions
+            chapter_data = []
+            current_time = 0.0
+
+            for i, (info, dur) in enumerate(zip(clip_info, durations)):
+                # For dissolve transitions, clips overlap
+                if i > 0 and transition_type == 'dissolve':
+                    current_time -= transition_duration
+
+                chapter_data.append({
+                    'name': info.get('fileName', info.get('name', f'Clip {i + 1}')),
+                    'index': i,
+                    'start_time': current_time,
+                    'end_time': current_time + dur
+                })
+                current_time += dur
+
+            # Adjust end times so chapters don't overlap
+            for i in range(len(chapter_data) - 1):
+                chapter_data[i]['end_time'] = chapter_data[i + 1]['start_time']
+
+            # Create and apply chapter metadata
+            metadata_path = create_chapter_metadata_file(chapter_data, output_path)
+
+            # Create temp output with chapters
+            temp_output = output_path + '.chapters.mp4'
+            add_chapters_to_video(output_path, metadata_path, temp_output)
+
+            # Replace original with chaptered version
+            if os.path.exists(temp_output) and os.path.getsize(temp_output) > 0:
+                os.replace(temp_output, output_path)
+                logger.info(f"[Multi-Clip] Added {len(chapter_data)} chapters to output")
+            else:
+                logger.warning("[Multi-Clip] Chapter embedding produced no output, keeping original")
+
+            # Cleanup
+            if os.path.exists(metadata_path):
+                os.remove(metadata_path)
+            if os.path.exists(temp_output):
+                os.remove(temp_output)
+
+        except Exception as e:
+            logger.error(f"[Multi-Clip] Failed to add chapters: {e}")
+            # Continue without chapters - video is still valid
 
 
 def _concatenate_with_fade(
@@ -1163,7 +1294,8 @@ async def export_multi_clip(
             clip_paths=processed_paths,
             output_path=final_output,
             transition=transition,
-            include_audio=include_audio_bool
+            include_audio=include_audio_bool,
+            clip_info=sorted_clips  # Pass clip info for chapter markers
         )
 
         logger.info(f"[Multi-Clip Export] Final output: {final_output}")
@@ -1206,3 +1338,72 @@ async def export_multi_clip(
 # Note: The upscale-comparison endpoint is intentionally omitted from this refactor
 # as it's a specialized debugging endpoint that adds significant complexity.
 # It can be added later if needed by copying from the original main.py.
+
+
+# =============================================================================
+# Video Metadata Endpoints
+# =============================================================================
+
+@router.post("/chapters")
+async def extract_chapters(
+    video: UploadFile = File(...)
+):
+    """
+    Extract chapter markers from a video file.
+
+    Returns chapter data that can be used to auto-generate highlight regions
+    in Overlay mode. Each chapter represents a clip boundary from a multi-clip export.
+
+    Returns:
+        {
+            "chapters": [
+                {
+                    "title": "Clip Name",
+                    "start_time": 0.0,
+                    "end_time": 10.5
+                },
+                ...
+            ]
+        }
+    """
+    temp_dir = tempfile.mkdtemp()
+    temp_file = os.path.join(temp_dir, "input.mp4")
+
+    try:
+        # Save uploaded file
+        with open(temp_file, "wb") as f:
+            content = await video.read()
+            f.write(content)
+
+        # Use ffprobe to extract chapter data
+        probe = ffmpeg.probe(temp_file, show_chapters=None)
+
+        chapters = []
+        for chapter in probe.get('chapters', []):
+            # Convert time from string ratio (e.g., "10/1") or float
+            start_time = float(chapter.get('start_time', 0))
+            end_time = float(chapter.get('end_time', 0))
+
+            # Get chapter title from tags
+            tags = chapter.get('tags', {})
+            title = tags.get('title', f"Chapter {len(chapters) + 1}")
+
+            chapters.append({
+                "title": title,
+                "start_time": start_time,
+                "end_time": end_time
+            })
+
+        logger.info(f"[Chapters] Extracted {len(chapters)} chapters from video")
+
+        return {"chapters": chapters}
+
+    except Exception as e:
+        logger.error(f"[Chapters] Failed to extract chapters: {e}")
+        # Return empty chapters on error - video may not have chapters
+        return {"chapters": []}
+
+    finally:
+        # Cleanup
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)

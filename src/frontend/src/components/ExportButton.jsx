@@ -18,6 +18,70 @@ const EXPORT_CONFIG = {
   // Future A/B test settings can be added here
 };
 
+/**
+ * Calculate effective clip duration after trim and speed adjustments
+ * @param {Object} clip - Clip object with duration, segments, trimRange
+ * @returns {number} Effective duration in seconds
+ */
+function calculateEffectiveDuration(clip) {
+  const segments = clip.segments || {};
+  const trimRange = segments.trimRange || clip.trimRange;
+  const segmentSpeeds = segments.segmentSpeeds || {};
+  const boundaries = segments.boundaries || [0, clip.duration];
+
+  // Start with full duration or trimmed range
+  const start = trimRange?.start ?? 0;
+  const end = trimRange?.end ?? clip.duration;
+
+  // If no speed changes, simple calculation
+  if (Object.keys(segmentSpeeds).length === 0) {
+    return end - start;
+  }
+
+  // Calculate duration accounting for speed changes per segment
+  let totalDuration = 0;
+
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    const segStart = Math.max(boundaries[i], start);
+    const segEnd = Math.min(boundaries[i + 1], end);
+
+    if (segEnd > segStart) {
+      const speed = segmentSpeeds[String(i)] || 1.0;
+      totalDuration += (segEnd - segStart) / speed;
+    }
+  }
+
+  return totalDuration;
+}
+
+/**
+ * Build clip metadata for overlay mode auto-highlight region creation
+ * @param {Array} clips - Array of clip objects
+ * @returns {Object} Metadata object with source_clips array
+ */
+function buildClipMetadata(clips) {
+  if (!clips || clips.length === 0) return null;
+
+  let currentTime = 0;
+  const sourceClips = clips.map(clip => {
+    const effectiveDuration = calculateEffectiveDuration(clip);
+
+    const clipMeta = {
+      name: clip.fileName,
+      start_time: currentTime,
+      end_time: currentTime + effectiveDuration
+    };
+
+    currentTime += effectiveDuration;
+    return clipMeta;
+  });
+
+  return {
+    version: 1,
+    source_clips: sourceClips
+  };
+}
+
 // Highlight effect styles mapped to toggle positions
 const HIGHLIGHT_EFFECT_STYLES = ['brightness_boost', 'original', 'dark_overlay'];
 const HIGHLIGHT_EFFECT_LABELS = ['Bright Inside', 'Yellow Inside', 'Dim Outside'];
@@ -293,7 +357,14 @@ export default function ExportButton({
         setProgressMessage('Loading into Overlay mode...');
 
         try {
-          await onProceedToOverlay(blob);
+          // Build clip metadata for auto-generating highlight regions
+          const clipMetadata = clips && clips.length > 0 ? buildClipMetadata(clips) : null;
+
+          if (clipMetadata) {
+            console.log('[ExportButton] Built clip metadata for overlay:', clipMetadata);
+          }
+
+          await onProceedToOverlay(blob, clipMetadata);
           setIsExporting(false);
           setProgress(0);
           setProgressMessage('');

@@ -41,6 +41,9 @@ function App() {
   const [overlayVideoUrl, setOverlayVideoUrl] = useState(null);
   const [overlayVideoMetadata, setOverlayVideoMetadata] = useState(null);
 
+  // Clip metadata for auto-generating highlight regions (from Framing export)
+  const [overlayClipMetadata, setOverlayClipMetadata] = useState(null);
+
   // Layer selection state for arrow key navigation
   const [selectedLayer, setSelectedLayer] = useState('playhead'); // 'playhead' | 'crop' | 'highlight'
 
@@ -186,6 +189,7 @@ function App() {
     keyframes: highlightRegionKeyframes,
     framerate: highlightRegionsFramerate,
     initializeWithDuration: initializeHighlightRegions,
+    initializeFromClipMetadata: initializeHighlightRegionsFromClips,
     addRegion: addHighlightRegion,
     deleteRegionByIndex: deleteHighlightRegion,
     moveRegionStart: moveHighlightRegionStart,
@@ -508,6 +512,25 @@ function App() {
       initializeHighlightRegions(highlightDuration);
     }
   }, [overlayVideoMetadata?.duration, duration, initializeHighlightRegions]);
+
+  // Auto-create highlight regions from clip metadata when transitioning from Framing
+  // This creates a 3-second region at the start of each clip for easy highlighting
+  useEffect(() => {
+    if (overlayClipMetadata && overlayVideoMetadata && highlightRegions.length === 0) {
+      const count = initializeHighlightRegionsFromClips(
+        overlayClipMetadata,
+        overlayVideoMetadata.width,
+        overlayVideoMetadata.height
+      );
+
+      if (count > 0) {
+        console.log(`[App] Auto-created ${count} highlight regions from clip metadata`);
+      }
+
+      // Clear clip metadata after processing to prevent re-triggering
+      setOverlayClipMetadata(null);
+    }
+  }, [overlayClipMetadata, overlayVideoMetadata, highlightRegions.length, initializeHighlightRegionsFromClips]);
 
   // Sync video mute state with export audio setting
   // When user turns off audio in export settings, also mute playback preview
@@ -1191,8 +1214,9 @@ function App() {
    * Handle transition from Framing to Overlay mode
    * Called when user exports from Framing mode
    * @param {Blob} renderedVideoBlob - The rendered video from framing export
+   * @param {Object|null} clipMetadata - Optional clip metadata for auto-generating highlight regions
    */
-  const handleProceedToOverlay = async (renderedVideoBlob) => {
+  const handleProceedToOverlay = async (renderedVideoBlob, clipMetadata = null) => {
     try {
       // Create URL for the rendered video
       const url = URL.createObjectURL(renderedVideoBlob);
@@ -1209,6 +1233,9 @@ function App() {
       setOverlayVideoFile(renderedVideoBlob);
       setOverlayVideoUrl(url);
       setOverlayVideoMetadata(meta);
+
+      // Store clip metadata for auto-generating highlight regions
+      setOverlayClipMetadata(clipMetadata);
 
       // Reset highlight state for fresh start in overlay mode
       resetHighlight();
@@ -1232,6 +1259,8 @@ function App() {
         height: meta.height,
         duration: meta.duration,
         aspectRatio: meta.aspectRatio,
+        hasClipMetadata: !!clipMetadata,
+        clipCount: clipMetadata?.source_clips?.length || 0,
       });
     } catch (err) {
       console.error('[App] Failed to transition to Overlay mode:', err);
