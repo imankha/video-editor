@@ -5,7 +5,7 @@ This module contains all data models used for request/response validation.
 """
 
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 
 # Health/Hello endpoint models
@@ -47,3 +47,84 @@ class HighlightKeyframe(BaseModel):
 class HighlightExportRequest(BaseModel):
     """Request model for highlight export"""
     keyframes: List[HighlightKeyframe]
+
+
+# Detection Models (YOLO)
+class BoundingBox(BaseModel):
+    """Bounding box coordinates"""
+    x: float       # Center x
+    y: float       # Center y
+    width: float   # Box width
+    height: float  # Box height
+
+
+class Detection(BaseModel):
+    """A single object detection result"""
+    bbox: BoundingBox
+    confidence: float
+    class_name: str
+    class_id: int
+
+
+class PlayerDetectionRequest(BaseModel):
+    """Request model for player detection on a single frame"""
+    video_path: Optional[str] = None  # Direct file path (for testing)
+    video_id: Optional[str] = None    # ID from /api/detect/upload (for frontend)
+    frame_number: int
+    confidence_threshold: Optional[float] = 0.5
+
+
+class PlayerDetectionResponse(BaseModel):
+    """Response model for player detection"""
+    frame_number: int
+    detections: List[Detection]
+    video_width: int
+    video_height: int
+
+
+class BallDetectionRequest(BaseModel):
+    """Request model for ball detection across frames"""
+    video_path: str
+    start_frame: int
+    end_frame: int
+    confidence_threshold: Optional[float] = 0.3
+
+
+class BallPosition(BaseModel):
+    """Ball position at a specific frame"""
+    frame: int
+    x: float
+    y: float
+    radius: float
+    confidence: float
+
+
+class BallDetectionResponse(BaseModel):
+    """Response model for ball detection"""
+    ball_positions: List[BallPosition]
+    video_width: int
+    video_height: int
+
+
+# Tracking Models (ByteTrack)
+class TrackPoint(BaseModel):
+    """A single point in a track"""
+    frame: int
+    bbox: BoundingBox
+
+
+class PlayerTrackRequest(BaseModel):
+    """Request model for tracking a player across frames"""
+    video_path: str
+    start_frame: int
+    end_frame: int
+    initial_bbox: BoundingBox  # Bounding box of player to track at start_frame
+    confidence_threshold: Optional[float] = 0.5
+
+
+class PlayerTrackResponse(BaseModel):
+    """Response model for player tracking"""
+    track_id: int
+    tracks: List[TrackPoint]
+    video_width: int
+    video_height: int

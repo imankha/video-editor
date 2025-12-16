@@ -52,3 +52,4 @@ __pycache__/
 /exports
 /test_outputs
 /weights
+src/backend/yolov8x.pt

@@ -36,6 +36,10 @@ einops>=0.7.0             # Tensor operations for transformers (used by SwinIR/H
 scipy>=1.10.0             # Scientific computing (used by RIFE)
 scikit-image>=0.21.0      # Image processing utilities
 
+# Object Detection and Tracking Dependencies
+ultralytics>=8.0.0        # YOLOv8 for player/ball detection
+supervision>=0.18.0       # ByteTrack and detection utilities
+
 # Testing Dependencies
 pytest>=7.4.0             # Testing framework
 pytest-mock>=3.12.0       # Mocking support for pytest

@@ -12,6 +12,7 @@ Architecture:
 - interpolation.py: Crop interpolation utilities for FFmpeg
 - routers/health.py: Health check and status endpoints
 - routers/export.py: Video export endpoints (crop, upscale, overlay)
+- routers/detection.py: YOLO-based object detection endpoints
 """
 
 from fastapi import FastAPI, WebSocket
@@ -32,7 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import routers and websocket handler
-from app.routers import health_router, export_router
+from app.routers import health_router, export_router, detection_router
 from app.websocket import websocket_export_progress
 
 # Environment detection
@@ -61,6 +62,7 @@ app.add_middleware(
 # Include routers
 app.include_router(health_router)
 app.include_router(export_router)
+app.include_router(detection_router)
 
 
 # WebSocket endpoint for export progress

@@ -15,7 +15,7 @@ import DebugInfo from './components/DebugInfo';
 import { ModeSwitcher } from './components/shared/ModeSwitcher';
 // Mode-specific imports
 import { useCrop, useSegments, FramingMode, CropOverlay } from './modes/framing';
-import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay } from './modes/overlay';
+import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay } from './modes/overlay';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
 import { extractVideoMetadata } from './utils/videoMetadata';
 
@@ -514,7 +514,7 @@ function App() {
   }, [overlayVideoMetadata?.duration, duration, initializeHighlightRegions]);
 
   // Auto-create highlight regions from clip metadata when transitioning from Framing
-  // This creates a 3-second region at the start of each clip for easy highlighting
+  // This creates a 5-second region at the start of each clip for easy highlighting
   useEffect(() => {
     if (overlayClipMetadata && overlayVideoMetadata && highlightRegions.length === 0) {
       const count = initializeHighlightRegionsFromClips(
@@ -654,6 +654,42 @@ function App() {
     // Otherwise, no file
     return null;
   }, [overlayVideoFile, hasMultipleClips, hasFramingEdits, videoFile]);
+
+  // Player detection for click-to-track feature
+  // Only enabled when in overlay mode AND playhead is in a highlight region
+  const playerDetectionEnabled = editorMode === 'overlay' && isTimeInEnabledRegion(currentTime);
+
+  const {
+    detections: playerDetections,
+    isLoading: isDetectionLoading,
+    isUploading: isDetectionUploading,
+    error: detectionError
+  } = usePlayerDetection({
+    videoFile: effectiveOverlayFile,
+    currentTime,
+    framerate: highlightRegionsFramerate || 30,
+    enabled: playerDetectionEnabled,
+    confidenceThreshold: 0.5
+  });
+
+  // Handle player selection from detection overlay
+  const handlePlayerSelect = useCallback((playerData) => {
+    // playerData contains: { x, y, radiusX, radiusY, confidence }
+    // Use default highlight appearance
+    const highlight = {
+      x: playerData.x,
+      y: playerData.y,
+      radiusX: playerData.radiusX,
+      radiusY: playerData.radiusY,
+      opacity: currentHighlightState?.opacity ?? 0.3,
+      color: currentHighlightState?.color ?? '#FFFF00'
+    };
+
+    // Update the highlight at current time
+    addHighlightRegionKeyframe(currentTime, highlight, duration);
+
+    console.log('[App] Player selected, highlight keyframe added:', highlight);
+  }, [currentTime, duration, currentHighlightState, addHighlightRegionKeyframe]);
 
   // Debug: Log keyframes changes (disabled - too frequent, use React DevTools instead)
 
@@ -1594,6 +1630,20 @@ function App() {
                   onHighlightComplete={handleHighlightComplete}
                   isEnabled={isTimeInEnabledRegion(currentTime)}
                   effectType={highlightEffectType}
+                  zoom={zoom}
+                  panOffset={panOffset}
+                />
+              ),
+              // Player detection overlay - shows clickable boxes around detected players
+              // Only render when in overlay mode and playhead is in a highlight region
+              editorMode === 'overlay' && effectiveOverlayVideoUrl && effectiveOverlayMetadata && playerDetectionEnabled && (
+                <PlayerDetectionOverlay
+                  key="player-detection"
+                  videoRef={videoRef}
+                  videoMetadata={effectiveOverlayMetadata}
+                  detections={playerDetections}
+                  isLoading={isDetectionLoading || isDetectionUploading}
+                  onPlayerSelect={handlePlayerSelect}
                   zoom={zoom}
                   panOffset={panOffset}
                 />

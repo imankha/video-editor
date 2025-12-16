@@ -17,17 +17,26 @@ AI-optimized documentation for building a soccer highlight video editor.
 
 ## Current Development Focus
 
-### Phase A: Multi-Clip + Transitions (NEXT)
+### Phase A: Overlay Improvements (NEXT PRIORITY)
 
-Support multiple video clips in Framing mode with transitions.
+Enhanced overlay system with AI-assisted features:
+- **Click-to-Track Highlights**: Click on a player, YOLO detects, ByteTrack tracks, keyframes auto-generated
+- **Ball Brightening**: YOLO ball detection with adjustable brightness slider
+- **Text Overlays**: Add animated text labels (player names, stats, etc.)
+- **Default Duration**: Highlight regions now 5 seconds (was 3)
 
-**Spec**: [ACTIVE/PHASE-A-MULTI-CLIP.md](ACTIVE/PHASE-A-MULTI-CLIP.md)
+**Spec**: [ACTIVE/PHASE-A-OVERLAY-IMPROVEMENTS.md](ACTIVE/PHASE-A-OVERLAY-IMPROVEMENTS.md)
 
-### Phase B: Overlay Expansion (THEN)
+### Phase B: Clipify Mode (THEN)
 
-Rich overlay system for soccer visualizations (text, ball effects, tactical markers).
+New workflow mode for extracting clips from full game footage:
+- **Add Game**: Import full game video instead of pre-cut clips
+- **Clip Regions**: Define clips with region levers (start/end)
+- **Descriptions**: Add description metadata to each clip
+- **Export**: Generate individual clip files with embedded metadata
+- **Auto-Load**: Exported clips load directly into Framing mode
 
-**Spec**: [ACTIVE/PHASE-B-OVERLAY-EXPANSION.md](ACTIVE/PHASE-B-OVERLAY-EXPANSION.md)
+**Spec**: [ACTIVE/PHASE-B-CLIPIFY.md](ACTIVE/PHASE-B-CLIPIFY.md)
 
 ### Phase C: Deployment (FINALLY)
 

@@ -20,7 +20,7 @@ import useKeyframeController from '../../../hooks/useKeyframeController';
 export default function useHighlight(videoMetadata, trimRange = null) {
   const [framerate] = useState(30);
   const [isEnabled, setIsEnabled] = useState(false); // Highlight layer is disabled by default
-  const [highlightDuration, setHighlightDuration] = useState(3); // Default 3 seconds
+  const [highlightDuration, setHighlightDuration] = useState(5); // Default 5 seconds
 
   // Highlight data keys for copy/paste operations
   const highlightDataKeys = ['x', 'y', 'radiusX', 'radiusY', 'opacity', 'color'];
@@ -69,7 +69,7 @@ export default function useHighlight(videoMetadata, trimRange = null) {
   /**
    * Auto-initialize keyframes when highlight is ENABLED (lazy initialization)
    * Creates permanent keyframes at start and end of highlight duration
-   * Default highlight duration is 3 seconds, not entire video
+   * Default highlight duration is 5 seconds, not entire video
    *
    * LAZY INITIALIZATION:
    * - Only initialize when isEnabled becomes true
@@ -158,9 +158,9 @@ export default function useHighlight(videoMetadata, trimRange = null) {
   const toggleEnabled = useCallback(() => {
     setIsEnabled(prev => {
       const newEnabled = !prev;
-      // When enabling, ensure duration is at least 3s if it's currently 0 or very small
+      // When enabling, ensure duration is at least 5s if it's currently 0 or very small
       if (newEnabled && highlightDuration < 0.5) {
-        setHighlightDuration(3);
+        setHighlightDuration(5);
       }
       return newEnabled;
     });
@@ -200,7 +200,7 @@ export default function useHighlight(videoMetadata, trimRange = null) {
   const reset = useCallback(() => {
     keyframeManager.reset();
     setIsEnabled(false);
-    setHighlightDuration(3);
+    setHighlightDuration(5);
   }, [keyframeManager]);
 
   return {

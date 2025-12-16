@@ -15,7 +15,14 @@
       "Bash(mkdir:*)",
       "Bash(timeout 10 python:*)",
       "Bash(python -m py_compile:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(curl:*)",
+      "Bash(taskkill:*)",
+      "Bash(netstat:*)",
+      "Bash(powershell -Command \"Stop-Process -Id 13000 -Force\")",
+      "Bash(timeout:*)",
+      "Bash(powershell -Command \"Invoke-RestMethod -Uri ''http://localhost:8000/api/detect/status'' -Method Get\")"
     ],
     "deny": [],
     "ask": []

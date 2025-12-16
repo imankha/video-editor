@@ -14,10 +14,10 @@ import { interpolateHighlightSpline } from '../../../utils/splineInterpolation';
  *   - keyframes: Array of keyframes within this region
  *
  * Each region has at least 2 keyframes (start and end, both permanent).
- * When user clicks on timeline, a 3-second region is created with auto-generated keyframes.
+ * When user clicks on timeline, a 5-second region is created with auto-generated keyframes.
  */
 
-const DEFAULT_REGION_DURATION = 3.0; // seconds
+const DEFAULT_REGION_DURATION = 5.0; // seconds
 const MIN_REGION_DURATION = 0.5; // seconds
 const TIME_EPSILON = 0.001; // 1ms tolerance for floating point comparison
 const MIN_KEYFRAME_DISTANCE_FRAMES = 5; // Minimum 5 frames (~0.167s at 30fps) between keyframes
@@ -133,7 +133,7 @@ export default function useHighlightRegions(videoMetadata) {
   }, [regions]);
 
   /**
-   * Add a new 3-second region at the given time
+   * Add a new 5-second region at the given time
    * Creates start and end keyframes automatically
    */
   const addRegion = useCallback((clickTime) => {
@@ -561,7 +561,7 @@ export default function useHighlightRegions(videoMetadata) {
 
   /**
    * Initialize highlight regions from clip metadata (auto-generated from Framing export)
-   * Creates a 3-second region at the start of each clip
+   * Creates a 5-second region at the start of each clip
    *
    * @param {Object} metadata - Clip metadata with source_clips array
    * @param {number} videoWidth - Video width for default highlight calculation
@@ -638,7 +638,7 @@ export default function useHighlightRegions(videoMetadata) {
     initializeFromClipMetadata,  // Auto-create regions from clip boundaries
 
     // Region operations (new API)
-    addRegion,                   // Creates 3-second region with keyframes
+    addRegion,                   // Creates 5-second region with keyframes
     deleteRegion,
     deleteRegionByIndex,
     moveRegionStart,             // For lever dragging

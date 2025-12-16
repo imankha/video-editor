@@ -73,44 +73,43 @@ See individual phase docs for implementation details (useful as reference for si
 
 ### ACTIVE DEVELOPMENT PHASES
 
-#### Phase A: Multi-Clip + Transitions (NEXT)
-**Goal**: Support multiple video clips in Framing mode with transitions
+#### Phase A: Overlay Improvements (NEXT PRIORITY)
+**Goal**: Enhanced overlay system with AI-assisted player tracking, ball effects, and text overlays
 
 **Features**:
-- Import multiple video files
-- Clip layer shows each clip as a region
-- Drag to reorder clips on the timeline
-- Click between clips to set transitions (cut, fade, dissolve)
-- Per-clip crop keyframes, speed regions, and trim
-- Delete unwanted clips
 
-**Why Important**: Users often have multiple angles or segments they want to combine into a single highlight.
+| Feature | Description |
+|---------|-------------|
+| **Click-to-Track Highlights** | Click on player → YOLO detects → ByteTrack tracks → keyframes auto-generated |
+| **Default 5s Duration** | Highlight regions now default to 5 seconds instead of 3 |
+| **3 Keyframes/Second** | Auto-generated keyframes at 3 per second for smooth tracking |
+| **Duration Re-Tracking** | Changing region duration re-runs tracking algorithm |
+| **Manual Override** | User can still manually edit/delete keyframes |
+| **Ball Brightening** | YOLO ball detection with adjustable brightness slider |
+| **Text Overlays** | Add animated text labels (player names, stats, etc.) |
+
+**Why Important**: Click-to-track dramatically simplifies the highlight workflow. Ball brightening and text overlays round out the overlay toolset.
 
 ---
 
-#### Phase B: Overlay Mode Expansion (THEN)
-**Goal**: Rich overlay system for soccer-specific visualizations
+#### Phase B: Clipify Mode (THEN)
+**Goal**: New workflow mode for extracting clips from full game footage
 
-**Planned Overlay Types**:
+**Features**:
+- New "Add Game" button alongside "Add Clips" in no-videos state
+- Import full game video into Clipify mode (pre-framing workflow)
+- Define clip regions with description metadata
+- Region levers to set start/end boundaries for each clip
+- Export creates individual clip files with embedded metadata
+- Files named: `{original}_{start_timestamp}_{end_timestamp}.mp4`
+- After export, clips auto-load into Framing mode
 
-| Type | Description |
-|------|-------------|
-| Highlight (existing) | Elliptical spotlight with brightness/color effects |
-| Text | Labels, player names, stats, timestamps |
-| Ball Effects | Brightness boost on ball, motion blur trails |
-| Scan Indicator | Show when dribbler looks up (head movement) |
-| Space Visualization | Show space created by dribble/movement |
-| Defender Markers | X marks on beaten defenders |
-| Through Ball Lines | Show passing lanes and beaten defenders |
+**Workflow**:
+```
+[Add Game] → Clipify → Export Clips → Framing (with clips) → Overlay → Export
+```
 
-**Architecture Goals**:
-- Common interface for all overlay layer types
-- Click-to-edit properties dialog (not in main UI)
-- Per-layer: visibility toggle, opacity, z-order
-- Keyframe animation for all layer types
-- Consistent add/edit/delete workflow
-
-**Why Important**: These visualizations are the core value proposition - they help viewers appreciate the soccer skill being demonstrated.
+**Why Important**: Users often start with full game footage. Clipify provides a streamlined way to extract the moments they want to highlight.
 
 ---
 
@@ -166,19 +165,31 @@ See `cloudflare_runpod_deploy_package/` for Terraform and Wrangler configs.
 
 ## Success Criteria
 
-### Phase A (Multi-Clip)
-- [ ] Can import multiple videos
-- [ ] Clips shown as regions on clip layer
-- [ ] Can drag to reorder clips
-- [ ] Transitions render correctly in export
-- [ ] Per-clip effects (crop/speed/trim) work
+### Phase A (Overlay Improvements)
+- [ ] Default highlight duration is 5 seconds
+- [ ] Click on video detects players via YOLO
+- [ ] Click on detected player initiates ByteTrack tracking
+- [ ] Keyframes auto-generated at 3 per second
+- [ ] Ellipse follows tracked player during playback
+- [ ] Duration change re-generates auto keyframes
+- [ ] Manual keyframes preserved on duration change
+- [ ] Ball detection runs and identifies ball
+- [ ] Ball brightness slider adjusts brightness level
+- [ ] Ball brightening visible in preview and export
+- [ ] Text overlay can be added with content
+- [ ] Text can be positioned, styled, and animated
+- [ ] Text appears correctly in export
 
-### Phase B (Overlay Expansion)
-- [ ] Common layer interface working
-- [ ] At least 3 overlay types implemented
-- [ ] Properties dialog for layer editing
-- [ ] Keyframe animation for all layers
-- [ ] Export includes all overlay effects
+### Phase B (Clipify Mode)
+- [ ] "Add Game" button visible alongside "Add Clips"
+- [ ] Full game video imports into Clipify mode
+- [ ] Can add clip regions at playhead
+- [ ] Can adjust region boundaries with levers
+- [ ] Can add description to each clip
+- [ ] Export creates individual clip files
+- [ ] Files named with timestamp convention
+- [ ] Metadata embedded in clip files
+- [ ] Clips auto-load into Framing after export
 
 ### Phase C (Deployment)
 - [ ] Staging environment deployed
@@ -207,9 +218,9 @@ docs/
 │   └── 05-PHASE-TRIMMING.md
 │
 ├── ACTIVE/                          # Current development specs
-│   ├── PHASE-A-MULTI-CLIP.md
-│   ├── PHASE-B-OVERLAY-EXPANSION.md
-│   └── PHASE-C-DEPLOYMENT.md
+│   ├── PHASE-A-OVERLAY-IMPROVEMENTS.md  # Click-to-track, ball, text overlays
+│   ├── PHASE-B-CLIPIFY.md               # Clipify mode for game footage
+│   └── PHASE-C-DEPLOYMENT.md            # Cloudflare + RunPod
 │
 └── REFERENCE/                       # Supplementary docs
     ├── AI-UPSCALING.md
