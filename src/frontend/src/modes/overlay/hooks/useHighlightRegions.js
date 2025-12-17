@@ -312,13 +312,17 @@ export default function useHighlightRegions(videoMetadata) {
 
   /**
    * Get the region at a specific time
-   * Note: Uses inclusive bounds with epsilon tolerance for floating point precision
+   * Uses frame-based comparison for exact boundary precision
+   * Both start and end frames are inclusive
    */
   const getRegionAtTime = useCallback((time) => {
-    return regions.find(r =>
-      time >= r.startTime - TIME_EPSILON && time <= r.endTime + TIME_EPSILON
-    ) || null;
-  }, [regions]);
+    const currentFrame = timeToFrame(time, framerate);
+    return regions.find(r => {
+      const startFrame = timeToFrame(r.startTime, framerate);
+      const endFrame = timeToFrame(r.endTime, framerate);
+      return currentFrame >= startFrame && currentFrame <= endFrame;
+    }) || null;
+  }, [regions, framerate]);
 
   /**
    * Check if time is in an enabled region

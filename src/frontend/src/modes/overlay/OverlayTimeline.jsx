@@ -31,6 +31,7 @@ export function OverlayTimeline({
   selectedLayer = 'playhead',
   onLayerSelect,
   trimRange = null,
+  isPlaying = false,
   // HighlightLayer props
   highlightKeyframes = [],
   highlightFramerate = 30,
@@ -121,6 +122,7 @@ export function OverlayTimeline({
       layerLabels={layerLabels}
       totalLayerHeight={getTotalLayerHeight()}
       trimRange={trimRange}
+      isPlaying={isPlaying}
     >
       {/* Highlight Layer */}
       <div className="mt-1">

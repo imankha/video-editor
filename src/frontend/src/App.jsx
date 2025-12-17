@@ -1781,6 +1781,7 @@ function App() {
               timelineScale={getTimelineScale()}
               timelineScrollPosition={timelineScrollPosition}
               onTimelineScrollPositionChange={updateTimelineScrollPosition}
+              isPlaying={isPlaying}
             />
           )}
 
@@ -1824,6 +1825,7 @@ function App() {
               timelineScrollPosition={timelineScrollPosition}
               onTimelineScrollPositionChange={updateTimelineScrollPosition}
               trimRange={null}  // No trimming in overlay mode
+              isPlaying={isPlaying}
             />
           )}
 

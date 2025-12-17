@@ -126,27 +126,38 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
   /**
    * Step forward one frame
+   * Uses frame-based calculation to avoid floating point accumulation errors.
    * Note: Check videoRef.current.src to support overlay mode
    */
   const stepForward = () => {
     if (videoRef.current && videoRef.current.src) {
       const framerate = getFramerate(videoRef.current);
-      const frameDuration = 1 / framerate;
       const effectiveDuration = duration || videoRef.current.duration || 0;
-      const newTime = Math.min(currentTime + frameDuration, effectiveDuration);
+      // Convert current time to frame, add 1, convert back to time
+      // This avoids floating point errors from repeatedly adding 1/framerate
+      const currentFrame = Math.round(currentTime * framerate);
+      const nextFrame = currentFrame + 1;
+      const maxFrame = Math.floor(effectiveDuration * framerate);
+      const targetFrame = Math.min(nextFrame, maxFrame);
+      const newTime = targetFrame / framerate;
       seek(newTime);
     }
   };
 
   /**
    * Step backward one frame
+   * Uses frame-based calculation to avoid floating point accumulation errors.
    * Note: Check videoRef.current.src to support overlay mode
    */
   const stepBackward = () => {
     if (videoRef.current && videoRef.current.src) {
       const framerate = getFramerate(videoRef.current);
-      const frameDuration = 1 / framerate;
-      const newTime = Math.max(currentTime - frameDuration, 0);
+      // Convert current time to frame, subtract 1, convert back to time
+      // This avoids floating point errors from repeatedly subtracting 1/framerate
+      const currentFrame = Math.round(currentTime * framerate);
+      const prevFrame = currentFrame - 1;
+      const targetFrame = Math.max(prevFrame, 0);
+      const newTime = targetFrame / framerate;
       seek(newTime);
     }
   };

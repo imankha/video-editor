@@ -32,6 +32,7 @@ export function FramingTimeline({
   trimRange = null,
   onDetrimStart,
   onDetrimEnd,
+  isPlaying = false,
   // CropLayer props
   cropKeyframes = [],
   framerate = 30,
@@ -117,6 +118,7 @@ export function FramingTimeline({
       trimRange={trimRange}
       onDetrimStart={onDetrimStart}
       onDetrimEnd={onDetrimEnd}
+      isPlaying={isPlaying}
     >
       {/* Crop Layer */}
       <div className="mt-1">

@@ -48,6 +48,7 @@ export function TimelineBase({
   trimRange = null,
   onDetrimStart,
   onDetrimEnd,
+  isPlaying = false, // Only auto-scroll when video is playing
 }) {
   const timelineRef = React.useRef(null);
   const scrollContainerRef = React.useRef(null);
@@ -195,10 +196,12 @@ export function TimelineBase({
   const effectiveDuration = visualDuration || duration;
   const progress = effectiveDuration > 0 ? (visualCurrentTime / effectiveDuration) * 100 : 0;
 
-  // Auto-scroll to keep playhead visible when zoomed
-  // Skip if user has recently scrolled manually (to avoid fighting with user interaction)
+  // Auto-scroll to keep playhead visible when zoomed and playing
+  // Only auto-scroll during playback - manual navigation shouldn't trigger auto-scroll
   React.useEffect(() => {
     if (!scrollContainerRef.current || timelineScale <= 1) return;
+    // Only auto-scroll during playback
+    if (!isPlaying) return;
     // Don't auto-scroll if user recently scrolled manually
     if (userScrolledRef.current) return;
 
@@ -223,7 +226,7 @@ export function TimelineBase({
       const targetScroll = Math.max(0, Math.min(100, idealScrollPercent - viewportWidthPercent / 2));
       container.scrollLeft = (targetScroll / 100) * maxScroll;
     }
-  }, [progress, timelineScale]);
+  }, [progress, timelineScale, isPlaying]);
 
   // Use visual duration for display (if segments exist), otherwise use source duration
   const displayDuration = visualDuration || duration;

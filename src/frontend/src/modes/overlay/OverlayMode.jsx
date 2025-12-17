@@ -60,6 +60,7 @@ export function OverlayMode({
   timelineScrollPosition,
   onTimelineScrollPositionChange,
   trimRange = null,
+  isPlaying = false,
   // Children (allows App.jsx to pass additional content)
   children,
 }) {
@@ -127,6 +128,7 @@ export function OverlayMode({
             layerLabels={layerLabels}
             totalLayerHeight={getTotalLayerHeight()}
             trimRange={trimRange}
+            isPlaying={isPlaying}
           >
             {/* Highlight Regions Layer - inside TimelineBase for proper alignment */}
             <div className="mt-1">

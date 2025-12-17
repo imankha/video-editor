@@ -71,6 +71,7 @@ export function FramingMode({
   timelineScale,
   timelineScrollPosition,
   onTimelineScrollPositionChange,
+  isPlaying = false,
   // Children (allows App.jsx to pass additional content)
   children,
 }) {
@@ -115,6 +116,7 @@ export function FramingMode({
             timelineScale={timelineScale}
             timelineScrollPosition={timelineScrollPosition}
             onTimelineScrollPositionChange={onTimelineScrollPositionChange}
+            isPlaying={isPlaying}
           />
         </div>
       )}
