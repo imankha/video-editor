@@ -55,6 +55,9 @@ export function TimelineBase({
   const [isDragging, setIsDragging] = React.useState(false);
   const [hoverTime, setHoverTime] = React.useState(null);
   const [hoverX, setHoverX] = React.useState(0);
+  // Track when user manually scrolls to disable auto-scroll temporarily
+  const userScrolledRef = React.useRef(false);
+  const userScrollTimeoutRef = React.useRef(null);
 
   // Padding at timeline edges for easier keyframe selection (in pixels)
   const EDGE_PADDING = 20;
@@ -164,8 +167,26 @@ export function TimelineBase({
     if (maxScroll > 0) {
       const scrollPercent = (container.scrollLeft / maxScroll) * 100;
       onTimelineScrollPositionChange(scrollPercent);
+
+      // Mark that user manually scrolled - disable auto-scroll for 2 seconds
+      userScrolledRef.current = true;
+      if (userScrollTimeoutRef.current) {
+        clearTimeout(userScrollTimeoutRef.current);
+      }
+      userScrollTimeoutRef.current = setTimeout(() => {
+        userScrolledRef.current = false;
+      }, 2000);
     }
   };
+
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (userScrollTimeoutRef.current) {
+        clearTimeout(userScrollTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Convert current source time to visual time for correct playhead positioning
   const visualCurrentTime = sourceTimeToVisualTime(currentTime);
@@ -175,8 +196,11 @@ export function TimelineBase({
   const progress = effectiveDuration > 0 ? (visualCurrentTime / effectiveDuration) * 100 : 0;
 
   // Auto-scroll to keep playhead visible when zoomed
+  // Skip if user has recently scrolled manually (to avoid fighting with user interaction)
   React.useEffect(() => {
     if (!scrollContainerRef.current || timelineScale <= 1) return;
+    // Don't auto-scroll if user recently scrolled manually
+    if (userScrolledRef.current) return;
 
     const container = scrollContainerRef.current;
     const maxScroll = container.scrollWidth - container.clientWidth;

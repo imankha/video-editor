@@ -1121,8 +1121,9 @@ function App() {
   // Keyboard handler: Space bar toggles play/pause
   useEffect(() => {
     const handleKeyDown = (event) => {
-      // Only handle spacebar if video is loaded
-      if (event.code === 'Space' && videoUrl) {
+      // Only handle spacebar if any video is loaded (framing or overlay mode)
+      const hasVideo = videoUrl || effectiveOverlayVideoUrl;
+      if (event.code === 'Space' && hasVideo) {
         // Prevent default spacebar behavior (page scroll)
         event.preventDefault();
         togglePlay();
@@ -1136,13 +1137,14 @@ function App() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [videoUrl, togglePlay]);
+  }, [videoUrl, effectiveOverlayVideoUrl, togglePlay]);
 
   // Keyboard handler: Ctrl-C/Cmd-C copies crop, Ctrl-V/Cmd-V pastes crop
   useEffect(() => {
     const handleKeyDown = (event) => {
-      // Only handle if video is loaded
-      if (!videoUrl) return;
+      // Only handle if any video is loaded (framing or overlay mode)
+      const hasVideo = videoUrl || effectiveOverlayVideoUrl;
+      if (!hasVideo) return;
 
       // Check for Ctrl-C or Cmd-C (Mac)
       if ((event.ctrlKey || event.metaKey) && event.code === 'KeyC') {
@@ -1170,13 +1172,14 @@ function App() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [videoUrl, currentTime, duration, copiedCrop, copyCropKeyframe, pasteCropKeyframe]);
+  }, [videoUrl, effectiveOverlayVideoUrl, currentTime, duration, copiedCrop, copyCropKeyframe, pasteCropKeyframe]);
 
   // Keyboard handler: Arrow keys for layer-specific navigation
   useEffect(() => {
     const handleArrowKeys = (event) => {
-      // Only handle if video is loaded and arrow keys pressed
-      if (!videoUrl) return;
+      // Only handle if any video is loaded (framing or overlay mode) and arrow keys pressed
+      const hasVideo = videoUrl || effectiveOverlayVideoUrl;
+      if (!hasVideo) return;
       if (event.code !== 'ArrowLeft' && event.code !== 'ArrowRight') return;
 
       // Don't handle if modifier keys are pressed (let other shortcuts work)
@@ -1250,7 +1253,7 @@ function App() {
 
     document.addEventListener('keydown', handleArrowKeys);
     return () => document.removeEventListener('keydown', handleArrowKeys);
-  }, [videoUrl, selectedLayer, selectedCropKeyframeIndex, selectedHighlightKeyframeIndex, keyframes, highlightKeyframes, framerate, highlightFramerate, isHighlightEnabled, stepForward, stepBackward, seek]);
+  }, [videoUrl, effectiveOverlayVideoUrl, selectedLayer, selectedCropKeyframeIndex, selectedHighlightKeyframeIndex, keyframes, highlightKeyframes, framerate, highlightFramerate, isHighlightEnabled, stepForward, stepBackward, seek]);
 
   // Handle crop changes during drag/resize (live preview)
   const handleCropChange = (newCrop) => {
