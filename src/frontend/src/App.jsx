@@ -198,6 +198,7 @@ function App() {
     addOrUpdateKeyframe: addHighlightRegionKeyframe,
     removeKeyframe: removeHighlightRegionKeyframe,
     isTimeInEnabledRegion,
+    getRegionAtTime,
     getHighlightAtTime: getRegionHighlightAtTime,
     getRegionsForExport,
     reset: resetHighlightRegions,
@@ -404,6 +405,60 @@ function App() {
       console.log('[App] Added clip:', newClipId, file.name);
     } catch (err) {
       console.error('[App] Failed to add clip:', err);
+    }
+  };
+
+  /**
+   * Handle pre-framed video selection for Overlay mode (skip Framing)
+   * Extracts chapter metadata from the video and goes directly to Overlay mode
+   */
+  const handleFramedVideoSelect = async (file) => {
+    if (!file) return;
+
+    try {
+      console.log('[App] handleFramedVideoSelect: Processing', file.name);
+
+      // Extract chapters from the video using backend
+      const formData = new FormData();
+      formData.append('video', file);
+
+      const chaptersResponse = await fetch('http://localhost:8000/api/export/chapters', {
+        method: 'POST',
+        body: formData,
+      });
+
+      let clipMetadata = null;
+      if (chaptersResponse.ok) {
+        const chaptersData = await chaptersResponse.json();
+        const chapters = chaptersData.chapters || [];
+
+        if (chapters.length > 0) {
+          // Convert chapters to source_clips format
+          clipMetadata = {
+            source_clips: chapters.map((chapter, index) => ({
+              index,
+              name: chapter.title,
+              fileName: chapter.title,
+              start_time: chapter.start_time,
+              end_time: chapter.end_time,
+              duration: chapter.end_time - chapter.start_time
+            }))
+          };
+          console.log('[App] Extracted chapter metadata:', clipMetadata);
+        } else {
+          console.log('[App] No chapters found in video, will create single region');
+        }
+      } else {
+        console.warn('[App] Failed to extract chapters, will create single region');
+      }
+
+      // Transition to overlay mode with the video file
+      await handleProceedToOverlay(file, clipMetadata);
+
+      console.log('[App] Successfully transitioned to Overlay mode with framed video');
+    } catch (err) {
+      console.error('[App] Failed to process framed video:', err);
+      throw err; // Re-throw so FileUpload can handle the error
     }
   };
 
@@ -673,23 +728,42 @@ function App() {
   });
 
   // Handle player selection from detection overlay
+  // When user clicks on a detected player box, create a keyframe at that position
+  // The highlight region has permanent start/end keyframes; user clicks add intermediate keyframes
   const handlePlayerSelect = useCallback((playerData) => {
     // playerData contains: { x, y, radiusX, radiusY, confidence }
+
+    // Get the current highlight region
+    const region = getRegionAtTime(currentTime);
+    if (!region) {
+      console.warn('[App] No highlight region at current time');
+      return;
+    }
+
     // Use default highlight appearance
+    const defaultOpacity = currentHighlightState?.opacity ?? 0.3;
+    const defaultColor = currentHighlightState?.color ?? '#FFFF00';
+
+    // Create keyframe at clicked position
     const highlight = {
       x: playerData.x,
       y: playerData.y,
       radiusX: playerData.radiusX,
       radiusY: playerData.radiusY,
-      opacity: currentHighlightState?.opacity ?? 0.3,
-      color: currentHighlightState?.color ?? '#FFFF00'
+      opacity: defaultOpacity,
+      color: defaultColor
     };
 
-    // Update the highlight at current time
-    addHighlightRegionKeyframe(currentTime, highlight, duration);
+    console.log('[App] Player selected, adding keyframe:', {
+      time: currentTime,
+      position: { x: playerData.x, y: playerData.y },
+      region: { start: region.startTime, end: region.endTime }
+    });
 
-    console.log('[App] Player selected, highlight keyframe added:', highlight);
-  }, [currentTime, duration, currentHighlightState, addHighlightRegionKeyframe]);
+    addHighlightRegionKeyframe(currentTime, highlight, duration);
+  }, [
+    currentTime, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime
+  ]);
 
   // Debug: Log keyframes changes (disabled - too frequent, use React DevTools instead)
 
@@ -1535,7 +1609,11 @@ function App() {
               )}
               {/* Add button - only show when no video loaded (Framing mode has Add in ClipSelectorSidebar) */}
               {!videoUrl && (
-                <FileUpload onFileSelect={handleFileSelect} isLoading={isLoading} />
+                <FileUpload
+                  onFileSelect={handleFileSelect}
+                  onFramedVideoSelect={handleFramedVideoSelect}
+                  isLoading={isLoading}
+                />
               )}
             </div>
           </div>

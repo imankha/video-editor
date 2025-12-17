@@ -104,27 +104,3 @@ class BallDetectionResponse(BaseModel):
     ball_positions: List[BallPosition]
     video_width: int
     video_height: int
-
-
-# Tracking Models (ByteTrack)
-class TrackPoint(BaseModel):
-    """A single point in a track"""
-    frame: int
-    bbox: BoundingBox
-
-
-class PlayerTrackRequest(BaseModel):
-    """Request model for tracking a player across frames"""
-    video_path: str
-    start_frame: int
-    end_frame: int
-    initial_bbox: BoundingBox  # Bounding box of player to track at start_frame
-    confidence_threshold: Optional[float] = 0.5
-
-
-class PlayerTrackResponse(BaseModel):
-    """Response model for player tracking"""
-    track_id: int
-    tracks: List[TrackPoint]
-    video_width: int
-    video_height: int

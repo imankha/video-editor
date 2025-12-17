@@ -218,7 +218,7 @@ export default function PlayerDetectionOverlay({
                     fontWeight="500"
                     className="pointer-events-none"
                   >
-                    Click to track
+                    Click to highlight
                   </text>
                 </>
               )}

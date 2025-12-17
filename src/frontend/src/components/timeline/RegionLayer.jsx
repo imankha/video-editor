@@ -374,7 +374,7 @@ export default function RegionLayer({
             >
               {/* Region background with border for highlight mode */}
               <div
-                className={`h-full transition-all relative ${
+                className={`h-full transition-all relative overflow-hidden ${
                   mode === 'highlight'
                     ? `${colorScheme.hover} bg-opacity-20 border-l-2 border-r-2 border-orange-400`
                     : isHovered

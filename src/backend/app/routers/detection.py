@@ -4,7 +4,6 @@ Detection endpoints for the Video Editor API.
 This router handles YOLO-based object detection for:
 - Player detection (person class)
 - Ball detection (sports ball class)
-- Player tracking (ByteTrack)
 - Video upload for detection (temp storage)
 """
 
@@ -12,7 +11,6 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 import cv2
 import os
 import logging
-import numpy as np
 import tempfile
 import uuid
 import shutil
@@ -23,12 +21,9 @@ from ..models import (
     PlayerDetectionResponse,
     BallDetectionRequest,
     BallDetectionResponse,
-    PlayerTrackRequest,
-    PlayerTrackResponse,
     Detection,
     BoundingBox,
-    BallPosition,
-    TrackPoint
+    BallPosition
 )
 
 logger = logging.getLogger(__name__)
@@ -387,186 +382,3 @@ async def detection_status():
             "sports_ball": SPORTS_BALL_CLASS_ID
         }
     }
-
-
-def iou(box1: BoundingBox, box2: BoundingBox) -> float:
-    """Calculate Intersection over Union between two bounding boxes."""
-    # Convert center + size to corners
-    x1_1 = box1.x - box1.width / 2
-    y1_1 = box1.y - box1.height / 2
-    x2_1 = box1.x + box1.width / 2
-    y2_1 = box1.y + box1.height / 2
-
-    x1_2 = box2.x - box2.width / 2
-    y1_2 = box2.y - box2.height / 2
-    x2_2 = box2.x + box2.width / 2
-    y2_2 = box2.y + box2.height / 2
-
-    # Calculate intersection
-    xi1 = max(x1_1, x1_2)
-    yi1 = max(y1_1, y1_2)
-    xi2 = min(x2_1, x2_2)
-    yi2 = min(y2_1, y2_2)
-
-    inter_width = max(0, xi2 - xi1)
-    inter_height = max(0, yi2 - yi1)
-    intersection = inter_width * inter_height
-
-    # Calculate union
-    area1 = box1.width * box1.height
-    area2 = box2.width * box2.height
-    union = area1 + area2 - intersection
-
-    if union == 0:
-        return 0.0
-
-    return intersection / union
-
-
-@router.post("/track/player", response_model=PlayerTrackResponse)
-async def track_player(request: PlayerTrackRequest):
-    """
-    Track a specific player across a range of frames using ByteTrack.
-
-    The player to track is identified by the initial_bbox at start_frame.
-    ByteTrack assigns consistent IDs across frames, allowing us to follow
-    the same player throughout the sequence.
-    """
-    logger.info(f"Player tracking request: frames {request.start_frame}-{request.end_frame}")
-
-    if not os.path.exists(request.video_path):
-        raise HTTPException(status_code=404, detail=f"Video file not found: {request.video_path}")
-
-    cap = cv2.VideoCapture(request.video_path)
-    if not cap.isOpened():
-        raise HTTPException(status_code=400, detail=f"Cannot open video: {request.video_path}")
-
-    try:
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        if request.start_frame < 0 or request.end_frame >= total_frames:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Frame range out of bounds (0-{total_frames-1})"
-            )
-
-        # Import supervision for ByteTrack
-        try:
-            import supervision as sv
-        except ImportError:
-            raise HTTPException(
-                status_code=500,
-                detail="supervision package not installed. Run: pip install supervision"
-            )
-
-        model = get_yolo_model()
-
-        # Initialize ByteTrack tracker
-        tracker = sv.ByteTrack()
-
-        # Store all tracks
-        all_tracks = {}  # track_id -> list of (frame, bbox)
-        target_track_id = None
-
-        for frame_num in range(request.start_frame, request.end_frame + 1):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
-            ret, frame = cap.read()
-
-            if not ret or frame is None:
-                continue
-
-            # Run YOLO detection
-            results = model(frame, verbose=False, conf=request.confidence_threshold)
-
-            # Convert to supervision Detections format
-            detections_list = []
-            for result in results:
-                boxes = result.boxes
-                if boxes is None:
-                    continue
-
-                for box in boxes:
-                    class_id = int(box.cls[0])
-                    if class_id != PERSON_CLASS_ID:
-                        continue
-
-                    conf = float(box.conf[0])
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()
-                    detections_list.append([x1, y1, x2, y2, conf, class_id])
-
-            if not detections_list:
-                continue
-
-            # Create supervision Detections object
-            detections_array = np.array(detections_list)
-            detections = sv.Detections(
-                xyxy=detections_array[:, :4],
-                confidence=detections_array[:, 4],
-                class_id=detections_array[:, 5].astype(int)
-            )
-
-            # Update tracker
-            tracked_detections = tracker.update_with_detections(detections)
-
-            # Process tracked detections
-            for i in range(len(tracked_detections)):
-                track_id = int(tracked_detections.tracker_id[i])
-                x1, y1, x2, y2 = tracked_detections.xyxy[i]
-
-                bbox = BoundingBox(
-                    x=(x1 + x2) / 2,
-                    y=(y1 + y2) / 2,
-                    width=x2 - x1,
-                    height=y2 - y1
-                )
-
-                if track_id not in all_tracks:
-                    all_tracks[track_id] = []
-                all_tracks[track_id].append((frame_num, bbox))
-
-                # On first frame, find which track matches our target bbox
-                if frame_num == request.start_frame and target_track_id is None:
-                    iou_score = iou(request.initial_bbox, bbox)
-                    if iou_score > 0.3:  # Good enough overlap
-                        target_track_id = track_id
-                        logger.info(f"Matched initial bbox to track_id {track_id} with IoU {iou_score:.2f}")
-
-        # If no track matched, find closest one on first frame
-        if target_track_id is None:
-            logger.warning("No track matched initial bbox, finding closest...")
-            best_iou = 0
-            for track_id, track_points in all_tracks.items():
-                for frame_num, bbox in track_points:
-                    if frame_num == request.start_frame:
-                        score = iou(request.initial_bbox, bbox)
-                        if score > best_iou:
-                            best_iou = score
-                            target_track_id = track_id
-
-        if target_track_id is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Could not find player to track at the specified location"
-            )
-
-        # Get tracks for our target
-        track_points = all_tracks.get(target_track_id, [])
-
-        tracks = [
-            TrackPoint(frame=frame_num, bbox=bbox)
-            for frame_num, bbox in sorted(track_points, key=lambda x: x[0])
-        ]
-
-        logger.info(f"Tracked player {target_track_id} across {len(tracks)} frames")
-
-        return PlayerTrackResponse(
-            track_id=target_track_id,
-            tracks=tracks,
-            video_width=width,
-            video_height=height
-        )
-
-    finally:
-        cap.release()

@@ -63,9 +63,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
   /**
    * Play video - handles promise to prevent race conditions
+   * Note: Check videoRef.current.src instead of videoUrl to support overlay mode
+   * where the video src is set externally (not via loadVideo)
    */
   const play = async () => {
-    if (videoRef.current && videoUrl) {
+    if (videoRef.current && videoRef.current.src) {
       try {
         // video.play() returns a promise - must handle it
         await videoRef.current.play();
@@ -104,13 +106,17 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    *
    * ARCHITECTURE: All seeks go through clampToVisibleRange to prevent
    * seeking to trimmed frames. This is the single validation point.
+   * Note: Check videoRef.current.src to support overlay mode where video
+   * is loaded externally.
    */
   const seek = (time) => {
-    if (videoRef.current && videoUrl) {
+    if (videoRef.current && videoRef.current.src) {
+      // Get duration from video element if not set (overlay mode)
+      const effectiveDuration = duration || videoRef.current.duration || 0;
       // Use centralized validation to prevent seeking to trimmed frames
       const validTime = clampToVisibleRange
         ? clampToVisibleRange(time)
-        : Math.max(0, Math.min(time, duration));
+        : Math.max(0, Math.min(time, effectiveDuration));
       videoRef.current.currentTime = validTime;
       // Immediately update React state to ensure synchronization
       // This prevents stale state issues when play is called right after seek
@@ -120,21 +126,24 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
   /**
    * Step forward one frame
+   * Note: Check videoRef.current.src to support overlay mode
    */
   const stepForward = () => {
-    if (videoRef.current && metadata) {
+    if (videoRef.current && videoRef.current.src) {
       const framerate = getFramerate(videoRef.current);
       const frameDuration = 1 / framerate;
-      const newTime = Math.min(currentTime + frameDuration, duration);
+      const effectiveDuration = duration || videoRef.current.duration || 0;
+      const newTime = Math.min(currentTime + frameDuration, effectiveDuration);
       seek(newTime);
     }
   };
 
   /**
    * Step backward one frame
+   * Note: Check videoRef.current.src to support overlay mode
    */
   const stepBackward = () => {
-    if (videoRef.current && metadata) {
+    if (videoRef.current && videoRef.current.src) {
       const framerate = getFramerate(videoRef.current);
       const frameDuration = 1 / framerate;
       const newTime = Math.max(currentTime - frameDuration, 0);
@@ -144,9 +153,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
   /**
    * Restart video - resets playhead to beginning (or first visible frame if start is trimmed)
+   * Note: Check videoRef.current.src to support overlay mode
    */
   const restart = () => {
-    if (videoRef.current && videoUrl) {
+    if (videoRef.current && videoRef.current.src) {
       pause();
       // seek(0) will automatically clamp to first visible frame if start is trimmed
       seek(0);

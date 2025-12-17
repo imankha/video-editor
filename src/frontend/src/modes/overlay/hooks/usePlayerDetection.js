@@ -238,7 +238,8 @@ export function usePlayerDetection({
     videoWidth: videoDimensions.width,
     videoHeight: videoDimensions.height,
     currentFrame,
-    videoId // Expose for debugging
+    videoId,
+    framerate
   };
 }
 

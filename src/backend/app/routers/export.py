@@ -1407,3 +1407,152 @@ async def extract_chapters(
         # Cleanup
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
+
+
+@router.post("/concat-for-overlay")
+async def concat_for_overlay(
+    request: Request,
+):
+    """
+    Concatenate multiple video clips without any framing/cropping.
+
+    This endpoint is used when the user wants to skip Framing mode and go
+    directly to Overlay mode with pre-edited clips. The clips are simply
+    concatenated with a cut transition and chapter markers are embedded.
+
+    Returns the concatenated video blob and clip metadata for auto-generating
+    highlight regions in Overlay mode.
+
+    Request format (multipart form):
+    - video_0, video_1, video_2, ... : Video files uploaded as multipart form
+    """
+    logger.info("[Concat for Overlay] Starting...")
+
+    # Parse form data to get video files
+    form = await request.form()
+
+    # Extract video files (video_0, video_1, etc.)
+    video_files: Dict[int, UploadFile] = {}
+    for key, value in form.items():
+        if key.startswith('video_'):
+            try:
+                index = int(key.split('_')[1])
+                video_files[index] = value
+                logger.info(f"[Concat for Overlay] Found video file: {key}")
+            except (ValueError, IndexError):
+                continue
+
+    if not video_files:
+        raise HTTPException(status_code=400, detail="No video files provided")
+
+    # Create temp directory
+    temp_dir = tempfile.mkdtemp()
+    input_paths = []
+
+    try:
+        # Save all uploaded files to temp directory
+        sorted_indices = sorted(video_files.keys())
+        clip_info = []
+
+        for idx in sorted_indices:
+            video_file = video_files[idx]
+            file_ext = Path(video_file.filename).suffix or ".mp4"
+            input_path = os.path.join(temp_dir, f"input_{idx}{file_ext}")
+
+            with open(input_path, 'wb') as f:
+                content = await video_file.read()
+                f.write(content)
+
+            input_paths.append(input_path)
+
+            # Get video duration for clip info
+            duration = get_video_duration(input_path)
+            clip_info.append({
+                'fileName': video_file.filename,
+                'index': idx,
+                'duration': duration
+            })
+
+            logger.info(f"[Concat for Overlay] Saved clip {idx}: {video_file.filename} ({duration:.2f}s)")
+
+        # Single clip - just return it directly with metadata
+        if len(input_paths) == 1:
+            # Calculate clip metadata
+            # 'name' is used by frontend for display label
+            clip_metadata = {
+                'source_clips': [{
+                    'index': 0,
+                    'name': clip_info[0]['fileName'],
+                    'fileName': clip_info[0]['fileName'],
+                    'start_time': 0,
+                    'end_time': clip_info[0]['duration'],
+                    'duration': clip_info[0]['duration']
+                }]
+            }
+
+            # Return the file with clip metadata in header
+            import base64
+            metadata_json = json.dumps(clip_metadata)
+            metadata_b64 = base64.b64encode(metadata_json.encode()).decode()
+
+            return FileResponse(
+                input_paths[0],
+                media_type='video/mp4',
+                filename=clip_info[0]['fileName'],
+                headers={'X-Clip-Metadata': metadata_b64},
+                background=BackgroundTask(lambda: shutil.rmtree(temp_dir) if os.path.exists(temp_dir) else None)
+            )
+
+        # Multiple clips - concatenate with chapter markers
+        final_output = os.path.join(temp_dir, f"concat_{uuid.uuid4().hex}.mp4")
+
+        # Use cut transition (simple concatenation)
+        concatenate_clips_with_transition(
+            clip_paths=input_paths,
+            output_path=final_output,
+            transition={'type': 'cut', 'duration': 0},
+            include_audio=True,
+            clip_info=clip_info  # For chapter markers
+        )
+
+        # Calculate clip timestamps in concatenated video
+        # 'name' is used by frontend for display label
+        source_clips = []
+        current_time = 0.0
+        for i, info in enumerate(clip_info):
+            source_clips.append({
+                'index': i,
+                'name': info['fileName'],
+                'fileName': info['fileName'],
+                'start_time': current_time,
+                'end_time': current_time + info['duration'],
+                'duration': info['duration']
+            })
+            current_time += info['duration']
+
+        clip_metadata = {'source_clips': source_clips}
+
+        logger.info(f"[Concat for Overlay] Created concatenated video with {len(source_clips)} clips")
+
+        # Return the file with clip metadata in header
+        import base64
+        metadata_json = json.dumps(clip_metadata)
+        metadata_b64 = base64.b64encode(metadata_json.encode()).decode()
+
+        return FileResponse(
+            final_output,
+            media_type='video/mp4',
+            filename=f"concat_{len(source_clips)}_clips.mp4",
+            headers={'X-Clip-Metadata': metadata_b64},
+            background=BackgroundTask(lambda: shutil.rmtree(temp_dir) if os.path.exists(temp_dir) else None)
+        )
+
+    except HTTPException:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        raise
+    except Exception as e:
+        logger.error(f"[Concat for Overlay] Failed: {str(e)}", exc_info=True)
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        raise HTTPException(status_code=500, detail=f"Concatenation failed: {str(e)}")
