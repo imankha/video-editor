@@ -203,18 +203,24 @@ interface ClipRegion {
   startTime: number;      // seconds
   endTime: number;        // seconds
   name: string;           // Default: formatted timestamp (e.g., "00:02:30"), user can override
-  notes: string;          // User-provided notes (shown as overlay during playback)
+  notes: string;          // User-provided notes (shown as overlay during playback), max 280 chars
   color: string;          // region display color (auto-assigned)
   createdAt: Date;
 }
 ```
 
-### Default Naming
+### Default Values & Constraints
 
 When a clip is created:
 - `name` defaults to the start timestamp formatted as `HH:MM:SS` (e.g., "00:02:30")
 - `notes` defaults to empty string
-- User can edit both in the side panel
+- Default clip duration: **15 seconds**
+- User can edit both name and notes in the side panel
+
+**Constraints:**
+- Notes: **280 characters max** (like a tweet)
+- Clip duration warning: **>45 seconds** (show warning, allow anyway)
+- Minimum clip duration: **1 second** (enforced)
 
 ### Exported Clip Metadata
 
@@ -308,6 +314,8 @@ After export completes:
 2. **Annotated source video** is downloaded to user's client
 3. User continues workflow in Framing mode with all clips ready for processing
 4. Clip metadata (name, notes) is visible in Framing mode clip list
+
+**Source Video Persistence**: The source game video remains in memory. User can navigate back to Clipify mode to add more clips or re-export. The source is only cleared when the user explicitly exits Clipify mode or starts a new session.
 
 ---
 
@@ -453,6 +461,8 @@ After export completes:
 - [ ] Verify start time, end time, and duration are displayed (read-only)
 - [ ] Edit name field - verify changes are saved
 - [ ] Edit notes field - verify changes are saved
+- [ ] Verify notes field shows character count (e.g., "42/280")
+- [ ] Type more than 280 characters in notes - verify input is truncated or blocked
 - [ ] Verify "Delete Clip" button is visible
 - [ ] With no clip selected - verify editor is hidden or shows placeholder
 
@@ -489,7 +499,7 @@ After export completes:
 - [ ] Seek video to a specific position
 - [ ] Click "+ Add Clip" button in side panel
 - [ ] Verify new clip is created at current playhead position
-- [ ] Verify default duration is 10 seconds
+- [ ] Verify default duration is 15 seconds
 - [ ] Verify clip name defaults to current timestamp
 - [ ] Verify new clip appears in side panel list
 - [ ] Verify new clip region appears on timeline
@@ -778,7 +788,7 @@ The annotated source video downloads happen in parallel with the mode transition
 ### Edge Cases
 - [ ] Overlapping clips: Show warning, allow anyway
 - [ ] Very short clips (<1s): Show warning, allow anyway
-- [ ] Very long clips (>60s): Show warning, allow anyway
+- [ ] Very long clips (>45s): Show warning, allow anyway
 - [ ] No clips defined: Export button disabled
 - [ ] Duplicate clip names: Auto-suffix with number
 
@@ -791,6 +801,7 @@ The annotated source video downloads happen in parallel with the mode transition
 - Scene change detection
 - Multi-select clips for batch operations
 - Clip templates (preset durations)
+- **Re-import annotated source**: Recognize `clipify_version` metadata when importing via "Add Game" and restore clip regions automatically
 
 ---
 
