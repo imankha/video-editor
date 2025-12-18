@@ -306,7 +306,7 @@ export function TimelineBase({
                 >
                   {/* Progress bar - accounts for edge padding */}
                   <div
-                    className="absolute top-0 h-full bg-blue-600 rounded-r-lg transition-all pointer-events-none"
+                    className="absolute top-0 h-full bg-blue-600 rounded-r-lg pointer-events-none"
                     style={{
                       left: `${EDGE_PADDING}px`,
                       width: `calc((100% - ${EDGE_PADDING * 2}px) * ${progress / 100})`
