@@ -69,12 +69,12 @@ export function FileUpload({ onFileSelect, onFramedVideoSelect, isLoading }) {
         className="hidden"
       />
 
-      {/* Add Clips button (Framing workflow) */}
+      {/* Add Raw Clips button (Framing workflow) */}
       <button
         onClick={handleFramingClick}
         disabled={isAnyLoading}
         className="px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
-        title="Add clips for Framing mode (crop, trim, speed adjustments)"
+        title="Add raw clips for Framing mode (crop, trim, speed adjustments)"
       >
         {isFramingLoading ? (
           <>
@@ -115,18 +115,18 @@ export function FileUpload({ onFileSelect, onFramedVideoSelect, isLoading }) {
                 d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
               />
             </svg>
-            <span>Add Clips</span>
+            <span>Add Raw Clips</span>
           </>
         )}
       </button>
 
-      {/* Add Framed Video button (skip Framing, go directly to Overlay) */}
+      {/* Add Overlay To Framed Video button (skip Framing, go directly to Overlay) */}
       {onFramedVideoSelect && (
         <button
           onClick={handleOverlayClick}
           disabled={isAnyLoading}
           className="px-4 py-3 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
-          title="Add a pre-framed video directly to Overlay mode (skip Framing)"
+          title="Add overlay effects to a pre-framed video (skip Framing)"
         >
           {isOverlayLoading ? (
             <>
@@ -168,7 +168,7 @@ export function FileUpload({ onFileSelect, onFramedVideoSelect, isLoading }) {
                   d="M12 5v2m0 10v2m-7-7h2m10 0h2"
                 />
               </svg>
-              <span>Add Framed Video</span>
+              <span>Add Overlay To Framed Video</span>
             </>
           )}
         </button>
