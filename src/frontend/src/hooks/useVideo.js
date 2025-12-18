@@ -189,6 +189,30 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     setIsPlaying(false);
   };
 
+  // Use requestAnimationFrame for smooth time updates during playback
+  // The native timeupdate event only fires ~4 times/second which causes
+  // visible lag in overlay positioning. RAF gives us ~60fps updates.
+  useEffect(() => {
+    if (!isPlaying || !videoRef.current) return;
+
+    let rafId;
+    const updateTime = () => {
+      if (videoRef.current && !isSeeking) {
+        const newTime = videoRef.current.currentTime;
+        setCurrentTime(newTime);
+      }
+      rafId = requestAnimationFrame(updateTime);
+    };
+
+    rafId = requestAnimationFrame(updateTime);
+
+    return () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+    };
+  }, [isPlaying, isSeeking]);
+
   const handleSeeking = () => {
     setIsSeeking(true);
   };
