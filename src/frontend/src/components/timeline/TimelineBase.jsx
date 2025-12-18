@@ -59,6 +59,10 @@ export function TimelineBase({
   // Track when user manually scrolls to disable auto-scroll temporarily
   const userScrolledRef = React.useRef(false);
   const userScrollTimeoutRef = React.useRef(null);
+  // Track previous isPlaying state to detect playback start
+  const wasPlayingRef = React.useRef(false);
+  // Track the progress when playback started to avoid immediate scroll on play
+  const playbackStartProgressRef = React.useRef(null);
 
   // Padding at timeline edges for easier keyframe selection (in pixels)
   const EDGE_PADDING = 20;
@@ -199,11 +203,28 @@ export function TimelineBase({
   // Auto-scroll to keep playhead visible when zoomed and playing
   // Only auto-scroll during playback - manual navigation shouldn't trigger auto-scroll
   React.useEffect(() => {
+    // Detect playback start/stop transitions
+    if (isPlaying && !wasPlayingRef.current) {
+      // Playback just started - record the starting progress
+      playbackStartProgressRef.current = progress;
+    } else if (!isPlaying && wasPlayingRef.current) {
+      // Playback just stopped - clear the start progress
+      playbackStartProgressRef.current = null;
+    }
+    wasPlayingRef.current = isPlaying;
+
     if (!scrollContainerRef.current || timelineScale <= 1) return;
     // Only auto-scroll during playback
     if (!isPlaying) return;
     // Don't auto-scroll if user recently scrolled manually
     if (userScrolledRef.current) return;
+
+    // Don't auto-scroll until playhead has moved at least 2% from where playback started
+    // This prevents the scroll from "kicking back" immediately when user hits play
+    if (playbackStartProgressRef.current !== null) {
+      const progressSinceStart = Math.abs(progress - playbackStartProgressRef.current);
+      if (progressSinceStart < 2) return;
+    }
 
     const container = scrollContainerRef.current;
     const maxScroll = container.scrollWidth - container.clientWidth;
