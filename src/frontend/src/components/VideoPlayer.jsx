@@ -147,7 +147,7 @@ export function VideoPlayer({
   return (
     <div
       ref={containerRef}
-      className={`video-player-container rounded-lg overflow-hidden relative outline-none ${
+      className={`video-player-container rounded-t-lg overflow-hidden relative outline-none ${
         isFullscreen ? 'w-screen h-screen' : 'min-h-[60vh]'
       }`}
       onDragEnter={handleDragEnter}

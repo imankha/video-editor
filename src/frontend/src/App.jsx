@@ -705,8 +705,16 @@ function App() {
    * Handle creating a clip from fullscreen overlay
    */
   const handleClipifyFullscreenCreateClip = useCallback((clipData) => {
-    // clipData: { startTime, duration, rating, notes }
-    const newRegion = addClipRegion(clipData.startTime, clipData.duration, clipData.notes, clipData.rating);
+    // clipData: { startTime, duration, rating, notes, tags, name }
+    const newRegion = addClipRegion(
+      clipData.startTime,
+      clipData.duration,
+      clipData.notes,
+      clipData.rating,
+      '', // position (not used - tags can be from any position)
+      clipData.tags,
+      clipData.name
+    );
     if (newRegion) {
       seek(newRegion.startTime);
     }
@@ -717,7 +725,7 @@ function App() {
    * Handle updating an existing clip from fullscreen overlay
    */
   const handleClipifyFullscreenUpdateClip = useCallback((regionId, updates) => {
-    // updates: { duration, rating, notes }
+    // updates: { duration, rating, notes, tags, name }
     updateClipRegion(regionId, updates);
     setShowClipifyOverlay(false);
   }, [updateClipRegion]);
@@ -2066,7 +2074,7 @@ function App() {
           {/* Wrap in ref container for clipify fullscreen */}
           <div
             ref={clipifyContainerRef}
-            className={`relative ${editorMode === 'clipify' ? 'bg-black' : ''}`}
+            className="relative bg-gray-900 rounded-lg"
           >
           <VideoPlayer
             videoRef={videoRef}
@@ -2093,14 +2101,16 @@ function App() {
                   selectedKeyframeIndex={selectedCropKeyframeIndex}
                 />
               ),
-              // Clipify mode overlay (NotesOverlay) - shows notes for region at playhead
+              // Clipify mode overlay (NotesOverlay) - shows name and notes for region at playhead
               editorMode === 'clipify' && clipifyVideoUrl && (() => {
                 const regionAtPlayhead = getClipifyRegionAtTime(currentTime);
-                return regionAtPlayhead?.notes ? (
+                return (regionAtPlayhead?.name || regionAtPlayhead?.notes) ? (
                   <NotesOverlay
                     key="clipify-notes"
+                    name={regionAtPlayhead.name}
                     notes={regionAtPlayhead.notes}
                     isVisible={true}
+                    isFullscreen={clipifyFullscreen}
                   />
                 ) : null;
               })(),
@@ -2160,6 +2170,38 @@ function App() {
             isFullscreen={editorMode === 'clipify' && clipifyFullscreen}
             isInClipRegion={editorMode === 'clipify' && !!getClipifyRegionAtTime(currentTime)}
           />
+          {/* Controls - inside video container to match video width */}
+          {/* Clipify mode uses ClipifyControls with speed and fullscreen */}
+          {editorMode === 'clipify' && clipifyVideoUrl && (
+            <ClipifyControls
+              isPlaying={isPlaying}
+              currentTime={currentTime}
+              duration={clipifyVideoMetadata?.duration || duration}
+              onTogglePlay={togglePlay}
+              onStepForward={stepForward}
+              onStepBackward={stepBackward}
+              onRestart={restart}
+              playbackSpeed={clipifyPlaybackSpeed}
+              onSpeedChange={setClipifyPlaybackSpeed}
+              isFullscreen={clipifyFullscreen}
+              onToggleFullscreen={handleClipifyToggleFullscreen}
+            />
+          )}
+          {/* Framing and Overlay modes use regular Controls */}
+          {((editorMode === 'framing' && videoUrl) || (editorMode === 'overlay' && effectiveOverlayVideoUrl)) && (
+            <Controls
+              isPlaying={isPlaying}
+              currentTime={currentTime}
+              duration={
+                editorMode === 'overlay' ? (effectiveOverlayMetadata?.duration || duration) :
+                duration
+              }
+              onTogglePlay={togglePlay}
+              onStepForward={stepForward}
+              onStepBackward={stepBackward}
+              onRestart={restart}
+            />
+          )}
           </div>
 
           {/* Mode-specific content (overlays + timelines) */}
@@ -2287,43 +2329,6 @@ function App() {
               >
                 Switch to Framing Mode
               </button>
-            </div>
-          )}
-
-          {/* Controls - show for current mode's video */}
-          {/* Clipify mode uses ClipifyControls with speed and fullscreen */}
-          {editorMode === 'clipify' && clipifyVideoUrl && (
-            <div className="mt-6">
-              <ClipifyControls
-                isPlaying={isPlaying}
-                currentTime={currentTime}
-                duration={clipifyVideoMetadata?.duration || duration}
-                onTogglePlay={togglePlay}
-                onStepForward={stepForward}
-                onStepBackward={stepBackward}
-                onRestart={restart}
-                playbackSpeed={clipifyPlaybackSpeed}
-                onSpeedChange={setClipifyPlaybackSpeed}
-                isFullscreen={clipifyFullscreen}
-                onToggleFullscreen={handleClipifyToggleFullscreen}
-              />
-            </div>
-          )}
-          {/* Framing and Overlay modes use regular Controls */}
-          {((editorMode === 'framing' && videoUrl) || (editorMode === 'overlay' && effectiveOverlayVideoUrl)) && (
-            <div className="mt-6">
-              <Controls
-                isPlaying={isPlaying}
-                currentTime={currentTime}
-                duration={
-                  editorMode === 'overlay' ? (effectiveOverlayMetadata?.duration || duration) :
-                  duration
-                }
-                onTogglePlay={togglePlay}
-                onStepForward={stepForward}
-                onStepBackward={stepBackward}
-                onRestart={restart}
-              />
             </div>
           )}
 

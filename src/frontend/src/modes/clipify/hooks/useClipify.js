@@ -9,7 +9,9 @@ import { formatTimeSimple } from '../../../utils/timeFormat';
  *   - id: unique identifier
  *   - startTime: region start in seconds
  *   - endTime: region end in seconds (calculated from startTime + duration)
- *   - name: clip name (default: timestamp like "00:02:30")
+ *   - name: clip name (auto-generated from rating + tags, or user-provided)
+ *   - position: player position (attacker, midfielder, defender, goalie)
+ *   - tags: array of tag names for the clip
  *   - notes: user notes (max 280 chars, shown as overlay during playback)
  *   - rating: 1-5 star rating (default 3)
  *   - color: region display color (auto-assigned)
@@ -142,9 +144,12 @@ export default function useClipify(videoMetadata) {
    * @param {number} customDuration - Optional custom duration (default: 15s)
    * @param {string} notes - Optional notes for the clip
    * @param {number} rating - Optional rating (1-5, default: 3)
+   * @param {string} position - Optional position (attacker, midfielder, defender, goalie)
+   * @param {Array} tags - Optional array of tag names
+   * @param {string} name - Optional clip name (auto-generated if not provided)
    */
-  const addClipRegion = useCallback((startTime, customDuration = DEFAULT_CLIP_DURATION, notes = '', rating = DEFAULT_RATING) => {
-    console.log('[useClipify] addClipRegion called with startTime:', startTime, 'duration:', duration, 'notes:', notes, 'rating:', rating);
+  const addClipRegion = useCallback((startTime, customDuration = DEFAULT_CLIP_DURATION, notes = '', rating = DEFAULT_RATING, position = '', tags = [], name = '') => {
+    console.log('[useClipify] addClipRegion called with startTime:', startTime, 'duration:', duration, 'notes:', notes, 'rating:', rating, 'position:', position, 'tags:', tags, 'name:', name);
     if (!duration) {
       console.warn('[useClipify] Cannot add clip region - no duration set');
       return null;
@@ -167,7 +172,9 @@ export default function useClipify(videoMetadata) {
       id: generateClipId(),
       startTime: clampedStart,
       endTime: Math.min(actualEndTime, duration),
-      name: formatTimestampForName(clampedStart),
+      name: name || formatTimestampForName(clampedStart),
+      position: position || '',
+      tags: tags || [],
       notes: notes || '',
       rating: rating || DEFAULT_RATING,
       color,
@@ -219,6 +226,16 @@ export default function useClipify(videoMetadata) {
       // Handle rating update (1-5)
       if (updates.rating !== undefined) {
         updated.rating = Math.max(1, Math.min(5, Math.round(updates.rating)));
+      }
+
+      // Handle position update
+      if (updates.position !== undefined) {
+        updated.position = updates.position;
+      }
+
+      // Handle tags update
+      if (updates.tags !== undefined) {
+        updated.tags = updates.tags;
       }
 
       return updated;
@@ -304,11 +321,11 @@ export default function useClipify(videoMetadata) {
   }, [clipRegions]);
 
   /**
-   * Check if any regions exceed the warning duration
-   * @returns {Array} - Array of regions exceeding warning duration
+   * Check if any regions exceed the max clip duration
+   * @returns {Array} - Array of regions exceeding max duration
    */
   const getLongRegions = useCallback(() => {
-    return clipRegions.filter(r => (r.endTime - r.startTime) > MAX_CLIP_WARNING_DURATION);
+    return clipRegions.filter(r => (r.endTime - r.startTime) > MAX_CLIP_DURATION);
   }, [clipRegions]);
 
   /**
@@ -320,6 +337,8 @@ export default function useClipify(videoMetadata) {
       start_time: region.startTime,
       end_time: region.endTime,
       name: region.name,
+      position: region.position,
+      tags: region.tags,
       notes: region.notes,
       rating: region.rating
     }));

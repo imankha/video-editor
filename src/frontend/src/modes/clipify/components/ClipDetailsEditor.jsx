@@ -1,10 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Star } from 'lucide-react';
+import { Trash2, Star, Check } from 'lucide-react';
+import { soccerTags, positions, generateClipName } from '../constants/soccerTags';
 
 // Constants
 const MIN_CLIP_DURATION = 1.0;
 const MAX_CLIP_DURATION = 60.0;
 const DEFAULT_CLIP_DURATION = 15.0;
+
+// Rating-based background colors (used for tinting the details panel)
+const RATING_COLORS = {
+  5: 'rgba(234, 179, 8, 0.15)',   // gold/yellow
+  4: 'rgba(34, 197, 94, 0.15)',   // green
+  3: 'rgba(59, 130, 246, 0.15)',  // blue
+  2: 'rgba(249, 115, 22, 0.15)',  // orange
+  1: 'rgba(239, 68, 68, 0.15)',   // red
+};
+
+// Rating-based border colors
+const RATING_BORDER_COLORS = {
+  5: '#eab308', // gold/yellow
+  4: '#22c55e', // green
+  3: '#3b82f6', // blue
+  2: '#f97316', // orange
+  1: '#ef4444', // red
+};
 
 /**
  * Format seconds to MM:SS.ms string for display
@@ -54,6 +73,45 @@ function StarRating({ rating, onRatingChange }) {
 }
 
 /**
+ * TagSelector - Multi-select tags grouped by position
+ * Shows all tags from all positions, allowing selection from multiple positions
+ */
+function TagSelector({ selectedTags, onTagToggle }) {
+  return (
+    <div className="space-y-2">
+      {positions.map((pos) => {
+        const positionTags = soccerTags[pos.id] || [];
+        return (
+          <div key={pos.id}>
+            <div className="text-gray-500 text-xs mb-1">{pos.name}</div>
+            <div className="flex flex-wrap gap-1">
+              {positionTags.map((tag) => {
+                const isSelected = selectedTags.includes(tag.name);
+                return (
+                  <button
+                    key={tag.name}
+                    onClick={() => onTagToggle(tag.name)}
+                    className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                      isSelected
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                    title={tag.description}
+                  >
+                    {isSelected && <Check size={12} />}
+                    {tag.shortName}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * ClipDetailsEditor - Edit panel for selected clip details
  *
  * Editable fields:
@@ -91,6 +149,24 @@ export function ClipDetailsEditor({
 
   const handleRatingChange = (newRating) => {
     onUpdate({ rating: newRating });
+    // Auto-regenerate name if tags are selected
+    if (region.tags?.length > 0) {
+      const newName = generateClipName(newRating, region.tags);
+      if (newName) {
+        onUpdate({ rating: newRating, name: newName });
+      }
+    }
+  };
+
+  const handleTagToggle = (tagName) => {
+    const currentTags = region.tags || [];
+    const newTags = currentTags.includes(tagName)
+      ? currentTags.filter((t) => t !== tagName)
+      : [...currentTags, tagName];
+
+    // Auto-generate name when tags change
+    const newName = generateClipName(region.rating || 3, newTags);
+    onUpdate({ tags: newTags, name: newName || region.name });
   };
 
   const handleStartTimeChange = (e) => {
@@ -129,8 +205,18 @@ export function ClipDetailsEditor({
     setShowDeleteConfirm(false);
   };
 
+  const rating = region.rating || 3;
+  const ratingColor = RATING_COLORS[rating] || RATING_COLORS[3];
+  const ratingBorderColor = RATING_BORDER_COLORS[rating] || RATING_BORDER_COLORS[3];
+
   return (
-    <div className="border-t border-gray-700 bg-gray-800/50">
+    <div
+      className="border-t-2"
+      style={{
+        backgroundColor: ratingColor,
+        borderTopColor: ratingBorderColor,
+      }}
+    >
       <div className="p-3 space-y-3">
         {/* Header */}
         <div className="text-gray-400 text-xs uppercase tracking-wider">
@@ -143,6 +229,15 @@ export function ClipDetailsEditor({
           <StarRating
             rating={region.rating || 3}
             onRatingChange={handleRatingChange}
+          />
+        </div>
+
+        {/* Tags Selection */}
+        <div>
+          <label className="block text-gray-400 text-xs mb-1">Tags</label>
+          <TagSelector
+            selectedTags={region.tags || []}
+            onTagToggle={handleTagToggle}
           />
         </div>
 
