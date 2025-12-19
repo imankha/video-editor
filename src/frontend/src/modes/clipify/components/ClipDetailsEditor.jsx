@@ -1,0 +1,254 @@
+import React, { useState, useEffect } from 'react';
+import { Trash2, Star } from 'lucide-react';
+
+// Constants
+const MIN_CLIP_DURATION = 1.0;
+const MAX_CLIP_DURATION = 60.0;
+const DEFAULT_CLIP_DURATION = 15.0;
+
+/**
+ * Format seconds to MM:SS.ms string for display
+ */
+function formatTimeForDisplay(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toFixed(1).padStart(4, '0')}`;
+}
+
+/**
+ * Parse MM:SS.ms string to seconds
+ */
+function parseTimeInput(timeStr) {
+  const parts = timeStr.split(':');
+  if (parts.length === 2) {
+    const mins = parseInt(parts[0], 10) || 0;
+    const secs = parseFloat(parts[1]) || 0;
+    return mins * 60 + secs;
+  }
+  return parseFloat(timeStr) || 0;
+}
+
+/**
+ * StarRating - 5-star rating selector
+ */
+function StarRating({ rating, onRatingChange }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((starNum) => (
+        <button
+          key={starNum}
+          onClick={() => onRatingChange(starNum)}
+          className="p-0.5 hover:scale-110 transition-transform"
+          title={`${starNum} star${starNum > 1 ? 's' : ''}`}
+        >
+          <Star
+            size={18}
+            fill={starNum <= rating ? '#fbbf24' : 'transparent'}
+            color={starNum <= rating ? '#fbbf24' : '#6b7280'}
+            strokeWidth={1.5}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * ClipDetailsEditor - Edit panel for selected clip details
+ *
+ * Editable fields:
+ * - Star rating (1-5)
+ * - Name
+ * - Start time
+ * - Duration (slider)
+ * - Notes
+ *
+ * Read-only:
+ * - End time (calculated from start + duration)
+ */
+export function ClipDetailsEditor({
+  region,
+  onUpdate,
+  onDelete,
+  maxNotesLength = 280,
+  videoDuration
+}) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [startTimeInput, setStartTimeInput] = useState('');
+
+  // Calculate current duration
+  const clipDuration = region.endTime - region.startTime;
+  const notesLength = region.notes?.length || 0;
+
+  // Sync start time input when region changes
+  useEffect(() => {
+    setStartTimeInput(formatTimeForDisplay(region.startTime));
+  }, [region.startTime]);
+
+  const handleNameChange = (e) => {
+    onUpdate({ name: e.target.value });
+  };
+
+  const handleRatingChange = (newRating) => {
+    onUpdate({ rating: newRating });
+  };
+
+  const handleStartTimeChange = (e) => {
+    setStartTimeInput(e.target.value);
+  };
+
+  const handleStartTimeBlur = () => {
+    const newStartTime = parseTimeInput(startTimeInput);
+    // Clamp to valid range
+    const maxStart = Math.max(0, (videoDuration || Infinity) - MIN_CLIP_DURATION);
+    const clampedStart = Math.max(0, Math.min(newStartTime, maxStart));
+    onUpdate({ startTime: clampedStart });
+    setStartTimeInput(formatTimeForDisplay(clampedStart));
+  };
+
+  const handleDurationChange = (e) => {
+    const newDuration = parseFloat(e.target.value);
+    onUpdate({ duration: newDuration });
+  };
+
+  const handleNotesChange = (e) => {
+    const newNotes = e.target.value.slice(0, maxNotesLength);
+    onUpdate({ notes: newNotes });
+  };
+
+  const handleDeleteClick = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = () => {
+    setShowDeleteConfirm(false);
+    onDelete();
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(false);
+  };
+
+  return (
+    <div className="border-t border-gray-700 bg-gray-800/50">
+      <div className="p-3 space-y-3">
+        {/* Header */}
+        <div className="text-gray-400 text-xs uppercase tracking-wider">
+          Clip Details
+        </div>
+
+        {/* Star Rating */}
+        <div>
+          <label className="block text-gray-400 text-xs mb-1">Rating</label>
+          <StarRating
+            rating={region.rating || 3}
+            onRatingChange={handleRatingChange}
+          />
+        </div>
+
+        {/* Name Input */}
+        <div>
+          <label className="block text-gray-400 text-xs mb-1">Name</label>
+          <input
+            type="text"
+            value={region.name}
+            onChange={handleNameChange}
+            className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+            placeholder="Clip name"
+          />
+        </div>
+
+        {/* Start Time (editable) */}
+        <div>
+          <label className="block text-gray-400 text-xs mb-1">Start Time</label>
+          <input
+            type="text"
+            value={startTimeInput}
+            onChange={handleStartTimeChange}
+            onBlur={handleStartTimeBlur}
+            className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm font-mono focus:outline-none focus:border-green-500"
+            placeholder="00:00.0"
+          />
+        </div>
+
+        {/* Duration Slider */}
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-gray-400 text-xs">Duration</label>
+            <span className="text-white text-xs font-mono">{clipDuration.toFixed(1)}s</span>
+          </div>
+          <input
+            type="range"
+            min={MIN_CLIP_DURATION}
+            max={MAX_CLIP_DURATION}
+            step={0.5}
+            value={clipDuration}
+            onChange={handleDurationChange}
+            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+          />
+          <div className="relative w-full h-4 mt-0.5">
+            <span className="absolute left-0 text-xs text-gray-500">{MIN_CLIP_DURATION}s</span>
+            {/* Position 15s label at correct slider position: (15-1)/(60-1) ≈ 24% */}
+            <span className="absolute text-xs text-gray-500" style={{ left: `${((DEFAULT_CLIP_DURATION - MIN_CLIP_DURATION) / (MAX_CLIP_DURATION - MIN_CLIP_DURATION)) * 100}%`, transform: 'translateX(-50%)' }}>{DEFAULT_CLIP_DURATION}s</span>
+            <span className="absolute right-0 text-xs text-gray-500">{MAX_CLIP_DURATION}s</span>
+          </div>
+        </div>
+
+        {/* End Time (calculated, read-only) */}
+        <div>
+          <label className="block text-gray-400 text-xs mb-1">
+            End Time <span className="text-gray-500">(calculated)</span>
+          </label>
+          <div className="px-2 py-1.5 bg-gray-700/30 border border-gray-600/50 rounded text-gray-400 text-sm font-mono">
+            {formatTimeForDisplay(region.endTime)}
+          </div>
+        </div>
+
+        {/* Notes Textarea */}
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-gray-400 text-xs">Notes</label>
+            <span className={`text-xs ${notesLength >= maxNotesLength ? 'text-red-400' : 'text-gray-500'}`}>
+              {notesLength}/{maxNotesLength}
+            </span>
+          </div>
+          <textarea
+            value={region.notes || ''}
+            onChange={handleNotesChange}
+            className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
+            placeholder="Add notes (shown as overlay during playback)"
+            rows={3}
+          />
+        </div>
+
+        {/* Delete Button */}
+        {showDeleteConfirm ? (
+          <div className="flex gap-2">
+            <button
+              onClick={handleConfirmDelete}
+              className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
+            >
+              Confirm Delete
+            </button>
+            <button
+              onClick={handleCancelDelete}
+              className="flex-1 px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-sm transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleDeleteClick}
+            className="w-full px-3 py-1.5 bg-gray-700 hover:bg-red-600 text-gray-300 hover:text-white rounded text-sm flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Delete Clip</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default ClipDetailsEditor;

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { GripVertical, X, Plus, Film } from 'lucide-react';
+import { GripVertical, X, Plus, Film, MessageSquare } from 'lucide-react';
 
 /**
  * ClipSelectorSidebar - Sidebar for managing multiple video clips
@@ -177,11 +177,30 @@ export function ClipSelectorSidebar({
 
               {/* Clip info */}
               <div className="flex-1 min-w-0">
-                <div className="text-sm text-white truncate" title={clip.fileName}>
-                  {clip.fileNameDisplay || clip.fileName}
+                {/* Clip name - use clipify name if available */}
+                <div
+                  className="text-sm text-white truncate"
+                  title={clip.clipifyName || clip.fileName}
+                >
+                  {clip.clipifyName || clip.fileNameDisplay || clip.fileName}
                 </div>
-                <div className="text-xs text-gray-500">
-                  {formatDuration(clip.duration)}
+                {/* Duration and source info */}
+                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                  <span>{formatDuration(clip.duration)}</span>
+                  {/* Show notes indicator if clip has clipify notes */}
+                  {clip.clipifyNotes && (
+                    <span
+                      className="inline-flex items-center text-purple-400"
+                      title={clip.clipifyNotes}
+                    >
+                      <MessageSquare size={10} className="mr-0.5" />
+                      <span className="truncate max-w-[60px]">
+                        {clip.clipifyNotes.length > 15
+                          ? clip.clipifyNotes.slice(0, 15) + '...'
+                          : clip.clipifyNotes}
+                      </span>
+                    </span>
+                  )}
                 </div>
               </div>
 

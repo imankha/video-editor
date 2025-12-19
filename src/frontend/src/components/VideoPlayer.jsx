@@ -15,6 +15,8 @@ import React, { useState, useRef, useCallback } from 'react';
  * @param {Object} props.panOffset - Pan offset {x, y}
  * @param {Function} props.onZoomChange - Callback when zoom changes (wheel)
  * @param {Function} props.onPanChange - Callback when pan changes (drag)
+ * @param {boolean} props.isFullscreen - Whether the player is in fullscreen mode
+ * @param {boolean} props.isInClipRegion - Whether playhead is inside a clip region (shows orange border)
  */
 export function VideoPlayer({
   videoRef,
@@ -25,7 +27,9 @@ export function VideoPlayer({
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   onZoomChange,
-  onPanChange
+  onPanChange,
+  isFullscreen = false,
+  isInClipRegion = false
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
@@ -143,7 +147,9 @@ export function VideoPlayer({
   return (
     <div
       ref={containerRef}
-      className="video-player-container bg-black rounded-lg overflow-hidden min-h-[60vh] relative outline-none"
+      className={`video-player-container rounded-lg overflow-hidden relative outline-none ${
+        isFullscreen ? 'w-screen h-screen' : 'min-h-[60vh]'
+      }`}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -152,7 +158,9 @@ export function VideoPlayer({
       style={{ cursor: isPanning ? 'grabbing' : (zoom > 1 ? 'grab' : 'default') }}
     >
       {videoUrl ? (
-        <div className="relative video-container h-[60vh] overflow-hidden">
+        <div className={`relative video-container overflow-hidden ${
+          isFullscreen ? 'w-full h-screen' : 'h-[60vh]'
+        }`}>
           <div
             className="absolute inset-0 flex items-center justify-center"
             style={{
@@ -164,7 +172,9 @@ export function VideoPlayer({
             <video
               ref={videoRef}
               src={videoUrl}
-              className="max-w-full max-h-full object-contain"
+              className={`object-contain ${
+                isFullscreen ? 'w-full h-full' : 'max-w-full max-h-full'
+              }`}
               onTimeUpdate={handlers.onTimeUpdate}
               onPlay={handlers.onPlay}
               onPause={handlers.onPause}
@@ -178,6 +188,15 @@ export function VideoPlayer({
 
           {/* Render any overlays passed by the mode */}
           {overlays}
+
+          {/* Orange border overlay when inside a clip region */}
+          {isInClipRegion && (
+            <div
+              className={`absolute inset-0 pointer-events-none z-40 border-orange-500 ${
+                isFullscreen ? 'border-8' : 'border-4 rounded-lg'
+              }`}
+            />
+          )}
         </div>
       ) : (
         <div

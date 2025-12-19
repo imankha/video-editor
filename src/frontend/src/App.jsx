@@ -16,6 +16,7 @@ import { ModeSwitcher } from './components/shared/ModeSwitcher';
 // Mode-specific imports
 import { useCrop, useSegments, FramingMode, CropOverlay } from './modes/framing';
 import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay } from './modes/overlay';
+import { ClipifyMode, useClipify, ClipsSidePanel, NotesOverlay, ClipifyControls, ClipifyFullscreenOverlay } from './modes/clipify';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
 import { extractVideoMetadata } from './utils/videoMetadata';
 
@@ -32,7 +33,7 @@ function App() {
   // Selected highlight keyframe time (when playhead is near a keyframe)
   const [selectedHighlightKeyframeTime, setSelectedHighlightKeyframeTime] = useState(null);
 
-  // Editor mode state ('framing' | 'overlay')
+  // Editor mode state ('framing' | 'overlay' | 'clipify')
   const [editorMode, setEditorMode] = useState('framing');
 
   // Overlay mode video state (SEPARATE from framing video)
@@ -43,6 +44,22 @@ function App() {
 
   // Clip metadata for auto-generating highlight regions (from Framing export)
   const [overlayClipMetadata, setOverlayClipMetadata] = useState(null);
+
+  // Clipify mode video state (for extracting clips from full game footage)
+  const [clipifyVideoFile, setClipifyVideoFile] = useState(null);
+  const [clipifyVideoUrl, setClipifyVideoUrl] = useState(null);
+  const [clipifyVideoMetadata, setClipifyVideoMetadata] = useState(null);
+
+  // Clipify mode playback state
+  const [clipifyPlaybackSpeed, setClipifyPlaybackSpeed] = useState(1);
+  const [clipifyFullscreen, setClipifyFullscreen] = useState(false);
+  const [showClipifyOverlay, setShowClipifyOverlay] = useState(false);
+
+  // Ref for fullscreen container
+  const clipifyContainerRef = useRef(null);
+
+  // Ref to track previous isPlaying state for detecting pause transitions
+  const wasPlayingRef = useRef(false);
 
   // Layer selection state for arrow key navigation
   const [selectedLayer, setSelectedLayer] = useState('playhead'); // 'playhead' | 'crop' | 'highlight'
@@ -226,6 +243,27 @@ function App() {
     updateScrollPosition: updateTimelineScrollPosition,
     getTimelineScale,
   } = useTimelineZoom();
+
+  // Clipify mode state management (lifted to App level for sidebar/MVC pattern)
+  const {
+    clipRegions,
+    regionsWithLayout: clipifyRegionsWithLayout,
+    selectedRegionId: clipifySelectedRegionId,
+    selectedRegion: clipifySelectedRegion,
+    hasClips: hasClipifyClips,
+    clipCount: clipifyClipCount,
+    initialize: initializeClipify,
+    reset: resetClipify,
+    addClipRegion,
+    updateClipRegion,
+    deleteClipRegion,
+    selectRegion: selectClipifyRegion,
+    moveRegionStart: moveClipifyRegionStart,
+    moveRegionEnd: moveClipifyRegionEnd,
+    getRegionAtTime: getClipifyRegionAtTime,
+    getExportData: getClipifyExportData,
+    MAX_NOTES_LENGTH: CLIPIFY_MAX_NOTES_LENGTH,
+  } = useClipify(clipifyVideoMetadata);
 
   // Frame tolerance for selection - approximately 5 pixels on each side
   // Derived selection state - computed from playhead position and keyframes
@@ -463,6 +501,265 @@ function App() {
   };
 
   /**
+   * Handle game video selection for Clipify mode
+   * Transitions to clipify mode where user can extract clips from full game footage
+   */
+  const handleGameVideoSelect = async (file) => {
+    if (!file) return;
+
+    try {
+      console.log('[App] handleGameVideoSelect: Processing', file.name);
+
+      // Extract video metadata
+      const videoMetadata = await extractVideoMetadata(file);
+      console.log('[App] Extracted game video metadata:', videoMetadata);
+
+      // Create object URL for the video
+      const videoUrl = URL.createObjectURL(file);
+
+      // Clean up any existing clipify video URL
+      if (clipifyVideoUrl) {
+        URL.revokeObjectURL(clipifyVideoUrl);
+      }
+
+      // Set clipify state
+      setClipifyVideoFile(file);
+      setClipifyVideoUrl(videoUrl);
+      setClipifyVideoMetadata(videoMetadata);
+
+      // Transition to clipify mode
+      setEditorMode('clipify');
+
+      console.log('[App] Successfully transitioned to Clipify mode');
+    } catch (err) {
+      console.error('[App] Failed to process game video:', err);
+      throw err; // Re-throw so FileUpload can handle the error
+    }
+  };
+
+  /**
+   * Handle exiting Clipify mode
+   * Clears clipify state and returns to no-video state
+   */
+  const handleExitClipifyMode = useCallback(() => {
+    console.log('[App] Exiting Clipify mode');
+
+    // Clean up clipify video URL
+    if (clipifyVideoUrl) {
+      URL.revokeObjectURL(clipifyVideoUrl);
+    }
+
+    // Clear clipify state
+    setClipifyVideoFile(null);
+    setClipifyVideoUrl(null);
+    setClipifyVideoMetadata(null);
+
+    // Return to framing mode (no video loaded state)
+    setEditorMode('framing');
+  }, [clipifyVideoUrl]);
+
+  /**
+   * Helper function to convert base64 string to Blob
+   */
+  const base64ToBlob = useCallback((base64, mimeType) => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
+  }, []);
+
+  /**
+   * Handle exporting clips from Clipify mode
+   * 1. Send clips to backend for cutting
+   * 2. Download annotated source video to client
+   * 3. Load cut clips into Framing mode
+   */
+  const handleClipifyExport = useCallback(async (clipData) => {
+    console.log('[App] Clipify export requested with clips:', clipData);
+
+    if (!clipifyVideoFile || !clipData || clipData.length === 0) {
+      console.error('[App] Cannot export: no video or clips');
+      return;
+    }
+
+    try {
+      console.log('[App] Starting clipify export...');
+
+      // Prepare form data for backend
+      const formData = new FormData();
+      formData.append('video', clipifyVideoFile);
+      formData.append('clips_json', JSON.stringify(clipData));
+
+      // Call backend export endpoint
+      const response = await fetch('http://localhost:8000/api/clipify/export-individual', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Export failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('[App] Clipify export response:', {
+        clipCount: result.clips?.length,
+        hasAnnotatedSource: !!result.annotated_source
+      });
+
+      // Download annotated source video
+      if (result.annotated_source) {
+        const annotatedBlob = base64ToBlob(result.annotated_source.data, 'video/mp4');
+        const downloadUrl = URL.createObjectURL(annotatedBlob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = result.annotated_source.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(downloadUrl);
+        console.log('[App] Downloaded annotated source:', result.annotated_source.filename);
+      }
+
+      // Clean up clipify state first
+      if (clipifyVideoUrl) {
+        URL.revokeObjectURL(clipifyVideoUrl);
+      }
+      setClipifyVideoFile(null);
+      setClipifyVideoUrl(null);
+      setClipifyVideoMetadata(null);
+
+      // Reset framing state for fresh start
+      resetSegments();
+      resetCrop();
+      resetHighlight();
+      resetHighlightRegions();
+      setSelectedLayer('playhead');
+
+      // Load extracted clips into Framing mode
+      if (result.clips && result.clips.length > 0) {
+        for (let i = 0; i < result.clips.length; i++) {
+          const clip = result.clips[i];
+
+          // Convert base64 to File object
+          const clipBlob = base64ToBlob(clip.data, 'video/mp4');
+          const clipFile = new File([clipBlob], clip.filename, { type: 'video/mp4' });
+
+          // Extract metadata from the clip
+          const clipMetadata = await extractVideoMetadata(clipFile);
+
+          // Add clipify-specific metadata
+          clipMetadata.clipifyName = clip.name;
+          clipMetadata.clipifyNotes = clip.notes;
+          clipMetadata.clipifyStartTime = clip.start_time;
+          clipMetadata.clipifyEndTime = clip.end_time;
+
+          // Add clip to clip manager
+          const newClipId = addClip(clipFile, clipMetadata);
+
+          // If this is the first clip, load it
+          if (i === 0) {
+            setVideoFile(clipFile);
+            await loadVideo(clipFile);
+            selectClip(newClipId);
+          }
+
+          console.log(`[App] Added clip ${i + 1}/${result.clips.length}: ${clip.name}`);
+        }
+      }
+
+      // Switch to framing mode
+      setEditorMode('framing');
+
+      console.log('[App] Clipify export complete, transitioned to Framing mode');
+
+    } catch (err) {
+      console.error('[App] Clipify export failed:', err);
+      alert(`Export failed: ${err.message}`);
+    }
+  }, [clipifyVideoFile, clipifyVideoUrl, base64ToBlob, resetSegments, resetCrop, resetHighlight, resetHighlightRegions, addClip, loadVideo, selectClip]);
+
+  /**
+   * Handle fullscreen toggle for Clipify mode
+   */
+  const handleClipifyToggleFullscreen = useCallback(() => {
+    if (!clipifyContainerRef.current) return;
+
+    if (!clipifyFullscreen) {
+      // Enter fullscreen
+      if (clipifyContainerRef.current.requestFullscreen) {
+        clipifyContainerRef.current.requestFullscreen();
+      }
+    } else {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  }, [clipifyFullscreen]);
+
+  /**
+   * Handle creating a clip from fullscreen overlay
+   */
+  const handleClipifyFullscreenCreateClip = useCallback((clipData) => {
+    // clipData: { startTime, duration, rating, notes }
+    const newRegion = addClipRegion(clipData.startTime, clipData.duration, clipData.notes, clipData.rating);
+    if (newRegion) {
+      seek(newRegion.startTime);
+    }
+    setShowClipifyOverlay(false);
+  }, [addClipRegion, seek]);
+
+  /**
+   * Handle updating an existing clip from fullscreen overlay
+   */
+  const handleClipifyFullscreenUpdateClip = useCallback((regionId, updates) => {
+    // updates: { duration, rating, notes }
+    updateClipRegion(regionId, updates);
+    setShowClipifyOverlay(false);
+  }, [updateClipRegion]);
+
+  /**
+   * Handle closing the fullscreen overlay without creating a clip
+   */
+  const handleClipifyOverlayClose = useCallback(() => {
+    setShowClipifyOverlay(false);
+  }, []);
+
+  /**
+   * Handle resuming playback from fullscreen overlay
+   */
+  const handleClipifyOverlayResume = useCallback(() => {
+    setShowClipifyOverlay(false);
+    togglePlay();
+  }, [togglePlay]);
+
+  /**
+   * Handle clipify region selection - selects the region AND seeks to its start
+   */
+  const handleSelectClipifyRegion = useCallback((regionId) => {
+    const region = clipRegions.find(r => r.id === regionId);
+    if (region) {
+      selectClipifyRegion(regionId);
+      seek(region.startTime);
+    }
+  }, [clipRegions, selectClipifyRegion, seek]);
+
+  /**
+   * Handle adding a clipify region - adds it AND seeks to its start
+   */
+  const handleAddClipifyRegion = useCallback((startTime, duration, notes, rating) => {
+    const newRegion = addClipRegion(startTime, duration, notes, rating);
+    if (newRegion) {
+      seek(newRegion.startTime);
+    }
+    return newRegion;
+  }, [addClipRegion, seek]);
+
+  /**
    * Handle clip selection from sidebar
    */
   const handleSelectClip = useCallback(async (clipId) => {
@@ -594,6 +891,43 @@ function App() {
       videoRef.current.muted = !includeAudio;
     }
   }, [includeAudio, videoRef]);
+
+  // Clipify mode: sync playback speed with video element
+  useEffect(() => {
+    if (editorMode === 'clipify' && videoRef.current) {
+      videoRef.current.playbackRate = clipifyPlaybackSpeed;
+    }
+  }, [clipifyPlaybackSpeed, editorMode, videoRef]);
+
+  // Clipify mode: detect fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isFullscreen = !!document.fullscreenElement;
+      setClipifyFullscreen(isFullscreen);
+      // Close overlay when exiting fullscreen
+      if (!isFullscreen) {
+        setShowClipifyOverlay(false);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // Clipify mode: show overlay when TRANSITIONING from playing to paused while in fullscreen
+  // (not when entering fullscreen while already paused)
+  useEffect(() => {
+    // Detect pause transition: was playing, now paused
+    const justPaused = wasPlayingRef.current && !isPlaying;
+
+    // Update ref for next render
+    wasPlayingRef.current = isPlaying;
+
+    // Only show overlay when pause transition happens while in fullscreen
+    if (editorMode === 'clipify' && clipifyFullscreen && justPaused) {
+      setShowClipifyOverlay(true);
+    }
+  }, [editorMode, clipifyFullscreen, isPlaying]);
 
   // DERIVED STATE: Single source of truth
   // - If dragging: show live preview (dragCrop)
@@ -1121,8 +1455,14 @@ function App() {
   // Keyboard handler: Space bar toggles play/pause
   useEffect(() => {
     const handleKeyDown = (event) => {
-      // Only handle spacebar if any video is loaded (framing or overlay mode)
-      const hasVideo = videoUrl || effectiveOverlayVideoUrl;
+      // Don't handle if typing in an input or textarea
+      const tagName = event.target.tagName.toLowerCase();
+      if (tagName === 'input' || tagName === 'textarea') {
+        return;
+      }
+
+      // Only handle spacebar if any video is loaded (framing, overlay, or clipify mode)
+      const hasVideo = videoUrl || effectiveOverlayVideoUrl || clipifyVideoUrl;
       if (event.code === 'Space' && hasVideo) {
         // Prevent default spacebar behavior (page scroll)
         event.preventDefault();
@@ -1137,7 +1477,7 @@ function App() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [videoUrl, effectiveOverlayVideoUrl, togglePlay]);
+  }, [videoUrl, effectiveOverlayVideoUrl, clipifyVideoUrl, togglePlay]);
 
   // Keyboard handler: Ctrl-C/Cmd-C copies crop, Ctrl-V/Cmd-V pastes crop
   useEffect(() => {
@@ -1565,7 +1905,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
-      {/* Sidebar - only show when clips exist */}
+      {/* Sidebar - Framing mode (when clips exist) */}
       {hasClips && clips.length > 0 && editorMode === 'framing' && (
         <ClipSelectorSidebar
           clips={clips}
@@ -1576,6 +1916,23 @@ function App() {
           onReorderClips={reorderClips}
           globalTransition={globalTransition}
           onTransitionChange={setGlobalTransition}
+        />
+      )}
+
+      {/* Sidebar - Clipify mode */}
+      {editorMode === 'clipify' && clipifyVideoUrl && (
+        <ClipsSidePanel
+          clipRegions={clipRegions}
+          regionsWithLayout={clipifyRegionsWithLayout}
+          selectedRegionId={clipifySelectedRegionId}
+          onSelectRegion={handleSelectClipifyRegion}
+          onUpdateRegion={updateClipRegion}
+          onDeleteRegion={deleteClipRegion}
+          maxNotesLength={CLIPIFY_MAX_NOTES_LENGTH}
+          hasClips={hasClipifyClips}
+          clipCount={clipifyClipCount}
+          videoDuration={clipifyVideoMetadata?.duration}
+          onExport={() => handleClipifyExport(getClipifyExportData())}
         />
       )}
 
@@ -1603,18 +1960,21 @@ function App() {
                   } : updateAspectRatio}
                 />
               )}
-              {/* Mode toggle - only show when video is loaded */}
-              {videoUrl && (
+              {/* Mode toggle - always show when any video is loaded */}
+              {(videoUrl || clipifyVideoUrl) && (
                 <ModeSwitcher
                   mode={editorMode}
                   onModeChange={handleModeChange}
+                  hasClipifyVideo={!!clipifyVideoUrl}
+                  hasFramingVideo={!!videoUrl}
                 />
               )}
               {/* Add button - only show when no video loaded (Framing mode has Add in ClipSelectorSidebar) */}
-              {!videoUrl && (
+              {!videoUrl && editorMode !== 'clipify' && (
                 <FileUpload
                   onFileSelect={handleFileSelect}
                   onFramedVideoSelect={handleFramedVideoSelect}
+                  onGameVideoSelect={handleGameVideoSelect}
                   isLoading={isLoading}
                 />
               )}
@@ -1629,8 +1989,8 @@ function App() {
           </div>
         )}
 
-        {/* Video Metadata */}
-        {metadata && (
+        {/* Video Metadata - Framing/Overlay modes */}
+        {metadata && editorMode !== 'clipify' && (
           <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
             <div className="flex items-center justify-between text-sm text-gray-300">
               <span className="font-semibold text-white">{metadata.fileName}</span>
@@ -1658,6 +2018,31 @@ function App() {
           </div>
         )}
 
+        {/* Video Metadata - Clipify mode */}
+        {editorMode === 'clipify' && clipifyVideoMetadata && !clipifyFullscreen && (
+          <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
+            <div className="flex items-center justify-between text-sm text-gray-300">
+              <span className="font-semibold text-white truncate max-w-md" title={clipifyVideoMetadata.fileName}>
+                {clipifyVideoMetadata.fileName}
+              </span>
+              <div className="flex space-x-6">
+                <span>
+                  <span className="text-gray-400">Resolution:</span>{' '}
+                  {clipifyVideoMetadata.resolution}
+                </span>
+                <span>
+                  <span className="text-gray-400">Format:</span>{' '}
+                  {clipifyVideoMetadata.format?.toUpperCase() || 'MP4'}
+                </span>
+                <span>
+                  <span className="text-gray-400">Size:</span>{' '}
+                  {clipifyVideoMetadata.sizeFormatted || `${(clipifyVideoMetadata.size / (1024 * 1024)).toFixed(2)} MB`}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Main Editor Area */}
         <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
           {/* Controls Bar */}
@@ -1677,10 +2062,19 @@ function App() {
           )}
 
           {/* Video Player with mode-specific overlays */}
-          {/* In Overlay mode, use overlay video if available (or pass-through if no edits) */}
+          {/* Use appropriate video URL based on mode: clipify -> overlay -> framing */}
+          {/* Wrap in ref container for clipify fullscreen */}
+          <div
+            ref={clipifyContainerRef}
+            className={`relative ${editorMode === 'clipify' ? 'bg-black' : ''}`}
+          >
           <VideoPlayer
             videoRef={videoRef}
-            videoUrl={editorMode === 'overlay' && effectiveOverlayVideoUrl ? effectiveOverlayVideoUrl : videoUrl}
+            videoUrl={
+              editorMode === 'clipify' && clipifyVideoUrl ? clipifyVideoUrl :
+              editorMode === 'overlay' && effectiveOverlayVideoUrl ? effectiveOverlayVideoUrl :
+              videoUrl
+            }
             handlers={handlers}
             onFileSelect={handleFileSelect}
             overlays={[
@@ -1699,6 +2093,35 @@ function App() {
                   selectedKeyframeIndex={selectedCropKeyframeIndex}
                 />
               ),
+              // Clipify mode overlay (NotesOverlay) - shows notes for region at playhead
+              editorMode === 'clipify' && clipifyVideoUrl && (() => {
+                const regionAtPlayhead = getClipifyRegionAtTime(currentTime);
+                return regionAtPlayhead?.notes ? (
+                  <NotesOverlay
+                    key="clipify-notes"
+                    notes={regionAtPlayhead.notes}
+                    isVisible={true}
+                  />
+                ) : null;
+              })(),
+              // Clipify mode fullscreen overlay - appears when paused in fullscreen
+              // If playhead is inside an existing clip, edit that clip; otherwise create new
+              editorMode === 'clipify' && clipifyVideoUrl && showClipifyOverlay && (() => {
+                const existingClip = getClipifyRegionAtTime(currentTime);
+                return (
+                  <ClipifyFullscreenOverlay
+                    key="clipify-fullscreen"
+                    isVisible={showClipifyOverlay}
+                    currentTime={currentTime}
+                    videoDuration={clipifyVideoMetadata?.duration || 0}
+                    existingClip={existingClip}
+                    onCreateClip={handleClipifyFullscreenCreateClip}
+                    onUpdateClip={handleClipifyFullscreenUpdateClip}
+                    onResume={handleClipifyOverlayResume}
+                    onClose={handleClipifyOverlayClose}
+                  />
+                );
+              })(),
               // Overlay mode overlay (HighlightOverlay) - uses overlay video metadata
               // Only render when we have a currentHighlightState (playhead is in a region)
               editorMode === 'overlay' && effectiveOverlayVideoUrl && currentHighlightState && effectiveOverlayMetadata && (
@@ -1734,7 +2157,10 @@ function App() {
             panOffset={panOffset}
             onZoomChange={zoomByWheel}
             onPanChange={updatePan}
+            isFullscreen={editorMode === 'clipify' && clipifyFullscreen}
+            isInClipRegion={editorMode === 'clipify' && !!getClipifyRegionAtTime(currentTime)}
           />
+          </div>
 
           {/* Mode-specific content (overlays + timelines) */}
           {videoUrl && editorMode === 'framing' && (
@@ -1829,6 +2255,21 @@ function App() {
             />
           )}
 
+          {/* Clipify mode - timeline for extracting clips */}
+          {clipifyVideoUrl && editorMode === 'clipify' && (
+            <ClipifyMode
+              currentTime={currentTime}
+              duration={clipifyVideoMetadata?.duration || 0}
+              isPlaying={isPlaying}
+              onSeek={seek}
+              regions={clipifyRegionsWithLayout}
+              selectedRegionId={clipifySelectedRegionId}
+              onSelectRegion={handleSelectClipifyRegion}
+              onDeleteRegion={deleteClipRegion}
+              onAddClipRegion={handleAddClipifyRegion}
+            />
+          )}
+
           {/* Message when in Overlay mode but export is required */}
           {editorMode === 'overlay' && !effectiveOverlayVideoUrl && videoUrl && (hasFramingEdits || hasMultipleClips) && (
             <div className="mt-6 bg-purple-900/30 border border-purple-500/50 rounded-lg p-6 text-center">
@@ -1850,12 +2291,34 @@ function App() {
           )}
 
           {/* Controls - show for current mode's video */}
+          {/* Clipify mode uses ClipifyControls with speed and fullscreen */}
+          {editorMode === 'clipify' && clipifyVideoUrl && (
+            <div className="mt-6">
+              <ClipifyControls
+                isPlaying={isPlaying}
+                currentTime={currentTime}
+                duration={clipifyVideoMetadata?.duration || duration}
+                onTogglePlay={togglePlay}
+                onStepForward={stepForward}
+                onStepBackward={stepBackward}
+                onRestart={restart}
+                playbackSpeed={clipifyPlaybackSpeed}
+                onSpeedChange={setClipifyPlaybackSpeed}
+                isFullscreen={clipifyFullscreen}
+                onToggleFullscreen={handleClipifyToggleFullscreen}
+              />
+            </div>
+          )}
+          {/* Framing and Overlay modes use regular Controls */}
           {((editorMode === 'framing' && videoUrl) || (editorMode === 'overlay' && effectiveOverlayVideoUrl)) && (
             <div className="mt-6">
               <Controls
                 isPlaying={isPlaying}
                 currentTime={currentTime}
-                duration={editorMode === 'overlay' ? (effectiveOverlayMetadata?.duration || duration) : duration}
+                duration={
+                  editorMode === 'overlay' ? (effectiveOverlayMetadata?.duration || duration) :
+                  duration
+                }
                 onTogglePlay={togglePlay}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}

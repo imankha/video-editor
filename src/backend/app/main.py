@@ -33,7 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import routers and websocket handler
-from app.routers import health_router, export_router, detection_router
+from app.routers import health_router, export_router, detection_router, clipify_router
 from app.websocket import websocket_export_progress
 
 # Environment detection
@@ -63,6 +63,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(export_router)
 app.include_router(detection_router)
+app.include_router(clipify_router)
 
 
 # WebSocket endpoint for export progress

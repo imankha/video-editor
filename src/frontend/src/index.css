@@ -12,3 +12,84 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Fullscreen styles for Clipify mode */
+:fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background-color: black !important;
+}
+
+:-webkit-full-screen {
+  width: 100vw !important;
+  height: 100vh !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background-color: black !important;
+}
+
+/* VideoPlayer containers need to expand in fullscreen */
+:fullscreen .video-player-container {
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  max-height: 100vh !important;
+}
+
+:fullscreen .video-container {
+  width: 100% !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  max-height: 100vh !important;
+}
+
+:-webkit-full-screen .video-player-container {
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  max-height: 100vh !important;
+}
+
+:-webkit-full-screen .video-container {
+  width: 100% !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  max-height: 100vh !important;
+}
+
+:fullscreen video {
+  max-width: 100% !important;
+  max-height: 100vh !important;
+  object-fit: contain !important;
+}
+
+:-webkit-full-screen video {
+  max-width: 100% !important;
+  max-height: 100vh !important;
+  object-fit: contain !important;
+}
+
+/* Ensure fullscreen overlays cover the entire screen */
+:fullscreen .absolute.inset-0 {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+}
+
+:-webkit-full-screen .absolute.inset-0 {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+}
+
