@@ -4,7 +4,7 @@ import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBa
 import ClipRegionLayer from './layers/ClipRegionLayer';
 
 /**
- * ClipifyTimeline - Mode-specific timeline for Clipify mode.
+ * AnnotateTimeline - Mode-specific timeline for Annotate mode.
  * Renders ClipRegionLayer within TimelineBase.
  *
  * This is a simpler timeline than Overlay mode:
@@ -12,7 +12,7 @@ import ClipRegionLayer from './layers/ClipRegionLayer';
  * - Clip regions layer with draggable start/end handles
  * - No zoom/trim complexity needed
  */
-export function ClipifyTimeline({
+export function AnnotateTimeline({
   // TimelineBase props
   currentTime,
   duration,
@@ -23,9 +23,8 @@ export function ClipifyTimeline({
   selectedRegionId,
   onSelectRegion,
   onDeleteRegion,
-  onTimelineClick,
 }) {
-  // Fixed layer height for Clipify (Video + Clips)
+  // Fixed layer height for Annotate (Video + Clips)
   // Video (h-12 = 3rem) + Clips (h-12 = 3rem) + margin (mt-1 = 0.25rem) + buffer
   const totalLayerHeight = '6.75rem';
 
@@ -59,7 +58,7 @@ export function ClipifyTimeline({
       layerLabels={layerLabels}
       totalLayerHeight={totalLayerHeight}
       isPlaying={isPlaying}
-      // Disable zoom/trim features for Clipify mode
+      // Disable zoom/trim features for Annotate mode
       timelineZoom={100}
       timelineScale={1}
       timelineScrollPosition={0}
@@ -73,7 +72,6 @@ export function ClipifyTimeline({
           selectedRegionId={selectedRegionId}
           onSelectRegion={onSelectRegion}
           onDeleteRegion={onDeleteRegion}
-          onTrackClick={onTimelineClick}
           edgePadding={EDGE_PADDING}
         />
       </div>
@@ -81,4 +79,4 @@ export function ClipifyTimeline({
   );
 }
 
-export default ClipifyTimeline;
+export default AnnotateTimeline;

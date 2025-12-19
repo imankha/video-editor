@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef } from 'react';
 
 // Rating to notation map
 const RATING_NOTATION = {
@@ -23,10 +23,13 @@ const RATING_COLORS = {
  * ClipRegionLayer - Timeline layer displaying clip markers with rating notation
  *
  * Interaction:
- * - Click empty area to add a new clip marker
  * - Click marker to select it
  * - Delete clips via sidebar (not by clicking)
  * - Shows rating notation: ?? (1), ? (2), !? (3), ! (4), !! (5)
+ *
+ * Clips are added via:
+ * - "Add Clip" button in controls bar (non-fullscreen)
+ * - Pausing in fullscreen mode
  */
 export default function ClipRegionLayer({
   regions = [],
@@ -34,38 +37,14 @@ export default function ClipRegionLayer({
   selectedRegionId,
   onSelectRegion,
   onDeleteRegion,
-  onTrackClick,
   edgePadding = 20
 }) {
   const trackRef = useRef(null);
-
-  // Convert pixel X position to time
-  const pixelToTime = useCallback((clientX) => {
-    if (!trackRef.current || !duration) return 0;
-    const rect = trackRef.current.getBoundingClientRect();
-    const usableWidth = rect.width - (edgePadding * 2);
-    const x = clientX - rect.left - edgePadding;
-    const clampedX = Math.max(0, Math.min(x, usableWidth));
-    return (clampedX / usableWidth) * duration;
-  }, [edgePadding, duration]);
 
   if (!duration) return null;
 
   // Convert time to percentage position
   const timeToPercent = (time) => (time / duration) * 100;
-
-  // Handle click on empty area to add new clip
-  const handleTrackClick = (e) => {
-    // Don't handle if clicking on a marker
-    if (e.target.closest('.clip-marker')) {
-      return;
-    }
-    // Add new clip at clicked time
-    if (onTrackClick) {
-      const clickedTime = pixelToTime(e.clientX);
-      onTrackClick(clickedTime);
-    }
-  };
 
   // Handle marker click - select the marker
   const handleMarkerClick = (e, regionId) => {
@@ -80,8 +59,7 @@ export default function ClipRegionLayer({
   return (
     <div
       ref={trackRef}
-      className="relative h-12 bg-gray-800 rounded cursor-pointer"
-      onClick={handleTrackClick}
+      className="relative h-12 bg-gray-800 rounded"
       style={{
         paddingLeft: `${edgePadding}px`,
         paddingRight: `${edgePadding}px`,
@@ -140,7 +118,7 @@ export default function ClipRegionLayer({
         {/* Empty state message */}
         {regions.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-sm">
-            Click to add a clip marker
+            Use "Add Clip" button or pause in fullscreen to add clips
           </div>
         )}
       </div>

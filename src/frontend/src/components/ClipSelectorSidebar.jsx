@@ -177,27 +177,27 @@ export function ClipSelectorSidebar({
 
               {/* Clip info */}
               <div className="flex-1 min-w-0">
-                {/* Clip name - use clipify name if available */}
+                {/* Clip name - use annotate name if available */}
                 <div
                   className="text-sm text-white truncate"
-                  title={clip.clipifyName || clip.fileName}
+                  title={clip.annotateName || clip.fileName}
                 >
-                  {clip.clipifyName || clip.fileNameDisplay || clip.fileName}
+                  {clip.annotateName || clip.fileNameDisplay || clip.fileName}
                 </div>
                 {/* Duration and source info */}
                 <div className="flex items-center gap-1.5 text-xs text-gray-500">
                   <span>{formatDuration(clip.duration)}</span>
-                  {/* Show notes indicator if clip has clipify notes */}
-                  {clip.clipifyNotes && (
+                  {/* Show notes indicator if clip has annotate notes */}
+                  {clip.annotateNotes && (
                     <span
                       className="inline-flex items-center text-purple-400"
-                      title={clip.clipifyNotes}
+                      title={clip.annotateNotes}
                     >
                       <MessageSquare size={10} className="mr-0.5" />
                       <span className="truncate max-w-[60px]">
-                        {clip.clipifyNotes.length > 15
-                          ? clip.clipifyNotes.slice(0, 15) + '...'
-                          : clip.clipifyNotes}
+                        {clip.annotateNotes.length > 15
+                          ? clip.annotateNotes.slice(0, 15) + '...'
+                          : clip.annotateNotes}
                       </span>
                     </span>
                   )}

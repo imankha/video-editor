@@ -117,12 +117,12 @@ function TagSelector({ selectedTags, onTagToggle }) {
  * Editable fields:
  * - Star rating (1-5)
  * - Name
- * - Start time
+ * - End time (editable - this is where playhead was when clip was created)
  * - Duration (slider)
  * - Notes
  *
  * Read-only:
- * - End time (calculated from start + duration)
+ * - Start time (calculated from end - duration)
  */
 export function ClipDetailsEditor({
   region,
@@ -132,16 +132,16 @@ export function ClipDetailsEditor({
   videoDuration
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [startTimeInput, setStartTimeInput] = useState('');
+  const [endTimeInput, setEndTimeInput] = useState('');
 
   // Calculate current duration
   const clipDuration = region.endTime - region.startTime;
   const notesLength = region.notes?.length || 0;
 
-  // Sync start time input when region changes
+  // Sync end time input when region changes
   useEffect(() => {
-    setStartTimeInput(formatTimeForDisplay(region.startTime));
-  }, [region.startTime]);
+    setEndTimeInput(formatTimeForDisplay(region.endTime));
+  }, [region.endTime]);
 
   const handleNameChange = (e) => {
     onUpdate({ name: e.target.value });
@@ -169,17 +169,16 @@ export function ClipDetailsEditor({
     onUpdate({ tags: newTags, name: newName || region.name });
   };
 
-  const handleStartTimeChange = (e) => {
-    setStartTimeInput(e.target.value);
+  const handleEndTimeChange = (e) => {
+    setEndTimeInput(e.target.value);
   };
 
-  const handleStartTimeBlur = () => {
-    const newStartTime = parseTimeInput(startTimeInput);
-    // Clamp to valid range
-    const maxStart = Math.max(0, (videoDuration || Infinity) - MIN_CLIP_DURATION);
-    const clampedStart = Math.max(0, Math.min(newStartTime, maxStart));
-    onUpdate({ startTime: clampedStart });
-    setStartTimeInput(formatTimeForDisplay(clampedStart));
+  const handleEndTimeBlur = () => {
+    const newEndTime = parseTimeInput(endTimeInput);
+    // Clamp to valid range (must be at least MIN_CLIP_DURATION and at most videoDuration)
+    const clampedEnd = Math.max(MIN_CLIP_DURATION, Math.min(newEndTime, videoDuration || Infinity));
+    onUpdate({ endTime: clampedEnd });
+    setEndTimeInput(formatTimeForDisplay(clampedEnd));
   };
 
   const handleDurationChange = (e) => {
@@ -253,14 +252,14 @@ export function ClipDetailsEditor({
           />
         </div>
 
-        {/* Start Time (editable) */}
+        {/* End Time (editable) */}
         <div>
-          <label className="block text-gray-400 text-xs mb-1">Start Time</label>
+          <label className="block text-gray-400 text-xs mb-1">End Time</label>
           <input
             type="text"
-            value={startTimeInput}
-            onChange={handleStartTimeChange}
-            onBlur={handleStartTimeBlur}
+            value={endTimeInput}
+            onChange={handleEndTimeChange}
+            onBlur={handleEndTimeBlur}
             className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm font-mono focus:outline-none focus:border-green-500"
             placeholder="00:00.0"
           />
@@ -289,13 +288,13 @@ export function ClipDetailsEditor({
           </div>
         </div>
 
-        {/* End Time (calculated, read-only) */}
+        {/* Start Time (calculated, read-only) */}
         <div>
           <label className="block text-gray-400 text-xs mb-1">
-            End Time <span className="text-gray-500">(calculated)</span>
+            Start Time <span className="text-gray-500">(calculated)</span>
           </label>
           <div className="px-2 py-1.5 bg-gray-700/30 border border-gray-600/50 rounded text-gray-400 text-sm font-mono">
-            {formatTimeForDisplay(region.endTime)}
+            {formatTimeForDisplay(region.startTime)}
           </div>
         </div>
 

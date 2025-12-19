@@ -5,30 +5,30 @@ import { Crop, Sparkles, Scissors } from 'lucide-react';
  * ModeSwitcher - Tab toggle for switching between editor modes.
  *
  * Modes:
- * - Clipify: Extract clips from full game footage
+ * - Annotate: Extract clips from full game footage
  * - Framing: Crop, trim, and speed editing
  * - Overlay: Highlight and effect overlays
  *
- * @param {string} mode - Current mode ('clipify' | 'framing' | 'overlay')
+ * @param {string} mode - Current mode ('annotate' | 'framing' | 'overlay')
  * @param {function} onModeChange - Callback when mode changes
  * @param {boolean} disabled - Whether the switcher is disabled
- * @param {boolean} hasClipifyVideo - Whether a clipify video is loaded
+ * @param {boolean} hasAnnotateVideo - Whether an annotate video is loaded
  * @param {boolean} hasFramingVideo - Whether a framing video is loaded
  */
 export function ModeSwitcher({
   mode,
   onModeChange,
   disabled = false,
-  hasClipifyVideo = false,
+  hasAnnotateVideo = false,
   hasFramingVideo = false,
 }) {
   const modes = [
     {
-      id: 'clipify',
-      label: 'Clipify',
+      id: 'annotate',
+      label: 'Annotate',
       icon: Scissors,
       description: 'Extract clips from game',
-      available: hasClipifyVideo,
+      available: hasAnnotateVideo,
       color: 'green',
     },
     {

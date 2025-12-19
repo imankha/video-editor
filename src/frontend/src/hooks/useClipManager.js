@@ -106,11 +106,11 @@ export function useClipManager() {
       sourceWidth: metadata.width,
       sourceHeight: metadata.height,
       framerate: metadata.framerate || 30,
-      // Clipify metadata (if clip came from Clipify mode)
-      clipifyName: metadata.clipifyName || null,
-      clipifyNotes: metadata.clipifyNotes || null,
-      clipifyStartTime: metadata.clipifyStartTime || null,
-      clipifyEndTime: metadata.clipifyEndTime || null,
+      // Annotate metadata (if clip came from Annotate mode)
+      annotateName: metadata.annotateName || null,
+      annotateNotes: metadata.annotateNotes || null,
+      annotateStartTime: metadata.annotateStartTime || null,
+      annotateEndTime: metadata.annotateEndTime || null,
       // Initialize with empty state - will be populated when clip is first selected
       segments: {
         boundaries: [0, metadata.duration],

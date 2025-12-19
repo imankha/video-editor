@@ -1,8 +1,8 @@
 """
-Clipify endpoints for the Video Editor API.
+Annotate endpoints for the Video Editor API.
 
 This router handles clip extraction from full game footage:
-- /api/clipify/export - Export clips from source video and create annotated source
+- /api/annotate/export - Export clips from source video and create annotated source
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
@@ -23,7 +23,7 @@ import zipfile
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/clipify", tags=["clipify"])
+router = APIRouter(prefix="/api/annotate", tags=["annotate"])
 
 
 def sanitize_filename(name: str) -> str:
@@ -129,7 +129,7 @@ async def create_annotated_source(
     """
     # Build clip metadata JSON
     clips_metadata = {
-        'clipify_version': '1.0',
+        'annotate_version': '1.0',
         'original_filename': original_filename,
         'exported_at': datetime.utcnow().isoformat(),
         'clips': [
@@ -225,7 +225,7 @@ async def export_clips(
             raise HTTPException(status_code=400, detail=f"Clip {i} has invalid time range")
 
     # Create temp directory for processing
-    temp_dir = tempfile.mkdtemp(prefix="clipify_")
+    temp_dir = tempfile.mkdtemp(prefix="annotate_")
     logger.info(f"Created temp directory: {temp_dir}")
 
     try:
@@ -300,7 +300,7 @@ async def export_clips(
             zip_buffer,
             media_type="application/zip",
             headers={
-                "Content-Disposition": f"attachment; filename=clipify_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+                "Content-Disposition": f"attachment; filename=annotate_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
             },
             background=BackgroundTask(cleanup_temp_dir, temp_dir)
         )
@@ -339,7 +339,7 @@ async def export_clips_individual(
         raise HTTPException(status_code=400, detail="No clips defined")
 
     # Create temp directory for processing
-    temp_dir = tempfile.mkdtemp(prefix="clipify_")
+    temp_dir = tempfile.mkdtemp(prefix="annotate_")
 
     try:
         # Save uploaded video

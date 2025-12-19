@@ -92,12 +92,12 @@ See individual phase docs for implementation details (useful as reference for si
 
 ---
 
-#### Phase B: Clipify Mode (THEN)
+#### Phase B: Annotate Mode (THEN)
 **Goal**: New workflow mode for extracting clips from full game footage
 
 **Features**:
 - New "Add Game" button alongside "Add Clips" in no-videos state
-- Import full game video into Clipify mode (pre-framing workflow)
+- Import full game video into Annotate mode (pre-framing workflow)
 - Define clip regions with description metadata
 - Region levers to set start/end boundaries for each clip
 - Export creates individual clip files with embedded metadata
@@ -106,10 +106,10 @@ See individual phase docs for implementation details (useful as reference for si
 
 **Workflow**:
 ```
-[Add Game] → Clipify → Export Clips → Framing (with clips) → Overlay → Export
+[Add Game] → Annotate → Export Clips → Framing (with clips) → Overlay → Export
 ```
 
-**Why Important**: Users often start with full game footage. Clipify provides a streamlined way to extract the moments they want to highlight.
+**Why Important**: Users often start with full game footage. Annotate provides a streamlined way to extract the moments they want to highlight.
 
 ---
 
@@ -180,9 +180,9 @@ See `cloudflare_runpod_deploy_package/` for Terraform and Wrangler configs.
 - [ ] Text can be positioned, styled, and animated
 - [ ] Text appears correctly in export
 
-### Phase B (Clipify Mode)
+### Phase B (Annotate Mode)
 - [ ] "Add Game" button visible alongside "Add Clips"
-- [ ] Full game video imports into Clipify mode
+- [ ] Full game video imports into Annotate mode
 - [ ] Can add clip regions at playhead
 - [ ] Can adjust region boundaries with levers
 - [ ] Can add description to each clip
@@ -219,7 +219,7 @@ docs/
 │
 ├── ACTIVE/                          # Current development specs
 │   ├── PHASE-A-OVERLAY-IMPROVEMENTS.md  # Click-to-track, ball, text overlays
-│   ├── PHASE-B-CLIPIFY.md               # Clipify mode for game footage
+│   ├── PHASE-B-ANNOTATE.md              # Annotate mode for game footage
 │   └── PHASE-C-DEPLOYMENT.md            # Cloudflare + RunPod
 │
 └── REFERENCE/                       # Supplementary docs

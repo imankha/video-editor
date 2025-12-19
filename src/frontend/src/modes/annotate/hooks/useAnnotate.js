@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { formatTimeSimple } from '../../../utils/timeFormat';
 
 /**
- * useClipify - Manages clip regions for extracting clips from full game footage
+ * useAnnotate - Manages clip regions for extracting clips from full game footage
  *
  * DATA MODEL:
  * - clipRegions: Array of clip region objects, each with:
@@ -69,7 +69,7 @@ function generateClipId() {
   return `clip_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-export default function useClipify(videoMetadata) {
+export default function useAnnotate(videoMetadata) {
   // Clip regions
   const [clipRegions, setClipRegions] = useState([]);
 
@@ -87,7 +87,7 @@ export default function useClipify(videoMetadata) {
    */
   useEffect(() => {
     if (videoMetadata?.duration) {
-      console.log('[useClipify] Auto-initializing with duration:', videoMetadata.duration);
+      console.log('[useAnnotate] Auto-initializing with duration:', videoMetadata.duration);
       setDuration(videoMetadata.duration);
     }
   }, [videoMetadata?.duration]);
@@ -149,9 +149,9 @@ export default function useClipify(videoMetadata) {
    * @param {string} name - Optional clip name (auto-generated if not provided)
    */
   const addClipRegion = useCallback((startTime, customDuration = DEFAULT_CLIP_DURATION, notes = '', rating = DEFAULT_RATING, position = '', tags = [], name = '') => {
-    console.log('[useClipify] addClipRegion called with startTime:', startTime, 'duration:', duration, 'notes:', notes, 'rating:', rating, 'position:', position, 'tags:', tags, 'name:', name);
+    console.log('[useAnnotate] addClipRegion called with startTime:', startTime, 'duration:', duration, 'notes:', notes, 'rating:', rating, 'position:', position, 'tags:', tags, 'name:', name);
     if (!duration) {
-      console.warn('[useClipify] Cannot add clip region - no duration set');
+      console.warn('[useAnnotate] Cannot add clip region - no duration set');
       return null;
     }
 
@@ -199,6 +199,14 @@ export default function useClipify(videoMetadata) {
 
       const updated = { ...region };
 
+      // Handle end time update (recalculate start time based on current duration)
+      if (updates.endTime !== undefined) {
+        const currentDuration = region.endTime - region.startTime;
+        updated.endTime = Math.max(MIN_CLIP_DURATION, Math.min(updates.endTime, duration || Infinity));
+        // Recalculate start time to maintain duration
+        updated.startTime = Math.max(0, updated.endTime - currentDuration);
+      }
+
       // Handle start time update (recalculate end time based on current duration)
       if (updates.startTime !== undefined) {
         const currentDuration = region.endTime - region.startTime;
@@ -207,10 +215,15 @@ export default function useClipify(videoMetadata) {
         updated.endTime = Math.min(updated.startTime + currentDuration, duration || Infinity);
       }
 
-      // Handle duration update (recalculate end time)
+      // Handle duration update (recalculate start time from end - duration)
       if (updates.duration !== undefined) {
         const clampedDuration = Math.max(MIN_CLIP_DURATION, Math.min(updates.duration, MAX_CLIP_DURATION));
-        updated.endTime = Math.min(region.startTime + clampedDuration, duration || Infinity);
+        // Keep end time fixed, adjust start time
+        updated.startTime = Math.max(0, region.endTime - clampedDuration);
+        // If start would go below 0, adjust end time instead
+        if (updated.startTime === 0) {
+          updated.endTime = Math.min(clampedDuration, duration || Infinity);
+        }
       }
 
       // Handle name update

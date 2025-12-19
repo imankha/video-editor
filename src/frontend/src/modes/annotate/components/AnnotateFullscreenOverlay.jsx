@@ -92,7 +92,7 @@ function TagSelector({ selectedTags, onTagToggle }) {
 }
 
 /**
- * ClipifyFullscreenOverlay - Overlay that appears when paused in fullscreen
+ * AnnotateFullscreenOverlay - Overlay that appears when paused in fullscreen
  *
  * Features:
  * - Quick clip creation form (or edit existing clip if playhead is in a clip)
@@ -108,7 +108,7 @@ function TagSelector({ selectedTags, onTagToggle }) {
  * When existingClip is provided, we're editing that clip.
  * Otherwise, we're creating a new clip at currentTime.
  */
-export function ClipifyFullscreenOverlay({
+export function AnnotateFullscreenOverlay({
   isVisible,
   currentTime,
   videoDuration,
@@ -216,9 +216,10 @@ export function ClipifyFullscreenOverlay({
         notes,
       });
     } else {
-      // Create new clip
+      // Create new clip - currentTime is the END time, so start = end - duration
+      const calculatedStartTime = Math.max(0, currentTime - duration);
       const clipData = {
-        startTime: currentTime,
+        startTime: calculatedStartTime,
         duration,
         rating,
         tags: selectedTags,
@@ -238,9 +239,11 @@ export function ClipifyFullscreenOverlay({
     onResume();
   };
 
-  // Calculate end time for display - use existing clip's start time if editing
-  const startTime = isEditMode ? existingClip.startTime : currentTime;
-  const endTime = Math.min(startTime + duration, videoDuration);
+  // Calculate times for display
+  // For new clips: currentTime is the END time, start = end - duration
+  // For editing: use existing clip's start time
+  const endTime = isEditMode ? existingClip.endTime : currentTime;
+  const startTime = isEditMode ? existingClip.startTime : Math.max(0, currentTime - duration);
 
   if (!isVisible) return null;
 
@@ -357,4 +360,4 @@ export function ClipifyFullscreenOverlay({
   );
 }
 
-export default ClipifyFullscreenOverlay;
+export default AnnotateFullscreenOverlay;

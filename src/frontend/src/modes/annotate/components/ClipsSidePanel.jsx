@@ -4,7 +4,7 @@ import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
 
 /**
- * ClipsSidePanel - Left sidebar for managing clip regions in Clipify mode
+ * ClipsSidePanel - Left sidebar for managing clip regions in Annotate mode
  *
  * Matches ClipSelectorSidebar styling for visual consistency.
  * Clips are added by clicking on the timeline, not via button.

@@ -5,7 +5,7 @@ import React, { useRef, useState } from 'react';
  * @param {Object} props
  * @param {Function} props.onFileSelect - Callback when file is selected (for Framing mode)
  * @param {Function} props.onFramedVideoSelect - Callback when a pre-framed video is selected for Overlay mode
- * @param {Function} props.onGameVideoSelect - Callback when a game video is selected for Clipify mode
+ * @param {Function} props.onGameVideoSelect - Callback when a game video is selected for Annotate mode
  * @param {boolean} props.isLoading - Whether a file is currently loading
  */
 export function FileUpload({ onFileSelect, onFramedVideoSelect, onGameVideoSelect, isLoading }) {
@@ -202,13 +202,13 @@ export function FileUpload({ onFileSelect, onFramedVideoSelect, onGameVideoSelec
         </button>
       )}
 
-      {/* Add Game button (Clipify workflow - extract clips from full game) */}
+      {/* Add Game button (Annotate workflow - extract clips from full game) */}
       {onGameVideoSelect && (
         <button
           onClick={handleGameClick}
           disabled={isAnyLoading}
           className="px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
-          title="Import full game video to extract clips (Clipify mode)"
+          title="Import full game video to extract clips (Annotate mode)"
         >
           {isGameLoading ? (
             <>

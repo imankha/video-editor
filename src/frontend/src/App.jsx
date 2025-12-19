@@ -16,7 +16,7 @@ import { ModeSwitcher } from './components/shared/ModeSwitcher';
 // Mode-specific imports
 import { useCrop, useSegments, FramingMode, CropOverlay } from './modes/framing';
 import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay } from './modes/overlay';
-import { ClipifyMode, useClipify, ClipsSidePanel, NotesOverlay, ClipifyControls, ClipifyFullscreenOverlay } from './modes/clipify';
+import { AnnotateMode, useAnnotate, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from './modes/annotate';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
 import { extractVideoMetadata } from './utils/videoMetadata';
 
@@ -33,7 +33,7 @@ function App() {
   // Selected highlight keyframe time (when playhead is near a keyframe)
   const [selectedHighlightKeyframeTime, setSelectedHighlightKeyframeTime] = useState(null);
 
-  // Editor mode state ('framing' | 'overlay' | 'clipify')
+  // Editor mode state ('framing' | 'overlay' | 'annotate')
   const [editorMode, setEditorMode] = useState('framing');
 
   // Overlay mode video state (SEPARATE from framing video)
@@ -45,18 +45,18 @@ function App() {
   // Clip metadata for auto-generating highlight regions (from Framing export)
   const [overlayClipMetadata, setOverlayClipMetadata] = useState(null);
 
-  // Clipify mode video state (for extracting clips from full game footage)
-  const [clipifyVideoFile, setClipifyVideoFile] = useState(null);
-  const [clipifyVideoUrl, setClipifyVideoUrl] = useState(null);
-  const [clipifyVideoMetadata, setClipifyVideoMetadata] = useState(null);
+  // Annotate mode video state (for extracting clips from full game footage)
+  const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
+  const [annotateVideoUrl, setAnnotateVideoUrl] = useState(null);
+  const [annotateVideoMetadata, setAnnotateVideoMetadata] = useState(null);
 
-  // Clipify mode playback state
-  const [clipifyPlaybackSpeed, setClipifyPlaybackSpeed] = useState(1);
-  const [clipifyFullscreen, setClipifyFullscreen] = useState(false);
-  const [showClipifyOverlay, setShowClipifyOverlay] = useState(false);
+  // Annotate mode playback state
+  const [annotatePlaybackSpeed, setAnnotatePlaybackSpeed] = useState(1);
+  const [annotateFullscreen, setAnnotateFullscreen] = useState(false);
+  const [showAnnotateOverlay, setShowAnnotateOverlay] = useState(false);
 
   // Ref for fullscreen container
-  const clipifyContainerRef = useRef(null);
+  const annotateContainerRef = useRef(null);
 
   // Ref to track previous isPlaying state for detecting pause transitions
   const wasPlayingRef = useRef(false);
@@ -244,26 +244,26 @@ function App() {
     getTimelineScale,
   } = useTimelineZoom();
 
-  // Clipify mode state management (lifted to App level for sidebar/MVC pattern)
+  // Annotate mode state management (lifted to App level for sidebar/MVC pattern)
   const {
     clipRegions,
-    regionsWithLayout: clipifyRegionsWithLayout,
-    selectedRegionId: clipifySelectedRegionId,
-    selectedRegion: clipifySelectedRegion,
-    hasClips: hasClipifyClips,
-    clipCount: clipifyClipCount,
-    initialize: initializeClipify,
-    reset: resetClipify,
+    regionsWithLayout: annotateRegionsWithLayout,
+    selectedRegionId: annotateSelectedRegionId,
+    selectedRegion: annotateSelectedRegion,
+    hasClips: hasAnnotateClips,
+    clipCount: annotateClipCount,
+    initialize: initializeAnnotate,
+    reset: resetAnnotate,
     addClipRegion,
     updateClipRegion,
     deleteClipRegion,
-    selectRegion: selectClipifyRegion,
-    moveRegionStart: moveClipifyRegionStart,
-    moveRegionEnd: moveClipifyRegionEnd,
-    getRegionAtTime: getClipifyRegionAtTime,
-    getExportData: getClipifyExportData,
-    MAX_NOTES_LENGTH: CLIPIFY_MAX_NOTES_LENGTH,
-  } = useClipify(clipifyVideoMetadata);
+    selectRegion: selectAnnotateRegion,
+    moveRegionStart: moveAnnotateRegionStart,
+    moveRegionEnd: moveAnnotateRegionEnd,
+    getRegionAtTime: getAnnotateRegionAtTime,
+    getExportData: getAnnotateExportData,
+    MAX_NOTES_LENGTH: ANNOTATE_MAX_NOTES_LENGTH,
+  } = useAnnotate(annotateVideoMetadata);
 
   // Frame tolerance for selection - approximately 5 pixels on each side
   // Derived selection state - computed from playhead position and keyframes
@@ -501,8 +501,8 @@ function App() {
   };
 
   /**
-   * Handle game video selection for Clipify mode
-   * Transitions to clipify mode where user can extract clips from full game footage
+   * Handle game video selection for Annotate mode
+   * Transitions to annotate mode where user can extract clips from full game footage
    */
   const handleGameVideoSelect = async (file) => {
     if (!file) return;
@@ -517,20 +517,20 @@ function App() {
       // Create object URL for the video
       const videoUrl = URL.createObjectURL(file);
 
-      // Clean up any existing clipify video URL
-      if (clipifyVideoUrl) {
-        URL.revokeObjectURL(clipifyVideoUrl);
+      // Clean up any existing annotate video URL
+      if (annotateVideoUrl) {
+        URL.revokeObjectURL(annotateVideoUrl);
       }
 
-      // Set clipify state
-      setClipifyVideoFile(file);
-      setClipifyVideoUrl(videoUrl);
-      setClipifyVideoMetadata(videoMetadata);
+      // Set annotate state
+      setAnnotateVideoFile(file);
+      setAnnotateVideoUrl(videoUrl);
+      setAnnotateVideoMetadata(videoMetadata);
 
-      // Transition to clipify mode
-      setEditorMode('clipify');
+      // Transition to annotate mode
+      setEditorMode('annotate');
 
-      console.log('[App] Successfully transitioned to Clipify mode');
+      console.log('[App] Successfully transitioned to Annotate mode');
     } catch (err) {
       console.error('[App] Failed to process game video:', err);
       throw err; // Re-throw so FileUpload can handle the error
@@ -538,25 +538,25 @@ function App() {
   };
 
   /**
-   * Handle exiting Clipify mode
-   * Clears clipify state and returns to no-video state
+   * Handle exiting Annotate mode
+   * Clears annotate state and returns to no-video state
    */
-  const handleExitClipifyMode = useCallback(() => {
-    console.log('[App] Exiting Clipify mode');
+  const handleExitAnnotateMode = useCallback(() => {
+    console.log('[App] Exiting Annotate mode');
 
-    // Clean up clipify video URL
-    if (clipifyVideoUrl) {
-      URL.revokeObjectURL(clipifyVideoUrl);
+    // Clean up annotate video URL
+    if (annotateVideoUrl) {
+      URL.revokeObjectURL(annotateVideoUrl);
     }
 
-    // Clear clipify state
-    setClipifyVideoFile(null);
-    setClipifyVideoUrl(null);
-    setClipifyVideoMetadata(null);
+    // Clear annotate state
+    setAnnotateVideoFile(null);
+    setAnnotateVideoUrl(null);
+    setAnnotateVideoMetadata(null);
 
     // Return to framing mode (no video loaded state)
     setEditorMode('framing');
-  }, [clipifyVideoUrl]);
+  }, [annotateVideoUrl]);
 
   /**
    * Helper function to convert base64 string to Blob
@@ -572,29 +572,29 @@ function App() {
   }, []);
 
   /**
-   * Handle exporting clips from Clipify mode
+   * Handle exporting clips from Annotate mode
    * 1. Send clips to backend for cutting
    * 2. Download annotated source video to client
    * 3. Load cut clips into Framing mode
    */
-  const handleClipifyExport = useCallback(async (clipData) => {
-    console.log('[App] Clipify export requested with clips:', clipData);
+  const handleAnnotateExport = useCallback(async (clipData) => {
+    console.log('[App] Annotate export requested with clips:', clipData);
 
-    if (!clipifyVideoFile || !clipData || clipData.length === 0) {
+    if (!annotateVideoFile || !clipData || clipData.length === 0) {
       console.error('[App] Cannot export: no video or clips');
       return;
     }
 
     try {
-      console.log('[App] Starting clipify export...');
+      console.log('[App] Starting annotate export...');
 
       // Prepare form data for backend
       const formData = new FormData();
-      formData.append('video', clipifyVideoFile);
+      formData.append('video', annotateVideoFile);
       formData.append('clips_json', JSON.stringify(clipData));
 
       // Call backend export endpoint
-      const response = await fetch('http://localhost:8000/api/clipify/export-individual', {
+      const response = await fetch('http://localhost:8000/api/annotate/export-individual', {
         method: 'POST',
         body: formData,
       });
@@ -605,7 +605,7 @@ function App() {
       }
 
       const result = await response.json();
-      console.log('[App] Clipify export response:', {
+      console.log('[App] Annotate export response:', {
         clipCount: result.clips?.length,
         hasAnnotatedSource: !!result.annotated_source
       });
@@ -624,13 +624,13 @@ function App() {
         console.log('[App] Downloaded annotated source:', result.annotated_source.filename);
       }
 
-      // Clean up clipify state first
-      if (clipifyVideoUrl) {
-        URL.revokeObjectURL(clipifyVideoUrl);
+      // Clean up annotate state first
+      if (annotateVideoUrl) {
+        URL.revokeObjectURL(annotateVideoUrl);
       }
-      setClipifyVideoFile(null);
-      setClipifyVideoUrl(null);
-      setClipifyVideoMetadata(null);
+      setAnnotateVideoFile(null);
+      setAnnotateVideoUrl(null);
+      setAnnotateVideoMetadata(null);
 
       // Reset framing state for fresh start
       resetSegments();
@@ -651,11 +651,11 @@ function App() {
           // Extract metadata from the clip
           const clipMetadata = await extractVideoMetadata(clipFile);
 
-          // Add clipify-specific metadata
-          clipMetadata.clipifyName = clip.name;
-          clipMetadata.clipifyNotes = clip.notes;
-          clipMetadata.clipifyStartTime = clip.start_time;
-          clipMetadata.clipifyEndTime = clip.end_time;
+          // Add annotate-specific metadata
+          clipMetadata.annotateName = clip.name;
+          clipMetadata.annotateNotes = clip.notes;
+          clipMetadata.annotateStartTime = clip.start_time;
+          clipMetadata.annotateEndTime = clip.end_time;
 
           // Add clip to clip manager
           const newClipId = addClip(clipFile, clipMetadata);
@@ -674,24 +674,24 @@ function App() {
       // Switch to framing mode
       setEditorMode('framing');
 
-      console.log('[App] Clipify export complete, transitioned to Framing mode');
+      console.log('[App] Annotate export complete, transitioned to Framing mode');
 
     } catch (err) {
-      console.error('[App] Clipify export failed:', err);
+      console.error('[App] Annotate export failed:', err);
       alert(`Export failed: ${err.message}`);
     }
-  }, [clipifyVideoFile, clipifyVideoUrl, base64ToBlob, resetSegments, resetCrop, resetHighlight, resetHighlightRegions, addClip, loadVideo, selectClip]);
+  }, [annotateVideoFile, annotateVideoUrl, base64ToBlob, resetSegments, resetCrop, resetHighlight, resetHighlightRegions, addClip, loadVideo, selectClip]);
 
   /**
-   * Handle fullscreen toggle for Clipify mode
+   * Handle fullscreen toggle for Annotate mode
    */
-  const handleClipifyToggleFullscreen = useCallback(() => {
-    if (!clipifyContainerRef.current) return;
+  const handleAnnotateToggleFullscreen = useCallback(() => {
+    if (!annotateContainerRef.current) return;
 
-    if (!clipifyFullscreen) {
+    if (!annotateFullscreen) {
       // Enter fullscreen
-      if (clipifyContainerRef.current.requestFullscreen) {
-        clipifyContainerRef.current.requestFullscreen();
+      if (annotateContainerRef.current.requestFullscreen) {
+        annotateContainerRef.current.requestFullscreen();
       }
     } else {
       // Exit fullscreen
@@ -699,12 +699,25 @@ function App() {
         document.exitFullscreen();
       }
     }
-  }, [clipifyFullscreen]);
+  }, [annotateFullscreen]);
+
+  /**
+   * Handle Add Clip button click (non-fullscreen mode)
+   * Pauses video and shows the clip creation overlay
+   */
+  const handleAddClipFromButton = useCallback(() => {
+    // Pause the video
+    if (videoRef.current && !videoRef.current.paused) {
+      videoRef.current.pause();
+    }
+    // Show the overlay
+    setShowAnnotateOverlay(true);
+  }, []);
 
   /**
    * Handle creating a clip from fullscreen overlay
    */
-  const handleClipifyFullscreenCreateClip = useCallback((clipData) => {
+  const handleAnnotateFullscreenCreateClip = useCallback((clipData) => {
     // clipData: { startTime, duration, rating, notes, tags, name }
     const newRegion = addClipRegion(
       clipData.startTime,
@@ -718,54 +731,43 @@ function App() {
     if (newRegion) {
       seek(newRegion.startTime);
     }
-    setShowClipifyOverlay(false);
+    setShowAnnotateOverlay(false);
   }, [addClipRegion, seek]);
 
   /**
    * Handle updating an existing clip from fullscreen overlay
    */
-  const handleClipifyFullscreenUpdateClip = useCallback((regionId, updates) => {
+  const handleAnnotateFullscreenUpdateClip = useCallback((regionId, updates) => {
     // updates: { duration, rating, notes, tags, name }
     updateClipRegion(regionId, updates);
-    setShowClipifyOverlay(false);
+    setShowAnnotateOverlay(false);
   }, [updateClipRegion]);
 
   /**
    * Handle closing the fullscreen overlay without creating a clip
    */
-  const handleClipifyOverlayClose = useCallback(() => {
-    setShowClipifyOverlay(false);
+  const handleAnnotateOverlayClose = useCallback(() => {
+    setShowAnnotateOverlay(false);
   }, []);
 
   /**
    * Handle resuming playback from fullscreen overlay
    */
-  const handleClipifyOverlayResume = useCallback(() => {
-    setShowClipifyOverlay(false);
+  const handleAnnotateOverlayResume = useCallback(() => {
+    setShowAnnotateOverlay(false);
     togglePlay();
   }, [togglePlay]);
 
   /**
-   * Handle clipify region selection - selects the region AND seeks to its start
+   * Handle annotate region selection - selects the region AND seeks to its start
    */
-  const handleSelectClipifyRegion = useCallback((regionId) => {
+  const handleSelectAnnotateRegion = useCallback((regionId) => {
     const region = clipRegions.find(r => r.id === regionId);
     if (region) {
-      selectClipifyRegion(regionId);
+      selectAnnotateRegion(regionId);
       seek(region.startTime);
     }
-  }, [clipRegions, selectClipifyRegion, seek]);
-
-  /**
-   * Handle adding a clipify region - adds it AND seeks to its start
-   */
-  const handleAddClipifyRegion = useCallback((startTime, duration, notes, rating) => {
-    const newRegion = addClipRegion(startTime, duration, notes, rating);
-    if (newRegion) {
-      seek(newRegion.startTime);
-    }
-    return newRegion;
-  }, [addClipRegion, seek]);
+  }, [clipRegions, selectAnnotateRegion, seek]);
 
   /**
    * Handle clip selection from sidebar
@@ -900,21 +902,21 @@ function App() {
     }
   }, [includeAudio, videoRef]);
 
-  // Clipify mode: sync playback speed with video element
+  // Annotate mode: sync playback speed with video element
   useEffect(() => {
-    if (editorMode === 'clipify' && videoRef.current) {
-      videoRef.current.playbackRate = clipifyPlaybackSpeed;
+    if (editorMode === 'annotate' && videoRef.current) {
+      videoRef.current.playbackRate = annotatePlaybackSpeed;
     }
-  }, [clipifyPlaybackSpeed, editorMode, videoRef]);
+  }, [annotatePlaybackSpeed, editorMode, videoRef]);
 
-  // Clipify mode: detect fullscreen changes
+  // Annotate mode: detect fullscreen changes
   useEffect(() => {
     const handleFullscreenChange = () => {
       const isFullscreen = !!document.fullscreenElement;
-      setClipifyFullscreen(isFullscreen);
+      setAnnotateFullscreen(isFullscreen);
       // Close overlay when exiting fullscreen
       if (!isFullscreen) {
-        setShowClipifyOverlay(false);
+        setShowAnnotateOverlay(false);
       }
     };
 
@@ -922,7 +924,7 @@ function App() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Clipify mode: show overlay when TRANSITIONING from playing to paused while in fullscreen
+  // Annotate mode: show overlay when TRANSITIONING from playing to paused while in fullscreen
   // (not when entering fullscreen while already paused)
   useEffect(() => {
     // Detect pause transition: was playing, now paused
@@ -932,10 +934,10 @@ function App() {
     wasPlayingRef.current = isPlaying;
 
     // Only show overlay when pause transition happens while in fullscreen
-    if (editorMode === 'clipify' && clipifyFullscreen && justPaused) {
-      setShowClipifyOverlay(true);
+    if (editorMode === 'annotate' && annotateFullscreen && justPaused) {
+      setShowAnnotateOverlay(true);
     }
-  }, [editorMode, clipifyFullscreen, isPlaying]);
+  }, [editorMode, annotateFullscreen, isPlaying]);
 
   // DERIVED STATE: Single source of truth
   // - If dragging: show live preview (dragCrop)
@@ -1469,8 +1471,8 @@ function App() {
         return;
       }
 
-      // Only handle spacebar if any video is loaded (framing, overlay, or clipify mode)
-      const hasVideo = videoUrl || effectiveOverlayVideoUrl || clipifyVideoUrl;
+      // Only handle spacebar if any video is loaded (framing, overlay, or annotate mode)
+      const hasVideo = videoUrl || effectiveOverlayVideoUrl || annotateVideoUrl;
       if (event.code === 'Space' && hasVideo) {
         // Prevent default spacebar behavior (page scroll)
         event.preventDefault();
@@ -1485,7 +1487,7 @@ function App() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [videoUrl, effectiveOverlayVideoUrl, clipifyVideoUrl, togglePlay]);
+  }, [videoUrl, effectiveOverlayVideoUrl, annotateVideoUrl, togglePlay]);
 
   // Keyboard handler: Ctrl-C/Cmd-C copies crop, Ctrl-V/Cmd-V pastes crop
   useEffect(() => {
@@ -1927,20 +1929,20 @@ function App() {
         />
       )}
 
-      {/* Sidebar - Clipify mode */}
-      {editorMode === 'clipify' && clipifyVideoUrl && (
+      {/* Sidebar - Annotate mode */}
+      {editorMode === 'annotate' && annotateVideoUrl && (
         <ClipsSidePanel
           clipRegions={clipRegions}
-          regionsWithLayout={clipifyRegionsWithLayout}
-          selectedRegionId={clipifySelectedRegionId}
-          onSelectRegion={handleSelectClipifyRegion}
+          regionsWithLayout={annotateRegionsWithLayout}
+          selectedRegionId={annotateSelectedRegionId}
+          onSelectRegion={handleSelectAnnotateRegion}
           onUpdateRegion={updateClipRegion}
           onDeleteRegion={deleteClipRegion}
-          maxNotesLength={CLIPIFY_MAX_NOTES_LENGTH}
-          hasClips={hasClipifyClips}
-          clipCount={clipifyClipCount}
-          videoDuration={clipifyVideoMetadata?.duration}
-          onExport={() => handleClipifyExport(getClipifyExportData())}
+          maxNotesLength={ANNOTATE_MAX_NOTES_LENGTH}
+          hasClips={hasAnnotateClips}
+          clipCount={annotateClipCount}
+          videoDuration={annotateVideoMetadata?.duration}
+          onExport={() => handleAnnotateExport(getAnnotateExportData())}
         />
       )}
 
@@ -1969,16 +1971,16 @@ function App() {
                 />
               )}
               {/* Mode toggle - always show when any video is loaded */}
-              {(videoUrl || clipifyVideoUrl) && (
+              {(videoUrl || annotateVideoUrl) && (
                 <ModeSwitcher
                   mode={editorMode}
                   onModeChange={handleModeChange}
-                  hasClipifyVideo={!!clipifyVideoUrl}
+                  hasAnnotateVideo={!!annotateVideoUrl}
                   hasFramingVideo={!!videoUrl}
                 />
               )}
               {/* Add button - only show when no video loaded (Framing mode has Add in ClipSelectorSidebar) */}
-              {!videoUrl && editorMode !== 'clipify' && (
+              {!videoUrl && editorMode !== 'annotate' && (
                 <FileUpload
                   onFileSelect={handleFileSelect}
                   onFramedVideoSelect={handleFramedVideoSelect}
@@ -1998,7 +2000,7 @@ function App() {
         )}
 
         {/* Video Metadata - Framing/Overlay modes */}
-        {metadata && editorMode !== 'clipify' && (
+        {metadata && editorMode !== 'annotate' && (
           <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
             <div className="flex items-center justify-between text-sm text-gray-300">
               <span className="font-semibold text-white">{metadata.fileName}</span>
@@ -2026,25 +2028,25 @@ function App() {
           </div>
         )}
 
-        {/* Video Metadata - Clipify mode */}
-        {editorMode === 'clipify' && clipifyVideoMetadata && !clipifyFullscreen && (
+        {/* Video Metadata - Annotate mode */}
+        {editorMode === 'annotate' && annotateVideoMetadata && !annotateFullscreen && (
           <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
             <div className="flex items-center justify-between text-sm text-gray-300">
-              <span className="font-semibold text-white truncate max-w-md" title={clipifyVideoMetadata.fileName}>
-                {clipifyVideoMetadata.fileName}
+              <span className="font-semibold text-white truncate max-w-md" title={annotateVideoMetadata.fileName}>
+                {annotateVideoMetadata.fileName}
               </span>
               <div className="flex space-x-6">
                 <span>
                   <span className="text-gray-400">Resolution:</span>{' '}
-                  {clipifyVideoMetadata.resolution}
+                  {annotateVideoMetadata.resolution}
                 </span>
                 <span>
                   <span className="text-gray-400">Format:</span>{' '}
-                  {clipifyVideoMetadata.format?.toUpperCase() || 'MP4'}
+                  {annotateVideoMetadata.format?.toUpperCase() || 'MP4'}
                 </span>
                 <span>
                   <span className="text-gray-400">Size:</span>{' '}
-                  {clipifyVideoMetadata.sizeFormatted || `${(clipifyVideoMetadata.size / (1024 * 1024)).toFixed(2)} MB`}
+                  {annotateVideoMetadata.sizeFormatted || `${(annotateVideoMetadata.size / (1024 * 1024)).toFixed(2)} MB`}
                 </span>
               </div>
             </div>
@@ -2070,16 +2072,16 @@ function App() {
           )}
 
           {/* Video Player with mode-specific overlays */}
-          {/* Use appropriate video URL based on mode: clipify -> overlay -> framing */}
-          {/* Wrap in ref container for clipify fullscreen */}
+          {/* Use appropriate video URL based on mode: annotate -> overlay -> framing */}
+          {/* Wrap in ref container for annotate fullscreen */}
           <div
-            ref={clipifyContainerRef}
+            ref={annotateContainerRef}
             className="relative bg-gray-900 rounded-lg"
           >
           <VideoPlayer
             videoRef={videoRef}
             videoUrl={
-              editorMode === 'clipify' && clipifyVideoUrl ? clipifyVideoUrl :
+              editorMode === 'annotate' && annotateVideoUrl ? annotateVideoUrl :
               editorMode === 'overlay' && effectiveOverlayVideoUrl ? effectiveOverlayVideoUrl :
               videoUrl
             }
@@ -2101,34 +2103,34 @@ function App() {
                   selectedKeyframeIndex={selectedCropKeyframeIndex}
                 />
               ),
-              // Clipify mode overlay (NotesOverlay) - shows name and notes for region at playhead
-              editorMode === 'clipify' && clipifyVideoUrl && (() => {
-                const regionAtPlayhead = getClipifyRegionAtTime(currentTime);
+              // Annotate mode overlay (NotesOverlay) - shows name and notes for region at playhead
+              editorMode === 'annotate' && annotateVideoUrl && (() => {
+                const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
                 return (regionAtPlayhead?.name || regionAtPlayhead?.notes) ? (
                   <NotesOverlay
-                    key="clipify-notes"
+                    key="annotate-notes"
                     name={regionAtPlayhead.name}
                     notes={regionAtPlayhead.notes}
                     isVisible={true}
-                    isFullscreen={clipifyFullscreen}
+                    isFullscreen={annotateFullscreen}
                   />
                 ) : null;
               })(),
-              // Clipify mode fullscreen overlay - appears when paused in fullscreen
+              // Annotate mode fullscreen overlay - appears when paused in fullscreen
               // If playhead is inside an existing clip, edit that clip; otherwise create new
-              editorMode === 'clipify' && clipifyVideoUrl && showClipifyOverlay && (() => {
-                const existingClip = getClipifyRegionAtTime(currentTime);
+              editorMode === 'annotate' && annotateVideoUrl && showAnnotateOverlay && (() => {
+                const existingClip = getAnnotateRegionAtTime(currentTime);
                 return (
-                  <ClipifyFullscreenOverlay
-                    key="clipify-fullscreen"
-                    isVisible={showClipifyOverlay}
+                  <AnnotateFullscreenOverlay
+                    key="annotate-fullscreen"
+                    isVisible={showAnnotateOverlay}
                     currentTime={currentTime}
-                    videoDuration={clipifyVideoMetadata?.duration || 0}
+                    videoDuration={annotateVideoMetadata?.duration || 0}
                     existingClip={existingClip}
-                    onCreateClip={handleClipifyFullscreenCreateClip}
-                    onUpdateClip={handleClipifyFullscreenUpdateClip}
-                    onResume={handleClipifyOverlayResume}
-                    onClose={handleClipifyOverlayClose}
+                    onCreateClip={handleAnnotateFullscreenCreateClip}
+                    onUpdateClip={handleAnnotateFullscreenUpdateClip}
+                    onResume={handleAnnotateOverlayResume}
+                    onClose={handleAnnotateOverlayClose}
                   />
                 );
               })(),
@@ -2167,24 +2169,25 @@ function App() {
             panOffset={panOffset}
             onZoomChange={zoomByWheel}
             onPanChange={updatePan}
-            isFullscreen={editorMode === 'clipify' && clipifyFullscreen}
-            isInClipRegion={editorMode === 'clipify' && !!getClipifyRegionAtTime(currentTime)}
+            isFullscreen={editorMode === 'annotate' && annotateFullscreen}
+            isInClipRegion={editorMode === 'annotate' && !!getAnnotateRegionAtTime(currentTime)}
           />
           {/* Controls - inside video container to match video width */}
-          {/* Clipify mode uses ClipifyControls with speed and fullscreen */}
-          {editorMode === 'clipify' && clipifyVideoUrl && (
-            <ClipifyControls
+          {/* Annotate mode uses AnnotateControls with speed and fullscreen */}
+          {editorMode === 'annotate' && annotateVideoUrl && (
+            <AnnotateControls
               isPlaying={isPlaying}
               currentTime={currentTime}
-              duration={clipifyVideoMetadata?.duration || duration}
+              duration={annotateVideoMetadata?.duration || duration}
               onTogglePlay={togglePlay}
               onStepForward={stepForward}
               onStepBackward={stepBackward}
               onRestart={restart}
-              playbackSpeed={clipifyPlaybackSpeed}
-              onSpeedChange={setClipifyPlaybackSpeed}
-              isFullscreen={clipifyFullscreen}
-              onToggleFullscreen={handleClipifyToggleFullscreen}
+              playbackSpeed={annotatePlaybackSpeed}
+              onSpeedChange={setAnnotatePlaybackSpeed}
+              isFullscreen={annotateFullscreen}
+              onToggleFullscreen={handleAnnotateToggleFullscreen}
+              onAddClip={handleAddClipFromButton}
             />
           )}
           {/* Framing and Overlay modes use regular Controls */}
@@ -2297,18 +2300,17 @@ function App() {
             />
           )}
 
-          {/* Clipify mode - timeline for extracting clips */}
-          {clipifyVideoUrl && editorMode === 'clipify' && (
-            <ClipifyMode
+          {/* Annotate mode - timeline for extracting clips */}
+          {annotateVideoUrl && editorMode === 'annotate' && (
+            <AnnotateMode
               currentTime={currentTime}
-              duration={clipifyVideoMetadata?.duration || 0}
+              duration={annotateVideoMetadata?.duration || 0}
               isPlaying={isPlaying}
               onSeek={seek}
-              regions={clipifyRegionsWithLayout}
-              selectedRegionId={clipifySelectedRegionId}
-              onSelectRegion={handleSelectClipifyRegion}
+              regions={annotateRegionsWithLayout}
+              selectedRegionId={annotateSelectedRegionId}
+              onSelectRegion={handleSelectAnnotateRegion}
               onDeleteRegion={deleteClipRegion}
-              onAddClipRegion={handleAddClipifyRegion}
             />
           )}
 

@@ -12,7 +12,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Fullscreen styles for Clipify mode */
+/* Fullscreen styles for Annotate mode */
 :fullscreen {
   width: 100vw !important;
   height: 100vh !important;

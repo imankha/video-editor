@@ -22,7 +22,9 @@
       "Bash(netstat:*)",
       "Bash(powershell -Command \"Stop-Process -Id 13000 -Force\")",
       "Bash(timeout:*)",
-      "Bash(powershell -Command \"Invoke-RestMethod -Uri ''http://localhost:8000/api/detect/status'' -Method Get\")"
+      "Bash(powershell -Command \"Invoke-RestMethod -Uri ''http://localhost:8000/api/detect/status'' -Method Get\")",
+      "Bash(mv:*)",
+      "Bash(powershell -Command:*)"
     ],
     "deny": [],
     "ask": []

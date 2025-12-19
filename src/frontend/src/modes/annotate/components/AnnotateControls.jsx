@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Maximize, Minimize, Star } from 'lucide-react';
+import { Maximize, Minimize, Plus } from 'lucide-react';
 import { formatTime } from '../../../utils/timeFormat';
 
 // YouTube-style speed options
@@ -56,15 +56,16 @@ function SpeedControl({ speed, onSpeedChange }) {
 }
 
 /**
- * ClipifyControls - Extended controls for Clipify mode
+ * AnnotateControls - Extended controls for Annotate mode
  *
  * Features:
  * - Play/pause, step forward/backward, restart
  * - Time display
  * - Playback speed control (YouTube style)
+ * - Add Clip button (non-fullscreen only)
  * - Fullscreen toggle button
  */
-export function ClipifyControls({
+export function AnnotateControls({
   isPlaying,
   currentTime,
   duration,
@@ -76,6 +77,7 @@ export function ClipifyControls({
   onSpeedChange,
   isFullscreen,
   onToggleFullscreen,
+  onAddClip,
 }) {
   return (
     <div className="controls-container flex items-center justify-between py-2 px-4 bg-gray-800 rounded-b-lg">
@@ -145,6 +147,18 @@ export function ClipifyControls({
 
       {/* Right side controls */}
       <div className="flex items-center space-x-2">
+        {/* Add Clip button - only show when not in fullscreen */}
+        {!isFullscreen && onAddClip && (
+          <button
+            onClick={onAddClip}
+            className="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-white text-xs font-medium transition-colors"
+            title="Add clip ending at current time"
+          >
+            <Plus className="w-3 h-3" />
+            <span>Add Clip</span>
+          </button>
+        )}
+
         {/* Speed control */}
         <SpeedControl speed={playbackSpeed} onSpeedChange={onSpeedChange} />
 
@@ -165,4 +179,4 @@ export function ClipifyControls({
   );
 }
 
-export default ClipifyControls;
+export default AnnotateControls;
