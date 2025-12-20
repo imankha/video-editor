@@ -1,6 +1,44 @@
 # Task 01: Database Setup and Initialization
 
+## Context
+
+**Project:** Browser-based video editor for soccer highlights with Annotate, Framing, and Overlay modes.
+
+**Tech Stack:**
+- Backend: FastAPI + Python (port 8000)
+- Database: SQLite (being added in this task)
+
+**Current State:** No persistence - videos exist only in browser memory.
+
+**Backend Structure:**
+```
+src/backend/app/
+├── main.py              # FastAPI app entry, router registration
+├── models.py            # Pydantic models
+├── routers/
+│   ├── __init__.py      # Exports all routers
+│   ├── health.py        # Health check endpoint
+│   ├── export.py        # Video export
+│   ├── annotate.py      # Clip extraction
+│   └── detection.py     # YOLO detection
+└── websocket.py
+```
+
+**Target File Storage:**
+```
+user_data/
+└── a/                        # Single user folder
+    ├── database.sqlite       # SQLite database
+    ├── raw_clips/            # From Annotate export
+    ├── uploads/              # Direct uploads to projects
+    ├── working_videos/       # From Framing export
+    └── final_videos/         # From Overlay export
+```
+
+---
+
 ## Objective
+
 Create the SQLite database layer with automatic initialization on backend startup.
 
 ## Files to Create

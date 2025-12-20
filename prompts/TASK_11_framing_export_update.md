@@ -1,5 +1,43 @@
 # Task 11: Framing Export - Create Working Video
 
+## Context
+
+**Project:** Browser-based video editor for soccer highlights with Annotate, Framing, and Overlay modes.
+
+**Tech Stack:**
+- Backend: FastAPI + Python (port 8000)
+- Database: SQLite
+
+**File Storage:**
+```
+user_data/a/
+├── working_videos/  ← Framing export saves here
+└── final_videos/    ← Overlay export saves here
+```
+
+**Database Tables:**
+```sql
+CREATE TABLE working_videos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    filename TEXT NOT NULL,
+    abandoned BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Re-export Behavior:**
+- Mark previous working_video as `abandoned = TRUE`
+- Also abandon any final_video (framing changed)
+- Create new working_video entry
+- Set all working_clips.progress = 1 (framed)
+
+**Enabling Overlay Mode:**
+- Overlay tab is disabled until `project.working_video_id` exists
+- After framing export, Overlay becomes available
+
+---
+
 ## Objective
 Update the Framing export to:
 1. Save the exported video to `user_data/a/working_videos/`

@@ -1,5 +1,53 @@
 # Task 07: Annotate Export - Save Clips & Create Projects
 
+## Context
+
+**Project:** Browser-based video editor for soccer highlights with Annotate, Framing, and Overlay modes.
+
+**Tech Stack:**
+- Backend: FastAPI + Python (port 8000)
+- Video Processing: FFmpeg (required in PATH)
+- Database: SQLite
+
+**Rating System (from soccerTags.js):**
+```javascript
+ratingAdjectives = {
+  5: 'Brilliant',   // Saved + gets own 9:16 project
+  4: 'Good',        // Saved to library only
+  3: 'Interesting', // NOT saved
+  2: 'Unfortunate', // NOT saved
+  1: 'Bad'          // NOT saved
+}
+```
+
+**What Export Creates:**
+1. **Raw Clips** - 4+ star clips saved to `user_data/a/raw_clips/` and database
+2. **Projects:**
+   - One "game" project (16:9) with ALL 4+ star clips
+   - One "clip" project (9:16) per 5-star clip
+3. **Download Files:**
+   - Full video with metadata annotations
+   - Clips compilation with burned-in text (name, rating, tags, notes)
+
+**Example:** 3 clips (5★, 4★, 3★) exports:
+- 2 raw_clips saved (5★ and 4★)
+- 2 projects created (game + 5★ individual)
+- 2 downloads generated
+
+**Clip JSON Format (from frontend):**
+```javascript
+{
+  start_time: 150.5,
+  end_time: 165.5,
+  name: "Brilliant Goal",
+  notes: "Amazing finish",
+  rating: 5,
+  tags: ["Goal", "1v1 Attack"]
+}
+```
+
+---
+
 ## Objective
 Update the Annotate export endpoint to:
 1. Save 4+ star clips to the database and filesystem

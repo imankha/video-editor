@@ -1,5 +1,51 @@
 # Task 03: Clips API Endpoints
 
+## Context
+
+**Project:** Browser-based video editor for soccer highlights with Annotate, Framing, and Overlay modes.
+
+**Tech Stack:**
+- Backend: FastAPI + Python (port 8000)
+- Database: SQLite
+
+**File Storage Structure:**
+```
+user_data/a/
+├── database.sqlite
+├── raw_clips/       ← Clips from Annotate export (4+ star)
+├── uploads/         ← Clips uploaded directly to projects
+├── working_videos/  ← From Framing export
+└── final_videos/    ← From Overlay export
+```
+
+**Database Schema (relevant tables):**
+```sql
+CREATE TABLE raw_clips (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename TEXT NOT NULL,
+    rating INTEGER NOT NULL,              -- 4 (Good) or 5 (Brilliant)
+    tags TEXT,                            -- JSON array
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE working_clips (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    raw_clip_id INTEGER,                  -- NULL if uploaded directly
+    uploaded_filename TEXT,               -- NULL if from raw_clips
+    progress INTEGER DEFAULT 0,
+    sort_order INTEGER DEFAULT 0,
+    abandoned BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Two Types of Clips:**
+1. **Raw Clips** - Extracted from Annotate mode (4+ star), stored in library
+2. **Working Clips** - Assigned to projects for editing (can reference raw_clips OR have uploaded_filename)
+
+---
+
 ## Objective
 Create REST API endpoints for managing raw clips (library) and working clips (project clips).
 

@@ -1,5 +1,46 @@
 # Task 12: Overlay Export - Create Final Video
 
+## Context
+
+**Project:** Browser-based video editor for soccer highlights with Annotate, Framing, and Overlay modes.
+
+**Tech Stack:**
+- Backend: FastAPI + Python (port 8000)
+- Database: SQLite
+
+**File Storage:**
+```
+user_data/a/
+├── working_videos/  ← Input for Overlay mode
+└── final_videos/    ← Overlay export saves here
+```
+
+**Database Table:**
+```sql
+CREATE TABLE final_videos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    filename TEXT NOT NULL,
+    abandoned BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Prerequisites:**
+- Project must have a working_video (from Framing export)
+- Overlay mode is only accessible after Framing export
+
+**Progress Completion:**
+- Project reaches 100% when final_video exists
+- Formula: `progress = (clips_framed + has_final) / (clip_count + 1) * 100`
+
+**Re-export Behavior:**
+- Mark previous final_video as `abandoned = TRUE`
+- Create new final_video entry
+- Update project.final_video_id
+
+---
+
 ## Objective
 Update the Overlay export to:
 1. Save the exported video to `user_data/a/final_videos/`

@@ -1,5 +1,52 @@
 # Task 04: Frontend Project State Management
 
+## Context
+
+**Project:** Browser-based video editor for soccer highlights with Annotate, Framing, and Overlay modes.
+
+**Tech Stack:**
+- Frontend: React 18 + Vite (port 5173)
+- Backend: FastAPI + Python (port 8000)
+
+**Frontend Structure:**
+```
+src/frontend/src/
+├── App.jsx                    # Main app component
+├── hooks/
+│   ├── useClipManager.js      # Existing - manages clips in Framing mode
+│   ├── useVideo.js            # Existing - video playback control
+│   ├── useProjects.js         # NEW - project state management
+│   ├── useProjectClips.js     # NEW - working clips for a project
+│   └── useRawClips.js         # NEW - raw clips library
+```
+
+**API Endpoints (from Tasks 02-03):**
+```
+GET    /api/projects              - List all projects
+POST   /api/projects              - Create project
+GET    /api/projects/{id}         - Get project details with clips
+DELETE /api/projects/{id}         - Delete project
+
+GET    /api/clips/raw             - List raw clips (library)
+GET    /api/clips/projects/{id}/clips  - List project's working clips
+POST   /api/clips/projects/{id}/clips  - Add clip to project
+```
+
+**React Hook Pattern:**
+```javascript
+export function useProjects() {
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+
+  const fetchProjects = useCallback(async () => { ... }, []);
+  const selectProject = useCallback(async (id) => { ... }, []);
+
+  return { projects, selectedProject, fetchProjects, selectProject, ... };
+}
+```
+
+---
+
 ## Objective
 Create a React hook and context for managing project state across the application.
 

@@ -1,5 +1,54 @@
 # Task 02: Project CRUD API Endpoints
 
+## Context
+
+**Project:** Browser-based video editor for soccer highlights with Annotate, Framing, and Overlay modes.
+
+**Tech Stack:**
+- Backend: FastAPI + Python (port 8000)
+- Database: SQLite (created in Task 01)
+
+**Prerequisites:** Task 01 completed - `database.py` exists with `get_db_connection()` function.
+
+**Backend Router Pattern:**
+```python
+# routers/__init__.py exports routers
+from .health import router as health_router
+from .projects import router as projects_router
+
+# main.py includes them
+app.include_router(projects_router)
+```
+
+**Database Schema (from Task 01):**
+```sql
+CREATE TABLE projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    aspect_ratio TEXT NOT NULL,           -- "16:9" or "9:16"
+    working_video_id INTEGER,
+    final_video_id INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE working_clips (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    progress INTEGER DEFAULT 0,           -- 0=not framed, 1=framed
+    abandoned BOOLEAN DEFAULT FALSE,
+    ...
+);
+```
+
+**Progress Calculation:**
+```
+total = clip_count + 1
+progress = clips_framed + (1 if has_final_video else 0)
+percent = (progress / total) * 100
+```
+
+---
+
 ## Objective
 Create REST API endpoints for managing projects (Create, Read, Update, Delete).
 

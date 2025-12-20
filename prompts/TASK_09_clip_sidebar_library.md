@@ -1,5 +1,54 @@
 # Task 09: Clip Sidebar - Library Integration
 
+## Context
+
+**Project:** Browser-based video editor for soccer highlights with Annotate, Framing, and Overlay modes.
+
+**Tech Stack:**
+- Frontend: React 18 + Vite (port 5173)
+- UI: Tailwind CSS + lucide-react icons
+
+**Current ClipSelectorSidebar:**
+```
+┌─────────────────────┐
+│ Clips               │
+├─────────────────────┤
+│ [Clip 1 thumbnail]  │
+│ [Clip 2 thumbnail]  │
+│ [Clip 3 thumbnail]  │
+├─────────────────────┤
+│ [+ Add Clip]        │ ← Currently single button
+└─────────────────────┘
+```
+
+**Updated Add Flow:**
+```
+┌─────────────────────┐
+│ [+ Add Clip]        │ ← Click opens menu
+├─────────────────────┤
+│ [Upload Clip]       │ ← Opens file picker
+│ [From Library]      │ ← Opens ClipLibraryModal
+│ [Cancel]            │
+└─────────────────────┘
+```
+
+**Raw Clips (Library) Data:**
+```javascript
+{
+  id: 1,
+  filename: "brilliant_goal.mp4",
+  rating: 5,
+  tags: ["Goal", "1v1 Attack"],
+  created_at: "..."
+}
+```
+
+**Working Clip Creation:**
+- From library: `{ project_id, raw_clip_id, sort_order }`
+- From upload: `{ project_id, uploaded_filename, sort_order }`
+
+---
+
 ## Objective
 Update ClipSelectorSidebar in Framing mode to:
 1. Replace single "Add" button with "Upload" and "From Library" options

@@ -1,5 +1,41 @@
 # Task 10: Navigation and FileUpload Changes
 
+## Context
+
+**Project:** Browser-based video editor for soccer highlights with Annotate, Framing, and Overlay modes.
+
+**Tech Stack:**
+- Frontend: React 18 + Vite (port 5173)
+- UI: Tailwind CSS + lucide-react icons
+
+**Current FileUpload Component:**
+```
+[Add Game]           ← Loads video for Annotate mode
+[Add Raw Clips]      ← REMOVE - moved to ClipSelectorSidebar
+[Add Overlay Video]  ← REMOVE - overlay follows framing in project flow
+```
+
+**New FileUpload Component:**
+```
+[Annotate]           ← Renamed, supports multiple files
+```
+
+**ModeSwitcher Visibility Rules:**
+```
+No project selected:
+  - Show nothing (or "Annotate Mode" badge if in annotate)
+
+Project selected:
+  - Show Framing tab (always enabled)
+  - Show Overlay tab (disabled until working_video exists)
+```
+
+**Multiple Video Support:**
+- Annotate button now accepts `multiple` files
+- For now, use first file only (TODO: concatenation in future)
+
+---
+
 ## Objective
 Update the navigation components:
 1. Remove "Add Raw Clips" button from header

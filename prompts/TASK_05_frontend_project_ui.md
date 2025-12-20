@@ -1,5 +1,47 @@
 # Task 05: Frontend Project UI Components
 
+## Context
+
+**Project:** Browser-based video editor for soccer highlights with Annotate, Framing, and Overlay modes.
+
+**Tech Stack:**
+- Frontend: React 18 + Vite (port 5173)
+- UI: Tailwind CSS + lucide-react icons
+
+**App Navigation Flow:**
+```
+No Project Selected → Show Project Manager
+                      - List of projects with progress bars
+                      - "New Project" button → Opens modal
+                      - "Annotate Game" button → Enters Annotate mode
+
+Project Selected → Show Framing/Overlay modes
+                   - ProjectHeader with dropdown to switch projects
+                   - ModeSwitcher for Framing/Overlay tabs
+```
+
+**Project Data Shape (from API):**
+```javascript
+{
+  id: 1,
+  name: "Game Highlights",
+  aspect_ratio: "16:9",
+  clip_count: 5,
+  clips_framed: 3,
+  has_working_video: true,
+  has_final_video: false,
+  progress_percent: 66.7,
+  created_at: "2024-..."
+}
+```
+
+**Aspect Ratio Options:**
+- `16:9` - Landscape (YouTube)
+- `9:16` - Portrait (TikTok/Reels)
+- `1:1` - Square (Instagram)
+
+---
+
 ## Objective
 Create the Project Manager view and New Project modal for when no project is selected.
 

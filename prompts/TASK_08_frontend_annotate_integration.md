@@ -1,5 +1,52 @@
 # Task 08: Frontend Annotate Export Integration
 
+## Context
+
+**Project:** Browser-based video editor for soccer highlights with Annotate, Framing, and Overlay modes.
+
+**Tech Stack:**
+- Frontend: React 18 + Vite (port 5173)
+- Backend: FastAPI + Python (port 8000)
+
+**Annotate Hook (useAnnotate.js):**
+```javascript
+const { clipRegions, getExportData, resetAnnotate } = useAnnotate();
+
+// getExportData() returns:
+[{
+  start_time: 150.5,
+  end_time: 165.5,
+  name: "Brilliant Goal",
+  notes: "Amazing finish",
+  rating: 5,
+  tags: ["Goal", "1v1 Attack"]
+}]
+```
+
+**Export Endpoint Response (from Task 07):**
+```javascript
+{
+  success: true,
+  downloads: {
+    full_annotated: { filename: "...", data: "<base64>" },
+    clips_compilation: { filename: "...", data: "<base64>" }
+  },
+  created: {
+    raw_clips: [{ id, filename, rating, name, tags }],
+    projects: [{ id, name, type: "game"|"clip", clip_count }]
+  }
+}
+```
+
+**Export Flow:**
+1. Format clips for API (remove `position` field if present)
+2. POST to `/api/annotate/export` with video + clips_json
+3. Download both files using base64 decode
+4. Refresh projects list
+5. Return to Project Manager
+
+---
+
 ## Objective
 Update the frontend Annotate mode to:
 1. Call the updated export endpoint

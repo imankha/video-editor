@@ -1,5 +1,56 @@
 # Task 06: App.jsx Refactor for Project-Based Flow
 
+## Context
+
+**Project:** Browser-based video editor for soccer highlights with Annotate, Framing, and Overlay modes.
+
+**Tech Stack:**
+- Frontend: React 18 + Vite (port 5173)
+- Backend: FastAPI + Python (port 8000)
+
+**Current App.jsx Structure (~1000 lines):**
+```javascript
+function App() {
+  // Video state
+  const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
+  const [annotateVideoUrl, setAnnotateVideoUrl] = useState(null);
+
+  // Editor mode (currently: 'annotate', 'framing', 'overlay')
+  const [editorMode, setEditorMode] = useState('framing');
+
+  // Existing hooks
+  const annotateHook = useAnnotate();
+  const clipManager = useClipManager();
+
+  // ... handlers, effects, render
+}
+```
+
+**New Project-Aware Navigation:**
+```
+┌─────────────────────────────────────────┐
+│  editorMode === 'project-manager'       │
+│  OR (!selectedProject && !annotate)     │
+│  → Show ProjectManager                  │
+├─────────────────────────────────────────┤
+│  editorMode === 'annotate'              │
+│  → Show Annotate mode (no project)      │
+├─────────────────────────────────────────┤
+│  selectedProject + editorMode           │
+│  → Show Framing or Overlay mode         │
+│  → Aspect ratio from project            │
+│  → Overlay disabled until working_video │
+└─────────────────────────────────────────┘
+```
+
+**Key State Changes:**
+- Add `useProjects()` hook
+- Add `useProjectClips()` hook
+- Mode switching respects project selection
+- Aspect ratio comes from project, not user selection
+
+---
+
 ## Objective
 Refactor App.jsx to implement the project-based navigation flow where:
 - No project selected → Show Project Manager
