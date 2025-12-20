@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Scissors } from 'lucide-react';
+import { Scissors } from 'lucide-react';
 import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
 
@@ -11,16 +11,13 @@ import ClipDetailsEditor from './ClipDetailsEditor';
  */
 export function ClipsSidePanel({
   clipRegions,
-  regionsWithLayout,
   selectedRegionId,
   onSelectRegion,
   onUpdateRegion,
   onDeleteRegion,
   maxNotesLength,
-  hasClips,
   clipCount,
   videoDuration,
-  onExport,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
 
@@ -65,18 +62,6 @@ export function ClipsSidePanel({
           videoDuration={videoDuration}
         />
       )}
-
-      {/* Export Button */}
-      <div className="p-3 border-t border-gray-700">
-        <button
-          onClick={onExport}
-          disabled={!hasClips}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          <Download size={16} />
-          <span>Export</span>
-        </button>
-      </div>
     </div>
   );
 }

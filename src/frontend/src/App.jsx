@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Download, Loader } from 'lucide-react';
 import { useVideo } from './hooks/useVideo';
 import useZoom from './hooks/useZoom';
 import useTimelineZoom from './hooks/useTimelineZoom';
@@ -49,6 +50,7 @@ function App() {
   const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
   const [annotateVideoUrl, setAnnotateVideoUrl] = useState(null);
   const [annotateVideoMetadata, setAnnotateVideoMetadata] = useState(null);
+  const [isAnnotateExporting, setIsAnnotateExporting] = useState(false);
 
   // Annotate mode playback state
   const [annotatePlaybackSpeed, setAnnotatePlaybackSpeed] = useState(1);
@@ -585,6 +587,7 @@ function App() {
       return;
     }
 
+    setIsAnnotateExporting(true);
     try {
       console.log('[App] Starting annotate export...');
 
@@ -679,6 +682,8 @@ function App() {
     } catch (err) {
       console.error('[App] Annotate export failed:', err);
       alert(`Export failed: ${err.message}`);
+    } finally {
+      setIsAnnotateExporting(false);
     }
   }, [annotateVideoFile, annotateVideoUrl, base64ToBlob, resetSegments, resetCrop, resetHighlight, resetHighlightRegions, addClip, loadVideo, selectClip]);
 
@@ -1933,16 +1938,13 @@ function App() {
       {editorMode === 'annotate' && annotateVideoUrl && (
         <ClipsSidePanel
           clipRegions={clipRegions}
-          regionsWithLayout={annotateRegionsWithLayout}
           selectedRegionId={annotateSelectedRegionId}
           onSelectRegion={handleSelectAnnotateRegion}
           onUpdateRegion={updateClipRegion}
           onDeleteRegion={deleteClipRegion}
           maxNotesLength={ANNOTATE_MAX_NOTES_LENGTH}
-          hasClips={hasAnnotateClips}
           clipCount={annotateClipCount}
           videoDuration={annotateVideoMetadata?.duration}
-          onExport={() => handleAnnotateExport(getAnnotateExportData())}
         />
       )}
 
@@ -2312,6 +2314,46 @@ function App() {
               onSelectRegion={handleSelectAnnotateRegion}
               onDeleteRegion={deleteClipRegion}
             />
+          )}
+
+          {/* Annotate mode - Export Button */}
+          {annotateVideoUrl && editorMode === 'annotate' && (
+            <div className="mt-6">
+              <div className="space-y-3">
+                {/* Export Settings */}
+                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
+                  <div className="text-sm font-medium text-gray-300 mb-3">
+                    Annotate Settings
+                  </div>
+                  <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
+                    Extracts marked clips and loads them into Framing mode
+                  </div>
+                </div>
+
+                {/* Export button */}
+                <button
+                  onClick={() => handleAnnotateExport(getAnnotateExportData())}
+                  disabled={!hasAnnotateClips || isAnnotateExporting}
+                  className={`w-full px-6 py-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                    !hasAnnotateClips || isAnnotateExporting
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
+                >
+                  {isAnnotateExporting ? (
+                    <>
+                      <Loader className="animate-spin" size={20} />
+                      <span>Exporting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download size={20} />
+                      <span>Export Video</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           )}
 
           {/* Message when in Overlay mode but export is required */}
