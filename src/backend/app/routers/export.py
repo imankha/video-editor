@@ -27,6 +27,8 @@ import shutil
 from ..models import CropKeyframe, HighlightKeyframe
 from ..websocket import export_progress, manager
 from ..interpolation import generate_crop_filter
+from ..database import get_db_connection, WORKING_VIDEOS_PATH, FINAL_VIDEOS_PATH
+from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
@@ -1556,3 +1558,263 @@ async def concat_for_overlay(
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
         raise HTTPException(status_code=500, detail=f"Concatenation failed: {str(e)}")
+
+
+# =============================================================================
+# Project-Based Export Endpoints
+# =============================================================================
+
+@router.post("/framing")
+async def export_framing(
+    project_id: int = Form(...),
+    video: UploadFile = File(...),
+    clips_data: str = Form("[]")
+):
+    """
+    Export framed video for a project.
+
+    This endpoint:
+    1. Receives the rendered video from the frontend
+    2. Saves it to working_videos folder
+    3. Creates working_videos DB entry
+    4. Updates project.working_video_id
+    5. Marks previous working_video as abandoned
+    6. Sets all working_clips.progress = 1
+
+    Request:
+    - project_id: The project ID
+    - video: The rendered video file
+    - clips_data: JSON with clip configurations (for metadata)
+
+    Response:
+    - success: boolean
+    - working_video_id: The new working video ID
+    - filename: The saved filename
+    """
+    logger.info(f"[Framing Export] Starting for project {project_id}")
+
+    try:
+        clips_config = json.loads(clips_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid clips_data JSON")
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Verify project exists
+        cursor.execute("SELECT id, working_video_id FROM projects WHERE id = ?", (project_id,))
+        project = cursor.fetchone()
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Generate unique filename
+        filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+        file_path = WORKING_VIDEOS_PATH / filename
+
+        # Save the video file
+        content = await video.read()
+        with open(file_path, 'wb') as f:
+            f.write(content)
+
+        logger.info(f"[Framing Export] Saved working video: {filename} ({len(content)} bytes)")
+
+        # Mark previous working video as abandoned
+        if project['working_video_id']:
+            cursor.execute("""
+                UPDATE working_videos SET abandoned = TRUE WHERE id = ?
+            """, (project['working_video_id'],))
+            logger.info(f"[Framing Export] Marked previous working video as abandoned: {project['working_video_id']}")
+
+            # Also abandon the final video since framing changed
+            cursor.execute("""
+                SELECT final_video_id FROM projects WHERE id = ?
+            """, (project_id,))
+            proj = cursor.fetchone()
+            if proj and proj['final_video_id']:
+                cursor.execute("""
+                    UPDATE final_videos SET abandoned = TRUE WHERE id = ?
+                """, (proj['final_video_id'],))
+                cursor.execute("""
+                    UPDATE projects SET final_video_id = NULL WHERE id = ?
+                """, (project_id,))
+                logger.info(f"[Framing Export] Abandoned final video due to framing change")
+
+        # Create new working video entry
+        cursor.execute("""
+            INSERT INTO working_videos (project_id, filename)
+            VALUES (?, ?)
+        """, (project_id, filename))
+        working_video_id = cursor.lastrowid
+
+        # Update project with new working video ID
+        cursor.execute("""
+            UPDATE projects SET working_video_id = ? WHERE id = ?
+        """, (working_video_id, project_id))
+
+        # Update all working clips to progress = 1 (framed)
+        cursor.execute("""
+            UPDATE working_clips
+            SET progress = 1
+            WHERE project_id = ? AND abandoned = FALSE
+        """, (project_id,))
+
+        conn.commit()
+
+        logger.info(f"[Framing Export] Created working video {working_video_id} for project {project_id}")
+
+        return JSONResponse({
+            'success': True,
+            'working_video_id': working_video_id,
+            'filename': filename,
+            'project_id': project_id
+        })
+
+
+@router.get("/projects/{project_id}/working-video")
+async def get_working_video(project_id: int):
+    """Stream the working video for a project."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT wv.filename
+            FROM projects p
+            JOIN working_videos wv ON p.working_video_id = wv.id
+            WHERE p.id = ? AND wv.abandoned = FALSE
+        """, (project_id,))
+        result = cursor.fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Working video not found")
+
+        file_path = WORKING_VIDEOS_PATH / result['filename']
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Video file not found")
+
+        return FileResponse(
+            path=str(file_path),
+            media_type="video/mp4",
+            filename=result['filename']
+        )
+
+
+@router.post("/final")
+async def export_final(
+    project_id: int = Form(...),
+    video: UploadFile = File(...),
+    overlay_data: str = Form("{}")
+):
+    """
+    Export final video with overlays for a project.
+
+    This endpoint:
+    1. Receives the rendered video with overlays from the frontend
+    2. Saves it to final_videos folder
+    3. Creates final_videos DB entry
+    4. Updates project.final_video_id
+    5. Marks previous final_video as abandoned
+
+    Request:
+    - project_id: The project ID
+    - video: The rendered video file with overlays
+    - overlay_data: JSON with overlay configurations (for metadata)
+
+    Response:
+    - success: boolean
+    - final_video_id: The new final video ID
+    - filename: The saved filename
+    """
+    logger.info(f"[Final Export] Starting for project {project_id}")
+
+    try:
+        overlay_config = json.loads(overlay_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid overlay_data JSON")
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Verify project exists and has a working video
+        cursor.execute("""
+            SELECT id, working_video_id, final_video_id
+            FROM projects WHERE id = ?
+        """, (project_id,))
+        project = cursor.fetchone()
+
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        if not project['working_video_id']:
+            raise HTTPException(
+                status_code=400,
+                detail="Project must have a working video before final export"
+            )
+
+        # Generate unique filename
+        filename = f"final_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+        file_path = FINAL_VIDEOS_PATH / filename
+
+        # Save the video file
+        content = await video.read()
+        with open(file_path, 'wb') as f:
+            f.write(content)
+
+        logger.info(f"[Final Export] Saved final video: {filename} ({len(content)} bytes)")
+
+        # Mark previous final video as abandoned
+        if project['final_video_id']:
+            cursor.execute("""
+                UPDATE final_videos SET abandoned = TRUE WHERE id = ?
+            """, (project['final_video_id'],))
+            logger.info(f"[Final Export] Marked previous final video as abandoned: {project['final_video_id']}")
+
+        # Create new final video entry
+        cursor.execute("""
+            INSERT INTO final_videos (project_id, filename)
+            VALUES (?, ?)
+        """, (project_id, filename))
+        final_video_id = cursor.lastrowid
+
+        # Update project with new final video ID
+        cursor.execute("""
+            UPDATE projects SET final_video_id = ? WHERE id = ?
+        """, (final_video_id, project_id))
+
+        conn.commit()
+
+        logger.info(f"[Final Export] Created final video {final_video_id} for project {project_id}")
+
+        return JSONResponse({
+            'success': True,
+            'final_video_id': final_video_id,
+            'filename': filename,
+            'project_id': project_id
+        })
+
+
+@router.get("/projects/{project_id}/final-video")
+async def get_final_video(project_id: int):
+    """Stream the final video for a project."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT fv.filename
+            FROM projects p
+            JOIN final_videos fv ON p.final_video_id = fv.id
+            WHERE p.id = ? AND fv.abandoned = FALSE
+        """, (project_id,))
+        result = cursor.fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Final video not found")
+
+        file_path = FINAL_VIDEOS_PATH / result['filename']
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Video file not found")
+
+        return FileResponse(
+            path=str(file_path),
+            media_type="video/mp4",
+            filename=result['filename']
+        )

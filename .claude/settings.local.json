@@ -24,7 +24,15 @@
       "Bash(timeout:*)",
       "Bash(powershell -Command \"Invoke-RestMethod -Uri ''http://localhost:8000/api/detect/status'' -Method Get\")",
       "Bash(mv:*)",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(python -m uvicorn:*)",
+      "Bash(/c/Users/imank/projects/video-editor/src/backend/.venv/Scripts/python.exe -m uvicorn:*)",
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(python:*)",
+      "Bash(bash:*)",
+      "Bash(for f in \"formal annotations\"/*.tsv)",
+      "Bash(do echo \"Validating $f:\")",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []

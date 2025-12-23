@@ -4,39 +4,34 @@ import { Crop, Sparkles, Scissors } from 'lucide-react';
 /**
  * ModeSwitcher - Tab toggle for switching between editor modes.
  *
- * Modes:
- * - Annotate: Extract clips from full game footage
- * - Framing: Crop, trim, and speed editing
- * - Overlay: Highlight and effect overlays
+ * Visibility rules:
+ * - When no project selected: Show nothing (or just Annotate badge if video loaded)
+ * - When project selected: Show Framing and Overlay
+ * - Overlay is disabled until working_video exists
  *
  * @param {string} mode - Current mode ('annotate' | 'framing' | 'overlay')
  * @param {function} onModeChange - Callback when mode changes
  * @param {boolean} disabled - Whether the switcher is disabled
+ * @param {boolean} hasProject - Whether a project is selected
+ * @param {boolean} hasWorkingVideo - Whether the project has a working video
  * @param {boolean} hasAnnotateVideo - Whether an annotate video is loaded
- * @param {boolean} hasFramingVideo - Whether a framing video is loaded
  */
 export function ModeSwitcher({
   mode,
   onModeChange,
   disabled = false,
+  hasProject = false,
+  hasWorkingVideo = false,
   hasAnnotateVideo = false,
-  hasFramingVideo = false,
 }) {
+  // Define mode configurations for project mode
   const modes = [
-    {
-      id: 'annotate',
-      label: 'Annotate',
-      icon: Scissors,
-      description: 'Extract clips from game',
-      available: hasAnnotateVideo,
-      color: 'green',
-    },
     {
       id: 'framing',
       label: 'Framing',
       icon: Crop,
       description: 'Crop, trim & speed',
-      available: hasFramingVideo,
+      available: hasProject,
       color: 'blue',
     },
     {
@@ -44,27 +39,34 @@ export function ModeSwitcher({
       label: 'Overlay',
       icon: Sparkles,
       description: 'Highlights & effects',
-      available: hasFramingVideo,
+      available: hasProject && hasWorkingVideo,
       color: 'purple',
     },
   ];
 
-  // Only show modes that have content OR the current mode
-  const visibleModes = modes.filter(m => m.available || m.id === mode);
-
-  // If no modes are visible, show all modes but disabled
-  const displayModes = visibleModes.length > 0 ? visibleModes : modes;
+  // If no project, don't show the mode switcher
+  // (Annotate is accessed via the Annotate button in Project Manager)
+  if (!hasProject) {
+    // If in annotate mode with a video, show a simple indicator
+    if (mode === 'annotate' && hasAnnotateVideo) {
+      return (
+        <div className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg">
+          <Scissors size={16} />
+          <span className="font-medium text-sm text-white">Annotate Mode</span>
+        </div>
+      );
+    }
+    return null;
+  }
 
   return (
     <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
-      {displayModes.map((modeOption) => {
+      {modes.map((modeOption) => {
         const Icon = modeOption.icon;
         const isActive = mode === modeOption.id;
         const isAvailable = modeOption.available;
 
-        // Get the appropriate color for active state
         const activeColor = {
-          green: 'bg-green-600',
           blue: 'bg-blue-600',
           purple: 'bg-purple-600',
         }[modeOption.color] || 'bg-purple-600';
@@ -84,7 +86,11 @@ export function ModeSwitcher({
               }
               ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
             `}
-            title={isAvailable ? modeOption.description : `${modeOption.label} - Load a video first`}
+            title={
+              !isAvailable && modeOption.id === 'overlay'
+                ? 'Export from Framing first to enable Overlay mode'
+                : modeOption.description
+            }
           >
             <Icon size={16} />
             <span className="font-medium text-sm">{modeOption.label}</span>

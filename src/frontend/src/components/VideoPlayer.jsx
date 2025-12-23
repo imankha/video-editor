@@ -16,7 +16,7 @@ import React, { useState, useRef, useCallback } from 'react';
  * @param {Function} props.onZoomChange - Callback when zoom changes (wheel)
  * @param {Function} props.onPanChange - Callback when pan changes (drag)
  * @param {boolean} props.isFullscreen - Whether the player is in fullscreen mode
- * @param {boolean} props.isInClipRegion - Whether playhead is inside a clip region (shows orange border)
+ * @param {number|null} props.clipRating - Rating (1-5) of clip at current time, null if not in clip
  */
 export function VideoPlayer({
   videoRef,
@@ -29,7 +29,7 @@ export function VideoPlayer({
   onZoomChange,
   onPanChange,
   isFullscreen = false,
-  isInClipRegion = false
+  clipRating = null
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
@@ -189,14 +189,26 @@ export function VideoPlayer({
           {/* Render any overlays passed by the mode */}
           {overlays}
 
-          {/* Orange border overlay when inside a clip region */}
-          {isInClipRegion && (
-            <div
-              className={`absolute inset-0 pointer-events-none z-40 border-orange-500 ${
-                isFullscreen ? 'border-8' : 'border-4 rounded-lg'
-              }`}
-            />
-          )}
+          {/* Rating-based border overlay when inside a clip region */}
+          {clipRating !== null && (() => {
+            // Rating-based border colors:
+            // 1 star = red, 2 star = yellow, 3 star = blue, 4 star = dark green, 5 star = light green
+            const ratingBorderColors = {
+              1: 'border-red-500',
+              2: 'border-yellow-500',
+              3: 'border-blue-500',
+              4: 'border-green-600',
+              5: 'border-green-400'
+            };
+            const borderColor = ratingBorderColors[clipRating] || 'border-orange-500';
+            return (
+              <div
+                className={`absolute inset-0 pointer-events-none z-40 ${borderColor} ${
+                  isFullscreen ? 'border-8' : 'border-4 rounded-lg'
+                }`}
+              />
+            );
+          })()}
         </div>
       ) : (
         <div

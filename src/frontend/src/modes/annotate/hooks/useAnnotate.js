@@ -25,6 +25,153 @@ import { formatTimeSimple } from '../../../utils/timeFormat';
  * - 5 star -> !!
  */
 
+// Allowed tags from the formal spec (must match parser_linter.py)
+const ALLOWED_TAGS = new Set([
+  "Goal",
+  "Assist",
+  "1v1 Attack",
+  "Movement",
+  "Pass",
+  "Chance Creation",
+  "Possession",
+  "Transition",
+  "Tackle",
+  "Interception",
+  "1v1 Defense",
+  "Build-Up",
+  "1v1 Save",
+]);
+
+// Required TSV columns in order
+const REQUIRED_COLUMNS = ['start_time', 'rating', 'tags', 'clip_name', 'clip_duration', 'notes'];
+
+// Time format regex: M:SS or MM:SS
+const TIME_REGEX = /^\d{1,2}:\d{2}$/;
+
+/**
+ * Parse time string (M:SS or MM:SS) to seconds
+ */
+function parseTimeToSeconds(timeStr) {
+  const parts = timeStr.split(':');
+  const minutes = parseInt(parts[0], 10);
+  const seconds = parseInt(parts[1], 10);
+  return minutes * 60 + seconds;
+}
+
+/**
+ * Validate a TSV file content and return parsed annotations or errors
+ * @param {string} content - Raw TSV file content
+ * @returns {{ success: boolean, annotations?: Array, errors?: Array }}
+ */
+export function validateTsvContent(content) {
+  const errors = [];
+  const annotations = [];
+
+  // Split into lines and filter empty lines
+  const lines = content.split(/\r?\n/).filter(line => line.trim());
+
+  if (lines.length === 0) {
+    return { success: false, errors: ['File is empty'] };
+  }
+
+  // Check header
+  const headerLine = lines[0];
+  const headers = headerLine.split('\t');
+
+  if (headers.length !== REQUIRED_COLUMNS.length) {
+    return {
+      success: false,
+      errors: [`Invalid header: expected ${REQUIRED_COLUMNS.length} columns (${REQUIRED_COLUMNS.join(', ')}), got ${headers.length}`]
+    };
+  }
+
+  for (let i = 0; i < REQUIRED_COLUMNS.length; i++) {
+    if (headers[i] !== REQUIRED_COLUMNS[i]) {
+      return {
+        success: false,
+        errors: [`Invalid header column ${i + 1}: expected "${REQUIRED_COLUMNS[i]}", got "${headers[i]}"`]
+      };
+    }
+  }
+
+  // Parse and validate each row
+  for (let i = 1; i < lines.length; i++) {
+    const lineNum = i + 1;
+    const line = lines[i];
+    const cols = line.split('\t');
+
+    // Allow rows with 5 columns (missing notes) - pad with empty string
+    if (cols.length < 5 || cols.length > REQUIRED_COLUMNS.length) {
+      errors.push(`Line ${lineNum}: expected 5-${REQUIRED_COLUMNS.length} columns, got ${cols.length}`);
+      continue;
+    }
+
+    // Pad missing columns with empty strings (handles optional trailing notes)
+    while (cols.length < REQUIRED_COLUMNS.length) {
+      cols.push('');
+    }
+
+    const [startTimeStr, ratingStr, tagsStr, clipName, clipDurationStr, notes] = cols;
+
+    // Validate start_time
+    if (!TIME_REGEX.test(startTimeStr)) {
+      errors.push(`Line ${lineNum}: Invalid start_time "${startTimeStr}" (expected M:SS or MM:SS)`);
+      continue;
+    }
+
+    // Validate rating
+    const rating = parseInt(ratingStr, 10);
+    if (isNaN(rating) || rating < 1 || rating > 5) {
+      errors.push(`Line ${lineNum}: Invalid rating "${ratingStr}" (must be integer 1-5)`);
+      continue;
+    }
+
+    // Validate tags
+    const tags = tagsStr.split(',').map(t => t.trim()).filter(t => t);
+    const invalidTags = tags.filter(t => !ALLOWED_TAGS.has(t));
+    if (invalidTags.length > 0) {
+      errors.push(`Line ${lineNum}: Invalid tags: ${invalidTags.join(', ')}`);
+      continue;
+    }
+
+    // Validate clip_duration
+    const clipDuration = parseFloat(clipDurationStr);
+    if (isNaN(clipDuration) || clipDuration < 0) {
+      errors.push(`Line ${lineNum}: Invalid clip_duration "${clipDurationStr}" (must be >= 0)`);
+      continue;
+    }
+
+    // Check decimal precision (max 1 decimal place)
+    if (clipDurationStr.includes('.') && clipDurationStr.split('.')[1].length > 1) {
+      errors.push(`Line ${lineNum}: clip_duration "${clipDurationStr}" has too many decimal places (max 1)`);
+      continue;
+    }
+
+    // Parse start time to seconds
+    const startTime = parseTimeToSeconds(startTimeStr);
+
+    // Add valid annotation
+    annotations.push({
+      startTime,
+      endTime: startTime + clipDuration,
+      name: clipName || '',
+      tags,
+      notes: notes || '',
+      rating
+    });
+  }
+
+  if (errors.length > 0) {
+    return { success: false, errors };
+  }
+
+  if (annotations.length === 0) {
+    return { success: false, errors: ['No valid annotations found in file'] };
+  }
+
+  return { success: true, annotations };
+}
+
 const DEFAULT_CLIP_DURATION = 15.0; // seconds
 const MIN_CLIP_DURATION = 1.0; // seconds (enforced)
 const MAX_CLIP_DURATION = 60.0; // seconds (max for slider)
@@ -350,12 +497,53 @@ export default function useAnnotate(videoMetadata) {
       start_time: region.startTime,
       end_time: region.endTime,
       name: region.name,
-      position: region.position,
-      tags: region.tags,
-      notes: region.notes,
-      rating: region.rating
+      // NOTE: position removed - not used by backend
+      tags: region.tags || [],
+      notes: region.notes || '',
+      rating: region.rating || 3
     }));
   }, [clipRegions]);
+
+  /**
+   * Import annotations from a validated TSV file
+   * @param {Array} annotations - Array of parsed annotations from validateTsvContent
+   * @returns {number} - Number of clips imported
+   */
+  const importAnnotations = useCallback((annotations) => {
+    if (!duration) {
+      console.warn('[useAnnotate] Cannot import annotations - no video duration set');
+      return 0;
+    }
+
+    const newRegions = annotations.map((annotation, index) => {
+      // Auto-assign color
+      const color = CLIP_COLORS[(colorIndex + index) % CLIP_COLORS.length];
+
+      return {
+        id: generateClipId(),
+        startTime: Math.max(0, Math.min(annotation.startTime, duration - MIN_CLIP_DURATION)),
+        endTime: Math.min(annotation.endTime, duration),
+        name: annotation.name || formatTimestampForName(annotation.startTime),
+        position: '',
+        tags: annotation.tags || [],
+        notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),
+        rating: Math.max(1, Math.min(5, annotation.rating || DEFAULT_RATING)),
+        color,
+        createdAt: new Date()
+      };
+    });
+
+    setClipRegions(prev => [...prev, ...newRegions]);
+    setColorIndex(prev => prev + newRegions.length);
+
+    // Select the first imported clip
+    if (newRegions.length > 0) {
+      setSelectedRegionId(newRegions[0].id);
+    }
+
+    console.log(`[useAnnotate] Imported ${newRegions.length} annotations`);
+    return newRegions.length;
+  }, [duration, colorIndex]);
 
   /**
    * Check if we have any clips defined
@@ -386,6 +574,7 @@ export default function useAnnotate(videoMetadata) {
     selectRegion,
     moveRegionStart,
     moveRegionEnd,
+    importAnnotations,
 
     // Queries
     getRegionAtTime,

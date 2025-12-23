@@ -1,22 +1,31 @@
 import React from 'react';
 import { formatTimeSimple } from '../../../utils/timeFormat';
 
-// Rating-based background colors (used for tinting the clip item)
-const RATING_COLORS = {
-  5: 'rgba(234, 179, 8, 0.15)',   // gold/yellow
-  4: 'rgba(34, 197, 94, 0.15)',   // green
-  3: 'rgba(59, 130, 246, 0.15)',  // blue
-  2: 'rgba(249, 115, 22, 0.15)',  // orange
-  1: 'rgba(239, 68, 68, 0.15)',   // red
+// Rating notation symbols (matches timeline ClipRegionLayer)
+const RATING_NOTATION = {
+  1: '??',   // Blunder
+  2: '?',    // Weak
+  3: '!?',   // Interesting
+  4: '!',    // Good
+  5: '!!',   // Excellent
 };
 
-// Rating-based border colors for selected state
-const RATING_BORDER_COLORS = {
-  5: '#eab308', // gold/yellow
-  4: '#22c55e', // green
-  3: '#3b82f6', // blue
-  2: '#f97316', // orange
-  1: '#ef4444', // red
+// Rating colors (matches timeline - color-blind safe palette)
+const RATING_BADGE_COLORS = {
+  1: '#C62828', // Brick Red - Blunder
+  2: '#F9A825', // Amber Yellow - Weak
+  3: '#1565C0', // Strong Blue - Interesting
+  4: '#2E7D32', // Teal-Green - Good
+  5: '#66BB6A', // Light Green - Excellent
+};
+
+// Background tint colors for selected items (derived from badge colors)
+const RATING_COLORS = {
+  5: 'rgba(102, 187, 106, 0.15)', // Light Green
+  4: 'rgba(46, 125, 50, 0.15)',   // Teal-Green
+  3: 'rgba(21, 101, 192, 0.15)',  // Strong Blue
+  2: 'rgba(249, 168, 37, 0.15)',  // Amber Yellow
+  1: 'rgba(198, 40, 40, 0.15)',   // Brick Red
 };
 
 /**
@@ -34,7 +43,8 @@ export function ClipListItem({ region, index, isSelected, onClick }) {
     : null;
 
   const ratingColor = RATING_COLORS[rating] || RATING_COLORS[3];
-  const ratingBorderColor = RATING_BORDER_COLORS[rating] || RATING_BORDER_COLORS[3];
+  const badgeColor = RATING_BADGE_COLORS[rating] || RATING_BADGE_COLORS[3];
+  const notation = RATING_NOTATION[rating] || RATING_NOTATION[3];
 
   return (
     <div
@@ -48,15 +58,23 @@ export function ClipListItem({ region, index, isSelected, onClick }) {
       `}
       style={{
         backgroundColor: isSelected ? ratingColor : undefined,
-        borderLeftColor: isSelected ? ratingBorderColor : undefined,
+        borderLeftColor: isSelected ? badgeColor : undefined,
       }}
     >
       <div className="flex items-center px-2 py-3">
-        {/* Color indicator */}
+        {/* Rating notation badge - matches timeline markers */}
         <div
-          className="w-3 h-3 rounded-full mr-2 flex-shrink-0"
-          style={{ backgroundColor: region.color }}
-        />
+          className="px-1.5 py-0.5 mr-2 rounded font-bold text-xs flex-shrink-0"
+          style={{
+            backgroundColor: badgeColor,
+            color: '#ffffff',
+            textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+            border: '1px solid rgba(0,0,0,0.3)',
+          }}
+          title={`Rating: ${rating}/5`}
+        >
+          {notation}
+        </div>
 
         {/* Clip info */}
         <div className="flex-1 min-w-0">

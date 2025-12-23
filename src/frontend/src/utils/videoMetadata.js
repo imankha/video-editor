@@ -1,4 +1,65 @@
 /**
+ * Extract metadata from a video URL.
+ * Used for loading project clips from backend.
+ *
+ * @param {string} url - URL to the video file
+ * @param {string} fileName - Optional filename for the video
+ * @returns {Promise<Object>} Video metadata
+ */
+export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.crossOrigin = 'anonymous';
+
+    const cleanup = () => {
+      video.remove();
+    };
+
+    // Set timeout for loading
+    const timeoutId = setTimeout(() => {
+      if (video.readyState === 0) {
+        cleanup();
+        reject(new Error('Video metadata loading timed out'));
+      }
+    }, 15000); // 15 second timeout for network videos
+
+    video.onloadedmetadata = () => {
+      clearTimeout(timeoutId);
+
+      const metadata = {
+        width: video.videoWidth,
+        height: video.videoHeight,
+        duration: video.duration,
+        aspectRatio: video.videoWidth / video.videoHeight,
+        fileName: fileName,
+        format: fileName.split('.').pop().toLowerCase() || 'mp4',
+        framerate: 30, // Default, could be extracted if needed
+      };
+
+      console.log('[videoMetadata] Extracted metadata from URL:', {
+        ...metadata,
+        url: url,
+        durationFormatted: `${Math.floor(metadata.duration / 60)}:${(metadata.duration % 60).toFixed(2)}`,
+        resolution: `${metadata.width}x${metadata.height}`,
+      });
+
+      cleanup();
+      resolve(metadata);
+    };
+
+    video.onerror = (e) => {
+      clearTimeout(timeoutId);
+      cleanup();
+      console.error('[videoMetadata] Failed to load video from URL:', url, e);
+      reject(new Error('Failed to load video metadata from URL'));
+    };
+
+    video.src = url;
+  });
+}
+
+/**
  * Extract metadata from a video File or Blob.
  * Used by both Framing (original upload) and Overlay (rendered video).
  *

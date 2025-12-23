@@ -4,6 +4,8 @@ import { useVideo } from './hooks/useVideo';
 import useZoom from './hooks/useZoom';
 import useTimelineZoom from './hooks/useTimelineZoom';
 import { useClipManager } from './hooks/useClipManager';
+import { useProjects } from './hooks/useProjects';
+import { useProjectClips } from './hooks/useProjectClips';
 import { VideoPlayer } from './components/VideoPlayer';
 import { Controls } from './components/Controls';
 import { FileUpload } from './components/FileUpload';
@@ -14,12 +16,14 @@ import ExportButton from './components/ExportButton';
 import CompareModelsButton from './components/CompareModelsButton';
 import DebugInfo from './components/DebugInfo';
 import { ModeSwitcher } from './components/shared/ModeSwitcher';
+import { ProjectManager } from './components/ProjectManager';
+import { ProjectHeader } from './components/ProjectHeader';
 // Mode-specific imports
 import { useCrop, useSegments, FramingMode, CropOverlay } from './modes/framing';
 import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay } from './modes/overlay';
 import { AnnotateMode, useAnnotate, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from './modes/annotate';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
-import { extractVideoMetadata } from './utils/videoMetadata';
+import { extractVideoMetadata, extractVideoMetadataFromUrl } from './utils/videoMetadata';
 
 // Feature flags for experimental features
 // Set to true to enable model comparison UI (for A/B testing different AI models)
@@ -63,6 +67,9 @@ function App() {
   // Ref to track previous isPlaying state for detecting pause transitions
   const wasPlayingRef = useRef(false);
 
+  // Ref for annotate mode file input (to trigger file picker directly from ProjectManager)
+  const annotateFileInputRef = useRef(null);
+
   // Layer selection state for arrow key navigation
   const [selectedLayer, setSelectedLayer] = useState('playhead'); // 'playhead' | 'crop' | 'highlight'
 
@@ -85,6 +92,9 @@ function App() {
     globalAspectRatio,
     globalTransition,
     addClip,
+    addClipFromProject,
+    loadProjectClips,
+    clearClips,
     deleteClip,
     selectClip,
     reorderClips,
@@ -93,6 +103,36 @@ function App() {
     setGlobalTransition,
     getExportData: getClipExportData,
   } = useClipManager();
+
+  // Project management hooks
+  const {
+    projects,
+    selectedProject,
+    selectedProjectId,
+    loading: projectsLoading,
+    hasProjects,
+    fetchProjects,
+    selectProject,
+    createProject,
+    deleteProject,
+    clearSelection,
+    refreshSelectedProject
+  } = useProjects();
+
+  // Project clips (only active when project selected)
+  const {
+    clips: projectClips,
+    fetchClips: fetchProjectClips,
+    uploadClip,
+    addClipFromLibrary,
+    removeClip: removeProjectClip,
+    reorderClips: reorderProjectClips,
+    saveFramingEdits,
+    getClipFileUrl
+  } = useProjectClips(selectedProjectId);
+
+  // Computed: is overlay available for this project?
+  const isOverlayAvailable = selectedProject?.working_video_id != null;
 
   // Segments hook (defined early so we can pass getSegmentAtTime and clampToVisibleRange to useVideo)
   const {
@@ -135,6 +175,7 @@ function App() {
     error,
     isLoading,
     loadVideo,
+    loadVideoFromUrl,
     togglePlay,
     seek,
     stepForward,
@@ -264,6 +305,7 @@ function App() {
     moveRegionEnd: moveAnnotateRegionEnd,
     getRegionAtTime: getAnnotateRegionAtTime,
     getExportData: getAnnotateExportData,
+    importAnnotations,
     MAX_NOTES_LENGTH: ANNOTATE_MAX_NOTES_LENGTH,
   } = useAnnotate(annotateVideoMetadata);
 
@@ -385,7 +427,7 @@ function App() {
   /**
    * Save current clip's state before switching
    */
-  const saveCurrentClipState = useCallback(() => {
+  const saveCurrentClipState = useCallback(async () => {
     if (!selectedClipId) {
       console.log('[App] saveCurrentClipState: No selectedClipId, skipping');
       return;
@@ -402,15 +444,26 @@ function App() {
     console.log('  - keyframes to save:', keyframes?.length, keyframes);
     console.log('  - segmentState:', segmentState);
 
-    // Save current crop keyframes
+    // Save to local clip manager state
     updateClipData(selectedClipId, {
       segments: segmentState,
       cropKeyframes: keyframes,
       trimRange: trimRange
     });
 
+    // If this is a project clip, also save to backend
+    const currentClip = clips.find(c => c.id === selectedClipId);
+    if (currentClip?.workingClipId && selectedProjectId) {
+      console.log('[App] Saving framing edits to backend for working clip:', currentClip.workingClipId);
+      await saveFramingEdits(currentClip.workingClipId, {
+        cropKeyframes: keyframes,
+        segments: segmentState,
+        trimRange: trimRange
+      });
+    }
+
     console.log('[App] Saved state for clip:', selectedClipId);
-  }, [selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, keyframes, updateClipData]);
+  }, [selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, keyframes, updateClipData, clips, selectedProjectId, saveFramingEdits]);
 
   /**
    * Handle file selection - adds clip to clip manager
@@ -561,23 +614,11 @@ function App() {
   }, [annotateVideoUrl]);
 
   /**
-   * Helper function to convert base64 string to Blob
-   */
-  const base64ToBlob = useCallback((base64, mimeType) => {
-    const byteCharacters = atob(base64);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    return new Blob([byteArray], { type: mimeType });
-  }, []);
-
-  /**
    * Handle exporting clips from Annotate mode
-   * 1. Send clips to backend for cutting
-   * 2. Download annotated source video to client
-   * 3. Load cut clips into Framing mode
+   * 1. Send clips to backend
+   * 2. Backend saves good/brilliant clips and creates projects
+   * 3. Trigger downloads via URL endpoints
+   * 4. Return to Project Manager
    */
   const handleAnnotateExport = useCallback(async (clipData) => {
     console.log('[App] Annotate export requested with clips:', clipData);
@@ -591,101 +632,109 @@ function App() {
     try {
       console.log('[App] Starting annotate export...');
 
-      // Prepare form data for backend
+      // Prepare form data
       const formData = new FormData();
       formData.append('video', annotateVideoFile);
-      formData.append('clips_json', JSON.stringify(clipData));
+
+      // Format clips for API (remove position field if present)
+      const clipsForApi = clipData.map(clip => ({
+        start_time: clip.start_time,
+        end_time: clip.end_time,
+        name: clip.name,
+        notes: clip.notes || '',
+        rating: clip.rating || 3,
+        tags: clip.tags || []
+      }));
+
+      formData.append('clips_json', JSON.stringify(clipsForApi));
 
       // Call backend export endpoint
-      const response = await fetch('http://localhost:8000/api/annotate/export-individual', {
+      console.log('[App] Sending export request...');
+      const response = await fetch('http://localhost:8000/api/annotate/export', {
         method: 'POST',
         body: formData,
       });
+
+      console.log('[App] Export response status:', response.status);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || `Export failed: ${response.status}`);
       }
 
+      // Parse response (now lightweight - just URLs, no base64)
       const result = await response.json();
+
       console.log('[App] Annotate export response:', {
-        clipCount: result.clips?.length,
-        hasAnnotatedSource: !!result.annotated_source
+        success: result.success,
+        rawClipsCount: result.created?.raw_clips?.length,
+        projectsCount: result.created?.projects?.length,
+        downloads: Object.keys(result.downloads || {})
       });
 
-      // Download annotated source video
-      if (result.annotated_source) {
-        const annotatedBlob = base64ToBlob(result.annotated_source.data, 'video/mp4');
-        const downloadUrl = URL.createObjectURL(annotatedBlob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = result.annotated_source.filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(downloadUrl);
-        console.log('[App] Downloaded annotated source:', result.annotated_source.filename);
+      // Trigger downloads via URL endpoints
+      if (result.downloads) {
+        // 1. Download annotations.tsv
+        if (result.downloads.annotations?.url) {
+          console.log('[App] Downloading annotations TSV...');
+          const a = document.createElement('a');
+          a.href = `http://localhost:8000${result.downloads.annotations.url}`;
+          a.download = result.downloads.annotations.filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          console.log('[App] Downloaded:', result.downloads.annotations.filename);
+        }
+
+        // 2. Download clips compilation video
+        if (result.downloads.clips_compilation?.url) {
+          console.log('[App] Downloading clips compilation...');
+          // Small delay to avoid browser blocking multiple downloads
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const a = document.createElement('a');
+          a.href = `http://localhost:8000${result.downloads.clips_compilation.url}`;
+          a.download = result.downloads.clips_compilation.filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          console.log('[App] Downloaded:', result.downloads.clips_compilation.filename);
+        }
       }
 
-      // Clean up annotate state first
+      // Clean up annotate state
       if (annotateVideoUrl) {
         URL.revokeObjectURL(annotateVideoUrl);
       }
       setAnnotateVideoFile(null);
       setAnnotateVideoUrl(null);
       setAnnotateVideoMetadata(null);
+      resetAnnotate();
 
-      // Reset framing state for fresh start
-      resetSegments();
-      resetCrop();
-      resetHighlight();
-      resetHighlightRegions();
-      setSelectedLayer('playhead');
+      // Refresh projects list
+      await fetchProjects();
 
-      // Load extracted clips into Framing mode
-      if (result.clips && result.clips.length > 0) {
-        for (let i = 0; i < result.clips.length; i++) {
-          const clip = result.clips[i];
+      // Show success message with what was created
+      const projectsCreated = result.created?.projects?.length || 0;
+      const clipsCreated = result.created?.raw_clips?.length || 0;
+      const serverMessage = result.message || `Created ${clipsCreated} clips and ${projectsCreated} projects`;
 
-          // Convert base64 to File object
-          const clipBlob = base64ToBlob(clip.data, 'video/mp4');
-          const clipFile = new File([clipBlob], clip.filename, { type: 'video/mp4' });
+      console.log(`[App] ${serverMessage}`);
 
-          // Extract metadata from the clip
-          const clipMetadata = await extractVideoMetadata(clipFile);
+      // Show user-friendly success message
+      alert(`Export complete!\n\n${serverMessage}`);
 
-          // Add annotate-specific metadata
-          clipMetadata.annotateName = clip.name;
-          clipMetadata.annotateNotes = clip.notes;
-          clipMetadata.annotateStartTime = clip.start_time;
-          clipMetadata.annotateEndTime = clip.end_time;
+      // Return to Project Manager
+      setEditorMode('project-manager');
 
-          // Add clip to clip manager
-          const newClipId = addClip(clipFile, clipMetadata);
-
-          // If this is the first clip, load it
-          if (i === 0) {
-            setVideoFile(clipFile);
-            await loadVideo(clipFile);
-            selectClip(newClipId);
-          }
-
-          console.log(`[App] Added clip ${i + 1}/${result.clips.length}: ${clip.name}`);
-        }
-      }
-
-      // Switch to framing mode
-      setEditorMode('framing');
-
-      console.log('[App] Annotate export complete, transitioned to Framing mode');
+      console.log('[App] Annotate export complete');
 
     } catch (err) {
       console.error('[App] Annotate export failed:', err);
-      alert(`Export failed: ${err.message}`);
+      alert(`Export failed: ${err.message}\n\nNote: If clips were being saved, they may still be on the server.`);
     } finally {
       setIsAnnotateExporting(false);
     }
-  }, [annotateVideoFile, annotateVideoUrl, base64ToBlob, resetSegments, resetCrop, resetHighlight, resetHighlightRegions, addClip, loadVideo, selectClip]);
+  }, [annotateVideoFile, annotateVideoUrl, resetAnnotate, fetchProjects]);
 
   /**
    * Handle fullscreen toggle for Annotate mode
@@ -799,10 +848,18 @@ function App() {
     resetHighlight();
     resetHighlightRegions();
     setSelectedLayer('playhead');
-    setVideoFile(clip.file);
 
-    // Load the video
-    await loadVideo(clip.file);
+    // Load the video - project clips use fileUrl, local clips use file
+    if (clip.file) {
+      setVideoFile(clip.file);
+      await loadVideo(clip.file);
+    } else if (clip.fileUrl) {
+      console.log('[App] Loading clip from URL:', clip.fileUrl);
+      await loadVideoFromUrl(clip.fileUrl, clip.fileName);
+    } else {
+      console.error('[App] Clip has no file or fileUrl:', clipId);
+      return;
+    }
 
     // Restore saved state for this clip (if any)
     const hasSavedSegments = clip.segments && (
@@ -824,7 +881,7 @@ function App() {
     }
 
     console.log('[App] Switched to clip:', clipId, clip.fileName);
-  }, [selectedClipId, saveCurrentClipState, clips, selectClip, resetSegments, resetCrop, resetHighlight, resetHighlightRegions, loadVideo, restoreSegmentState, restoreCropState]);
+  }, [selectedClipId, saveCurrentClipState, clips, selectClip, resetSegments, resetCrop, resetHighlight, resetHighlightRegions, loadVideo, loadVideoFromUrl, restoreSegmentState, restoreCropState]);
 
   /**
    * Handle clip deletion from sidebar
@@ -1918,6 +1975,77 @@ function App() {
     return filtered;
   }, [isHighlightEnabled, getHighlightKeyframesForExport, getSegmentExportData, duration, editorMode]);
 
+  // If no project selected and not in annotate mode, show ProjectManager
+  if (!selectedProject && editorMode !== 'annotate') {
+    return (
+      <div className="min-h-screen bg-gray-900">
+        {/* Hidden file input for Annotate Game - triggers file picker directly */}
+        <input
+          ref={annotateFileInputRef}
+          type="file"
+          accept="video/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              clearSelection();
+              handleGameVideoSelect(file);
+            }
+            // Reset input so same file can be selected again
+            e.target.value = '';
+          }}
+        />
+        <ProjectManager
+          projects={projects}
+          loading={projectsLoading}
+          onSelectProject={async (id) => {
+            console.log('[App] Selecting project:', id);
+            const project = await selectProject(id);
+            setEditorMode('framing');
+
+            // Clear existing clips before loading new ones
+            clearClips();
+
+            // Fetch clips for the project - pass project ID explicitly since React state may not have updated yet
+            const projectClipsData = await fetchProjectClips(id);
+            console.log('[App] Fetched project clips:', projectClipsData);
+
+            if (projectClipsData && projectClipsData.length > 0) {
+              // Helper to get video metadata from URL
+              const getMetadataFromUrl = async (url) => {
+                return await extractVideoMetadataFromUrl(url);
+              };
+
+              // Helper to get clip URL with explicit project ID
+              const getClipUrl = (clipId) => getClipFileUrl(clipId, id);
+
+              // Load all clips into the clip manager
+              console.log('[App] Loading clips into clip manager...');
+              await loadProjectClips(
+                projectClipsData,
+                getClipUrl,
+                getMetadataFromUrl,
+                project?.aspect_ratio || '9:16'
+              );
+
+              // Load the first clip for video playback
+              const firstClip = projectClipsData[0];
+              const clipUrl = getClipFileUrl(firstClip.id, id);
+              console.log('[App] Loading first clip for playback:', firstClip.id, clipUrl);
+              await loadVideoFromUrl(clipUrl, firstClip.filename || 'clip.mp4');
+            }
+          }}
+          onCreateProject={createProject}
+          onDeleteProject={deleteProject}
+          onAnnotate={() => {
+            // Directly open file picker instead of showing empty annotate mode
+            annotateFileInputRef.current?.click();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
       {/* Sidebar - Framing mode (when clips exist) */}
@@ -1942,6 +2070,7 @@ function App() {
           onSelectRegion={handleSelectAnnotateRegion}
           onUpdateRegion={updateClipRegion}
           onDeleteRegion={deleteClipRegion}
+          onImportAnnotations={importAnnotations}
           maxNotesLength={ANNOTATE_MAX_NOTES_LENGTH}
           clipCount={annotateClipCount}
           videoDuration={annotateVideoMetadata?.duration}
@@ -1953,13 +2082,37 @@ function App() {
         <div className="container mx-auto px-4 py-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-4xl font-bold text-white mb-2">
-                Player Showcase
-              </h1>
-              <p className="text-gray-400">
-                Showcase your player's brilliance
-              </p>
+            <div className="flex items-center gap-4">
+              {/* Back to Projects button - show in all editor modes */}
+              {(editorMode === 'annotate' || editorMode === 'framing' || editorMode === 'overlay') && (
+                <button
+                  onClick={() => {
+                    // Clear project selection
+                    clearSelection();
+                    // Clear annotate state if in annotate mode
+                    if (editorMode === 'annotate') {
+                      setAnnotateVideoFile(null);
+                      setAnnotateVideoUrl(null);
+                      setAnnotateVideoMetadata(null);
+                    }
+                    // Return to project manager
+                    setEditorMode('project-manager');
+                  }}
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                >
+                  ← Projects
+                </button>
+              )}
+              <div>
+                <h1 className="text-4xl font-bold text-white mb-2">
+                  {editorMode === 'annotate' ? 'Annotate Game' : 'Player Showcase'}
+                </h1>
+                <p className="text-gray-400">
+                  {editorMode === 'annotate'
+                    ? 'Mark clips to extract from your game footage'
+                    : 'Showcase your player\'s brilliance'}
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               {/* AspectRatioSelector - only in Framing mode when video is loaded */}
@@ -1972,20 +2125,18 @@ function App() {
                   } : updateAspectRatio}
                 />
               )}
-              {/* Mode toggle - always show when any video is loaded */}
-              {(videoUrl || annotateVideoUrl) && (
-                <ModeSwitcher
-                  mode={editorMode}
-                  onModeChange={handleModeChange}
-                  hasAnnotateVideo={!!annotateVideoUrl}
-                  hasFramingVideo={!!videoUrl}
-                />
-              )}
-              {/* Add button - only show when no video loaded (Framing mode has Add in ClipSelectorSidebar) */}
-              {!videoUrl && editorMode !== 'annotate' && (
+              {/* Mode toggle - project-aware visibility */}
+              <ModeSwitcher
+                mode={editorMode}
+                onModeChange={handleModeChange}
+                disabled={isLoading}
+                hasProject={!!selectedProject}
+                hasWorkingVideo={selectedProject?.working_video_id != null}
+                hasAnnotateVideo={!!annotateVideoUrl}
+              />
+              {/* Annotate mode - show file upload when no game video loaded */}
+              {editorMode === 'annotate' && !annotateVideoUrl && (
                 <FileUpload
-                  onFileSelect={handleFileSelect}
-                  onFramedVideoSelect={handleFramedVideoSelect}
                   onGameVideoSelect={handleGameVideoSelect}
                   isLoading={isLoading}
                 />
@@ -2172,7 +2323,7 @@ function App() {
             onZoomChange={zoomByWheel}
             onPanChange={updatePan}
             isFullscreen={editorMode === 'annotate' && annotateFullscreen}
-            isInClipRegion={editorMode === 'annotate' && !!getAnnotateRegionAtTime(currentTime)}
+            clipRating={editorMode === 'annotate' ? getAnnotateRegionAtTime(currentTime)?.rating ?? null : null}
           />
           {/* Controls - inside video container to match video width */}
           {/* Annotate mode uses AnnotateControls with speed and fullscreen */}

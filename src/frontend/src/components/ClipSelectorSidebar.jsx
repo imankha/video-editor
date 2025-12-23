@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import { GripVertical, X, Plus, Film, MessageSquare } from 'lucide-react';
+import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library } from 'lucide-react';
+import { ClipLibraryModal } from './ClipLibraryModal';
 
 /**
  * ClipSelectorSidebar - Sidebar for managing multiple video clips
@@ -19,6 +20,8 @@ import { GripVertical, X, Plus, Film, MessageSquare } from 'lucide-react';
  * @param {Function} onReorderClips - Callback when clips are reordered via drag
  * @param {Object} globalTransition - Current transition settings { type, duration }
  * @param {Function} onTransitionChange - Callback to change transition
+ * @param {Function} onAddFromLibrary - Callback for adding clips from library
+ * @param {Array} existingRawClipIds - Raw clip IDs already in the project
  */
 export function ClipSelectorSidebar({
   clips,
@@ -28,10 +31,14 @@ export function ClipSelectorSidebar({
   onDeleteClip,
   onReorderClips,
   globalTransition,
-  onTransitionChange
+  onTransitionChange,
+  onAddFromLibrary,
+  existingRawClipIds = []
 }) {
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showLibraryModal, setShowLibraryModal] = useState(false);
   const fileInputRef = useRef(null);
 
   /**
@@ -62,6 +69,15 @@ export function ClipSelectorSidebar({
    */
   const handleAddClick = () => {
     fileInputRef.current?.click();
+  };
+
+  /**
+   * Handle library clip selection
+   */
+  const handleLibrarySelect = (rawClipId) => {
+    if (onAddFromLibrary) {
+      onAddFromLibrary(rawClipId);
+    }
   };
 
   /**
@@ -234,15 +250,51 @@ export function ClipSelectorSidebar({
         )}
       </div>
 
-      {/* Add clip button */}
+      {/* Add clip section */}
       <div className="p-3 border-t border-gray-700">
-        <button
-          onClick={handleAddClick}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          <Plus size={16} />
-          <span>Add</span>
-        </button>
+        {showAddMenu ? (
+          <div className="space-y-2">
+            {/* Upload option */}
+            <button
+              onClick={() => {
+                fileInputRef.current?.click();
+                setShowAddMenu(false);
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+            >
+              <Upload size={16} />
+              <span>Upload Clip</span>
+            </button>
+
+            {/* Library option */}
+            <button
+              onClick={() => {
+                setShowLibraryModal(true);
+                setShowAddMenu(false);
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+            >
+              <Library size={16} />
+              <span>From Library</span>
+            </button>
+
+            {/* Cancel */}
+            <button
+              onClick={() => setShowAddMenu(false)}
+              className="w-full px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowAddMenu(true)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus size={16} />
+            <span>Add Clip</span>
+          </button>
+        )}
 
         {/* Hidden file input (supports multiple files) */}
         <input
@@ -254,6 +306,14 @@ export function ClipSelectorSidebar({
           multiple
         />
       </div>
+
+      {/* Library Modal */}
+      <ClipLibraryModal
+        isOpen={showLibraryModal}
+        onClose={() => setShowLibraryModal(false)}
+        onSelectClip={handleLibrarySelect}
+        existingClipIds={existingRawClipIds}
+      />
 
       {/* Total duration */}
       {clips.length > 1 && (
