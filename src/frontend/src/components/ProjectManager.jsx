@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle } from 'lucide-react';
 
 /**
  * ProjectManager - Shown when no project is selected
  *
  * Displays:
- * - List of existing projects with progress bars
- * - Button to create new project
- * - Button to enter Annotate mode
+ * - Tab navigation: Games | Projects
+ * - Games: List of saved games with option to load into annotate mode
+ * - Projects: List of existing projects with progress bars
+ * - Buttons to add new game or create new project
  */
 export function ProjectManager({
   projects,
@@ -15,9 +16,23 @@ export function ProjectManager({
   onSelectProject,
   onCreateProject,
   onDeleteProject,
-  onAnnotate
+  onAnnotate,
+  // Games props
+  games = [],
+  gamesLoading = false,
+  onLoadGame,
+  onDeleteGame,
+  onFetchGames,
 }) {
+  const [activeTab, setActiveTab] = useState('projects'); // 'games' | 'projects'
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+
+  // Fetch games when switching to games tab
+  useEffect(() => {
+    if (activeTab === 'games' && onFetchGames) {
+      onFetchGames();
+    }
+  }, [activeTab, onFetchGames]);
 
   const handleCreateProject = async (name, aspectRatio) => {
     await onCreateProject(name, aspectRatio);
@@ -25,56 +40,124 @@ export function ProjectManager({
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-gray-900">
+    <div className="flex-1 flex flex-col items-center p-8 bg-gray-900">
       {/* Header */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-6">
         <FolderOpen size={48} className="mx-auto mb-4 text-purple-400" />
-        <h1 className="text-2xl font-bold text-white mb-2">Project Manager</h1>
-        <p className="text-gray-400">Select a project or create a new one</p>
+        <h1 className="text-2xl font-bold text-white mb-2">Clipify</h1>
+        <p className="text-gray-400">Manage your games and projects</p>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex gap-4 mb-8">
+      {/* Tab Navigation */}
+      <div className="flex gap-1 mb-6 bg-gray-800 rounded-lg p-1">
         <button
-          onClick={() => setShowNewProjectModal(true)}
-          className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+          onClick={() => setActiveTab('games')}
+          className={`flex items-center gap-2 px-6 py-2 rounded-md font-medium transition-colors ${
+            activeTab === 'games'
+              ? 'bg-green-600 text-white'
+              : 'text-gray-400 hover:text-white hover:bg-gray-700'
+          }`}
         >
-          <Plus size={20} />
-          New Project
+          <Gamepad2 size={18} />
+          Games
+          {games.length > 0 && (
+            <span className="ml-1 px-2 py-0.5 text-xs bg-gray-700 rounded-full">
+              {games.length}
+            </span>
+          )}
         </button>
         <button
-          onClick={onAnnotate}
-          className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+          onClick={() => setActiveTab('projects')}
+          className={`flex items-center gap-2 px-6 py-2 rounded-md font-medium transition-colors ${
+            activeTab === 'projects'
+              ? 'bg-purple-600 text-white'
+              : 'text-gray-400 hover:text-white hover:bg-gray-700'
+          }`}
         >
-          <Film size={20} />
-          Annotate Game
+          <FolderOpen size={18} />
+          Projects
+          {projects.length > 0 && (
+            <span className="ml-1 px-2 py-0.5 text-xs bg-gray-700 rounded-full">
+              {projects.length}
+            </span>
+          )}
         </button>
       </div>
 
-      {/* Projects List */}
-      {loading ? (
-        <div className="text-gray-400">Loading projects...</div>
-      ) : projects.length === 0 ? (
-        <div className="text-gray-500 text-center">
-          <p className="mb-2">No projects yet</p>
-          <p className="text-sm">Create a new project or annotate a game to get started</p>
-        </div>
-      ) : (
-        <div className="w-full max-w-2xl">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
-            Your Projects
-          </h2>
-          <div className="space-y-2">
-            {projects.map(project => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onSelect={() => onSelectProject(project.id)}
-                onDelete={() => onDeleteProject(project.id)}
-              />
-            ))}
+      {/* Action Button */}
+      <div className="mb-8">
+        {activeTab === 'games' ? (
+          <button
+            onClick={onAnnotate}
+            className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+          >
+            <Plus size={20} />
+            Add Game
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowNewProjectModal(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+          >
+            <Plus size={20} />
+            New Project
+          </button>
+        )}
+      </div>
+
+      {/* Content */}
+      {activeTab === 'games' ? (
+        /* Games List */
+        gamesLoading ? (
+          <div className="text-gray-400">Loading games...</div>
+        ) : games.length === 0 ? (
+          <div className="text-gray-500 text-center">
+            <p className="mb-2">No games yet</p>
+            <p className="text-sm">Add a game to annotate your footage</p>
           </div>
-        </div>
+        ) : (
+          <div className="w-full max-w-2xl">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
+              Your Games
+            </h2>
+            <div className="space-y-2">
+              {games.map(game => (
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  onLoad={() => onLoadGame(game.id)}
+                  onDelete={() => onDeleteGame(game.id)}
+                />
+              ))}
+            </div>
+          </div>
+        )
+      ) : (
+        /* Projects List */
+        loading ? (
+          <div className="text-gray-400">Loading projects...</div>
+        ) : projects.length === 0 ? (
+          <div className="text-gray-500 text-center">
+            <p className="mb-2">No projects yet</p>
+            <p className="text-sm">Create a new project or add a game to get started</p>
+          </div>
+        ) : (
+          <div className="w-full max-w-2xl">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
+              Your Projects
+            </h2>
+            <div className="space-y-2">
+              {projects.map(project => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onSelect={() => onSelectProject(project.id)}
+                  onDelete={() => onDeleteProject(project.id)}
+                />
+              ))}
+            </div>
+          </div>
+        )
       )}
 
       {/* New Project Modal */}
@@ -84,6 +167,69 @@ export function ProjectManager({
           onCreate={handleCreateProject}
         />
       )}
+    </div>
+  );
+}
+
+
+/**
+ * GameCard - Individual game in the list
+ */
+function GameCard({ game, onLoad, onDelete }) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    if (showDeleteConfirm) {
+      onDelete();
+    } else {
+      setShowDeleteConfirm(true);
+      setTimeout(() => setShowDeleteConfirm(false), 3000);
+    }
+  };
+
+  return (
+    <div
+      onClick={onLoad}
+      className="group relative p-4 bg-gray-800 hover:bg-gray-750 rounded-lg cursor-pointer border border-gray-700 hover:border-green-500 transition-all"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <Gamepad2 size={18} className="text-green-400" />
+            <h3 className="text-white font-medium">{game.name}</h3>
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
+            <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>
+            <span>•</span>
+            <span>{new Date(game.created_at).toLocaleDateString()}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Load button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onLoad(); }}
+            className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
+          >
+            <PlayCircle size={14} />
+            Load
+          </button>
+
+          {/* Delete button */}
+          <button
+            onClick={handleDelete}
+            className={`p-2 rounded transition-colors ${
+              showDeleteConfirm
+                ? 'bg-red-600 text-white'
+                : 'text-gray-500 hover:text-red-400 hover:bg-gray-700 opacity-0 group-hover:opacity-100'
+            }`}
+            title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

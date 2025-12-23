@@ -220,20 +220,26 @@ export function useClipManager() {
       setGlobalAspectRatioState(projectAspectRatio);
     }
 
-    const createdIds = [];
-
-    for (const projectClip of projectClips) {
+    // Fetch all metadata in parallel for faster loading
+    const clipPromises = projectClips.map(async (projectClip) => {
       const fileUrl = getClipFileUrl(projectClip.id);
-
       try {
-        // Get video metadata
         const metadata = await getVideoMetadata(fileUrl);
-
-        // Add the clip
-        const clipId = addClipFromProject(projectClip, fileUrl, metadata);
-        createdIds.push(clipId);
+        return { projectClip, fileUrl, metadata, success: true };
       } catch (error) {
         console.error('[useClipManager] Failed to load clip:', projectClip.id, error);
+        return { projectClip, fileUrl, metadata: null, success: false };
+      }
+    });
+
+    const results = await Promise.all(clipPromises);
+
+    // Add clips in order (preserving sort order)
+    const createdIds = [];
+    for (const result of results) {
+      if (result.success && result.metadata) {
+        const clipId = addClipFromProject(result.projectClip, result.fileUrl, result.metadata);
+        createdIds.push(clipId);
       }
     }
 

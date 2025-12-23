@@ -181,7 +181,7 @@ export function VideoPlayer({
               onSeeking={handlers.onSeeking}
               onSeeked={handlers.onSeeked}
               onLoadedMetadata={handlers.onLoadedMetadata}
-              preload="metadata"
+              preload="auto"
               style={{ pointerEvents: 'none' }}
             />
           </div>

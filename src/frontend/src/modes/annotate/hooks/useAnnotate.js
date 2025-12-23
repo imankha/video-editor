@@ -229,6 +229,12 @@ export default function useAnnotate(videoMetadata) {
   // Color index for auto-assignment
   const [colorIndex, setColorIndex] = useState(0);
 
+  // Pending annotations to import once duration is available
+  const [pendingAnnotations, setPendingAnnotations] = useState(null);
+
+  // Loading state for UI feedback
+  const [isLoadingAnnotations, setIsLoadingAnnotations] = useState(false);
+
   /**
    * Auto-initialize duration from videoMetadata when it changes
    */
@@ -238,6 +244,45 @@ export default function useAnnotate(videoMetadata) {
       setDuration(videoMetadata.duration);
     }
   }, [videoMetadata?.duration]);
+
+  /**
+   * Process pending annotations once duration is available
+   */
+  useEffect(() => {
+    if (duration && pendingAnnotations && pendingAnnotations.length > 0) {
+      console.log('[useAnnotate] Duration now available, processing pending annotations:', pendingAnnotations.length);
+
+      const newRegions = pendingAnnotations.map((annotation, index) => {
+        const color = CLIP_COLORS[(colorIndex + index) % CLIP_COLORS.length];
+        const startTime = annotation.startTime ?? annotation.start_time ?? 0;
+        const endTime = annotation.endTime ?? annotation.end_time ?? startTime;
+
+        return {
+          id: generateClipId(),
+          startTime: Math.max(0, Math.min(startTime, duration - MIN_CLIP_DURATION)),
+          endTime: Math.min(endTime, duration),
+          name: annotation.name || formatTimestampForName(startTime),
+          position: '',
+          tags: annotation.tags || [],
+          notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),
+          rating: Math.max(1, Math.min(5, annotation.rating || DEFAULT_RATING)),
+          color,
+          createdAt: new Date()
+        };
+      });
+
+      setClipRegions(prev => [...prev, ...newRegions]);
+      setColorIndex(prev => prev + newRegions.length);
+
+      if (newRegions.length > 0) {
+        setSelectedRegionId(newRegions[0].id);
+      }
+
+      console.log(`[useAnnotate] Imported ${newRegions.length} pending annotations`);
+      setPendingAnnotations(null);
+      setIsLoadingAnnotations(false);
+    }
+  }, [duration, pendingAnnotations, colorIndex]);
 
   /**
    * Initialize with video duration
@@ -505,13 +550,22 @@ export default function useAnnotate(videoMetadata) {
   }, [clipRegions]);
 
   /**
-   * Import annotations from a validated TSV file
-   * @param {Array} annotations - Array of parsed annotations from validateTsvContent
-   * @returns {number} - Number of clips imported
+   * Import annotations from TSV file or backend API
+   * Handles both camelCase (TSV parser) and snake_case (backend API) field names
+   * If duration is not yet available, queues annotations for later processing
+   * @param {Array} annotations - Array of parsed annotations
+   * @returns {number} - Number of clips imported (0 if queued for later)
    */
   const importAnnotations = useCallback((annotations) => {
+    if (!annotations || annotations.length === 0) {
+      return 0;
+    }
+
+    // If duration not available yet, queue for later
     if (!duration) {
-      console.warn('[useAnnotate] Cannot import annotations - no video duration set');
+      console.log('[useAnnotate] Duration not available, queueing', annotations.length, 'annotations for later');
+      setPendingAnnotations(annotations);
+      setIsLoadingAnnotations(true);
       return 0;
     }
 
@@ -519,11 +573,15 @@ export default function useAnnotate(videoMetadata) {
       // Auto-assign color
       const color = CLIP_COLORS[(colorIndex + index) % CLIP_COLORS.length];
 
+      // Handle both camelCase (TSV) and snake_case (backend API) field names
+      const startTime = annotation.startTime ?? annotation.start_time ?? 0;
+      const endTime = annotation.endTime ?? annotation.end_time ?? startTime;
+
       return {
         id: generateClipId(),
-        startTime: Math.max(0, Math.min(annotation.startTime, duration - MIN_CLIP_DURATION)),
-        endTime: Math.min(annotation.endTime, duration),
-        name: annotation.name || formatTimestampForName(annotation.startTime),
+        startTime: Math.max(0, Math.min(startTime, duration - MIN_CLIP_DURATION)),
+        endTime: Math.min(endTime, duration),
+        name: annotation.name || formatTimestampForName(startTime),
         position: '',
         tags: annotation.tags || [],
         notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),
@@ -564,6 +622,7 @@ export default function useAnnotate(videoMetadata) {
     duration,
     hasClips,
     clipCount,
+    isLoadingAnnotations,
 
     // Actions
     initialize,

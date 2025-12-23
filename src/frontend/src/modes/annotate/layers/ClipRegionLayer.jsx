@@ -105,10 +105,10 @@ export default function ClipRegionLayer({
               >
                 {notation}
               </div>
-              {/* Show name tooltip when selected */}
+              {/* Show clip number and name tooltip when selected - positioned above to avoid cutoff */}
               {isSelected && (
-                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-white bg-gray-900 px-1.5 py-0.5 rounded shadow">
-                  {region.name}
+                <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-white bg-gray-900 px-1.5 py-0.5 rounded shadow z-30">
+                  <span className="text-gray-400">{region.index + 1}.</span> {region.name}
                 </div>
               )}
             </div>

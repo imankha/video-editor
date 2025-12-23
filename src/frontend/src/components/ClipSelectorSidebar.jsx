@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library } from 'lucide-react';
 import { ClipLibraryModal } from './ClipLibraryModal';
+import { getRatingDisplay, formatDuration } from './shared/clipConstants';
 
 /**
  * ClipSelectorSidebar - Sidebar for managing multiple video clips
@@ -11,8 +12,9 @@ import { ClipLibraryModal } from './ClipLibraryModal';
  * - Drag-and-drop to reorder clips
  * - Delete button per clip
  * - Add clip button (opens file picker)
+ * - Rating badges for clips imported from annotate mode
  *
- * @param {Array} clips - Array of clip objects: { id, file, fileName, duration, ... }
+ * @param {Array} clips - Array of clip objects: { id, file, fileName, duration, rating?, ... }
  * @param {string} selectedClipId - Currently selected clip ID
  * @param {Function} onSelectClip - Callback when clip is clicked
  * @param {Function} onAddClip - Callback to add new clip
@@ -40,14 +42,6 @@ export function ClipSelectorSidebar({
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const fileInputRef = useRef(null);
-
-  /**
-   * Format duration as MM:SS.ms
-   */
-  const formatDuration = (seconds) => {
-    if (!seconds || isNaN(seconds)) return '0.0s';
-    return `${seconds.toFixed(1)}s`;
-  };
 
   /**
    * Handle file selection (supports multiple files)
@@ -163,84 +157,109 @@ export function ClipSelectorSidebar({
         </div>
       </div>
 
-      {/* Clip list */}
-      <div className="flex-1 overflow-y-auto">
-        {clips.map((clip, index) => (
-          <div
-            key={clip.id}
-            draggable
-            onDragStart={(e) => handleDragStart(e, index)}
-            onDragOver={(e) => handleDragOver(e, index)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, index)}
-            onDragEnd={handleDragEnd}
-            onClick={() => onSelectClip(clip.id)}
-            className={`
-              relative group cursor-pointer border-b border-gray-800 transition-all
-              ${selectedClipId === clip.id
-                ? 'bg-purple-900/40 border-l-2 border-l-purple-500'
-                : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'
-              }
-              ${dragOverIndex === index ? 'border-t-2 border-t-purple-500' : ''}
-              ${draggedIndex === index ? 'opacity-50' : ''}
-            `}
-          >
-            <div className="flex items-center px-2 py-3">
-              {/* Drag handle */}
-              <div className="mr-2 cursor-grab text-gray-500 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">
-                <GripVertical size={14} />
-              </div>
+      {/* Clip list - scrollable with custom scrollbar */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        {clips.map((clip, index) => {
+          // Get rating display info if clip has a rating
+          const hasRating = clip.rating != null;
+          const ratingInfo = hasRating ? getRatingDisplay(clip.rating) : null;
+          const isSelected = selectedClipId === clip.id;
 
-              {/* Clip info */}
-              <div className="flex-1 min-w-0">
-                {/* Clip name - use annotate name if available */}
-                <div
-                  className="text-sm text-white truncate"
-                  title={clip.annotateName || clip.fileName}
-                >
-                  {clip.annotateName || clip.fileNameDisplay || clip.fileName}
+          return (
+            <div
+              key={clip.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              onClick={() => onSelectClip(clip.id)}
+              className={`
+                group cursor-pointer border-b border-gray-800 transition-all
+                ${isSelected
+                  ? 'border-l-2'
+                  : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'
+                }
+                ${dragOverIndex === index ? 'border-t-2 border-t-purple-500' : ''}
+                ${draggedIndex === index ? 'opacity-50' : ''}
+              `}
+              style={{
+                backgroundColor: isSelected
+                  ? (hasRating ? ratingInfo.backgroundColor : 'rgba(147, 51, 234, 0.25)')
+                  : undefined,
+                borderLeftColor: isSelected
+                  ? (hasRating ? ratingInfo.badgeColor : 'rgb(147, 51, 234)')
+                  : undefined,
+              }}
+            >
+              <div className="flex items-center px-2 py-3">
+                {/* Drag handle */}
+                <div className="mr-2 cursor-grab text-gray-500 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <GripVertical size={14} />
                 </div>
-                {/* Duration and source info */}
-                <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                  <span>{formatDuration(clip.duration)}</span>
-                  {/* Show notes indicator if clip has annotate notes */}
-                  {clip.annotateNotes && (
-                    <span
-                      className="inline-flex items-center text-purple-400"
-                      title={clip.annotateNotes}
-                    >
-                      <MessageSquare size={10} className="mr-0.5" />
-                      <span className="truncate max-w-[60px]">
-                        {clip.annotateNotes.length > 15
-                          ? clip.annotateNotes.slice(0, 15) + '...'
-                          : clip.annotateNotes}
+
+                {/* Rating badge (if clip has rating from annotate) */}
+                {hasRating && (
+                  <div
+                    className="px-1.5 py-0.5 mr-2 rounded font-bold text-xs flex-shrink-0"
+                    style={{
+                      backgroundColor: ratingInfo.badgeColor,
+                      color: '#ffffff',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                      border: '1px solid rgba(0,0,0,0.3)',
+                    }}
+                    title={`Rating: ${clip.rating}/5`}
+                  >
+                    {ratingInfo.notation}
+                  </div>
+                )}
+
+                {/* Clip info */}
+                <div className="flex-1 min-w-0">
+                  {/* Clip number and name on same line */}
+                  <div
+                    className="text-sm text-white truncate"
+                    title={clip.annotateName || clip.fileName}
+                  >
+                    <span className="text-gray-500 mr-1">{index + 1}.</span>
+                    {clip.annotateName || clip.fileNameDisplay || clip.fileName}
+                  </div>
+                  {/* Duration and source info */}
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <span>{formatDuration(clip.duration)}</span>
+                    {/* Show notes indicator if clip has annotate notes */}
+                    {clip.annotateNotes && (
+                      <span
+                        className="inline-flex items-center text-purple-400"
+                        title={clip.annotateNotes}
+                      >
+                        <MessageSquare size={10} className="mr-0.5" />
+                        <span className="truncate max-w-[60px]">
+                          {clip.annotateNotes.length > 15
+                            ? clip.annotateNotes.slice(0, 15) + '...'
+                            : clip.annotateNotes}
+                        </span>
                       </span>
-                    </span>
-                  )}
+                    )}
+                  </div>
                 </div>
+
+                {/* Delete button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteClip(clip.id);
+                  }}
+                  className="ml-2 p-1 rounded hover:bg-red-600/30 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                  title="Remove clip"
+                >
+                  <X size={14} />
+                </button>
               </div>
-
-              {/* Delete button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteClip(clip.id);
-                }}
-                className="ml-2 p-1 rounded hover:bg-red-600/30 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                title="Remove clip"
-              >
-                <X size={14} />
-              </button>
             </div>
-
-            {/* Clip number indicator */}
-            <div className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center pointer-events-none">
-              <span className="text-[10px] text-gray-600 font-mono">
-                {index + 1}
-              </span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* Empty state */}
         {clips.length === 0 && (

@@ -33,7 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import routers and websocket handler
-from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router
+from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router
 from app.websocket import websocket_export_progress
 from app.database import init_database
 
@@ -67,6 +67,7 @@ app.include_router(detection_router)
 app.include_router(annotate_router)
 app.include_router(projects_router)
 app.include_router(clips_router)
+app.include_router(games_router)
 
 
 # WebSocket endpoint for export progress

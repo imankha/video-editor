@@ -65,6 +65,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * Load a video from URL (for server-side clips)
    * @param {string} url - URL to fetch video from
    * @param {string} filename - Optional filename for the created file
+   * @returns {Promise<File|null>} - The loaded file or null on error
    */
   const loadVideoFromUrl = async (url, filename = 'video.mp4') => {
     setError(null);
@@ -98,9 +99,12 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       setDuration(videoMetadata.duration);
       setCurrentTime(0);
       setIsLoading(false);
+
+      return file; // Return the file so caller can use it
     } catch (err) {
       setError(err.message || 'Failed to load video from URL');
       setIsLoading(false);
+      return null;
     }
   };
 

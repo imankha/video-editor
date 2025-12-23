@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Scissors, Upload, X, AlertCircle } from 'lucide-react';
+import { Scissors, Upload, X, AlertCircle, Loader } from 'lucide-react';
 import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
 import { validateTsvContent } from '../hooks/useAnnotate';
@@ -20,6 +20,7 @@ export function ClipsSidePanel({
   maxNotesLength,
   clipCount,
   videoDuration,
+  isLoading = false,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
   const fileInputRef = useRef(null);
@@ -63,7 +64,7 @@ export function ClipsSidePanel({
   };
 
   return (
-    <div className="w-56 bg-gray-900/95 border-r border-gray-700 flex flex-col h-full">
+    <div className="w-[352px] bg-gray-900/95 border-r border-gray-700 flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b border-gray-700">
         <div className="flex items-center gap-2 mb-2">
@@ -124,9 +125,14 @@ export function ClipsSidePanel({
         </div>
       )}
 
-      {/* Clip List */}
-      <div className="flex-1 overflow-y-auto">
-        {clipRegions.length === 0 ? (
+      {/* Clip List - scrollable with custom scrollbar */}
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+        {isLoading ? (
+          <div className="p-4 text-gray-400 text-sm text-center flex flex-col items-center gap-2">
+            <Loader size={20} className="animate-spin text-green-400" />
+            <span>Loading clips...</span>
+          </div>
+        ) : clipRegions.length === 0 ? (
           <div className="p-4 text-gray-500 text-sm text-center">
             No clips yet
           </div>

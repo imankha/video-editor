@@ -223,8 +223,8 @@ export function ClipDetailsEditor({
         </div>
 
         {/* Star Rating */}
-        <div>
-          <label className="block text-gray-400 text-xs mb-1">Rating</label>
+        <div className="flex items-center gap-2">
+          <label className="text-gray-400 text-xs w-16 shrink-0">Rating</label>
           <StarRating
             rating={region.rating || 3}
             onRatingChange={handleRatingChange}
@@ -241,26 +241,26 @@ export function ClipDetailsEditor({
         </div>
 
         {/* Name Input */}
-        <div>
-          <label className="block text-gray-400 text-xs mb-1">Name</label>
+        <div className="flex items-center gap-2">
+          <label className="text-gray-400 text-xs w-16 shrink-0">Name</label>
           <input
             type="text"
             value={region.name}
             onChange={handleNameChange}
-            className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+            className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
             placeholder="Clip name"
           />
         </div>
 
         {/* End Time (editable) */}
-        <div>
-          <label className="block text-gray-400 text-xs mb-1">End Time</label>
+        <div className="flex items-center gap-2">
+          <label className="text-gray-400 text-xs w-16 shrink-0">End Time</label>
           <input
             type="text"
             value={endTimeInput}
             onChange={handleEndTimeChange}
             onBlur={handleEndTimeBlur}
-            className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm font-mono focus:outline-none focus:border-green-500"
+            className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm font-mono focus:outline-none focus:border-green-500"
             placeholder="00:00.0"
           />
         </div>
@@ -289,11 +289,9 @@ export function ClipDetailsEditor({
         </div>
 
         {/* Start Time (calculated, read-only) */}
-        <div>
-          <label className="block text-gray-400 text-xs mb-1">
-            Start Time <span className="text-gray-500">(calculated)</span>
-          </label>
-          <div className="px-2 py-1.5 bg-gray-700/30 border border-gray-600/50 rounded text-gray-400 text-sm font-mono">
+        <div className="flex items-center gap-2">
+          <label className="text-gray-400 text-xs w-16 shrink-0">Start Time</label>
+          <div className="flex-1 px-2 py-1.5 bg-gray-700/30 border border-gray-600/50 rounded text-gray-400 text-sm font-mono">
             {formatTimeForDisplay(region.startTime)}
           </div>
         </div>

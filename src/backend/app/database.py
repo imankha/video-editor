@@ -27,6 +27,8 @@ UPLOADS_PATH = USER_DATA_PATH / "uploads"
 WORKING_VIDEOS_PATH = USER_DATA_PATH / "working_videos"
 FINAL_VIDEOS_PATH = USER_DATA_PATH / "final_videos"
 DOWNLOADS_PATH = USER_DATA_PATH / "downloads"  # Temporary export downloads
+GAMES_PATH = USER_DATA_PATH / "games"  # Game source videos
+CLIP_CACHE_PATH = USER_DATA_PATH / "clip_cache"  # Cached burned-in clips for reuse
 
 # Track if we've already initialized this session
 _initialized = False
@@ -48,7 +50,7 @@ def ensure_directories():
     Called automatically before database access.
     """
     for directory in [USER_DATA_PATH, RAW_CLIPS_PATH, UPLOADS_PATH,
-                      WORKING_VIDEOS_PATH, FINAL_VIDEOS_PATH, DOWNLOADS_PATH]:
+                      WORKING_VIDEOS_PATH, FINAL_VIDEOS_PATH, DOWNLOADS_PATH, GAMES_PATH, CLIP_CACHE_PATH]:
         directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -148,6 +150,19 @@ def ensure_database():
             )
         """)
 
+        # Games - store annotated game footage for later project creation
+        # video_filename is NULL until video is uploaded (allows instant game creation)
+        # annotations_filename points to a TSV file in the games folder
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                video_filename TEXT,
+                annotations_filename TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # Migration: Add new columns to existing tables (silently ignore if already exists)
         migrations = [
             # raw_clips new columns
@@ -163,6 +178,11 @@ def ensure_database():
             # working_videos overlay edit storage
             "ALTER TABLE working_videos ADD COLUMN highlights_data TEXT",
             "ALTER TABLE working_videos ADD COLUMN text_overlays TEXT",
+            # games video metadata (for faster loading without re-extracting)
+            "ALTER TABLE games ADD COLUMN video_duration REAL",
+            "ALTER TABLE games ADD COLUMN video_width INTEGER",
+            "ALTER TABLE games ADD COLUMN video_height INTEGER",
+            "ALTER TABLE games ADD COLUMN video_size INTEGER",
         ]
 
         for migration in migrations:
@@ -213,7 +233,7 @@ def init_database():
     # Ensure directories exist
     ensure_directories()
     for directory in [USER_DATA_PATH, RAW_CLIPS_PATH, UPLOADS_PATH,
-                      WORKING_VIDEOS_PATH, FINAL_VIDEOS_PATH, DOWNLOADS_PATH]:
+                      WORKING_VIDEOS_PATH, FINAL_VIDEOS_PATH, DOWNLOADS_PATH, GAMES_PATH, CLIP_CACHE_PATH]:
         logger.info(f"Ensured directory exists: {directory}")
 
     # Ensure database tables exist
@@ -234,7 +254,7 @@ def is_database_initialized() -> bool:
         tables = {row['name'] for row in cursor.fetchall()}
         conn.close()
         required = {'raw_clips', 'projects', 'working_clips',
-                   'working_videos', 'final_videos'}
+                   'working_videos', 'final_videos', 'games'}
         return required.issubset(tables)
     except Exception:
         return False

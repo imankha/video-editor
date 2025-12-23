@@ -235,10 +235,27 @@ export default function ExportButton({
           // Multi-clip export: Use multi-clip endpoint
           endpoint = 'http://localhost:8000/api/export/multi-clip';
 
-          // Append all clip files
-          clips.forEach((clip, index) => {
-            formData.append(`video_${index}`, clip.file);
-          });
+          // Append all clip files - handle both local files and project clips (URL-based)
+          for (let index = 0; index < clips.length; index++) {
+            const clip = clips[index];
+            if (clip.file) {
+              // Local file - append directly
+              formData.append(`video_${index}`, clip.file);
+            } else if (clip.fileUrl) {
+              // Project clip - fetch from URL first
+              console.log(`[ExportButton] Fetching clip ${index} from URL:`, clip.fileUrl);
+              setProgressMessage(`Preparing clip ${index + 1}/${clips.length}...`);
+              const response = await fetch(clip.fileUrl);
+              if (!response.ok) {
+                throw new Error(`Failed to fetch clip ${index}: ${response.status}`);
+              }
+              const blob = await response.blob();
+              const file = new File([blob], clip.fileName || `clip_${index}.mp4`, { type: 'video/mp4' });
+              formData.append(`video_${index}`, file);
+            } else {
+              throw new Error(`Clip ${index} has no file or fileUrl`);
+            }
+          }
 
           // Build multi-clip export data
           const multiClipData = {
