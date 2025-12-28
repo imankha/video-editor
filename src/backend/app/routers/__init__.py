@@ -9,6 +9,7 @@ This package contains FastAPI routers organized by functionality:
 - projects.py: Project CRUD endpoints
 - clips.py: Clip library and working clips endpoints
 - games.py: Game storage and management endpoints
+- downloads.py: Final video downloads management
 """
 
 from .health import router as health_router
@@ -18,5 +19,6 @@ from .annotate import router as annotate_router
 from .projects import router as projects_router
 from .clips import router as clips_router
 from .games import router as games_router
+from .downloads import router as downloads_router
 
-__all__ = ['health_router', 'export_router', 'detection_router', 'annotate_router', 'projects_router', 'clips_router', 'games_router']
+__all__ = ['health_router', 'export_router', 'detection_router', 'annotate_router', 'projects_router', 'clips_router', 'games_router', 'downloads_router']

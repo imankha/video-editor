@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Download, Loader, Upload, Settings } from 'lucide-react';
+import { Download, Loader, Upload, Settings, Image } from 'lucide-react';
+import { DownloadsPanel } from './components/DownloadsPanel';
+import { useDownloads } from './hooks/useDownloads';
 import { useVideo } from './hooks/useVideo';
 import useZoom from './hooks/useZoom';
 import useTimelineZoom from './hooks/useTimelineZoom';
@@ -53,6 +55,12 @@ function App() {
   // Clip metadata for auto-generating highlight regions (from Framing export)
   const [overlayClipMetadata, setOverlayClipMetadata] = useState(null);
 
+  // Track if framing has changed since last export (for showing warning on Overlay button)
+  const [framingChangedSinceExport, setFramingChangedSinceExport] = useState(false);
+
+  // Working video loading state
+  const [isLoadingWorkingVideo, setIsLoadingWorkingVideo] = useState(false);
+
   // Annotate mode video state (for extracting clips from full game footage)
   const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
   const [annotateVideoUrl, setAnnotateVideoUrl] = useState(null);
@@ -61,6 +69,7 @@ function App() {
   // Separate loading states for each export button
   const [isCreatingAnnotatedVideo, setIsCreatingAnnotatedVideo] = useState(false);
   const [isImportingToProjects, setIsImportingToProjects] = useState(false);
+  const [isUploadingGameVideo, setIsUploadingGameVideo] = useState(false);
 
   // Export progress tracking (for SSE updates)
   // { current: number, total: number, phase: string, message: string }
@@ -151,6 +160,17 @@ function App() {
 
   // Settings modal state
   const [showProjectCreationSettings, setShowProjectCreationSettings] = useState(false);
+
+  // Downloads panel state
+  const [isDownloadsPanelOpen, setIsDownloadsPanelOpen] = useState(false);
+  const { count: downloadsCount, fetchCount: refreshDownloadsCount } = useDownloads();
+
+  // Overlay persistence state
+  const pendingOverlaySaveRef = useRef(null);
+  const overlayDataLoadedRef = useRef(false);
+
+  // Framing persistence state
+  const pendingFramingSaveRef = useRef(null);
 
   // Project clips (only active when project selected)
   const {
@@ -295,6 +315,7 @@ function App() {
     getHighlightAtTime: getRegionHighlightAtTime,
     getRegionsForExport,
     reset: resetHighlightRegions,
+    restoreRegions: restoreHighlightRegions,
   } = useHighlightRegions(effectiveHighlightMetadata);
 
   // Zoom hook
@@ -459,12 +480,67 @@ function App() {
   }, [clips, selectedClipId, getKeyframesForExport, segmentBoundaries, segmentSpeeds, trimRange, hasClips, globalAspectRatio]);
 
   /**
-   * Save current clip's state before switching
+   * Save current clip's framing edits (debounced auto-save)
+   * This is the auto-save function that gets called continuously as user makes edits
+   */
+  const autoSaveFramingEdits = useCallback(async () => {
+    // Don't save if no clip selected or not in framing mode
+    if (!selectedClipId || editorMode !== 'framing') return;
+
+    // Cancel pending debounced save
+    if (pendingFramingSaveRef.current) {
+      clearTimeout(pendingFramingSaveRef.current);
+    }
+
+    // Debounce: wait 2 seconds after last change
+    pendingFramingSaveRef.current = setTimeout(async () => {
+      const saveClipId = selectedClipId; // Capture for closure
+      const currentClip = clips.find(c => c.id === saveClipId);
+
+      // Only save if this is a project clip with a backend ID
+      if (!currentClip?.workingClipId || !selectedProjectId) return;
+
+      try {
+        const segmentState = {
+          boundaries: segmentBoundaries,
+          segmentSpeeds: segmentSpeeds,
+          trimRange: trimRange,
+        };
+
+        // Save to local clip manager state first
+        updateClipData(saveClipId, {
+          segments: segmentState,
+          cropKeyframes: keyframes,
+          trimRange: trimRange
+        });
+
+        // Save to backend (non-blocking, silent)
+        await saveFramingEdits(currentClip.workingClipId, {
+          cropKeyframes: keyframes,
+          segments: segmentState,
+          trimRange: trimRange
+        });
+
+        console.log('[App] Framing edits auto-saved for clip:', saveClipId);
+      } catch (e) {
+        console.error('[App] Failed to auto-save framing edits:', e);
+      }
+    }, 2000);
+  }, [selectedClipId, editorMode, segmentBoundaries, segmentSpeeds, trimRange, keyframes, updateClipData, clips, selectedProjectId, saveFramingEdits]);
+
+  /**
+   * Save current clip's state before switching (immediate, non-debounced)
    */
   const saveCurrentClipState = useCallback(async () => {
     if (!selectedClipId) {
       console.log('[App] saveCurrentClipState: No selectedClipId, skipping');
       return;
+    }
+
+    // Cancel any pending auto-save since we're saving immediately
+    if (pendingFramingSaveRef.current) {
+      clearTimeout(pendingFramingSaveRef.current);
+      pendingFramingSaveRef.current = null;
     }
 
     // Save current segment state including speeds
@@ -640,14 +716,17 @@ function App() {
       setEditorMode('annotate');
       console.log('[App] Transitioned to Annotate mode with game ID:', game.id);
 
-      // Upload video to server in background (don't await - fire and forget)
+      // Upload video to server in background
       console.log('[App] Starting background video upload...');
+      setIsUploadingGameVideo(true);
       uploadGameVideo(game.id, file)
         .then(() => {
           console.log('[App] Background video upload complete for game:', game.id);
+          setIsUploadingGameVideo(false);
         })
         .catch((uploadErr) => {
           console.error('[App] Background video upload failed:', uploadErr);
+          setIsUploadingGameVideo(false);
           // Video upload failed, but annotations are still saved
           // User can re-upload video later if needed
         });
@@ -675,6 +754,7 @@ function App() {
     setAnnotateVideoUrl(null);
     setAnnotateVideoMetadata(null);
     setAnnotateGameId(null);
+    setIsUploadingGameVideo(false);
 
     // Return to framing mode (no video loaded state)
     setEditorMode('framing');
@@ -899,9 +979,10 @@ function App() {
       }
 
       // Show success - stay on annotate screen
+      console.log('[App] ✅ STAYING ON ANNOTATE SCREEN - NOT navigating to projects');
       alert(`${result.message}\n\nVideo downloaded successfully!`);
 
-      console.log('[App] Create annotated video complete');
+      console.log('[App] Create annotated video complete - still on annotate screen');
 
     } catch (err) {
       console.error('[App] Create annotated video failed:', err);
@@ -915,6 +996,7 @@ function App() {
    * Import Into Projects - Saves to DB, creates projects, downloads files, navigates to projects
    */
   const handleImportIntoProjects = useCallback(async (clipData) => {
+    console.log('[App] 🔄 IMPORT INTO PROJECTS - Will navigate to projects when done');
     console.log('[App] Import into projects requested with clips:', clipData);
     console.log('[App] Using project creation settings:', projectCreationSettings);
 
@@ -939,17 +1021,9 @@ function App() {
         downloads: Object.keys(result.downloads || {})
       });
 
-      // Download only the clips compilation video (annotations are already saved)
-      if (result.downloads?.clips_compilation?.url) {
-        console.log('[App] Downloading clips compilation...');
-        const a = document.createElement('a');
-        a.href = `http://localhost:8000${result.downloads.clips_compilation.url}`;
-        a.download = result.downloads.clips_compilation.filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        console.log('[App] Downloaded:', result.downloads.clips_compilation.filename);
-      }
+      // Note: Clips compilation video is NOT generated when importing into projects
+      // It's only generated for "Download Clips Review" mode
+      // The clips are saved directly to the database instead
 
       // Clean up annotate state (only revoke blob URLs)
       if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
@@ -959,6 +1033,7 @@ function App() {
       setAnnotateVideoUrl(null);
       setAnnotateVideoMetadata(null);
       setAnnotateGameId(null);
+      setIsUploadingGameVideo(false);
       resetAnnotate();
 
       // Refresh projects list
@@ -2094,6 +2169,14 @@ function App() {
    */
   const handleProceedToOverlay = async (renderedVideoBlob, clipMetadata = null) => {
     try {
+      // Flush any pending framing saves to database before transitioning
+      // This ensures framing data is persisted if user refreshes after going to overlay
+      if (selectedClipId && pendingFramingSaveRef.current) {
+        clearTimeout(pendingFramingSaveRef.current);
+        pendingFramingSaveRef.current = null;
+        await saveCurrentClipState();
+      }
+
       // Create URL for the rendered video
       const url = URL.createObjectURL(renderedVideoBlob);
 
@@ -2112,6 +2195,16 @@ function App() {
 
       // Store clip metadata for auto-generating highlight regions
       setOverlayClipMetadata(clipMetadata);
+
+      // Save the current framing state snapshot (for comparison later)
+      exportedFramingStateRef.current = {
+        keyframesHash: JSON.stringify(keyframes),
+        segmentsHash: JSON.stringify(segments),
+        clipsCount: clips.length,
+      };
+
+      // Clear the "framing changed" flag since we just exported
+      setFramingChangedSinceExport(false);
 
       // Reset highlight state for fresh start in overlay mode
       resetHighlight();
@@ -2159,14 +2252,271 @@ function App() {
    * the original video is used directly in overlay mode (via effectiveOverlayVideoUrl).
    * Multiple clips always require export to combine them first.
    */
+
+  // ============================================================================
+  // Overlay Data Persistence
+  // ============================================================================
+
+  /**
+   * Save overlay data to backend (debounced)
+   */
+  const saveOverlayData = useCallback(async (data) => {
+    // Don't save if no project or not in overlay mode
+    if (!selectedProjectId || editorMode !== 'overlay') return;
+
+    // Cancel pending debounced save
+    if (pendingOverlaySaveRef.current) {
+      clearTimeout(pendingOverlaySaveRef.current);
+    }
+
+    // Debounce: wait 2 seconds after last change
+    pendingOverlaySaveRef.current = setTimeout(async () => {
+      const saveProjectId = selectedProjectId; // Capture for closure
+
+      try {
+        const formData = new FormData();
+        formData.append('highlights_data', JSON.stringify(data.highlightRegions || []));
+        formData.append('text_overlays', JSON.stringify(data.textOverlays || []));
+        formData.append('effect_type', data.effectType || 'original');
+
+        await fetch(`http://localhost:8000/api/export/projects/${saveProjectId}/overlay-data`, {
+          method: 'PUT',
+          body: formData
+        });
+
+        console.log('[App] Overlay data saved for project:', saveProjectId);
+      } catch (e) {
+        console.error('[App] Failed to save overlay data:', e);
+      }
+    }, 2000);
+  }, [selectedProjectId, editorMode]);
+
+  /**
+   * Load overlay data from backend
+   */
+  const loadOverlayData = useCallback(async (projectId, videoDuration) => {
+    if (!projectId) return;
+
+    try {
+      console.log('[App] Loading overlay data for project:', projectId);
+      const response = await fetch(
+        `http://localhost:8000/api/export/projects/${projectId}/overlay-data`
+      );
+      const data = await response.json();
+
+      if (data.has_data && data.highlights_data?.length > 0) {
+        // Restore highlight regions
+        restoreHighlightRegions(data.highlights_data, videoDuration);
+        console.log('[App] Restored', data.highlights_data.length, 'highlight regions');
+      }
+      // Restore effect type
+      if (data.effect_type) {
+        setHighlightEffectType(data.effect_type);
+      }
+
+      overlayDataLoadedRef.current = true;
+    } catch (e) {
+      console.error('[App] Failed to load overlay data:', e);
+    }
+  }, [restoreHighlightRegions, setHighlightEffectType]);
+
+  /**
+   * Load overlay data when entering overlay mode
+   */
+  useEffect(() => {
+    const effectiveDuration = overlayVideoMetadata?.duration || metadata?.duration;
+    if (editorMode === 'overlay' && selectedProjectId && !overlayDataLoadedRef.current && effectiveDuration) {
+      loadOverlayData(selectedProjectId, effectiveDuration);
+    }
+
+    // Reset loaded flag when leaving overlay mode or changing project
+    if (editorMode !== 'overlay') {
+      overlayDataLoadedRef.current = false;
+    }
+  }, [editorMode, selectedProjectId, loadOverlayData, overlayVideoMetadata?.duration, metadata?.duration]);
+
+  /**
+   * Auto-save overlay data when highlight regions or effect type changes
+   */
+  useEffect(() => {
+    // Only save after initial load and when in overlay mode
+    if (editorMode === 'overlay' && overlayDataLoadedRef.current && selectedProjectId) {
+      saveOverlayData({
+        highlightRegions: getRegionsForExport(),
+        textOverlays: [], // Add when text overlays implemented
+        effectType: highlightEffectType
+      });
+    }
+  }, [highlightRegions, highlightEffectType, editorMode, selectedProjectId, saveOverlayData, getRegionsForExport]);
+
+  /**
+   * Auto-save framing data when keyframes, segments, or trim range changes
+   */
+  useEffect(() => {
+    // Only save when in framing mode with a selected clip
+    if (editorMode === 'framing' && selectedClipId && selectedProjectId) {
+      autoSaveFramingEdits();
+    }
+  }, [keyframes, segmentBoundaries, segmentSpeeds, trimRange, editorMode, selectedClipId, selectedProjectId, autoSaveFramingEdits]);
+
+  /**
+   * Save all pending changes before browser close or navigation
+   */
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      // Flush any pending saves immediately
+      if (pendingFramingSaveRef.current) {
+        clearTimeout(pendingFramingSaveRef.current);
+        pendingFramingSaveRef.current = null;
+        // Synchronous save using navigator.sendBeacon for reliability
+        if (selectedClipId && selectedProjectId) {
+          const currentClip = clips.find(c => c.id === selectedClipId);
+          if (currentClip?.workingClipId) {
+            const segmentState = {
+              boundaries: segmentBoundaries,
+              segmentSpeeds: segmentSpeeds,
+              trimRange: trimRange,
+            };
+            const payload = {
+              crop_data: JSON.stringify(keyframes),
+              segments_data: JSON.stringify(segmentState),
+              timing_data: JSON.stringify({ trimRange })
+            };
+            // Use sendBeacon for reliable async save on page unload
+            const url = `http://localhost:8000/api/clips/projects/${selectedProjectId}/clips/${currentClip.workingClipId}`;
+            navigator.sendBeacon(url, JSON.stringify(payload));
+          }
+        }
+      }
+
+      if (pendingOverlaySaveRef.current) {
+        clearTimeout(pendingOverlaySaveRef.current);
+        pendingOverlaySaveRef.current = null;
+        if (selectedProjectId) {
+          const formData = new FormData();
+          formData.append('highlights_data', JSON.stringify(getRegionsForExport() || []));
+          formData.append('text_overlays', JSON.stringify([]));
+          formData.append('effect_type', highlightEffectType || 'original');
+          // Use fetch with keepalive for FormData
+          fetch(`http://localhost:8000/api/export/projects/${selectedProjectId}/overlay-data`, {
+            method: 'PUT',
+            body: formData,
+            keepalive: true
+          }).catch(() => {});
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [selectedClipId, selectedProjectId, clips, segmentBoundaries, segmentSpeeds, trimRange, keyframes, getRegionsForExport, highlightEffectType]);
+
+  /**
+   * Track when framing edits are made (for showing warning on Overlay button)
+   * Compares current framing state against the state that produced the overlay video
+   */
+  const exportedFramingStateRef = useRef(null);
+  useEffect(() => {
+    // Clear exported state if no overlay video
+    if (!overlayVideoUrl) {
+      exportedFramingStateRef.current = null;
+      return;
+    }
+
+    // Skip if no exported state to compare against
+    if (!exportedFramingStateRef.current) {
+      return;
+    }
+
+    // Only check for changes when in framing mode
+    if (editorMode !== 'framing') {
+      return;
+    }
+
+    // Create current state snapshot
+    const currentState = {
+      keyframesHash: JSON.stringify(keyframes),
+      segmentsHash: JSON.stringify(segments),
+      clipsCount: clips.length,
+    };
+
+    // Compare current state against the exported state
+    const hasChanged =
+      currentState.keyframesHash !== exportedFramingStateRef.current.keyframesHash ||
+      currentState.segmentsHash !== exportedFramingStateRef.current.segmentsHash ||
+      currentState.clipsCount !== exportedFramingStateRef.current.clipsCount;
+
+    // Update flag based on comparison
+    if (hasChanged !== framingChangedSinceExport) {
+      if (hasChanged) {
+        console.log('[App] Framing state differs from exported state - marking overlay as out of sync');
+      } else {
+        console.log('[App] Framing state matches exported state - clearing out of sync flag');
+      }
+      setFramingChangedSinceExport(hasChanged);
+    }
+  }, [keyframes, segments, clips.length, editorMode, overlayVideoUrl, framingChangedSinceExport]);
+
   const handleModeChange = useCallback((newMode) => {
     if (newMode === editorMode) return;
 
     console.log(`[App] Switching from ${editorMode} to ${newMode} mode`);
 
-    // Simply switch the mode - video state is preserved
+    // Flush any pending saves before switching modes
+
+    // Flush overlay save if leaving overlay mode
+    if (editorMode === 'overlay' && pendingOverlaySaveRef.current) {
+      clearTimeout(pendingOverlaySaveRef.current);
+      pendingOverlaySaveRef.current = null;
+      if (selectedProjectId) {
+        const formData = new FormData();
+        formData.append('highlights_data', JSON.stringify(getRegionsForExport() || []));
+        formData.append('text_overlays', JSON.stringify([]));
+        formData.append('effect_type', highlightEffectType || 'original');
+        fetch(`http://localhost:8000/api/export/projects/${selectedProjectId}/overlay-data`, {
+          method: 'PUT',
+          body: formData
+        }).catch(e => console.error('[App] Failed to flush overlay save:', e));
+      }
+    }
+
+    // Flush framing save if leaving framing mode
+    if (editorMode === 'framing' && pendingFramingSaveRef.current) {
+      clearTimeout(pendingFramingSaveRef.current);
+      pendingFramingSaveRef.current = null;
+      // Fire immediate save (non-debounced)
+      saveCurrentClipState().catch(e => console.error('[App] Failed to flush framing save:', e));
+    }
+
+    // Switch the mode
     setEditorMode(newMode);
-  }, [editorMode]);
+
+    // Save current mode to database (non-blocking)
+    if (selectedProjectId) {
+      fetch(`http://localhost:8000/api/projects/${selectedProjectId}/state?current_mode=${newMode}`, {
+        method: 'PATCH'
+      }).catch(e => console.error('[App] Failed to save current mode:', e));
+    }
+
+    // Force video element to reload source when switching back to framing
+    // This fixes the blank video issue when returning from overlay mode
+    if (newMode === 'framing') {
+      setTimeout(() => {
+        // If we have clips, ALWAYS reload the selected clip to ensure it's showing
+        if (hasClips && clips.length > 0 && selectedProjectId) {
+          const clipToLoad = selectedClip || clips[0];
+          // Use workingClipId (database ID) not id (temporary local ID)
+          if (clipToLoad?.workingClipId) {
+            console.log('[App] Switching to framing mode - reloading clip video:', clipToLoad.workingClipId);
+            const clipUrl = getClipFileUrl(clipToLoad.workingClipId, selectedProjectId);
+            loadVideoFromUrl(clipUrl, clipToLoad.fileName || 'clip.mp4').catch(e =>
+              console.error('[App] Failed to reload clip video:', e)
+            );
+          }
+        }
+      }, 100);
+    }
+  }, [editorMode, selectedProjectId, getRegionsForExport, highlightEffectType, saveCurrentClipState, videoRef, videoUrl, currentTime, hasClips, clips, selectedClip, loadVideoFromUrl, getClipFileUrl]);
 
   // Prepare crop context value
   const cropContextValue = useMemo(() => ({
@@ -2352,7 +2702,15 @@ function App() {
           onSelectProject={async (id) => {
             console.log('[App] Selecting project:', id);
             const project = await selectProject(id);
-            setEditorMode('framing');
+
+            // Update last_opened_at timestamp (non-blocking)
+            fetch(`http://localhost:8000/api/projects/${id}/state?update_last_opened=true`, {
+              method: 'PATCH'
+            }).catch(e => console.error('[App] Failed to update last_opened_at:', e));
+
+            // Set mode to saved current_mode, or default to framing
+            const initialMode = project?.current_mode || 'framing';
+            setEditorMode(initialMode);
 
             // Clear all state before loading new project to prevent stale data
             clearClips();
@@ -2395,6 +2753,50 @@ function App() {
                 setVideoFile(loadedFile); // Update App's videoFile state for export
               }
             }
+
+            // Load working video in background if it exists (enables Overlay mode)
+            // This runs in background to avoid blocking project load
+            if (project?.working_video_id) {
+              console.log('[App] Project has working video, loading in background:', project.working_video_id);
+              setIsLoadingWorkingVideo(true);
+
+              // Load in background (non-blocking)
+              (async () => {
+                try {
+                  const workingVideoUrl = `http://localhost:8000/api/projects/${id}/working-video`;
+                  const response = await fetch(workingVideoUrl);
+                  if (response.ok) {
+                    const blob = await response.blob();
+                    const workingVideoBlob = new File([blob], 'working_video.mp4', { type: 'video/mp4' });
+                    const workingVideoObjectUrl = URL.createObjectURL(workingVideoBlob);
+                    const workingVideoMeta = await extractVideoMetadata(workingVideoBlob);
+
+                    // Set overlay video state
+                    setOverlayVideoFile(workingVideoBlob);
+                    setOverlayVideoUrl(workingVideoObjectUrl);
+                    setOverlayVideoMetadata(workingVideoMeta);
+
+                    // Save the current framing state as the exported state
+                    // (since this working video was created from the current framing state)
+                    setTimeout(() => {
+                      exportedFramingStateRef.current = {
+                        keyframesHash: JSON.stringify(keyframes),
+                        segmentsHash: JSON.stringify(segments),
+                        clipsCount: clips.length,
+                      };
+                    }, 100);
+
+                    console.log('[App] Loaded working video for overlay mode');
+                  } else {
+                    console.warn('[App] Failed to load working video:', response.status);
+                  }
+                } catch (err) {
+                  console.error('[App] Error loading working video:', err);
+                } finally {
+                  setIsLoadingWorkingVideo(false);
+                }
+              })();
+            }
           }}
           onCreateProject={createProject}
           onDeleteProject={deleteProject}
@@ -2408,6 +2810,22 @@ function App() {
           onLoadGame={handleLoadGame}
           onDeleteGame={deleteGame}
           onFetchGames={fetchGames}
+          // Downloads props
+          downloadsCount={downloadsCount}
+          onOpenDownloads={() => setIsDownloadsPanelOpen(true)}
+        />
+
+        {/* Downloads Panel - also available from Project Manager */}
+        <DownloadsPanel
+          isOpen={isDownloadsPanelOpen}
+          onClose={() => setIsDownloadsPanelOpen(false)}
+          onOpenProject={(projectId) => {
+            // Navigate to project in overlay mode
+            selectProject(projectId);
+            setEditorMode('overlay');
+            setIsDownloadsPanelOpen(false);
+          }}
+          onCountChange={refreshDownloadsCount}
         />
       </div>
     );
@@ -2462,6 +2880,7 @@ function App() {
                       setAnnotateVideoFile(null);
                       setAnnotateVideoUrl(null);
                       setAnnotateVideoMetadata(null);
+                      setIsUploadingGameVideo(false);
                     }
                     // Return to project manager
                     setEditorMode('project-manager');
@@ -2483,6 +2902,20 @@ function App() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* Gallery button - always visible */}
+              <button
+                onClick={() => setIsDownloadsPanelOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-700 rounded-lg transition-colors"
+                title="Gallery"
+              >
+                <Image size={18} className="text-purple-400" />
+                <span className="text-sm text-gray-400">Gallery</span>
+                {downloadsCount > 0 && (
+                  <span className="px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
+                    {downloadsCount > 9 ? '9+' : downloadsCount}
+                  </span>
+                )}
+              </button>
               {/* AspectRatioSelector - only in Framing mode when video is loaded */}
               {/* Read-only when a project is selected (aspect ratio is set at project level) */}
               {editorMode === 'framing' && videoUrl && (
@@ -2502,7 +2935,10 @@ function App() {
                 disabled={isLoading}
                 hasProject={!!selectedProject}
                 hasWorkingVideo={selectedProject?.working_video_id != null}
+                hasOverlayVideo={!!overlayVideoUrl}
+                framingOutOfSync={framingChangedSinceExport && !!overlayVideoUrl}
                 hasAnnotateVideo={!!annotateVideoUrl}
+                isLoadingWorkingVideo={isLoadingWorkingVideo}
               />
               {/* Annotate mode - show file upload when no game video loaded */}
               {editorMode === 'annotate' && !annotateVideoUrl && (
@@ -2887,14 +3323,19 @@ function App() {
                   {/* Create Annotated Video - stays on screen */}
                   <button
                     onClick={() => handleCreateAnnotatedVideo(getAnnotateExportData())}
-                    disabled={!hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects}
+                    disabled={!hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo}
                     className={`w-full px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                      !hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects
+                      !hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo
                         ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                         : 'bg-green-600 hover:bg-green-700 text-white'
                     }`}
                   >
-                    {isCreatingAnnotatedVideo ? (
+                    {isUploadingGameVideo ? (
+                      <>
+                        <Loader className="animate-spin" size={18} />
+                        <span>Uploading video...</span>
+                      </>
+                    ) : isCreatingAnnotatedVideo ? (
                       <>
                         <Loader className="animate-spin" size={18} />
                         <span>Processing...</span>
@@ -2911,9 +3352,9 @@ function App() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleImportIntoProjects(getAnnotateExportData())}
-                      disabled={!hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects}
+                      disabled={!hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo}
                       className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                        !hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects
+                        !hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo
                           ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                           : 'bg-blue-600 hover:bg-blue-700 text-white'
                       }`}
@@ -2984,6 +3425,12 @@ function App() {
                 clips={editorMode === 'framing' && hasClips ? clipsWithCurrentState : null}
                 globalAspectRatio={globalAspectRatio}
                 globalTransition={globalTransition}
+                // Project props for saving final video to DB
+                projectId={selectedProjectId}
+                onExportComplete={() => {
+                  fetchProjects();
+                  refreshDownloadsCount();
+                }}
               />
             </div>
           )}
@@ -3057,6 +3504,19 @@ function App() {
         settings={projectCreationSettings}
         onUpdateSettings={updateProjectCreationSettings}
         onReset={resetSettings}
+      />
+
+      {/* Downloads Panel */}
+      <DownloadsPanel
+        isOpen={isDownloadsPanelOpen}
+        onClose={() => setIsDownloadsPanelOpen(false)}
+        onOpenProject={(projectId) => {
+          // Navigate to project in overlay mode
+          selectProject(projectId);
+          setEditorMode('overlay');
+          setIsDownloadsPanelOpen(false);
+        }}
+        onCountChange={refreshDownloadsCount}
       />
     </div>
   );

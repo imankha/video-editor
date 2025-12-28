@@ -163,6 +163,7 @@ async def list_project_clips(project_id: int):
             raise HTTPException(status_code=404, detail="Project not found")
 
         # Get working clips with resolved filenames and metadata
+        # Only show the latest version of each clip (grouped by end_time)
         cursor.execute("""
             SELECT
                 wc.id,
@@ -180,9 +181,25 @@ async def list_project_clips(project_id: int):
                 rc.notes as raw_notes
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-            WHERE wc.project_id = ? AND wc.abandoned = FALSE
+            WHERE wc.project_id = ?
+            AND wc.id IN (
+                SELECT wc2.id FROM working_clips wc2
+                LEFT JOIN raw_clips rc2 ON wc2.raw_clip_id = rc2.id
+                WHERE wc2.project_id = ?
+                AND wc2.id IN (
+                    SELECT id FROM (
+                        SELECT wc3.id, ROW_NUMBER() OVER (
+                            PARTITION BY COALESCE(rc3.end_time, wc3.uploaded_filename)
+                            ORDER BY wc3.version DESC
+                        ) as rn
+                        FROM working_clips wc3
+                        LEFT JOIN raw_clips rc3 ON wc3.raw_clip_id = rc3.id
+                        WHERE wc3.project_id = ?
+                    ) WHERE rn = 1
+                )
+            )
             ORDER BY wc.sort_order
-        """, (project_id,))
+        """, (project_id, project_id, project_id))
         clips = cursor.fetchall()
 
         return [
@@ -242,25 +259,37 @@ async def add_clip_to_project(
         cursor.execute("""
             SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order
             FROM working_clips
-            WHERE project_id = ? AND abandoned = FALSE
+            WHERE project_id = ?
         """, (project_id,))
         next_order = cursor.fetchone()['next_order']
 
         uploaded_filename = None
         raw_filename = None
+        next_version = 1
 
         if raw_clip_id is not None:
             # Adding from library
-            cursor.execute("SELECT filename FROM raw_clips WHERE id = ?", (raw_clip_id,))
+            cursor.execute("SELECT filename, end_time FROM raw_clips WHERE id = ?", (raw_clip_id,))
             raw_clip = cursor.fetchone()
             if not raw_clip:
                 raise HTTPException(status_code=404, detail="Raw clip not found")
             raw_filename = raw_clip['filename']
+            end_time = raw_clip['end_time']
+
+            # Get next version for clips with THIS specific end_time
+            # Clips are identified by their end timestamp
+            cursor.execute("""
+                SELECT COALESCE(MAX(wc.version), 0) + 1 as next_version
+                FROM working_clips wc
+                JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+                WHERE wc.project_id = ? AND rc.end_time = ?
+            """, (project_id, end_time))
+            next_version = cursor.fetchone()['next_version']
 
             cursor.execute("""
-                INSERT INTO working_clips (project_id, raw_clip_id, sort_order)
-                VALUES (?, ?, ?)
-            """, (project_id, raw_clip_id, next_order))
+                INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version)
+                VALUES (?, ?, ?, ?)
+            """, (project_id, raw_clip_id, next_order, next_version))
 
         else:
             # Uploading new file
@@ -274,10 +303,12 @@ async def add_clip_to_project(
             with open(file_path, 'wb') as f:
                 f.write(content)
 
+            # For uploaded files, each upload is version 1 (unique filename)
+            # No version history for uploaded clips since filename is unique
             cursor.execute("""
-                INSERT INTO working_clips (project_id, uploaded_filename, sort_order)
-                VALUES (?, ?, ?)
-            """, (project_id, uploaded_filename, next_order))
+                INSERT INTO working_clips (project_id, uploaded_filename, sort_order, version)
+                VALUES (?, ?, ?, ?)
+            """, (project_id, uploaded_filename, next_order, 1))
 
         conn.commit()
         clip_id = cursor.lastrowid
@@ -305,7 +336,7 @@ async def reorder_clips(project_id: int, clip_ids: List[int]):
             cursor.execute("""
                 UPDATE working_clips
                 SET sort_order = ?
-                WHERE id = ? AND project_id = ? AND abandoned = FALSE
+                WHERE id = ? AND project_id = ?
             """, (index, clip_id, project_id))
 
         conn.commit()
@@ -321,7 +352,7 @@ async def get_working_clip_file(project_id: int, clip_id: int):
             SELECT wc.raw_clip_id, wc.uploaded_filename, rc.filename as raw_filename
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-            WHERE wc.id = ? AND wc.project_id = ? AND wc.abandoned = FALSE
+            WHERE wc.id = ? AND wc.project_id = ?
         """, (clip_id, project_id))
         clip = cursor.fetchone()
 
@@ -358,7 +389,7 @@ async def update_working_clip(
 
         cursor.execute("""
             SELECT id FROM working_clips
-            WHERE id = ? AND project_id = ? AND abandoned = FALSE
+            WHERE id = ? AND project_id = ?
         """, (clip_id, project_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Working clip not found")
@@ -396,19 +427,20 @@ async def update_working_clip(
 
 @router.delete("/projects/{project_id}/clips/{clip_id}")
 async def remove_clip_from_project(project_id: int, clip_id: int):
-    """Remove a clip from a project (soft delete)."""
+    """Remove a clip from a project."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
         cursor.execute("""
             SELECT id FROM working_clips
-            WHERE id = ? AND project_id = ? AND abandoned = FALSE
+            WHERE id = ? AND project_id = ?
         """, (clip_id, project_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Working clip not found")
 
+        # Delete the clip from the database
         cursor.execute("""
-            UPDATE working_clips SET abandoned = TRUE WHERE id = ?
+            DELETE FROM working_clips WHERE id = ?
         """, (clip_id,))
         conn.commit()
 

@@ -117,6 +117,34 @@ export default function useHighlightRegions(videoMetadata) {
   }, []);
 
   /**
+   * Restore regions from saved data (for overlay persistence)
+   * @param {Array} savedRegions - Array of saved region objects from backend
+   * @param {number} videoDuration - Video duration in seconds
+   */
+  const restoreRegions = useCallback((savedRegions, videoDuration) => {
+    if (!savedRegions || !Array.isArray(savedRegions)) {
+      console.log('[useHighlightRegions] No regions to restore');
+      return;
+    }
+
+    console.log('[useHighlightRegions] Restoring', savedRegions.length, 'regions');
+    setDuration(videoDuration);
+
+    // Convert saved regions to internal format
+    // Saved format uses start_time/end_time, internal uses startTime/endTime
+    const restoredRegions = savedRegions.map(saved => ({
+      id: saved.id || `region-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+      startTime: saved.start_time ?? saved.startTime,
+      endTime: saved.end_time ?? saved.endTime,
+      enabled: saved.enabled !== false, // Default to true if not specified
+      keyframes: saved.keyframes || []
+    }));
+
+    setRegions(restoredRegions);
+    setSelectedRegionId(null);
+  }, []);
+
+  /**
    * Generate unique region ID
    */
   const generateRegionId = () => `region-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
@@ -640,6 +668,7 @@ export default function useHighlightRegions(videoMetadata) {
     // Initialization
     initializeWithDuration,
     initializeFromClipMetadata,  // Auto-create regions from clip boundaries
+    restoreRegions,              // Restore saved regions from backend
 
     // Region operations (new API)
     addRegion,                   // Creates 5-second region with keyframes

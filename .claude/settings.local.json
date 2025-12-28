@@ -32,7 +32,11 @@
       "Bash(bash:*)",
       "Bash(for f in \"formal annotations\"/*.tsv)",
       "Bash(do echo \"Validating $f:\")",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(pkill:*)",
+      "Bash(ls:*)",
+      "Bash(sqlite3:*)",
+      "Bash(src/backend/.venv/Scripts/python.exe test_persistence.py)"
     ],
     "deny": [],
     "ask": []

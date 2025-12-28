@@ -41,6 +41,8 @@ class ProjectListItem(BaseModel):
     has_working_video: bool
     has_final_video: bool
     created_at: str
+    current_mode: Optional[str] = 'framing'
+    last_opened_at: Optional[str] = None
 
 
 class WorkingClipResponse(BaseModel):
@@ -70,7 +72,7 @@ async def list_projects():
 
         # Get all projects
         cursor.execute("""
-            SELECT id, name, aspect_ratio, working_video_id, final_video_id, created_at
+            SELECT id, name, aspect_ratio, working_video_id, final_video_id, created_at, current_mode, last_opened_at
             FROM projects
             ORDER BY created_at DESC
         """)
@@ -80,36 +82,47 @@ async def list_projects():
         for project in projects:
             project_id = project['id']
 
-            # Count clips and framed clips
+            # Count clips and edited clips (latest version of each clip only, grouped by end_time)
+            # A clip is considered "framed" (edited) when it has crop_data saved
+            # This tracks editing progress, not export progress
             cursor.execute("""
                 SELECT
                     COUNT(*) as total,
-                    SUM(CASE WHEN progress = 1 THEN 1 ELSE 0 END) as framed
-                FROM working_clips
-                WHERE project_id = ? AND abandoned = FALSE
-            """, (project_id,))
+                    SUM(CASE WHEN crop_data IS NOT NULL AND crop_data != '' THEN 1 ELSE 0 END) as framed
+                FROM working_clips wc
+                WHERE wc.project_id = ?
+                AND wc.id IN (
+                    SELECT id FROM (
+                        SELECT wc2.id, ROW_NUMBER() OVER (
+                            PARTITION BY COALESCE(rc2.end_time, wc2.uploaded_filename)
+                            ORDER BY wc2.version DESC
+                        ) as rn
+                        FROM working_clips wc2
+                        LEFT JOIN raw_clips rc2 ON wc2.raw_clip_id = rc2.id
+                        WHERE wc2.project_id = ?
+                    ) WHERE rn = 1
+                )
+            """, (project_id, project_id))
             counts = cursor.fetchone()
 
             clip_count = counts['total'] or 0
             clips_framed = counts['framed'] or 0
 
-            # Check for non-abandoned working video
+            # Check for working video (project references latest version)
             has_working = False
             if project['working_video_id']:
                 cursor.execute("""
-                    SELECT abandoned FROM working_videos WHERE id = ?
+                    SELECT id FROM working_videos WHERE id = ?
                 """, (project['working_video_id'],))
-                wv = cursor.fetchone()
-                has_working = wv and not wv['abandoned']
+                has_working = cursor.fetchone() is not None
 
-            # Check for non-abandoned final video
+            # Check for final video (project references latest version)
             has_final = False
             if project['final_video_id']:
                 cursor.execute("""
-                    SELECT abandoned FROM final_videos WHERE id = ?
+                    SELECT id FROM final_videos WHERE id = ?
                 """, (project['final_video_id'],))
-                fv = cursor.fetchone()
-                has_final = fv and not fv['abandoned']
+                has_final = cursor.fetchone() is not None
 
             result.append(ProjectListItem(
                 id=project_id,
@@ -119,7 +132,9 @@ async def list_projects():
                 clips_framed=clips_framed,
                 has_working_video=has_working,
                 has_final_video=has_final,
-                created_at=project['created_at']
+                created_at=project['created_at'],
+                current_mode=project['current_mode'] or 'framing',
+                last_opened_at=project['last_opened_at']
             ))
 
         return result
@@ -172,7 +187,7 @@ async def get_project(project_id: int):
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Get working clips with resolved filenames
+        # Get working clips with resolved filenames (latest version of each clip only, grouped by end_time)
         cursor.execute("""
             SELECT
                 wc.id,
@@ -183,9 +198,20 @@ async def get_project(project_id: int):
                 rc.filename as raw_filename
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-            WHERE wc.project_id = ? AND wc.abandoned = FALSE
+            WHERE wc.project_id = ?
+            AND wc.id IN (
+                SELECT id FROM (
+                    SELECT wc2.id, ROW_NUMBER() OVER (
+                        PARTITION BY COALESCE(rc2.end_time, wc2.uploaded_filename)
+                        ORDER BY wc2.version DESC
+                    ) as rn
+                    FROM working_clips wc2
+                    LEFT JOIN raw_clips rc2 ON wc2.raw_clip_id = rc2.id
+                    WHERE wc2.project_id = ?
+                ) WHERE rn = 1
+            )
             ORDER BY wc.sort_order
-        """, (project_id,))
+        """, (project_id, project_id))
         clips_rows = cursor.fetchall()
 
         clips = []
@@ -223,19 +249,19 @@ async def delete_project(project_id: int):
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Delete working clips (soft delete by marking abandoned)
+        # Delete working clips (all versions for this project)
         cursor.execute("""
-            UPDATE working_clips SET abandoned = TRUE WHERE project_id = ?
+            DELETE FROM working_clips WHERE project_id = ?
         """, (project_id,))
 
-        # Mark working videos abandoned
+        # Delete working videos (all versions for this project)
         cursor.execute("""
-            UPDATE working_videos SET abandoned = TRUE WHERE project_id = ?
+            DELETE FROM working_videos WHERE project_id = ?
         """, (project_id,))
 
-        # Mark final videos abandoned
+        # Delete final videos (all versions for this project)
         cursor.execute("""
-            UPDATE final_videos SET abandoned = TRUE WHERE project_id = ?
+            DELETE FROM final_videos WHERE project_id = ?
         """, (project_id,))
 
         # Delete project
@@ -262,3 +288,80 @@ async def update_project(project_id: int, project: ProjectCreate):
         conn.commit()
 
         return {"success": True, "id": project_id}
+
+
+@router.patch("/{project_id}/state")
+async def update_project_state(
+    project_id: int,
+    current_mode: Optional[str] = None,
+    update_last_opened: bool = False
+):
+    """
+    Update project state (current mode and/or last opened timestamp).
+
+    - current_mode: 'annotate' | 'framing' | 'overlay'
+    - update_last_opened: Set to true to update last_opened_at to current time
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        updates = []
+        params = []
+
+        if current_mode is not None:
+            if current_mode not in ['annotate', 'framing', 'overlay']:
+                raise HTTPException(status_code=400, detail="Invalid mode")
+            updates.append("current_mode = ?")
+            params.append(current_mode)
+
+        if update_last_opened:
+            updates.append("last_opened_at = CURRENT_TIMESTAMP")
+
+        if not updates:
+            return {"success": True, "message": "No updates requested"}
+
+        params.append(project_id)
+        query = f"UPDATE projects SET {', '.join(updates)} WHERE id = ?"
+        cursor.execute(query, params)
+        conn.commit()
+
+        return {"success": True, "id": project_id}
+
+
+@router.get("/{project_id}/working-video")
+async def get_working_video(project_id: int):
+    """
+    Get the working video file for a project.
+    Returns the video file if it exists, 404 otherwise.
+    """
+    from fastapi.responses import FileResponse
+    from app.database import WORKING_VIDEOS_PATH
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Get project and its working video (latest version)
+        cursor.execute("""
+            SELECT p.working_video_id, wv.filename
+            FROM projects p
+            LEFT JOIN working_videos wv ON p.working_video_id = wv.id
+            WHERE p.id = ?
+        """, (project_id,))
+
+        row = cursor.fetchone()
+        if not row or not row['filename']:
+            raise HTTPException(status_code=404, detail="Working video not found")
+
+        video_path = WORKING_VIDEOS_PATH / row['filename']
+        if not video_path.exists():
+            raise HTTPException(status_code=404, detail="Working video file not found on disk")
+
+        return FileResponse(
+            video_path,
+            media_type="video/mp4",
+            filename=row['filename']
+        )

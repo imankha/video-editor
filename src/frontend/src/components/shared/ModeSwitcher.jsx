@@ -1,5 +1,5 @@
 import React from 'react';
-import { Crop, Sparkles, Scissors } from 'lucide-react';
+import { Crop, Sparkles, Scissors, Loader2 } from 'lucide-react';
 
 /**
  * ModeSwitcher - Tab toggle for switching between editor modes.
@@ -7,14 +7,19 @@ import { Crop, Sparkles, Scissors } from 'lucide-react';
  * Visibility rules:
  * - When no project selected: Show nothing (or just Annotate badge if video loaded)
  * - When project selected: Show Framing and Overlay
- * - Overlay is disabled until working_video exists
+ * - Overlay is available if working video OR overlay video exists
+ * - Shows warning asterisk if framing has changed since last export
+ * - Shows loading spinner if working video is being loaded
  *
  * @param {string} mode - Current mode ('annotate' | 'framing' | 'overlay')
  * @param {function} onModeChange - Callback when mode changes
  * @param {boolean} disabled - Whether the switcher is disabled
  * @param {boolean} hasProject - Whether a project is selected
  * @param {boolean} hasWorkingVideo - Whether the project has a working video
+ * @param {boolean} hasOverlayVideo - Whether an overlay video is loaded (from export)
+ * @param {boolean} framingOutOfSync - Whether framing has changed since last export
  * @param {boolean} hasAnnotateVideo - Whether an annotate video is loaded
+ * @param {boolean} isLoadingWorkingVideo - Whether working video is currently loading
  */
 export function ModeSwitcher({
   mode,
@@ -22,7 +27,10 @@ export function ModeSwitcher({
   disabled = false,
   hasProject = false,
   hasWorkingVideo = false,
+  hasOverlayVideo = false,
+  framingOutOfSync = false,
   hasAnnotateVideo = false,
+  isLoadingWorkingVideo = false,
 }) {
   // Define mode configurations for project mode
   const modes = [
@@ -39,8 +47,9 @@ export function ModeSwitcher({
       label: 'Overlay',
       icon: Sparkles,
       description: 'Highlights & effects',
-      available: hasProject && hasWorkingVideo,
+      available: hasProject && (hasWorkingVideo || hasOverlayVideo),
       color: 'purple',
+      showWarning: framingOutOfSync,
     },
   ];
 
@@ -77,23 +86,34 @@ export function ModeSwitcher({
             onClick={() => !disabled && isAvailable && onModeChange(modeOption.id)}
             disabled={disabled || !isAvailable}
             className={`
-              flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200
+              flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 relative
               ${isActive
                 ? `${activeColor} text-white shadow-lg`
                 : isAvailable
                   ? 'text-gray-400 hover:text-white hover:bg-white/10'
-                  : 'text-gray-600 cursor-not-allowed'
+                  : 'text-gray-600 cursor-not-allowed opacity-40'
               }
               ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
             `}
             title={
-              !isAvailable && modeOption.id === 'overlay'
-                ? 'Export from Framing first to enable Overlay mode'
-                : modeOption.description
+              isLoadingWorkingVideo && modeOption.id === 'overlay'
+                ? 'Loading working video...'
+                : !isAvailable && modeOption.id === 'overlay'
+                  ? 'Export from Framing first to enable Overlay mode'
+                  : modeOption.showWarning
+                    ? 'Previously exported video no longer matches your settings. Export to create latest video before overlaying.'
+                    : modeOption.description
             }
           >
-            <Icon size={16} />
+            {isLoadingWorkingVideo && modeOption.id === 'overlay' ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Icon size={16} />
+            )}
             <span className="font-medium text-sm">{modeOption.label}</span>
+            {modeOption.showWarning && isAvailable && (
+              <span className="text-yellow-400 font-bold text-xs">*</span>
+            )}
           </button>
         );
       })}

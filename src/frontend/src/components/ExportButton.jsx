@@ -116,6 +116,9 @@ export default function ExportButton({
   clips = null,                // Array of clip objects for multi-clip export
   globalAspectRatio = '9:16',  // Shared aspect ratio for all clips
   globalTransition = null,     // Transition settings { type, duration }
+  // Project props (for saving final video to DB)
+  projectId = null,            // Current project ID (for overlay mode DB save)
+  onExportComplete = null,     // Callback when export completes (to refresh project list)
 }) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -355,25 +358,37 @@ export default function ExportButton({
         wsRef.current = null;
       }
 
-      // Download the video
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      const prefix = editorMode === 'overlay' ? 'overlayed_' : 'upscaled_';
-      link.download = `${prefix}${videoFile.name || 'video.mp4'}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // Clean up download URL
-      window.URL.revokeObjectURL(url);
-
-      // In Framing mode, also transition to Overlay mode with the exported video
+      // In Framing mode, save to database then transition to Overlay mode
+      // (No download - user will download from Overlay mode when final video is ready)
       if (editorMode === 'framing' && onProceedToOverlay) {
-        setProgress(100);
-        setProgressMessage('Loading into Overlay mode...');
-
         try {
+          // Save working video to database for persistence
+          if (projectId) {
+            setProgress(95);
+            setProgressMessage('Saving working video...');
+
+            const saveFormData = new FormData();
+            saveFormData.append('project_id', String(projectId));
+            saveFormData.append('video', blob, 'working_video.mp4');
+            saveFormData.append('clips_data', JSON.stringify(clips || []));
+
+            const saveResponse = await axios.post(
+              'http://localhost:8000/api/export/framing',
+              saveFormData,
+              { headers: { 'Content-Type': 'multipart/form-data' } }
+            );
+
+            console.log('[ExportButton] Saved working video to DB:', saveResponse.data);
+
+            // Refresh projects list to show updated progress
+            if (onExportComplete) {
+              onExportComplete();
+            }
+          }
+
+          setProgress(100);
+          setProgressMessage('Loading into Overlay mode...');
+
           // Build clip metadata for auto-generating highlight regions
           const clipMetadata = clips && clips.length > 0 ? buildClipMetadata(clips) : null;
 
@@ -386,14 +401,58 @@ export default function ExportButton({
           setProgress(0);
           setProgressMessage('');
         } catch (err) {
-          console.error('Failed to transition to overlay:', err);
-          // Don't show error - download already succeeded
+          console.error('Failed to save working video or transition to overlay:', err);
+          setError(err.message || 'Failed to save working video');
           setIsExporting(false);
           setProgress(0);
           setProgressMessage('');
         }
       } else {
-        // Overlay mode - just show success
+        // Overlay mode - download the video AND save to database
+        // Download the video
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `overlayed_${videoFile.name || 'video.mp4'}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Clean up download URL
+        window.URL.revokeObjectURL(url);
+
+        setProgress(95);
+        setProgressMessage('Saving to downloads...');
+
+        // Save to database if we have a project ID
+        if (projectId) {
+          try {
+            const saveFormData = new FormData();
+            saveFormData.append('project_id', String(projectId));
+            saveFormData.append('video', blob, 'final_video.mp4');
+            saveFormData.append('overlay_data', JSON.stringify({
+              highlightRegions: highlightRegions || [],
+              effectType: highlightEffectType
+            }));
+
+            const saveResponse = await axios.post(
+              'http://localhost:8000/api/export/final',
+              saveFormData,
+              { headers: { 'Content-Type': 'multipart/form-data' } }
+            );
+
+            console.log('[ExportButton] Saved final video to DB:', saveResponse.data);
+
+            // Refresh projects list if callback provided
+            if (onExportComplete) {
+              onExportComplete();
+            }
+          } catch (saveErr) {
+            console.error('[ExportButton] Failed to save final video to DB:', saveErr);
+            // Don't block - download already succeeded
+          }
+        }
+
         setProgress(100);
         setProgressMessage('Export complete!');
         setTimeout(() => {

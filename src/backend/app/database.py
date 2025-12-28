@@ -113,7 +113,7 @@ def ensure_database():
                 uploaded_filename TEXT,
                 progress INTEGER DEFAULT 0,
                 sort_order INTEGER DEFAULT 0,
-                abandoned BOOLEAN DEFAULT FALSE,
+                version INTEGER NOT NULL DEFAULT 1,
                 crop_data TEXT,
                 timing_data TEXT,
                 segments_data TEXT,
@@ -130,7 +130,7 @@ def ensure_database():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id INTEGER NOT NULL,
                 filename TEXT NOT NULL,
-                abandoned BOOLEAN DEFAULT FALSE,
+                version INTEGER NOT NULL DEFAULT 1,
                 highlights_data TEXT,
                 text_overlays TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -144,7 +144,7 @@ def ensure_database():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id INTEGER NOT NULL,
                 filename TEXT NOT NULL,
-                abandoned BOOLEAN DEFAULT FALSE,
+                version INTEGER NOT NULL DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
@@ -183,6 +183,16 @@ def ensure_database():
             "ALTER TABLE games ADD COLUMN video_width INTEGER",
             "ALTER TABLE games ADD COLUMN video_height INTEGER",
             "ALTER TABLE games ADD COLUMN video_size INTEGER",
+            # Downloads & overlay persistence (added for downloads navigation feature)
+            "ALTER TABLE final_videos ADD COLUMN duration REAL",
+            "ALTER TABLE working_videos ADD COLUMN effect_type TEXT DEFAULT 'original'",
+            "ALTER TABLE projects ADD COLUMN last_opened_at TIMESTAMP",
+            # Project state persistence (current mode for resume)
+            "ALTER TABLE projects ADD COLUMN current_mode TEXT DEFAULT 'framing'",
+            # Version-based tracking (replaces abandoned flag approach)
+            "ALTER TABLE working_clips ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE working_videos ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE final_videos ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
         ]
 
         for migration in migrations:
@@ -191,6 +201,66 @@ def ensure_database():
             except sqlite3.OperationalError:
                 # Column already exists, ignore
                 pass
+
+        # Initialize version numbers for existing records (if version is NULL or 0)
+        # Assign versions based on created_at order per project
+        try:
+            # Working clips: Assign version numbers
+            cursor.execute("""
+                UPDATE working_clips
+                SET version = (
+                    SELECT COUNT(*)
+                    FROM working_clips wc2
+                    WHERE wc2.project_id = working_clips.project_id
+                    AND wc2.created_at <= working_clips.created_at
+                )
+                WHERE version IS NULL OR version = 0
+            """)
+
+            # Working videos: Assign version numbers
+            cursor.execute("""
+                UPDATE working_videos
+                SET version = (
+                    SELECT COUNT(*)
+                    FROM working_videos w2
+                    WHERE w2.project_id = working_videos.project_id
+                    AND w2.created_at <= working_videos.created_at
+                )
+                WHERE version IS NULL OR version = 0
+            """)
+
+            # Final videos: Assign version numbers
+            cursor.execute("""
+                UPDATE final_videos
+                SET version = (
+                    SELECT COUNT(*)
+                    FROM final_videos f2
+                    WHERE f2.project_id = final_videos.project_id
+                    AND f2.created_at <= final_videos.created_at
+                )
+                WHERE version IS NULL OR version = 0
+            """)
+        except sqlite3.OperationalError:
+            # Migration already done, ignore
+            pass
+
+        # Create indexes for efficient version queries
+        try:
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_working_clips_project_version
+                ON working_clips(project_id, version DESC)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_working_videos_project_version
+                ON working_videos(project_id, version DESC)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_final_videos_project_version
+                ON final_videos(project_id, version DESC)
+            """)
+        except sqlite3.OperationalError:
+            # Index already exists, ignore
+            pass
 
         conn.commit()
         _initialized = True

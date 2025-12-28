@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image } from 'lucide-react';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -23,6 +23,9 @@ export function ProjectManager({
   onLoadGame,
   onDeleteGame,
   onFetchGames,
+  // Downloads props
+  downloadsCount = 0,
+  onOpenDownloads,
 }) {
   const [activeTab, setActiveTab] = useState('projects'); // 'games' | 'projects'
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -41,6 +44,23 @@ export function ProjectManager({
 
   return (
     <div className="flex-1 flex flex-col items-center p-8 bg-gray-900">
+      {/* Gallery button - fixed top right corner */}
+      {onOpenDownloads && (
+        <button
+          onClick={onOpenDownloads}
+          className="fixed top-4 right-4 z-30 flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg transition-colors"
+          title="Gallery"
+        >
+          <Image size={18} className="text-purple-400" />
+          <span className="text-sm text-gray-300">Gallery</span>
+          {downloadsCount > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
+              {downloadsCount > 9 ? '9+' : downloadsCount}
+            </span>
+          )}
+        </button>
+      )}
+
       {/* Header */}
       <div className="text-center mb-6">
         <FolderOpen size={48} className="mx-auto mb-4 text-purple-400" />
@@ -236,13 +256,111 @@ function GameCard({ game, onLoad, onDelete }) {
 
 
 /**
- * Calculate project progress percentage (derived, not from API)
+ * SegmentedProgressStrip - Visual progress indicator with segments
+ *
+ * Shows one segment per clip + one for overlay/final export.
+ * Scales from 1 to 100+ clips by adjusting segment widths.
+ *
+ * Colors:
+ * - Green (✓): Complete
+ * - Blue (◐): In progress
+ * - Gray (○): Not started
  */
-function calculateProgress(project) {
-  if (project.clip_count === 0) return 0;
-  const total = project.clip_count + 1;
-  const completed = project.clips_framed + (project.has_final_video ? 1 : 0);
-  return Math.round((completed / total) * 100 * 10) / 10;
+function SegmentedProgressStrip({ project }) {
+  const { clip_count, clips_framed, has_working_video, has_final_video } = project;
+
+  // Total segments = clips + 1 for overlay stage
+  const totalSegments = Math.max(clip_count, 1) + 1;
+
+  // Build segment data
+  // For clips: green if framed, gray otherwise
+  // We don't have per-clip data, so we show clips_framed as green, rest as gray
+  const clipSegments = [];
+  for (let i = 0; i < clip_count; i++) {
+    if (i < clips_framed) {
+      clipSegments.push({ status: 'done', label: `Clip ${i + 1}` });
+    } else {
+      clipSegments.push({ status: 'pending', label: `Clip ${i + 1}` });
+    }
+  }
+
+  // Overlay segment: green if final, blue if working, gray otherwise
+  const overlayStatus = has_final_video ? 'done' : has_working_video ? 'in_progress' : 'pending';
+  const overlaySegment = { status: overlayStatus, label: 'Overlay' };
+
+  const allSegments = [...clipSegments, overlaySegment];
+
+  // Calculate segment width - minimum 4px, flex to fill space
+  const minWidth = 4;
+  const gapWidth = 2;
+
+  // Status to color mapping
+  const statusColors = {
+    done: 'bg-green-500',
+    in_progress: 'bg-blue-500',
+    pending: 'bg-gray-600'
+  };
+
+  // For many clips, use a compact view
+  const isCompact = totalSegments > 10;
+
+  return (
+    <div className="mt-3">
+      {/* Labels row */}
+      <div className="flex justify-between text-xs text-gray-500 mb-1">
+        <span className="flex items-center gap-2">
+          <span>Framing</span>
+          <span className="text-gray-600">({clips_framed}/{clip_count})</span>
+        </span>
+        <span>Overlay</span>
+      </div>
+
+      {/* Segments strip */}
+      <div
+        className="flex h-3 bg-gray-700 rounded overflow-hidden"
+        style={{ gap: `${gapWidth}px` }}
+      >
+        {allSegments.map((segment, index) => {
+          const isLast = index === allSegments.length - 1;
+          return (
+            <div
+              key={index}
+              className={`${statusColors[segment.status]} transition-all ${
+                isLast ? 'rounded-r' : ''
+              } ${index === 0 ? 'rounded-l' : ''}`}
+              style={{
+                flex: isLast ? '0 0 20%' : '1 1 0',
+                minWidth: `${minWidth}px`
+              }}
+              title={`${segment.label}: ${
+                segment.status === 'done' ? 'Complete' :
+                segment.status === 'in_progress' ? 'In Progress' :
+                'Not Started'
+              }`}
+            />
+          );
+        })}
+      </div>
+
+      {/* Legend - only show if not compact */}
+      {!isCompact && (
+        <div className="flex gap-3 mt-1.5 text-xs text-gray-500">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm bg-green-500"></span>
+            Done
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm bg-blue-500"></span>
+            Working
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm bg-gray-600"></span>
+            Pending
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -250,7 +368,6 @@ function calculateProgress(project) {
  */
 function ProjectCard({ project, onSelect, onDelete }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const progressPercent = calculateProgress(project);
 
   const handleDelete = (e) => {
     e.stopPropagation();
@@ -263,7 +380,7 @@ function ProjectCard({ project, onSelect, onDelete }) {
     }
   };
 
-  const isComplete = progressPercent >= 100;
+  const isComplete = project.has_final_video;
 
   return (
     <div
@@ -285,8 +402,8 @@ function ProjectCard({ project, onSelect, onDelete }) {
             <span>•</span>
             <span>
               {project.has_final_video ? 'Complete' :
-               project.has_working_video ? 'Framed' :
-               project.clips_framed > 0 ? 'In Progress' : 'Not Started'}
+               project.has_working_video ? 'In Overlay' :
+               project.clips_framed > 0 ? 'Framing' : 'Not Started'}
             </span>
           </div>
         </div>
@@ -305,21 +422,8 @@ function ProjectCard({ project, onSelect, onDelete }) {
         </button>
       </div>
 
-      {/* Progress bar */}
-      <div className="mt-3">
-        <div className="flex justify-between text-xs text-gray-500 mb-1">
-          <span>Progress</span>
-          <span>{Math.round(progressPercent)}%</span>
-        </div>
-        <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-          <div
-            className={`h-full transition-all ${
-              isComplete ? 'bg-green-500' : 'bg-purple-500'
-            }`}
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-      </div>
+      {/* Segmented progress strip */}
+      <SegmentedProgressStrip project={project} />
     </div>
   );
 }

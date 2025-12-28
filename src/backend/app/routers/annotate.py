@@ -20,11 +20,11 @@ import uuid
 import subprocess
 import logging
 import re
-import hashlib
 import shutil
 import asyncio
 
-from app.database import get_db_connection, RAW_CLIPS_PATH, DOWNLOADS_PATH, GAMES_PATH, CLIP_CACHE_PATH, ensure_directories
+from app.database import get_db_connection, RAW_CLIPS_PATH, DOWNLOADS_PATH, GAMES_PATH, ensure_directories
+from app.services.clip_cache import get_clip_cache
 
 logger = logging.getLogger(__name__)
 
@@ -33,55 +33,6 @@ router = APIRouter(prefix="/api/annotate", tags=["annotate"])
 # Track export progress for SSE streaming
 # Key: export_id, Value: { 'total': int, 'current': int, 'phase': str, 'message': str, 'done': bool }
 _export_progress: Dict[str, Dict[str, Any]] = {}
-
-
-def generate_clip_cache_key(
-    source_video_path: str,
-    start_time: float,
-    end_time: float,
-    name: str,
-    notes: str,
-    rating: int,
-    tags: List[str]
-) -> str:
-    """
-    Generate a hash-based cache key for a clip with burned-in text.
-    Cache is invalidated when any annotation changes.
-    """
-    # Include video file modification time to invalidate if source changes
-    try:
-        mtime = os.path.getmtime(source_video_path)
-    except OSError:
-        mtime = 0
-
-    # Create hash from all parameters that affect the output
-    hash_input = json.dumps({
-        'source': source_video_path,
-        'mtime': mtime,
-        'start': round(start_time, 3),
-        'end': round(end_time, 3),
-        'name': name,
-        'notes': notes[:100] if notes else '',  # Match the truncation in create_clip
-        'rating': rating,
-        'tags': sorted(tags) if tags else []
-    }, sort_keys=True)
-
-    return hashlib.sha256(hash_input.encode()).hexdigest()[:16]
-
-
-def get_cached_clip_path(cache_key: str) -> Optional[Path]:
-    """Get path to cached clip if it exists."""
-    cached_path = CLIP_CACHE_PATH / f"{cache_key}.mp4"
-    if cached_path.exists():
-        return cached_path
-    return None
-
-
-def save_clip_to_cache(source_path: str, cache_key: str) -> Path:
-    """Copy a clip to the cache directory."""
-    cache_path = CLIP_CACHE_PATH / f"{cache_key}.mp4"
-    shutil.copy2(source_path, cache_path)
-    return cache_path
 
 
 def sanitize_filename(name: str) -> str:
@@ -169,17 +120,25 @@ async def create_clip_with_burned_text(
     Extract clip with burned-in text overlay showing annotations.
     Uses caching to avoid re-encoding if clip hasn't changed.
     """
+    cache = get_clip_cache()
+    cache_key = None
+
     # Check cache first
     if use_cache:
-        cache_key = generate_clip_cache_key(
-            source_path, start_time, end_time,
-            clip_name, clip_notes or '', rating, tags or []
+        cache_key = cache.generate_key(
+            cache_type='annotate',
+            video_id=cache.get_video_identity(source_path),
+            start=round(start_time, 3),
+            end=round(end_time, 3),
+            name=clip_name,
+            notes=(clip_notes or '')[:100],  # Match truncation in FFmpeg filter
+            rating=rating,
+            tags=sorted(tags) if tags else []
         )
-        cached_path = get_cached_clip_path(cache_key)
+        cached_path = cache.get(cache_key)
         if cached_path:
             # Copy from cache to output
             shutil.copy2(cached_path, output_path)
-            logger.info(f"Using cached clip: {clip_name} (key: {cache_key})")
             return True
 
     duration = end_time - start_time
@@ -268,10 +227,9 @@ async def create_clip_with_burned_text(
         return False
 
     # Save to cache for future use
-    if use_cache:
+    if use_cache and cache_key:
         try:
-            save_clip_to_cache(output_path, cache_key)
-            logger.info(f"Cached clip: {clip_name} (key: {cache_key})")
+            cache.put(output_path, cache_key)
         except Exception as e:
             logger.warning(f"Failed to cache clip: {e}")
 
@@ -348,16 +306,20 @@ async def download_file(filename: str):
     Download a generated file from the downloads folder.
     Files are cleaned up after 1 hour by a background task (TODO).
     """
+    logger.info(f"[Download] Request for file: {filename}")
+
     # Ensure directories exist
     ensure_directories()
 
     # Security: prevent path traversal
     if '..' in filename or '/' in filename or '\\' in filename:
+        logger.error(f"[Download] VALIDATION ERROR - Path traversal attempt detected: {filename}")
         raise HTTPException(status_code=400, detail="Invalid filename")
 
     file_path = DOWNLOADS_PATH / filename
 
     if not file_path.exists():
+        logger.error(f"[Download] VALIDATION ERROR - File not found: {file_path}")
         raise HTTPException(status_code=404, detail="File not found")
 
     # Determine media type
@@ -468,12 +430,19 @@ async def export_clips(
     - downloads: URLs for downloadable files (TSV, compilation video)
     - created: info about created raw_clips and projects (only if save_to_db=true)
     """
+    # Log request parameters for debugging
+    logger.info(f"[Export] Request received - save_to_db={save_to_db}, game_id={game_id}, video={video.filename if video else None}, export_id={export_id}")
+    logger.debug(f"[Export] clips_json length: {len(clips_json) if clips_json else 0} chars")
+    logger.debug(f"[Export] settings_json: {settings_json}")
+
     should_save_to_db = save_to_db.lower() == "true"
 
     # Parse settings with defaults
     try:
         settings = json.loads(settings_json) if settings_json else {}
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.error(f"[Export] Failed to parse settings JSON: {e}")
+        logger.error(f"[Export] settings_json content: {settings_json}")
         settings = {}
 
     # Apply defaults for missing settings
@@ -483,20 +452,27 @@ async def export_clips(
     create_clip_projects = settings.get('createClipProjects', True)
     clip_project_min_rating = settings.get('clipProjectMinRating', 5)
     clip_project_aspect = settings.get('clipProjectAspectRatio', '9:16')
+
     # Parse clips JSON
     try:
         clips = json.loads(clips_json)
-    except json.JSONDecodeError:
+        logger.info(f"[Export] Parsed {len(clips)} clips from JSON")
+    except json.JSONDecodeError as e:
+        logger.error(f"[Export] VALIDATION ERROR - Invalid clips JSON: {e}")
+        logger.error(f"[Export] clips_json content (first 500 chars): {clips_json[:500]}")
         raise HTTPException(status_code=400, detail="Invalid clips JSON")
 
     if not clips:
+        logger.error("[Export] VALIDATION ERROR - No clips defined in request")
         raise HTTPException(status_code=400, detail="No clips defined")
 
     # Validate clips
     for i, clip in enumerate(clips):
         if 'start_time' not in clip or 'end_time' not in clip:
+            logger.error(f"[Export] VALIDATION ERROR - Clip {i} missing times: {clip}")
             raise HTTPException(status_code=400, detail=f"Clip {i} missing times")
         if clip['start_time'] >= clip['end_time']:
+            logger.error(f"[Export] VALIDATION ERROR - Clip {i} invalid range: start={clip['start_time']}, end={clip['end_time']}")
             raise HTTPException(status_code=400, detail=f"Clip {i} invalid range")
 
     # Ensure directories exist
@@ -505,9 +481,11 @@ async def export_clips(
     # Determine video source: uploaded file OR existing game video
     if game_id:
         # Use existing game's video
+        logger.info(f"[Export] Using game_id source: {game_id}")
         try:
             game_id_int = int(game_id)
         except ValueError:
+            logger.error(f"[Export] VALIDATION ERROR - Invalid game_id format: {game_id}")
             raise HTTPException(status_code=400, detail="Invalid game_id")
 
         with get_db_connection() as conn:
@@ -516,22 +494,27 @@ async def export_clips(
             row = cursor.fetchone()
 
             if not row:
+                logger.error(f"[Export] VALIDATION ERROR - Game not found: game_id={game_id_int}")
                 raise HTTPException(status_code=404, detail="Game not found")
             if not row['video_filename']:
+                logger.error(f"[Export] VALIDATION ERROR - Game {game_id_int} has no video uploaded")
                 raise HTTPException(status_code=400, detail="Game has no video uploaded")
 
             source_path = str(GAMES_PATH / row['video_filename'])
             original_filename = row['name'] + ".mp4"
 
             if not os.path.exists(source_path):
+                logger.error(f"[Export] VALIDATION ERROR - Game video file not found on disk: {source_path}")
                 raise HTTPException(status_code=404, detail="Game video file not found")
 
-            logger.info(f"Using game {game_id} video: {row['video_filename']}")
+            logger.info(f"[Export] Using game {game_id} video: {row['video_filename']}")
 
     elif video and video.filename:
         # Use uploaded video - need temp dir
+        logger.info(f"[Export] Using uploaded video: {video.filename}")
         pass  # Will be handled below
     else:
+        logger.error("[Export] VALIDATION ERROR - Neither video file nor game_id provided")
         raise HTTPException(status_code=400, detail="Either video file or game_id required")
 
     # Create temp directory for processing
@@ -715,40 +698,43 @@ async def export_clips(
         }
 
         # 2. Generate clips_compilation.mp4 with burned-in overlays
-        for idx, clip in enumerate(all_clips):
-            clip_name = clip.get('name', 'clip')
-            step += 1
-            update_progress(step, total_steps, 'clips', f'Creating clip {idx + 1}/{len(all_clips)}: {clip_name}')
-            burned_path = os.path.join(temp_dir, f"burned_{uuid.uuid4().hex[:8]}.mp4")
+        # Only generate compilation video for "Download Clips Review" mode (save_to_db=false)
+        # When importing into projects, users don't need the compilation since clips are saved to DB
+        if not should_save_to_db:
+            for idx, clip in enumerate(all_clips):
+                clip_name = clip.get('name', 'clip')
+                step += 1
+                update_progress(step, total_steps, 'clips', f'Creating clip {idx + 1}/{len(all_clips)}: {clip_name}')
+                burned_path = os.path.join(temp_dir, f"burned_{uuid.uuid4().hex[:8]}.mp4")
 
-            success = await create_clip_with_burned_text(
-                source_path=source_path,
-                output_path=burned_path,
-                start_time=clip['start_time'],
-                end_time=clip['end_time'],
-                clip_name=clip_name,
-                clip_notes=clip.get('notes', ''),
-                rating=clip.get('rating', 3),
-                tags=clip.get('tags', [])
-            )
+                success = await create_clip_with_burned_text(
+                    source_path=source_path,
+                    output_path=burned_path,
+                    start_time=clip['start_time'],
+                    end_time=clip['end_time'],
+                    clip_name=clip_name,
+                    clip_notes=clip.get('notes', ''),
+                    rating=clip.get('rating', 3),
+                    tags=clip.get('tags', [])
+                )
 
-            if success:
-                burned_clip_paths.append(burned_path)
+                if success:
+                    burned_clip_paths.append(burned_path)
 
-        # Concatenate burned clips into compilation
-        if burned_clip_paths:
-            step += 1
-            update_progress(step, total_steps, 'concatenating', f'Merging {len(burned_clip_paths)} clips into compilation...')
-            compilation_filename = f"{video_base}_{download_id}_clips_review.mp4"
-            compilation_path = str(DOWNLOADS_PATH / compilation_filename)
+            # Concatenate burned clips into compilation
+            if burned_clip_paths:
+                step += 1
+                update_progress(step, total_steps, 'concatenating', f'Merging {len(burned_clip_paths)} clips into compilation...')
+                compilation_filename = f"{video_base}_{download_id}_clips_review.mp4"
+                compilation_path = str(DOWNLOADS_PATH / compilation_filename)
 
-            if await concatenate_videos(burned_clip_paths, compilation_path):
-                compilation_size = os.path.getsize(compilation_path)
-                logger.info(f"Generated clips compilation: {compilation_filename} ({compilation_size / (1024*1024):.1f}MB)")
-                download_urls['clips_compilation'] = {
-                    'filename': compilation_filename,
-                    'url': f"/api/annotate/download/{compilation_filename}"
-                }
+                if await concatenate_videos(burned_clip_paths, compilation_path):
+                    compilation_size = os.path.getsize(compilation_path)
+                    logger.info(f"Generated clips compilation: {compilation_filename} ({compilation_size / (1024*1024):.1f}MB)")
+                    download_urls['clips_compilation'] = {
+                        'filename': compilation_filename,
+                        'url': f"/api/annotate/download/{compilation_filename}"
+                    }
 
         if should_save_to_db:
             logger.info(f"Export complete: {len(created_raw_clips)} clips saved, {len(created_projects)} projects created")
@@ -774,10 +760,12 @@ async def export_clips(
 
         return JSONResponse(response_data, background=BackgroundTask(cleanup_temp_dir, temp_dir))
 
-    except HTTPException:
+    except HTTPException as e:
+        # HTTPException already logged before raising, just cleanup and re-raise
+        logger.warning(f"[Export] Request failed with HTTPException: {e.status_code} - {e.detail}")
         cleanup_temp_dir(temp_dir)
         raise
     except Exception as e:
-        logger.error(f"Export error: {e}")
+        logger.error(f"[Export] UNEXPECTED ERROR - Export failed: {type(e).__name__}: {e}", exc_info=True)
         cleanup_temp_dir(temp_dir)
         raise HTTPException(status_code=500, detail=str(e))

@@ -28,6 +28,7 @@ from ..models import CropKeyframe, HighlightKeyframe
 from ..websocket import export_progress, manager
 from ..interpolation import generate_crop_filter
 from ..database import get_db_connection, WORKING_VIDEOS_PATH, FINAL_VIDEOS_PATH
+from ..services.clip_cache import get_clip_cache
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
@@ -39,8 +40,9 @@ AIVideoUpscaler = None
 try:
     from app.ai_upscaler import AIVideoUpscaler as _AIVideoUpscaler
     AIVideoUpscaler = _AIVideoUpscaler
-except ImportError:
-    logger.warning("AI upscaler dependencies not installed")
+except (ImportError, OSError, AttributeError) as e:
+    logger.warning(f"AI upscaler dependencies not available: {e}")
+    logger.warning("AI upscaling features will be disabled")
 
 
 # =============================================================================
@@ -104,15 +106,23 @@ async def process_single_clip(
 ) -> str:
     """
     Process a single clip with its crop/trim/speed settings.
+    Uses caching to avoid re-processing unchanged clips.
     Returns path to processed clip.
     """
+    import hashlib
+
     clip_index = clip_data['clipIndex']
 
     # Save video to temp
     input_path = os.path.join(temp_dir, f"input_{clip_index}.mp4")
+    content = await video_file.read()
     with open(input_path, 'wb') as f:
-        content = await video_file.read()
         f.write(content)
+
+    # Compute content hash for cache key (first 1MB + size for speed)
+    content_sample = content[:1024 * 1024]  # First 1MB
+    content_hash = hashlib.sha256(content_sample).hexdigest()[:12]
+    content_identity = f"{content_hash}|{len(content)}"
 
     # Output path for this clip
     output_path = os.path.join(temp_dir, f"processed_{clip_index}.mp4")
@@ -155,6 +165,28 @@ async def process_single_clip(
                 })
             segment_data['segments'] = segment_list
 
+    # Check cache before processing
+    cache = get_clip_cache()
+    cache_key = cache.generate_key(
+        cache_type='framing',
+        video_id=content_identity,
+        crop_keyframes=keyframes,
+        segment_data=segment_data,
+        target_fps=target_fps,
+        export_mode=export_mode,
+        include_audio=include_audio
+    )
+
+    cached_path = cache.get(cache_key)
+    if cached_path:
+        # Cache hit - copy to output path
+        shutil.copy2(cached_path, output_path)
+        logger.info(f"[Multi-Clip] Cache HIT for clip {clip_index}")
+        # Call progress callback to show we're done with this clip
+        if progress_callback:
+            progress_callback(1, 1, "Using cached result", 'cached')
+        return output_path
+
     logger.info(f"[Multi-Clip] Processing clip {clip_index}: {len(keyframes)} keyframes, segment_data={segment_data}")
 
     # Check AI upscaler
@@ -189,6 +221,13 @@ async def process_single_clip(
         segment_data=segment_data,
         include_audio=include_audio
     )
+
+    # Save to cache for future use
+    try:
+        cache.put(output_path, cache_key)
+        logger.info(f"[Multi-Clip] Cached clip {clip_index}")
+    except Exception as e:
+        logger.warning(f"[Multi-Clip] Failed to cache clip {clip_index}: {e}")
 
     return output_path
 
@@ -1576,9 +1615,9 @@ async def export_framing(
     This endpoint:
     1. Receives the rendered video from the frontend
     2. Saves it to working_videos folder
-    3. Creates working_videos DB entry
+    3. Creates working_videos DB entry with next version number
     4. Updates project.working_video_id
-    5. Marks previous working_video as abandoned
+    5. Resets project.final_video_id (framing changed, need to re-export overlay)
     6. Sets all working_clips.progress = 1
 
     Request:
@@ -1618,32 +1657,25 @@ async def export_framing(
 
         logger.info(f"[Framing Export] Saved working video: {filename} ({len(content)} bytes)")
 
-        # Mark previous working video as abandoned
-        if project['working_video_id']:
-            cursor.execute("""
-                UPDATE working_videos SET abandoned = TRUE WHERE id = ?
-            """, (project['working_video_id'],))
-            logger.info(f"[Framing Export] Marked previous working video as abandoned: {project['working_video_id']}")
-
-            # Also abandon the final video since framing changed
-            cursor.execute("""
-                SELECT final_video_id FROM projects WHERE id = ?
-            """, (project_id,))
-            proj = cursor.fetchone()
-            if proj and proj['final_video_id']:
-                cursor.execute("""
-                    UPDATE final_videos SET abandoned = TRUE WHERE id = ?
-                """, (proj['final_video_id'],))
-                cursor.execute("""
-                    UPDATE projects SET final_video_id = NULL WHERE id = ?
-                """, (project_id,))
-                logger.info(f"[Framing Export] Abandoned final video due to framing change")
-
-        # Create new working video entry
+        # Get next version number for working video
         cursor.execute("""
-            INSERT INTO working_videos (project_id, filename)
-            VALUES (?, ?)
-        """, (project_id, filename))
+            SELECT COALESCE(MAX(version), 0) + 1 as next_version
+            FROM working_videos
+            WHERE project_id = ?
+        """, (project_id,))
+        next_version = cursor.fetchone()['next_version']
+
+        # Reset final_video_id since framing changed (user needs to re-export from overlay)
+        cursor.execute("""
+            UPDATE projects SET final_video_id = NULL WHERE id = ?
+        """, (project_id,))
+        logger.info(f"[Framing Export] Reset final_video_id due to framing change")
+
+        # Create new working video entry with version number
+        cursor.execute("""
+            INSERT INTO working_videos (project_id, filename, version)
+            VALUES (?, ?, ?)
+        """, (project_id, filename, next_version))
         working_video_id = cursor.lastrowid
 
         # Update project with new working video ID
@@ -1651,11 +1683,21 @@ async def export_framing(
             UPDATE projects SET working_video_id = ? WHERE id = ?
         """, (working_video_id, project_id))
 
-        # Update all working clips to progress = 1 (framed)
+        # Update all working clips to progress = 1 (framed) - only latest versions
         cursor.execute("""
             UPDATE working_clips
             SET progress = 1
-            WHERE project_id = ? AND abandoned = FALSE
+            WHERE id IN (
+                SELECT id FROM (
+                    SELECT wc.id, ROW_NUMBER() OVER (
+                        PARTITION BY COALESCE(rc.end_time, wc.uploaded_filename)
+                        ORDER BY wc.version DESC
+                    ) as rn
+                    FROM working_clips wc
+                    LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+                    WHERE wc.project_id = ?
+                ) WHERE rn = 1
+            )
         """, (project_id,))
 
         conn.commit()
@@ -1676,11 +1718,13 @@ async def get_working_video(project_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        # Get latest working video for this project
         cursor.execute("""
-            SELECT wv.filename
-            FROM projects p
-            JOIN working_videos wv ON p.working_video_id = wv.id
-            WHERE p.id = ? AND wv.abandoned = FALSE
+            SELECT filename
+            FROM working_videos
+            WHERE project_id = ?
+            ORDER BY version DESC
+            LIMIT 1
         """, (project_id,))
         result = cursor.fetchone()
 
@@ -1710,9 +1754,8 @@ async def export_final(
     This endpoint:
     1. Receives the rendered video with overlays from the frontend
     2. Saves it to final_videos folder
-    3. Creates final_videos DB entry
-    4. Updates project.final_video_id
-    5. Marks previous final_video as abandoned
+    3. Creates final_videos DB entry with next version number
+    4. Updates project.final_video_id to point to latest version
 
     Request:
     - project_id: The project ID
@@ -1761,18 +1804,20 @@ async def export_final(
 
         logger.info(f"[Final Export] Saved final video: {filename} ({len(content)} bytes)")
 
-        # Mark previous final video as abandoned
-        if project['final_video_id']:
-            cursor.execute("""
-                UPDATE final_videos SET abandoned = TRUE WHERE id = ?
-            """, (project['final_video_id'],))
-            logger.info(f"[Final Export] Marked previous final video as abandoned: {project['final_video_id']}")
-
-        # Create new final video entry
+        # Get next version number for final video
         cursor.execute("""
-            INSERT INTO final_videos (project_id, filename)
-            VALUES (?, ?)
-        """, (project_id, filename))
+            SELECT COALESCE(MAX(version), 0) + 1 as next_version
+            FROM final_videos
+            WHERE project_id = ?
+        """, (project_id,))
+        next_version = cursor.fetchone()['next_version']
+        logger.info(f"[Final Export] Creating final video version {next_version} for project {project_id}")
+
+        # Create new final video entry with version number
+        cursor.execute("""
+            INSERT INTO final_videos (project_id, filename, version)
+            VALUES (?, ?, ?)
+        """, (project_id, filename, next_version))
         final_video_id = cursor.lastrowid
 
         # Update project with new final video ID
@@ -1798,11 +1843,13 @@ async def get_final_video(project_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        # Get latest final video for this project
         cursor.execute("""
-            SELECT fv.filename
-            FROM projects p
-            JOIN final_videos fv ON p.final_video_id = fv.id
-            WHERE p.id = ? AND fv.abandoned = FALSE
+            SELECT filename
+            FROM final_videos
+            WHERE project_id = ?
+            ORDER BY version DESC
+            LIMIT 1
         """, (project_id,))
         result = cursor.fetchone()
 
@@ -1818,3 +1865,123 @@ async def get_final_video(project_id: int):
             media_type="video/mp4",
             filename=result['filename']
         )
+
+
+@router.put("/projects/{project_id}/overlay-data")
+async def save_overlay_data(
+    project_id: int,
+    highlights_data: str = Form("[]"),
+    text_overlays: str = Form("[]"),
+    effect_type: str = Form("original")
+):
+    """
+    Save overlay editing state for a project.
+
+    Called by frontend auto-save when user modifies highlights in Overlay mode.
+    Saves to working_videos table for the project's current working video.
+
+    Request (form data):
+    - highlights_data: JSON string of highlight regions
+    - text_overlays: JSON string of text overlay configs
+    - effect_type: 'original' | 'brightness_boost' | 'dark_overlay'
+
+    Response:
+    - success: boolean
+    - saved_at: timestamp
+    """
+    logger.info(f"[Overlay Data] Saving for project {project_id}")
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Get project's current working video
+        cursor.execute("""
+            SELECT working_video_id FROM projects WHERE id = ?
+        """, (project_id,))
+        project = cursor.fetchone()
+
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        if not project['working_video_id']:
+            raise HTTPException(
+                status_code=400,
+                detail="Project has no working video - complete framing first"
+            )
+
+        # Update working video with overlay data
+        cursor.execute("""
+            UPDATE working_videos
+            SET highlights_data = ?,
+                text_overlays = ?,
+                effect_type = ?
+            WHERE id = ?
+        """, (highlights_data, text_overlays, effect_type, project['working_video_id']))
+
+        conn.commit()
+
+        logger.info(f"[Overlay Data] Saved for working_video {project['working_video_id']}")
+
+        return JSONResponse({
+            'success': True,
+            'saved_at': datetime.now().isoformat(),
+            'working_video_id': project['working_video_id']
+        })
+
+
+@router.get("/projects/{project_id}/overlay-data")
+async def get_overlay_data(project_id: int):
+    """
+    Get saved overlay editing state for a project.
+
+    Called by frontend when entering Overlay mode to restore previous edits.
+
+    Response:
+    - highlights_data: Parsed JSON array of highlight regions
+    - text_overlays: Parsed JSON array of text overlay configs
+    - effect_type: 'original' | 'brightness_boost' | 'dark_overlay'
+    - has_data: boolean indicating if any data exists
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Get latest working video's overlay data for this project
+        cursor.execute("""
+            SELECT highlights_data, text_overlays, effect_type
+            FROM working_videos
+            WHERE project_id = ?
+            ORDER BY version DESC
+            LIMIT 1
+        """, (project_id,))
+        result = cursor.fetchone()
+
+        if not result:
+            return JSONResponse({
+                'highlights_data': [],
+                'text_overlays': [],
+                'effect_type': 'original',
+                'has_data': False
+            })
+
+        # Parse JSON strings
+        highlights = []
+        text_overlays = []
+
+        if result['highlights_data']:
+            try:
+                highlights = json.loads(result['highlights_data'])
+            except json.JSONDecodeError:
+                pass
+
+        if result['text_overlays']:
+            try:
+                text_overlays = json.loads(result['text_overlays'])
+            except json.JSONDecodeError:
+                pass
+
+        return JSONResponse({
+            'highlights_data': highlights,
+            'text_overlays': text_overlays,
+            'effect_type': result['effect_type'] or 'original',
+            'has_data': len(highlights) > 0 or len(text_overlays) > 0
+        })
