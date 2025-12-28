@@ -53,3 +53,4 @@ __pycache__/
 /test_outputs
 /weights
 src/backend/yolov8x.pt
+/user_data
