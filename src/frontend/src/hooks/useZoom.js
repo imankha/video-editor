@@ -7,7 +7,7 @@ export default function useZoom() {
   const [zoom, setZoom] = useState(1); // 1 = 100%
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
 
-  const MIN_ZOOM = 0.25; // 25%
+  const MIN_ZOOM = 1; // 100% - never zoom out beyond full size to avoid black bars
   const MAX_ZOOM = 4; // 400%
   const ZOOM_STEP = 0.25; // 25% increment
 

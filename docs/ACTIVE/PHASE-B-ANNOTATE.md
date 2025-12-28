@@ -1,4 +1,4 @@
-# Phase B: Clipify Mode
+# Phase B: Annotate Mode
 
 **Status**: PLANNED (After Phase A)
 **Priority**: MEDIUM
@@ -8,7 +8,7 @@
 
 ## Overview
 
-Clipify Mode introduces a new pre-framing workflow where users can extract individual clips from full-length game footage. Instead of importing pre-cut clips, users can import an entire game video and identify the moments they want to turn into highlight clips.
+Annotate Mode introduces a new pre-framing workflow where users can extract individual clips from full-length game footage. Instead of importing pre-cut clips, users can import an entire game video and identify the moments they want to turn into highlight clips.
 
 ---
 
@@ -20,12 +20,12 @@ Current Flow:
        OR
   [Add Overlay To Framed Video] → Overlay → Export (skip Framing)
 
-New Flow (adds Clipify option):
+New Flow (adds Annotate option):
   [Add Raw Clips] → Framing → Overlay → Export
        OR
   [Add Overlay To Framed Video] → Overlay → Export (skip Framing)
        OR
-  [Add Game] → Clipify → Export → Framing (with clips) → Overlay → Export
+  [Add Game] → Annotate → Export → Framing (with clips) → Overlay → Export
                            ↓
                     (Annotated source video
                      downloads to client)
@@ -37,7 +37,7 @@ New Flow (adds Clipify option):
 
 ### No Videos State (Updated)
 
-Currently, the "no videos" state shows two buttons. A third button will be added for Clipify:
+Currently, the "no videos" state shows two buttons. A third button will be added for Annotate:
 
 ```
 Current:
@@ -65,11 +65,11 @@ New (adds third button):
 |--------|--------|
 | **Add Raw Clips** | Opens file picker, imports videos directly to Framing mode (existing) |
 | **Add Overlay To Framed Video** | Opens file picker, imports pre-framed video to Overlay mode (existing) |
-| **Add Game** | Opens file picker, imports single video into Clipify mode (new) |
+| **Add Game** | Opens file picker, imports single video into Annotate mode (new) |
 
 ---
 
-## Clipify Mode Interface
+## Annotate Mode Interface
 
 ### Main Layout
 
@@ -77,7 +77,7 @@ The layout mirrors Framing mode with a **side panel** for clip management:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│  Mode: Clipify                                                    [Exit Mode]   │
+│  Mode: Annotate                                                    [Exit Mode]   │
 ├────────────────────────────────────────────────────────┬────────────────────────┤
 │                                                        │  Clips Panel           │
 │  ┌──────────────────────────────────────────────────┐ │  ┌──────────────────┐  │
@@ -177,16 +177,16 @@ When the video is playing and the playhead enters a clip region, the **notes** f
 - Disappears when playhead exits the clip region
 - Shows the **notes** field (not the name)
 - Styling: White background, black text, top of video, 80% width centered, rounded corners
-- Only visible during playback in Clipify mode (not exported)
+- Only visible during playback in Annotate mode (not exported)
 
 ---
 
 ## Data Model
 
-### Clipify State
+### Annotate State
 
 ```typescript
-interface ClipifyState {
+interface AnnotateState {
   sourceVideo: {
     file: File;
     path: string;
@@ -280,7 +280,7 @@ The **original full video** is downloaded to the user's client with all clip not
 
 ```json
 {
-  "clipify_version": "1.0",
+  "annotate_version": "1.0",
   "clips": [
     {
       "name": "Great dribble",
@@ -302,7 +302,7 @@ The **original full video** is downloaded to the user's client with all clip not
 
 ```bash
 ffmpeg -i input.mp4 \
-  -metadata description='{"clipify_version":"1.0","clips":[...]}' \
+  -metadata description='{"annotate_version":"1.0","clips":[...]}' \
   -c copy \
   annotated_source.mp4
 ```
@@ -315,7 +315,7 @@ After export completes:
 3. User continues workflow in Framing mode with all clips ready for processing
 4. Clip metadata (name, notes) is visible in Framing mode clip list
 
-**Source Video Persistence**: The source game video remains in memory. User can navigate back to Clipify mode to add more clips or re-export. The source is only cleared when the user explicitly exits Clipify mode or starts a new session.
+**Source Video Persistence**: The source game video remains in memory. User can navigate back to Annotate mode to add more clips or re-export. The source is only cleared when the user explicitly exits Annotate mode or starts a new session.
 
 ---
 
@@ -331,34 +331,34 @@ After export completes:
 - [ ] Open the app with no videos loaded
 - [ ] Verify three buttons visible: "Add Raw Clips", "Add Overlay To Framed Video", "Add Game"
 - [ ] Click "Add Game" - verify file picker opens
-- [ ] Select a video file - verify app enters Clipify mode
+- [ ] Select a video file - verify app enters Annotate mode
 - [ ] Verify "Add Raw Clips" still works (goes to Framing mode)
 - [ ] Verify "Add Overlay To Framed Video" still works (goes to Overlay mode)
 
 ---
 
-### Task 2: Create Clipify Mode State Hook
+### Task 2: Create Annotate Mode State Hook
 **Estimated Effort**: Medium
 **Files to Create**:
-- `src/frontend/src/modes/clipify/hooks/useClipify.js`
+- `src/frontend/src/modes/annotate/hooks/useAnnotate.js`
 
 **QA Verification**:
 - [ ] Import a game video via "Add Game"
-- [ ] Verify `editorMode` is set to `'clipify'` (check React DevTools or console)
+- [ ] Verify `editorMode` is set to `'annotate'` (check React DevTools or console)
 - [ ] Verify source video metadata is stored (duration, dimensions, framerate)
 - [ ] Verify `clipRegions` array is initialized as empty
 - [ ] Verify `selectedRegionId` is initialized as null
 
 ---
 
-### Task 3: Create Clipify Mode Container with Side Panel Layout
+### Task 3: Create Annotate Mode Container with Side Panel Layout
 **Estimated Effort**: Medium
 **Files to Create**:
-- `src/frontend/src/modes/clipify/ClipifyMode.jsx`
-- `src/frontend/src/modes/clipify/index.js`
+- `src/frontend/src/modes/annotate/AnnotateMode.jsx`
+- `src/frontend/src/modes/annotate/index.js`
 
 **QA Verification**:
-- [ ] Import a game video - verify Clipify mode renders
+- [ ] Import a game video - verify Annotate mode renders
 - [ ] Verify layout has video preview on left (larger area)
 - [ ] Verify layout has side panel on right (similar width to Framing clips panel)
 - [ ] Verify "Exit Mode" button is visible in header
@@ -370,8 +370,8 @@ After export completes:
 ### Task 4: Create Clips Side Panel Component
 **Estimated Effort**: Medium
 **Files to Create**:
-- `src/frontend/src/modes/clipify/components/ClipsSidePanel.jsx`
-- `src/frontend/src/modes/clipify/components/ClipListItem.jsx`
+- `src/frontend/src/modes/annotate/components/ClipsSidePanel.jsx`
+- `src/frontend/src/modes/annotate/components/ClipListItem.jsx`
 
 **QA Verification**:
 - [ ] Verify side panel header shows "Clips" title
@@ -387,7 +387,7 @@ After export completes:
 ### Task 5: Implement Default Clip Naming
 **Estimated Effort**: Small
 **Files to Modify**:
-- `src/frontend/src/modes/clipify/hooks/useClipify.js`
+- `src/frontend/src/modes/annotate/hooks/useAnnotate.js`
 
 **QA Verification**:
 - [ ] Seek video to 00:02:30 and add a clip
@@ -398,11 +398,11 @@ After export completes:
 
 ---
 
-### Task 6: Create Clipify Timeline with Region Layer
+### Task 6: Create Annotate Timeline with Region Layer
 **Estimated Effort**: Medium
 **Files to Create**:
-- `src/frontend/src/modes/clipify/ClipifyTimeline.jsx`
-- `src/frontend/src/modes/clipify/layers/ClipRegionLayer.jsx`
+- `src/frontend/src/modes/annotate/AnnotateTimeline.jsx`
+- `src/frontend/src/modes/annotate/layers/ClipRegionLayer.jsx`
 
 **QA Verification**:
 - [ ] Verify timeline shows below video preview
@@ -417,7 +417,7 @@ After export completes:
 ### Task 7: Implement Clip Region Levers (Like Highlight Regions)
 **Estimated Effort**: Medium
 **Files to Modify**:
-- `src/frontend/src/modes/clipify/layers/ClipRegionLayer.jsx`
+- `src/frontend/src/modes/annotate/layers/ClipRegionLayer.jsx`
 
 **QA Verification**:
 - [ ] Add a clip - verify start lever (left) is visible on region
@@ -435,8 +435,8 @@ After export completes:
 ### Task 8: Implement Clip Selection on Timeline
 **Estimated Effort**: Small
 **Files to Modify**:
-- `src/frontend/src/modes/clipify/layers/ClipRegionLayer.jsx`
-- `src/frontend/src/modes/clipify/components/ClipsSidePanel.jsx`
+- `src/frontend/src/modes/annotate/layers/ClipRegionLayer.jsx`
+- `src/frontend/src/modes/annotate/components/ClipsSidePanel.jsx`
 
 **QA Verification**:
 - [ ] Add multiple clips (at least 3)
@@ -452,7 +452,7 @@ After export completes:
 ### Task 9: Create Clip Details Editor in Side Panel
 **Estimated Effort**: Medium
 **Files to Create**:
-- `src/frontend/src/modes/clipify/components/ClipDetailsEditor.jsx`
+- `src/frontend/src/modes/annotate/components/ClipDetailsEditor.jsx`
 
 **QA Verification**:
 - [ ] Select a clip - verify details editor appears in side panel
@@ -471,7 +471,7 @@ After export completes:
 ### Task 10: Implement Notes Overlay During Playback
 **Estimated Effort**: Medium
 **Files to Create**:
-- `src/frontend/src/modes/clipify/components/NotesOverlay.jsx`
+- `src/frontend/src/modes/annotate/components/NotesOverlay.jsx`
 
 **QA Verification**:
 - [ ] Add a clip with notes text
@@ -492,8 +492,8 @@ After export completes:
 ### Task 11: Add Clip Region via Button
 **Estimated Effort**: Small
 **Files to Modify**:
-- `src/frontend/src/modes/clipify/ClipifyMode.jsx`
-- `src/frontend/src/modes/clipify/hooks/useClipify.js`
+- `src/frontend/src/modes/annotate/AnnotateMode.jsx`
+- `src/frontend/src/modes/annotate/hooks/useAnnotate.js`
 
 **QA Verification**:
 - [ ] Seek video to a specific position
@@ -510,7 +510,7 @@ After export completes:
 ### Task 12: Add Clip Region via Keyboard Shortcut
 **Estimated Effort**: Small
 **Files to Modify**:
-- `src/frontend/src/modes/clipify/ClipifyMode.jsx`
+- `src/frontend/src/modes/annotate/AnnotateMode.jsx`
 
 **QA Verification**:
 - [ ] Seek video to a specific position
@@ -524,8 +524,8 @@ After export completes:
 ### Task 13: Delete Clip Region
 **Estimated Effort**: Small
 **Files to Modify**:
-- `src/frontend/src/modes/clipify/components/ClipDetailsEditor.jsx`
-- `src/frontend/src/modes/clipify/hooks/useClipify.js`
+- `src/frontend/src/modes/annotate/components/ClipDetailsEditor.jsx`
+- `src/frontend/src/modes/annotate/hooks/useAnnotate.js`
 
 **QA Verification**:
 - [ ] Select a clip
@@ -540,17 +540,17 @@ After export completes:
 
 ---
 
-### Task 14: Exit Clipify Mode
+### Task 14: Exit Annotate Mode
 **Estimated Effort**: Small
 **Files to Modify**:
-- `src/frontend/src/modes/clipify/ClipifyMode.jsx`
+- `src/frontend/src/modes/annotate/AnnotateMode.jsx`
 - `src/frontend/src/App.jsx`
 
 **QA Verification**:
 - [ ] With no clips defined: Click "Exit Mode" - verify returns to no-videos state immediately
 - [ ] With clips defined: Click "Exit Mode" - verify warning dialog appears
 - [ ] Warning dialog shows: "You have X unsaved clips. Exit anyway?"
-- [ ] Click "Cancel" - verify stays in Clipify mode
+- [ ] Click "Cancel" - verify stays in Annotate mode
 - [ ] Click "Exit" - verify returns to no-videos state
 - [ ] Verify clip data is cleared after exit
 
@@ -559,13 +559,13 @@ After export completes:
 ### Task 15: Create Clips Export Backend Endpoint
 **Estimated Effort**: Medium
 **Files to Create**:
-- `src/backend/app/routers/clipify.py`
+- `src/backend/app/routers/annotate.py`
 **Files to Modify**:
 - `src/backend/app/main.py`
 
 **API Contract**:
 ```
-POST /api/clipify/export
+POST /api/annotate/export
 Request: {
   video_path: string,
   clips: [{
@@ -606,9 +606,9 @@ Response: {
 ### Task 16: Implement Frontend Export Flow
 **Estimated Effort**: Medium
 **Files to Create**:
-- `src/frontend/src/modes/clipify/components/ExportClipsButton.jsx`
+- `src/frontend/src/modes/annotate/components/ExportClipsButton.jsx`
 **Files to Modify**:
-- `src/frontend/src/modes/clipify/ClipifyMode.jsx`
+- `src/frontend/src/modes/annotate/AnnotateMode.jsx`
 
 **Description**:
 Export performs two actions:
@@ -633,7 +633,7 @@ Export performs two actions:
 ### Task 17: Auto-Load Clips to Framing Mode
 **Estimated Effort**: Medium
 **Files to Modify**:
-- `src/frontend/src/modes/clipify/components/ExportClipsButton.jsx`
+- `src/frontend/src/modes/annotate/components/ExportClipsButton.jsx`
 - `src/frontend/src/App.jsx`
 - `src/frontend/src/hooks/useClipManager.js`
 
@@ -660,7 +660,7 @@ The annotated source video downloads happen in parallel with the mode transition
 - `src/frontend/src/hooks/useClipManager.js`
 
 **QA Verification**:
-- [ ] Load clips from Clipify export into Framing mode
+- [ ] Load clips from Annotate export into Framing mode
 - [ ] Verify clip name is visible in clip list (not just filename)
 - [ ] Verify clip notes are visible (tooltip or expandable section)
 - [ ] Verify original video source is shown
@@ -675,27 +675,27 @@ The annotated source video downloads happen in parallel with the mode transition
 
 | File | Purpose |
 |------|---------|
-| `src/frontend/src/modes/clipify/ClipifyMode.jsx` | Main clipify mode container |
-| `src/frontend/src/modes/clipify/index.js` | Mode exports |
-| `src/frontend/src/modes/clipify/hooks/useClipify.js` | Clipify state management |
-| `src/frontend/src/modes/clipify/ClipifyTimeline.jsx` | Timeline component |
-| `src/frontend/src/modes/clipify/layers/ClipRegionLayer.jsx` | Clip regions on timeline |
-| `src/frontend/src/modes/clipify/components/ClipsSidePanel.jsx` | Side panel container |
-| `src/frontend/src/modes/clipify/components/ClipListItem.jsx` | Individual clip in list |
-| `src/frontend/src/modes/clipify/components/ClipDetailsEditor.jsx` | Edit clip name/notes |
-| `src/frontend/src/modes/clipify/components/NotesOverlay.jsx` | Notes text overlay on video |
-| `src/frontend/src/modes/clipify/components/ExportClipsButton.jsx` | Export action button |
-| `src/backend/app/routers/clipify.py` | Clipify export endpoint |
+| `src/frontend/src/modes/annotate/AnnotateMode.jsx` | Main annotate mode container |
+| `src/frontend/src/modes/annotate/index.js` | Mode exports |
+| `src/frontend/src/modes/annotate/hooks/useAnnotate.js` | Annotate state management |
+| `src/frontend/src/modes/annotate/AnnotateTimeline.jsx` | Timeline component |
+| `src/frontend/src/modes/annotate/layers/ClipRegionLayer.jsx` | Clip regions on timeline |
+| `src/frontend/src/modes/annotate/components/ClipsSidePanel.jsx` | Side panel container |
+| `src/frontend/src/modes/annotate/components/ClipListItem.jsx` | Individual clip in list |
+| `src/frontend/src/modes/annotate/components/ClipDetailsEditor.jsx` | Edit clip name/notes |
+| `src/frontend/src/modes/annotate/components/NotesOverlay.jsx` | Notes text overlay on video |
+| `src/frontend/src/modes/annotate/components/ExportClipsButton.jsx` | Export action button |
+| `src/backend/app/routers/annotate.py` | Annotate export endpoint |
 
 ### Files to Modify
 
 | File | Changes |
 |------|---------|
 | `src/frontend/src/components/FileUpload.jsx` | Add "Add Game" button |
-| `src/frontend/src/App.jsx` | Add clipify mode state, handle game import callback |
-| `src/frontend/src/hooks/useClipManager.js` | Support clip metadata, auto-load from clipify |
-| `src/frontend/src/components/ClipList.jsx` | Display clip metadata from Clipify |
-| `src/backend/app/main.py` | Register clipify router |
+| `src/frontend/src/App.jsx` | Add annotate mode state, handle game import callback |
+| `src/frontend/src/hooks/useClipManager.js` | Support clip metadata, auto-load from annotate |
+| `src/frontend/src/components/ClipList.jsx` | Display clip metadata from Annotate |
+| `src/backend/app/main.py` | Register annotate router |
 
 ---
 
@@ -749,7 +749,7 @@ The annotated source video downloads happen in parallel with the mode transition
 ### Entry Point
 - [ ] "Add Game" button visible alongside "Add Raw Clips" and "Add Overlay To Framed Video"
 - [ ] Clicking "Add Game" opens file picker
-- [ ] Single video file imports into Clipify mode
+- [ ] Single video file imports into Annotate mode
 
 ### Layout
 - [ ] Video preview on left, side panel on right
@@ -801,7 +801,7 @@ The annotated source video downloads happen in parallel with the mode transition
 - Scene change detection
 - Multi-select clips for batch operations
 - Clip templates (preset durations)
-- **Re-import annotated source**: Recognize `clipify_version` metadata when importing via "Add Game" and restore clip regions automatically
+- **Re-import annotated source**: Recognize `annotate_version` metadata when importing via "Add Game" and restore clip regions automatically
 
 ---
 

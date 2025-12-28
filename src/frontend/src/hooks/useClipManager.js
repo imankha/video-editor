@@ -4,8 +4,10 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
  * useClipManager - Manages the list of clips and their metadata
  *
  * Each clip stores:
- * - id: unique identifier
- * - file: the File object
+ * - id: unique identifier (local or from backend working_clip_id)
+ * - file: the File object (null for project clips loaded from URL)
+ * - fileUrl: URL to fetch clip (for project clips)
+ * - workingClipId: backend working_clips.id (for project clips)
  * - fileName: display name
  * - fileNameDisplay: name without extension
  * - duration: video duration in seconds
@@ -106,6 +108,11 @@ export function useClipManager() {
       sourceWidth: metadata.width,
       sourceHeight: metadata.height,
       framerate: metadata.framerate || 30,
+      // Annotate metadata (if clip came from Annotate mode)
+      annotateName: metadata.annotateName || null,
+      annotateNotes: metadata.annotateNotes || null,
+      annotateStartTime: metadata.annotateStartTime || null,
+      annotateEndTime: metadata.annotateEndTime || null,
       // Initialize with empty state - will be populated when clip is first selected
       segments: {
         boundaries: [0, metadata.duration],
@@ -121,6 +128,131 @@ export function useClipManager() {
 
     return id;
   }, [generateClipId]);
+
+  /**
+   * Add a clip from a project (loaded from backend)
+   * @param {Object} projectClip - Clip data from backend API
+   * @param {string} fileUrl - URL to fetch the clip video
+   * @param {Object} metadata - Video metadata (duration, width, height, etc.)
+   * @returns {string} - The new clip's ID
+   */
+  const addClipFromProject = useCallback((projectClip, fileUrl, metadata) => {
+    const id = generateClipId();
+    const fileName = projectClip.filename || 'clip.mp4';
+    const fileNameDisplay = fileName.replace(/\.[^/.]+$/, '');
+
+    // Parse saved framing edits if they exist
+    let savedCropKeyframes = [];
+    let savedSegments = null;
+    let savedTrimRange = null;
+
+    if (projectClip.crop_data) {
+      try {
+        savedCropKeyframes = JSON.parse(projectClip.crop_data);
+      } catch (e) {
+        console.warn('[useClipManager] Failed to parse crop_data:', e);
+      }
+    }
+
+    if (projectClip.segments_data) {
+      try {
+        savedSegments = JSON.parse(projectClip.segments_data);
+      } catch (e) {
+        console.warn('[useClipManager] Failed to parse segments_data:', e);
+      }
+    }
+
+    if (projectClip.timing_data) {
+      try {
+        const timingData = JSON.parse(projectClip.timing_data);
+        savedTrimRange = timingData.trimRange || null;
+      } catch (e) {
+        console.warn('[useClipManager] Failed to parse timing_data:', e);
+      }
+    }
+
+    const newClip = {
+      id,
+      file: null, // No file for project clips
+      fileUrl,
+      workingClipId: projectClip.id, // Backend working_clips.id
+      fileName,
+      fileNameDisplay,
+      duration: metadata.duration,
+      sourceWidth: metadata.width,
+      sourceHeight: metadata.height,
+      framerate: metadata.framerate || 30,
+      // Clip metadata from raw_clips
+      annotateName: projectClip.name || null,
+      annotateNotes: projectClip.notes || null,
+      annotateStartTime: null,
+      annotateEndTime: null,
+      // Restored framing edits or defaults
+      segments: savedSegments || {
+        boundaries: [0, metadata.duration],
+        userSplits: [],
+        trimRange: null,
+        segmentSpeeds: {}
+      },
+      cropKeyframes: savedCropKeyframes,
+      trimRange: savedTrimRange
+    };
+
+    setClips(prev => [...prev, newClip]);
+
+    return id;
+  }, [generateClipId]);
+
+  /**
+   * Load all clips from a project
+   * @param {Array} projectClips - Array of clip data from backend
+   * @param {Function} getClipFileUrl - Function to generate clip file URL
+   * @param {Function} getVideoMetadata - Async function to get video metadata from URL
+   * @param {string} projectAspectRatio - Project's aspect ratio
+   * @returns {Promise<string[]>} - Array of created clip IDs
+   */
+  const loadProjectClips = useCallback(async (projectClips, getClipFileUrl, getVideoMetadata, projectAspectRatio) => {
+    // Clear existing clips
+    setClips([]);
+    setSelectedClipId(null);
+
+    if (projectAspectRatio) {
+      setGlobalAspectRatioState(projectAspectRatio);
+    }
+
+    // Fetch all metadata in parallel for faster loading
+    const clipPromises = projectClips.map(async (projectClip) => {
+      const fileUrl = getClipFileUrl(projectClip.id);
+      try {
+        const metadata = await getVideoMetadata(fileUrl);
+        return { projectClip, fileUrl, metadata, success: true };
+      } catch (error) {
+        console.error('[useClipManager] Failed to load clip:', projectClip.id, error);
+        return { projectClip, fileUrl, metadata: null, success: false };
+      }
+    });
+
+    const results = await Promise.all(clipPromises);
+
+    // Add clips in order (preserving sort order)
+    const createdIds = [];
+    for (const result of results) {
+      if (result.success && result.metadata) {
+        const clipId = addClipFromProject(result.projectClip, result.fileUrl, result.metadata);
+        createdIds.push(clipId);
+      }
+    }
+
+    return createdIds;
+  }, [addClipFromProject]);
+
+  /**
+   * Clear all clips (used when switching projects)
+   */
+  const clearClips = useCallback(() => {
+    setClips([]);
+    setSelectedClipId(null);
+  }, []);
 
   /**
    * Effect to ensure the first clip is always selected when clips exist
@@ -300,6 +432,9 @@ export function useClipManager() {
 
     // Actions
     addClip,
+    addClipFromProject,
+    loadProjectClips,
+    clearClips,
     deleteClip,
     selectClip,
     reorderClips,

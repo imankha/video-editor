@@ -27,7 +27,7 @@ Enhanced overlay system with AI-assisted features:
 
 **Spec**: [ACTIVE/PHASE-A-OVERLAY-IMPROVEMENTS.md](ACTIVE/PHASE-A-OVERLAY-IMPROVEMENTS.md)
 
-### Phase B: Clipify Mode (THEN)
+### Phase B: Annotate Mode (THEN)
 
 New workflow mode for extracting clips from full game footage:
 - **Add Game**: Import full game video instead of pre-cut clips
@@ -36,7 +36,7 @@ New workflow mode for extracting clips from full game footage:
 - **Export**: Generate individual clip files with embedded metadata
 - **Auto-Load**: Exported clips load directly into Framing mode
 
-**Spec**: [ACTIVE/PHASE-B-CLIPIFY.md](ACTIVE/PHASE-B-CLIPIFY.md)
+**Spec**: [ACTIVE/PHASE-B-ANNOTATE.md](ACTIVE/PHASE-B-ANNOTATE.md)
 
 ### Phase C: Deployment (FINALLY)
 

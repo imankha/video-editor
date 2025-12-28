@@ -1,55 +1,119 @@
 import React from 'react';
-import { Crop, Sparkles } from 'lucide-react';
+import { Crop, Sparkles, Scissors, Loader2 } from 'lucide-react';
 
 /**
- * ModeSwitcher - Two-tab toggle for switching between Framing and Overlay modes.
+ * ModeSwitcher - Tab toggle for switching between editor modes.
  *
- * Framing Mode: Crop, trim, and speed editing
- * Overlay Mode: Highlight and effect overlays
+ * Visibility rules:
+ * - When no project selected: Show nothing (or just Annotate badge if video loaded)
+ * - When project selected: Show Framing and Overlay
+ * - Overlay is available if working video OR overlay video exists
+ * - Shows warning asterisk if framing has changed since last export
+ * - Shows loading spinner if working video is being loaded
  *
- * @param {string} mode - Current mode ('framing' | 'overlay')
+ * @param {string} mode - Current mode ('annotate' | 'framing' | 'overlay')
  * @param {function} onModeChange - Callback when mode changes
- * @param {boolean} disabled - Whether the switcher is disabled (e.g., no video loaded)
+ * @param {boolean} disabled - Whether the switcher is disabled
+ * @param {boolean} hasProject - Whether a project is selected
+ * @param {boolean} hasWorkingVideo - Whether the project has a working video
+ * @param {boolean} hasOverlayVideo - Whether an overlay video is loaded (from export)
+ * @param {boolean} framingOutOfSync - Whether framing has changed since last export
+ * @param {boolean} hasAnnotateVideo - Whether an annotate video is loaded
+ * @param {boolean} isLoadingWorkingVideo - Whether working video is currently loading
  */
-export function ModeSwitcher({ mode, onModeChange, disabled = false }) {
+export function ModeSwitcher({
+  mode,
+  onModeChange,
+  disabled = false,
+  hasProject = false,
+  hasWorkingVideo = false,
+  hasOverlayVideo = false,
+  framingOutOfSync = false,
+  hasAnnotateVideo = false,
+  isLoadingWorkingVideo = false,
+}) {
+  // Define mode configurations for project mode
   const modes = [
     {
       id: 'framing',
       label: 'Framing',
       icon: Crop,
       description: 'Crop, trim & speed',
+      available: hasProject,
+      color: 'blue',
     },
     {
       id: 'overlay',
       label: 'Overlay',
       icon: Sparkles,
       description: 'Highlights & effects',
+      available: hasProject && (hasWorkingVideo || hasOverlayVideo),
+      color: 'purple',
+      showWarning: framingOutOfSync,
     },
   ];
+
+  // If no project, don't show the mode switcher
+  // (Annotate is accessed via the Annotate button in Project Manager)
+  if (!hasProject) {
+    // If in annotate mode with a video, show a simple indicator
+    if (mode === 'annotate' && hasAnnotateVideo) {
+      return (
+        <div className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg">
+          <Scissors size={16} />
+          <span className="font-medium text-sm text-white">Annotate Mode</span>
+        </div>
+      );
+    }
+    return null;
+  }
 
   return (
     <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
       {modes.map((modeOption) => {
         const Icon = modeOption.icon;
         const isActive = mode === modeOption.id;
+        const isAvailable = modeOption.available;
+
+        const activeColor = {
+          blue: 'bg-blue-600',
+          purple: 'bg-purple-600',
+        }[modeOption.color] || 'bg-purple-600';
 
         return (
           <button
             key={modeOption.id}
-            onClick={() => !disabled && onModeChange(modeOption.id)}
-            disabled={disabled}
+            onClick={() => !disabled && isAvailable && onModeChange(modeOption.id)}
+            disabled={disabled || !isAvailable}
             className={`
-              flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200
+              flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 relative
               ${isActive
-                ? 'bg-purple-600 text-white shadow-lg'
-                : 'text-gray-400 hover:text-white hover:bg-white/10'
+                ? `${activeColor} text-white shadow-lg`
+                : isAvailable
+                  ? 'text-gray-400 hover:text-white hover:bg-white/10'
+                  : 'text-gray-600 cursor-not-allowed opacity-40'
               }
-              ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+              ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
             `}
-            title={modeOption.description}
+            title={
+              isLoadingWorkingVideo && modeOption.id === 'overlay'
+                ? 'Loading working video...'
+                : !isAvailable && modeOption.id === 'overlay'
+                  ? 'Export from Framing first to enable Overlay mode'
+                  : modeOption.showWarning
+                    ? 'Previously exported video no longer matches your settings. Export to create latest video before overlaying.'
+                    : modeOption.description
+            }
           >
-            <Icon size={16} />
+            {isLoadingWorkingVideo && modeOption.id === 'overlay' ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Icon size={16} />
+            )}
             <span className="font-medium text-sm">{modeOption.label}</span>
+            {modeOption.showWarning && isAvailable && (
+              <span className="text-yellow-400 font-bold text-xs">*</span>
+            )}
           </button>
         );
       })}

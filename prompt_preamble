@@ -1,0 +1,141 @@
+I'm experiencing a bug in the video editor persistence/project workflow implementation.
+
+**Tech Stack:**
+- Frontend: React 18 + Vite (port 5173)
+- Backend: FastAPI + Python (port 8000)
+- Database: SQLite at user_data/a/database.sqlite
+
+**Key Files:**
+Backend:
+- src/backend/app/database.py - DB connection, paths, init, migrations
+- src/backend/app/routers/projects.py - Project CRUD endpoints
+- src/backend/app/routers/clips.py - Raw clips & working clips API
+- src/backend/app/routers/annotate.py - Export clips, create projects
+- src/backend/app/routers/export.py - Framing/overlay export endpoints
+- src/backend/app/routers/downloads.py - Downloads/Gallery for final videos
+- test_persistence.py - Comprehensive test suite (22 tests)
+
+Frontend:
+- src/frontend/src/App.jsx - Main app with project-based flow
+- src/frontend/src/hooks/useProjects.js - Project state management
+- src/frontend/src/hooks/useProjectClips.js - Working clips for projects
+- src/frontend/src/hooks/useRawClips.js - Raw clips library
+- src/frontend/src/hooks/useDownloads.js - Downloads/Gallery state
+- src/frontend/src/components/ProjectManager.jsx - Project selection UI
+- src/frontend/src/components/ProjectHeader.jsx - Project dropdown with Downloads button
+- src/frontend/src/components/ClipSelectorSidebar.jsx - Clip list + add
+- src/frontend/src/components/ClipLibraryModal.jsx - Add from library
+- src/frontend/src/components/DownloadsPanel.jsx - Downloads/Gallery UI
+- src/frontend/src/components/shared/ModeSwitcher.jsx - Framing/Overlay tabs
+
+**Database Schema (VERSION-BASED SYSTEM):**
+IMPORTANT: This system uses VERSION NUMBERS, NOT abandoned flags!
+
+- raw_clips (id, filename, rating, tags, name, notes, start_time, end_time, created_at)
+- projects (id, name, aspect_ratio, working_video_id, final_video_id, last_opened_at, created_at)
+- working_clips (id, project_id, raw_clip_id, uploaded_filename, progress, sort_order,
+                 crop_data, timing_data, segments_data, transform_data, VERSION, created_at)
+- working_videos (id, project_id, filename, effect_type, duration, VERSION, created_at)
+- final_videos (id, project_id, filename, VERSION, created_at)
+- overlay_data (id, project_id, regions_json, updated_at) - Auto-saved every 2 seconds
+
+**CRITICAL: Version-Based Persistence Architecture**
+
+The system uses integer VERSION numbers instead of boolean abandoned flags. Only the LATEST version is shown to users.
+
+1. **Clip Versioning (IDENTITY BY END_TIME):**
+   - Clips are identified by their raw_clips.end_time timestamp
+   - If two working_clips reference raw_clips with the SAME end_time → they are versions of each other
+   - Each new export/re-process of a clip increments its version
+   - Example: User has 3 clips (all version 1). Re-exports one → that becomes version 2
+   - Window function partitioning: `PARTITION BY COALESCE(rc.end_time, wc.uploaded_filename)`
+
+2. **Working Video Versioning (PER PROJECT):**
+   - Each framing export creates a new working_video with incremented version
+   - Only latest version is used for Overlay mode
+   - Window function partitioning: `PARTITION BY project_id`
+
+3. **Final Video Versioning (PER PROJECT):**
+   - Each overlay export creates a new final_video with incremented version
+   - ALL versions shown in Downloads/Gallery (export history)
+   - Window function partitioning: `PARTITION BY project_id`
+
+**QUERY PATTERNS FOR LATEST VERSION:**
+```sql
+-- Get latest working clips for a project (by end_time identity)
+SELECT wc.* FROM working_clips wc
+WHERE wc.id IN (
+    SELECT id FROM (
+        SELECT wc2.id, ROW_NUMBER() OVER (
+            PARTITION BY COALESCE(rc2.end_time, wc2.uploaded_filename)
+            ORDER BY wc2.version DESC
+        ) as rn
+        FROM working_clips wc2
+        LEFT JOIN raw_clips rc2 ON wc2.raw_clip_id = rc2.id
+        WHERE wc2.project_id = ?
+    ) WHERE rn = 1
+)
+
+-- Get latest working video for a project
+SELECT filename FROM working_videos
+WHERE project_id = ?
+ORDER BY version DESC LIMIT 1
+
+-- Calculate next version for clip (by end_time)
+SELECT COALESCE(MAX(wc.version), 0) + 1 as next_version
+FROM working_clips wc
+JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+WHERE wc.project_id = ? AND rc.end_time = ?
+```
+
+**Expected Flow:**
+1. No project → Show ProjectManager
+2. "Annotate Game" → Load video, create clips, export saves 4+★ clips, creates projects
+3. Select project → Framing mode (aspect ratio from project)
+4. Export framing → Creates working_video (new version), marks clips progress=1, enables Overlay
+5. Overlay mode → Auto-saves regions_json every 2 seconds to overlay_data table
+6. Export overlay → Creates final_video (new version), shows in Downloads/Gallery
+7. Downloads → View all final videos (all versions), download or delete
+
+**Overlay Data Auto-Save:**
+- PUT /api/export/overlay-data (project_id, regions_json) - Debounced 2s
+- GET /api/export/overlay-data/{project_id} - Auto-restored on load
+- Uses REPLACE INTO for upsert behavior
+- Frontend: useHighlightRegions.js handles auto-save with AbortController
+
+**Bug Description:**
+
+
+**Relevant Logs/Errors:**
+[PASTE CONSOLE ERRORS OR BACKEND LOGS]
+
+Please diagnose and fix this issue. Check:
+1. API endpoint responses and DB queries (especially version filtering)
+2. Frontend hook state updates and re-fetches
+3. Mode switching logic in App.jsx
+4. Progress calculation and version-based clip counting
+5. File paths (RAW_CLIPS_PATH, WORKING_VIDEOS_PATH, FINAL_VIDEOS_PATH, UPLOADS_PATH)
+6. Window function queries returning only latest versions
+7. Overlay data auto-save/restore working correctly
+
+Common bug areas to check:
+- Project selection not updating UI → Check refreshSelectedProject() calls after mutations
+- Overlay tab stays disabled → Verify working_video_id is set AND working_video exists with latest version
+- Clips not appearing in sidebar → Check window function query, raw_clip_id joins, end_time grouping
+- Export fails → Check FFmpeg in PATH, file permissions, temp directory cleanup
+- Progress stuck at 0% → Check calculate_progress() using latest-version window function
+- Annotate export doesn't create projects → Check rating filter (only 4+★ saved)
+- Multiple clips showing instead of latest → Check version filtering in window function
+- Clip versioning wrong → Verify end_time identity logic, not raw_clip_id
+- Overlay data not persisting → Check PUT /overlay-data endpoint, debounce timing
+- Downloads not showing → Check final_videos query (should show ALL versions)
+- Version numbers wrong → Check COALESCE(MAX(version), 0) + 1 calculation
+
+**Testing:**
+Run test_persistence.py to verify all versioning functionality:
+- Project state persistence
+- Clip versioning by end_time
+- Working video versioning
+- Final video versioning
+- Overlay data persistence
+- Version deletion and cleanup

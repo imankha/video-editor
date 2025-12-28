@@ -32,11 +32,22 @@ def setup_torchvision_compatibility():
     if 'torchvision.transforms.functional_tensor' not in sys.modules:
         try:
             import torchvision.transforms.functional_tensor
-        except ImportError:
-            # Create a compatibility shim for the removed module
-            # First ensure torchvision.transforms is loaded
-            import torchvision.transforms
-            import torchvision.transforms.functional as F
+        except (ImportError, AttributeError, RuntimeError) as e:
+            # Catch ImportError (module doesn't exist)
+            # Catch AttributeError (torch.library.register_fake compatibility issues)
+            # Catch RuntimeError (other torch/torchvision version mismatches)
+            logger.debug(f"torchvision import compatibility issue: {e}")
+            try:
+                # Create a compatibility shim for the removed module
+                # First ensure torchvision.transforms is loaded
+                import torchvision.transforms
+                import torchvision.transforms.functional as F
+            except (AttributeError, OSError, ImportError) as import_err:
+                # If torchvision itself fails to import due to DLL/compatibility issues,
+                # log the error and return - AI upscaler won't work but app can still run
+                logger.warning(f"Failed to import torchvision for compatibility shim: {import_err}")
+                logger.warning("AI upscaling features will be disabled")
+                return
 
             # Create fake module that redirects to functional
             functional_tensor = types.ModuleType('torchvision.transforms.functional_tensor')

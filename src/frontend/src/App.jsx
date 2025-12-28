@@ -1,8 +1,15 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Download, Loader, Upload, Settings, Image } from 'lucide-react';
+import { DownloadsPanel } from './components/DownloadsPanel';
+import { useDownloads } from './hooks/useDownloads';
 import { useVideo } from './hooks/useVideo';
 import useZoom from './hooks/useZoom';
 import useTimelineZoom from './hooks/useTimelineZoom';
 import { useClipManager } from './hooks/useClipManager';
+import { useProjects } from './hooks/useProjects';
+import { useProjectClips } from './hooks/useProjectClips';
+import { useGames } from './hooks/useGames';
+import { useSettings } from './hooks/useSettings';
 import { VideoPlayer } from './components/VideoPlayer';
 import { Controls } from './components/Controls';
 import { FileUpload } from './components/FileUpload';
@@ -13,11 +20,15 @@ import ExportButton from './components/ExportButton';
 import CompareModelsButton from './components/CompareModelsButton';
 import DebugInfo from './components/DebugInfo';
 import { ModeSwitcher } from './components/shared/ModeSwitcher';
+import { ProjectManager } from './components/ProjectManager';
+import { ProjectCreationSettings } from './components/ProjectCreationSettings';
+import { ProjectHeader } from './components/ProjectHeader';
 // Mode-specific imports
 import { useCrop, useSegments, FramingMode, CropOverlay } from './modes/framing';
 import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay } from './modes/overlay';
+import { AnnotateMode, useAnnotate, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from './modes/annotate';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
-import { extractVideoMetadata } from './utils/videoMetadata';
+import { extractVideoMetadata, extractVideoMetadataFromUrl } from './utils/videoMetadata';
 
 // Feature flags for experimental features
 // Set to true to enable model comparison UI (for A/B testing different AI models)
@@ -32,7 +43,7 @@ function App() {
   // Selected highlight keyframe time (when playhead is near a keyframe)
   const [selectedHighlightKeyframeTime, setSelectedHighlightKeyframeTime] = useState(null);
 
-  // Editor mode state ('framing' | 'overlay')
+  // Editor mode state ('framing' | 'overlay' | 'annotate')
   const [editorMode, setEditorMode] = useState('framing');
 
   // Overlay mode video state (SEPARATE from framing video)
@@ -43,6 +54,40 @@ function App() {
 
   // Clip metadata for auto-generating highlight regions (from Framing export)
   const [overlayClipMetadata, setOverlayClipMetadata] = useState(null);
+
+  // Track if framing has changed since last export (for showing warning on Overlay button)
+  const [framingChangedSinceExport, setFramingChangedSinceExport] = useState(false);
+
+  // Working video loading state
+  const [isLoadingWorkingVideo, setIsLoadingWorkingVideo] = useState(false);
+
+  // Annotate mode video state (for extracting clips from full game footage)
+  const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
+  const [annotateVideoUrl, setAnnotateVideoUrl] = useState(null);
+  const [annotateVideoMetadata, setAnnotateVideoMetadata] = useState(null);
+  const [annotateGameId, setAnnotateGameId] = useState(null); // Current game ID for saving annotations
+  // Separate loading states for each export button
+  const [isCreatingAnnotatedVideo, setIsCreatingAnnotatedVideo] = useState(false);
+  const [isImportingToProjects, setIsImportingToProjects] = useState(false);
+  const [isUploadingGameVideo, setIsUploadingGameVideo] = useState(false);
+
+  // Export progress tracking (for SSE updates)
+  // { current: number, total: number, phase: string, message: string }
+  const [exportProgress, setExportProgress] = useState(null);
+
+  // Annotate mode playback state
+  const [annotatePlaybackSpeed, setAnnotatePlaybackSpeed] = useState(1);
+  const [annotateFullscreen, setAnnotateFullscreen] = useState(false);
+  const [showAnnotateOverlay, setShowAnnotateOverlay] = useState(false);
+
+  // Ref for fullscreen container
+  const annotateContainerRef = useRef(null);
+
+  // Ref to track previous isPlaying state for detecting pause transitions
+  const wasPlayingRef = useRef(false);
+
+  // Ref for annotate mode file input (to trigger file picker directly from ProjectManager)
+  const annotateFileInputRef = useRef(null);
 
   // Layer selection state for arrow key navigation
   const [selectedLayer, setSelectedLayer] = useState('playhead'); // 'playhead' | 'crop' | 'highlight'
@@ -66,6 +111,9 @@ function App() {
     globalAspectRatio,
     globalTransition,
     addClip,
+    addClipFromProject,
+    loadProjectClips,
+    clearClips,
     deleteClip,
     selectClip,
     reorderClips,
@@ -74,6 +122,70 @@ function App() {
     setGlobalTransition,
     getExportData: getClipExportData,
   } = useClipManager();
+
+  // Project management hooks
+  const {
+    projects,
+    selectedProject,
+    selectedProjectId,
+    loading: projectsLoading,
+    hasProjects,
+    fetchProjects,
+    selectProject,
+    createProject,
+    deleteProject,
+    clearSelection,
+    refreshSelectedProject
+  } = useProjects();
+
+  // Games management hook
+  const {
+    games,
+    isLoading: gamesLoading,
+    fetchGames,
+    createGame,
+    uploadGameVideo,
+    getGame,
+    deleteGame,
+    saveAnnotationsDebounced,
+    getGameVideoUrl,
+  } = useGames();
+
+  // Settings hook for project creation rules
+  const {
+    projectCreationSettings,
+    updateProjectCreationSettings,
+    resetSettings,
+  } = useSettings();
+
+  // Settings modal state
+  const [showProjectCreationSettings, setShowProjectCreationSettings] = useState(false);
+
+  // Downloads panel state
+  const [isDownloadsPanelOpen, setIsDownloadsPanelOpen] = useState(false);
+  const { count: downloadsCount, fetchCount: refreshDownloadsCount } = useDownloads();
+
+  // Overlay persistence state
+  const pendingOverlaySaveRef = useRef(null);
+  const overlayDataLoadedRef = useRef(false);
+
+  // Framing persistence state
+  const pendingFramingSaveRef = useRef(null);
+
+  // Project clips (only active when project selected)
+  const {
+    clips: projectClips,
+    fetchClips: fetchProjectClips,
+    uploadClip,
+    addClipFromLibrary,
+    removeClip: removeProjectClip,
+    reorderClips: reorderProjectClips,
+    saveFramingEdits,
+    getClipFileUrl
+  } = useProjectClips(selectedProjectId);
+
+  // Computed: is overlay available for this project?
+  const isOverlayAvailable = selectedProject?.working_video_id != null;
 
   // Segments hook (defined early so we can pass getSegmentAtTime and clampToVisibleRange to useVideo)
   const {
@@ -116,6 +228,7 @@ function App() {
     error,
     isLoading,
     loadVideo,
+    loadVideoFromUrl,
     togglePlay,
     seek,
     stepForward,
@@ -202,6 +315,7 @@ function App() {
     getHighlightAtTime: getRegionHighlightAtTime,
     getRegionsForExport,
     reset: resetHighlightRegions,
+    restoreRegions: restoreHighlightRegions,
   } = useHighlightRegions(effectiveHighlightMetadata);
 
   // Zoom hook
@@ -226,6 +340,29 @@ function App() {
     updateScrollPosition: updateTimelineScrollPosition,
     getTimelineScale,
   } = useTimelineZoom();
+
+  // Annotate mode state management (lifted to App level for sidebar/MVC pattern)
+  const {
+    clipRegions,
+    regionsWithLayout: annotateRegionsWithLayout,
+    selectedRegionId: annotateSelectedRegionId,
+    selectedRegion: annotateSelectedRegion,
+    hasClips: hasAnnotateClips,
+    clipCount: annotateClipCount,
+    isLoadingAnnotations,
+    initialize: initializeAnnotate,
+    reset: resetAnnotate,
+    addClipRegion,
+    updateClipRegion,
+    deleteClipRegion,
+    selectRegion: selectAnnotateRegion,
+    moveRegionStart: moveAnnotateRegionStart,
+    moveRegionEnd: moveAnnotateRegionEnd,
+    getRegionAtTime: getAnnotateRegionAtTime,
+    getExportData: getAnnotateExportData,
+    importAnnotations,
+    MAX_NOTES_LENGTH: ANNOTATE_MAX_NOTES_LENGTH,
+  } = useAnnotate(annotateVideoMetadata);
 
   // Frame tolerance for selection - approximately 5 pixels on each side
   // Derived selection state - computed from playhead position and keyframes
@@ -343,12 +480,67 @@ function App() {
   }, [clips, selectedClipId, getKeyframesForExport, segmentBoundaries, segmentSpeeds, trimRange, hasClips, globalAspectRatio]);
 
   /**
-   * Save current clip's state before switching
+   * Save current clip's framing edits (debounced auto-save)
+   * This is the auto-save function that gets called continuously as user makes edits
    */
-  const saveCurrentClipState = useCallback(() => {
+  const autoSaveFramingEdits = useCallback(async () => {
+    // Don't save if no clip selected or not in framing mode
+    if (!selectedClipId || editorMode !== 'framing') return;
+
+    // Cancel pending debounced save
+    if (pendingFramingSaveRef.current) {
+      clearTimeout(pendingFramingSaveRef.current);
+    }
+
+    // Debounce: wait 2 seconds after last change
+    pendingFramingSaveRef.current = setTimeout(async () => {
+      const saveClipId = selectedClipId; // Capture for closure
+      const currentClip = clips.find(c => c.id === saveClipId);
+
+      // Only save if this is a project clip with a backend ID
+      if (!currentClip?.workingClipId || !selectedProjectId) return;
+
+      try {
+        const segmentState = {
+          boundaries: segmentBoundaries,
+          segmentSpeeds: segmentSpeeds,
+          trimRange: trimRange,
+        };
+
+        // Save to local clip manager state first
+        updateClipData(saveClipId, {
+          segments: segmentState,
+          cropKeyframes: keyframes,
+          trimRange: trimRange
+        });
+
+        // Save to backend (non-blocking, silent)
+        await saveFramingEdits(currentClip.workingClipId, {
+          cropKeyframes: keyframes,
+          segments: segmentState,
+          trimRange: trimRange
+        });
+
+        console.log('[App] Framing edits auto-saved for clip:', saveClipId);
+      } catch (e) {
+        console.error('[App] Failed to auto-save framing edits:', e);
+      }
+    }, 2000);
+  }, [selectedClipId, editorMode, segmentBoundaries, segmentSpeeds, trimRange, keyframes, updateClipData, clips, selectedProjectId, saveFramingEdits]);
+
+  /**
+   * Save current clip's state before switching (immediate, non-debounced)
+   */
+  const saveCurrentClipState = useCallback(async () => {
     if (!selectedClipId) {
       console.log('[App] saveCurrentClipState: No selectedClipId, skipping');
       return;
+    }
+
+    // Cancel any pending auto-save since we're saving immediately
+    if (pendingFramingSaveRef.current) {
+      clearTimeout(pendingFramingSaveRef.current);
+      pendingFramingSaveRef.current = null;
     }
 
     // Save current segment state including speeds
@@ -362,15 +554,26 @@ function App() {
     console.log('  - keyframes to save:', keyframes?.length, keyframes);
     console.log('  - segmentState:', segmentState);
 
-    // Save current crop keyframes
+    // Save to local clip manager state
     updateClipData(selectedClipId, {
       segments: segmentState,
       cropKeyframes: keyframes,
       trimRange: trimRange
     });
 
+    // If this is a project clip, also save to backend
+    const currentClip = clips.find(c => c.id === selectedClipId);
+    if (currentClip?.workingClipId && selectedProjectId) {
+      console.log('[App] Saving framing edits to backend for working clip:', currentClip.workingClipId);
+      await saveFramingEdits(currentClip.workingClipId, {
+        cropKeyframes: keyframes,
+        segments: segmentState,
+        trimRange: trimRange
+      });
+    }
+
     console.log('[App] Saved state for clip:', selectedClipId);
-  }, [selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, keyframes, updateClipData]);
+  }, [selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, keyframes, updateClipData, clips, selectedProjectId, saveFramingEdits]);
 
   /**
    * Handle file selection - adds clip to clip manager
@@ -463,6 +666,501 @@ function App() {
   };
 
   /**
+   * Handle game video selection for Annotate mode
+   * Transitions to annotate mode where user can extract clips from full game footage.
+   *
+   * Uses an upsert pattern:
+   * 1. Create game row immediately (just name) → get game ID instantly
+   * 2. Use local object URL for immediate playback
+   * 3. Upload video to server in background
+   * 4. Annotations can be saved immediately since we have game ID
+   */
+  const handleGameVideoSelect = async (file) => {
+    if (!file) return;
+
+    try {
+      console.log('[App] handleGameVideoSelect: Processing', file.name);
+
+      // Extract video metadata (fast, local operation)
+      const videoMetadata = await extractVideoMetadata(file);
+      console.log('[App] Extracted game video metadata:', videoMetadata);
+
+      // Create local object URL for IMMEDIATE playback
+      const localVideoUrl = URL.createObjectURL(file);
+
+      // Clean up any existing annotate video URL (only if it was an object URL)
+      if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(annotateVideoUrl);
+      }
+
+      // Create game row IMMEDIATELY (just name, no video yet)
+      // This gives us a game ID for saving annotations right away
+      // Include video metadata so loading is instant (no need to re-extract)
+      const gameName = file.name.replace(/\.[^/.]+$/, ''); // Remove extension for game name
+      console.log('[App] Creating game row:', gameName);
+      const game = await createGame(gameName, {
+        duration: videoMetadata.duration,
+        width: videoMetadata.width,
+        height: videoMetadata.height,
+        size: videoMetadata.size,
+      });
+      console.log('[App] Game created with ID:', game.id);
+
+      // Set annotate state with LOCAL video URL and game ID
+      setAnnotateVideoFile(file);
+      setAnnotateVideoUrl(localVideoUrl);
+      setAnnotateVideoMetadata(videoMetadata);
+      setAnnotateGameId(game.id); // Set immediately - annotations can save now!
+
+      // Transition to annotate mode IMMEDIATELY
+      setEditorMode('annotate');
+      console.log('[App] Transitioned to Annotate mode with game ID:', game.id);
+
+      // Upload video to server in background
+      console.log('[App] Starting background video upload...');
+      setIsUploadingGameVideo(true);
+      uploadGameVideo(game.id, file)
+        .then(() => {
+          console.log('[App] Background video upload complete for game:', game.id);
+          setIsUploadingGameVideo(false);
+        })
+        .catch((uploadErr) => {
+          console.error('[App] Background video upload failed:', uploadErr);
+          setIsUploadingGameVideo(false);
+          // Video upload failed, but annotations are still saved
+          // User can re-upload video later if needed
+        });
+
+    } catch (err) {
+      console.error('[App] Failed to process game video:', err);
+      throw err; // Re-throw so FileUpload can handle the error
+    }
+  };
+
+  /**
+   * Handle exiting Annotate mode
+   * Clears annotate state and returns to no-video state
+   */
+  const handleExitAnnotateMode = useCallback(() => {
+    console.log('[App] Exiting Annotate mode');
+
+    // Clean up annotate video URL (only if it was an object URL)
+    if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(annotateVideoUrl);
+    }
+
+    // Clear annotate state
+    setAnnotateVideoFile(null);
+    setAnnotateVideoUrl(null);
+    setAnnotateVideoMetadata(null);
+    setAnnotateGameId(null);
+    setIsUploadingGameVideo(false);
+
+    // Return to framing mode (no video loaded state)
+    setEditorMode('framing');
+  }, [annotateVideoUrl]);
+
+  /**
+   * Handle loading a saved game into annotate mode
+   * Fetches game data from server and restores video + annotations
+   * Uses stored metadata for instant loading (no extraction needed)
+   */
+  const handleLoadGame = useCallback(async (gameId) => {
+    console.log('[App] Loading game:', gameId);
+
+    try {
+      // Fetch full game data including annotations and metadata
+      const gameData = await getGame(gameId);
+      console.log('[App] Loaded game data:', gameData);
+
+      // Get the video URL for this game
+      const videoUrl = getGameVideoUrl(gameId);
+      console.log('[App] Game video URL:', videoUrl);
+
+      // Use stored metadata if available, otherwise null (VideoPlayer will provide it)
+      let videoMetadata = null;
+      if (gameData.video_duration && gameData.video_width && gameData.video_height) {
+        console.log('[App] Using stored video metadata (instant load)');
+        videoMetadata = {
+          duration: gameData.video_duration,
+          width: gameData.video_width,
+          height: gameData.video_height,
+          size: gameData.video_size,
+          aspectRatio: gameData.video_width / gameData.video_height,
+          fileName: gameData.name,
+          format: 'mp4',
+        };
+      } else {
+        console.log('[App] No stored metadata - video will load without blocking');
+      }
+
+      // Clean up any existing annotate video URL (only if it was an object URL)
+      if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(annotateVideoUrl);
+      }
+
+      // Reset annotate state before loading new game (prevents clip accumulation)
+      resetAnnotate();
+
+      // Set annotate state with the game's video - don't wait for metadata!
+      setAnnotateVideoFile(null); // No file object, using URL
+      setAnnotateVideoUrl(videoUrl);
+      setAnnotateVideoMetadata(videoMetadata); // May be null, that's OK
+      setAnnotateGameId(gameId); // Track which game we're editing
+
+      // Import saved annotations if they exist
+      if (gameData.annotations && gameData.annotations.length > 0) {
+        console.log('[App] Importing', gameData.annotations.length, 'saved annotations');
+        importAnnotations(gameData.annotations);
+      }
+
+      // Transition to annotate mode immediately - video loads in parallel
+      setEditorMode('annotate');
+
+      console.log('[App] Successfully loaded game into Annotate mode with game ID:', gameId);
+    } catch (err) {
+      console.error('[App] Failed to load game:', err);
+    }
+  }, [getGame, getGameVideoUrl, annotateVideoUrl, resetAnnotate, importAnnotations]);
+
+  /**
+   * Helper function to call the annotate export API
+   * @param {Array} clipData - Clip data to export
+   * @param {boolean} saveToDb - Whether to save to database and create projects
+   * @param {Object} settings - Project creation settings (optional, only used when saveToDb=true)
+   * @returns {Promise<Object>} - API response
+   */
+  const callAnnotateExportApi = useCallback(async (clipData, saveToDb, settings = null) => {
+    // Generate unique export ID for progress tracking
+    const exportId = `exp_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    let eventSource = null;
+
+    // Start listening for progress updates
+    try {
+      eventSource = new EventSource(`http://localhost:8000/api/annotate/progress/${exportId}`);
+      eventSource.onmessage = (event) => {
+        try {
+          const progress = JSON.parse(event.data);
+          setExportProgress(progress);
+          if (progress.done) {
+            eventSource?.close();
+          }
+        } catch (e) {
+          console.warn('[App] Failed to parse progress:', e);
+        }
+      };
+      eventSource.onerror = () => {
+        // Connection closed or error - clean up silently
+        eventSource?.close();
+      };
+    } catch (e) {
+      console.warn('[App] Failed to connect to progress endpoint:', e);
+    }
+
+    const formData = new FormData();
+    formData.append('save_to_db', saveToDb ? 'true' : 'false');
+    formData.append('export_id', exportId);
+
+    // Include project creation settings when saving to DB
+    if (saveToDb && settings) {
+      formData.append('settings_json', JSON.stringify(settings));
+    }
+
+    // Format clips for API (remove position field if present)
+    const clipsForApi = clipData.map(clip => ({
+      start_time: clip.start_time,
+      end_time: clip.end_time,
+      name: clip.name,
+      notes: clip.notes || '',
+      rating: clip.rating || 3,
+      tags: clip.tags || []
+    }));
+
+    formData.append('clips_json', JSON.stringify(clipsForApi));
+
+    // Use game_id if loading from server, otherwise upload video file
+    if (annotateGameId) {
+      formData.append('game_id', annotateGameId.toString());
+    } else if (annotateVideoFile) {
+      formData.append('video', annotateVideoFile);
+    } else {
+      eventSource?.close();
+      throw new Error('No video source available');
+    }
+
+    try {
+      const response = await fetch('http://localhost:8000/api/annotate/export', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Export failed: ${response.status}`);
+      }
+
+      return await response.json();
+    } finally {
+      // Ensure EventSource is closed
+      eventSource?.close();
+      // Clear progress after a short delay to show completion
+      setTimeout(() => setExportProgress(null), 1000);
+    }
+  }, [annotateVideoFile, annotateGameId]);
+
+  /**
+   * Trigger downloads from export result
+   */
+  const triggerAnnotateDownloads = async (downloads) => {
+    if (!downloads) return;
+
+    // 1. Download annotations.tsv
+    if (downloads.annotations?.url) {
+      console.log('[App] Downloading annotations TSV...');
+      const a = document.createElement('a');
+      a.href = `http://localhost:8000${downloads.annotations.url}`;
+      a.download = downloads.annotations.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      console.log('[App] Downloaded:', downloads.annotations.filename);
+    }
+
+    // 2. Download clips compilation video
+    if (downloads.clips_compilation?.url) {
+      console.log('[App] Downloading clips compilation...');
+      // Small delay to avoid browser blocking multiple downloads
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const a = document.createElement('a');
+      a.href = `http://localhost:8000${downloads.clips_compilation.url}`;
+      a.download = downloads.clips_compilation.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      console.log('[App] Downloaded:', downloads.clips_compilation.filename);
+    }
+  };
+
+  /**
+   * Create Annotated Video - Downloads compilation video, stays on annotate screen
+   * (Annotations are auto-saved to the game's JSON file)
+   */
+  const handleCreateAnnotatedVideo = useCallback(async (clipData) => {
+    console.log('[App] Create annotated video requested with clips:', clipData);
+
+    // Need either a video file (new upload) or game ID (loaded from server)
+    const hasVideoSource = annotateVideoFile || annotateGameId;
+    if (!hasVideoSource || !clipData || clipData.length === 0) {
+      console.error('[App] Cannot export: no video source or clips');
+      return;
+    }
+
+    setIsCreatingAnnotatedVideo(true);
+    try {
+      console.log('[App] Creating annotated video (download only)...');
+
+      const result = await callAnnotateExportApi(clipData, false);
+
+      console.log('[App] Annotated video created:', {
+        success: result.success,
+        downloads: Object.keys(result.downloads || {})
+      });
+
+      // Download only the clips compilation video (annotations are auto-saved separately)
+      if (result.downloads?.clips_compilation?.url) {
+        console.log('[App] Downloading clips compilation...');
+        const a = document.createElement('a');
+        a.href = `http://localhost:8000${result.downloads.clips_compilation.url}`;
+        a.download = result.downloads.clips_compilation.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        console.log('[App] Downloaded:', result.downloads.clips_compilation.filename);
+      }
+
+      // Show success - stay on annotate screen
+      console.log('[App] ✅ STAYING ON ANNOTATE SCREEN - NOT navigating to projects');
+      alert(`${result.message}\n\nVideo downloaded successfully!`);
+
+      console.log('[App] Create annotated video complete - still on annotate screen');
+
+    } catch (err) {
+      console.error('[App] Create annotated video failed:', err);
+      alert(`Failed to create video: ${err.message}`);
+    } finally {
+      setIsCreatingAnnotatedVideo(false);
+    }
+  }, [annotateVideoFile, annotateGameId, callAnnotateExportApi]);
+
+  /**
+   * Import Into Projects - Saves to DB, creates projects, downloads files, navigates to projects
+   */
+  const handleImportIntoProjects = useCallback(async (clipData) => {
+    console.log('[App] 🔄 IMPORT INTO PROJECTS - Will navigate to projects when done');
+    console.log('[App] Import into projects requested with clips:', clipData);
+    console.log('[App] Using project creation settings:', projectCreationSettings);
+
+    // Need either a video file (new upload) or game ID (loaded from server)
+    const hasVideoSource = annotateVideoFile || annotateGameId;
+    if (!hasVideoSource || !clipData || clipData.length === 0) {
+      console.error('[App] Cannot export: no video source or clips');
+      return;
+    }
+
+    setIsImportingToProjects(true);
+    try {
+      console.log('[App] Importing clips into projects...');
+
+      // Pass project creation settings to the API
+      const result = await callAnnotateExportApi(clipData, true, projectCreationSettings);
+
+      console.log('[App] Import response:', {
+        success: result.success,
+        rawClipsCount: result.created?.raw_clips?.length,
+        projectsCount: result.created?.projects?.length,
+        downloads: Object.keys(result.downloads || {})
+      });
+
+      // Note: Clips compilation video is NOT generated when importing into projects
+      // It's only generated for "Download Clips Review" mode
+      // The clips are saved directly to the database instead
+
+      // Clean up annotate state (only revoke blob URLs)
+      if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(annotateVideoUrl);
+      }
+      setAnnotateVideoFile(null);
+      setAnnotateVideoUrl(null);
+      setAnnotateVideoMetadata(null);
+      setAnnotateGameId(null);
+      setIsUploadingGameVideo(false);
+      resetAnnotate();
+
+      // Refresh projects list
+      await fetchProjects();
+
+      // Show success message
+      const projectsCreated = result.created?.projects?.length || 0;
+      const clipsCreated = result.created?.raw_clips?.length || 0;
+      const serverMessage = result.message || `Created ${clipsCreated} clips and ${projectsCreated} projects`;
+
+      console.log(`[App] ${serverMessage}`);
+      alert(`Import complete!\n\n${serverMessage}`);
+
+      // Return to Project Manager
+      setEditorMode('project-manager');
+
+      console.log('[App] Import into projects complete');
+
+    } catch (err) {
+      console.error('[App] Import into projects failed:', err);
+      alert(`Import failed: ${err.message}\n\nNote: If clips were being saved, they may still be on the server.`);
+    } finally {
+      setIsImportingToProjects(false);
+    }
+  }, [annotateVideoFile, annotateVideoUrl, annotateGameId, resetAnnotate, fetchProjects, callAnnotateExportApi, projectCreationSettings]);
+
+  /**
+   * Handle fullscreen toggle for Annotate mode
+   */
+  const handleAnnotateToggleFullscreen = useCallback(() => {
+    if (!annotateContainerRef.current) return;
+
+    if (!annotateFullscreen) {
+      // Enter fullscreen
+      if (annotateContainerRef.current.requestFullscreen) {
+        annotateContainerRef.current.requestFullscreen();
+      }
+    } else {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  }, [annotateFullscreen]);
+
+  /**
+   * Handle Add Clip button click (non-fullscreen mode)
+   * Pauses video and shows the clip creation overlay
+   */
+  const handleAddClipFromButton = useCallback(() => {
+    // Pause the video
+    if (videoRef.current && !videoRef.current.paused) {
+      videoRef.current.pause();
+    }
+    // Show the overlay
+    setShowAnnotateOverlay(true);
+  }, []);
+
+  /**
+   * Handle creating a clip from fullscreen overlay
+   */
+  const handleAnnotateFullscreenCreateClip = useCallback((clipData) => {
+    // clipData: { startTime, duration, rating, notes, tags, name }
+    const newRegion = addClipRegion(
+      clipData.startTime,
+      clipData.duration,
+      clipData.notes,
+      clipData.rating,
+      '', // position (not used - tags can be from any position)
+      clipData.tags,
+      clipData.name
+    );
+    if (newRegion) {
+      seek(newRegion.startTime);
+    }
+    setShowAnnotateOverlay(false);
+  }, [addClipRegion, seek]);
+
+  /**
+   * Handle updating an existing clip from fullscreen overlay
+   */
+  const handleAnnotateFullscreenUpdateClip = useCallback((regionId, updates) => {
+    // updates: { duration, rating, notes, tags, name }
+    updateClipRegion(regionId, updates);
+    setShowAnnotateOverlay(false);
+  }, [updateClipRegion]);
+
+  /**
+   * Handle closing the fullscreen overlay without creating a clip
+   */
+  const handleAnnotateOverlayClose = useCallback(() => {
+    setShowAnnotateOverlay(false);
+  }, []);
+
+  /**
+   * Handle resuming playback from fullscreen overlay
+   */
+  const handleAnnotateOverlayResume = useCallback(() => {
+    setShowAnnotateOverlay(false);
+    togglePlay();
+  }, [togglePlay]);
+
+  /**
+   * Handle annotate region selection - selects the region AND seeks to its start
+   */
+  const handleSelectAnnotateRegion = useCallback((regionId) => {
+    const region = clipRegions.find(r => r.id === regionId);
+    if (region) {
+      selectAnnotateRegion(regionId);
+      seek(region.startTime);
+    }
+  }, [clipRegions, selectAnnotateRegion, seek]);
+
+  /**
+   * Auto-select annotate clip when playhead is over a region
+   * Uses selectAnnotateRegion directly to avoid seeking (which would cause feedback loop)
+   */
+  useEffect(() => {
+    if (editorMode !== 'annotate' || !annotateVideoUrl) return;
+
+    const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
+    if (regionAtPlayhead && regionAtPlayhead.id !== annotateSelectedRegionId) {
+      selectAnnotateRegion(regionAtPlayhead.id);
+    }
+  }, [editorMode, annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion]);
+
+  /**
    * Handle clip selection from sidebar
    */
   const handleSelectClip = useCallback(async (clipId) => {
@@ -487,10 +1185,27 @@ function App() {
     resetHighlight();
     resetHighlightRegions();
     setSelectedLayer('playhead');
-    setVideoFile(clip.file);
 
-    // Load the video
-    await loadVideo(clip.file);
+    // Ensure crop aspect ratio matches project/global setting
+    const effectiveAspectRatio = selectedProject?.aspect_ratio || globalAspectRatio;
+    if (effectiveAspectRatio) {
+      updateAspectRatio(effectiveAspectRatio);
+    }
+
+    // Load the video - project clips use fileUrl, local clips use file
+    if (clip.file) {
+      setVideoFile(clip.file);
+      await loadVideo(clip.file);
+    } else if (clip.fileUrl) {
+      console.log('[App] Loading clip from URL:', clip.fileUrl);
+      const loadedFile = await loadVideoFromUrl(clip.fileUrl, clip.fileName);
+      if (loadedFile) {
+        setVideoFile(loadedFile); // Update App's videoFile state for export
+      }
+    } else {
+      console.error('[App] Clip has no file or fileUrl:', clipId);
+      return;
+    }
 
     // Restore saved state for this clip (if any)
     const hasSavedSegments = clip.segments && (
@@ -512,7 +1227,7 @@ function App() {
     }
 
     console.log('[App] Switched to clip:', clipId, clip.fileName);
-  }, [selectedClipId, saveCurrentClipState, clips, selectClip, resetSegments, resetCrop, resetHighlight, resetHighlightRegions, loadVideo, restoreSegmentState, restoreCropState]);
+  }, [selectedClipId, saveCurrentClipState, clips, selectClip, resetSegments, resetCrop, resetHighlight, resetHighlightRegions, loadVideo, loadVideoFromUrl, restoreSegmentState, restoreCropState, selectedProject, globalAspectRatio, updateAspectRatio]);
 
   /**
    * Handle clip deletion from sidebar
@@ -594,6 +1309,93 @@ function App() {
       videoRef.current.muted = !includeAudio;
     }
   }, [includeAudio, videoRef]);
+
+  // Annotate mode: sync playback speed with video element
+  useEffect(() => {
+    if (editorMode === 'annotate' && videoRef.current) {
+      videoRef.current.playbackRate = annotatePlaybackSpeed;
+    }
+  }, [annotatePlaybackSpeed, editorMode, videoRef]);
+
+  // Annotate mode: update metadata from video element when it loads
+  // This handles cases where stored metadata is missing (old games)
+  useEffect(() => {
+    if (editorMode !== 'annotate' || !annotateVideoUrl || !videoRef.current) return;
+
+    const video = videoRef.current;
+
+    const handleLoadedMetadata = () => {
+      // Only update if we don't already have metadata
+      if (!annotateVideoMetadata || !annotateVideoMetadata.duration) {
+        console.log('[App] Annotate video loaded, extracting metadata from element');
+        setAnnotateVideoMetadata({
+          duration: video.duration,
+          width: video.videoWidth,
+          height: video.videoHeight,
+          aspectRatio: video.videoWidth / video.videoHeight,
+          fileName: annotateVideoMetadata?.fileName || 'game.mp4',
+          format: 'mp4',
+          size: annotateVideoMetadata?.size,
+          resolution: `${video.videoWidth}x${video.videoHeight}`,
+        });
+      }
+    };
+
+    // If video is already loaded, update metadata immediately
+    if (video.readyState >= 1) {
+      handleLoadedMetadata();
+    } else {
+      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      return () => video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+    }
+  }, [editorMode, annotateVideoUrl, annotateVideoMetadata, videoRef]);
+
+  // Annotate mode: detect fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isFullscreen = !!document.fullscreenElement;
+      setAnnotateFullscreen(isFullscreen);
+      // Close overlay when exiting fullscreen
+      if (!isFullscreen) {
+        setShowAnnotateOverlay(false);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // Annotate mode: show overlay when TRANSITIONING from playing to paused while in fullscreen
+  // (not when entering fullscreen while already paused)
+  useEffect(() => {
+    // Detect pause transition: was playing, now paused
+    const justPaused = wasPlayingRef.current && !isPlaying;
+
+    // Update ref for next render
+    wasPlayingRef.current = isPlaying;
+
+    // Only show overlay when pause transition happens while in fullscreen
+    if (editorMode === 'annotate' && annotateFullscreen && justPaused) {
+      setShowAnnotateOverlay(true);
+    }
+  }, [editorMode, annotateFullscreen, isPlaying]);
+
+  // Annotate mode: auto-save annotations when they change
+  // Uses debounced save to avoid excessive API calls during rapid edits
+  useEffect(() => {
+    if (editorMode === 'annotate' && annotateGameId && clipRegions.length > 0) {
+      // Convert clipRegions to export format for saving
+      const annotationsForSave = clipRegions.map(region => ({
+        start_time: region.startTime,
+        end_time: region.endTime,
+        name: region.name,
+        tags: region.tags || [],
+        notes: region.notes || '',
+        rating: region.rating || 3
+      }));
+      saveAnnotationsDebounced(annotateGameId, annotationsForSave);
+    }
+  }, [editorMode, annotateGameId, clipRegions, saveAnnotationsDebounced]);
 
   // DERIVED STATE: Single source of truth
   // - If dragging: show live preview (dragCrop)
@@ -1121,8 +1923,14 @@ function App() {
   // Keyboard handler: Space bar toggles play/pause
   useEffect(() => {
     const handleKeyDown = (event) => {
-      // Only handle spacebar if any video is loaded (framing or overlay mode)
-      const hasVideo = videoUrl || effectiveOverlayVideoUrl;
+      // Don't handle if typing in an input or textarea
+      const tagName = event.target.tagName.toLowerCase();
+      if (tagName === 'input' || tagName === 'textarea') {
+        return;
+      }
+
+      // Only handle spacebar if any video is loaded (framing, overlay, or annotate mode)
+      const hasVideo = videoUrl || effectiveOverlayVideoUrl || annotateVideoUrl;
       if (event.code === 'Space' && hasVideo) {
         // Prevent default spacebar behavior (page scroll)
         event.preventDefault();
@@ -1137,7 +1945,7 @@ function App() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [videoUrl, effectiveOverlayVideoUrl, togglePlay]);
+  }, [videoUrl, effectiveOverlayVideoUrl, annotateVideoUrl, togglePlay]);
 
   // Keyboard handler: Ctrl-C/Cmd-C copies crop, Ctrl-V/Cmd-V pastes crop
   useEffect(() => {
@@ -1177,13 +1985,43 @@ function App() {
   // Keyboard handler: Arrow keys for layer-specific navigation
   useEffect(() => {
     const handleArrowKeys = (event) => {
-      // Only handle if any video is loaded (framing or overlay mode) and arrow keys pressed
-      const hasVideo = videoUrl || effectiveOverlayVideoUrl;
-      if (!hasVideo) return;
+      // Only handle arrow keys
       if (event.code !== 'ArrowLeft' && event.code !== 'ArrowRight') return;
 
       // Don't handle if modifier keys are pressed (let other shortcuts work)
       if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+      // Handle annotate mode: navigate between annotated clips
+      if (editorMode === 'annotate' && annotateVideoUrl && clipRegions.length > 0) {
+        event.preventDefault();
+        const isLeft = event.code === 'ArrowLeft';
+
+        // Sort regions by startTime
+        const sortedRegions = [...clipRegions].sort((a, b) => a.startTime - b.startTime);
+
+        // Find current region index
+        let currentIndex = sortedRegions.findIndex(r => r.id === annotateSelectedRegionId);
+        if (currentIndex === -1) {
+          // No region selected, select first or last based on direction
+          currentIndex = isLeft ? sortedRegions.length : -1;
+        }
+
+        // Navigate to next/previous region
+        const targetIndex = isLeft
+          ? Math.max(0, currentIndex - 1)
+          : Math.min(sortedRegions.length - 1, currentIndex + 1);
+
+        if (targetIndex !== currentIndex || currentIndex === -1) {
+          const targetRegion = sortedRegions[targetIndex];
+          selectAnnotateRegion(targetRegion.id);
+          seek(targetRegion.startTime);
+        }
+        return;
+      }
+
+      // Only handle if any video is loaded (framing or overlay mode)
+      const hasVideo = videoUrl || effectiveOverlayVideoUrl;
+      if (!hasVideo) return;
 
       event.preventDefault();
 
@@ -1253,7 +2091,7 @@ function App() {
 
     document.addEventListener('keydown', handleArrowKeys);
     return () => document.removeEventListener('keydown', handleArrowKeys);
-  }, [videoUrl, effectiveOverlayVideoUrl, selectedLayer, selectedCropKeyframeIndex, selectedHighlightKeyframeIndex, keyframes, highlightKeyframes, framerate, highlightFramerate, isHighlightEnabled, stepForward, stepBackward, seek]);
+  }, [videoUrl, effectiveOverlayVideoUrl, selectedLayer, selectedCropKeyframeIndex, selectedHighlightKeyframeIndex, keyframes, highlightKeyframes, framerate, highlightFramerate, isHighlightEnabled, stepForward, stepBackward, seek, editorMode, annotateVideoUrl, clipRegions, annotateSelectedRegionId, selectAnnotateRegion]);
 
   // Handle crop changes during drag/resize (live preview)
   const handleCropChange = (newCrop) => {
@@ -1331,6 +2169,14 @@ function App() {
    */
   const handleProceedToOverlay = async (renderedVideoBlob, clipMetadata = null) => {
     try {
+      // Flush any pending framing saves to database before transitioning
+      // This ensures framing data is persisted if user refreshes after going to overlay
+      if (selectedClipId && pendingFramingSaveRef.current) {
+        clearTimeout(pendingFramingSaveRef.current);
+        pendingFramingSaveRef.current = null;
+        await saveCurrentClipState();
+      }
+
       // Create URL for the rendered video
       const url = URL.createObjectURL(renderedVideoBlob);
 
@@ -1349,6 +2195,16 @@ function App() {
 
       // Store clip metadata for auto-generating highlight regions
       setOverlayClipMetadata(clipMetadata);
+
+      // Save the current framing state snapshot (for comparison later)
+      exportedFramingStateRef.current = {
+        keyframesHash: JSON.stringify(keyframes),
+        segmentsHash: JSON.stringify(segments),
+        clipsCount: clips.length,
+      };
+
+      // Clear the "framing changed" flag since we just exported
+      setFramingChangedSinceExport(false);
 
       // Reset highlight state for fresh start in overlay mode
       resetHighlight();
@@ -1396,14 +2252,271 @@ function App() {
    * the original video is used directly in overlay mode (via effectiveOverlayVideoUrl).
    * Multiple clips always require export to combine them first.
    */
+
+  // ============================================================================
+  // Overlay Data Persistence
+  // ============================================================================
+
+  /**
+   * Save overlay data to backend (debounced)
+   */
+  const saveOverlayData = useCallback(async (data) => {
+    // Don't save if no project or not in overlay mode
+    if (!selectedProjectId || editorMode !== 'overlay') return;
+
+    // Cancel pending debounced save
+    if (pendingOverlaySaveRef.current) {
+      clearTimeout(pendingOverlaySaveRef.current);
+    }
+
+    // Debounce: wait 2 seconds after last change
+    pendingOverlaySaveRef.current = setTimeout(async () => {
+      const saveProjectId = selectedProjectId; // Capture for closure
+
+      try {
+        const formData = new FormData();
+        formData.append('highlights_data', JSON.stringify(data.highlightRegions || []));
+        formData.append('text_overlays', JSON.stringify(data.textOverlays || []));
+        formData.append('effect_type', data.effectType || 'original');
+
+        await fetch(`http://localhost:8000/api/export/projects/${saveProjectId}/overlay-data`, {
+          method: 'PUT',
+          body: formData
+        });
+
+        console.log('[App] Overlay data saved for project:', saveProjectId);
+      } catch (e) {
+        console.error('[App] Failed to save overlay data:', e);
+      }
+    }, 2000);
+  }, [selectedProjectId, editorMode]);
+
+  /**
+   * Load overlay data from backend
+   */
+  const loadOverlayData = useCallback(async (projectId, videoDuration) => {
+    if (!projectId) return;
+
+    try {
+      console.log('[App] Loading overlay data for project:', projectId);
+      const response = await fetch(
+        `http://localhost:8000/api/export/projects/${projectId}/overlay-data`
+      );
+      const data = await response.json();
+
+      if (data.has_data && data.highlights_data?.length > 0) {
+        // Restore highlight regions
+        restoreHighlightRegions(data.highlights_data, videoDuration);
+        console.log('[App] Restored', data.highlights_data.length, 'highlight regions');
+      }
+      // Restore effect type
+      if (data.effect_type) {
+        setHighlightEffectType(data.effect_type);
+      }
+
+      overlayDataLoadedRef.current = true;
+    } catch (e) {
+      console.error('[App] Failed to load overlay data:', e);
+    }
+  }, [restoreHighlightRegions, setHighlightEffectType]);
+
+  /**
+   * Load overlay data when entering overlay mode
+   */
+  useEffect(() => {
+    const effectiveDuration = overlayVideoMetadata?.duration || metadata?.duration;
+    if (editorMode === 'overlay' && selectedProjectId && !overlayDataLoadedRef.current && effectiveDuration) {
+      loadOverlayData(selectedProjectId, effectiveDuration);
+    }
+
+    // Reset loaded flag when leaving overlay mode or changing project
+    if (editorMode !== 'overlay') {
+      overlayDataLoadedRef.current = false;
+    }
+  }, [editorMode, selectedProjectId, loadOverlayData, overlayVideoMetadata?.duration, metadata?.duration]);
+
+  /**
+   * Auto-save overlay data when highlight regions or effect type changes
+   */
+  useEffect(() => {
+    // Only save after initial load and when in overlay mode
+    if (editorMode === 'overlay' && overlayDataLoadedRef.current && selectedProjectId) {
+      saveOverlayData({
+        highlightRegions: getRegionsForExport(),
+        textOverlays: [], // Add when text overlays implemented
+        effectType: highlightEffectType
+      });
+    }
+  }, [highlightRegions, highlightEffectType, editorMode, selectedProjectId, saveOverlayData, getRegionsForExport]);
+
+  /**
+   * Auto-save framing data when keyframes, segments, or trim range changes
+   */
+  useEffect(() => {
+    // Only save when in framing mode with a selected clip
+    if (editorMode === 'framing' && selectedClipId && selectedProjectId) {
+      autoSaveFramingEdits();
+    }
+  }, [keyframes, segmentBoundaries, segmentSpeeds, trimRange, editorMode, selectedClipId, selectedProjectId, autoSaveFramingEdits]);
+
+  /**
+   * Save all pending changes before browser close or navigation
+   */
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      // Flush any pending saves immediately
+      if (pendingFramingSaveRef.current) {
+        clearTimeout(pendingFramingSaveRef.current);
+        pendingFramingSaveRef.current = null;
+        // Synchronous save using navigator.sendBeacon for reliability
+        if (selectedClipId && selectedProjectId) {
+          const currentClip = clips.find(c => c.id === selectedClipId);
+          if (currentClip?.workingClipId) {
+            const segmentState = {
+              boundaries: segmentBoundaries,
+              segmentSpeeds: segmentSpeeds,
+              trimRange: trimRange,
+            };
+            const payload = {
+              crop_data: JSON.stringify(keyframes),
+              segments_data: JSON.stringify(segmentState),
+              timing_data: JSON.stringify({ trimRange })
+            };
+            // Use sendBeacon for reliable async save on page unload
+            const url = `http://localhost:8000/api/clips/projects/${selectedProjectId}/clips/${currentClip.workingClipId}`;
+            navigator.sendBeacon(url, JSON.stringify(payload));
+          }
+        }
+      }
+
+      if (pendingOverlaySaveRef.current) {
+        clearTimeout(pendingOverlaySaveRef.current);
+        pendingOverlaySaveRef.current = null;
+        if (selectedProjectId) {
+          const formData = new FormData();
+          formData.append('highlights_data', JSON.stringify(getRegionsForExport() || []));
+          formData.append('text_overlays', JSON.stringify([]));
+          formData.append('effect_type', highlightEffectType || 'original');
+          // Use fetch with keepalive for FormData
+          fetch(`http://localhost:8000/api/export/projects/${selectedProjectId}/overlay-data`, {
+            method: 'PUT',
+            body: formData,
+            keepalive: true
+          }).catch(() => {});
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [selectedClipId, selectedProjectId, clips, segmentBoundaries, segmentSpeeds, trimRange, keyframes, getRegionsForExport, highlightEffectType]);
+
+  /**
+   * Track when framing edits are made (for showing warning on Overlay button)
+   * Compares current framing state against the state that produced the overlay video
+   */
+  const exportedFramingStateRef = useRef(null);
+  useEffect(() => {
+    // Clear exported state if no overlay video
+    if (!overlayVideoUrl) {
+      exportedFramingStateRef.current = null;
+      return;
+    }
+
+    // Skip if no exported state to compare against
+    if (!exportedFramingStateRef.current) {
+      return;
+    }
+
+    // Only check for changes when in framing mode
+    if (editorMode !== 'framing') {
+      return;
+    }
+
+    // Create current state snapshot
+    const currentState = {
+      keyframesHash: JSON.stringify(keyframes),
+      segmentsHash: JSON.stringify(segments),
+      clipsCount: clips.length,
+    };
+
+    // Compare current state against the exported state
+    const hasChanged =
+      currentState.keyframesHash !== exportedFramingStateRef.current.keyframesHash ||
+      currentState.segmentsHash !== exportedFramingStateRef.current.segmentsHash ||
+      currentState.clipsCount !== exportedFramingStateRef.current.clipsCount;
+
+    // Update flag based on comparison
+    if (hasChanged !== framingChangedSinceExport) {
+      if (hasChanged) {
+        console.log('[App] Framing state differs from exported state - marking overlay as out of sync');
+      } else {
+        console.log('[App] Framing state matches exported state - clearing out of sync flag');
+      }
+      setFramingChangedSinceExport(hasChanged);
+    }
+  }, [keyframes, segments, clips.length, editorMode, overlayVideoUrl, framingChangedSinceExport]);
+
   const handleModeChange = useCallback((newMode) => {
     if (newMode === editorMode) return;
 
     console.log(`[App] Switching from ${editorMode} to ${newMode} mode`);
 
-    // Simply switch the mode - video state is preserved
+    // Flush any pending saves before switching modes
+
+    // Flush overlay save if leaving overlay mode
+    if (editorMode === 'overlay' && pendingOverlaySaveRef.current) {
+      clearTimeout(pendingOverlaySaveRef.current);
+      pendingOverlaySaveRef.current = null;
+      if (selectedProjectId) {
+        const formData = new FormData();
+        formData.append('highlights_data', JSON.stringify(getRegionsForExport() || []));
+        formData.append('text_overlays', JSON.stringify([]));
+        formData.append('effect_type', highlightEffectType || 'original');
+        fetch(`http://localhost:8000/api/export/projects/${selectedProjectId}/overlay-data`, {
+          method: 'PUT',
+          body: formData
+        }).catch(e => console.error('[App] Failed to flush overlay save:', e));
+      }
+    }
+
+    // Flush framing save if leaving framing mode
+    if (editorMode === 'framing' && pendingFramingSaveRef.current) {
+      clearTimeout(pendingFramingSaveRef.current);
+      pendingFramingSaveRef.current = null;
+      // Fire immediate save (non-debounced)
+      saveCurrentClipState().catch(e => console.error('[App] Failed to flush framing save:', e));
+    }
+
+    // Switch the mode
     setEditorMode(newMode);
-  }, [editorMode]);
+
+    // Save current mode to database (non-blocking)
+    if (selectedProjectId) {
+      fetch(`http://localhost:8000/api/projects/${selectedProjectId}/state?current_mode=${newMode}`, {
+        method: 'PATCH'
+      }).catch(e => console.error('[App] Failed to save current mode:', e));
+    }
+
+    // Force video element to reload source when switching back to framing
+    // This fixes the blank video issue when returning from overlay mode
+    if (newMode === 'framing') {
+      setTimeout(() => {
+        // If we have clips, ALWAYS reload the selected clip to ensure it's showing
+        if (hasClips && clips.length > 0 && selectedProjectId) {
+          const clipToLoad = selectedClip || clips[0];
+          // Use workingClipId (database ID) not id (temporary local ID)
+          if (clipToLoad?.workingClipId) {
+            console.log('[App] Switching to framing mode - reloading clip video:', clipToLoad.workingClipId);
+            const clipUrl = getClipFileUrl(clipToLoad.workingClipId, selectedProjectId);
+            loadVideoFromUrl(clipUrl, clipToLoad.fileName || 'clip.mp4').catch(e =>
+              console.error('[App] Failed to reload clip video:', e)
+            );
+          }
+        }
+      }, 100);
+    }
+  }, [editorMode, selectedProjectId, getRegionsForExport, highlightEffectType, saveCurrentClipState, videoRef, videoUrl, currentTime, hasClips, clips, selectedClip, loadVideoFromUrl, getClipFileUrl]);
 
   // Prepare crop context value
   const cropContextValue = useMemo(() => ({
@@ -1563,9 +2676,164 @@ function App() {
     return filtered;
   }, [isHighlightEnabled, getHighlightKeyframesForExport, getSegmentExportData, duration, editorMode]);
 
+  // If no project selected and not in annotate mode, show ProjectManager
+  if (!selectedProject && editorMode !== 'annotate') {
+    return (
+      <div className="min-h-screen bg-gray-900">
+        {/* Hidden file input for Annotate Game - triggers file picker directly */}
+        <input
+          ref={annotateFileInputRef}
+          type="file"
+          accept="video/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              clearSelection();
+              handleGameVideoSelect(file);
+            }
+            // Reset input so same file can be selected again
+            e.target.value = '';
+          }}
+        />
+        <ProjectManager
+          projects={projects}
+          loading={projectsLoading}
+          onSelectProject={async (id) => {
+            console.log('[App] Selecting project:', id);
+            const project = await selectProject(id);
+
+            // Update last_opened_at timestamp (non-blocking)
+            fetch(`http://localhost:8000/api/projects/${id}/state?update_last_opened=true`, {
+              method: 'PATCH'
+            }).catch(e => console.error('[App] Failed to update last_opened_at:', e));
+
+            // Set mode to saved current_mode, or default to framing
+            const initialMode = project?.current_mode || 'framing';
+            setEditorMode(initialMode);
+
+            // Clear all state before loading new project to prevent stale data
+            clearClips();
+            resetCrop();
+            resetSegments();
+            setVideoFile(null);
+
+            // Set crop aspect ratio to match project BEFORE loading video
+            const projectAspectRatio = project?.aspect_ratio || '9:16';
+            updateAspectRatio(projectAspectRatio);
+
+            // Fetch clips for the project - pass project ID explicitly since React state may not have updated yet
+            const projectClipsData = await fetchProjectClips(id);
+            console.log('[App] Fetched project clips:', projectClipsData);
+
+            if (projectClipsData && projectClipsData.length > 0) {
+              // Helper to get video metadata from URL
+              const getMetadataFromUrl = async (url) => {
+                return await extractVideoMetadataFromUrl(url);
+              };
+
+              // Helper to get clip URL with explicit project ID
+              const getClipUrl = (clipId) => getClipFileUrl(clipId, id);
+
+              // Load all clips into the clip manager
+              console.log('[App] Loading clips into clip manager...');
+              await loadProjectClips(
+                projectClipsData,
+                getClipUrl,
+                getMetadataFromUrl,
+                projectAspectRatio
+              );
+
+              // Load the first clip for video playback
+              const firstClip = projectClipsData[0];
+              const clipUrl = getClipFileUrl(firstClip.id, id);
+              console.log('[App] Loading first clip for playback:', firstClip.id, clipUrl);
+              const loadedFile = await loadVideoFromUrl(clipUrl, firstClip.filename || 'clip.mp4');
+              if (loadedFile) {
+                setVideoFile(loadedFile); // Update App's videoFile state for export
+              }
+            }
+
+            // Load working video in background if it exists (enables Overlay mode)
+            // This runs in background to avoid blocking project load
+            if (project?.working_video_id) {
+              console.log('[App] Project has working video, loading in background:', project.working_video_id);
+              setIsLoadingWorkingVideo(true);
+
+              // Load in background (non-blocking)
+              (async () => {
+                try {
+                  const workingVideoUrl = `http://localhost:8000/api/projects/${id}/working-video`;
+                  const response = await fetch(workingVideoUrl);
+                  if (response.ok) {
+                    const blob = await response.blob();
+                    const workingVideoBlob = new File([blob], 'working_video.mp4', { type: 'video/mp4' });
+                    const workingVideoObjectUrl = URL.createObjectURL(workingVideoBlob);
+                    const workingVideoMeta = await extractVideoMetadata(workingVideoBlob);
+
+                    // Set overlay video state
+                    setOverlayVideoFile(workingVideoBlob);
+                    setOverlayVideoUrl(workingVideoObjectUrl);
+                    setOverlayVideoMetadata(workingVideoMeta);
+
+                    // Save the current framing state as the exported state
+                    // (since this working video was created from the current framing state)
+                    setTimeout(() => {
+                      exportedFramingStateRef.current = {
+                        keyframesHash: JSON.stringify(keyframes),
+                        segmentsHash: JSON.stringify(segments),
+                        clipsCount: clips.length,
+                      };
+                    }, 100);
+
+                    console.log('[App] Loaded working video for overlay mode');
+                  } else {
+                    console.warn('[App] Failed to load working video:', response.status);
+                  }
+                } catch (err) {
+                  console.error('[App] Error loading working video:', err);
+                } finally {
+                  setIsLoadingWorkingVideo(false);
+                }
+              })();
+            }
+          }}
+          onCreateProject={createProject}
+          onDeleteProject={deleteProject}
+          onAnnotate={() => {
+            // Directly open file picker instead of showing empty annotate mode
+            annotateFileInputRef.current?.click();
+          }}
+          // Games props
+          games={games}
+          gamesLoading={gamesLoading}
+          onLoadGame={handleLoadGame}
+          onDeleteGame={deleteGame}
+          onFetchGames={fetchGames}
+          // Downloads props
+          downloadsCount={downloadsCount}
+          onOpenDownloads={() => setIsDownloadsPanelOpen(true)}
+        />
+
+        {/* Downloads Panel - also available from Project Manager */}
+        <DownloadsPanel
+          isOpen={isDownloadsPanelOpen}
+          onClose={() => setIsDownloadsPanelOpen(false)}
+          onOpenProject={(projectId) => {
+            // Navigate to project in overlay mode
+            selectProject(projectId);
+            setEditorMode('overlay');
+            setIsDownloadsPanelOpen(false);
+          }}
+          onCountChange={refreshDownloadsCount}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
-      {/* Sidebar - only show when clips exist */}
+    <div className="h-screen overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
+      {/* Sidebar - Framing mode (when clips exist) */}
       {hasClips && clips.length > 0 && editorMode === 'framing' && (
         <ClipSelectorSidebar
           clips={clips}
@@ -1579,42 +2847,103 @@ function App() {
         />
       )}
 
+      {/* Sidebar - Annotate mode */}
+      {editorMode === 'annotate' && annotateVideoUrl && (
+        <ClipsSidePanel
+          clipRegions={clipRegions}
+          selectedRegionId={annotateSelectedRegionId}
+          onSelectRegion={handleSelectAnnotateRegion}
+          onUpdateRegion={updateClipRegion}
+          onDeleteRegion={deleteClipRegion}
+          onImportAnnotations={importAnnotations}
+          maxNotesLength={ANNOTATE_MAX_NOTES_LENGTH}
+          clipCount={annotateClipCount}
+          videoDuration={annotateVideoMetadata?.duration}
+          isLoading={isLoadingAnnotations}
+        />
+      )}
+
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <div className="container mx-auto px-4 py-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-4xl font-bold text-white mb-2">
-                Player Showcase
-              </h1>
-              <p className="text-gray-400">
-                Showcase your player's brilliance
-              </p>
+            <div className="flex items-center gap-4">
+              {/* Back to Projects button - show in all editor modes */}
+              {(editorMode === 'annotate' || editorMode === 'framing' || editorMode === 'overlay') && (
+                <button
+                  onClick={() => {
+                    // Clear project selection
+                    clearSelection();
+                    // Clear annotate state if in annotate mode
+                    if (editorMode === 'annotate') {
+                      setAnnotateVideoFile(null);
+                      setAnnotateVideoUrl(null);
+                      setAnnotateVideoMetadata(null);
+                      setIsUploadingGameVideo(false);
+                    }
+                    // Return to project manager
+                    setEditorMode('project-manager');
+                  }}
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                >
+                  ← Projects
+                </button>
+              )}
+              <div>
+                <h1 className="text-4xl font-bold text-white mb-2">
+                  {editorMode === 'annotate' ? 'Annotate Game' : 'Player Showcase'}
+                </h1>
+                <p className="text-gray-400">
+                  {editorMode === 'annotate'
+                    ? 'Mark clips to extract from your game footage'
+                    : 'Showcase your player\'s brilliance'}
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* Gallery button - always visible */}
+              <button
+                onClick={() => setIsDownloadsPanelOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-700 rounded-lg transition-colors"
+                title="Gallery"
+              >
+                <Image size={18} className="text-purple-400" />
+                <span className="text-sm text-gray-400">Gallery</span>
+                {downloadsCount > 0 && (
+                  <span className="px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
+                    {downloadsCount > 9 ? '9+' : downloadsCount}
+                  </span>
+                )}
+              </button>
               {/* AspectRatioSelector - only in Framing mode when video is loaded */}
+              {/* Read-only when a project is selected (aspect ratio is set at project level) */}
               {editorMode === 'framing' && videoUrl && (
                 <AspectRatioSelector
-                  aspectRatio={hasClips ? globalAspectRatio : aspectRatio}
-                  onAspectRatioChange={hasClips ? (newRatio) => {
+                  aspectRatio={selectedProject?.aspect_ratio || globalAspectRatio || aspectRatio}
+                  onAspectRatioChange={selectedProject ? null : (hasClips ? (newRatio) => {
                     setGlobalAspectRatio(newRatio);
                     updateAspectRatio(newRatio);
-                  } : updateAspectRatio}
+                  } : updateAspectRatio)}
+                  readOnly={!!selectedProject}
                 />
               )}
-              {/* Mode toggle - only show when video is loaded */}
-              {videoUrl && (
-                <ModeSwitcher
-                  mode={editorMode}
-                  onModeChange={handleModeChange}
-                />
-              )}
-              {/* Add button - only show when no video loaded (Framing mode has Add in ClipSelectorSidebar) */}
-              {!videoUrl && (
+              {/* Mode toggle - project-aware visibility */}
+              <ModeSwitcher
+                mode={editorMode}
+                onModeChange={handleModeChange}
+                disabled={isLoading}
+                hasProject={!!selectedProject}
+                hasWorkingVideo={selectedProject?.working_video_id != null}
+                hasOverlayVideo={!!overlayVideoUrl}
+                framingOutOfSync={framingChangedSinceExport && !!overlayVideoUrl}
+                hasAnnotateVideo={!!annotateVideoUrl}
+                isLoadingWorkingVideo={isLoadingWorkingVideo}
+              />
+              {/* Annotate mode - show file upload when no game video loaded */}
+              {editorMode === 'annotate' && !annotateVideoUrl && (
                 <FileUpload
-                  onFileSelect={handleFileSelect}
-                  onFramedVideoSelect={handleFramedVideoSelect}
+                  onGameVideoSelect={handleGameVideoSelect}
                   isLoading={isLoading}
                 />
               )}
@@ -1629,8 +2958,8 @@ function App() {
           </div>
         )}
 
-        {/* Video Metadata */}
-        {metadata && (
+        {/* Video Metadata - Framing/Overlay modes */}
+        {metadata && editorMode !== 'annotate' && (
           <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
             <div className="flex items-center justify-between text-sm text-gray-300">
               <span className="font-semibold text-white">{metadata.fileName}</span>
@@ -1658,6 +2987,31 @@ function App() {
           </div>
         )}
 
+        {/* Video Metadata - Annotate mode */}
+        {editorMode === 'annotate' && annotateVideoMetadata && !annotateFullscreen && (
+          <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
+            <div className="flex items-center justify-between text-sm text-gray-300">
+              <span className="font-semibold text-white truncate max-w-md" title={annotateVideoMetadata.fileName}>
+                {annotateVideoMetadata.fileName}
+              </span>
+              <div className="flex space-x-6">
+                <span>
+                  <span className="text-gray-400">Resolution:</span>{' '}
+                  {annotateVideoMetadata.resolution}
+                </span>
+                <span>
+                  <span className="text-gray-400">Format:</span>{' '}
+                  {annotateVideoMetadata.format?.toUpperCase() || 'MP4'}
+                </span>
+                <span>
+                  <span className="text-gray-400">Size:</span>{' '}
+                  {annotateVideoMetadata.sizeFormatted || `${(annotateVideoMetadata.size / (1024 * 1024)).toFixed(2)} MB`}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Main Editor Area */}
         <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
           {/* Controls Bar */}
@@ -1677,10 +3031,19 @@ function App() {
           )}
 
           {/* Video Player with mode-specific overlays */}
-          {/* In Overlay mode, use overlay video if available (or pass-through if no edits) */}
+          {/* Use appropriate video URL based on mode: annotate -> overlay -> framing */}
+          {/* Wrap in ref container for annotate fullscreen */}
+          <div
+            ref={annotateContainerRef}
+            className="relative bg-gray-900 rounded-lg"
+          >
           <VideoPlayer
             videoRef={videoRef}
-            videoUrl={editorMode === 'overlay' && effectiveOverlayVideoUrl ? effectiveOverlayVideoUrl : videoUrl}
+            videoUrl={
+              editorMode === 'annotate' && annotateVideoUrl ? annotateVideoUrl :
+              editorMode === 'overlay' && effectiveOverlayVideoUrl ? effectiveOverlayVideoUrl :
+              videoUrl
+            }
             handlers={handlers}
             onFileSelect={handleFileSelect}
             overlays={[
@@ -1699,6 +3062,37 @@ function App() {
                   selectedKeyframeIndex={selectedCropKeyframeIndex}
                 />
               ),
+              // Annotate mode overlay (NotesOverlay) - shows name and notes for region at playhead
+              editorMode === 'annotate' && annotateVideoUrl && (() => {
+                const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
+                return (regionAtPlayhead?.name || regionAtPlayhead?.notes) ? (
+                  <NotesOverlay
+                    key="annotate-notes"
+                    name={regionAtPlayhead.name}
+                    notes={regionAtPlayhead.notes}
+                    isVisible={true}
+                    isFullscreen={annotateFullscreen}
+                  />
+                ) : null;
+              })(),
+              // Annotate mode fullscreen overlay - appears when paused in fullscreen
+              // If playhead is inside an existing clip, edit that clip; otherwise create new
+              editorMode === 'annotate' && annotateVideoUrl && showAnnotateOverlay && (() => {
+                const existingClip = getAnnotateRegionAtTime(currentTime);
+                return (
+                  <AnnotateFullscreenOverlay
+                    key="annotate-fullscreen"
+                    isVisible={showAnnotateOverlay}
+                    currentTime={currentTime}
+                    videoDuration={annotateVideoMetadata?.duration || 0}
+                    existingClip={existingClip}
+                    onCreateClip={handleAnnotateFullscreenCreateClip}
+                    onUpdateClip={handleAnnotateFullscreenUpdateClip}
+                    onResume={handleAnnotateOverlayResume}
+                    onClose={handleAnnotateOverlayClose}
+                  />
+                );
+              })(),
               // Overlay mode overlay (HighlightOverlay) - uses overlay video metadata
               // Only render when we have a currentHighlightState (playhead is in a region)
               editorMode === 'overlay' && effectiveOverlayVideoUrl && currentHighlightState && effectiveOverlayMetadata && (
@@ -1734,7 +3128,43 @@ function App() {
             panOffset={panOffset}
             onZoomChange={zoomByWheel}
             onPanChange={updatePan}
+            isFullscreen={editorMode === 'annotate' && annotateFullscreen}
+            clipRating={editorMode === 'annotate' ? getAnnotateRegionAtTime(currentTime)?.rating ?? null : null}
           />
+          {/* Controls - inside video container to match video width */}
+          {/* Annotate mode uses AnnotateControls with speed and fullscreen */}
+          {editorMode === 'annotate' && annotateVideoUrl && (
+            <AnnotateControls
+              isPlaying={isPlaying}
+              currentTime={currentTime}
+              duration={annotateVideoMetadata?.duration || duration}
+              onTogglePlay={togglePlay}
+              onStepForward={stepForward}
+              onStepBackward={stepBackward}
+              onRestart={restart}
+              playbackSpeed={annotatePlaybackSpeed}
+              onSpeedChange={setAnnotatePlaybackSpeed}
+              isFullscreen={annotateFullscreen}
+              onToggleFullscreen={handleAnnotateToggleFullscreen}
+              onAddClip={handleAddClipFromButton}
+            />
+          )}
+          {/* Framing and Overlay modes use regular Controls */}
+          {((editorMode === 'framing' && videoUrl) || (editorMode === 'overlay' && effectiveOverlayVideoUrl)) && (
+            <Controls
+              isPlaying={isPlaying}
+              currentTime={currentTime}
+              duration={
+                editorMode === 'overlay' ? (effectiveOverlayMetadata?.duration || duration) :
+                duration
+              }
+              onTogglePlay={togglePlay}
+              onStepForward={stepForward}
+              onStepBackward={stepBackward}
+              onRestart={restart}
+            />
+          )}
+          </div>
 
           {/* Mode-specific content (overlays + timelines) */}
           {videoUrl && editorMode === 'framing' && (
@@ -1829,6 +3259,132 @@ function App() {
             />
           )}
 
+          {/* Annotate mode - timeline for extracting clips */}
+          {annotateVideoUrl && editorMode === 'annotate' && (
+            <AnnotateMode
+              currentTime={currentTime}
+              duration={annotateVideoMetadata?.duration || 0}
+              isPlaying={isPlaying}
+              onSeek={seek}
+              regions={annotateRegionsWithLayout}
+              selectedRegionId={annotateSelectedRegionId}
+              onSelectRegion={handleSelectAnnotateRegion}
+              onDeleteRegion={deleteClipRegion}
+            />
+          )}
+
+          {/* Annotate mode - Export Button */}
+          {annotateVideoUrl && editorMode === 'annotate' && (
+            <div className="mt-6">
+              <div className="space-y-3">
+                {/* Export Settings */}
+                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
+                  <div className="text-sm font-medium text-gray-300 mb-3">
+                    Annotate Settings
+                  </div>
+                  <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
+                    Extracts marked clips and loads them into Framing mode
+                  </div>
+                </div>
+
+                {/* Export buttons */}
+                <div className="space-y-2">
+                  {/* Progress bar (shown during export) */}
+                  {exportProgress && (
+                    <div className="bg-gray-800 rounded-lg p-3 mb-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-gray-300">{exportProgress.message}</span>
+                        {exportProgress.total > 0 && (
+                          <span className="text-xs text-gray-500">
+                            {Math.round((exportProgress.current / exportProgress.total) * 100)}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            exportProgress.done ? 'bg-green-500' : 'bg-blue-500'
+                          }`}
+                          style={{
+                            width: exportProgress.total > 0
+                              ? `${(exportProgress.current / exportProgress.total) * 100}%`
+                              : '0%'
+                          }}
+                        />
+                      </div>
+                      {exportProgress.phase === 'clips' && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          {exportProgress.current > 0 && 'Using cache for unchanged clips'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Create Annotated Video - stays on screen */}
+                  <button
+                    onClick={() => handleCreateAnnotatedVideo(getAnnotateExportData())}
+                    disabled={!hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo}
+                    className={`w-full px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                      !hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-green-600 hover:bg-green-700 text-white'
+                    }`}
+                  >
+                    {isUploadingGameVideo ? (
+                      <>
+                        <Loader className="animate-spin" size={18} />
+                        <span>Uploading video...</span>
+                      </>
+                    ) : isCreatingAnnotatedVideo ? (
+                      <>
+                        <Loader className="animate-spin" size={18} />
+                        <span>Processing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download size={18} />
+                        <span>Create Annotated Video</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Import Into Projects - navigates to projects */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleImportIntoProjects(getAnnotateExportData())}
+                      disabled={!hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo}
+                      className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                        !hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo
+                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      {isImportingToProjects ? (
+                        <>
+                          <Loader className="animate-spin" size={18} />
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={18} />
+                          <span>Import Into Projects</span>
+                        </>
+                      )}
+                    </button>
+                    {/* Settings button */}
+                    <button
+                      onClick={() => setShowProjectCreationSettings(true)}
+                      className="px-3 py-3 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
+                      title="Project creation settings"
+                    >
+                      <Settings size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Message when in Overlay mode but export is required */}
           {editorMode === 'overlay' && !effectiveOverlayVideoUrl && videoUrl && (hasFramingEdits || hasMultipleClips) && (
             <div className="mt-6 bg-purple-900/30 border border-purple-500/50 rounded-lg p-6 text-center">
@@ -1846,21 +3402,6 @@ function App() {
               >
                 Switch to Framing Mode
               </button>
-            </div>
-          )}
-
-          {/* Controls - show for current mode's video */}
-          {((editorMode === 'framing' && videoUrl) || (editorMode === 'overlay' && effectiveOverlayVideoUrl)) && (
-            <div className="mt-6">
-              <Controls
-                isPlaying={isPlaying}
-                currentTime={currentTime}
-                duration={editorMode === 'overlay' ? (effectiveOverlayMetadata?.duration || duration) : duration}
-                onTogglePlay={togglePlay}
-                onStepForward={stepForward}
-                onStepBackward={stepBackward}
-                onRestart={restart}
-              />
             </div>
           )}
 
@@ -1884,6 +3425,12 @@ function App() {
                 clips={editorMode === 'framing' && hasClips ? clipsWithCurrentState : null}
                 globalAspectRatio={globalAspectRatio}
                 globalTransition={globalTransition}
+                // Project props for saving final video to DB
+                projectId={selectedProjectId}
+                onExportComplete={() => {
+                  fetchProjects();
+                  refreshDownloadsCount();
+                }}
               />
             </div>
           )}
@@ -1949,6 +3496,28 @@ function App() {
 
       {/* Debug Info - Shows current branch and commit */}
       <DebugInfo />
+
+      {/* Project Creation Settings Modal */}
+      <ProjectCreationSettings
+        isOpen={showProjectCreationSettings}
+        onClose={() => setShowProjectCreationSettings(false)}
+        settings={projectCreationSettings}
+        onUpdateSettings={updateProjectCreationSettings}
+        onReset={resetSettings}
+      />
+
+      {/* Downloads Panel */}
+      <DownloadsPanel
+        isOpen={isDownloadsPanelOpen}
+        onClose={() => setIsDownloadsPanelOpen(false)}
+        onOpenProject={(projectId) => {
+          // Navigate to project in overlay mode
+          selectProject(projectId);
+          setEditorMode('overlay');
+          setIsDownloadsPanelOpen(false);
+        }}
+        onCountChange={refreshDownloadsCount}
+      />
     </div>
   );
 }

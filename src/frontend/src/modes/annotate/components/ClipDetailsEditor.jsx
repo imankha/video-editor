@@ -1,0 +1,346 @@
+import React, { useState, useEffect } from 'react';
+import { Trash2, Star, Check } from 'lucide-react';
+import { soccerTags, positions, generateClipName } from '../constants/soccerTags';
+
+// Constants
+const MIN_CLIP_DURATION = 1.0;
+const MAX_CLIP_DURATION = 60.0;
+const DEFAULT_CLIP_DURATION = 15.0;
+
+// Rating-based background colors (used for tinting the details panel)
+const RATING_COLORS = {
+  5: 'rgba(234, 179, 8, 0.15)',   // gold/yellow
+  4: 'rgba(34, 197, 94, 0.15)',   // green
+  3: 'rgba(59, 130, 246, 0.15)',  // blue
+  2: 'rgba(249, 115, 22, 0.15)',  // orange
+  1: 'rgba(239, 68, 68, 0.15)',   // red
+};
+
+// Rating-based border colors
+const RATING_BORDER_COLORS = {
+  5: '#eab308', // gold/yellow
+  4: '#22c55e', // green
+  3: '#3b82f6', // blue
+  2: '#f97316', // orange
+  1: '#ef4444', // red
+};
+
+/**
+ * Format seconds to MM:SS.ms string for display
+ */
+function formatTimeForDisplay(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toFixed(1).padStart(4, '0')}`;
+}
+
+/**
+ * Parse MM:SS.ms string to seconds
+ */
+function parseTimeInput(timeStr) {
+  const parts = timeStr.split(':');
+  if (parts.length === 2) {
+    const mins = parseInt(parts[0], 10) || 0;
+    const secs = parseFloat(parts[1]) || 0;
+    return mins * 60 + secs;
+  }
+  return parseFloat(timeStr) || 0;
+}
+
+/**
+ * StarRating - 5-star rating selector
+ */
+function StarRating({ rating, onRatingChange }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((starNum) => (
+        <button
+          key={starNum}
+          onClick={() => onRatingChange(starNum)}
+          className="p-0.5 hover:scale-110 transition-transform"
+          title={`${starNum} star${starNum > 1 ? 's' : ''}`}
+        >
+          <Star
+            size={18}
+            fill={starNum <= rating ? '#fbbf24' : 'transparent'}
+            color={starNum <= rating ? '#fbbf24' : '#6b7280'}
+            strokeWidth={1.5}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * TagSelector - Multi-select tags grouped by position
+ * Shows all tags from all positions, allowing selection from multiple positions
+ */
+function TagSelector({ selectedTags, onTagToggle }) {
+  return (
+    <div className="space-y-2">
+      {positions.map((pos) => {
+        const positionTags = soccerTags[pos.id] || [];
+        return (
+          <div key={pos.id}>
+            <div className="text-gray-500 text-xs mb-1">{pos.name}</div>
+            <div className="flex flex-wrap gap-1">
+              {positionTags.map((tag) => {
+                const isSelected = selectedTags.includes(tag.name);
+                return (
+                  <button
+                    key={tag.name}
+                    onClick={() => onTagToggle(tag.name)}
+                    className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                      isSelected
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                    title={tag.description}
+                  >
+                    {isSelected && <Check size={12} />}
+                    {tag.shortName}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * ClipDetailsEditor - Edit panel for selected clip details
+ *
+ * Editable fields:
+ * - Star rating (1-5)
+ * - Name
+ * - End time (editable - this is where playhead was when clip was created)
+ * - Duration (slider)
+ * - Notes
+ *
+ * Read-only:
+ * - Start time (calculated from end - duration)
+ */
+export function ClipDetailsEditor({
+  region,
+  onUpdate,
+  onDelete,
+  maxNotesLength = 280,
+  videoDuration
+}) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [endTimeInput, setEndTimeInput] = useState('');
+
+  // Calculate current duration
+  const clipDuration = region.endTime - region.startTime;
+  const notesLength = region.notes?.length || 0;
+
+  // Sync end time input when region changes
+  useEffect(() => {
+    setEndTimeInput(formatTimeForDisplay(region.endTime));
+  }, [region.endTime]);
+
+  const handleNameChange = (e) => {
+    onUpdate({ name: e.target.value });
+  };
+
+  const handleRatingChange = (newRating) => {
+    onUpdate({ rating: newRating });
+    // Auto-regenerate name if tags are selected
+    if (region.tags?.length > 0) {
+      const newName = generateClipName(newRating, region.tags);
+      if (newName) {
+        onUpdate({ rating: newRating, name: newName });
+      }
+    }
+  };
+
+  const handleTagToggle = (tagName) => {
+    const currentTags = region.tags || [];
+    const newTags = currentTags.includes(tagName)
+      ? currentTags.filter((t) => t !== tagName)
+      : [...currentTags, tagName];
+
+    // Auto-generate name when tags change
+    const newName = generateClipName(region.rating || 3, newTags);
+    onUpdate({ tags: newTags, name: newName || region.name });
+  };
+
+  const handleEndTimeChange = (e) => {
+    setEndTimeInput(e.target.value);
+  };
+
+  const handleEndTimeBlur = () => {
+    const newEndTime = parseTimeInput(endTimeInput);
+    // Clamp to valid range (must be at least MIN_CLIP_DURATION and at most videoDuration)
+    const clampedEnd = Math.max(MIN_CLIP_DURATION, Math.min(newEndTime, videoDuration || Infinity));
+    onUpdate({ endTime: clampedEnd });
+    setEndTimeInput(formatTimeForDisplay(clampedEnd));
+  };
+
+  const handleDurationChange = (e) => {
+    const newDuration = parseFloat(e.target.value);
+    onUpdate({ duration: newDuration });
+  };
+
+  const handleNotesChange = (e) => {
+    const newNotes = e.target.value.slice(0, maxNotesLength);
+    onUpdate({ notes: newNotes });
+  };
+
+  const handleDeleteClick = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = () => {
+    setShowDeleteConfirm(false);
+    onDelete();
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(false);
+  };
+
+  const rating = region.rating || 3;
+  const ratingColor = RATING_COLORS[rating] || RATING_COLORS[3];
+  const ratingBorderColor = RATING_BORDER_COLORS[rating] || RATING_BORDER_COLORS[3];
+
+  return (
+    <div
+      className="border-t-2"
+      style={{
+        backgroundColor: ratingColor,
+        borderTopColor: ratingBorderColor,
+      }}
+    >
+      <div className="p-3 space-y-3">
+        {/* Header */}
+        <div className="text-gray-400 text-xs uppercase tracking-wider">
+          Clip Details
+        </div>
+
+        {/* Star Rating */}
+        <div className="flex items-center gap-2">
+          <label className="text-gray-400 text-xs w-16 shrink-0">Rating</label>
+          <StarRating
+            rating={region.rating || 3}
+            onRatingChange={handleRatingChange}
+          />
+        </div>
+
+        {/* Tags Selection */}
+        <div>
+          <label className="block text-gray-400 text-xs mb-1">Tags</label>
+          <TagSelector
+            selectedTags={region.tags || []}
+            onTagToggle={handleTagToggle}
+          />
+        </div>
+
+        {/* Name Input */}
+        <div className="flex items-center gap-2">
+          <label className="text-gray-400 text-xs w-16 shrink-0">Name</label>
+          <input
+            type="text"
+            value={region.name}
+            onChange={handleNameChange}
+            className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+            placeholder="Clip name"
+          />
+        </div>
+
+        {/* End Time (editable) */}
+        <div className="flex items-center gap-2">
+          <label className="text-gray-400 text-xs w-16 shrink-0">End Time</label>
+          <input
+            type="text"
+            value={endTimeInput}
+            onChange={handleEndTimeChange}
+            onBlur={handleEndTimeBlur}
+            className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm font-mono focus:outline-none focus:border-green-500"
+            placeholder="00:00.0"
+          />
+        </div>
+
+        {/* Duration Slider */}
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-gray-400 text-xs">Duration</label>
+            <span className="text-white text-xs font-mono">{clipDuration.toFixed(1)}s</span>
+          </div>
+          <input
+            type="range"
+            min={MIN_CLIP_DURATION}
+            max={MAX_CLIP_DURATION}
+            step={0.5}
+            value={clipDuration}
+            onChange={handleDurationChange}
+            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+          />
+          <div className="relative w-full h-4 mt-0.5">
+            <span className="absolute left-0 text-xs text-gray-500">{MIN_CLIP_DURATION}s</span>
+            {/* Position 15s label at correct slider position: (15-1)/(60-1) ≈ 24% */}
+            <span className="absolute text-xs text-gray-500" style={{ left: `${((DEFAULT_CLIP_DURATION - MIN_CLIP_DURATION) / (MAX_CLIP_DURATION - MIN_CLIP_DURATION)) * 100}%`, transform: 'translateX(-50%)' }}>{DEFAULT_CLIP_DURATION}s</span>
+            <span className="absolute right-0 text-xs text-gray-500">{MAX_CLIP_DURATION}s</span>
+          </div>
+        </div>
+
+        {/* Start Time (calculated, read-only) */}
+        <div className="flex items-center gap-2">
+          <label className="text-gray-400 text-xs w-16 shrink-0">Start Time</label>
+          <div className="flex-1 px-2 py-1.5 bg-gray-700/30 border border-gray-600/50 rounded text-gray-400 text-sm font-mono">
+            {formatTimeForDisplay(region.startTime)}
+          </div>
+        </div>
+
+        {/* Notes Textarea */}
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-gray-400 text-xs">Notes</label>
+            <span className={`text-xs ${notesLength >= maxNotesLength ? 'text-red-400' : 'text-gray-500'}`}>
+              {notesLength}/{maxNotesLength}
+            </span>
+          </div>
+          <textarea
+            value={region.notes || ''}
+            onChange={handleNotesChange}
+            className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
+            placeholder="Add notes (shown as overlay during playback)"
+            rows={3}
+          />
+        </div>
+
+        {/* Delete Button */}
+        {showDeleteConfirm ? (
+          <div className="flex gap-2">
+            <button
+              onClick={handleConfirmDelete}
+              className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
+            >
+              Confirm Delete
+            </button>
+            <button
+              onClick={handleCancelDelete}
+              className="flex-1 px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-sm transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleDeleteClick}
+            className="w-full px-3 py-1.5 bg-gray-700 hover:bg-red-600 text-gray-300 hover:text-white rounded text-sm flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Delete Clip</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default ClipDetailsEditor;
