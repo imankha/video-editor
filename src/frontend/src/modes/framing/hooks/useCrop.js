@@ -127,6 +127,7 @@ export default function useCrop(videoMetadata, trimRange = null) {
    * Creates permanent keyframes at start (frame=0) and end (frame=totalFrames)
    * End keyframe initially mirrors start until explicitly modified
    * Also reinitializes if keyframes are stale (end frame doesn't match current video duration)
+   * or if the current crop dimensions don't match the expected aspect ratio
    * NOTE: Uses trimRange.end if trimming is active, otherwise uses original duration
    */
   useEffect(() => {
@@ -137,7 +138,31 @@ export default function useCrop(videoMetadata, trimRange = null) {
 
       // Check if we need to initialize (only on first load, not after trim)
       // Skip initialization if trimRange is set - trim operations handle their own keyframe management
-      if (!trimRange && needsInitialization(totalFrames)) {
+      let shouldInitialize = !trimRange && needsInitialization(totalFrames);
+
+      // Additional check: if keyframes exist but have wrong orientation (portrait vs landscape),
+      // force re-initialization. This handles aspect ratio changes when switching clips.
+      // We compare orientation (ratio > 1 = landscape, ratio < 1 = portrait) rather than
+      // exact dimensions to avoid breaking manual resize functionality.
+      if (!shouldInitialize && !trimRange && keyframeManager.keyframes.length > 0) {
+        const firstKeyframe = keyframeManager.keyframes[0];
+        if (firstKeyframe?.width && firstKeyframe?.height) {
+          const keyframeRatio = firstKeyframe.width / firstKeyframe.height;
+          const [ratioW, ratioH] = aspectRatio.split(':').map(Number);
+          const expectedRatio = ratioW / ratioH;
+
+          // Check if orientation is fundamentally different (portrait vs landscape)
+          const keyframeIsLandscape = keyframeRatio > 1;
+          const expectedIsLandscape = expectedRatio > 1;
+
+          if (keyframeIsLandscape !== expectedIsLandscape) {
+            console.log('[useCrop] Orientation mismatch - reinitializing. Keyframe ratio:', keyframeRatio.toFixed(2), 'Expected:', expectedRatio.toFixed(2));
+            shouldInitialize = true;
+          }
+        }
+      }
+
+      if (shouldInitialize) {
         const defaultCrop = calculateDefaultCrop(
           videoMetadata.width,
           videoMetadata.height,
@@ -147,7 +172,7 @@ export default function useCrop(videoMetadata, trimRange = null) {
         initializeKeyframes(defaultCrop, totalFrames);
       }
     }
-  }, [videoMetadata, aspectRatio, needsInitialization, initializeKeyframes, calculateDefaultCrop, framerate, trimRange]);
+  }, [videoMetadata, aspectRatio, needsInitialization, initializeKeyframes, calculateDefaultCrop, framerate, trimRange, keyframeManager.keyframes]);
 
   /**
    * Update aspect ratio and recalculate all keyframes

@@ -22,17 +22,17 @@ export function Controls({
   onRestart,
 }) {
   return (
-    <div className="controls-container flex items-center justify-between py-4 px-6 bg-gray-800 rounded-lg">
+    <div className="controls-container flex items-center justify-between py-2 px-4 bg-gray-800 rounded-b-lg">
       {/* Playback controls */}
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-2">
         {/* Step backward */}
         <button
           onClick={onStepBackward}
-          className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+          className="p-1.5 hover:bg-gray-700 rounded transition-colors"
           title="Step backward (one frame)"
         >
           <svg
-            className="w-5 h-5 text-white"
+            className="w-4 h-4 text-white"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -49,12 +49,12 @@ export function Controls({
         {/* Play/Pause button */}
         <button
           onClick={onTogglePlay}
-          className="p-3 bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+          className="p-2 bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
           title={isPlaying ? 'Pause' : 'Play'}
         >
           {isPlaying ? (
             <svg
-              className="w-6 h-6 text-white"
+              className="w-5 h-5 text-white"
               fill="currentColor"
               viewBox="0 0 24 24"
             >
@@ -62,7 +62,7 @@ export function Controls({
             </svg>
           ) : (
             <svg
-              className="w-6 h-6 text-white"
+              className="w-5 h-5 text-white"
               fill="currentColor"
               viewBox="0 0 24 24"
             >
@@ -74,11 +74,11 @@ export function Controls({
         {/* Restart button */}
         <button
           onClick={onRestart}
-          className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+          className="p-1.5 hover:bg-gray-700 rounded transition-colors"
           title="Restart (go to beginning)"
         >
           <svg
-            className="w-5 h-5 text-white"
+            className="w-4 h-4 text-white"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -95,11 +95,11 @@ export function Controls({
         {/* Step forward */}
         <button
           onClick={onStepForward}
-          className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+          className="p-1.5 hover:bg-gray-700 rounded transition-colors"
           title="Step forward (one frame)"
         >
           <svg
-            className="w-5 h-5 text-white"
+            className="w-4 h-4 text-white"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -115,7 +115,7 @@ export function Controls({
       </div>
 
       {/* Time display */}
-      <div className="text-white font-mono text-sm">
+      <div className="text-white font-mono text-xs">
         {formatTime(currentTime)} / {formatTime(duration)}
       </div>
     </div>

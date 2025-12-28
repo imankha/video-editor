@@ -22,7 +22,21 @@
       "Bash(netstat:*)",
       "Bash(powershell -Command \"Stop-Process -Id 13000 -Force\")",
       "Bash(timeout:*)",
-      "Bash(powershell -Command \"Invoke-RestMethod -Uri ''http://localhost:8000/api/detect/status'' -Method Get\")"
+      "Bash(powershell -Command \"Invoke-RestMethod -Uri ''http://localhost:8000/api/detect/status'' -Method Get\")",
+      "Bash(mv:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(python -m uvicorn:*)",
+      "Bash(/c/Users/imank/projects/video-editor/src/backend/.venv/Scripts/python.exe -m uvicorn:*)",
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(python:*)",
+      "Bash(bash:*)",
+      "Bash(for f in \"formal annotations\"/*.tsv)",
+      "Bash(do echo \"Validating $f:\")",
+      "Bash(done)",
+      "Bash(pkill:*)",
+      "Bash(ls:*)",
+      "Bash(sqlite3:*)",
+      "Bash(src/backend/.venv/Scripts/python.exe test_persistence.py)"
     ],
     "deny": [],
     "ask": []

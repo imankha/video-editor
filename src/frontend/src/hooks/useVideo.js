@@ -62,6 +62,53 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   };
 
   /**
+   * Load a video from URL (for server-side clips)
+   * @param {string} url - URL to fetch video from
+   * @param {string} filename - Optional filename for the created file
+   * @returns {Promise<File|null>} - The loaded file or null on error
+   */
+  const loadVideoFromUrl = async (url, filename = 'video.mp4') => {
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      // Clean up previous video
+      if (videoUrl) {
+        revokeVideoURL(videoUrl);
+        setIsPlaying(false);
+      }
+
+      // Fetch the video from URL
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch video: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const file = new File([blob], filename, { type: blob.type || 'video/mp4' });
+
+      // Extract metadata
+      const videoMetadata = await extractVideoMetadata(file);
+
+      // Create blob URL
+      const blobUrl = createVideoURL(file);
+
+      setVideoFile(file);
+      setVideoUrl(blobUrl);
+      setMetadata(videoMetadata);
+      setDuration(videoMetadata.duration);
+      setCurrentTime(0);
+      setIsLoading(false);
+
+      return file; // Return the file so caller can use it
+    } catch (err) {
+      setError(err.message || 'Failed to load video from URL');
+      setIsLoading(false);
+      return null;
+    }
+  };
+
+  /**
    * Play video - handles promise to prevent race conditions
    * Note: Check videoRef.current.src instead of videoUrl to support overlay mode
    * where the video src is set externally (not via loadVideo)
@@ -289,6 +336,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
     // Actions
     loadVideo,
+    loadVideoFromUrl,
     play,
     pause,
     togglePlay,

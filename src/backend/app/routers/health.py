@@ -9,6 +9,7 @@ from datetime import datetime
 
 from ..models import HelloResponse
 from ..websocket import export_progress
+from ..database import is_database_initialized, get_database_path, get_user_data_path
 
 router = APIRouter(tags=["health"])
 
@@ -52,6 +53,17 @@ async def get_status():
         "status": "healthy",
         "service": "video-editor-api",
         "timestamp": datetime.now().isoformat()
+    }
+
+
+@router.get("/api/health")
+async def health_check():
+    """Health check with database status"""
+    return {
+        "status": "healthy",
+        "db_initialized": is_database_initialized(),
+        "db_path": str(get_database_path()),
+        "user_data_path": str(get_user_data_path())
     }
 
 
