@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Download, Loader } from 'lucide-react';
 import axios from 'axios';
 import ThreePositionToggle from './ThreePositionToggle';
@@ -99,7 +99,7 @@ const HIGHLIGHT_EFFECT_COLORS = ['bg-blue-600', 'bg-yellow-600', 'bg-purple-600'
  * - Each clip has its own segments and crop keyframes
  * - Global aspect ratio and transition settings apply to all clips
  */
-export default function ExportButton({
+const ExportButton = forwardRef(function ExportButton({
   videoFile,
   cropKeyframes,
   highlightRegions = [],  // Array of { start_time, end_time, keyframes: [...] }
@@ -119,7 +119,7 @@ export default function ExportButton({
   // Project props (for saving final video to DB)
   projectId = null,            // Current project ID (for overlay mode DB save)
   onExportComplete = null,     // Callback when export completes (to refresh project list)
-}) {
+}, ref) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
@@ -128,6 +128,7 @@ export default function ExportButton({
   const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
+  const handleExportRef = useRef(null);
 
   // Map effect type to toggle position
   const effectTypeToPosition = { 'brightness_boost': 0, 'original': 1, 'dark_overlay': 2 };
@@ -499,6 +500,16 @@ export default function ExportButton({
     }
   };
 
+  // Keep ref updated with latest handleExport (avoids stale closure in useImperativeHandle)
+  handleExportRef.current = handleExport;
+
+  // Expose triggerExport method to parent via ref
+  // Uses ref to always call latest handleExport, avoiding stale closure issues
+  useImperativeHandle(ref, () => ({
+    triggerExport: () => handleExportRef.current?.(),
+    isExporting
+  }), [isExporting]);
+
   // Determine button text based on mode
   const isFramingMode = editorMode === 'framing';
 
@@ -619,3 +630,6 @@ export default function ExportButton({
     </div>
   );
 }
+);
+
+export default ExportButton;

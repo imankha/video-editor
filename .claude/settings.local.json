@@ -36,7 +36,13 @@
       "Bash(pkill:*)",
       "Bash(ls:*)",
       "Bash(sqlite3:*)",
-      "Bash(src/backend/.venv/Scripts/python.exe test_persistence.py)"
+      "Bash(src/backend/.venv/Scripts/python.exe test_persistence.py)",
+      "Bash(echo \"Verify: Check clips - should see new version\" curl -s http://localhost:8000/api/clips/projects/1/clips)",
+      "Bash(findstr:*)",
+      "Bash(npx eslint:*)",
+      "Bash(git checkout:*)",
+      "Bash(tasklist:*)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []

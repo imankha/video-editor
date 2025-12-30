@@ -37,8 +37,10 @@ class ProjectListItem(BaseModel):
     name: str
     aspect_ratio: str
     clip_count: int
-    clips_framed: int
+    clips_exported: int  # Clips with progress >= 1 (included in working video)
+    clips_in_progress: int  # Clips with edits but not yet exported
     has_working_video: bool
+    has_overlay_edits: bool
     has_final_video: bool
     created_at: str
     current_mode: Optional[str] = 'framing'
@@ -82,13 +84,18 @@ async def list_projects():
         for project in projects:
             project_id = project['id']
 
-            # Count clips and edited clips (latest version of each clip only, grouped by end_time)
-            # A clip is considered "framed" (edited) when it has crop_data saved
-            # This tracks editing progress, not export progress
+            # Count clips by status (latest version of each clip only, grouped by end_time)
+            # - exported: progress >= 1 (included in working video export)
+            # - in_progress: has framing edits but not yet exported (progress = 0 with data)
             cursor.execute("""
                 SELECT
                     COUNT(*) as total,
-                    SUM(CASE WHEN crop_data IS NOT NULL AND crop_data != '' THEN 1 ELSE 0 END) as framed
+                    SUM(CASE WHEN progress >= 1 THEN 1 ELSE 0 END) as exported,
+                    SUM(CASE WHEN progress = 0 AND (
+                        (crop_data IS NOT NULL AND crop_data != '' AND crop_data != '[]') OR
+                        (segments_data IS NOT NULL AND segments_data != '' AND segments_data != '{}') OR
+                        (timing_data IS NOT NULL AND timing_data != '' AND timing_data != '{}')
+                    ) THEN 1 ELSE 0 END) as in_progress
                 FROM working_clips wc
                 WHERE wc.project_id = ?
                 AND wc.id IN (
@@ -106,15 +113,25 @@ async def list_projects():
             counts = cursor.fetchone()
 
             clip_count = counts['total'] or 0
-            clips_framed = counts['framed'] or 0
+            clips_exported = counts['exported'] or 0
+            clips_in_progress = counts['in_progress'] or 0
 
-            # Check for working video (project references latest version)
+            # Check for working video and overlay edits (project references latest version)
             has_working = False
+            has_overlay = False
             if project['working_video_id']:
                 cursor.execute("""
-                    SELECT id FROM working_videos WHERE id = ?
+                    SELECT id, highlights_data, text_overlays
+                    FROM working_videos WHERE id = ?
                 """, (project['working_video_id'],))
-                has_working = cursor.fetchone() is not None
+                wv_row = cursor.fetchone()
+                if wv_row:
+                    has_working = True
+                    # Check if overlay edits exist (highlights or text overlays)
+                    has_overlay = bool(
+                        (wv_row['highlights_data'] and wv_row['highlights_data'] != '[]') or
+                        (wv_row['text_overlays'] and wv_row['text_overlays'] != '[]')
+                    )
 
             # Check for final video (project references latest version)
             has_final = False
@@ -129,8 +146,10 @@ async def list_projects():
                 name=project['name'],
                 aspect_ratio=project['aspect_ratio'],
                 clip_count=clip_count,
-                clips_framed=clips_framed,
+                clips_exported=clips_exported,
+                clips_in_progress=clips_in_progress,
                 has_working_video=has_working,
+                has_overlay_edits=has_overlay,
                 has_final_video=has_final,
                 created_at=project['created_at'],
                 current_mode=project['current_mode'] or 'framing',
@@ -330,6 +349,39 @@ async def update_project_state(
         conn.commit()
 
         return {"success": True, "id": project_id}
+
+
+@router.post("/{project_id}/discard-uncommitted")
+async def discard_uncommitted_changes(project_id: int):
+    """
+    Discard all uncommitted framing changes for a project.
+
+    This deletes any clip versions that:
+    - Have progress = 0 (not exported)
+    - Have version > 1 (are newer versions of exported clips)
+
+    After deletion, the previous exported version becomes the "latest" again.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Verify project exists
+        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Find and delete uncommitted versions (progress=0, version>1)
+        # These are newer versions of clips that were previously exported
+        cursor.execute("""
+            DELETE FROM working_clips
+            WHERE project_id = ? AND progress = 0 AND version > 1
+        """, (project_id,))
+
+        deleted_count = cursor.rowcount
+        conn.commit()
+
+        logger.info(f"Discarded {deleted_count} uncommitted clip versions for project {project_id}")
+        return {"success": True, "discarded_count": deleted_count}
 
 
 @router.get("/{project_id}/working-video")

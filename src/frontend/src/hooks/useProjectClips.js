@@ -212,9 +212,10 @@ export function useProjectClips(projectId) {
    * @param {Array} framingData.cropKeyframes - Crop keyframes array
    * @param {Object} framingData.segments - Segment data (boundaries, speeds, etc.)
    * @param {Object} framingData.trimRange - Trim range data
+   * @returns {Object} Result object with success boolean
    */
   const saveFramingEdits = useCallback(async (clipId, framingData) => {
-    if (!projectId) return false;
+    if (!projectId) return { success: false };
 
     setError(null);
     try {
@@ -239,7 +240,7 @@ export function useProjectClips(projectId) {
 
       // Only make request if there's something to update
       if (Object.keys(updatePayload).length === 0) {
-        return true;
+        return { success: true };
       }
 
       console.log('[useProjectClips] Saving framing edits for clip:', clipId, updatePayload);
@@ -254,18 +255,32 @@ export function useProjectClips(projectId) {
       );
       if (!response.ok) throw new Error('Failed to save framing edits');
 
-      // Update local state
-      setClips(prev => prev.map(c =>
-        c.id === clipId ? { ...c, ...updatePayload } : c
-      ));
+      const result = await response.json();
 
-      return true;
+      // Backend tells us if we need to refresh (e.g., new data was created server-side)
+      if (result.refresh_required) {
+        console.log('[useProjectClips] Server indicated refresh required, new clip ID:', result.new_clip_id);
+        await fetchClips();
+        // Return the new clip ID so caller can update selection
+        return {
+          success: true,
+          newClipId: result.new_clip_id,
+          newVersion: result.new_version
+        };
+      } else {
+        // No refresh needed - update local state with data we just sent
+        setClips(prev => prev.map(c =>
+          c.id === clipId ? { ...c, ...updatePayload } : c
+        ));
+      }
+
+      return { success: true };
     } catch (err) {
       setError(err.message);
       console.error('[useProjectClips] saveFramingEdits error:', err);
-      return false;
+      return { success: false };
     }
-  }, [projectId]);
+  }, [projectId, fetchClips]);
 
   /**
    * Get clip file URL

@@ -383,17 +383,74 @@ async def update_working_clip(
     clip_id: int,
     update: WorkingClipUpdate
 ):
-    """Update a working clip's progress, sort order, or framing edits."""
+    """Update a working clip's progress, sort order, or framing edits.
+
+    Version creation logic:
+    - If the clip was previously exported (progress >= 1) AND this update contains
+      framing changes (crop_data, timing_data, or segments_data), a NEW version
+      is created instead of updating the existing clip.
+    - Otherwise, the existing clip is updated in place.
+    """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        # Fetch current clip data
         cursor.execute("""
-            SELECT id FROM working_clips
+            SELECT id, project_id, raw_clip_id, uploaded_filename, progress, sort_order, version,
+                   crop_data, timing_data, segments_data, transform_data
+            FROM working_clips
             WHERE id = ? AND project_id = ?
         """, (clip_id, project_id))
-        if not cursor.fetchone():
+        current_clip = cursor.fetchone()
+
+        if not current_clip:
             raise HTTPException(status_code=404, detail="Working clip not found")
 
+        # Check if this is a framing change on an exported clip
+        is_framing_change = (
+            update.crop_data is not None or
+            update.timing_data is not None or
+            update.segments_data is not None
+        )
+        was_exported = current_clip['progress'] >= 1
+
+        if is_framing_change and was_exported:
+            # Create a NEW version of this clip instead of updating
+            new_version = current_clip['version'] + 1
+
+            logger.info(f"Creating new version {new_version} of clip {clip_id} (was exported)")
+
+            cursor.execute("""
+                INSERT INTO working_clips (
+                    project_id, raw_clip_id, uploaded_filename, sort_order, version,
+                    crop_data, timing_data, segments_data, transform_data, progress
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                project_id,
+                current_clip['raw_clip_id'],
+                current_clip['uploaded_filename'],
+                current_clip['sort_order'],
+                new_version,
+                update.crop_data if update.crop_data is not None else current_clip['crop_data'],
+                update.timing_data if update.timing_data is not None else current_clip['timing_data'],
+                update.segments_data if update.segments_data is not None else current_clip['segments_data'],
+                update.transform_data if update.transform_data is not None else current_clip['transform_data'],
+                0  # Reset progress for new version (not exported yet)
+            ))
+            conn.commit()
+
+            new_clip_id = cursor.lastrowid
+            logger.info(f"Created new clip version: {new_clip_id} (version {new_version})")
+
+            # Tell client the new clip ID so it can switch to it
+            return {
+                "success": True,
+                "refresh_required": True,
+                "new_clip_id": new_clip_id,
+                "new_version": new_version
+            }
+
+        # Regular update (no versioning needed)
         updates = []
         params = []
         if update.progress is not None:
@@ -422,7 +479,8 @@ async def update_working_clip(
             """, params)
             conn.commit()
 
-        return {"success": True}
+        # No refresh needed - client already has the data they just sent
+        return {"success": True, "refresh_required": False}
 
 
 @router.delete("/projects/{project_id}/clips/{clip_id}")

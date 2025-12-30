@@ -1,5 +1,6 @@
 // Shared component exports
 // Components in shared/ directory
+export { ConfirmationDialog } from './ConfirmationDialog';
 export { ExportProgress } from './ExportProgress';
 export { ModeSwitcher } from './ModeSwitcher';
 

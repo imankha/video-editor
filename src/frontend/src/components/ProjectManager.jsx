@@ -14,6 +14,7 @@ export function ProjectManager({
   projects,
   loading,
   onSelectProject,
+  onSelectProjectWithMode, // (projectId, options) => void - options: { mode: 'framing'|'overlay', clipIndex?: number }
   onCreateProject,
   onDeleteProject,
   onAnnotate,
@@ -172,6 +173,7 @@ export function ProjectManager({
                   key={project.id}
                   project={project}
                   onSelect={() => onSelectProject(project.id)}
+                  onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
                   onDelete={() => onDeleteProject(project.id)}
                 />
               ))}
@@ -265,27 +267,47 @@ function GameCard({ game, onLoad, onDelete }) {
  * - Green (✓): Complete
  * - Blue (◐): In progress
  * - Gray (○): Not started
+ *
+ * Click handlers:
+ * - onClipClick(clipIndex) - Called when a clip segment is clicked
+ * - onOverlayClick() - Called when the overlay segment is clicked
  */
-function SegmentedProgressStrip({ project }) {
-  const { clip_count, clips_framed, has_working_video, has_final_video } = project;
+function SegmentedProgressStrip({ project, onClipClick, onOverlayClick }) {
+  const { clip_count, clips_exported, clips_in_progress, has_working_video, has_overlay_edits, has_final_video } = project;
 
   // Total segments = clips + 1 for overlay stage
   const totalSegments = Math.max(clip_count, 1) + 1;
 
   // Build segment data
-  // For clips: green if framed, gray otherwise
-  // We don't have per-clip data, so we show clips_framed as green, rest as gray
+  // If final video exists, entire bar is green (complete)
+  // Otherwise:
+  // - Green: exported (included in working video)
+  // - Blue: in progress (has edits but not exported)
+  // - Gray: not started
   const clipSegments = [];
   for (let i = 0; i < clip_count; i++) {
-    if (i < clips_framed) {
+    if (has_final_video || i < clips_exported) {
       clipSegments.push({ status: 'done', label: `Clip ${i + 1}` });
+    } else if (i < clips_exported + clips_in_progress) {
+      clipSegments.push({ status: 'in_progress', label: `Clip ${i + 1}` });
     } else {
       clipSegments.push({ status: 'pending', label: `Clip ${i + 1}` });
     }
   }
 
-  // Overlay segment: green if final, blue if working, gray otherwise
-  const overlayStatus = has_final_video ? 'done' : has_working_video ? 'in_progress' : 'pending';
+  // Overlay segment status:
+  // - green: final video exported
+  // - blue: overlay edits in progress
+  // - light blue: working video exists but no overlay edits yet
+  // - gray: no working video
+  let overlayStatus = 'pending';
+  if (has_final_video) {
+    overlayStatus = 'done';
+  } else if (has_overlay_edits) {
+    overlayStatus = 'in_progress';
+  } else if (has_working_video) {
+    overlayStatus = 'ready';
+  }
   const overlaySegment = { status: overlayStatus, label: 'Overlay' };
 
   const allSegments = [...clipSegments, overlaySegment];
@@ -298,6 +320,7 @@ function SegmentedProgressStrip({ project }) {
   const statusColors = {
     done: 'bg-green-500',
     in_progress: 'bg-blue-500',
+    ready: 'bg-blue-300',
     pending: 'bg-gray-600'
   };
 
@@ -310,7 +333,7 @@ function SegmentedProgressStrip({ project }) {
       <div className="flex justify-between text-xs text-gray-500 mb-1">
         <span className="flex items-center gap-2">
           <span>Framing</span>
-          <span className="text-gray-600">({clips_framed}/{clip_count})</span>
+          <span className="text-gray-600">({clips_exported}/{clip_count} exported)</span>
         </span>
         <span>Overlay</span>
       </div>
@@ -322,10 +345,23 @@ function SegmentedProgressStrip({ project }) {
       >
         {allSegments.map((segment, index) => {
           const isLast = index === allSegments.length - 1;
+          const isOverlay = isLast;
+          const clipIndex = isOverlay ? -1 : index;
+
+          const handleClick = (e) => {
+            e.stopPropagation(); // Don't trigger card's onClick
+            if (isOverlay && onOverlayClick) {
+              onOverlayClick();
+            } else if (!isOverlay && onClipClick) {
+              onClipClick(clipIndex);
+            }
+          };
+
           return (
             <div
               key={index}
-              className={`${statusColors[segment.status]} transition-all ${
+              onClick={handleClick}
+              className={`${statusColors[segment.status]} transition-all cursor-pointer hover:brightness-110 ${
                 isLast ? 'rounded-r' : ''
               } ${index === 0 ? 'rounded-l' : ''}`}
               style={{
@@ -335,8 +371,9 @@ function SegmentedProgressStrip({ project }) {
               title={`${segment.label}: ${
                 segment.status === 'done' ? 'Complete' :
                 segment.status === 'in_progress' ? 'In Progress' :
+                segment.status === 'ready' ? 'Ready for Editing' :
                 'Not Started'
-              }`}
+              } (click to open)`}
             />
           );
         })}
@@ -351,7 +388,11 @@ function SegmentedProgressStrip({ project }) {
           </span>
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-sm bg-blue-500"></span>
-            Working
+            Editing
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm bg-blue-300"></span>
+            Ready
           </span>
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-sm bg-gray-600"></span>
@@ -365,8 +406,13 @@ function SegmentedProgressStrip({ project }) {
 
 /**
  * ProjectCard - Individual project in the list
+ *
+ * Click behavior:
+ * - Click on project name/info area: Open with smart mode (auto-detect next action)
+ * - Click on a clip segment: Open in framing mode with that clip selected
+ * - Click on overlay segment: Open in overlay mode
  */
-function ProjectCard({ project, onSelect, onDelete }) {
+function ProjectCard({ project, onSelect, onSelectWithMode, onDelete }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleDelete = (e) => {
@@ -377,6 +423,18 @@ function ProjectCard({ project, onSelect, onDelete }) {
       setShowDeleteConfirm(true);
       // Auto-hide after 3 seconds
       setTimeout(() => setShowDeleteConfirm(false), 3000);
+    }
+  };
+
+  const handleClipClick = (clipIndex) => {
+    if (onSelectWithMode) {
+      onSelectWithMode({ mode: 'framing', clipIndex });
+    }
+  };
+
+  const handleOverlayClick = () => {
+    if (onSelectWithMode) {
+      onSelectWithMode({ mode: 'overlay' });
     }
   };
 
@@ -403,7 +461,7 @@ function ProjectCard({ project, onSelect, onDelete }) {
             <span>
               {project.has_final_video ? 'Complete' :
                project.has_working_video ? 'In Overlay' :
-               project.clips_framed > 0 ? 'Framing' : 'Not Started'}
+               (project.clips_in_progress > 0 || project.clips_exported > 0) ? 'Framing' : 'Not Started'}
             </span>
           </div>
         </div>
@@ -422,8 +480,12 @@ function ProjectCard({ project, onSelect, onDelete }) {
         </button>
       </div>
 
-      {/* Segmented progress strip */}
-      <SegmentedProgressStrip project={project} />
+      {/* Segmented progress strip - clickable segments for direct navigation */}
+      <SegmentedProgressStrip
+        project={project}
+        onClipClick={handleClipClick}
+        onOverlayClick={handleOverlayClick}
+      />
     </div>
   );
 }

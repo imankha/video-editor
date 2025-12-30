@@ -131,18 +131,49 @@ export default function useHighlightRegions(videoMetadata) {
     setDuration(videoDuration);
 
     // Convert saved regions to internal format
-    // Saved format uses start_time/end_time, internal uses startTime/endTime
-    const restoredRegions = savedRegions.map(saved => ({
-      id: saved.id || `region-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-      startTime: saved.start_time ?? saved.startTime,
-      endTime: saved.end_time ?? saved.endTime,
-      enabled: saved.enabled !== false, // Default to true if not specified
-      keyframes: saved.keyframes || []
-    }));
+    // Saved format uses start_time/end_time and time, internal uses startTime/endTime and frame
+    const restoredRegions = savedRegions.map(saved => {
+      const startTime = saved.start_time ?? saved.startTime;
+      const endTime = saved.end_time ?? saved.endTime;
+
+      // Convert keyframes from export format (time) to internal format (frame)
+      const restoredKeyframes = (saved.keyframes || []).map((kf, idx) => {
+        // If keyframe has time but no frame, convert time to frame
+        let frame = kf.frame;
+        if (frame === undefined || frame === null) {
+          if (typeof kf.time === 'number') {
+            frame = timeToFrame(kf.time, framerate);
+          } else {
+            // Fallback: use region start/end for first/last keyframe
+            frame = idx === 0 ? timeToFrame(startTime, framerate) : timeToFrame(endTime, framerate);
+            console.warn('[useHighlightRegions] Keyframe missing time, using region boundary');
+          }
+        }
+
+        return {
+          frame,
+          x: kf.x,
+          y: kf.y,
+          radiusX: kf.radiusX,
+          radiusY: kf.radiusY,
+          opacity: kf.opacity,
+          color: kf.color,
+          origin: kf.origin || 'permanent'
+        };
+      });
+
+      return {
+        id: saved.id || `region-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+        startTime,
+        endTime,
+        enabled: saved.enabled !== false, // Default to true if not specified
+        keyframes: restoredKeyframes
+      };
+    });
 
     setRegions(restoredRegions);
     setSelectedRegionId(null);
-  }, []);
+  }, [framerate]);
 
   /**
    * Generate unique region ID
@@ -550,18 +581,33 @@ export default function useHighlightRegions(videoMetadata) {
     return regions
       .filter(r => r.enabled)
       .map(region => {
-        // Use keyframes from the region itself
-        const regionKeyframes = (region.keyframes || []).map(kf => ({
-          time: frameToTime(kf.frame, framerate),
-          x: kf.x,
-          y: kf.y,
-          radiusX: kf.radiusX,
-          radiusY: kf.radiusY,
-          opacity: kf.opacity,
-          color: kf.color
-        }));
+        // Use keyframes from the region itself, converting frame to time
+        const regionKeyframes = (region.keyframes || [])
+          .map(kf => {
+            // Handle both frame-based (internal) and time-based (restored) keyframes
+            let time;
+            if (typeof kf.frame === 'number' && !isNaN(kf.frame)) {
+              time = frameToTime(kf.frame, framerate);
+            } else if (typeof kf.time === 'number' && !isNaN(kf.time)) {
+              time = kf.time; // Already has valid time
+            } else {
+              time = null; // Will be filtered out
+            }
 
-        // If no keyframes, add default at start
+            return {
+              time,
+              x: kf.x,
+              y: kf.y,
+              radiusX: kf.radiusX,
+              radiusY: kf.radiusY,
+              opacity: kf.opacity,
+              color: kf.color
+            };
+          })
+          // Filter out keyframes with invalid time
+          .filter(kf => typeof kf.time === 'number' && !isNaN(kf.time));
+
+        // If no valid keyframes, add default at start
         if (regionKeyframes.length === 0) {
           const defaultHighlight = calculateDefaultHighlight(
             videoMetadata?.width,

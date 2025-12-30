@@ -96,8 +96,11 @@ class KeyframeInterpolator:
         if len(keyframes) == 0:
             return None
 
-        # Sort keyframes by time
-        sorted_kf = sorted(keyframes, key=lambda k: k['time'])
+        # Filter out keyframes with None time values and sort by time
+        valid_keyframes = [k for k in keyframes if k.get('time') is not None]
+        if len(valid_keyframes) == 0:
+            return None
+        sorted_kf = sorted(valid_keyframes, key=lambda k: k['time'])
 
         # If time is after the last keyframe, no highlight should be rendered
         if time > sorted_kf[-1]['time']:

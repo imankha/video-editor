@@ -892,9 +892,14 @@ async def export_with_ai_upscale(
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
 
-        if os.path.exists(temp_dir):
-            import shutil
-            shutil.rmtree(temp_dir)
+        import shutil
+        import time
+        time.sleep(0.5)
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception as cleanup_error:
+            logger.warning(f"[AI Upscale] Cleanup failed: {cleanup_error}")
         raise HTTPException(status_code=500, detail=f"AI upscaling failed: {str(e)}")
 
 
@@ -1152,8 +1157,14 @@ async def export_overlay_only(
 
     except HTTPException:
         import shutil
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+        import time
+        # Delay cleanup to allow FFmpeg to release file handles
+        time.sleep(0.5)
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception as cleanup_error:
+            logger.warning(f"[Overlay Export] Cleanup failed (will be cleaned by OS): {cleanup_error}")
         raise
     except Exception as e:
         logger.error(f"[Overlay Export] Failed: {str(e)}", exc_info=True)
@@ -1161,8 +1172,14 @@ async def export_overlay_only(
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
         import shutil
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+        import time
+        # Delay cleanup to allow FFmpeg to release file handles
+        time.sleep(0.5)
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception as cleanup_error:
+            logger.warning(f"[Overlay Export] Cleanup failed (will be cleaned by OS): {cleanup_error}")
         raise HTTPException(status_code=500, detail=f"Overlay export failed: {str(e)}")
 
 
@@ -1363,16 +1380,26 @@ async def export_multi_clip(
         )
 
     except HTTPException:
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+        import time
+        time.sleep(0.5)
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception as cleanup_error:
+            logger.warning(f"[Multi-Clip Export] Cleanup failed: {cleanup_error}")
         raise
     except Exception as e:
         logger.error(f"[Multi-Clip Export] Failed: {str(e)}", exc_info=True)
         error_data = {"progress": 0, "message": f"Export failed: {str(e)}", "status": "error"}
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+        import time
+        time.sleep(0.5)
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception as cleanup_error:
+            logger.warning(f"[Multi-Clip Export] Cleanup failed: {cleanup_error}")
         raise HTTPException(status_code=500, detail=f"Multi-clip export failed: {str(e)}")
 
 
@@ -1445,9 +1472,14 @@ async def extract_chapters(
         return {"chapters": []}
 
     finally:
-        # Cleanup
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+        # Cleanup (with retry for Windows file locking)
+        import time
+        time.sleep(0.3)
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception:
+            pass  # Let OS clean up temp files
 
 
 @router.post("/concat-for-overlay")
@@ -1589,13 +1621,23 @@ async def concat_for_overlay(
         )
 
     except HTTPException:
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+        import time
+        time.sleep(0.5)
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception:
+            pass
         raise
     except Exception as e:
         logger.error(f"[Concat for Overlay] Failed: {str(e)}", exc_info=True)
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+        import time
+        time.sleep(0.5)
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Concatenation failed: {str(e)}")
 
 

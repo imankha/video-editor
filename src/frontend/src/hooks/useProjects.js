@@ -155,6 +155,25 @@ export function useProjects() {
     setSelectedProject(null);
   }, []);
 
+  /**
+   * Discard all uncommitted framing changes for a project.
+   * Deletes any clip versions that haven't been exported yet.
+   */
+  const discardUncommittedChanges = useCallback(async (projectId) => {
+    try {
+      const response = await fetch(`${API_BASE}/projects/${projectId}/discard-uncommitted`, {
+        method: 'POST'
+      });
+      if (!response.ok) throw new Error('Failed to discard uncommitted changes');
+      const result = await response.json();
+      console.log('[useProjects] Discarded uncommitted changes:', result.discarded_count);
+      return result;
+    } catch (err) {
+      console.error('[useProjects] discardUncommittedChanges error:', err);
+      throw err;
+    }
+  }, []);
+
   // Fetch projects on mount
   useEffect(() => {
     fetchProjects();
@@ -176,7 +195,8 @@ export function useProjects() {
     createProject,
     deleteProject,
     refreshSelectedProject,
-    clearSelection
+    clearSelection,
+    discardUncommittedChanges
   };
 }
 

@@ -19,7 +19,7 @@ import ZoomControls from './components/ZoomControls';
 import ExportButton from './components/ExportButton';
 import CompareModelsButton from './components/CompareModelsButton';
 import DebugInfo from './components/DebugInfo';
-import { ModeSwitcher } from './components/shared/ModeSwitcher';
+import { ConfirmationDialog, ModeSwitcher } from './components/shared';
 import { ProjectManager } from './components/ProjectManager';
 import { ProjectCreationSettings } from './components/ProjectCreationSettings';
 import { ProjectHeader } from './components/ProjectHeader';
@@ -58,6 +58,9 @@ function App() {
   // Track if framing has changed since last export (for showing warning on Overlay button)
   const [framingChangedSinceExport, setFramingChangedSinceExport] = useState(false);
 
+  // Mode switch confirmation dialog state
+  const [modeSwitchDialog, setModeSwitchDialog] = useState({ isOpen: false, pendingMode: null });
+
   // Working video loading state
   const [isLoadingWorkingVideo, setIsLoadingWorkingVideo] = useState(false);
 
@@ -85,6 +88,10 @@ function App() {
 
   // Ref to track previous isPlaying state for detecting pause transitions
   const wasPlayingRef = useRef(false);
+
+  // Ref to track if user has made explicit edits to current clip (vs auto-generated defaults)
+  // Resets when clip selection changes. Prevents saving default state as "user edits"
+  const clipHasUserEditsRef = useRef(false);
 
   // Ref for annotate mode file input (to trigger file picker directly from ProjectManager)
   const annotateFileInputRef = useRef(null);
@@ -135,7 +142,8 @@ function App() {
     createProject,
     deleteProject,
     clearSelection,
-    refreshSelectedProject
+    refreshSelectedProject,
+    discardUncommittedChanges
   } = useProjects();
 
   // Games management hook
@@ -171,6 +179,9 @@ function App() {
 
   // Framing persistence state
   const pendingFramingSaveRef = useRef(null);
+
+  // Export button ref (for triggering export programmatically)
+  const exportButtonRef = useRef(null);
 
   // Project clips (only active when project selected)
   const {
@@ -514,12 +525,18 @@ function App() {
           trimRange: trimRange
         });
 
-        // Save to backend (non-blocking, silent)
-        await saveFramingEdits(currentClip.workingClipId, {
+        // Save to backend
+        const result = await saveFramingEdits(currentClip.workingClipId, {
           cropKeyframes: keyframes,
           segments: segmentState,
           trimRange: trimRange
         });
+
+        // If backend created a new version, update local clip's workingClipId
+        if (result.newClipId) {
+          console.log('[App] Clip versioned, updating workingClipId:', currentClip.workingClipId, '->', result.newClipId);
+          updateClipData(saveClipId, { workingClipId: result.newClipId });
+        }
 
         console.log('[App] Framing edits auto-saved for clip:', saveClipId);
       } catch (e) {
@@ -565,11 +582,17 @@ function App() {
     const currentClip = clips.find(c => c.id === selectedClipId);
     if (currentClip?.workingClipId && selectedProjectId) {
       console.log('[App] Saving framing edits to backend for working clip:', currentClip.workingClipId);
-      await saveFramingEdits(currentClip.workingClipId, {
+      const result = await saveFramingEdits(currentClip.workingClipId, {
         cropKeyframes: keyframes,
         segments: segmentState,
         trimRange: trimRange
       });
+
+      // If backend created a new version, update local clip's workingClipId
+      if (result.newClipId) {
+        console.log('[App] Clip versioned in saveCurrentClipState, updating workingClipId:', currentClip.workingClipId, '->', result.newClipId);
+        updateClipData(selectedClipId, { workingClipId: result.newClipId });
+      }
     }
 
     console.log('[App] Saved state for clip:', selectedClipId);
@@ -1681,6 +1704,9 @@ function App() {
   const handleTrimSegment = (segmentIndex) => {
     if (!duration || segmentIndex < 0 || segmentIndex >= segments.length) return;
 
+    // Mark that user has made an edit (enables auto-save)
+    clipHasUserEditsRef.current = true;
+
     const segment = segments[segmentIndex];
     const isCurrentlyTrimmed = segment.isTrimmed;
 
@@ -1818,6 +1844,9 @@ function App() {
   const handleDetrimStart = () => {
     if (!trimRange || !duration) return;
 
+    // Mark that user has made an edit (enables auto-save)
+    clipHasUserEditsRef.current = true;
+
     console.log(`[App] Detrim start: boundary=${trimRange.start.toFixed(2)}s, cropKFs=${keyframes.length}, highlightKFs=${highlightKeyframes.length}`);
 
     // The current trim boundary is trimRange.start
@@ -1873,6 +1902,9 @@ function App() {
    */
   const handleDetrimEnd = () => {
     if (!trimRange || !duration) return;
+
+    // Mark that user has made an edit (enables auto-save)
+    clipHasUserEditsRef.current = true;
 
     console.log(`[App] Detrim end: boundary=${trimRange.end.toFixed(2)}s, cropKFs=${keyframes.length}, highlightKFs=${highlightKeyframes.length}`);
 
@@ -2104,6 +2136,9 @@ function App() {
     const isUpdate = keyframes.some(kf => kf.frame === frame);
     console.log(`[App] Crop ${isUpdate ? 'update' : 'add'} at ${currentTime.toFixed(2)}s (frame ${frame}): x=${cropData.x}, y=${cropData.y}, ${cropData.width}x${cropData.height}`);
 
+    // Mark that user has made an edit (enables auto-save)
+    clipHasUserEditsRef.current = true;
+
     addOrUpdateKeyframe(currentTime, cropData, duration);
     setDragCrop(null); // Clear drag preview
   };
@@ -2139,6 +2174,8 @@ function App() {
   // Handle keyframe delete (pass duration to removeKeyframe)
   // Selection automatically becomes null when keyframe no longer exists (derived state)
   const handleKeyframeDelete = (time) => {
+    // Mark that user has made an edit (enables auto-save)
+    clipHasUserEditsRef.current = true;
     removeKeyframe(time, duration);
   };
 
@@ -2350,14 +2387,36 @@ function App() {
   }, [highlightRegions, highlightEffectType, editorMode, selectedProjectId, saveOverlayData, getRegionsForExport]);
 
   /**
-   * Auto-save framing data when keyframes, segments, or trim range changes
+   * Reset user edit tracking when clip selection changes
+   * This prevents auto-save from saving default state as "user edits"
    */
   useEffect(() => {
-    // Only save when in framing mode with a selected clip
-    if (editorMode === 'framing' && selectedClipId && selectedProjectId) {
+    clipHasUserEditsRef.current = false;
+  }, [selectedClipId]);
+
+  /**
+   * Auto-save framing data when keyframes, segments, or trim range changes
+   * Only saves if:
+   * - User has made explicit edits (clipHasUserEditsRef), OR
+   * - Clip was loaded with saved data (not just auto-generated defaults)
+   */
+  useEffect(() => {
+    if (editorMode !== 'framing' || !selectedClipId || !selectedProjectId) return;
+
+    // Check if clip was loaded with saved data (vs being a fresh/clean clip)
+    const currentClip = clips.find(c => c.id === selectedClipId);
+    const clipHadSavedData = currentClip && (
+      (currentClip.cropKeyframes && currentClip.cropKeyframes.length > 0) ||
+      (currentClip.segments && Object.keys(currentClip.segments).length > 0 &&
+        (currentClip.segments.userSplits?.length > 0 || Object.keys(currentClip.segments.segmentSpeeds || {}).length > 0)) ||
+      currentClip.trimRange != null
+    );
+
+    // Only save if user has made edits OR clip had saved data
+    if (clipHasUserEditsRef.current || clipHadSavedData) {
       autoSaveFramingEdits();
     }
-  }, [keyframes, segmentBoundaries, segmentSpeeds, trimRange, editorMode, selectedClipId, selectedProjectId, autoSaveFramingEdits]);
+  }, [keyframes, segmentBoundaries, segmentSpeeds, trimRange, editorMode, selectedClipId, selectedProjectId, autoSaveFramingEdits, clips]);
 
   /**
    * Save all pending changes before browser close or navigation
@@ -2423,8 +2482,19 @@ function App() {
       return;
     }
 
-    // Skip if no exported state to compare against
+    // If we have an overlay video but no exported state, capture the current loaded state
+    // This handles the case of loading a project that was exported in a previous session
     if (!exportedFramingStateRef.current) {
+      // Only capture if we have actual framing data loaded (not default/empty state)
+      const hasLoadedData = keyframes.length > 0 || (segments.boundaries && segments.boundaries.length > 1);
+      if (hasLoadedData) {
+        console.log("[App] Capturing loaded framing state as exported baseline (existing working video)");
+        exportedFramingStateRef.current = {
+          keyframesHash: JSON.stringify(keyframes),
+          segmentsHash: JSON.stringify(segments),
+          clipsCount: clips.length,
+        };
+      }
       return;
     }
 
@@ -2462,6 +2532,14 @@ function App() {
 
     console.log(`[App] Switching from ${editorMode} to ${newMode} mode`);
 
+    // Check if switching from framing to overlay with uncommitted changes
+    // This would invalidate the existing working video
+    if (editorMode === 'framing' && newMode === 'overlay' && overlayVideoUrl && framingChangedSinceExport) {
+      console.log('[App] Uncommitted framing changes detected - showing confirmation dialog');
+      setModeSwitchDialog({ isOpen: true, pendingMode: 'overlay' });
+      return; // Don't switch yet - wait for dialog action
+    }
+
     // Flush any pending saves before switching modes
 
     // Flush overlay save if leaving overlay mode
@@ -2491,17 +2569,10 @@ function App() {
     // Switch the mode
     setEditorMode(newMode);
 
-    // Save current mode to database (non-blocking)
-    if (selectedProjectId) {
-      fetch(`http://localhost:8000/api/projects/${selectedProjectId}/state?current_mode=${newMode}`, {
-        method: 'PATCH'
-      }).catch(e => console.error('[App] Failed to save current mode:', e));
-    }
-
     // Force video element to reload source when switching back to framing
     // This fixes the blank video issue when returning from overlay mode
     if (newMode === 'framing') {
-      setTimeout(() => {
+      setTimeout(async () => {
         // If we have clips, ALWAYS reload the selected clip to ensure it's showing
         if (hasClips && clips.length > 0 && selectedProjectId) {
           const clipToLoad = selectedClip || clips[0];
@@ -2509,14 +2580,91 @@ function App() {
           if (clipToLoad?.workingClipId) {
             console.log('[App] Switching to framing mode - reloading clip video:', clipToLoad.workingClipId);
             const clipUrl = getClipFileUrl(clipToLoad.workingClipId, selectedProjectId);
-            loadVideoFromUrl(clipUrl, clipToLoad.fileName || 'clip.mp4').catch(e =>
-              console.error('[App] Failed to reload clip video:', e)
-            );
+
+            try {
+              await loadVideoFromUrl(clipUrl, clipToLoad.fileName || 'clip.mp4');
+
+              // Restore framing state from clip data
+              if (clipToLoad.segments || clipToLoad.cropKeyframes) {
+                console.log('[App] Restoring framing state for clip:', clipToLoad.id);
+
+                // Restore segments if saved
+                if (clipToLoad.segments) {
+                  restoreSegmentState(clipToLoad.segments, clipToLoad.duration);
+                }
+
+                // Restore crop keyframes if saved
+                if (clipToLoad.cropKeyframes && clipToLoad.cropKeyframes.length > 0) {
+                  const endFrame = Math.round(clipToLoad.duration * (clipToLoad.framerate || 30));
+                  restoreCropState(clipToLoad.cropKeyframes, endFrame);
+                }
+              }
+            } catch (e) {
+              console.error('[App] Failed to reload clip video:', e);
+            }
           }
         }
       }, 100);
     }
-  }, [editorMode, selectedProjectId, getRegionsForExport, highlightEffectType, saveCurrentClipState, videoRef, videoUrl, currentTime, hasClips, clips, selectedClip, loadVideoFromUrl, getClipFileUrl]);
+  }, [editorMode, selectedProjectId, getRegionsForExport, highlightEffectType, saveCurrentClipState, videoRef, videoUrl, currentTime, hasClips, clips, selectedClip, loadVideoFromUrl, getClipFileUrl, restoreSegmentState, restoreCropState, overlayVideoUrl, framingChangedSinceExport]);
+
+  /**
+   * Mode switch dialog handlers
+   */
+  const handleModeSwitchCancel = useCallback(() => {
+    setModeSwitchDialog({ isOpen: false, pendingMode: null });
+  }, []);
+
+  const handleModeSwitchExport = useCallback(() => {
+    // Close dialog and trigger export
+    setModeSwitchDialog({ isOpen: false, pendingMode: null });
+    console.log('[App] User chose to export first - triggering export');
+
+    // Trigger export via ref (this will export and then proceed to overlay mode via onProceedToOverlay)
+    if (exportButtonRef.current?.triggerExport) {
+      exportButtonRef.current.triggerExport();
+    }
+  }, []);
+
+  const handleModeSwitchDiscard = useCallback(async () => {
+    // Restore clip states from backend (discard uncommitted changes)
+    if (selectedProjectId) {
+      try {
+        console.log('[App] Discarding framing changes - calling backend to discard uncommitted');
+
+        // Tell backend to delete uncommitted clip versions
+        await discardUncommittedChanges(selectedProjectId);
+
+        // Fetch fresh clip data from backend (now returns previous exported versions)
+        const freshClips = await fetchProjectClips(selectedProjectId);
+
+        // Reload clips with their saved state (this will clear local changes)
+        if (freshClips.length > 0) {
+          await loadProjectClips(
+            freshClips,
+            (clipId) => getClipFileUrl(clipId, selectedProjectId),
+            extractVideoMetadataFromUrl,
+            selectedProject?.aspect_ratio || '9:16'
+          );
+        }
+
+        // Don't reset exportedFramingStateRef here - keep the original exported state (v1)
+        // The restored clip state (also v1) will match the ref, so hasChanged will be false
+
+        // Clear the changed flag
+        setFramingChangedSinceExport(false);
+
+        // Now switch to overlay mode
+        setModeSwitchDialog({ isOpen: false, pendingMode: null });
+        setEditorMode('overlay');
+      } catch (err) {
+        console.error('[App] Failed to restore clip states:', err);
+        setModeSwitchDialog({ isOpen: false, pendingMode: null });
+      }
+    } else {
+      setModeSwitchDialog({ isOpen: false, pendingMode: null });
+    }
+  }, [selectedProjectId, fetchProjectClips, loadProjectClips, getClipFileUrl, selectedProject, discardUncommittedChanges]);
 
   // Prepare crop context value
   const cropContextValue = useMemo(() => ({
@@ -2708,8 +2856,10 @@ function App() {
               method: 'PATCH'
             }).catch(e => console.error('[App] Failed to update last_opened_at:', e));
 
-            // Set mode to saved current_mode, or default to framing
-            const initialMode = project?.current_mode || 'framing';
+            // Derive mode from project state:
+            // - If working_video_id exists → framing is complete, open in overlay mode
+            // - Otherwise → open in framing mode
+            const initialMode = project?.working_video_id ? 'overlay' : 'framing';
             setEditorMode(initialMode);
 
             // Clear all state before loading new project to prevent stale data
@@ -2752,6 +2902,41 @@ function App() {
               if (loadedFile) {
                 setVideoFile(loadedFile); // Update App's videoFile state for export
               }
+
+              // BUGFIX: Restore first clip's framing state from persisted data
+              // The loadProjectClips loads data into useClipManager, but we also need
+              // to restore the crop/segment state to the useCrop/useSegments hooks
+              if (firstClip.segments_data || firstClip.crop_data) {
+                console.log('[App] Restoring first clip framing state from persistence');
+
+                // Get video metadata for duration
+                const firstClipMetadata = await extractVideoMetadataFromUrl(clipUrl);
+
+                // Restore segments if saved
+                if (firstClip.segments_data) {
+                  try {
+                    const savedSegments = JSON.parse(firstClip.segments_data);
+                    console.log('[App] Restoring segment state:', savedSegments);
+                    restoreSegmentState(savedSegments, firstClipMetadata?.duration || 0);
+                  } catch (e) {
+                    console.warn('[App] Failed to parse segments_data:', e);
+                  }
+                }
+
+                // Restore crop keyframes if saved
+                if (firstClip.crop_data) {
+                  try {
+                    const savedCropKeyframes = JSON.parse(firstClip.crop_data);
+                    if (savedCropKeyframes.length > 0) {
+                      const endFrame = Math.round((firstClipMetadata?.duration || 0) * (firstClipMetadata?.framerate || 30));
+                      console.log('[App] Restoring crop keyframes:', savedCropKeyframes.length, 'keyframes, endFrame:', endFrame);
+                      restoreCropState(savedCropKeyframes, endFrame);
+                    }
+                  } catch (e) {
+                    console.warn('[App] Failed to parse crop_data:', e);
+                  }
+                }
+              }
             }
 
             // Load working video in background if it exists (enables Overlay mode)
@@ -2776,19 +2961,112 @@ function App() {
                     setOverlayVideoUrl(workingVideoObjectUrl);
                     setOverlayVideoMetadata(workingVideoMeta);
 
-                    // Save the current framing state as the exported state
-                    // (since this working video was created from the current framing state)
-                    setTimeout(() => {
-                      exportedFramingStateRef.current = {
-                        keyframesHash: JSON.stringify(keyframes),
-                        segmentsHash: JSON.stringify(segments),
-                        clipsCount: clips.length,
-                      };
-                    }, 100);
+                    // Don't set exportedFramingStateRef here - we don't know what framing
+                    // state produced this existing working video. The ref should only be set
+                    // when we actually export (in handleExportWorkingVideo). This means the
+                    // asterisk won't appear until the user makes actual changes after a fresh export.
 
                     console.log('[App] Loaded working video for overlay mode');
                   } else {
                     console.warn('[App] Failed to load working video:', response.status);
+                  }
+                } catch (err) {
+                  console.error('[App] Error loading working video:', err);
+                } finally {
+                  setIsLoadingWorkingVideo(false);
+                }
+              })();
+            }
+          }}
+          onSelectProjectWithMode={async (id, options) => {
+            console.log('[App] Selecting project with mode:', id, options);
+            const project = await selectProject(id);
+
+            // Update last_opened_at timestamp (non-blocking)
+            fetch(`http://localhost:8000/api/projects/${id}/state?update_last_opened=true`, {
+              method: 'PATCH'
+            }).catch(e => console.error('[App] Failed to update last_opened_at:', e));
+
+            // Use specified mode or derive from project state
+            const targetMode = options?.mode || (project?.working_video_id ? 'overlay' : 'framing');
+            setEditorMode(targetMode);
+
+            // Clear all state before loading new project
+            clearClips();
+            resetCrop();
+            resetSegments();
+            setVideoFile(null);
+
+            // Set crop aspect ratio to match project
+            const projectAspectRatio = project?.aspect_ratio || '9:16';
+            updateAspectRatio(projectAspectRatio);
+
+            // Fetch clips for the project
+            const projectClipsData = await fetchProjectClips(id);
+            console.log('[App] Fetched project clips:', projectClipsData);
+
+            if (projectClipsData && projectClipsData.length > 0) {
+              const getMetadataFromUrl = async (url) => await extractVideoMetadataFromUrl(url);
+              const getClipUrl = (clipId) => getClipFileUrl(clipId, id);
+
+              // Load all clips into the clip manager
+              await loadProjectClips(projectClipsData, getClipUrl, getMetadataFromUrl, projectAspectRatio);
+
+              // Determine which clip to load
+              const clipIndex = options?.clipIndex ?? 0;
+              const targetClip = projectClipsData[Math.min(clipIndex, projectClipsData.length - 1)];
+              const clipUrl = getClipFileUrl(targetClip.id, id);
+              console.log('[App] Loading clip at index', clipIndex, ':', targetClip.id);
+
+              const loadedFile = await loadVideoFromUrl(clipUrl, targetClip.filename || 'clip.mp4');
+              if (loadedFile) {
+                setVideoFile(loadedFile);
+              }
+
+              // Restore clip's framing state
+              if (targetClip.segments_data || targetClip.crop_data) {
+                const clipMetadata = await extractVideoMetadataFromUrl(clipUrl);
+
+                if (targetClip.segments_data) {
+                  try {
+                    const savedSegments = JSON.parse(targetClip.segments_data);
+                    restoreSegmentState(savedSegments, clipMetadata?.duration || 0);
+                  } catch (e) {
+                    console.warn('[App] Failed to parse segments_data:', e);
+                  }
+                }
+
+                if (targetClip.crop_data) {
+                  try {
+                    const savedCropKeyframes = JSON.parse(targetClip.crop_data);
+                    if (savedCropKeyframes.length > 0) {
+                      const endFrame = Math.round((clipMetadata?.duration || 0) * (clipMetadata?.framerate || 30));
+                      restoreCropState(savedCropKeyframes, endFrame);
+                    }
+                  } catch (e) {
+                    console.warn('[App] Failed to parse crop_data:', e);
+                  }
+                }
+              }
+
+              // Note: The video for the target clip is already loaded above.
+              // Sidebar selection will sync when clips state updates.
+            }
+
+            // Load working video in background if it exists
+            if (project?.working_video_id) {
+              setIsLoadingWorkingVideo(true);
+              (async () => {
+                try {
+                  const response = await fetch(`http://localhost:8000/api/projects/${id}/working-video`);
+                  if (response.ok) {
+                    const workingVideoBlob = await response.blob();
+                    const workingVideoObjectUrl = URL.createObjectURL(workingVideoBlob);
+                    const workingVideoMeta = await extractVideoMetadata(workingVideoBlob);
+                    setOverlayVideoFile(workingVideoBlob);
+                    setOverlayVideoUrl(workingVideoObjectUrl);
+                    setOverlayVideoMetadata(workingVideoMeta);
+                    console.log('[App] Loaded working video for overlay mode');
                   }
                 } catch (err) {
                   console.error('[App] Error loading working video:', err);
@@ -3195,9 +3473,9 @@ function App() {
               visualDuration={visualDuration || duration}
               trimRange={trimRange}
               trimHistory={trimHistory}
-              onAddSegmentBoundary={addSegmentBoundary}
-              onRemoveSegmentBoundary={removeSegmentBoundary}
-              onSegmentSpeedChange={setSegmentSpeed}
+              onAddSegmentBoundary={(time) => { clipHasUserEditsRef.current = true; addSegmentBoundary(time); }}
+              onRemoveSegmentBoundary={(time) => { clipHasUserEditsRef.current = true; removeSegmentBoundary(time); }}
+              onSegmentSpeedChange={(idx, speed) => { clipHasUserEditsRef.current = true; setSegmentSpeed(idx, speed); }}
               onSegmentTrim={handleTrimSegment}
               onDetrimStart={handleDetrimStart}
               onDetrimEnd={handleDetrimEnd}
@@ -3409,6 +3687,7 @@ function App() {
           {((editorMode === 'framing' && videoUrl) || (editorMode === 'overlay' && effectiveOverlayVideoUrl)) && (
             <div className="mt-6">
               <ExportButton
+                ref={exportButtonRef}
                 videoFile={editorMode === 'overlay' ? effectiveOverlayFile : videoFile}
                 cropKeyframes={editorMode === 'framing' ? getFilteredKeyframesForExport : []}
                 highlightRegions={editorMode === 'overlay' ? getRegionsForExport() : []}
@@ -3517,6 +3796,31 @@ function App() {
           setIsDownloadsPanelOpen(false);
         }}
         onCountChange={refreshDownloadsCount}
+      />
+
+      {/* Mode Switch Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={modeSwitchDialog.isOpen}
+        title="Uncommitted Framing Changes"
+        message="You have made framing edits that haven't been exported yet. The current working video doesn't reflect these changes. What would you like to do?"
+        onClose={handleModeSwitchCancel}
+        buttons={[
+          {
+            label: 'Cancel',
+            onClick: handleModeSwitchCancel,
+            variant: 'secondary'
+          },
+          {
+            label: 'Discard Changes',
+            onClick: handleModeSwitchDiscard,
+            variant: 'danger'
+          },
+          {
+            label: 'Export First',
+            onClick: handleModeSwitchExport,
+            variant: 'primary'
+          }
+        ]}
       />
     </div>
   );
