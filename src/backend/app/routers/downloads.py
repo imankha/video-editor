@@ -204,14 +204,25 @@ async def delete_download(download_id: int, remove_file: bool = False):
 @router.get("/count")
 async def get_download_count():
     """
-    Get count of available downloads.
+    Get count of available downloads (latest version per project only).
     Useful for showing badge count in header.
+    Must match the same filtering logic as the list endpoint.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        # Count only latest version per project (same logic as list endpoint)
         cursor.execute("""
             SELECT COUNT(*) as count FROM final_videos
+            WHERE id IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (
+                        PARTITION BY project_id
+                        ORDER BY version DESC
+                    ) as rn
+                    FROM final_videos
+                ) WHERE rn = 1
+            )
         """)
         row = cursor.fetchone()
 
