@@ -122,15 +122,18 @@ export function useDownloads(isOpen = false) {
 
   /**
    * Trigger file download in browser
+   * Note: Filename is controlled by backend's Content-Disposition header (single source of truth)
    */
-  const downloadFile = useCallback((downloadId, filename) => {
+  const downloadFile = useCallback((downloadId) => {
     const url = getDownloadUrl(downloadId);
+    console.log('[useDownloads] downloadFile called:', { downloadId, url });
 
     // Create a temporary link and trigger download
+    // Don't set link.download - let the server's Content-Disposition header control the filename
     const link = document.createElement('a');
     link.href = url;
-    link.download = filename || 'video.mp4';
     document.body.appendChild(link);
+    console.log('[useDownloads] Triggering download click');
     link.click();
     document.body.removeChild(link);
   }, [getDownloadUrl]);

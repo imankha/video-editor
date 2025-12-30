@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import os
+import re
 import logging
 
 from app.database import get_db_connection, FINAL_VIDEOS_PATH
@@ -89,32 +90,65 @@ async def list_downloads():
         )
 
 
+def generate_download_filename(project_name: str) -> str:
+    """
+    Generate a sanitized download filename from project name.
+    This is the SINGLE SOURCE OF TRUTH for final video filenames.
+
+    Args:
+        project_name: The project name (can be None)
+
+    Returns:
+        Sanitized filename like "Project_Name_final.mp4"
+    """
+    name = project_name or 'video'
+    # Remove special characters, keep alphanumeric, spaces, hyphens, underscores
+    safe_name = re.sub(r'[^\w\s-]', '', name).strip()
+    # Replace spaces with underscores
+    safe_name = re.sub(r'[\s]+', '_', safe_name)
+    if not safe_name:
+        safe_name = 'video'
+    return f"{safe_name}_final.mp4"
+
+
 @router.get("/{download_id}/file")
 async def download_file(download_id: int):
     """
     Download/stream a final video file.
-    Returns the video file for download.
+    Returns the video file for download with project name as filename.
     """
+    logger.info(f"[Download] Request for download_id={download_id}")
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT filename FROM final_videos
-            WHERE id = ?
+            SELECT fv.filename, p.name as project_name
+            FROM final_videos fv
+            LEFT JOIN projects p ON fv.project_id = p.id
+            WHERE fv.id = ?
         """, (download_id,))
         row = cursor.fetchone()
 
         if not row:
+            logger.warning(f"[Download] Not found: download_id={download_id}")
             raise HTTPException(status_code=404, detail="Download not found")
+
+        logger.info(f"[Download] Found: stored_filename={row['filename']}, project_name={row['project_name']}")
 
         file_path = FINAL_VIDEOS_PATH / row['filename']
         if not file_path.exists():
+            logger.error(f"[Download] File missing: {file_path}")
             raise HTTPException(status_code=404, detail="Video file not found")
+
+        # Generate download filename from project name (single source of truth)
+        download_filename = generate_download_filename(row['project_name'])
+        logger.info(f"[Download] Serving file as: {download_filename}")
 
         return FileResponse(
             path=str(file_path),
             media_type="video/mp4",
-            filename=row['filename']
+            filename=download_filename
         )
 
 

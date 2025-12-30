@@ -118,6 +118,7 @@ const ExportButton = forwardRef(function ExportButton({
   globalTransition = null,     // Transition settings { type, duration }
   // Project props (for saving final video to DB)
   projectId = null,            // Current project ID (for overlay mode DB save)
+  projectName = null,          // Project name for download filename
   onExportComplete = null,     // Callback when export completes (to refresh project list)
 }, ref) {
   const [isExporting, setIsExporting] = useState(false);
@@ -410,11 +411,17 @@ const ExportButton = forwardRef(function ExportButton({
         }
       } else {
         // Overlay mode - download the video AND save to database
+        // Generate download filename from project name
+        const safeName = projectName
+          ? projectName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'video'
+          : 'video';
+        const downloadFilename = `${safeName}_final.mp4`;
+
         // Download the video
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `overlayed_${videoFile.name || 'video.mp4'}`;
+        link.download = downloadFilename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

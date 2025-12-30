@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
 import json
 import os
+import re
 import tempfile
 import uuid
 import asyncio
@@ -1821,7 +1822,7 @@ async def export_final(
 
         # Verify project exists and has a working video
         cursor.execute("""
-            SELECT id, working_video_id, final_video_id
+            SELECT id, name, working_video_id, final_video_id
             FROM projects WHERE id = ?
         """, (project_id,))
         project = cursor.fetchone()
@@ -1835,9 +1836,23 @@ async def export_final(
                 detail="Project must have a working video before final export"
             )
 
-        # Generate unique filename
-        filename = f"final_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+        # Generate filename using project name
+        # Sanitize project name: keep alphanumeric, spaces, hyphens, underscores
+        project_name = project['name'] or f"project_{project_id}"
+        safe_name = re.sub(r'[^\w\s-]', '', project_name).strip()
+        safe_name = re.sub(r'[\s]+', '_', safe_name)  # Replace spaces with underscores
+        if not safe_name:
+            safe_name = f"project_{project_id}"
+
+        # Check for existing file and add version suffix if needed
+        base_filename = f"{safe_name}_final"
+        filename = f"{base_filename}.mp4"
         file_path = FINAL_VIDEOS_PATH / filename
+        version_suffix = 1
+        while file_path.exists():
+            version_suffix += 1
+            filename = f"{base_filename}_{version_suffix}.mp4"
+            file_path = FINAL_VIDEOS_PATH / filename
 
         # Save the video file
         content = await video.read()

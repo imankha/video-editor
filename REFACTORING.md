@@ -182,6 +182,5 @@ Standardize on NULL for "no data":
 
 ## Notes
 
-- Refactors should be done after current bugs are fixed
 - Each refactor should be a separate PR with tests
 - Run full test suite after each change

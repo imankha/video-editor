@@ -3706,6 +3706,7 @@ function App() {
                 globalTransition={globalTransition}
                 // Project props for saving final video to DB
                 projectId={selectedProjectId}
+                projectName={selectedProject?.name}
                 onExportComplete={() => {
                   fetchProjects();
                   refreshDownloadsCount();

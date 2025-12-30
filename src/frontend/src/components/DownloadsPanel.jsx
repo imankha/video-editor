@@ -54,7 +54,9 @@ export function DownloadsPanel({
 
   const handleDownload = (e, download) => {
     e.stopPropagation();
-    downloadFile(download.id, download.filename);
+    console.log('[DownloadsPanel] handleDownload:', { id: download.id, project_name: download.project_name });
+    // Filename is controlled by backend's Content-Disposition header (single source of truth)
+    downloadFile(download.id);
   };
 
   const handlePlay = (e, download) => {
@@ -261,7 +263,10 @@ export function DownloadsPanel({
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => downloadFile(playingVideo.id, playingVideo.filename)}
+                  onClick={() => {
+                    console.log('[DownloadsPanel] Modal download:', { id: playingVideo.id, project_name: playingVideo.project_name });
+                    downloadFile(playingVideo.id);
+                  }}
                   className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors"
                 >
                   <Download size={16} />
