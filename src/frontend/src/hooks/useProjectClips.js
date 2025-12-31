@@ -10,7 +10,7 @@ const API_BASE = 'http://localhost:8000/api';
  * - Adding clips (from library or upload)
  * - Removing clips
  * - Reordering clips
- * - Updating clip progress
+ * - Saving framing edits
  */
 export function useProjectClips(projectId) {
   const [clips, setClips] = useState([]);
@@ -175,37 +175,6 @@ export function useProjectClips(projectId) {
   }, [projectId, fetchClips]);
 
   /**
-   * Update clip progress
-   */
-  const updateClipProgress = useCallback(async (clipId, progress) => {
-    if (!projectId) return false;
-
-    setError(null);
-    try {
-      const response = await fetch(
-        `${API_BASE}/clips/projects/${projectId}/clips/${clipId}`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ progress })
-        }
-      );
-      if (!response.ok) throw new Error('Failed to update clip');
-
-      // Update local state
-      setClips(prev => prev.map(c =>
-        c.id === clipId ? { ...c, progress } : c
-      ));
-
-      return true;
-    } catch (err) {
-      setError(err.message);
-      console.error('[useProjectClips] updateClipProgress error:', err);
-      return false;
-    }
-  }, [projectId]);
-
-  /**
    * Save framing edits for a clip
    * @param {number} clipId - Working clip ID
    * @param {Object} framingData - Framing edit data
@@ -304,7 +273,6 @@ export function useProjectClips(projectId) {
     uploadClip,
     removeClip,
     reorderClips,
-    updateClipProgress,
     saveFramingEdits,
     getClipFileUrl
   };

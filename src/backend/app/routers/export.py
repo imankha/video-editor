@@ -1661,7 +1661,7 @@ async def export_framing(
     3. Creates working_videos DB entry with next version number
     4. Updates project.working_video_id
     5. Resets project.final_video_id (framing changed, need to re-export overlay)
-    6. Sets all working_clips.progress = 1
+    6. Sets exported_at timestamp for all working clips
 
     Request:
     - project_id: The project ID
@@ -1726,10 +1726,10 @@ async def export_framing(
             UPDATE projects SET working_video_id = ? WHERE id = ?
         """, (working_video_id, project_id))
 
-        # Update all working clips to progress = 1 (framed) - only latest versions
+        # Set exported_at timestamp for all working clips (latest versions only)
         cursor.execute("""
             UPDATE working_clips
-            SET progress = 1
+            SET exported_at = datetime('now')
             WHERE id IN (
                 SELECT id FROM (
                     SELECT wc.id, ROW_NUMBER() OVER (

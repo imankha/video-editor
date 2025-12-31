@@ -461,7 +461,10 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete }) {
             <span>
               {project.has_final_video ? 'Complete' :
                project.has_working_video ? 'In Overlay' :
-               (project.clips_in_progress > 0 || project.clips_exported > 0) ? 'Framing' : 'Not Started'}
+               project.clips_in_progress > 0 ? (
+                 <span className="text-blue-400">Editing</span>
+               ) :
+               project.clips_exported > 0 ? 'Exported' : 'Not Started'}
             </span>
           </div>
         </div>

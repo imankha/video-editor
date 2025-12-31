@@ -37,7 +37,7 @@ class ProjectListItem(BaseModel):
     name: str
     aspect_ratio: str
     clip_count: int
-    clips_exported: int  # Clips with progress >= 1 (included in working video)
+    clips_exported: int  # Clips with exported_at IS NOT NULL (included in working video)
     clips_in_progress: int  # Clips with edits but not yet exported
     has_working_video: bool
     has_overlay_edits: bool
@@ -52,7 +52,7 @@ class WorkingClipResponse(BaseModel):
     raw_clip_id: Optional[int]
     uploaded_filename: Optional[str]
     filename: str  # Resolved filename (from raw_clips or uploaded)
-    progress: int
+    exported_at: Optional[str] = None  # ISO timestamp when clip was exported
     sort_order: int
 
 
@@ -85,13 +85,13 @@ async def list_projects():
             project_id = project['id']
 
             # Count clips by status (latest version of each clip only, grouped by end_time)
-            # - exported: progress >= 1 (included in working video export)
-            # - in_progress: has framing edits but not yet exported (progress = 0 with data)
+            # - exported: exported_at IS NOT NULL (included in working video export)
+            # - in_progress: has framing edits but not yet exported (exported_at IS NULL with data)
             cursor.execute("""
                 SELECT
                     COUNT(*) as total,
-                    SUM(CASE WHEN progress >= 1 THEN 1 ELSE 0 END) as exported,
-                    SUM(CASE WHEN progress = 0 AND (
+                    SUM(CASE WHEN exported_at IS NOT NULL THEN 1 ELSE 0 END) as exported,
+                    SUM(CASE WHEN exported_at IS NULL AND (
                         (crop_data IS NOT NULL AND crop_data != '' AND crop_data != '[]') OR
                         (segments_data IS NOT NULL AND segments_data != '' AND segments_data != '{}') OR
                         (timing_data IS NOT NULL AND timing_data != '' AND timing_data != '{}')
@@ -212,7 +212,7 @@ async def get_project(project_id: int):
                 wc.id,
                 wc.raw_clip_id,
                 wc.uploaded_filename,
-                wc.progress,
+                wc.exported_at,
                 wc.sort_order,
                 rc.filename as raw_filename
             FROM working_clips wc
@@ -242,7 +242,7 @@ async def get_project(project_id: int):
                 raw_clip_id=clip['raw_clip_id'],
                 uploaded_filename=clip['uploaded_filename'],
                 filename=filename,
-                progress=clip['progress'],
+                exported_at=clip['exported_at'],
                 sort_order=clip['sort_order']
             ))
 

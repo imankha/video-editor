@@ -111,7 +111,7 @@ def ensure_database():
                 project_id INTEGER NOT NULL,
                 raw_clip_id INTEGER,
                 uploaded_filename TEXT,
-                progress INTEGER DEFAULT 0,
+                exported_at TEXT DEFAULT NULL,
                 sort_order INTEGER DEFAULT 0,
                 version INTEGER NOT NULL DEFAULT 1,
                 crop_data TEXT,
@@ -193,6 +193,8 @@ def ensure_database():
             "ALTER TABLE working_clips ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
             "ALTER TABLE working_videos ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
             "ALTER TABLE final_videos ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
+            # Replace progress flag with exported_at timestamp
+            "ALTER TABLE working_clips ADD COLUMN exported_at TEXT DEFAULT NULL",
         ]
 
         for migration in migrations:
@@ -201,6 +203,18 @@ def ensure_database():
             except sqlite3.OperationalError:
                 # Column already exists, ignore
                 pass
+
+        # Migrate progress flag to exported_at timestamp
+        # Set exported_at to current timestamp for clips that were previously exported (progress >= 1)
+        try:
+            cursor.execute("""
+                UPDATE working_clips
+                SET exported_at = datetime('now')
+                WHERE exported_at IS NULL AND progress >= 1
+            """)
+        except sqlite3.OperationalError:
+            # progress column doesn't exist (fresh install), ignore
+            pass
 
         # Initialize version numbers for existing records (if version is NULL or 0)
         # Assign versions based on created_at order per project
