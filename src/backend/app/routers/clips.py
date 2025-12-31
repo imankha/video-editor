@@ -53,7 +53,7 @@ class WorkingClipResponse(BaseModel):
     filename: str
     name: Optional[str] = None
     notes: Optional[str] = None
-    progress: int
+    exported_at: Optional[str] = None  # ISO timestamp when clip was exported (NULL = not exported)
     sort_order: int
     crop_data: Optional[str] = None
     timing_data: Optional[str] = None
@@ -62,7 +62,6 @@ class WorkingClipResponse(BaseModel):
 
 
 class WorkingClipUpdate(BaseModel):
-    progress: Optional[int] = None
     sort_order: Optional[int] = None
     crop_data: Optional[str] = None
     timing_data: Optional[str] = None
@@ -170,7 +169,7 @@ async def list_project_clips(project_id: int):
                 wc.project_id,
                 wc.raw_clip_id,
                 wc.uploaded_filename,
-                wc.progress,
+                wc.exported_at,
                 wc.sort_order,
                 wc.crop_data,
                 wc.timing_data,
@@ -211,7 +210,7 @@ async def list_project_clips(project_id: int):
                 filename=clip['raw_filename'] or clip['uploaded_filename'] or 'unknown',
                 name=clip['raw_name'],
                 notes=clip['raw_notes'],
-                progress=clip['progress'],
+                exported_at=clip['exported_at'],
                 sort_order=clip['sort_order'],
                 crop_data=clip['crop_data'],
                 timing_data=clip['timing_data'],
@@ -321,7 +320,7 @@ async def add_clip_to_project(
             raw_clip_id=raw_clip_id,
             uploaded_filename=uploaded_filename,
             filename=raw_filename or uploaded_filename,
-            progress=0,
+            exported_at=None,
             sort_order=next_order
         )
 
@@ -383,10 +382,10 @@ async def update_working_clip(
     clip_id: int,
     update: WorkingClipUpdate
 ):
-    """Update a working clip's progress, sort order, or framing edits.
+    """Update a working clip's sort order or framing edits.
 
     Version creation logic:
-    - If the clip was previously exported (progress >= 1) AND this update contains
+    - If the clip was previously exported (exported_at IS NOT NULL) AND this update contains
       framing changes (crop_data, timing_data, or segments_data), a NEW version
       is created instead of updating the existing clip.
     - Otherwise, the existing clip is updated in place.
@@ -396,7 +395,7 @@ async def update_working_clip(
 
         # Fetch current clip data
         cursor.execute("""
-            SELECT id, project_id, raw_clip_id, uploaded_filename, progress, sort_order, version,
+            SELECT id, project_id, raw_clip_id, uploaded_filename, exported_at, sort_order, version,
                    crop_data, timing_data, segments_data, transform_data
             FROM working_clips
             WHERE id = ? AND project_id = ?
@@ -412,7 +411,7 @@ async def update_working_clip(
             update.timing_data is not None or
             update.segments_data is not None
         )
-        was_exported = current_clip['progress'] >= 1
+        was_exported = current_clip['exported_at'] is not None
 
         if is_framing_change and was_exported:
             # Create a NEW version of this clip instead of updating
@@ -423,8 +422,8 @@ async def update_working_clip(
             cursor.execute("""
                 INSERT INTO working_clips (
                     project_id, raw_clip_id, uploaded_filename, sort_order, version,
-                    crop_data, timing_data, segments_data, transform_data, progress
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    crop_data, timing_data, segments_data, transform_data
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 project_id,
                 current_clip['raw_clip_id'],
@@ -435,7 +434,7 @@ async def update_working_clip(
                 update.timing_data if update.timing_data is not None else current_clip['timing_data'],
                 update.segments_data if update.segments_data is not None else current_clip['segments_data'],
                 update.transform_data if update.transform_data is not None else current_clip['transform_data'],
-                0  # Reset progress for new version (not exported yet)
+                # exported_at defaults to NULL for new version (not exported yet)
             ))
             conn.commit()
 
@@ -453,9 +452,6 @@ async def update_working_clip(
         # Regular update (no versioning needed)
         updates = []
         params = []
-        if update.progress is not None:
-            updates.append("progress = ?")
-            params.append(update.progress)
         if update.sort_order is not None:
             updates.append("sort_order = ?")
             params.append(update.sort_order)
