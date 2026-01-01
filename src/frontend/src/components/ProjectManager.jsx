@@ -484,6 +484,12 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
             <span>•</span>
             <span>
               {project.has_final_video ? 'Complete' :
+               isExporting === 'overlay' ? (
+                 <span className="text-amber-400">Exporting...</span>
+               ) :
+               isExporting === 'framing' ? (
+                 <span className="text-amber-400">Exporting...</span>
+               ) :
                project.has_working_video ? 'In Overlay' :
                project.clips_in_progress > 0 ? (
                  <span className="text-blue-400">Editing</span>

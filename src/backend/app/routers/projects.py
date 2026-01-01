@@ -69,82 +69,91 @@ class ProjectDetailResponse(BaseModel):
 
 @router.get("", response_model=List[ProjectListItem])
 async def list_projects():
-    """List all projects with progress information."""
+    """List all projects with progress information.
+
+    Optimized to use a single query with JOINs instead of N+1 queries.
+    """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get all projects
+        # Single optimized query that fetches all project data with JOINs
+        # - LEFT JOIN with clip_stats subquery for clip counts (latest versions only)
+        # - LEFT JOIN with working_videos for overlay edit info
+        # - LEFT JOIN with final_videos for completion status
         cursor.execute("""
-            SELECT id, name, aspect_ratio, working_video_id, final_video_id, created_at, current_mode, last_opened_at
-            FROM projects
-            ORDER BY created_at DESC
-        """)
-        projects = cursor.fetchall()
-
-        result = []
-        for project in projects:
-            project_id = project['id']
-
-            # Count clips by status (latest version of each clip only, grouped by end_time)
-            # - exported: exported_at IS NOT NULL (included in working video export)
-            # - in_progress: has framing edits but not yet exported (exported_at IS NULL with data)
-            cursor.execute(f"""
+            SELECT
+                p.id,
+                p.name,
+                p.aspect_ratio,
+                p.working_video_id,
+                p.final_video_id,
+                p.created_at,
+                p.current_mode,
+                p.last_opened_at,
+                -- Clip counts from subquery
+                COALESCE(clip_stats.total, 0) as clip_count,
+                COALESCE(clip_stats.exported, 0) as clips_exported,
+                COALESCE(clip_stats.in_progress, 0) as clips_in_progress,
+                -- Working video info (check if referenced working video exists)
+                CASE WHEN wv.id IS NOT NULL THEN 1 ELSE 0 END as has_working_video,
+                -- Check for overlay edits (highlights or text overlays with actual content)
+                CASE WHEN (
+                    (wv.highlights_data IS NOT NULL AND wv.highlights_data != '[]' AND wv.highlights_data != '') OR
+                    (wv.text_overlays IS NOT NULL AND wv.text_overlays != '[]' AND wv.text_overlays != '')
+                ) THEN 1 ELSE 0 END as has_overlay_edits,
+                -- Final video info (check if referenced final video exists)
+                CASE WHEN fv.id IS NOT NULL THEN 1 ELSE 0 END as has_final_video
+            FROM projects p
+            LEFT JOIN (
+                -- Subquery for clip counts per project (latest version of each clip only)
                 SELECT
+                    wc.project_id,
                     COUNT(*) as total,
-                    SUM(CASE WHEN exported_at IS NOT NULL THEN 1 ELSE 0 END) as exported,
-                    SUM(CASE WHEN exported_at IS NULL AND (
-                        crop_data IS NOT NULL OR
-                        segments_data IS NOT NULL OR
-                        timing_data IS NOT NULL
+                    SUM(CASE WHEN wc.exported_at IS NOT NULL THEN 1 ELSE 0 END) as exported,
+                    SUM(CASE WHEN wc.exported_at IS NULL AND (
+                        wc.crop_data IS NOT NULL OR
+                        wc.segments_data IS NOT NULL OR
+                        wc.timing_data IS NOT NULL
                     ) THEN 1 ELSE 0 END) as in_progress
                 FROM working_clips wc
-                WHERE wc.project_id = ?
-                AND wc.id IN ({latest_working_clips_subquery()})
-            """, (project_id, project_id))
-            counts = cursor.fetchone()
+                WHERE wc.id IN (
+                    -- Get latest version of each clip across ALL projects
+                    -- Partition by (project_id, clip_identity) to handle versions correctly
+                    SELECT id FROM (
+                        SELECT
+                            wc2.id,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY wc2.project_id, COALESCE(rc2.end_time, wc2.uploaded_filename)
+                                ORDER BY wc2.version DESC
+                            ) as rn
+                        FROM working_clips wc2
+                        LEFT JOIN raw_clips rc2 ON wc2.raw_clip_id = rc2.id
+                    ) WHERE rn = 1
+                )
+                GROUP BY wc.project_id
+            ) clip_stats ON p.id = clip_stats.project_id
+            LEFT JOIN working_videos wv ON p.working_video_id = wv.id
+            LEFT JOIN final_videos fv ON p.final_video_id = fv.id
+            ORDER BY p.created_at DESC
+        """)
 
-            clip_count = counts['total'] or 0
-            clips_exported = counts['exported'] or 0
-            clips_in_progress = counts['in_progress'] or 0
+        rows = cursor.fetchall()
 
-            # Check for working video and overlay edits (project references latest version)
-            has_working = False
-            has_overlay = False
-            if project['working_video_id']:
-                cursor.execute("""
-                    SELECT id, highlights_data, text_overlays
-                    FROM working_videos WHERE id = ?
-                """, (project['working_video_id'],))
-                wv_row = cursor.fetchone()
-                if wv_row:
-                    has_working = True
-                    # Check if overlay edits exist (highlights or text overlays)
-                    has_overlay = bool(
-                        (wv_row['highlights_data'] and wv_row['highlights_data'] != '[]') or
-                        (wv_row['text_overlays'] and wv_row['text_overlays'] != '[]')
-                    )
-
-            # Check for final video (project references latest version)
-            has_final = False
-            if project['final_video_id']:
-                cursor.execute("""
-                    SELECT id FROM final_videos WHERE id = ?
-                """, (project['final_video_id'],))
-                has_final = cursor.fetchone() is not None
-
+        result = []
+        for row in rows:
             result.append(ProjectListItem(
-                id=project_id,
-                name=project['name'],
-                aspect_ratio=project['aspect_ratio'],
-                clip_count=clip_count,
-                clips_exported=clips_exported,
-                clips_in_progress=clips_in_progress,
-                has_working_video=has_working,
-                has_overlay_edits=has_overlay,
-                has_final_video=has_final,
-                created_at=project['created_at'],
-                current_mode=project['current_mode'] or 'framing',
-                last_opened_at=project['last_opened_at']
+                id=row['id'],
+                name=row['name'],
+                aspect_ratio=row['aspect_ratio'],
+                clip_count=row['clip_count'],
+                clips_exported=row['clips_exported'],
+                clips_in_progress=row['clips_in_progress'],
+                has_working_video=bool(row['has_working_video']),
+                has_overlay_edits=bool(row['has_overlay_edits']),
+                has_final_video=bool(row['has_final_video']),
+                created_at=row['created_at'],
+                current_mode=row['current_mode'] or 'framing',
+                last_opened_at=row['last_opened_at']
             ))
 
         return result
