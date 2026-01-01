@@ -28,25 +28,26 @@ class TestUtilityFunctions:
         with patch('torch.cuda.is_available', return_value=False):
             upscaler = AIVideoUpscaler(device='cpu')
 
-            # 1920x1080 is 16:9
+            # 1920x1080 is 16:9 - returns TARGET resolution for upscaling (4K)
             aspect, resolution = upscaler.detect_aspect_ratio(1920, 1080)
             assert aspect == "16:9"
-            assert resolution == (1920, 1080)
+            assert resolution == (3840, 2160)  # Target 4K resolution
 
-            # 3840x2160 is also 16:9
+            # 3840x2160 is also 16:9 - already at 4K target
             aspect, resolution = upscaler.detect_aspect_ratio(3840, 2160)
             assert aspect == "16:9"
             assert resolution == (3840, 2160)
 
     def test_detect_aspect_ratio_4_3(self):
-        """Test 4:3 aspect ratio detection"""
+        """Test 4:3 aspect ratio detection - falls into 'other' category"""
         with patch('torch.cuda.is_available', return_value=False):
             upscaler = AIVideoUpscaler(device='cpu')
 
-            # 1024x768 is 4:3
+            # 1024x768 is 4:3 (ratio ~1.33) - not a special case, classified as 'other'
+            # Since it's wider than tall, uses 4K width (3840) and scales height proportionally
             aspect, resolution = upscaler.detect_aspect_ratio(1024, 768)
-            assert aspect == "4:3"
-            assert resolution == (1024, 768)
+            assert aspect == "other"
+            assert resolution == (3840, 2880)  # 3840 / 1.333... = 2880
 
     def test_detect_aspect_ratio_vertical(self):
         """Test vertical video (9:16)"""
@@ -236,19 +237,19 @@ class TestVRAMTracking:
     @patch('torch.cuda.is_available', return_value=True)
     @patch('torch.cuda.device_count', return_value=1)
     @patch('torch.cuda.get_device_name', return_value='Mock GPU')
-    @patch('torch.cuda.memory_allocated', return_value=1024 * 1024 * 512)  # 512 MB
-    def test_update_peak_vram(self, mock_mem, mock_name, mock_count, mock_available):
+    def test_update_peak_vram(self, mock_name, mock_count, mock_available):
         """Test peak VRAM tracking"""
-        with patch('app.video_upscaler.RealESRGANer', MagicMock()):
+        with patch('app.ai_upscaler.model_manager.RealESRGANBackend.setup', MagicMock()):
             upscaler = AIVideoUpscaler(device='cuda')
 
             # Initially 0
             assert upscaler.get_peak_vram_mb() == 0
 
-            # Update should set peak
-            upscaler.update_peak_vram()
-            peak = upscaler.get_peak_vram_mb()
-            assert peak == 512.0  # 512 MB
+            # Mock memory_allocated for the update call
+            with patch('torch.cuda.memory_allocated', return_value=1024 * 1024 * 512):  # 512 MB
+                upscaler.update_peak_vram()
+                peak = upscaler.get_peak_vram_mb()
+                assert peak == 512.0  # 512 MB
 
             # Reset should clear
             upscaler.reset_peak_vram()
@@ -263,7 +264,7 @@ class TestModelInitialization:
     @patch('torch.cuda.get_device_name', return_value='Mock GPU')
     def test_multi_gpu_detection(self, mock_name, mock_count, mock_available):
         """Test multi-GPU detection"""
-        with patch('app.video_upscaler.RealESRGANer', MagicMock()):
+        with patch('app.ai_upscaler.model_manager.RealESRGANBackend.setup', MagicMock()):
             upscaler = AIVideoUpscaler(device='cuda', enable_multi_gpu=True)
 
             assert upscaler.num_gpus == 2
@@ -274,7 +275,7 @@ class TestModelInitialization:
     @patch('torch.cuda.get_device_name', return_value='Mock GPU')
     def test_multi_gpu_disabled(self, mock_name, mock_count, mock_available):
         """Test multi-GPU can be disabled"""
-        with patch('app.video_upscaler.RealESRGANer', MagicMock()):
+        with patch('app.ai_upscaler.model_manager.RealESRGANBackend.setup', MagicMock()):
             upscaler = AIVideoUpscaler(device='cuda', enable_multi_gpu=False)
 
             assert upscaler.num_gpus == 2  # Still detected
@@ -337,7 +338,7 @@ class TestExportModes:
     def test_sr_backend_realbasicvsr(self):
         """Test RealBasicVSR backend"""
         with patch('torch.cuda.is_available', return_value=False):
-            with patch('app.video_upscaler.RealBasicVSRer', MagicMock()):
+            with patch('app.ai_upscaler.model_manager.RealBasicVSRBackend.setup', MagicMock()):
                 upscaler = AIVideoUpscaler(device='cpu', sr_backend='realbasicvsr')
 
                 assert upscaler.sr_backend == 'realbasicvsr'
@@ -351,21 +352,24 @@ class TestFFmpegCodecOverrides:
         with patch('torch.cuda.is_available', return_value=False):
             upscaler = AIVideoUpscaler(device='cpu', ffmpeg_codec='libx265')
 
-            assert upscaler.ffmpeg_codec == 'libx265'
+            # FFmpeg settings are stored on the video_encoder instance
+            assert upscaler.video_encoder.ffmpeg_codec == 'libx265'
 
     def test_ffmpeg_preset_override(self):
         """Test FFmpeg preset can be overridden"""
         with patch('torch.cuda.is_available', return_value=False):
             upscaler = AIVideoUpscaler(device='cpu', ffmpeg_preset='slow')
 
-            assert upscaler.ffmpeg_preset == 'slow'
+            # FFmpeg settings are stored on the video_encoder instance
+            assert upscaler.video_encoder.ffmpeg_preset == 'slow'
 
     def test_ffmpeg_crf_override(self):
         """Test FFmpeg CRF can be overridden"""
         with patch('torch.cuda.is_available', return_value=False):
             upscaler = AIVideoUpscaler(device='cpu', ffmpeg_crf='18')
 
-            assert upscaler.ffmpeg_crf == '18'
+            # FFmpeg settings are stored on the video_encoder instance
+            assert upscaler.video_encoder.ffmpeg_crf == '18'
 
 
 class TestFrameInterpolator:
@@ -391,25 +395,32 @@ class TestFrameInterpolator:
         assert InterpolationBackend.RIFE_NCNN.value == "rife_ncnn"
         assert InterpolationBackend.MINTERPOLATE.value == "minterpolate"
 
-    @patch('torch.cuda.is_available', return_value=False)
-    @patch('shutil.which', return_value=None)
-    def test_frame_interpolator_fallback_to_minterpolate(self, mock_which, mock_cuda):
+    def test_frame_interpolator_fallback_to_minterpolate(self):
         """Test frame interpolator falls back to minterpolate when no GPU available"""
-        from app.ai_upscaler.frame_interpolator import FrameInterpolator, InterpolationBackend
+        from app.ai_upscaler.frame_interpolator import FrameInterpolator, InterpolationBackend, GPUCapabilities
+        from app.ai_upscaler import frame_interpolator as fi_module
 
-        # Reset singleton to force re-detection
+        # Reset both class-level and module-level singletons BEFORE applying mocks
         FrameInterpolator._capabilities = None
         FrameInterpolator._selected_backend = None
+        fi_module._interpolator = None
 
-        interpolator = FrameInterpolator()
+        # Apply mocks for capability detection
+        with patch('torch.cuda.is_available', return_value=False), \
+             patch.object(FrameInterpolator, '_check_cuda', return_value=(False, None)), \
+             patch.object(FrameInterpolator, '_check_vulkan', return_value=(False, None)), \
+             patch.object(FrameInterpolator, '_check_rife_cuda', return_value=False), \
+             patch.object(FrameInterpolator, '_check_rife_ncnn', return_value=False):
 
-        # Should fallback to minterpolate
-        assert interpolator.backend == InterpolationBackend.MINTERPOLATE
+            interpolator = FrameInterpolator()
 
-        # Backend info should indicate fallback
-        info = interpolator.get_backend_info()
-        assert info['is_fallback'] == True
-        assert info['quality_tier'] == 'standard'
+            # Should fallback to minterpolate
+            assert interpolator.backend == InterpolationBackend.MINTERPOLATE
+
+            # Backend info should indicate fallback
+            info = interpolator.get_backend_info()
+            assert info['is_fallback'] == True
+            assert info['quality_tier'] == 'standard'
 
     @patch('torch.cuda.is_available', return_value=True)
     @patch('torch.cuda.get_device_name', return_value='NVIDIA GeForce RTX 3080')
