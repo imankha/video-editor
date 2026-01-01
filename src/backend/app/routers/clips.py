@@ -30,6 +30,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/clips", tags=["clips"])
 
 
+def normalize_json_data(value: Optional[str]) -> Optional[str]:
+    """Convert empty JSON to NULL for consistent storage.
+
+    This ensures we don't have multiple representations of 'no data'
+    (NULL, '', '[]', '{}') which complicates queries.
+    """
+    if value is None:
+        return None
+    if value in ('', '[]', '{}', 'null'):
+        return None
+    return value
+
+
 class RawClipResponse(BaseModel):
     id: int
     filename: str
@@ -426,9 +439,9 @@ async def update_working_clip(
                 current_clip['uploaded_filename'],
                 current_clip['sort_order'],
                 new_version,
-                update.crop_data if update.crop_data is not None else current_clip['crop_data'],
-                update.timing_data if update.timing_data is not None else current_clip['timing_data'],
-                update.segments_data if update.segments_data is not None else current_clip['segments_data'],
+                normalize_json_data(update.crop_data if update.crop_data is not None else current_clip['crop_data']),
+                normalize_json_data(update.timing_data if update.timing_data is not None else current_clip['timing_data']),
+                normalize_json_data(update.segments_data if update.segments_data is not None else current_clip['segments_data']),
                 update.transform_data if update.transform_data is not None else current_clip['transform_data'],
                 # exported_at defaults to NULL for new version (not exported yet)
             ))
@@ -453,13 +466,13 @@ async def update_working_clip(
             params.append(update.sort_order)
         if update.crop_data is not None:
             updates.append("crop_data = ?")
-            params.append(update.crop_data)
+            params.append(normalize_json_data(update.crop_data))
         if update.timing_data is not None:
             updates.append("timing_data = ?")
-            params.append(update.timing_data)
+            params.append(normalize_json_data(update.timing_data))
         if update.segments_data is not None:
             updates.append("segments_data = ?")
-            params.append(update.segments_data)
+            params.append(normalize_json_data(update.segments_data))
         if update.transform_data is not None:
             updates.append("transform_data = ?")
             params.append(update.transform_data)
