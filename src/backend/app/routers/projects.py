@@ -13,6 +13,7 @@ import json
 import logging
 
 from app.database import get_db_connection
+from app.queries import latest_working_clips_subquery
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -87,28 +88,18 @@ async def list_projects():
             # Count clips by status (latest version of each clip only, grouped by end_time)
             # - exported: exported_at IS NOT NULL (included in working video export)
             # - in_progress: has framing edits but not yet exported (exported_at IS NULL with data)
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT
                     COUNT(*) as total,
                     SUM(CASE WHEN exported_at IS NOT NULL THEN 1 ELSE 0 END) as exported,
                     SUM(CASE WHEN exported_at IS NULL AND (
                         (crop_data IS NOT NULL AND crop_data != '' AND crop_data != '[]') OR
-                        (segments_data IS NOT NULL AND segments_data != '' AND segments_data != '{}') OR
-                        (timing_data IS NOT NULL AND timing_data != '' AND timing_data != '{}')
+                        (segments_data IS NOT NULL AND segments_data != '' AND segments_data != '{{}}') OR
+                        (timing_data IS NOT NULL AND timing_data != '' AND timing_data != '{{}}')
                     ) THEN 1 ELSE 0 END) as in_progress
                 FROM working_clips wc
                 WHERE wc.project_id = ?
-                AND wc.id IN (
-                    SELECT id FROM (
-                        SELECT wc2.id, ROW_NUMBER() OVER (
-                            PARTITION BY COALESCE(rc2.end_time, wc2.uploaded_filename)
-                            ORDER BY wc2.version DESC
-                        ) as rn
-                        FROM working_clips wc2
-                        LEFT JOIN raw_clips rc2 ON wc2.raw_clip_id = rc2.id
-                        WHERE wc2.project_id = ?
-                    ) WHERE rn = 1
-                )
+                AND wc.id IN ({latest_working_clips_subquery()})
             """, (project_id, project_id))
             counts = cursor.fetchone()
 
@@ -207,7 +198,7 @@ async def get_project(project_id: int):
             raise HTTPException(status_code=404, detail="Project not found")
 
         # Get working clips with resolved filenames (latest version of each clip only, grouped by end_time)
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT
                 wc.id,
                 wc.raw_clip_id,
@@ -218,17 +209,7 @@ async def get_project(project_id: int):
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             WHERE wc.project_id = ?
-            AND wc.id IN (
-                SELECT id FROM (
-                    SELECT wc2.id, ROW_NUMBER() OVER (
-                        PARTITION BY COALESCE(rc2.end_time, wc2.uploaded_filename)
-                        ORDER BY wc2.version DESC
-                    ) as rn
-                    FROM working_clips wc2
-                    LEFT JOIN raw_clips rc2 ON wc2.raw_clip_id = rc2.id
-                    WHERE wc2.project_id = ?
-                ) WHERE rn = 1
-            )
+            AND wc.id IN ({latest_working_clips_subquery()})
             ORDER BY wc.sort_order
         """, (project_id, project_id))
         clips_rows = cursor.fetchall()

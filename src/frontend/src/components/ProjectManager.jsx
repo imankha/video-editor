@@ -27,6 +27,8 @@ export function ProjectManager({
   // Downloads props
   downloadsCount = 0,
   onOpenDownloads,
+  // Export state
+  exportingProject = null, // { projectId, stage: 'framing' | 'overlay' } | null
 }) {
   const [activeTab, setActiveTab] = useState('projects'); // 'games' | 'projects'
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -175,6 +177,7 @@ export function ProjectManager({
                   onSelect={() => onSelectProject(project.id)}
                   onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
                   onDelete={() => onDeleteProject(project.id)}
+                  exportingProject={exportingProject}
                 />
               ))}
             </div>
@@ -264,15 +267,20 @@ function GameCard({ game, onLoad, onDelete }) {
  * Scales from 1 to 100+ clips by adjusting segment widths.
  *
  * Colors:
- * - Green (✓): Complete
- * - Blue (◐): In progress
+ * - Green (✓): Done/Complete
+ * - Yellow/Amber: Exporting (actively rendering)
+ * - Blue (◐): Editing (has edits, not exported)
+ * - Light Blue: Ready (for overlay - working video exists)
  * - Gray (○): Not started
  *
  * Click handlers:
  * - onClipClick(clipIndex) - Called when a clip segment is clicked
  * - onOverlayClick() - Called when the overlay segment is clicked
+ *
+ * @param {Object} project - Project data
+ * @param {string} isExporting - 'framing' | 'overlay' | null - Which stage is currently exporting
  */
-function SegmentedProgressStrip({ project, onClipClick, onOverlayClick }) {
+function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExporting = null }) {
   const { clip_count, clips_exported, clips_in_progress, has_working_video, has_overlay_edits, has_final_video } = project;
 
   // Total segments = clips + 1 for overlay stage
@@ -282,12 +290,16 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick }) {
   // If final video exists, entire bar is green (complete)
   // Otherwise:
   // - Green: exported (included in working video)
-  // - Blue: in progress (has edits but not exported)
+  // - Yellow: exporting (actively rendering)
+  // - Blue: editing (has edits but not exported)
   // - Gray: not started
   const clipSegments = [];
   for (let i = 0; i < clip_count; i++) {
     if (has_final_video || i < clips_exported) {
       clipSegments.push({ status: 'done', label: `Clip ${i + 1}` });
+    } else if (isExporting === 'framing') {
+      // When framing export is running, all non-exported clips show as exporting
+      clipSegments.push({ status: 'exporting', label: `Clip ${i + 1}` });
     } else if (i < clips_exported + clips_in_progress) {
       clipSegments.push({ status: 'in_progress', label: `Clip ${i + 1}` });
     } else {
@@ -297,12 +309,15 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick }) {
 
   // Overlay segment status:
   // - green: final video exported
+  // - yellow: exporting final video
   // - blue: overlay edits in progress
-  // - light blue: working video exists but no overlay edits yet
+  // - light blue: working video exists but no overlay edits yet (ready)
   // - gray: no working video
   let overlayStatus = 'pending';
   if (has_final_video) {
     overlayStatus = 'done';
+  } else if (isExporting === 'overlay') {
+    overlayStatus = 'exporting';
   } else if (has_overlay_edits) {
     overlayStatus = 'in_progress';
   } else if (has_working_video) {
@@ -319,6 +334,7 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick }) {
   // Status to color mapping
   const statusColors = {
     done: 'bg-green-500',
+    exporting: 'bg-amber-500',
     in_progress: 'bg-blue-500',
     ready: 'bg-blue-300',
     pending: 'bg-gray-600'
@@ -370,8 +386,9 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick }) {
               }}
               title={`${segment.label}: ${
                 segment.status === 'done' ? 'Complete' :
-                segment.status === 'in_progress' ? 'In Progress' :
-                segment.status === 'ready' ? 'Ready for Editing' :
+                segment.status === 'exporting' ? 'Exporting...' :
+                segment.status === 'in_progress' ? 'Editing' :
+                segment.status === 'ready' ? 'Ready' :
                 'Not Started'
               } (click to open)`}
             />
@@ -387,6 +404,10 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick }) {
             Done
           </span>
           <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm bg-amber-500"></span>
+            Exporting
+          </span>
+          <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-sm bg-blue-500"></span>
             Editing
           </span>
@@ -396,7 +417,7 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick }) {
           </span>
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-sm bg-gray-600"></span>
-            Pending
+            Not Started
           </span>
         </div>
       )}
@@ -412,8 +433,11 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick }) {
  * - Click on a clip segment: Open in framing mode with that clip selected
  * - Click on overlay segment: Open in overlay mode
  */
-function ProjectCard({ project, onSelect, onSelectWithMode, onDelete }) {
+function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Determine if this project is currently exporting
+  const isExporting = exportingProject?.projectId === project.id ? exportingProject.stage : null;
 
   const handleDelete = (e) => {
     e.stopPropagation();
@@ -488,6 +512,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete }) {
         project={project}
         onClipClick={handleClipClick}
         onOverlayClick={handleOverlayClick}
+        isExporting={isExporting}
       />
     </div>
   );

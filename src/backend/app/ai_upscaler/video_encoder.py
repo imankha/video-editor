@@ -75,6 +75,44 @@ class VideoEncoder:
         return None
 
     @staticmethod
+    def has_audio_stream(video_path: str) -> bool:
+        """
+        Check if a video file has an audio stream using ffprobe.
+
+        Args:
+            video_path: Path to the video file
+
+        Returns:
+            True if video has at least one audio stream, False otherwise
+        """
+        try:
+            result = subprocess.run(
+                [
+                    'ffprobe', '-v', 'error',
+                    '-select_streams', 'a',
+                    '-show_entries', 'stream=codec_type',
+                    '-of', 'csv=p=0',
+                    video_path
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            # Check if ffprobe succeeded (return code 0)
+            if result.returncode != 0:
+                logger.warning(f"ffprobe failed for {video_path}: {result.stderr}")
+                # Assume audio exists to avoid breaking existing behavior
+                return True
+            # If there's any output, there's an audio stream
+            has_audio = bool(result.stdout.strip())
+            logger.debug(f"Audio stream check for {video_path}: {has_audio}")
+            return has_audio
+        except Exception as e:
+            logger.warning(f"Failed to check audio stream for {video_path}: {e}")
+            # Assume audio exists to avoid breaking existing behavior
+            return True
+
+    @staticmethod
     def build_atempo_filter(speed: float) -> str:
         """
         Build atempo filter chain for audio speed adjustment.
@@ -179,6 +217,12 @@ class VideoEncoder:
         frame_files = list(frames_dir.glob("frame_*.png"))
         input_frame_count = len(frame_files)
         logger.info(f"Total input frames: {input_frame_count}")
+
+        # Check if input video actually has audio (user wants audio AND video has audio)
+        source_has_audio = self.has_audio_stream(input_video_path)
+        effective_include_audio = include_audio and source_has_audio
+        if include_audio and not source_has_audio:
+            logger.info("Input video has no audio stream - skipping audio processing")
 
         # Get original FPS from input video (needed for frame interpolation and segment processing)
         cap = cv2.VideoCapture(input_video_path)
@@ -303,7 +347,7 @@ class VideoEncoder:
                         )
 
                         # Audio: trim using original source times and slow down with atempo=0.5
-                        if include_audio:
+                        if effective_include_audio:
                             atempo_filter = self.build_atempo_filter(speed)
                             audio_filter_parts.append(
                                 f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,"
@@ -326,7 +370,7 @@ class VideoEncoder:
                         )
 
                         # Audio: build atempo filter for speed adjustment using original source times
-                        if include_audio:
+                        if effective_include_audio:
                             atempo_filter = self.build_atempo_filter(speed)
                             if atempo_filter:
                                 logger.info(f"  → Applying {atempo_filter} to audio")
@@ -486,9 +530,9 @@ class VideoEncoder:
             logger.info("Skipping pass 1 for FAST mode - using single-pass encoding")
             logger.info("=" * 60)
 
-        # Prepare audio trim parameters if frames are pre-trimmed
+        # Prepare audio trim parameters if frames are pre-trimmed (only if audio exists)
         audio_trim_params = None
-        if frames_pretrimmed and (trim_start > 0 or trim_end):
+        if effective_include_audio and frames_pretrimmed and (trim_start > 0 or trim_end):
             audio_trim_params = {'start': trim_start, 'end': trim_end}
             logger.info(f"Audio trim params: start={trim_start:.2f}s, end={trim_end or 'end'}s")
 
@@ -496,7 +540,7 @@ class VideoEncoder:
         self._run_ffmpeg_pass2(
             frames_pattern, input_video_path, output_path, input_framerate, fps,
             filter_complex, trim_filter, codec, preset, crf, export_mode,
-            needs_interpolation, interpolation_ratio, include_audio,
+            needs_interpolation, interpolation_ratio, effective_include_audio,
             expected_output_frames, progress_callback, audio_trim_params
         )
 

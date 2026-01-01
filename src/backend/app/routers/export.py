@@ -29,6 +29,7 @@ from ..models import CropKeyframe, HighlightKeyframe
 from ..websocket import export_progress, manager
 from ..interpolation import generate_crop_filter
 from ..database import get_db_connection, WORKING_VIDEOS_PATH, FINAL_VIDEOS_PATH
+from ..queries import latest_working_clips_subquery
 from ..services.clip_cache import get_clip_cache
 from fastapi.responses import JSONResponse
 
@@ -1727,20 +1728,10 @@ async def export_framing(
         """, (working_video_id, project_id))
 
         # Set exported_at timestamp for all working clips (latest versions only)
-        cursor.execute("""
+        cursor.execute(f"""
             UPDATE working_clips
             SET exported_at = datetime('now')
-            WHERE id IN (
-                SELECT id FROM (
-                    SELECT wc.id, ROW_NUMBER() OVER (
-                        PARTITION BY COALESCE(rc.end_time, wc.uploaded_filename)
-                        ORDER BY wc.version DESC
-                    ) as rn
-                    FROM working_clips wc
-                    LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-                    WHERE wc.project_id = ?
-                ) WHERE rn = 1
-            )
+            WHERE id IN ({latest_working_clips_subquery()})
         """, (project_id,))
 
         conn.commit()
