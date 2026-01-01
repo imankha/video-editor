@@ -1,10 +1,56 @@
 """
-Reusable SQL query helpers for version filtering.
+Reusable SQL query helpers and data transformation utilities.
 
 These functions generate SQL subqueries for filtering to the latest version
 of records, avoiding duplication of complex window function logic across
 multiple files.
 """
+
+from typing import List, Optional
+
+
+# Rating adjectives for clip name generation (matches frontend soccerTags.js)
+RATING_ADJECTIVES = {
+    5: 'Brilliant',
+    4: 'Good',
+    3: 'Interesting',
+    2: 'Unfortunate',
+    1: 'Bad'
+}
+
+
+def derive_clip_name(stored_name: Optional[str], rating: int, tags: List[str]) -> str:
+    """
+    Derive a clip name from rating and tags if no custom name is stored.
+
+    This is the single source of truth for clip name derivation. The algorithm
+    matches the frontend generateClipName() in soccerTags.js.
+
+    Args:
+        stored_name: The name stored in the database (None or empty = auto-generate)
+        rating: Star rating 1-5
+        tags: List of tag short names (e.g., ["Goal", "Dribble"])
+
+    Returns:
+        The stored name if present, otherwise a generated name like "Brilliant Goal and Dribble"
+    """
+    # If there's a stored custom name, use it
+    if stored_name:
+        return stored_name
+
+    # No tags = no auto-generated name
+    if not tags:
+        return ''
+
+    adjective = RATING_ADJECTIVES.get(rating, 'Interesting')
+
+    # Tags are already short names (Goal, Assist, Dribble, etc.)
+    if len(tags) == 1:
+        tag_part = tags[0]
+    else:
+        tag_part = ', '.join(tags[:-1]) + ' and ' + tags[-1]
+
+    return f"{adjective} {tag_part}"
 
 
 def latest_working_clips_subquery(alias: str = "wc", project_filter: bool = True) -> str:

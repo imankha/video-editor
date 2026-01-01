@@ -14,8 +14,8 @@ export const soccerTags = {
       description: "Final pass that leads directly to a goal."
     },
     {
-      name: "1v1 Attacking",
-      shortName: "1v1 Attack",
+      name: "Dribbling",
+      shortName: "Dribble",
       description: "Beating defenders in individual attacking duels."
     },
     {

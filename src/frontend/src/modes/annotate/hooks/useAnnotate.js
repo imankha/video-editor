@@ -29,7 +29,7 @@ import { formatTimeSimple } from '../../../utils/timeFormat';
 const ALLOWED_TAGS = new Set([
   "Goal",
   "Assist",
-  "1v1 Attack",
+  "Dribble",
   "Movement",
   "Pass",
   "Chance Creation",
@@ -261,7 +261,7 @@ export default function useAnnotate(videoMetadata) {
           id: generateClipId(),
           startTime: Math.max(0, Math.min(startTime, duration - MIN_CLIP_DURATION)),
           endTime: Math.min(endTime, duration),
-          name: annotation.name || formatTimestampForName(startTime),
+          name: annotation.name || '',
           position: '',
           tags: annotation.tags || [],
           notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),
@@ -305,12 +305,15 @@ export default function useAnnotate(videoMetadata) {
   }, []);
 
   /**
-   * Derived: Regions with visual layout info
+   * Derived: Regions with visual layout info, sorted by endTime for display
    */
   const regionsWithLayout = useMemo(() => {
     if (!duration) return [];
 
-    return clipRegions.map((region, index) => {
+    // Sort by endTime for chronological display order
+    const sorted = [...clipRegions].sort((a, b) => a.endTime - b.endTime);
+
+    return sorted.map((region, index) => {
       const regionDuration = region.endTime - region.startTime;
       return {
         ...region,
@@ -360,11 +363,12 @@ export default function useAnnotate(videoMetadata) {
     const color = CLIP_COLORS[colorIndex % CLIP_COLORS.length];
 
     // Create new clip region
+    // NOTE: name is only set if explicitly provided - UI derives display name from rating+tags
     const newRegion = {
       id: generateClipId(),
       startTime: clampedStart,
       endTime: Math.min(actualEndTime, duration),
-      name: name || formatTimestampForName(clampedStart),
+      name: name || '',
       position: position || '',
       tags: tags || [],
       notes: notes || '',
@@ -581,7 +585,7 @@ export default function useAnnotate(videoMetadata) {
         id: generateClipId(),
         startTime: Math.max(0, Math.min(startTime, duration - MIN_CLIP_DURATION)),
         endTime: Math.min(endTime, duration),
-        name: annotation.name || formatTimestampForName(startTime),
+        name: annotation.name || '',
         position: '',
         tags: annotation.tags || [],
         notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),

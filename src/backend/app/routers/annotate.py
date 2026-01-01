@@ -412,7 +412,7 @@ async def export_clips(
         "name": "Brilliant Goal",
         "notes": "Amazing finish",
         "rating": 5,
-        "tags": ["Goal", "1v1 Attack"]
+        "tags": ["Goal", "Dribble"]
       }
     ]
 

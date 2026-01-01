@@ -137,7 +137,8 @@ export function ClipsSidePanel({
             No clips yet
           </div>
         ) : (
-          clipRegions.map((region, index) => (
+          // Sort by endTime to match timeline order
+          [...clipRegions].sort((a, b) => a.endTime - b.endTime).map((region, index) => (
             <ClipListItem
               key={region.id}
               region={region}

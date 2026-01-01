@@ -24,7 +24,7 @@ from app.database import (
     RAW_CLIPS_PATH,
     UPLOADS_PATH
 )
-from app.queries import latest_working_clips_subquery
+from app.queries import latest_working_clips_subquery, derive_clip_name
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/clips", tags=["clips"])
@@ -97,20 +97,21 @@ async def list_raw_clips():
         """)
         clips = cursor.fetchall()
 
-        return [
-            RawClipResponse(
+        result = []
+        for clip in clips:
+            tags = json.loads(clip['tags']) if clip['tags'] else []
+            result.append(RawClipResponse(
                 id=clip['id'],
                 filename=clip['filename'],
                 rating=clip['rating'],
-                tags=json.loads(clip['tags']) if clip['tags'] else [],
-                name=clip['name'],
+                tags=tags,
+                name=derive_clip_name(clip['name'], clip['rating'], tags),
                 notes=clip['notes'],
                 start_time=clip['start_time'],
                 end_time=clip['end_time'],
                 created_at=clip['created_at']
-            )
-            for clip in clips
-        ]
+            ))
+        return result
 
 
 @router.get("/raw/{clip_id}", response_model=RawClipResponse)
@@ -127,12 +128,13 @@ async def get_raw_clip(clip_id: int):
         if not clip:
             raise HTTPException(status_code=404, detail="Raw clip not found")
 
+        tags = json.loads(clip['tags']) if clip['tags'] else []
         return RawClipResponse(
             id=clip['id'],
             filename=clip['filename'],
             rating=clip['rating'],
-            tags=json.loads(clip['tags']) if clip['tags'] else [],
-            name=clip['name'],
+            tags=tags,
+            name=derive_clip_name(clip['name'], clip['rating'], tags),
             notes=clip['notes'],
             start_time=clip['start_time'],
             end_time=clip['end_time'],
@@ -191,7 +193,9 @@ async def list_project_clips(project_id: int):
                 wc.transform_data,
                 rc.filename as raw_filename,
                 rc.name as raw_name,
-                rc.notes as raw_notes
+                rc.notes as raw_notes,
+                rc.rating as raw_rating,
+                rc.tags as raw_tags
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             WHERE wc.project_id = ?
@@ -200,14 +204,17 @@ async def list_project_clips(project_id: int):
         """, (project_id, project_id))
         clips = cursor.fetchall()
 
-        return [
-            WorkingClipResponse(
+        result = []
+        for clip in clips:
+            tags = json.loads(clip['raw_tags']) if clip['raw_tags'] else []
+            rating = clip['raw_rating'] or 3
+            result.append(WorkingClipResponse(
                 id=clip['id'],
                 project_id=clip['project_id'],
                 raw_clip_id=clip['raw_clip_id'],
                 uploaded_filename=clip['uploaded_filename'],
                 filename=clip['raw_filename'] or clip['uploaded_filename'] or 'unknown',
-                name=clip['raw_name'],
+                name=derive_clip_name(clip['raw_name'], rating, tags),
                 notes=clip['raw_notes'],
                 exported_at=clip['exported_at'],
                 sort_order=clip['sort_order'],
@@ -215,9 +222,8 @@ async def list_project_clips(project_id: int):
                 timing_data=clip['timing_data'],
                 segments_data=clip['segments_data'],
                 transform_data=clip['transform_data']
-            )
-            for clip in clips
-        ]
+            ))
+        return result
 
 
 @router.post("/projects/{project_id}/clips", response_model=WorkingClipResponse)

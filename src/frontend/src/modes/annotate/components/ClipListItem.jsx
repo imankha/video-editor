@@ -1,5 +1,6 @@
 import React from 'react';
 import { getRatingDisplay } from '../../../components/shared/clipConstants';
+import { generateClipName } from '../constants/soccerTags';
 
 /**
  * ClipListItem - Individual clip item in the side panel list
@@ -9,6 +10,9 @@ import { getRatingDisplay } from '../../../components/shared/clipConstants';
 export function ClipListItem({ region, index, isSelected, onClick }) {
   const rating = region.rating || 3;
   const { notation, badgeColor, backgroundColor } = getRatingDisplay(rating);
+
+  // Derive display name from stored name or auto-generate from rating+tags
+  const displayName = region.name || generateClipName(rating, region.tags || []) || '';
 
   return (
     <div
@@ -41,9 +45,9 @@ export function ClipListItem({ region, index, isSelected, onClick }) {
         </div>
 
         {/* Clip title only - single line */}
-        <div className="flex-1 min-w-0 text-sm text-white truncate" title={region.name}>
+        <div className="flex-1 min-w-0 text-sm text-white truncate" title={displayName}>
           <span className="text-gray-500 mr-1">{index + 1}.</span>
-          {region.name}
+          {displayName}
         </div>
       </div>
     </div>

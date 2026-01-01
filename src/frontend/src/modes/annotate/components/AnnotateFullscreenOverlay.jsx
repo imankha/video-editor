@@ -66,11 +66,12 @@ function TagSelector({ selectedTags, onTagToggle }) {
             <div className="text-gray-400 text-xs mb-1.5">{pos.name}</div>
             <div className="flex flex-wrap gap-2">
               {positionTags.map((tag) => {
-                const isSelected = selectedTags.includes(tag.name);
+                // Use shortName for selection/toggle since tags are stored as short names
+                const isSelected = selectedTags.includes(tag.shortName);
                 return (
                   <button
-                    key={tag.name}
-                    onClick={() => onTagToggle(tag.name)}
+                    key={tag.shortName}
+                    onClick={() => onTagToggle(tag.shortName)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${
                       isSelected
                         ? 'bg-green-600 text-white'
@@ -208,22 +209,24 @@ export function AnnotateFullscreenOverlay({
   const handleSave = () => {
     if (isEditMode) {
       // Update existing clip
+      // Only include name if it was manually edited, otherwise leave empty for auto-generation
       onUpdateClip(existingClip.id, {
         duration,
         rating,
         tags: selectedTags,
-        name: clipName,
+        name: isNameManuallyEdited ? clipName : '',
         notes,
       });
     } else {
       // Create new clip - currentTime is the END time, so start = end - duration
       const calculatedStartTime = Math.max(0, currentTime - duration);
+      // Only include name if it was manually edited, otherwise leave empty for auto-generation
       const clipData = {
         startTime: calculatedStartTime,
         duration,
         rating,
         tags: selectedTags,
-        name: clipName,
+        name: isNameManuallyEdited ? clipName : '',
         notes,
       };
       onCreateClip(clipData);
