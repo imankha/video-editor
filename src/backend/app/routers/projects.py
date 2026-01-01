@@ -93,9 +93,9 @@ async def list_projects():
                     COUNT(*) as total,
                     SUM(CASE WHEN exported_at IS NOT NULL THEN 1 ELSE 0 END) as exported,
                     SUM(CASE WHEN exported_at IS NULL AND (
-                        (crop_data IS NOT NULL AND crop_data != '' AND crop_data != '[]') OR
-                        (segments_data IS NOT NULL AND segments_data != '' AND segments_data != '{{}}') OR
-                        (timing_data IS NOT NULL AND timing_data != '' AND timing_data != '{{}}')
+                        crop_data IS NOT NULL OR
+                        segments_data IS NOT NULL OR
+                        timing_data IS NOT NULL
                     ) THEN 1 ELSE 0 END) as in_progress
                 FROM working_clips wc
                 WHERE wc.project_id = ?
