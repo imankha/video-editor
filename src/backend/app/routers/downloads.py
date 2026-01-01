@@ -15,6 +15,7 @@ import re
 import logging
 
 from app.database import get_db_connection, FINAL_VIDEOS_PATH
+from app.queries import latest_final_videos_subquery
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
@@ -44,7 +45,7 @@ async def list_downloads():
         cursor = conn.cursor()
 
         # Get only the latest version of final videos per project
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT
                 fv.id,
                 fv.project_id,
@@ -54,15 +55,7 @@ async def list_downloads():
                 p.name as project_name
             FROM final_videos fv
             JOIN projects p ON fv.project_id = p.id
-            WHERE fv.id IN (
-                SELECT id FROM (
-                    SELECT id, ROW_NUMBER() OVER (
-                        PARTITION BY project_id
-                        ORDER BY version DESC
-                    ) as rn
-                    FROM final_videos
-                ) WHERE rn = 1
-            )
+            WHERE fv.id IN ({latest_final_videos_subquery()})
             ORDER BY fv.created_at DESC
         """)
         rows = cursor.fetchall()
@@ -212,17 +205,9 @@ async def get_download_count():
         cursor = conn.cursor()
 
         # Count only latest version per project (same logic as list endpoint)
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT COUNT(*) as count FROM final_videos
-            WHERE id IN (
-                SELECT id FROM (
-                    SELECT id, ROW_NUMBER() OVER (
-                        PARTITION BY project_id
-                        ORDER BY version DESC
-                    ) as rn
-                    FROM final_videos
-                ) WHERE rn = 1
-            )
+            WHERE id IN ({latest_final_videos_subquery()})
         """)
         row = cursor.fetchone()
 

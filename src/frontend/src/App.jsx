@@ -78,6 +78,15 @@ function App() {
   // { current: number, total: number, phase: string, message: string }
   const [exportProgress, setExportProgress] = useState(null);
 
+  // Track which project is currently exporting (for showing status on project cards)
+  // { projectId: number, stage: 'framing' | 'overlay', exportId: string } | null
+  const [exportingProject, setExportingProject] = useState(null);
+
+  // Global export progress from WebSocket (persists across navigation)
+  // { progress: number, message: string }
+  const [globalExportProgress, setGlobalExportProgress] = useState(null);
+  const exportWebSocketRef = useRef(null);
+
   // Annotate mode playback state
   const [annotatePlaybackSpeed, setAnnotatePlaybackSpeed] = useState(1);
   const [annotateFullscreen, setAnnotateFullscreen] = useState(false);
@@ -182,6 +191,70 @@ function App() {
 
   // Export button ref (for triggering export programmatically)
   const exportButtonRef = useRef(null);
+
+  // Manage global WebSocket for export progress (persists across navigation)
+  useEffect(() => {
+    // Only connect if we have an active export with an exportId
+    if (!exportingProject?.exportId) {
+      // Clean up any existing connection
+      if (exportWebSocketRef.current) {
+        exportWebSocketRef.current.close();
+        exportWebSocketRef.current = null;
+      }
+      setGlobalExportProgress(null);
+      return;
+    }
+
+    const exportId = exportingProject.exportId;
+    console.log('[App] Connecting global WebSocket for export:', exportId);
+
+    const ws = new WebSocket(`ws://localhost:8000/ws/export/${exportId}`);
+    exportWebSocketRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('[App] Global export WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log('[App] Global export progress:', data);
+
+      setGlobalExportProgress({
+        progress: Math.round(data.progress),
+        message: data.message || ''
+      });
+
+      // Handle completion
+      if (data.status === 'complete') {
+        console.log('[App] Export complete via global WebSocket');
+        setExportingProject(null);
+        setGlobalExportProgress(null);
+        // Refresh projects to show updated state
+        fetchProjects();
+        refreshDownloadsCount();
+      } else if (data.status === 'error') {
+        console.error('[App] Export error via global WebSocket:', data.message);
+        setExportingProject(null);
+        setGlobalExportProgress(null);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('[App] Global export WebSocket error:', error);
+    };
+
+    ws.onclose = () => {
+      console.log('[App] Global export WebSocket disconnected');
+      exportWebSocketRef.current = null;
+    };
+
+    // Cleanup on unmount or when exportingProject changes
+    return () => {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    };
+  }, [exportingProject?.exportId, fetchProjects, refreshDownloadsCount]);
 
   // Project clips (only active when project selected)
   const {
@@ -3091,6 +3164,8 @@ function App() {
           // Downloads props
           downloadsCount={downloadsCount}
           onOpenDownloads={() => setIsDownloadsPanelOpen(true)}
+          // Export state for showing "Exporting" status on project cards
+          exportingProject={exportingProject}
         />
 
         {/* Downloads Panel - also available from Project Manager */}
@@ -3160,6 +3235,8 @@ function App() {
                       setAnnotateVideoMetadata(null);
                       setIsUploadingGameVideo(false);
                     }
+                    // Refresh project list to show updated progress/status
+                    fetchProjects();
                     // Return to project manager
                     setEditorMode('project-manager');
                   }}
@@ -3711,6 +3788,26 @@ function App() {
                   fetchProjects();
                   refreshDownloadsCount();
                 }}
+                onExportStart={(exportId) => {
+                  setExportingProject({
+                    projectId: selectedProjectId,
+                    stage: editorMode === 'framing' ? 'framing' : 'overlay',
+                    exportId: exportId
+                  });
+                }}
+                onExportEnd={() => {
+                  setExportingProject(null);
+                  setGlobalExportProgress(null);
+                }}
+                // Pass external exporting state for when user navigates back while export is running
+                isExternallyExporting={
+                  exportingProject?.projectId === selectedProjectId &&
+                  exportingProject?.stage === (editorMode === 'framing' ? 'framing' : 'overlay')
+                }
+                // Pass global progress for when user navigates back during export
+                externalProgress={
+                  exportingProject?.projectId === selectedProjectId ? globalExportProgress : null
+                }
               />
             </div>
           )}

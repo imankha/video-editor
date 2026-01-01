@@ -42,7 +42,8 @@
       "Bash(npx eslint:*)",
       "Bash(git checkout:*)",
       "Bash(tasklist:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(.venv/Scripts/pip.exe install:*)"
     ],
     "deny": [],
     "ask": []
