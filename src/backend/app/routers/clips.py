@@ -24,6 +24,7 @@ from app.database import (
     RAW_CLIPS_PATH,
     UPLOADS_PATH
 )
+from app.queries import latest_working_clips_subquery
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/clips", tags=["clips"])
@@ -163,7 +164,7 @@ async def list_project_clips(project_id: int):
 
         # Get working clips with resolved filenames and metadata
         # Only show the latest version of each clip (grouped by end_time)
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT
                 wc.id,
                 wc.project_id,
@@ -181,24 +182,9 @@ async def list_project_clips(project_id: int):
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             WHERE wc.project_id = ?
-            AND wc.id IN (
-                SELECT wc2.id FROM working_clips wc2
-                LEFT JOIN raw_clips rc2 ON wc2.raw_clip_id = rc2.id
-                WHERE wc2.project_id = ?
-                AND wc2.id IN (
-                    SELECT id FROM (
-                        SELECT wc3.id, ROW_NUMBER() OVER (
-                            PARTITION BY COALESCE(rc3.end_time, wc3.uploaded_filename)
-                            ORDER BY wc3.version DESC
-                        ) as rn
-                        FROM working_clips wc3
-                        LEFT JOIN raw_clips rc3 ON wc3.raw_clip_id = rc3.id
-                        WHERE wc3.project_id = ?
-                    ) WHERE rn = 1
-                )
-            )
+            AND wc.id IN ({latest_working_clips_subquery()})
             ORDER BY wc.sort_order
-        """, (project_id, project_id, project_id))
+        """, (project_id, project_id))
         clips = cursor.fetchall()
 
         return [
@@ -413,7 +399,17 @@ async def update_working_clip(
         )
         was_exported = current_clip['exported_at'] is not None
 
-        if is_framing_change and was_exported:
+        # Check if data actually changed (avoid creating new versions for no-op saves)
+        data_actually_changed = False
+        if is_framing_change:
+            if update.crop_data is not None and update.crop_data != current_clip['crop_data']:
+                data_actually_changed = True
+            if update.timing_data is not None and update.timing_data != current_clip['timing_data']:
+                data_actually_changed = True
+            if update.segments_data is not None and update.segments_data != current_clip['segments_data']:
+                data_actually_changed = True
+
+        if is_framing_change and was_exported and data_actually_changed:
             # Create a NEW version of this clip instead of updating
             new_version = current_clip['version'] + 1
 

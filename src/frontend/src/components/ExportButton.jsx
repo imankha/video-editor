@@ -120,10 +120,21 @@ const ExportButton = forwardRef(function ExportButton({
   projectId = null,            // Current project ID (for overlay mode DB save)
   projectName = null,          // Project name for download filename
   onExportComplete = null,     // Callback when export completes (to refresh project list)
+  onExportStart = null,        // Callback when export starts (with exportId for global tracking)
+  onExportEnd = null,          // Callback when export ends (success or failure)
+  isExternallyExporting = false, // True if this project is exporting (from global state)
+  externalProgress = null,     // { progress: number, message: string } from global WebSocket
 }, ref) {
   const [isExporting, setIsExporting] = useState(false);
+
+  // Combine internal and external exporting state
+  const isCurrentlyExporting = isExporting || isExternallyExporting;
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
+
+  // Use external progress when available and not actively exporting locally
+  const displayProgress = isExporting ? progress : (externalProgress?.progress ?? 0);
+  const displayMessage = isExporting ? progressMessage : (externalProgress?.message ?? '');
   const [error, setError] = useState(null);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
   const wsRef = useRef(null);
@@ -223,6 +234,9 @@ const ExportButton = forwardRef(function ExportButton({
     // Generate unique export ID
     const exportId = generateExportId();
     exportIdRef.current = exportId;
+
+    // Notify parent with exportId for global WebSocket tracking
+    onExportStart?.(exportId);
 
     try {
       // Prepare form data based on mode
@@ -400,12 +414,14 @@ const ExportButton = forwardRef(function ExportButton({
 
           await onProceedToOverlay(blob, clipMetadata);
           setIsExporting(false);
+          onExportEnd?.();
           setProgress(0);
           setProgressMessage('');
         } catch (err) {
           console.error('Failed to save working video or transition to overlay:', err);
           setError(err.message || 'Failed to save working video');
           setIsExporting(false);
+          onExportEnd?.();
           setProgress(0);
           setProgressMessage('');
         }
@@ -465,6 +481,7 @@ const ExportButton = forwardRef(function ExportButton({
         setProgressMessage('Export complete!');
         setTimeout(() => {
           setIsExporting(false);
+          onExportEnd?.();
           setProgress(0);
           setProgressMessage('');
         }, 2000);
@@ -502,6 +519,7 @@ const ExportButton = forwardRef(function ExportButton({
       }
 
       setIsExporting(false);
+      onExportEnd?.();
       setProgress(0);
       setProgressMessage('');
     }
@@ -514,8 +532,9 @@ const ExportButton = forwardRef(function ExportButton({
   // Uses ref to always call latest handleExport, avoiding stale closure issues
   useImperativeHandle(ref, () => ({
     triggerExport: () => handleExportRef.current?.(),
-    isExporting
-  }), [isExporting]);
+    isExporting,
+    isCurrentlyExporting
+  }), [isExporting, isCurrentlyExporting]);
 
   // Determine button text based on mode
   const isFramingMode = editorMode === 'framing';
@@ -542,10 +561,10 @@ const ExportButton = forwardRef(function ExportButton({
                 onIncludeAudioChange(!includeAudio);
                 setAudioExplicitlySet(true);
               }}
-              disabled={isExporting}
+              disabled={isCurrentlyExporting}
               className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
                 includeAudio ? 'bg-blue-600' : 'bg-gray-600'
-              } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              } ${isCurrentlyExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               role="switch"
               aria-checked={includeAudio}
               aria-label="Toggle audio"
@@ -576,7 +595,7 @@ const ExportButton = forwardRef(function ExportButton({
               onChange={(pos) => onHighlightEffectTypeChange?.(positionToEffectType[pos])}
               colors={HIGHLIGHT_EFFECT_COLORS}
               labels={HIGHLIGHT_EFFECT_LABELS}
-              disabled={isExporting || !isHighlightEnabled}
+              disabled={isCurrentlyExporting || !isHighlightEnabled}
             />
           </div>
         )}
@@ -593,17 +612,17 @@ const ExportButton = forwardRef(function ExportButton({
       {/* Single Export button for both modes */}
       <button
         onClick={handleExport}
-        disabled={disabled || isExporting || !videoFile}
+        disabled={disabled || isCurrentlyExporting || !videoFile}
         className={`w-full px-6 py-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-          disabled || isExporting || !videoFile
+          disabled || isCurrentlyExporting || !videoFile
             ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
             : 'bg-blue-600 hover:bg-blue-700 text-white'
         }`}
       >
-        {isExporting ? (
+        {isCurrentlyExporting ? (
           <>
             <Loader className="animate-spin" size={20} />
-            <span>Exporting...</span>
+            <span>{isExternallyExporting && !isExporting ? 'Export in progress...' : 'Exporting...'}</span>
           </>
         ) : (
           <>
@@ -613,11 +632,11 @@ const ExportButton = forwardRef(function ExportButton({
         )}
       </button>
 
-      {/* Progress display when exporting */}
+      {/* Progress display when exporting (show for both internal and external exports) */}
       <ExportProgress
-        isExporting={isExporting}
-        progress={progress}
-        progressMessage={progressMessage}
+        isExporting={isCurrentlyExporting}
+        progress={displayProgress}
+        progressMessage={displayMessage}
         label={isFramingMode ? "AI Upscaling" : "Overlay Export"}
       />
 
@@ -629,7 +648,7 @@ const ExportButton = forwardRef(function ExportButton({
       )}
 
       {/* Success message */}
-      {progress === 100 && !isExporting && (
+      {progress === 100 && !isCurrentlyExporting && (
         <div className="text-green-400 text-sm bg-green-900/20 border border-green-800 rounded p-2">
           Export complete! Video downloaded.
         </div>
