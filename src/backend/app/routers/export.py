@@ -1728,11 +1728,36 @@ async def export_framing(
         """, (working_video_id, project_id))
 
         # Set exported_at timestamp for all working clips (latest versions only)
+        # Add explicit project_id filter for extra safety
         cursor.execute(f"""
             UPDATE working_clips
             SET exported_at = datetime('now')
-            WHERE id IN ({latest_working_clips_subquery()})
-        """, (project_id,))
+            WHERE project_id = ?
+            AND id IN ({latest_working_clips_subquery()})
+        """, (project_id, project_id))
+
+        clips_updated = cursor.rowcount
+        logger.info(f"[Framing Export] Set exported_at for {clips_updated} clips in project {project_id}")
+
+        # Fallback: If no clips were updated, try simpler approach
+        # This handles edge cases where the version query might not work
+        if clips_updated == 0:
+            logger.warning(f"[Framing Export] No clips updated with version query, trying fallback for project {project_id}")
+            # Check how many clips exist for this project
+            cursor.execute("SELECT COUNT(*) as cnt FROM working_clips WHERE project_id = ?", (project_id,))
+            total_clips = cursor.fetchone()['cnt']
+            logger.info(f"[Framing Export] Project {project_id} has {total_clips} total working_clips")
+
+            if total_clips > 0:
+                # Update all clips in the project (fallback for edge cases)
+                cursor.execute("""
+                    UPDATE working_clips
+                    SET exported_at = datetime('now')
+                    WHERE project_id = ?
+                    AND exported_at IS NULL
+                """, (project_id,))
+                clips_updated = cursor.rowcount
+                logger.info(f"[Framing Export] Fallback: Set exported_at for {clips_updated} clips")
 
         conn.commit()
 
