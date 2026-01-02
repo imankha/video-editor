@@ -152,14 +152,39 @@ def ensure_database():
 
         # Games - store annotated game footage for later project creation
         # video_filename is NULL until video is uploaded (allows instant game creation)
-        # annotations_filename points to a TSV file in the games folder
+        # Aggregate columns cache annotation counts for fast listing without parsing
+        # Annotations are stored in the annotations table (linked by game_id)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 video_filename TEXT,
-                annotations_filename TEXT,
+                clip_count INTEGER DEFAULT 0,
+                brilliant_count INTEGER DEFAULT 0,
+                good_count INTEGER DEFAULT 0,
+                interesting_count INTEGER DEFAULT 0,
+                mistake_count INTEGER DEFAULT 0,
+                blunder_count INTEGER DEFAULT 0,
+                aggregate_score INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Annotations - individual marked regions in game footage
+        # Replaces TSV file storage for better queryability and performance
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS annotations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL,
+                start_time REAL NOT NULL,
+                end_time REAL NOT NULL,
+                name TEXT DEFAULT '',
+                rating INTEGER DEFAULT 3 CHECK (rating >= 1 AND rating <= 5),
+                tags TEXT DEFAULT '[]',
+                notes TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
             )
         """)
 
@@ -195,6 +220,14 @@ def ensure_database():
             "ALTER TABLE final_videos ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
             # Replace progress flag with exported_at timestamp
             "ALTER TABLE working_clips ADD COLUMN exported_at TEXT DEFAULT NULL",
+            # Annotations refactor: aggregate columns on games table
+            "ALTER TABLE games ADD COLUMN clip_count INTEGER DEFAULT 0",
+            "ALTER TABLE games ADD COLUMN brilliant_count INTEGER DEFAULT 0",
+            "ALTER TABLE games ADD COLUMN good_count INTEGER DEFAULT 0",
+            "ALTER TABLE games ADD COLUMN interesting_count INTEGER DEFAULT 0",
+            "ALTER TABLE games ADD COLUMN mistake_count INTEGER DEFAULT 0",
+            "ALTER TABLE games ADD COLUMN blunder_count INTEGER DEFAULT 0",
+            "ALTER TABLE games ADD COLUMN aggregate_score INTEGER DEFAULT 0",
         ]
 
         for migration in migrations:
@@ -271,6 +304,15 @@ def ensure_database():
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_final_videos_project_version
                 ON final_videos(project_id, version DESC)
+            """)
+            # Indexes for annotations table
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_annotations_game_id
+                ON annotations(game_id)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_annotations_rating
+                ON annotations(rating)
             """)
         except sqlite3.OperationalError:
             # Index already exists, ignore
