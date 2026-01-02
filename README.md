@@ -1,258 +1,331 @@
 # Video Editor
 
-A browser-based video editing application with advanced crop keyframing and speed control features.
+A browser-based video editing application with three-mode workflow: **Annotate** (clip extraction), **Framing** (crop/upscale), and **Overlay** (highlight effects).
 
-## Project Status
+## Tech Stack
 
-This project is in active development using AI-assisted development with Claude Code. Development follows a risk-first, phase-based approach to build features incrementally.
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | React 18 + Vite (port 5173) |
+| **Backend** | FastAPI + Python (uvicorn, port 8000) |
+| **Database** | SQLite (`user_data/a/database.sqlite`) |
+| **Video Processing** | FFmpeg (required in PATH) |
+| **AI Upscaling** | Real-ESRGAN, RIFE (optional) |
 
-## Project Vision
+## Quick Start
 
-A web-based video editor focused on:
-- **Animated Crop System**: Keyframe-based cropping with smooth interpolation between different crop regions
-- **Speed Controls**: Variable playback speed with dedicated timeline regions
-- **Professional Timeline**: Multi-clip editing with trim, split, and arrange capabilities
-- **Export Pipeline**: FFmpeg-based rendering with quality presets
-
-## Development Approach
-
-This project prioritizes:
-1. **Risk Front-loading**: Most complex/novel features (crop keyframes) built first
-2. **MVP Completeness**: Essential features (import/export) included early
-3. **AI-Friendly Structure**: Clear technical requirements optimized for Claude Code
-4. **Incremental Validation**: Each phase produces testable, working software
-
-## Phase Overview
-
-### Development Phases (Feature Building)
-1. **Foundation** - Basic playback & architecture
-2. **Crop Keyframes** - Animated crop system (HIGHEST RISK - Novel feature)
-3. **Import/Export** - File management (MVP ESSENTIAL)
-4. **Speed Controls** - Variable playback
-5. **Timeline Editing** - Trim & multi-clip
-
-### Deployment Phases (Production Readiness)
-6. **Build Pipeline** - Automated builds
-7. **Environment Setup** - Multi-environment deploy
-8. **Cross-Platform** - Multi-device testing
-
-## Documentation Structure
-
-All project specifications and technical documentation are located in the [docs/](docs/) directory:
-
-### Core Documentation
-- [00-PROJECT-OVERVIEW.md](docs/00-PROJECT-OVERVIEW.md) - Complete project vision and phase breakdown
-- [AI-IMPLEMENTATION-GUIDE.md](docs/AI-IMPLEMENTATION-GUIDE.md) - Guide for AI-assisted development
-- [TECHNICAL-REFERENCE.md](docs/TECHNICAL-REFERENCE.md) - Technical architecture and patterns
-
-### Phase Specifications
-- [01-PHASE-FOUNDATION.md](docs/01-PHASE-FOUNDATION.md) - Video player foundation
-- [02-PHASE-CROP-KEYFRAMES.md](docs/02-PHASE-CROP-KEYFRAMES.md) - Animated crop system
-- [03-PHASE-IMPORT-EXPORT.md](docs/03-PHASE-IMPORT-EXPORT.md) - File I/O and rendering
-- [04-PHASE-SPEED-CONTROLS.md](docs/04-PHASE-SPEED-CONTROLS.md) - Variable speed playback
-- [05-PHASE-TIMELINE-EDITING.md](docs/05-PHASE-TIMELINE-EDITING.md) - Professional editing features
-- [06-PHASE-BUILD-PIPELINE.md](docs/06-PHASE-BUILD-PIPELINE.md) - Build automation
-- [07-PHASE-ENVIRONMENT-SETUP.md](docs/07-PHASE-ENVIRONMENT-SETUP.md) - Environment configuration
-- [08-PHASE-CROSS-PLATFORM.md](docs/08-PHASE-CROSS-PLATFORM.md) - Cross-platform testing
-
-## 🚀 Quick Start - Running the Application
-
-### Windows Users - One-Click Startup! ⚡
-
-From the project root directory:
-
+### Windows
 ```batch
 start-dev.bat
 ```
 
-That's it! This automatically starts both servers in separate windows.
-
-**See [DEVELOPMENT.md](DEVELOPMENT.md) for complete Windows development guide.**
-
----
-
-### Manual Setup (All Platforms)
-
-#### Prerequisites
-
-- **Python 3.11+** - [Download](https://www.python.org/downloads/)
-- **Node.js 18+** - [Download](https://nodejs.org/)
-- **FFmpeg** (for future video processing) - [Install guide](#install-ffmpeg)
-
-#### Step 1: Start the Backend
-
-**Windows:**
-```batch
-cd src\backend
-start.bat
-```
-
-**macOS/Linux:**
+### Manual (All Platforms)
 ```bash
+# Terminal 1: Backend
 cd src/backend
-python3 -m venv venv
-source venv/bin/activate
+python -m venv .venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
+uvicorn app.main:app --reload --port 8000
 
-**Backend will run at:** http://localhost:8000
-
-#### Step 2: Start the Frontend (New Terminal)
-
-**Windows:**
-```batch
-cd src\frontend
-start.bat
-```
-
-**macOS/Linux:**
-```bash
+# Terminal 2: Frontend
 cd src/frontend
-npm install
-npm run dev
+npm install && npm run dev
 ```
 
-**Frontend will run at:** http://localhost:5173
-
-#### Step 3: View the Application
-
-Open your browser to: **http://localhost:5173**
-
-You should see the video editor with:
-- ✅ Beautiful gradient UI (Tailwind CSS)
-- ✅ Live connection to backend API
-- ✅ Video upload and processing capabilities
-
-**Additional URLs:**
-- API Documentation: http://localhost:8000/docs
-- Backend API: http://localhost:8000/api/hello
+**Access:** http://localhost:5173 | **API Docs:** http://localhost:8000/docs
 
 ---
 
-## 🛠️ Technology Stack
+## Architecture Overview
 
-### Frontend
-- **React 18** - UI framework
-- **Vite** - Build tool with hot reload
-- **Tailwind CSS** - Utility-first styling
-- **Axios** - HTTP client for API calls
-
-### Backend
-- **FastAPI** - Modern Python web framework
-- **Python 3.11+** - Programming language
-- **Uvicorn** - ASGI server
-- **Pydantic** - Data validation
-
-### Coming Soon
-- **FFmpeg** - Video encoding/decoding
-- **OpenCV** - Video frame manipulation
-- **moviepy** - Video editing
-
-## Development Philosophy
-
-Each phase specification includes:
-- Exact component requirements
-- Complete data models
-- Algorithm specifications
-- API contracts
-- Testing requirements
-- Clear acceptance criteria
-
-The specifications are written to minimize ambiguity and maximize implementation success with AI coding assistants.
-
-## Current Phase
-
-**Status:** Hello World Demo Complete ✅
-**Next:** Phase 1 (Foundation) - Video upload and playback
-
----
-
-## 📚 Additional Documentation
-
-- **[IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md)** - Complete development plan with FastAPI backend architecture
-- **[MILESTONES.md](./docs/MILESTONES.md)** - Project milestones and timeline (5 weeks to production)
-- **[QUICK_START.md](./docs/QUICK_START.md)** - Detailed setup guide
-- **[README_HELLO_WORLD.md](./docs/README_HELLO_WORLD.md)** - Hello World demo details
-- **[VERIFICATION.md](./docs/VERIFICATION.md)** - Project verification guide
-
----
-
-## 🐛 Troubleshooting
-
-### Backend Issues
-
-**Problem:** `ModuleNotFoundError: No module named 'fastapi'`
-**Solution:** Make sure virtual environment is activated (you should see `(venv)` in terminal prompt), then run `pip install -r requirements.txt`
-
-**Problem:** Port 8000 already in use
-**Solution:** Kill the process: `lsof -ti:8000 | xargs kill -9` or use different port
-
-### Frontend Issues
-
-**Problem:** `Cannot find module 'vite'`
-**Solution:** Delete `node_modules` and reinstall: `rm -rf node_modules package-lock.json && npm install`
-
-**Problem:** CORS errors in browser console
-**Solution:** Ensure backend is running on port 8000 and check CORS settings in `backend/app/main.py`
-
----
-
-## 📦 Install FFmpeg
-
-### macOS
-```bash
-brew install ffmpeg
+```
+User Workflow:
+  +-----------------+     +---------------+     +--------------+     +---------+
+  | Annotate Mode   | --> | Framing Mode  | --> | Overlay Mode | --> | Gallery |
+  | (Mark clips in  |     | (Crop, speed, |     | (Highlight   |     | (Final  |
+  |  game footage)  |     |  trim, AI up) |     |  effects)    |     | videos) |
+  +-----------------+     +---------------+     +--------------+     +---------+
+         |                       |                     |                  |
+         v                       v                     v                  v
+    raw_clips/            working_clips         working_videos      final_videos/
+    (library)             (per project)         (per project)       (downloads)
 ```
 
-### Ubuntu/Debian
-```bash
-sudo apt update && sudo apt install ffmpeg
-```
+### Three Editing Modes
 
-### Windows
-Download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to PATH
+1. **Annotate Mode**: Mark clip regions on full game footage
+   - Add metadata (tags, rating 1-5, notes)
+   - Export creates raw clips (4+ stars) + projects
+   - Outputs: `raw_clips/` files + `annotations.tsv`
 
-**Verify installation:**
-```bash
-ffmpeg -version
-```
+2. **Framing Mode**: Edit individual clips within a project
+   - Crop keyframes with spline interpolation
+   - Segment splitting, speed control, trimming
+   - AI upscaling (Real-ESRGAN 4x)
+   - Outputs: `working_videos/` (intermediate renders)
+
+3. **Overlay Mode**: Add highlight effects to working video
+   - Ellipse highlight regions with keyframe animation
+   - Effect types (brightness, dark overlay)
+   - Outputs: `final_videos/` (shown in Gallery)
 
 ---
 
-## 🎯 Project Structure
+## Project Structure
 
 ```
 video-editor/
 ├── src/
-│   ├── frontend/              # React + Vite + Tailwind
-│   │   ├── src/
-│   │   │   ├── App.jsx       # Main component
-│   │   │   ├── main.jsx      # Entry point
-│   │   │   └── index.css     # Tailwind CSS
-│   │   └── package.json      # Dependencies
+│   ├── backend/                    # FastAPI Python backend
+│   │   └── app/
+│   │       ├── main.py             # App initialization, CORS, WebSocket
+│   │       ├── database.py         # SQLite schema, migrations, paths
+│   │       ├── models.py           # Pydantic request/response models
+│   │       ├── queries.py          # Shared SQL query helpers
+│   │       ├── websocket.py        # WebSocket manager for progress
+│   │       ├── routers/            # API endpoints
+│   │       │   ├── projects.py     # Project CRUD, state persistence
+│   │       │   ├── clips.py        # Raw clips library + working clips
+│   │       │   ├── games.py        # Game footage storage, annotations
+│   │       │   ├── annotate.py     # Annotate export (creates clips + projects)
+│   │       │   ├── export.py       # Framing/overlay export, rendering
+│   │       │   ├── downloads.py    # Gallery/final video management
+│   │       │   ├── detection.py    # YOLO player/ball detection
+│   │       │   └── health.py       # Health checks
+│   │       └── services/
+│   │           └── clip_cache.py   # Clip caching to avoid re-encoding
 │   │
-│   └── backend/              # FastAPI + Python
-│       ├── app/
-│       │   └── main.py       # FastAPI application
-│       └── requirements.txt  # Python dependencies
+│   └── frontend/                   # React + Vite frontend
+│       └── src/
+│           ├── App.jsx             # Main container (3900+ lines)
+│           ├── components/         # Shared UI components
+│           │   ├── VideoPlayer.jsx
+│           │   ├── ProjectManager.jsx
+│           │   ├── ClipSelectorSidebar.jsx
+│           │   ├── ExportButton.jsx
+│           │   ├── DownloadsPanel.jsx
+│           │   └── timeline/       # Timeline components
+│           ├── hooks/              # State management
+│           │   ├── useProjects.js
+│           │   ├── useProjectClips.js
+│           │   ├── useClipManager.js
+│           │   ├── useVideo.js
+│           │   ├── useGames.js
+│           │   └── useKeyframeController.js
+│           ├── modes/              # Mode-specific code
+│           │   ├── framing/        # Crop, segments, overlays
+│           │   ├── overlay/        # Highlight regions
+│           │   └── annotate/       # Clip marking, metadata
+│           ├── controllers/        # Pure state machines
+│           │   └── keyframeController.js
+│           └── utils/              # Utilities
+│               ├── timeFormat.js
+│               ├── splineInterpolation.js
+│               └── keyframeUtils.js
 │
-├── docs/                     # Documentation & specifications
-└── scripts/                  # Utility scripts
+├── user_data/a/                    # Runtime data (gitignored)
+│   ├── database.sqlite
+│   ├── raw_clips/                  # Library clips (from Annotate)
+│   ├── uploads/                    # Direct uploads
+│   ├── games/                      # Full game videos + TSV
+│   ├── working_videos/             # Framing output
+│   ├── final_videos/               # Overlay output
+│   ├── clip_cache/                 # Cached processed clips
+│   └── downloads/                  # Temp export files
+│
+├── test_persistence.py             # 22 backend persistence tests
+├── MANUAL_TEST.md                  # Manual testing procedures
+├── KNOWN_BUGS.md                   # Known issues
+└── prompt_preamble                 # Project context for AI assistants
 ```
 
 ---
 
-## ✨ Success Checklist
+## Database Schema
 
-When everything is working:
+**Version-based system**: Uses INTEGER `version` columns that increment on re-export. Only latest version shown (except Gallery shows all).
 
-- [ ] Backend shows: `INFO: Application startup complete`
-- [ ] Frontend shows: `VITE v5.x.x ready in XXXms`
-- [ ] Browser displays http://localhost:5173
-- [ ] Green checkmark: "Hello from FastAPI + Python!"
-- [ ] No errors in browser console (F12)
-- [ ] API docs work: http://localhost:8000/docs
+### Core Tables
+
+```sql
+-- Raw clips: Extracted from Annotate mode (4+ star ratings)
+raw_clips (
+    id, filename, rating, tags, name, notes,
+    start_time, end_time,  -- end_time is IDENTITY KEY for versioning
+    created_at
+)
+
+-- Projects: Organize clips for editing
+projects (
+    id, name, aspect_ratio,
+    working_video_id,      -- Points to latest working_videos.id
+    final_video_id,        -- Points to latest final_videos.id
+    current_mode,          -- 'framing' or 'overlay' (for resume)
+    last_opened_at, created_at
+)
+
+-- Working clips: Clips in projects with framing edits
+working_clips (
+    id, project_id, raw_clip_id, uploaded_filename,
+    progress,              -- 0 = not exported, 1 = exported
+    sort_order, version,   -- Version increments on re-export
+    crop_data,             -- JSON: crop keyframes
+    timing_data,           -- JSON: {trimRange}
+    segments_data,         -- JSON: {boundaries, segmentSpeeds}
+    transform_data, created_at
+)
+
+-- Working videos: Framing mode output
+working_videos (
+    id, project_id, filename, version,
+    effect_type,           -- Overlay effect type
+    highlights_data,       -- JSON: [{start_time, end_time, keyframes}]
+    text_overlays, duration, created_at
+)
+
+-- Final videos: Overlay mode output (shown in Gallery)
+final_videos (
+    id, project_id, filename, version, duration, created_at
+)
+
+-- Games: Full game footage for Annotate mode
+games (
+    id, name, video_filename, annotations_filename,
+    video_duration, video_width, video_height, video_size, created_at
+)
+```
+
+### Version Identity Rules
+
+- **Clips**: Identified by `raw_clips.end_time` (not by ID)
+- **Videos**: Identified by `project_id` + `version`
+- **Latest query pattern**:
+  ```sql
+  SELECT * FROM working_clips wc WHERE wc.id IN (
+      SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (
+              PARTITION BY COALESCE(rc.end_time, wc.uploaded_filename)
+              ORDER BY version DESC
+          ) as rn FROM working_clips wc
+          LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+          WHERE project_id = ?
+      ) WHERE rn = 1
+  )
+  ```
+
+---
+
+## Key API Endpoints
+
+### Projects
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/projects` | List all with clip counts |
+| POST | `/api/projects` | Create project |
+| DELETE | `/api/projects/{id}` | Delete with all clips |
+| PATCH | `/api/projects/{id}/state` | Update mode/timestamps |
+| POST | `/api/projects/{id}/discard-uncommitted` | Revert unsaved edits |
+
+### Clips
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/clips/raw` | List library clips |
+| GET | `/api/clips/projects/{id}/clips` | List project's working clips |
+| POST | `/api/clips/projects/{id}/clips` | Add clip to project |
+| PUT | `/api/clips/projects/{id}/clips/{id}` | Save framing edits |
+
+### Export
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/export/upscale` | AI upscale single clip |
+| POST | `/api/export/multi-clip` | Concatenate multiple clips |
+| POST | `/api/export/overlay` | Apply highlight effects |
+| POST | `/api/export/framing` | Save framing output |
+| POST | `/api/export/final` | Save final output |
+
+### Games & Annotate
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/games` | Create game (video optional) |
+| PUT | `/api/games/{id}/video` | Upload game video |
+| POST | `/api/annotate/export` | Export clips + create projects |
+
+---
+
+## Key Frontend Patterns
+
+### State Management
+- **useKeyframeController**: Pure state machine for keyframe operations
+- **Contexts**: CropContext, HighlightContext to avoid prop drilling
+- **Hooks per domain**: useProjects, useClipManager, useVideo, etc.
+
+### Keyframe System
+```javascript
+// All keyframes are frame-based (not time-based)
+keyframe = {
+  frame: number,
+  origin: 'permanent' | 'user' | 'trim',  // Creation source
+  // Mode-specific data:
+  x, y, width, height,      // Crop mode
+  radiusX, radiusY, opacity // Highlight mode
+}
+```
+
+### Spline Interpolation
+- Catmull-Rom cubic spline for smooth animations
+- Converts frame -> position data between keyframes
+- Used by both crop and highlight overlays
+
+### Auto-Save Pattern
+- Debounced (2s) saves to backend
+- `refresh_required` response pattern: if true, client fetches fresh data
+- Prevents version conflicts with server-side versioning
+
+---
+
+## Testing
+
+```bash
+# Backend persistence tests (22 tests)
+cd src/backend && python ../../test_persistence.py
+
+# Manual UI testing
+# See MANUAL_TEST.md for procedures
+```
+
+---
+
+## Common Patterns
+
+### Export Progress
+- WebSocket connection for real-time updates
+- Progress stages: init (10%) -> processing (20-80%) -> encoding (80-100%)
+- Clip caching prevents re-encoding unchanged clips
+
+### Error Handling
+- Development: Full traceback in responses
+- Production: Sanitized error messages
+- Logging with `[Feature]` tags for filtering
+
+### File Paths
+```python
+# Always use Path objects from database.py:
+from app.database import RAW_CLIPS_PATH, UPLOADS_PATH, WORKING_VIDEOS_PATH
+file_path = RAW_CLIPS_PATH / filename  # NOT f-strings
+```
+
+---
+
+## Known Issues
+
+See [KNOWN_BUGS.md](KNOWN_BUGS.md) for current issues and workarounds.
+
+## Additional Documentation
+
+- [DEVELOPMENT.md](DEVELOPMENT.md) - Development setup guide
+- [MANUAL_TEST.md](MANUAL_TEST.md) - Manual testing procedures
+- [prompt_preamble](prompt_preamble) - Detailed context for debugging
+- [docs/](docs/) - Original phase specifications (historical)
 
 ---
 
