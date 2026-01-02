@@ -105,6 +105,29 @@ async def extract_clip_to_file(
     return True
 
 
+# Rating notation symbols (chess-inspired)
+RATING_NOTATION = {
+    1: '??',   # Blunder
+    2: '?',    # Mistake
+    3: '!?',   # Interesting
+    4: '!',    # Good
+    5: '!!'    # Brilliant
+}
+
+# Rating colors for border (matching frontend ClipRegionLayer)
+# FFmpeg uses 0xRRGGBB format
+RATING_COLORS = {
+    1: '0xC62828',  # Red - Blunder
+    2: '0xF9A825',  # Amber - Mistake
+    3: '0x1565C0',  # Blue - Interesting
+    4: '0x2E7D32',  # Green - Good
+    5: '0x66BB6A',  # Light Green - Brilliant
+}
+
+# Overlay style version - increment to invalidate cache when style changes
+OVERLAY_STYLE_VERSION = 2
+
+
 async def create_clip_with_burned_text(
     source_path: str,
     output_path: str,
@@ -119,6 +142,12 @@ async def create_clip_with_burned_text(
     """
     Extract clip with burned-in text overlay showing annotations.
     Uses caching to avoid re-encoding if clip hasn't changed.
+
+    Overlay style matches the playback overlay:
+    - Centered white box at top of video with colored border
+    - Border color matches rating (red→amber→blue→green→light green)
+    - Rating notation (!, !!, !?, ?, ??) before the clip name
+    - Notes below the name in the same box
     """
     cache = get_clip_cache()
     cache_key = None
@@ -133,7 +162,8 @@ async def create_clip_with_burned_text(
             name=clip_name,
             notes=(clip_notes or '')[:100],  # Match truncation in FFmpeg filter
             rating=rating,
-            tags=sorted(tags) if tags else []
+            tags=sorted(tags) if tags else [],
+            style_version=OVERLAY_STYLE_VERSION  # Invalidate cache when style changes
         )
         cached_path = cache.get(cache_key)
         if cached_path:
@@ -143,9 +173,9 @@ async def create_clip_with_burned_text(
 
     duration = end_time - start_time
 
-    # Build text overlay - use ASCII stars for FFmpeg compatibility
-    rating_display = f"[{rating}/5]"
-    tags_text = ', '.join(tags) if tags else ''
+    # Get rating notation symbol and color
+    rating_notation = RATING_NOTATION.get(rating, '!?')
+    rating_color = RATING_COLORS.get(rating, '0x1565C0')  # Default to blue
 
     def escape_drawtext(text: str) -> str:
         """
@@ -164,43 +194,38 @@ async def create_clip_with_burned_text(
         text = text.replace(';', '\\;')
         return text
 
-    # Build filter complex for text overlays
-    # Show text in top-left with semi-transparent background
+    # Build filter complex for centered white text overlay (matching playback style)
     filter_parts = []
 
-    # Background box for text
+    # Centered white background box at top
+    # Box width is 80% of video width, centered
+    # Height depends on whether we have notes
+    box_height = 80 if clip_notes else 50
+    border_thickness = 4
+
+    # Draw colored border first (slightly larger box)
     filter_parts.append(
-        "drawbox=x=10:y=10:w=400:h=100:color=black@0.6:t=fill"
+        f"drawbox=x=(iw*0.1-{border_thickness}):y=(10-{border_thickness}):w=(iw*0.8+{border_thickness*2}):h=({box_height}+{border_thickness*2}):color={rating_color}:t=fill"
     )
 
-    # Clip name (large)
-    escaped_name = escape_drawtext(clip_name)
+    # Draw white fill on top
     filter_parts.append(
-        f"drawtext=text='{escaped_name}':fontsize=24:fontcolor=white:x=20:y=20"
+        f"drawbox=x=(iw*0.1):y=10:w=(iw*0.8):h={box_height}:color=white@0.95:t=fill"
     )
 
-    # Rating display
-    escaped_rating = escape_drawtext(rating_display)
+    # Rating notation + clip name (centered, black text on white)
+    # Combine notation and name into single text for proper centering
+    title_text = f"{rating_notation}  {clip_name}"
+    escaped_title = escape_drawtext(title_text)
     filter_parts.append(
-        f"drawtext=text='{escaped_rating}':fontsize=20:fontcolor=gold:x=20:y=50"
+        f"drawtext=text='{escaped_title}':fontsize=24:fontcolor=black:x=(w-text_w)/2:y=20"
     )
 
-    # Tags (if any)
-    if tags_text:
-        escaped_tags = escape_drawtext(tags_text)
-        filter_parts.append(
-            f"drawtext=text='{escaped_tags}':fontsize=16:fontcolor=white:x=20:y=75"
-        )
-
-    # Notes (if any) - shown at bottom
-    # Note: drawbox uses ih/iw, drawtext uses h/w for video dimensions
+    # Notes (if any) - below name, also centered
     if clip_notes:
-        filter_parts.append(
-            "drawbox=x=10:y=ih-60:w=iw-20:h=50:color=black@0.6:t=fill"
-        )
         escaped_notes = escape_drawtext(clip_notes[:100])
         filter_parts.append(
-            f"drawtext=text='{escaped_notes}':fontsize=14:fontcolor=white:x=20:y=h-50"
+            f"drawtext=text='{escaped_notes}':fontsize=16:fontcolor=0x333333:x=(w-text_w)/2:y=50"
         )
 
     filter_complex = ','.join(filter_parts)

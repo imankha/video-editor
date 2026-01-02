@@ -3449,7 +3449,7 @@ function App() {
                   selectedKeyframeIndex={selectedCropKeyframeIndex}
                 />
               ),
-              // Annotate mode overlay (NotesOverlay) - shows name and notes for region at playhead
+              // Annotate mode overlay (NotesOverlay) - shows name, rating notation, and notes for region at playhead
               editorMode === 'annotate' && annotateVideoUrl && (() => {
                 const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
                 return (regionAtPlayhead?.name || regionAtPlayhead?.notes) ? (
@@ -3457,6 +3457,7 @@ function App() {
                     key="annotate-notes"
                     name={regionAtPlayhead.name}
                     notes={regionAtPlayhead.notes}
+                    rating={regionAtPlayhead.rating}
                     isVisible={true}
                     isFullscreen={annotateFullscreen}
                   />
