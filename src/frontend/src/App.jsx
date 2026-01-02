@@ -91,6 +91,8 @@ function App() {
   const [annotatePlaybackSpeed, setAnnotatePlaybackSpeed] = useState(1);
   const [annotateFullscreen, setAnnotateFullscreen] = useState(false);
   const [showAnnotateOverlay, setShowAnnotateOverlay] = useState(false);
+  // Annotate mode layer selection for arrow key navigation: 'playhead' | 'clips'
+  const [annotateSelectedLayer, setAnnotateSelectedLayer] = useState('clips');
 
   // Ref for fullscreen container
   const annotateContainerRef = useRef(null);
@@ -1234,27 +1236,44 @@ function App() {
 
   /**
    * Handle annotate region selection - selects the region AND seeks to its start
+   * Also switches to 'clips' layer for arrow key navigation
    */
   const handleSelectAnnotateRegion = useCallback((regionId) => {
+    console.log('[handleSelectAnnotateRegion] Called with regionId:', regionId);
+    console.log('[handleSelectAnnotateRegion] clipRegions count:', clipRegions.length);
     const region = clipRegions.find(r => r.id === regionId);
+    console.log('[handleSelectAnnotateRegion] Found region:', region ? region.name : 'NOT FOUND');
     if (region) {
       selectAnnotateRegion(regionId);
       seek(region.startTime);
+      setAnnotateSelectedLayer('clips');
+    } else {
+      console.warn('[handleSelectAnnotateRegion] Region not found! Available IDs:', clipRegions.map(r => r.id));
     }
   }, [clipRegions, selectAnnotateRegion, seek]);
 
   /**
    * Auto-select annotate clip when playhead is over a region
    * Uses selectAnnotateRegion directly to avoid seeking (which would cause feedback loop)
+   *
+   * IMPORTANT: If the currently selected region also contains the playhead,
+   * we don't override the selection. This handles overlapping clips where
+   * user manually selects one clip but another clip also covers that time.
    */
   useEffect(() => {
     if (editorMode !== 'annotate' || !annotateVideoUrl) return;
 
     const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
     if (regionAtPlayhead && regionAtPlayhead.id !== annotateSelectedRegionId) {
+      // Check if currently selected region also contains the playhead
+      // If so, don't override - user's manual selection takes priority
+      const currentSelection = clipRegions.find(r => r.id === annotateSelectedRegionId);
+      if (currentSelection && currentTime >= currentSelection.startTime && currentTime <= currentSelection.endTime) {
+        return; // Current selection still contains playhead, don't override
+      }
       selectAnnotateRegion(regionAtPlayhead.id);
     }
-  }, [editorMode, annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion]);
+  }, [editorMode, annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions]);
 
   /**
    * Handle clip selection from sidebar
@@ -2096,30 +2115,43 @@ function App() {
       // Don't handle if modifier keys are pressed (let other shortcuts work)
       if (event.ctrlKey || event.metaKey || event.altKey) return;
 
-      // Handle annotate mode: navigate between annotated clips
-      if (editorMode === 'annotate' && annotateVideoUrl && clipRegions.length > 0) {
+      // Handle annotate mode: layer-dependent navigation
+      if (editorMode === 'annotate' && annotateVideoUrl) {
         event.preventDefault();
         const isLeft = event.code === 'ArrowLeft';
 
-        // Sort regions by startTime
-        const sortedRegions = [...clipRegions].sort((a, b) => a.startTime - b.startTime);
-
-        // Find current region index
-        let currentIndex = sortedRegions.findIndex(r => r.id === annotateSelectedRegionId);
-        if (currentIndex === -1) {
-          // No region selected, select first or last based on direction
-          currentIndex = isLeft ? sortedRegions.length : -1;
+        // If playhead layer is selected, step frames
+        if (annotateSelectedLayer === 'playhead') {
+          if (isLeft) {
+            stepBackward();
+          } else {
+            stepForward();
+          }
+          return;
         }
 
-        // Navigate to next/previous region
-        const targetIndex = isLeft
-          ? Math.max(0, currentIndex - 1)
-          : Math.min(sortedRegions.length - 1, currentIndex + 1);
+        // Clips layer: navigate between annotated clips
+        if (clipRegions.length > 0) {
+          // Sort regions by startTime
+          const sortedRegions = [...clipRegions].sort((a, b) => a.startTime - b.startTime);
 
-        if (targetIndex !== currentIndex || currentIndex === -1) {
-          const targetRegion = sortedRegions[targetIndex];
-          selectAnnotateRegion(targetRegion.id);
-          seek(targetRegion.startTime);
+          // Find current region index
+          let currentIndex = sortedRegions.findIndex(r => r.id === annotateSelectedRegionId);
+          if (currentIndex === -1) {
+            // No region selected, select first or last based on direction
+            currentIndex = isLeft ? sortedRegions.length : -1;
+          }
+
+          // Navigate to next/previous region
+          const targetIndex = isLeft
+            ? Math.max(0, currentIndex - 1)
+            : Math.min(sortedRegions.length - 1, currentIndex + 1);
+
+          if (targetIndex !== currentIndex || currentIndex === -1) {
+            const targetRegion = sortedRegions[targetIndex];
+            selectAnnotateRegion(targetRegion.id);
+            seek(targetRegion.startTime);
+          }
         }
         return;
       }
@@ -2196,7 +2228,7 @@ function App() {
 
     document.addEventListener('keydown', handleArrowKeys);
     return () => document.removeEventListener('keydown', handleArrowKeys);
-  }, [videoUrl, effectiveOverlayVideoUrl, selectedLayer, selectedCropKeyframeIndex, selectedHighlightKeyframeIndex, keyframes, highlightKeyframes, framerate, highlightFramerate, isHighlightEnabled, stepForward, stepBackward, seek, editorMode, annotateVideoUrl, clipRegions, annotateSelectedRegionId, selectAnnotateRegion]);
+  }, [videoUrl, effectiveOverlayVideoUrl, selectedLayer, selectedCropKeyframeIndex, selectedHighlightKeyframeIndex, keyframes, highlightKeyframes, framerate, highlightFramerate, isHighlightEnabled, stepForward, stepBackward, seek, editorMode, annotateVideoUrl, clipRegions, annotateSelectedRegionId, selectAnnotateRegion, annotateSelectedLayer]);
 
   // Handle crop changes during drag/resize (live preview)
   const handleCropChange = (newCrop) => {
@@ -3625,6 +3657,8 @@ function App() {
               selectedRegionId={annotateSelectedRegionId}
               onSelectRegion={handleSelectAnnotateRegion}
               onDeleteRegion={deleteClipRegion}
+              selectedLayer={annotateSelectedLayer}
+              onLayerSelect={setAnnotateSelectedLayer}
             />
           )}
 

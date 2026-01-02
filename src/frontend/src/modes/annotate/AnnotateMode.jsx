@@ -21,6 +21,8 @@ export default function AnnotateMode({
   selectedRegionId,
   onSelectRegion,
   onDeleteRegion,
+  selectedLayer = 'clips',
+  onLayerSelect,
 }) {
   if (!duration) return null;
 
@@ -35,6 +37,8 @@ export default function AnnotateMode({
         selectedRegionId={selectedRegionId}
         onSelectRegion={onSelectRegion}
         onDeleteRegion={onDeleteRegion}
+        selectedLayer={selectedLayer}
+        onLayerSelect={onLayerSelect}
       />
     </div>
   );

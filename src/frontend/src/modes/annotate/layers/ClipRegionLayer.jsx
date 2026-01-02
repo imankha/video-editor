@@ -1,4 +1,16 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
+import { generateClipName } from '../constants/soccerTags';
+
+// Format seconds to MM:SS or HH:MM:SS
+const formatTime = (seconds) => {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  if (hrs > 0) {
+    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
 
 // Rating to notation map
 const RATING_NOTATION = {
@@ -40,6 +52,7 @@ export default function ClipRegionLayer({
   edgePadding = 20
 }) {
   const trackRef = useRef(null);
+  const [hoveredRegionId, setHoveredRegionId] = useState(null);
 
   if (!duration) return null;
 
@@ -70,10 +83,14 @@ export default function ClipRegionLayer({
         {/* Clip markers */}
         {regions.map((region) => {
           const isSelected = region.id === selectedRegionId;
+          const isHovered = region.id === hoveredRegionId;
           const left = timeToPercent(region.startTime);
           const rating = region.rating || 3;
           const notation = RATING_NOTATION[rating];
           const color = RATING_COLORS[rating];
+          const showTooltip = isSelected || isHovered;
+          // Use same fallback logic as ClipListItem
+          const displayName = region.name || generateClipName(rating, region.tags || []) || '';
 
           return (
             <div
@@ -82,9 +99,11 @@ export default function ClipRegionLayer({
               style={{
                 left: `${left}%`,
                 transform: `translateX(-50%) translateY(-50%)`,
-                zIndex: isSelected ? 20 : 10,
+                zIndex: isSelected ? 20 : isHovered ? 15 : 10,
               }}
               onClick={(e) => handleMarkerClick(e, region.id)}
+              onMouseEnter={() => setHoveredRegionId(region.id)}
+              onMouseLeave={() => setHoveredRegionId(null)}
             >
               {/* Rating notation badge with outline for visibility */}
               <div
@@ -105,10 +124,12 @@ export default function ClipRegionLayer({
               >
                 {notation}
               </div>
-              {/* Show clip number and name tooltip when selected - positioned above to avoid cutoff */}
-              {isSelected && (
+              {/* Show tooltip on hover or select - end timestamp before clip name */}
+              {showTooltip && (
                 <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-white bg-gray-900 px-1.5 py-0.5 rounded shadow z-30">
-                  <span className="text-gray-400">{region.index + 1}.</span> {region.name}
+                  <span className="text-blue-400">{formatTime(region.endTime)}</span>
+                  <span className="text-gray-500 mx-1">|</span>
+                  <span className="text-gray-400">{region.index + 1}.</span> {displayName}
                 </div>
               )}
             </div>

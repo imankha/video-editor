@@ -2,6 +2,17 @@ import React from 'react';
 import { getRatingDisplay } from '../../../components/shared/clipConstants';
 import { generateClipName } from '../constants/soccerTags';
 
+// Format seconds to MM:SS or HH:MM:SS
+const formatTime = (seconds) => {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  if (hrs > 0) {
+    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
 /**
  * ClipListItem - Individual clip item in the side panel list
  * Compact single-line display showing rating badge and title only.
@@ -13,6 +24,9 @@ export function ClipListItem({ region, index, isSelected, onClick }) {
 
   // Derive display name from stored name or auto-generate from rating+tags
   const displayName = region.name || generateClipName(rating, region.tags || []) || '';
+
+  // Tooltip shows end timestamp before clip name
+  const tooltipText = `${formatTime(region.endTime)} | ${displayName}`;
 
   return (
     <div
@@ -45,7 +59,7 @@ export function ClipListItem({ region, index, isSelected, onClick }) {
         </div>
 
         {/* Clip title only - single line */}
-        <div className="flex-1 min-w-0 text-sm text-white truncate" title={displayName}>
+        <div className="flex-1 min-w-0 text-sm text-white truncate" title={tooltipText}>
           <span className="text-gray-500 mr-1">{index + 1}.</span>
           {displayName}
         </div>

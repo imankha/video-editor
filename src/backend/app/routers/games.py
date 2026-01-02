@@ -29,6 +29,57 @@ router = APIRouter(prefix="/api/games", tags=["games"])
 # TSV column headers (must match frontend useAnnotate.js REQUIRED_COLUMNS)
 TSV_COLUMNS = ['start_time', 'rating', 'tags', 'clip_name', 'clip_duration', 'notes']
 
+# Rating adjectives for clip name generation (must match frontend soccerTags.js)
+RATING_ADJECTIVES = {
+    5: 'Brilliant',
+    4: 'Good',
+    3: 'Interesting',
+    2: 'Unfortunate',
+    1: 'Bad'
+}
+
+# Tag name to short name mapping (must match frontend soccerTags.js)
+TAG_SHORT_NAMES = {
+    'Goals': 'Goal',
+    'Assists': 'Assist',
+    'Dribbling': 'Dribble',
+    'Movement Off Ball': 'Movement',
+    'Passing Range': 'Pass',
+    'Chance Creation': 'Chance Creation',
+    'Possession Play': 'Possession',
+    'Transitions': 'Transition',
+    'Tackles': 'Tackle',
+    'Interceptions': 'Interception',
+    '1v1 Defense': '1v1 Defense',
+    'Build-Up Passing': 'Build-Up',
+    'Shot Stopping': 'Save',
+    'Command of Area': 'Command',
+    'Distribution': 'Distribution',
+    '1v1 Saves': '1v1 Save',
+}
+
+
+def generate_clip_name(rating: int, tags: list) -> str:
+    """
+    Generate a default clip name based on rating and tags.
+    Must match frontend generateClipName() in soccerTags.js.
+    """
+    if not tags:
+        return ''
+
+    adjective = RATING_ADJECTIVES.get(rating, 'Interesting')
+
+    # Convert tag names to short names
+    short_names = [TAG_SHORT_NAMES.get(tag, tag) for tag in tags]
+
+    # Join with "and" for multiple tags
+    if len(short_names) == 1:
+        tag_part = short_names[0]
+    else:
+        tag_part = ', '.join(short_names[:-1]) + ' and ' + short_names[-1]
+
+    return f"{adjective} {tag_part}"
+
 
 def format_time_for_tsv(seconds: float) -> str:
     """Format seconds as M:SS or MM:SS for TSV export."""
@@ -81,9 +132,13 @@ def load_annotations(annotations_filename: Optional[str]) -> list:
             start_time = parse_time_from_tsv(cols[0])
             rating = int(cols[1])
             tags = [t.strip() for t in cols[2].split(',') if t.strip()]
-            clip_name = cols[3]
+            clip_name = cols[3].strip()
             clip_duration = float(cols[4]) if cols[4] else 0
             notes = cols[5] if len(cols) > 5 else ''
+
+            # Generate default name if not provided
+            if not clip_name:
+                clip_name = generate_clip_name(rating, tags)
 
             annotations.append({
                 'start_time': start_time,
