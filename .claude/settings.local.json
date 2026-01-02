@@ -44,8 +44,11 @@
       "Bash(tasklist:*)",
       "Bash(npm run dev:*)",
       "Bash(.venv/Scripts/pip.exe install:*)",
-      "Bash(dir:*)",
-      "Bash(tree:*)"
+
+      "Bash(.venv/Scripts/pip.exe:*)",
+      "Bash(src/backend/.venv/Scripts/python.exe:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nMigrate annotations from TSV files to SQLite database\n\n- Store annotations in dedicated `annotations` table with game_id foreign key\n- Cache aggregate counts \\(clip_count, brilliant_count, etc.\\) on games table\n- Remove all TSV file operations - annotations now DB-only\n- Add ON DELETE CASCADE for automatic cleanup when game deleted\n- Add tests for annotation behavior and aggregate calculations\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ],
     "deny": [],
     "ask": []
