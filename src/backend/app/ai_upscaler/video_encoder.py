@@ -229,6 +229,17 @@ class VideoEncoder:
         original_fps = cap.get(cv2.CAP_PROP_FPS)
         cap.release()
 
+        # DIAGNOSTIC: Log encoding parameters for debugging duration mismatch
+        logger.info("=" * 60)
+        logger.info("VIDEO ENCODING PARAMETERS")
+        logger.info("=" * 60)
+        logger.info(f"  input_frame_count (PNG files): {input_frame_count}")
+        logger.info(f"  original_fps (from source): {original_fps}")
+        logger.info(f"  target_fps (requested): {fps}")
+        logger.info(f"  expected input duration: {input_frame_count / original_fps:.6f}s")
+        logger.info(f"  expected output duration: {input_frame_count / original_fps:.6f}s (should match)")
+        logger.info("=" * 60)
+
         # Detect if frame interpolation is needed (target FPS > source FPS)
         # Use tolerance to handle floating-point comparisons (e.g., 29.97 vs 30)
         fps_tolerance = 0.5
@@ -314,8 +325,9 @@ class VideoEncoder:
 
                     # Calculate input frames for this segment based on adjusted video times
                     # This accounts for clipping at trim boundaries
+                    # Use round() to avoid floating-point precision loss
                     segment_duration = video_end - video_start
-                    segment_input_frames = int(segment_duration * original_fps)
+                    segment_input_frames = round(segment_duration * original_fps)
 
                     if speed == 0.5:
                         # For 0.5x speed: trim segment, apply minterpolate to double frames
@@ -415,7 +427,7 @@ class VideoEncoder:
                         video_filters = ';'.join(filter_parts)
                         filter_complex = f'{video_filters};{concat_filter}[concat];[concat]{minterpolate_filter}[outv]'
 
-                    expected_output_frames = int(expected_output_frames * interpolation_ratio)
+                    expected_output_frames = round(expected_output_frames * interpolation_ratio)
                     logger.info(f"Expected output frames after interpolation: {expected_output_frames}")
                 else:
                     # Combine video and audio filters
@@ -458,10 +470,11 @@ class VideoEncoder:
                             logger.info(f"Trimming start at {trim_start:.2f}s")
 
                         # Recalculate expected frames for trim
+                        # Use round() to avoid floating-point precision loss
                         total_duration = input_frame_count / original_fps
                         actual_end = trim_end if trim_end else total_duration
                         trimmed_duration = actual_end - trim_start
-                        expected_output_frames = int(trimmed_duration * original_fps)
+                        expected_output_frames = round(trimmed_duration * original_fps)
 
         # Apply frame interpolation if needed (when target FPS > source FPS and no segment processing)
         if needs_interpolation and not filter_complex and not trim_filter:
@@ -479,7 +492,7 @@ class VideoEncoder:
             # Create video filter with improved minterpolate settings
             minterpolate_filter = self._get_minterpolate_filter(fps)
             trim_filter = minterpolate_filter
-            expected_output_frames = int(input_frame_count * interpolation_ratio)
+            expected_output_frames = round(input_frame_count * interpolation_ratio)
 
             logger.info(f"Motion interpolation filter: {trim_filter}")
             logger.info("=" * 60)
@@ -493,7 +506,7 @@ class VideoEncoder:
             # Get improved minterpolate settings
             minterpolate_filter = self._get_minterpolate_filter(fps)
             trim_filter = f"{trim_filter},{minterpolate_filter}"
-            expected_output_frames = int(expected_output_frames * interpolation_ratio)
+            expected_output_frames = round(expected_output_frames * interpolation_ratio)
 
             logger.info(f"Combined filter: {trim_filter}")
             logger.info("=" * 60)

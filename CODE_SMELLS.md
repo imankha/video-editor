@@ -4,44 +4,14 @@ This document identifies Martin Fowler-style code smells and refactoring opportu
 
 ---
 
-## Completed Refactors
-
-### ✅ Duplicated Rating/Tag Constants (COMPLETED)
-**Status**: Resolved
-
-**What was done**:
-- Created [constants.py](src/backend/app/constants.py) as single source of truth for all rating/tag constants
-- Contains: `RATING_ADJECTIVES`, `RATING_NOTATION`, `RATING_COLORS_HEX`, `RATING_COLORS_CSS`, `TAG_SHORT_NAMES`
-- Helper functions: `get_rating_adjective()`, `get_rating_notation()`, `get_rating_color_hex()`, `get_tag_short_name()`
-- Updated [queries.py](src/backend/app/queries.py), [annotate.py](src/backend/app/routers/annotate.py), [games.py](src/backend/app/routers/games.py) to import from constants
-
-**Remaining**: Frontend still has duplicate constants in `soccerTags.js`. Consider serving via API endpoint for full unification.
-
----
-
-### ✅ GPU Processing Interface (COMPLETED)
-**Status**: Resolved - Created extensible architecture for future WebGPU/RunPod support
-
-**What was done**:
-- Created [video_processor.py](src/backend/app/services/video_processor.py) - Abstract interface with:
-  - `ProcessingBackend` enum: `LOCAL_GPU`, `WEB_GPU`, `RUNPOD`, `CPU_ONLY`
-  - `ProcessingConfig` dataclass for standardized input
-  - `ProcessingResult` dataclass for standardized output
-  - `ProcessorFactory` for creating processors by backend type
-- Created [ffmpeg_service.py](src/backend/app/services/ffmpeg_service.py) - Isolated FFmpeg helpers
-- Created [local_gpu_processor.py](src/backend/app/services/local_gpu_processor.py) - Current implementation using Real-ESRGAN
-- Updated [services/__init__.py](src/backend/app/services/__init__.py) to export new modules
-
-**Future work**: Implement `WebGPUProcessor` and `RunPodProcessor` classes when those features are needed.
-
----
-
 ## High Priority (Significant Technical Debt)
 
 ### 1. God Class: App.jsx (4,000+ lines)
 **Smell**: Large Class, Feature Envy, Long Method
 
 **Location**: [App.jsx](src/frontend/src/App.jsx)
+
+**Status**: IN PROGRESS - Analysis complete, detailed refactoring plan created
 
 **Problem**:
 - Single file handles ALL application state for 3 different modes
@@ -61,43 +31,122 @@ const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
 // ... 70+ more
 ```
 
-**Refactoring**:
-1. **Extract Mode Components**: Create `<FramingModeContainer>`, `<OverlayModeContainer>`, `<AnnotateModeContainer>` that own their mode's state
-2. **State Machine Pattern**: Replace boolean flags with proper state machine (xstate or useReducer)
-3. **Context Splitting**: Move shared state to granular contexts (VideoContext, ExportContext, ProjectContext)
+**Current Architecture Analysis** (completed):
+- Mode components already exist: `FramingMode.jsx`, `OverlayMode.jsx`, `AnnotateMode.jsx`
+- Contexts already exist: `CropContext.jsx`, `HighlightContext.jsx`
+- State is passed from App.jsx to mode components via 40+ props per component
+- The "prop drilling" pattern is the main issue
+
+**Refactoring Plan** (incremental approach):
+
+**Phase 1: Create Mode State Hooks** ✅ COMPLETED
+- ~~Create `useFramingState.js`~~ - Framing already uses `useCrop` and `useSegments` hooks
+- ✅ Created [useOverlayState.js](src/frontend/src/modes/overlay/hooks/useOverlayState.js) (23 tests)
+  - Consolidates overlay video state, clip metadata, drag state, effect type
+  - Provides `loadOverlayVideoFromUrl()`, `loadOverlayVideoFromFile()`, `resetOverlayState()`
+- ✅ Created [useAnnotateState.js](src/frontend/src/modes/annotate/hooks/useAnnotateState.js) (23 tests)
+  - Consolidates annotate video state, game ID, loading states, playback settings
+  - Provides `loadAnnotateVideoFromUrl()`, `loadAnnotateVideoFromFile()`, `resetAnnotateState()`, `toggleFullscreen()`, `cyclePlaybackSpeed()`
+- ✅ Added comprehensive tests for [useHighlightRegions.js](src/frontend/src/modes/overlay/hooks/useHighlightRegions.test.js) (53 tests)
+- All 215 frontend tests pass
+
+**Phase 2: Mode Container Upgrade** (1 day)
+- Update `FramingModeContainer` to use `useFramingState` internally
+- Update `OverlayModeContainer` to use `useOverlayState` internally
+- Update `AnnotateModeContainer` to use `useAnnotateState` internally
+- Remove corresponding useState calls from App.jsx (reduces by ~60 lines each)
+
+**Phase 3: Cross-Mode State Management** (0.5 day)
+- Create `AppStateContext` for truly shared state:
+  - Current mode (`editorMode`)
+  - Selected project
+  - Global export progress
+  - Downloads count
+- Move only cross-mode state to this context
+
+**Phase 4: Video State Unification** (0.5 day)
+- Create `useVideoState(mode)` hook that returns the appropriate video state
+- Replaces separate `videoFile`, `overlayVideoFile`, `annotateVideoFile`
+- Simplifies VideoPlayer integration
+
+**Testing Strategy**:
+- Each phase should leave the app fully functional
+- Run `npm run build` after each phase
+- Manual testing of each mode after changes
 
 **Effort**: High (2-3 days)
 
----
-
-### 2. Long Module: export.py (2,059 lines)
-**Smell**: Large Class, Long Method, Shotgun Surgery
-
-**Location**: [export.py](src/backend/app/routers/export.py)
-
-**Status**: Partially addressed - FFmpeg helpers extracted to `ffmpeg_service.py`, GPU interface created
-
-**Remaining Problem**:
-- Router still handles 10+ different export operations
-- Could benefit from further splitting into `framing_export.py`, `overlay_export.py`, `multi_clip_export.py`
-
-**Evidence**:
-- `_concatenate_with_fade()` (lines 443-533): 90 lines of FFmpeg filter building
-- `_concatenate_with_dissolve()` (lines 536-599): Nearly identical structure
-- `process_single_clip()` (lines 99-200): Mixes caching, file I/O, and AI processing
-
-**Refactoring**:
-1. ~~**Extract FFmpegService**: Move FFmpeg command building to dedicated service~~ ✅ Done
-2. **Strategy Pattern**: Create transition strategies (FadeTransition, DissolveTransition, CutTransition)
-3. **Split Router**: Separate into `framing_export.py`, `overlay_export.py`, `multi_clip_export.py`
-
-**Effort**: Medium (1-2 days remaining)
+**Priority**: This is the next major refactoring target
 
 ---
 
 ## Medium Priority (Code Quality Issues)
 
-### 3. Primitive Obsession: JSON Columns
+### 3. OpenCV Frame Extraction Limitations
+**Smell**: Inappropriate Intimacy (with OpenCV quirks), Data Clump
+
+**Location**: [ai_upscaler/__init__.py](src/backend/app/ai_upscaler/__init__.py) - `process_video_with_upscale()`
+
+**Problem**: OpenCV's `cv2.CAP_PROP_FRAME_COUNT` and frame seeking are unreliable for certain video formats, causing exports to be shorter than source videos.
+
+**Root Cause**:
+- **Container metadata mismatch**: MP4 containers store duration/frame count metadata separately from actual decodable frames
+- **Incomplete GOPs**: H.264 encodes frames in Groups of Pictures. If recording stopped mid-GOP, metadata declares frames that aren't fully decodable
+- **Variable Frame Rate (VFR)**: Screen recordings often have VFR, causing discrepancies between declared and actual frame counts
+- **Seek inaccuracy**: OpenCV's `CAP_PROP_POS_FRAMES` seek can skip frames for certain codecs
+
+**Evidence**:
+```
+# Browser reports (from container metadata): 11.243s, 309 frames
+# OpenCV can actually decode: 11.099s, 304 frames
+# Result: Exported video is ~0.14s shorter than source
+```
+
+**Current Workaround** (implemented):
+```python
+# Use minimum of ffprobe and OpenCV frame counts
+video_total_frames = min(ffprobe_frame_count, opencv_total_frames)
+
+# Binary search to find actual last readable frame
+if not cap.read() at last_frame:
+    # Find actual_last via binary search
+    video_total_frames = actual_last + 1
+```
+
+**Proper Refactoring** (future work):
+1. **Use FFmpeg for frame extraction** instead of OpenCV
+   - FFmpeg handles edge cases more gracefully
+   - Consistent with encoding pipeline (already uses FFmpeg)
+   - Better VFR support
+
+2. **Implementation approach**:
+   ```python
+   # Instead of OpenCV frame-by-frame:
+   cap = cv2.VideoCapture(path)
+   while cap.read(): ...
+
+   # Use FFmpeg to extract all frames at once:
+   ffmpeg -i input.mp4 -vsync 0 frames/frame_%06d.png
+   ```
+
+3. **Benefits**:
+   - Eliminates frame count mismatch between browser preview and export
+   - More reliable handling of VFR and edge cases
+   - Single dependency (FFmpeg) instead of FFmpeg + OpenCV
+
+**Trade-offs**:
+- FFmpeg extraction is all-or-nothing (can't process frames incrementally)
+- Higher disk I/O (must extract all frames before processing)
+- Current OpenCV approach allows frame-by-frame processing with progress updates
+
+**Effort**: Medium-High (2-3 days)
+- Refactor frame extraction to use FFmpeg subprocess
+- Update progress reporting to work with batch extraction
+- Test with VFR and edge-case videos
+
+---
+
+### 4. Primitive Obsession: JSON Columns
 **Smell**: Primitive Obsession, Stringly Typed
 
 **Location**: Database schema across all tables
@@ -126,7 +175,7 @@ highlights_data TEXT -- JSON: [{start_time, end_time, keyframes}]
 
 ---
 
-### 4. Feature Envy: Clip Name Derivation
+### 5. Feature Envy: Clip Name Derivation
 **Smell**: Feature Envy, Duplicated Code
 
 **Locations**:
@@ -158,7 +207,7 @@ export function deriveClipName(customName, rating, tags) {
 
 ---
 
-### 5. Long Parameter Lists
+### 6. Long Parameter Lists
 **Smell**: Long Parameter List, Data Clump
 
 **Locations**:
@@ -188,7 +237,7 @@ export function deriveClipName(customName, rating, tags) {
 
 ---
 
-### 6. Speculative Generality: transform_data Column
+### 7. Speculative Generality: transform_data Column
 **Smell**: Speculative Generality, Dead Code
 
 **Location**: [database.py](src/backend/app/database.py) - `working_clips` table
@@ -205,7 +254,7 @@ transform_data TEXT,  -- Reserved for future use
 
 ---
 
-### 7. Magic Numbers/Strings
+### 8. Magic Numbers/Strings
 **Smell**: Magic Number, Magic String
 
 **Locations throughout codebase**:
@@ -228,7 +277,7 @@ USER_ID = "a"  # Single-user hardcoded
 
 ---
 
-### 8. Inconsistent Naming: progress vs exported_at
+### 9. Inconsistent Naming: progress vs exported_at
 **Smell**: Inconsistent Naming, Middle Man
 
 **Location**: [clips.py](src/backend/app/routers/clips.py), [database.py](src/backend/app/database.py)
@@ -245,7 +294,7 @@ Both are checked in different places, creating confusion.
 
 ---
 
-### 9. Nested Callbacks: Export Progress
+### 10. Nested Callbacks: Export Progress
 **Smell**: Callback Hell, Message Chain
 
 **Location**: [export.py](src/backend/app/routers/export.py) - progress_callback usage
@@ -269,7 +318,7 @@ async def process_single_clip(..., progress_callback, ...):
 
 ## Low Priority (Minor Issues)
 
-### 10. Comments as Code Smell
+### 11. Comments as Code Smell
 **Smell**: Comments explaining what (not why)
 
 **Locations throughout**:
@@ -289,7 +338,7 @@ These comments explain obvious code. Better to have self-documenting code.
 
 ---
 
-### 11. Boolean Parameters
+### 12. Boolean Parameters
 **Smell**: Boolean Blindness
 
 **Locations**:
@@ -309,7 +358,7 @@ isHighlightEnabled={editorMode === 'overlay' && highlightRegions.length > 0}
 
 ---
 
-### 12. Temporal Coupling
+### 13. Temporal Coupling
 **Smell**: Temporal Coupling
 
 **Location**: [export.py](src/backend/app/routers/export.py) - multi-clip export
@@ -327,7 +376,7 @@ isHighlightEnabled={editorMode === 'overlay' && highlightRegions.length > 0}
 
 ---
 
-### 13. Incomplete Error Handling
+### 14. Incomplete Error Handling
 **Smell**: Incomplete Library Class
 
 **Location**: Various FFmpeg subprocess calls
@@ -349,7 +398,7 @@ if result.returncode != 0:
 
 ## Architectural Improvements
 
-### 14. Consider State Management Library
+### 15. Consider State Management Library
 **Smell**: Data Class (anti-pattern for React)
 
 **Problem**: App.jsx manages state through 100+ useState hooks. This is complex to reason about and test.
@@ -363,7 +412,7 @@ if result.returncode != 0:
 
 ---
 
-### 15. Service Layer Pattern
+### 16. Service Layer Pattern
 **Smell**: Transaction Script
 
 **Problem**: Business logic mixed into router handlers. Makes testing harder.
@@ -396,10 +445,8 @@ async def export(...):
 
 | Priority | Issue | Effort | Impact | Status |
 |----------|-------|--------|--------|--------|
-| High | App.jsx God Class | 2-3 days | Very High | Pending |
-| High | export.py Long Module | 1-2 days | High | **Partial** |
-| ~~High~~ | ~~Duplicated Constants~~ | ~~1 day~~ | ~~Medium~~ | **✅ Done** |
-| ~~High~~ | ~~GPU Interface~~ | ~~1 day~~ | ~~High~~ | **✅ Done** |
+| High | App.jsx God Class | 2-3 days | Very High | **In Progress** (Phase 1 ✅, Phase 2-4 pending) |
+| Medium | OpenCV Frame Extraction | 2-3 days | Medium | Workaround applied, FFmpeg refactor pending |
 | Medium | JSON Primitive Obsession | 1-2 days | Medium | Pending |
 | Medium | Feature Envy (clip name) | 0.5 days | Low | Pending |
 | Medium | Long Parameter Lists | 1 day | Medium | Pending |
@@ -411,20 +458,18 @@ async def export(...):
 
 ## Recommended Refactoring Order
 
-1. ~~**First Sprint**: Duplicated constants (reduces shotgun surgery for future work)~~ ✅ Completed
-2. ~~**GPU Interface**: Create abstract processor interface for future WebGPU/RunPod~~ ✅ Completed
-3. **Next**: Export.py router split (enables parallel work on export features)
-4. **Future**: App.jsx mode extraction (biggest payoff for maintainability)
-5. **Ongoing**: Address smaller issues as files are touched
+1. **Next**: App.jsx mode extraction (follow 4-phase plan above)
+2. **Ongoing**: Address smaller issues as files are touched
 
 ---
 
 ## Notes for AI Assistants
 
 When working on this codebase:
-1. **App.jsx**: Treat this file carefully. It's large and interconnected. Small changes can have unexpected effects.
-2. **Export pipeline**: Test with actual video files after changes. FFmpeg behavior varies.
+1. **App.jsx**: Treat this file carefully. It's large and interconnected. Follow the 4-phase refactoring plan incrementally. Small changes can have unexpected effects.
+2. **Export pipeline**: Test with actual video files after changes. FFmpeg behavior varies. Use the new transition strategy pattern for adding new transition types.
 3. **Database migrations**: The codebase uses auto-migration. Test with existing databases.
 4. **Mode interactions**: Changes in one mode may affect others through shared state.
 5. **Services layer**: New GPU-intensive code should implement the `VideoProcessor` interface in `app/services/video_processor.py`.
 6. **Constants**: All rating/tag constants should be imported from `app/constants.py` - never define duplicates.
+7. **Transitions**: Use `TransitionFactory.create('fade')` or `apply_transition()` from `app/services/transitions/` for video concatenation.

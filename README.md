@@ -89,7 +89,11 @@ video-editor/
 │   │       │   ├── clips.py        # Raw clips library + working clips
 │   │       │   ├── games.py        # Game footage storage, annotations
 │   │       │   ├── annotate.py     # Annotate export (creates clips + projects)
-│   │       │   ├── export.py       # Framing/overlay export, rendering
+│   │       │   ├── export/         # Export endpoints (split by mode)
+│   │       │   │   ├── __init__.py     # Aggregates sub-routers
+│   │       │   │   ├── framing.py      # /crop, /upscale, /framing endpoints
+│   │       │   │   ├── overlay.py      # /overlay, /final endpoints
+│   │       │   │   └── multi_clip.py   # /multi-clip, /chapters endpoints
 │   │       │   ├── downloads.py    # Gallery/final video management
 │   │       │   ├── detection.py    # YOLO player/ball detection
 │   │       │   └── health.py       # Health checks
@@ -97,7 +101,12 @@ video-editor/
 │   │           ├── clip_cache.py       # Clip caching to avoid re-encoding
 │   │           ├── video_processor.py  # Abstract GPU processing interface
 │   │           ├── ffmpeg_service.py   # FFmpeg helper functions
-│   │           └── local_gpu_processor.py  # Local GPU implementation
+│   │           ├── local_gpu_processor.py  # Local GPU implementation
+│   │           └── transitions/        # Video transition strategies
+│   │               ├── base.py         # TransitionStrategy interface
+│   │               ├── cut.py          # Simple concatenation
+│   │               ├── fade.py         # Fade to black transition
+│   │               └── dissolve.py     # Cross-dissolve transition
 │   │
 │   └── frontend/                   # React + Vite frontend
 │       └── src/
@@ -329,12 +338,39 @@ from app.constants import (
 )
 ```
 
+### Transition Strategies
+
+Video clip concatenation uses the Strategy pattern for extensibility:
+
+```python
+from app.services.transitions import TransitionFactory, apply_transition
+
+# Create specific transition strategy
+strategy = TransitionFactory.create('dissolve')  # 'cut', 'fade', or 'dissolve'
+success = strategy.concatenate(
+    clip_paths=['clip1.mp4', 'clip2.mp4'],
+    output_path='output.mp4',
+    duration=0.5,  # transition duration in seconds
+    include_audio=True
+)
+
+# Or use convenience function
+success = apply_transition(
+    transition_type='fade',
+    clip_paths=['clip1.mp4', 'clip2.mp4'],
+    output_path='output.mp4',
+    duration=0.5
+)
+```
+
+To add a new transition type, create a class implementing `TransitionStrategy` and register it with `TransitionFactory.register()`.
+
 ---
 
 ## Testing
 
 ```bash
-# Backend tests (141 tests)
+# Backend tests (159 tests)
 cd src/backend && .venv/Scripts/python -m pytest tests/ -v
 
 # Manual UI testing

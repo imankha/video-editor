@@ -20,6 +20,7 @@ import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from datetime import datetime
+import json
 
 # Import utilities
 from . import utils
@@ -46,6 +47,75 @@ logging.getLogger('realesrgan').setLevel(logging.CRITICAL)
 os.environ['REALESRGAN_VERBOSE'] = '0'
 
 logger = logging.getLogger(__name__)
+
+
+def get_video_metadata_ffprobe(video_path: str) -> Optional[Dict[str, Any]]:
+    """
+    Get accurate video metadata using ffprobe.
+    This reads container metadata which matches what browsers report.
+
+    Args:
+        video_path: Path to the video file
+
+    Returns:
+        Dict with 'duration', 'fps', 'frame_count', 'width', 'height' or None on failure
+    """
+    try:
+        # Get stream info including duration and frame count
+        result = subprocess.run(
+            [
+                'ffprobe', '-v', 'error',
+                '-select_streams', 'v:0',
+                '-show_entries', 'stream=duration,r_frame_rate,nb_frames,width,height',
+                '-show_entries', 'format=duration',
+                '-of', 'json',
+                video_path
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode != 0:
+            logger.warning(f"ffprobe failed for {video_path}: {result.stderr}")
+            return None
+
+        data = json.loads(result.stdout)
+
+        # Get stream info
+        stream = data.get('streams', [{}])[0]
+        format_info = data.get('format', {})
+
+        # Get FPS (r_frame_rate is like "30/1" or "30000/1001")
+        fps_str = stream.get('r_frame_rate', '30/1')
+        fps_parts = fps_str.split('/')
+        fps = float(fps_parts[0]) / float(fps_parts[1]) if len(fps_parts) == 2 else float(fps_parts[0])
+
+        # Get duration - prefer stream duration, fall back to format duration
+        duration = None
+        if stream.get('duration'):
+            duration = float(stream['duration'])
+        elif format_info.get('duration'):
+            duration = float(format_info['duration'])
+
+        # Get frame count from stream if available
+        frame_count = None
+        if stream.get('nb_frames'):
+            frame_count = int(stream['nb_frames'])
+        elif duration and fps:
+            # Calculate from duration and fps
+            frame_count = round(duration * fps)
+
+        return {
+            'duration': duration,
+            'fps': fps,
+            'frame_count': frame_count,
+            'width': int(stream.get('width', 0)),
+            'height': int(stream.get('height', 0))
+        }
+    except Exception as e:
+        logger.warning(f"Failed to get video metadata via ffprobe: {e}")
+        return None
 
 
 class AIVideoUpscaler:
@@ -430,21 +500,39 @@ class AIVideoUpscaler:
         Returns:
             Dict with processing results
         """
-        # Get video info
+        # Get accurate video metadata using ffprobe (matches browser's duration reporting)
+        ffprobe_metadata = get_video_metadata_ffprobe(input_path)
+
+        # Get video info from OpenCV as fallback/verification
         cap = cv2.VideoCapture(input_path)
-        video_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        original_fps = cap.get(cv2.CAP_PROP_FPS)
+        opencv_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        opencv_fps = cap.get(cv2.CAP_PROP_FPS)
         original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        # Verify actual readable frame count (CAP_PROP_FRAME_COUNT can be inaccurate)
-        # Check if last reported frame is actually readable
+        # Use ffprobe values if available, fall back to OpenCV
+        if ffprobe_metadata:
+            original_fps = ffprobe_metadata['fps']
+            ffprobe_frame_count = ffprobe_metadata['frame_count'] or opencv_total_frames
+            container_duration = ffprobe_metadata['duration']
+            logger.info(f"Using ffprobe metadata: fps={original_fps}, frames={ffprobe_frame_count}, duration={container_duration:.6f}s")
+        else:
+            original_fps = opencv_fps
+            ffprobe_frame_count = opencv_total_frames
+            container_duration = None
+            logger.warning("ffprobe metadata unavailable, using OpenCV values")
+
+        # Use the MINIMUM of ffprobe and OpenCV frame counts as starting point
+        # ffprobe can report more frames than OpenCV can actually read
+        video_total_frames = min(ffprobe_frame_count, opencv_total_frames)
+
+        # Verify the last frame is actually readable
+        # If not, binary search to find the actual last readable frame
         if video_total_frames > 0:
             cap.set(cv2.CAP_PROP_POS_FRAMES, video_total_frames - 1)
             ret, _ = cap.read()
             if not ret:
-                # Binary search for actual last readable frame
-                logger.warning(f"CAP_PROP_FRAME_COUNT reports {video_total_frames} frames but last frame unreadable, probing...")
+                logger.warning(f"Last frame (index {video_total_frames - 1}) not readable, probing for actual count...")
                 low, high = 0, video_total_frames - 1
                 actual_last = 0
                 while low <= high:
@@ -459,8 +547,25 @@ class AIVideoUpscaler:
                 video_total_frames = actual_last + 1
                 logger.info(f"Actual readable frame count: {video_total_frames}")
 
+        # Calculate duration: use actual readable frames for accuracy
         duration = video_total_frames / original_fps
+
         cap.release()
+
+        # DIAGNOSTIC: Log all metadata sources for debugging duration mismatch
+        logger.info("=" * 60)
+        logger.info("SOURCE VIDEO ANALYSIS")
+        logger.info("=" * 60)
+        if ffprobe_metadata:
+            logger.info(f"  [ffprobe] container_duration: {container_duration:.6f}s")
+            logger.info(f"  [ffprobe] fps: {ffprobe_metadata['fps']}")
+            logger.info(f"  [ffprobe] frame_count: {ffprobe_frame_count}")
+        logger.info(f"  [OpenCV] CAP_PROP_FRAME_COUNT: {opencv_total_frames}")
+        logger.info(f"  [OpenCV] CAP_PROP_FPS: {opencv_fps}")
+        logger.info(f"  [FINAL] video_total_frames (verified readable): {video_total_frames}")
+        logger.info(f"  [FINAL] original_fps: {original_fps}")
+        logger.info(f"  [FINAL] duration: {duration:.6f}s")
+        logger.info("=" * 60)
 
         # Store original video size for highlight rendering
         original_video_size = (original_width, original_height)
@@ -468,10 +573,12 @@ class AIVideoUpscaler:
         # Calculate which frames to process based on trim range
         # This optimization avoids upscaling frames that get thrown away during encoding!
         if segment_data and 'trim_start' in segment_data:
-            start_frame = int(segment_data['trim_start'] * original_fps)
+            start_frame = round(segment_data['trim_start'] * original_fps)
             # Cap end_frame to actual video frame count to prevent reading non-existent frames
+            # Use round() instead of int() to avoid floating-point precision loss
+            # (e.g., int(299/26.66*26.66) = int(298.999) = 298, losing a frame)
             end_frame = min(
-                int(segment_data.get('trim_end', duration) * original_fps),
+                round(segment_data.get('trim_end', duration) * original_fps),
                 video_total_frames
             )
             # Also cap start_frame just in case

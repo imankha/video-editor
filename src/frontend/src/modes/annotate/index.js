@@ -1,5 +1,6 @@
 // Annotate Mode - Extract clips from full game footage
 export { default as useAnnotate } from './hooks/useAnnotate';
+export { default as useAnnotateState } from './hooks/useAnnotateState';
 export { default as AnnotateMode } from './AnnotateMode';
 export { default as AnnotateTimeline } from './AnnotateTimeline';
 export { default as NotesOverlay } from './components/NotesOverlay';

@@ -15,7 +15,7 @@ class TestCalculateMultiClipResolution:
 
     def test_default_resolution_for_9_16(self):
         """9:16 aspect ratio should default to 1080x1920."""
-        from app.routers.export import calculate_multi_clip_resolution
+        from app.routers.export.multi_clip import calculate_multi_clip_resolution
 
         # Empty clips list
         clips = []
@@ -25,7 +25,7 @@ class TestCalculateMultiClipResolution:
 
     def test_default_resolution_for_16_9(self):
         """16:9 aspect ratio should default to 1920x1080."""
-        from app.routers.export import calculate_multi_clip_resolution
+        from app.routers.export.multi_clip import calculate_multi_clip_resolution
 
         clips = []
         width, height = calculate_multi_clip_resolution(clips, "16:9")
@@ -34,7 +34,7 @@ class TestCalculateMultiClipResolution:
 
     def test_resolution_from_crop_keyframes(self):
         """Resolution should be calculated from minimum crop size."""
-        from app.routers.export import calculate_multi_clip_resolution
+        from app.routers.export.multi_clip import calculate_multi_clip_resolution
 
         clips = [
             {'cropKeyframes': [
@@ -57,7 +57,7 @@ class TestCalculateMultiClipResolution:
 
     def test_resolution_capped_at_max(self):
         """Resolution should be capped at 2560x1440."""
-        from app.routers.export import calculate_multi_clip_resolution
+        from app.routers.export.multi_clip import calculate_multi_clip_resolution
 
         # Very large crop that would exceed cap
         clips = [
@@ -76,7 +76,7 @@ class TestChapterMetadataFormat:
 
     def test_chapter_format_valid(self):
         """Chapter metadata should be valid FFMETADATA format."""
-        from app.routers.export import create_chapter_metadata_file
+        from app.routers.export.multi_clip import create_chapter_metadata_file
         import tempfile
         import os
 

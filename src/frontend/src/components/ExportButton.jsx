@@ -170,42 +170,61 @@ const ExportButton = forwardRef(function ExportButton({
 
   /**
    * Connect to WebSocket for real-time progress updates
+   * Returns a Promise that resolves when the connection is established
    */
   const connectWebSocket = (exportId) => {
-    // Close any existing connection
-    if (wsRef.current) {
-      wsRef.current.close();
-    }
-
-    const ws = new WebSocket(`ws://localhost:8000/ws/export/${exportId}`);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log('[ExportButton] WebSocket connected');
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log('[ExportButton] Progress update:', data);
-
-      // Update progress from WebSocket
-      setProgress(Math.round(data.progress));
-      setProgressMessage(data.message || '');
-
-      // Close connection if complete or error
-      if (data.status === 'complete' || data.status === 'error') {
-        ws.close();
+    return new Promise((resolve, reject) => {
+      // Close any existing connection
+      if (wsRef.current) {
+        wsRef.current.close();
       }
-    };
 
-    ws.onerror = (error) => {
-      console.error('[ExportButton] WebSocket error:', error);
-    };
+      // Use same host as the page to go through Vite proxy
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProtocol}//${window.location.host}/ws/export/${exportId}`;
+      console.log('[ExportButton] Attempting WebSocket connection to:', wsUrl);
 
-    ws.onclose = () => {
-      console.log('[ExportButton] WebSocket disconnected');
-      wsRef.current = null;
-    };
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      // Set a timeout in case connection takes too long
+      const timeout = setTimeout(() => {
+        console.warn('[ExportButton] WebSocket connection timeout after 3s, readyState:', ws.readyState);
+        resolve(); // Resolve anyway to not block export
+      }, 3000);
+
+      ws.onopen = () => {
+        clearTimeout(timeout);
+        console.log('[ExportButton] WebSocket CONNECTED successfully, readyState:', ws.readyState);
+        resolve();
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('[ExportButton] Progress update:', data);
+
+        // Update progress from WebSocket
+        setProgress(Math.round(data.progress));
+        setProgressMessage(data.message || '');
+
+        // Close connection if complete or error
+        if (data.status === 'complete' || data.status === 'error') {
+          ws.close();
+        }
+      };
+
+      ws.onerror = (error) => {
+        clearTimeout(timeout);
+        console.error('[ExportButton] WebSocket ERROR - readyState:', ws.readyState, 'error:', error);
+        console.error('[ExportButton] Check browser Network tab for WebSocket connection details');
+        resolve(); // Resolve anyway to not block export
+      };
+
+      ws.onclose = (event) => {
+        console.log('[ExportButton] WebSocket CLOSED - code:', event.code, 'reason:', event.reason, 'wasClean:', event.wasClean);
+        wsRef.current = null;
+      };
+    });
   };
 
   const handleExport = async () => {
@@ -335,7 +354,8 @@ const ExportButton = forwardRef(function ExportButton({
       }
 
       // Connect WebSocket for real-time progress updates
-      connectWebSocket(exportId);
+      // Wait for connection to be established before starting export
+      await connectWebSocket(exportId);
 
       // Send export request
       const response = await axios.post(

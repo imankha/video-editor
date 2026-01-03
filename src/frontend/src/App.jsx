@@ -210,7 +210,10 @@ function App() {
     const exportId = exportingProject.exportId;
     console.log('[App] Connecting global WebSocket for export:', exportId);
 
-    const ws = new WebSocket(`ws://localhost:8000/ws/export/${exportId}`);
+    // Use same host as the page to go through Vite proxy
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/export/${exportId}`;
+    const ws = new WebSocket(wsUrl);
     exportWebSocketRef.current = ws;
 
     ws.onopen = () => {

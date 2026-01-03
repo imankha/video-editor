@@ -17,6 +17,14 @@ from app.services.ffmpeg_service import (
     concatenate_clips,
     extract_clip,
 )
+from app.services.transitions import (
+    TransitionStrategy,
+    TransitionFactory,
+    CutTransition,
+    FadeTransition,
+    DissolveTransition,
+    apply_transition,
+)
 
 # Import LocalGPUProcessor to register it with the factory
 from app.services import local_gpu_processor  # noqa: F401
@@ -39,4 +47,11 @@ __all__ = [
     'get_video_info',
     'concatenate_clips',
     'extract_clip',
+    # Transition strategies
+    'TransitionStrategy',
+    'TransitionFactory',
+    'CutTransition',
+    'FadeTransition',
+    'DissolveTransition',
+    'apply_transition',
 ]
