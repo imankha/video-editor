@@ -372,7 +372,7 @@ To add a new transition type, create a class implementing `TransitionStrategy` a
 ## Testing
 
 ```bash
-# Frontend tests (215 tests)
+# Frontend tests (219 tests)
 cd src/frontend && npm test
 
 # Backend tests (159 tests)

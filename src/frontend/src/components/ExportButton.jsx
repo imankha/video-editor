@@ -3,6 +3,7 @@ import { Download, Loader } from 'lucide-react';
 import axios from 'axios';
 import ThreePositionToggle from './ThreePositionToggle';
 import { ExportProgress } from './shared';
+import { useAppState } from '../contexts';
 
 /**
  * Generate a unique ID for tracking export progress
@@ -110,21 +111,69 @@ const ExportButton = forwardRef(function ExportButton({
   onIncludeAudioChange,
   highlightEffectType = 'original',       // 'brightness_boost' | 'original' | 'dark_overlay'
   onHighlightEffectTypeChange,            // Callback to change effect type (updates preview too)
-  editorMode = 'framing',      // 'framing' | 'overlay'
+  editorMode: editorModeProp,             // 'framing' | 'overlay' - now optional, from context
   onProceedToOverlay,          // Callback when framing export completes (receives blob)
   // Multi-clip props
   clips = null,                // Array of clip objects for multi-clip export
   globalAspectRatio = '9:16',  // Shared aspect ratio for all clips
   globalTransition = null,     // Transition settings { type, duration }
-  // Project props (for saving final video to DB)
-  projectId = null,            // Current project ID (for overlay mode DB save)
-  projectName = null,          // Project name for download filename
+  // Project props (for saving final video to DB) - now optional, from context
+  projectId: projectIdProp,    // Current project ID (for overlay mode DB save)
+  projectName: projectNameProp, // Project name for download filename
   onExportComplete = null,     // Callback when export completes (to refresh project list)
-  onExportStart = null,        // Callback when export starts (with exportId for global tracking)
-  onExportEnd = null,          // Callback when export ends (success or failure)
-  isExternallyExporting = false, // True if this project is exporting (from global state)
-  externalProgress = null,     // { progress: number, message: string } from global WebSocket
+  onExportStart: onExportStartProp,  // Callback when export starts (optional, context used)
+  onExportEnd: onExportEndProp,      // Callback when export ends (optional, context used)
+  isExternallyExporting: isExternallyExportingProp, // Optional, derived from context
+  externalProgress: externalProgressProp, // Optional, from context
 }, ref) {
+  // Get app state from context (provides defaults for props above)
+  const {
+    editorMode: contextEditorMode,
+    selectedProjectId,
+    selectedProject,
+    exportingProject,
+    setExportingProject,
+    globalExportProgress,
+    setGlobalExportProgress,
+  } = useAppState();
+
+  // Use props if provided, otherwise fall back to context values
+  const editorMode = editorModeProp ?? contextEditorMode ?? 'framing';
+  const projectId = projectIdProp ?? selectedProjectId;
+  const projectName = projectNameProp ?? selectedProject?.name;
+
+  // Derive external exporting state from context if not provided as prop
+  const isExternallyExporting = isExternallyExportingProp ?? (
+    exportingProject?.projectId === selectedProjectId &&
+    exportingProject?.stage === (editorMode === 'framing' ? 'framing' : 'overlay')
+  );
+
+  // Use context progress if not provided as prop
+  const externalProgress = externalProgressProp ?? (
+    exportingProject?.projectId === selectedProjectId ? globalExportProgress : null
+  );
+
+  // Export callbacks - use props if provided, otherwise use context setters
+  const handleExportStart = (exportId) => {
+    if (onExportStartProp) {
+      onExportStartProp(exportId);
+    } else if (setExportingProject) {
+      setExportingProject({
+        projectId: selectedProjectId,
+        stage: editorMode === 'framing' ? 'framing' : 'overlay',
+        exportId: exportId
+      });
+    }
+  };
+
+  const handleExportEnd = () => {
+    if (onExportEndProp) {
+      onExportEndProp();
+    } else {
+      if (setExportingProject) setExportingProject(null);
+      if (setGlobalExportProgress) setGlobalExportProgress(null);
+    }
+  };
   const [isExporting, setIsExporting] = useState(false);
 
   // Combine internal and external exporting state
@@ -255,7 +304,7 @@ const ExportButton = forwardRef(function ExportButton({
     exportIdRef.current = exportId;
 
     // Notify parent with exportId for global WebSocket tracking
-    onExportStart?.(exportId);
+    handleExportStart(exportId);
 
     try {
       // Prepare form data based on mode
@@ -434,14 +483,14 @@ const ExportButton = forwardRef(function ExportButton({
 
           await onProceedToOverlay(blob, clipMetadata);
           setIsExporting(false);
-          onExportEnd?.();
+          handleExportEnd();
           setProgress(0);
           setProgressMessage('');
         } catch (err) {
           console.error('Failed to save working video or transition to overlay:', err);
           setError(err.message || 'Failed to save working video');
           setIsExporting(false);
-          onExportEnd?.();
+          handleExportEnd();
           setProgress(0);
           setProgressMessage('');
         }
@@ -501,7 +550,7 @@ const ExportButton = forwardRef(function ExportButton({
         setProgressMessage('Export complete!');
         setTimeout(() => {
           setIsExporting(false);
-          onExportEnd?.();
+          handleExportEnd();
           setProgress(0);
           setProgressMessage('');
         }, 2000);
@@ -539,7 +588,7 @@ const ExportButton = forwardRef(function ExportButton({
       }
 
       setIsExporting(false);
-      onExportEnd?.();
+      handleExportEnd();
       setProgress(0);
       setProgressMessage('');
     }

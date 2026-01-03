@@ -28,6 +28,7 @@ import { useCrop, useSegments, FramingMode, CropOverlay } from './modes/framing'
 import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay, useOverlayState } from './modes/overlay';
 import { AnnotateMode, useAnnotate, useAnnotateState, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from './modes/annotate';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
+import { AppStateProvider } from './contexts';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from './utils/videoMetadata';
 
 // Feature flags for experimental features
@@ -2869,6 +2870,35 @@ function App() {
     hasKeyframeAt: hasHighlightKeyframeAt,
   }), [highlightKeyframes, isHighlightEndKeyframeExplicit, copiedHighlight, isHighlightEnabled, highlightDuration, toggleHighlightEnabled, updateHighlightDuration, addOrUpdateHighlightKeyframe, removeHighlightKeyframe, copyHighlightKeyframe, pasteHighlightKeyframe, interpolateHighlight, hasHighlightKeyframeAt]);
 
+  // App-level shared state for context (reduces prop drilling to ExportButton, ModeSwitcher, ProjectManager)
+  const appStateValue = useMemo(() => ({
+    // Editor mode
+    editorMode,
+    setEditorMode,
+
+    // Project state
+    selectedProjectId,
+    selectedProject,
+
+    // Export progress
+    exportingProject,
+    setExportingProject,
+    globalExportProgress,
+    setGlobalExportProgress,
+
+    // Downloads
+    downloadsCount,
+    refreshDownloadsCount,
+  }), [
+    editorMode,
+    selectedProjectId,
+    selectedProject,
+    exportingProject,
+    globalExportProgress,
+    downloadsCount,
+    refreshDownloadsCount,
+  ]);
+
   /**
    * Get filtered keyframes for export
    * Includes keyframes within trim range PLUS surrounding keyframes for proper interpolation
@@ -2998,6 +3028,7 @@ function App() {
   // If no project selected and not in annotate mode, show ProjectManager
   if (!selectedProject && editorMode !== 'annotate') {
     return (
+      <AppStateProvider value={appStateValue}>
       <div className="min-h-screen bg-gray-900">
         {/* Hidden file input for Annotate Game - triggers file picker directly */}
         <input
@@ -3285,11 +3316,8 @@ function App() {
           onLoadGame={handleLoadGame}
           onDeleteGame={deleteGame}
           onFetchGames={fetchGames}
-          // Downloads props
-          downloadsCount={downloadsCount}
+          // Note: downloadsCount and exportingProject are now from AppStateContext
           onOpenDownloads={() => setIsDownloadsPanelOpen(true)}
-          // Export state for showing "Exporting" status on project cards
-          exportingProject={exportingProject}
         />
 
         {/* Downloads Panel - also available from Project Manager */}
@@ -3305,10 +3333,12 @@ function App() {
           onCountChange={refreshDownloadsCount}
         />
       </div>
+      </AppStateProvider>
     );
   }
 
   return (
+    <AppStateProvider value={appStateValue}>
     <div className="h-screen overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
       {/* Sidebar - Framing mode (when clips exist) */}
       {hasClips && clips.length > 0 && editorMode === 'framing' && (
@@ -3412,12 +3442,11 @@ function App() {
                 mode={editorMode}
                 onModeChange={handleModeChange}
                 disabled={isLoading}
-                hasProject={!!selectedProject}
-                hasWorkingVideo={selectedProject?.working_video_id != null}
                 hasOverlayVideo={!!overlayVideoUrl}
                 framingOutOfSync={framingChangedSinceExport && !!overlayVideoUrl}
                 hasAnnotateVideo={!!annotateVideoUrl}
                 isLoadingWorkingVideo={isLoadingWorkingVideo}
+                // Note: hasProject and hasWorkingVideo are now from AppStateContext
               />
               {/* Annotate mode - show file upload when no game video loaded */}
               {editorMode === 'annotate' && !annotateVideoUrl && (
@@ -3902,39 +3931,18 @@ function App() {
                 onIncludeAudioChange={setIncludeAudio}
                 highlightEffectType={highlightEffectType}
                 onHighlightEffectTypeChange={setHighlightEffectType}
-                editorMode={editorMode}
                 onProceedToOverlay={handleProceedToOverlay}
                 // Multi-clip props (use clipsWithCurrentState to include current clip's live keyframes)
                 clips={editorMode === 'framing' && hasClips ? clipsWithCurrentState : null}
                 globalAspectRatio={globalAspectRatio}
                 globalTransition={globalTransition}
-                // Project props for saving final video to DB
-                projectId={selectedProjectId}
-                projectName={selectedProject?.name}
+                // Callback for refreshing data after export (not from context)
                 onExportComplete={() => {
                   fetchProjects();
                   refreshDownloadsCount();
                 }}
-                onExportStart={(exportId) => {
-                  setExportingProject({
-                    projectId: selectedProjectId,
-                    stage: editorMode === 'framing' ? 'framing' : 'overlay',
-                    exportId: exportId
-                  });
-                }}
-                onExportEnd={() => {
-                  setExportingProject(null);
-                  setGlobalExportProgress(null);
-                }}
-                // Pass external exporting state for when user navigates back while export is running
-                isExternallyExporting={
-                  exportingProject?.projectId === selectedProjectId &&
-                  exportingProject?.stage === (editorMode === 'framing' ? 'framing' : 'overlay')
-                }
-                // Pass global progress for when user navigates back during export
-                externalProgress={
-                  exportingProject?.projectId === selectedProjectId ? globalExportProgress : null
-                }
+                // Note: editorMode, projectId, projectName, onExportStart, onExportEnd,
+                // isExternallyExporting, externalProgress are now from AppStateContext
               />
             </div>
           )}
@@ -4048,6 +4056,7 @@ function App() {
         ]}
       />
     </div>
+    </AppStateProvider>
   );
 }
 

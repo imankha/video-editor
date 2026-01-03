@@ -59,13 +59,14 @@ const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
   - Also removed annotate refs (annotateContainerRef, annotateFileInputRef)
 - All 215 frontend tests and 159 backend tests pass
 
-**Phase 3: Cross-Mode State Management** (0.5 day)
-- Create `AppStateContext` for truly shared state:
-  - Current mode (`editorMode`)
-  - Selected project
-  - Global export progress
-  - Downloads count
-- Move only cross-mode state to this context
+**Phase 3: Cross-Mode State Management** ✅ COMPLETED
+- ✅ Created [AppStateContext.jsx](src/frontend/src/contexts/AppStateContext.jsx) following existing context pattern
+- ✅ Context provides: editorMode, selectedProject, exportingProject, globalExportProgress, downloadsCount
+- ✅ Updated ExportButton to use context (reduced 8 props)
+- ✅ Updated ModeSwitcher to use context (reduced 2 props: hasProject, hasWorkingVideo)
+- ✅ Updated ProjectManager to use context (reduced 2 props: downloadsCount, exportingProject)
+- ✅ Added 4 unit tests for AppStateContext
+- All 219 frontend tests and 159 backend tests pass
 
 **Phase 4: Video State Unification** (0.5 day)
 - Create `useVideoState(mode)` hook that returns the appropriate video state
@@ -448,7 +449,7 @@ async def export(...):
 
 | Priority | Issue | Effort | Impact | Status |
 |----------|-------|--------|--------|--------|
-| High | App.jsx God Class | 2-3 days | Very High | **In Progress** (Phase 1-2 ✅, Phase 3-4 pending) |
+| High | App.jsx God Class | 2-3 days | Very High | **In Progress** (Phase 1-3 ✅, Phase 4 pending) |
 | Medium | OpenCV Frame Extraction | 2-3 days | Medium | Workaround applied, FFmpeg refactor pending |
 | Medium | JSON Primitive Obsession | 1-2 days | Medium | Pending |
 | Medium | Feature Envy (clip name) | 0.5 days | Low | Pending |
