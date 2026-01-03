@@ -674,6 +674,61 @@ function App() {
   }, [selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, keyframes, updateClipData, clips, selectedProjectId, saveFramingEdits]);
 
   /**
+   * Calculate clip metadata for overlay mode from loaded project clips
+   * Used when reopening a project with an existing working video
+   * @param {Array} clipsData - Array of clip data from backend (with segments_data JSON)
+   * @returns {Object|null} Metadata object with source_clips array, or null if no clips
+   */
+  const buildClipMetadataFromProjectClips = useCallback((clipsData) => {
+    if (!clipsData || clipsData.length === 0) return null;
+
+    // Helper to calculate effective duration (same logic as ExportButton)
+    const calculateEffectiveDuration = (clip) => {
+      const segments = clip.segments_data ? JSON.parse(clip.segments_data) : {};
+      const boundaries = segments.boundaries || [0, clip.duration || 0];
+      const segmentSpeeds = segments.segmentSpeeds || {};
+      const trimRange = segments.trimRange;
+
+      const start = trimRange?.start ?? 0;
+      const end = trimRange?.end ?? (clip.duration || 0);
+
+      // If no speed changes, simple calculation
+      if (Object.keys(segmentSpeeds).length === 0) {
+        return end - start;
+      }
+
+      // Calculate duration accounting for speed changes per segment
+      let totalDuration = 0;
+      for (let i = 0; i < boundaries.length - 1; i++) {
+        const segStart = Math.max(boundaries[i], start);
+        const segEnd = Math.min(boundaries[i + 1], end);
+        if (segEnd > segStart) {
+          const speed = segmentSpeeds[String(i)] || 1.0;
+          totalDuration += (segEnd - segStart) / speed;
+        }
+      }
+      return totalDuration;
+    };
+
+    let currentTime = 0;
+    const sourceClips = clipsData.map(clip => {
+      const effectiveDuration = calculateEffectiveDuration(clip);
+      const clipMeta = {
+        name: clip.filename || clip.name || 'Clip',
+        start_time: currentTime,
+        end_time: currentTime + effectiveDuration
+      };
+      currentTime += effectiveDuration;
+      return clipMeta;
+    });
+
+    return {
+      version: 1,
+      source_clips: sourceClips
+    };
+  }, []);
+
+  /**
    * Handle file selection - adds clip to clip manager
    */
   const handleFileSelect = async (file) => {
@@ -2971,7 +3026,10 @@ function App() {
             clearClips();
             resetCrop();
             resetSegments();
+            resetHighlightRegions();  // Clear stale highlight regions
             setVideoFile(null);
+            setOverlayClipMetadata(null);  // Clear stale clip metadata
+            overlayDataLoadedRef.current = false;  // Reset so overlay data is loaded for new project
 
             // Set crop aspect ratio to match project BEFORE loading video
             const projectAspectRatio = project?.aspect_ratio || '9:16';
@@ -3066,6 +3124,16 @@ function App() {
                     setOverlayVideoUrl(workingVideoObjectUrl);
                     setOverlayVideoMetadata(workingVideoMeta);
 
+                    // Calculate clip metadata for auto-generating default highlights
+                    // This enables the useEffect that creates 5-second highlight regions at clip boundaries
+                    if (projectClipsData && projectClipsData.length > 0) {
+                      const clipMetadata = buildClipMetadataFromProjectClips(projectClipsData);
+                      if (clipMetadata) {
+                        console.log('[App] Setting clip metadata for overlay mode:', clipMetadata);
+                        setOverlayClipMetadata(clipMetadata);
+                      }
+                    }
+
                     // Don't set exportedFramingStateRef here - we don't know what framing
                     // state produced this existing working video. The ref should only be set
                     // when we actually export (in handleExportWorkingVideo). This means the
@@ -3100,7 +3168,10 @@ function App() {
             clearClips();
             resetCrop();
             resetSegments();
+            resetHighlightRegions();  // Clear stale highlight regions
             setVideoFile(null);
+            setOverlayClipMetadata(null);  // Clear stale clip metadata
+            overlayDataLoadedRef.current = false;  // Reset so overlay data is loaded for new project
 
             // Set crop aspect ratio to match project
             const projectAspectRatio = project?.aspect_ratio || '9:16';
@@ -3171,6 +3242,16 @@ function App() {
                     setOverlayVideoFile(workingVideoBlob);
                     setOverlayVideoUrl(workingVideoObjectUrl);
                     setOverlayVideoMetadata(workingVideoMeta);
+
+                    // Calculate clip metadata for auto-generating default highlights
+                    if (projectClipsData && projectClipsData.length > 0) {
+                      const clipMetadata = buildClipMetadataFromProjectClips(projectClipsData);
+                      if (clipMetadata) {
+                        console.log('[App] Setting clip metadata for overlay mode:', clipMetadata);
+                        setOverlayClipMetadata(clipMetadata);
+                      }
+                    }
+
                     console.log('[App] Loaded working video for overlay mode');
                   }
                 } catch (err) {

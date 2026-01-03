@@ -105,27 +105,14 @@ async def extract_clip_to_file(
     return True
 
 
-# Rating notation symbols (chess-inspired)
-RATING_NOTATION = {
-    1: '??',   # Blunder
-    2: '?',    # Mistake
-    3: '!?',   # Interesting
-    4: '!',    # Good
-    5: '!!'    # Brilliant
-}
-
-# Rating colors for border (matching frontend ClipRegionLayer)
-# FFmpeg uses 0xRRGGBB format
-RATING_COLORS = {
-    1: '0xC62828',  # Red - Blunder
-    2: '0xF9A825',  # Amber - Mistake
-    3: '0x1565C0',  # Blue - Interesting
-    4: '0x2E7D32',  # Green - Good
-    5: '0x66BB6A',  # Light Green - Brilliant
-}
-
-# Overlay style version - increment to invalidate cache when style changes
-OVERLAY_STYLE_VERSION = 2
+# Import rating constants from shared module (single source of truth)
+from app.constants import (
+    RATING_NOTATION,
+    RATING_COLORS_HEX as RATING_COLORS,  # Alias for backward compatibility
+    OVERLAY_STYLE_VERSION,
+    get_rating_notation,
+    get_rating_color_hex,
+)
 
 
 async def create_clip_with_burned_text(
@@ -174,8 +161,8 @@ async def create_clip_with_burned_text(
     duration = end_time - start_time
 
     # Get rating notation symbol and color
-    rating_notation = RATING_NOTATION.get(rating, '!?')
-    rating_color = RATING_COLORS.get(rating, '0x1565C0')  # Default to blue
+    rating_notation = get_rating_notation(rating)
+    rating_color = get_rating_color_hex(rating)
 
     def escape_drawtext(text: str) -> str:
         """

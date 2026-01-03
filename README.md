@@ -83,6 +83,7 @@ video-editor/
 │   │       ├── models.py           # Pydantic request/response models
 │   │       ├── queries.py          # Shared SQL query helpers
 │   │       ├── websocket.py        # WebSocket manager for progress
+│   │       ├── constants.py        # Shared constants (ratings, tags, colors)
 │   │       ├── routers/            # API endpoints
 │   │       │   ├── projects.py     # Project CRUD, state persistence
 │   │       │   ├── clips.py        # Raw clips library + working clips
@@ -92,8 +93,11 @@ video-editor/
 │   │       │   ├── downloads.py    # Gallery/final video management
 │   │       │   ├── detection.py    # YOLO player/ball detection
 │   │       │   └── health.py       # Health checks
-│   │       └── services/
-│   │           └── clip_cache.py   # Clip caching to avoid re-encoding
+│   │       └── services/           # Business logic layer
+│   │           ├── clip_cache.py       # Clip caching to avoid re-encoding
+│   │           ├── video_processor.py  # Abstract GPU processing interface
+│   │           ├── ffmpeg_service.py   # FFmpeg helper functions
+│   │           └── local_gpu_processor.py  # Local GPU implementation
 │   │
 │   └── frontend/                   # React + Vite frontend
 │       └── src/
@@ -283,11 +287,55 @@ keyframe = {
 
 ---
 
+## Services Layer
+
+The backend uses a services layer for GPU-intensive operations, designed for future extensibility to WebGPU or cloud processing (RunPod).
+
+### Video Processor Interface
+
+```python
+from app.services import VideoProcessor, ProcessingBackend, ProcessorFactory
+
+# Available backends (enum)
+ProcessingBackend.LOCAL_GPU   # Current: Real-ESRGAN on local GPU
+ProcessingBackend.WEB_GPU     # Future: Browser-based processing
+ProcessingBackend.RUNPOD      # Future: Cloud GPU processing
+ProcessingBackend.CPU_ONLY    # Fallback: CPU-only processing
+
+# Get a processor
+processor = ProcessorFactory.create(ProcessingBackend.LOCAL_GPU)
+
+# Process a clip
+result = await processor.process_clip(ProcessingConfig(
+    input_path="/path/to/input.mp4",
+    output_path="/path/to/output.mp4",
+    target_width=1080,
+    use_ai_upscale=True
+))
+```
+
+### Shared Constants
+
+All rating and tag constants are centralized in `app/constants.py`:
+
+```python
+from app.constants import (
+    RATING_ADJECTIVES,      # {5: 'Brilliant', 4: 'Good', ...}
+    RATING_NOTATION,        # {5: '!!', 4: '!', 3: '!?', ...}
+    RATING_COLORS_HEX,      # FFmpeg format: {5: '0x66BB6A', ...}
+    TAG_SHORT_NAMES,        # {'Goals': 'Goal', 'Assists': 'Assist', ...}
+    get_rating_adjective,   # Helper functions
+    get_rating_color_hex,
+)
+```
+
+---
+
 ## Testing
 
 ```bash
-# Backend persistence tests (22 tests)
-cd src/backend && python ../../test_persistence.py
+# Backend tests (141 tests)
+cd src/backend && .venv/Scripts/python -m pytest tests/ -v
 
 # Manual UI testing
 # See MANUAL_TEST.md for procedures
@@ -322,8 +370,10 @@ See [KNOWN_BUGS.md](KNOWN_BUGS.md) for current issues and workarounds.
 
 ## Additional Documentation
 
+- [CODE_SMELLS.md](CODE_SMELLS.md) - Refactoring opportunities and completed improvements
 - [DEVELOPMENT.md](DEVELOPMENT.md) - Development setup guide
 - [MANUAL_TEST.md](MANUAL_TEST.md) - Manual testing procedures
+- [KNOWN_BUGS.md](KNOWN_BUGS.md) - Known issues and workarounds
 - [prompt_preamble](prompt_preamble) - Detailed context for debugging
 - [docs/](docs/) - Original phase specifications (historical)
 

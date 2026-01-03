@@ -4,9 +4,41 @@ This document identifies Martin Fowler-style code smells and refactoring opportu
 
 ---
 
+## Completed Refactors
+
+### ✅ Duplicated Rating/Tag Constants (COMPLETED)
+**Status**: Resolved
+
+**What was done**:
+- Created [constants.py](src/backend/app/constants.py) as single source of truth for all rating/tag constants
+- Contains: `RATING_ADJECTIVES`, `RATING_NOTATION`, `RATING_COLORS_HEX`, `RATING_COLORS_CSS`, `TAG_SHORT_NAMES`
+- Helper functions: `get_rating_adjective()`, `get_rating_notation()`, `get_rating_color_hex()`, `get_tag_short_name()`
+- Updated [queries.py](src/backend/app/queries.py), [annotate.py](src/backend/app/routers/annotate.py), [games.py](src/backend/app/routers/games.py) to import from constants
+
+**Remaining**: Frontend still has duplicate constants in `soccerTags.js`. Consider serving via API endpoint for full unification.
+
+---
+
+### ✅ GPU Processing Interface (COMPLETED)
+**Status**: Resolved - Created extensible architecture for future WebGPU/RunPod support
+
+**What was done**:
+- Created [video_processor.py](src/backend/app/services/video_processor.py) - Abstract interface with:
+  - `ProcessingBackend` enum: `LOCAL_GPU`, `WEB_GPU`, `RUNPOD`, `CPU_ONLY`
+  - `ProcessingConfig` dataclass for standardized input
+  - `ProcessingResult` dataclass for standardized output
+  - `ProcessorFactory` for creating processors by backend type
+- Created [ffmpeg_service.py](src/backend/app/services/ffmpeg_service.py) - Isolated FFmpeg helpers
+- Created [local_gpu_processor.py](src/backend/app/services/local_gpu_processor.py) - Current implementation using Real-ESRGAN
+- Updated [services/__init__.py](src/backend/app/services/__init__.py) to export new modules
+
+**Future work**: Implement `WebGPUProcessor` and `RunPodProcessor` classes when those features are needed.
+
+---
+
 ## High Priority (Significant Technical Debt)
 
-### 1. God Class: App.jsx (3,962 lines)
+### 1. God Class: App.jsx (4,000+ lines)
 **Smell**: Large Class, Feature Envy, Long Method
 
 **Location**: [App.jsx](src/frontend/src/App.jsx)
@@ -43,11 +75,11 @@ const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
 
 **Location**: [export.py](src/backend/app/routers/export.py)
 
-**Problem**:
-- Single file handles 10+ different export operations
-- FFmpeg command building mixed with API logic
-- Progress tracking mixed with video processing
-- Similar code patterns repeated across functions
+**Status**: Partially addressed - FFmpeg helpers extracted to `ffmpeg_service.py`, GPU interface created
+
+**Remaining Problem**:
+- Router still handles 10+ different export operations
+- Could benefit from further splitting into `framing_export.py`, `overlay_export.py`, `multi_clip_export.py`
 
 **Evidence**:
 - `_concatenate_with_fade()` (lines 443-533): 90 lines of FFmpeg filter building
@@ -55,31 +87,11 @@ const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
 - `process_single_clip()` (lines 99-200): Mixes caching, file I/O, and AI processing
 
 **Refactoring**:
-1. **Extract FFmpegService**: Move FFmpeg command building to dedicated service
+1. ~~**Extract FFmpegService**: Move FFmpeg command building to dedicated service~~ ✅ Done
 2. **Strategy Pattern**: Create transition strategies (FadeTransition, DissolveTransition, CutTransition)
 3. **Split Router**: Separate into `framing_export.py`, `overlay_export.py`, `multi_clip_export.py`
 
-**Effort**: High (2-3 days)
-
----
-
-### 3. Duplicated Rating/Tag Constants
-**Smell**: Duplicated Code, Shotgun Surgery
-
-**Locations**:
-- [annotate.py:109-125](src/backend/app/routers/annotate.py#L109-L125) - RATING_NOTATION, RATING_COLORS
-- [soccerTags.js](src/frontend/src/modes/annotate/constants/soccerTags.js) - Same constants
-- [ClipRegionLayer.jsx](src/frontend/src/modes/annotate/layers/ClipRegionLayer.jsx) - Same colors
-- [queries.py](src/backend/app/queries.py) - derive_clip_name logic
-
-**Problem**: Rating notation, colors, and tag definitions duplicated across frontend and backend. Changes require updating 4+ files.
-
-**Refactoring**:
-1. **Single Source of Truth**: Define once in backend, serve via API endpoint
-2. **Shared Config File**: Use JSON config imported by both frontend and backend
-3. **Code Generation**: Generate constants from single definition
-
-**Effort**: Medium (1 day)
+**Effort**: Medium (1-2 days remaining)
 
 ---
 
@@ -382,26 +394,28 @@ async def export(...):
 
 ## Summary by Effort
 
-| Priority | Issue | Effort | Impact |
-|----------|-------|--------|--------|
-| High | App.jsx God Class | 2-3 days | Very High |
-| High | export.py Long Module | 2-3 days | High |
-| High | Duplicated Constants | 1 day | Medium |
-| Medium | JSON Primitive Obsession | 1-2 days | Medium |
-| Medium | Feature Envy (clip name) | 0.5 days | Low |
-| Medium | Long Parameter Lists | 1 day | Medium |
-| Low | Unused transform_data | 0.5 hours | Low |
-| Low | Magic Numbers | 2-3 hours | Low |
-| Medium | progress/exported_at | 1 day | Medium |
+| Priority | Issue | Effort | Impact | Status |
+|----------|-------|--------|--------|--------|
+| High | App.jsx God Class | 2-3 days | Very High | Pending |
+| High | export.py Long Module | 1-2 days | High | **Partial** |
+| ~~High~~ | ~~Duplicated Constants~~ | ~~1 day~~ | ~~Medium~~ | **✅ Done** |
+| ~~High~~ | ~~GPU Interface~~ | ~~1 day~~ | ~~High~~ | **✅ Done** |
+| Medium | JSON Primitive Obsession | 1-2 days | Medium | Pending |
+| Medium | Feature Envy (clip name) | 0.5 days | Low | Pending |
+| Medium | Long Parameter Lists | 1 day | Medium | Pending |
+| Low | Unused transform_data | 0.5 hours | Low | Pending |
+| Low | Magic Numbers | 2-3 hours | Low | Pending |
+| Medium | progress/exported_at | 1 day | Medium | Pending |
 
 ---
 
 ## Recommended Refactoring Order
 
-1. **First Sprint**: Duplicated constants (reduces shotgun surgery for future work)
-2. **Second Sprint**: Export.py split (enables parallel work on export features)
-3. **Third Sprint**: App.jsx mode extraction (biggest payoff for maintainability)
-4. **Ongoing**: Address smaller issues as files are touched
+1. ~~**First Sprint**: Duplicated constants (reduces shotgun surgery for future work)~~ ✅ Completed
+2. ~~**GPU Interface**: Create abstract processor interface for future WebGPU/RunPod~~ ✅ Completed
+3. **Next**: Export.py router split (enables parallel work on export features)
+4. **Future**: App.jsx mode extraction (biggest payoff for maintainability)
+5. **Ongoing**: Address smaller issues as files are touched
 
 ---
 
@@ -412,3 +426,5 @@ When working on this codebase:
 2. **Export pipeline**: Test with actual video files after changes. FFmpeg behavior varies.
 3. **Database migrations**: The codebase uses auto-migration. Test with existing databases.
 4. **Mode interactions**: Changes in one mode may affect others through shared state.
+5. **Services layer**: New GPU-intensive code should implement the `VideoProcessor` interface in `app/services/video_processor.py`.
+6. **Constants**: All rating/tag constants should be imported from `app/constants.py` - never define duplicates.
