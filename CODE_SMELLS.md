@@ -97,7 +97,7 @@ const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
 
 ## Medium Priority (Code Quality Issues)
 
-### 4. Primitive Obsession: JSON Columns
+### 3. Primitive Obsession: JSON Columns
 **Smell**: Primitive Obsession, Stringly Typed
 
 **Location**: Database schema across all tables
@@ -126,7 +126,7 @@ highlights_data TEXT -- JSON: [{start_time, end_time, keyframes}]
 
 ---
 
-### 5. Feature Envy: Clip Name Derivation
+### 4. Feature Envy: Clip Name Derivation
 **Smell**: Feature Envy, Duplicated Code
 
 **Locations**:
@@ -158,7 +158,7 @@ export function deriveClipName(customName, rating, tags) {
 
 ---
 
-### 6. Long Parameter Lists
+### 5. Long Parameter Lists
 **Smell**: Long Parameter List, Data Clump
 
 **Locations**:
@@ -188,7 +188,7 @@ export function deriveClipName(customName, rating, tags) {
 
 ---
 
-### 7. Speculative Generality: transform_data Column
+### 6. Speculative Generality: transform_data Column
 **Smell**: Speculative Generality, Dead Code
 
 **Location**: [database.py](src/backend/app/database.py) - `working_clips` table
@@ -205,7 +205,7 @@ transform_data TEXT,  -- Reserved for future use
 
 ---
 
-### 8. Magic Numbers/Strings
+### 7. Magic Numbers/Strings
 **Smell**: Magic Number, Magic String
 
 **Locations throughout codebase**:
@@ -228,7 +228,7 @@ USER_ID = "a"  # Single-user hardcoded
 
 ---
 
-### 9. Inconsistent Naming: progress vs exported_at
+### 8. Inconsistent Naming: progress vs exported_at
 **Smell**: Inconsistent Naming, Middle Man
 
 **Location**: [clips.py](src/backend/app/routers/clips.py), [database.py](src/backend/app/database.py)
@@ -245,7 +245,7 @@ Both are checked in different places, creating confusion.
 
 ---
 
-### 10. Nested Callbacks: Export Progress
+### 9. Nested Callbacks: Export Progress
 **Smell**: Callback Hell, Message Chain
 
 **Location**: [export.py](src/backend/app/routers/export.py) - progress_callback usage
@@ -269,7 +269,7 @@ async def process_single_clip(..., progress_callback, ...):
 
 ## Low Priority (Minor Issues)
 
-### 11. Comments as Code Smell
+### 10. Comments as Code Smell
 **Smell**: Comments explaining what (not why)
 
 **Locations throughout**:
@@ -289,7 +289,7 @@ These comments explain obvious code. Better to have self-documenting code.
 
 ---
 
-### 12. Boolean Parameters
+### 11. Boolean Parameters
 **Smell**: Boolean Blindness
 
 **Locations**:
@@ -309,7 +309,7 @@ isHighlightEnabled={editorMode === 'overlay' && highlightRegions.length > 0}
 
 ---
 
-### 13. Temporal Coupling
+### 12. Temporal Coupling
 **Smell**: Temporal Coupling
 
 **Location**: [export.py](src/backend/app/routers/export.py) - multi-clip export
@@ -327,7 +327,7 @@ isHighlightEnabled={editorMode === 'overlay' && highlightRegions.length > 0}
 
 ---
 
-### 14. Incomplete Error Handling
+### 13. Incomplete Error Handling
 **Smell**: Incomplete Library Class
 
 **Location**: Various FFmpeg subprocess calls
@@ -349,7 +349,7 @@ if result.returncode != 0:
 
 ## Architectural Improvements
 
-### 15. Consider State Management Library
+### 14. Consider State Management Library
 **Smell**: Data Class (anti-pattern for React)
 
 **Problem**: App.jsx manages state through 100+ useState hooks. This is complex to reason about and test.
@@ -363,7 +363,7 @@ if result.returncode != 0:
 
 ---
 
-### 16. Service Layer Pattern
+### 15. Service Layer Pattern
 **Smell**: Transaction Script
 
 **Problem**: Business logic mixed into router handlers. Makes testing harder.
