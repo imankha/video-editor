@@ -136,6 +136,7 @@ export default function useOverlayState() {
     isFromFramingExport,
 
     // Video state setters (for external use like project loading)
+    setOverlayVideoFile,
     setOverlayVideoUrl,
     setOverlayVideoMetadata,
     setOverlayClipMetadata,

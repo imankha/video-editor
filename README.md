@@ -128,7 +128,9 @@ video-editor/
 │           ├── modes/              # Mode-specific code
 │           │   ├── framing/        # Crop, segments, overlays
 │           │   ├── overlay/        # Highlight regions
+│           │   │   └── hooks/useOverlayState.js  # Consolidated overlay state
 │           │   └── annotate/       # Clip marking, metadata
+│           │       └── hooks/useAnnotateState.js # Consolidated annotate state
 │           ├── controllers/        # Pure state machines
 │           │   └── keyframeController.js
 │           └── utils/              # Utilities
@@ -370,11 +372,15 @@ To add a new transition type, create a class implementing `TransitionStrategy` a
 ## Testing
 
 ```bash
+# Frontend tests (215 tests)
+cd src/frontend && npm test
+
 # Backend tests (159 tests)
 cd src/backend && .venv/Scripts/python -m pytest tests/ -v
 
-# Manual UI testing
-# See MANUAL_TEST.md for procedures
+# Manual/integration test scripts
+# See scripts/ folder for API, WebSocket, and browser tests
+# See MANUAL_TEST.md for manual UI procedures
 ```
 
 ---

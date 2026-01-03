@@ -25,8 +25,8 @@ import { ProjectCreationSettings } from './components/ProjectCreationSettings';
 import { ProjectHeader } from './components/ProjectHeader';
 // Mode-specific imports
 import { useCrop, useSegments, FramingMode, CropOverlay } from './modes/framing';
-import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay } from './modes/overlay';
-import { AnnotateMode, useAnnotate, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from './modes/annotate';
+import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay, useOverlayState } from './modes/overlay';
+import { AnnotateMode, useAnnotate, useAnnotateState, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from './modes/annotate';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from './utils/videoMetadata';
 
@@ -38,22 +38,31 @@ function App() {
   const [videoFile, setVideoFile] = useState(null);
   // Temporary state for live drag/resize preview (null when not dragging)
   const [dragCrop, setDragCrop] = useState(null);
-  const [dragHighlight, setDragHighlight] = useState(null);
-
-  // Selected highlight keyframe time (when playhead is near a keyframe)
-  const [selectedHighlightKeyframeTime, setSelectedHighlightKeyframeTime] = useState(null);
 
   // Editor mode state ('framing' | 'overlay' | 'annotate')
   const [editorMode, setEditorMode] = useState('framing');
 
-  // Overlay mode video state (SEPARATE from framing video)
-  // This is either: 1) Rendered output from Framing, or 2) Fresh upload for Overlay
-  const [overlayVideoFile, setOverlayVideoFile] = useState(null);
-  const [overlayVideoUrl, setOverlayVideoUrl] = useState(null);
-  const [overlayVideoMetadata, setOverlayVideoMetadata] = useState(null);
-
-  // Clip metadata for auto-generating highlight regions (from Framing export)
-  const [overlayClipMetadata, setOverlayClipMetadata] = useState(null);
+  // Overlay mode state (consolidated via useOverlayState hook)
+  const {
+    overlayVideoFile,
+    overlayVideoUrl,
+    overlayVideoMetadata,
+    overlayClipMetadata,
+    isLoadingWorkingVideo,
+    setOverlayVideoFile,
+    setOverlayVideoUrl,
+    setOverlayVideoMetadata,
+    setOverlayClipMetadata,
+    setIsLoadingWorkingVideo,
+    dragHighlight,
+    setDragHighlight,
+    selectedHighlightKeyframeTime,
+    setSelectedHighlightKeyframeTime,
+    highlightEffectType,
+    setHighlightEffectType,
+    pendingOverlaySaveRef,
+    overlayDataLoadedRef,
+  } = useOverlayState();
 
   // Track if framing has changed since last export (for showing warning on Overlay button)
   const [framingChangedSinceExport, setFramingChangedSinceExport] = useState(false);
@@ -61,18 +70,33 @@ function App() {
   // Mode switch confirmation dialog state
   const [modeSwitchDialog, setModeSwitchDialog] = useState({ isOpen: false, pendingMode: null });
 
-  // Working video loading state
-  const [isLoadingWorkingVideo, setIsLoadingWorkingVideo] = useState(false);
-
-  // Annotate mode video state (for extracting clips from full game footage)
-  const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
-  const [annotateVideoUrl, setAnnotateVideoUrl] = useState(null);
-  const [annotateVideoMetadata, setAnnotateVideoMetadata] = useState(null);
-  const [annotateGameId, setAnnotateGameId] = useState(null); // Current game ID for saving annotations
-  // Separate loading states for each export button
-  const [isCreatingAnnotatedVideo, setIsCreatingAnnotatedVideo] = useState(false);
-  const [isImportingToProjects, setIsImportingToProjects] = useState(false);
-  const [isUploadingGameVideo, setIsUploadingGameVideo] = useState(false);
+  // Annotate mode state (consolidated via useAnnotateState hook)
+  const {
+    annotateVideoFile,
+    annotateVideoUrl,
+    annotateVideoMetadata,
+    annotateGameId,
+    setAnnotateVideoFile,
+    setAnnotateVideoUrl,
+    setAnnotateVideoMetadata,
+    setAnnotateGameId,
+    isCreatingAnnotatedVideo,
+    setIsCreatingAnnotatedVideo,
+    isImportingToProjects,
+    setIsImportingToProjects,
+    isUploadingGameVideo,
+    setIsUploadingGameVideo,
+    annotatePlaybackSpeed,
+    setAnnotatePlaybackSpeed,
+    annotateFullscreen,
+    setAnnotateFullscreen,
+    showAnnotateOverlay,
+    setShowAnnotateOverlay,
+    annotateSelectedLayer,
+    setAnnotateSelectedLayer,
+    annotateContainerRef,
+    annotateFileInputRef,
+  } = useAnnotateState();
 
   // Export progress tracking (for SSE updates)
   // { current: number, total: number, phase: string, message: string }
@@ -87,16 +111,6 @@ function App() {
   const [globalExportProgress, setGlobalExportProgress] = useState(null);
   const exportWebSocketRef = useRef(null);
 
-  // Annotate mode playback state
-  const [annotatePlaybackSpeed, setAnnotatePlaybackSpeed] = useState(1);
-  const [annotateFullscreen, setAnnotateFullscreen] = useState(false);
-  const [showAnnotateOverlay, setShowAnnotateOverlay] = useState(false);
-  // Annotate mode layer selection for arrow key navigation: 'playhead' | 'clips'
-  const [annotateSelectedLayer, setAnnotateSelectedLayer] = useState('clips');
-
-  // Ref for fullscreen container
-  const annotateContainerRef = useRef(null);
-
   // Ref to track previous isPlaying state for detecting pause transitions
   const wasPlayingRef = useRef(false);
 
@@ -104,18 +118,13 @@ function App() {
   // Resets when clip selection changes. Prevents saving default state as "user edits"
   const clipHasUserEditsRef = useRef(false);
 
-  // Ref for annotate mode file input (to trigger file picker directly from ProjectManager)
-  const annotateFileInputRef = useRef(null);
-
   // Layer selection state for arrow key navigation
   const [selectedLayer, setSelectedLayer] = useState('playhead'); // 'playhead' | 'crop' | 'highlight'
 
   // Audio state - synced between export settings and playback (Framing mode only)
   const [includeAudio, setIncludeAudio] = useState(true);
 
-  // Highlight effect type - controls both client-side preview and export
-  // 'brightness_boost' | 'original' | 'dark_overlay'
-  const [highlightEffectType, setHighlightEffectType] = useState('original');
+  // NOTE: highlightEffectType is now provided by useOverlayState hook
 
   // NOTE: selectedCropKeyframeIndex and selectedHighlightKeyframeIndex are now derived via useMemo
   // (defined after hooks that provide keyframes and currentTime)
@@ -184,9 +193,8 @@ function App() {
   const [isDownloadsPanelOpen, setIsDownloadsPanelOpen] = useState(false);
   const { count: downloadsCount, fetchCount: refreshDownloadsCount } = useDownloads();
 
-  // Overlay persistence state
-  const pendingOverlaySaveRef = useRef(null);
-  const overlayDataLoadedRef = useRef(false);
+  // NOTE: Overlay persistence refs (pendingOverlaySaveRef, overlayDataLoadedRef)
+  // are now provided by useOverlayState hook
 
   // Framing persistence state
   const pendingFramingSaveRef = useRef(null);

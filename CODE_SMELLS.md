@@ -50,11 +50,14 @@ const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
 - ✅ Added comprehensive tests for [useHighlightRegions.js](src/frontend/src/modes/overlay/hooks/useHighlightRegions.test.js) (53 tests)
 - All 215 frontend tests pass
 
-**Phase 2: Mode Container Upgrade** (1 day)
-- Update `FramingModeContainer` to use `useFramingState` internally
-- Update `OverlayModeContainer` to use `useOverlayState` internally
-- Update `AnnotateModeContainer` to use `useAnnotateState` internally
-- Remove corresponding useState calls from App.jsx (reduces by ~60 lines each)
+**Phase 2: Mode State Integration** ✅ COMPLETED
+- ✅ App.jsx now uses `useOverlayState()` hook instead of 8 individual useState calls
+  - Removed: overlayVideoFile, overlayVideoUrl, overlayVideoMetadata, overlayClipMetadata, isLoadingWorkingVideo, dragHighlight, selectedHighlightKeyframeTime, highlightEffectType
+  - Also removed overlay persistence refs (pendingOverlaySaveRef, overlayDataLoadedRef)
+- ✅ App.jsx now uses `useAnnotateState()` hook instead of 12 individual useState calls
+  - Removed: annotateVideoFile, annotateVideoUrl, annotateVideoMetadata, annotateGameId, isCreatingAnnotatedVideo, isImportingToProjects, isUploadingGameVideo, annotatePlaybackSpeed, annotateFullscreen, showAnnotateOverlay, annotateSelectedLayer
+  - Also removed annotate refs (annotateContainerRef, annotateFileInputRef)
+- All 215 frontend tests and 159 backend tests pass
 
 **Phase 3: Cross-Mode State Management** (0.5 day)
 - Create `AppStateContext` for truly shared state:
@@ -445,7 +448,7 @@ async def export(...):
 
 | Priority | Issue | Effort | Impact | Status |
 |----------|-------|--------|--------|--------|
-| High | App.jsx God Class | 2-3 days | Very High | **In Progress** (Phase 1 ✅, Phase 2-4 pending) |
+| High | App.jsx God Class | 2-3 days | Very High | **In Progress** (Phase 1-2 ✅, Phase 3-4 pending) |
 | Medium | OpenCV Frame Extraction | 2-3 days | Medium | Workaround applied, FFmpeg refactor pending |
 | Medium | JSON Primitive Obsession | 1-2 days | Medium | Pending |
 | Medium | Feature Envy (clip name) | 0.5 days | Low | Pending |

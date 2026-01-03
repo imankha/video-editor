@@ -160,6 +160,7 @@ export default function useAnnotateState() {
     isAssociatedWithGame,
 
     // Video state setters (for external use like game loading)
+    setAnnotateVideoFile,
     setAnnotateVideoUrl,
     setAnnotateVideoMetadata,
     setAnnotateGameId,
