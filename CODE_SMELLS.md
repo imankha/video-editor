@@ -387,7 +387,7 @@ isHighlightEnabled={editorMode === 'overlay' && highlightRegions.length > 0}
 
 ---
 
-### 13. Temporal Coupling
+### 13. Temporal Coupling ✅ COMPLETED
 **Smell**: Temporal Coupling
 
 **Location**: [export.py](src/backend/app/routers/export.py) - multi-clip export
@@ -399,7 +399,15 @@ isHighlightEnabled={editorMode === 'overlay' && highlightRegions.length > 0}
 4. Process if miss
 5. Store in cache
 
-**Refactoring**: Use pipeline/builder pattern to enforce order.
+**Solution Implemented**:
+- ✅ Created [clip_pipeline.py](src/backend/app/services/clip_pipeline.py) with:
+  - `ClipProcessingPipeline` class with explicit stages (INIT → SAVED → CONFIGURED → CACHE_CHECKED → PROCESSED → CACHED)
+  - `PipelineError` exception raised when operations called out of order
+  - `ClipProcessingContext` dataclass holding all processing state
+  - `process_clip_with_pipeline()` convenience function
+- ✅ Added 19 tests in [test_clip_pipeline.py](src/backend/tests/test_clip_pipeline.py)
+- Each stage validates prerequisites before proceeding
+- New exports can use the pipeline for guaranteed correct order
 
 **Effort**: Medium (1 day)
 
