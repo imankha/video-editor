@@ -347,7 +347,7 @@ async def discard_uncommitted_changes(project_id: int):
     Discard all uncommitted framing changes for a project.
 
     This deletes any clip versions that:
-    - Have progress = 0 (not exported)
+    - Have exported_at IS NULL (not exported)
     - Have version > 1 (are newer versions of exported clips)
 
     After deletion, the previous exported version becomes the "latest" again.
@@ -360,11 +360,11 @@ async def discard_uncommitted_changes(project_id: int):
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Find and delete uncommitted versions (progress=0, version>1)
+        # Find and delete uncommitted versions (exported_at IS NULL, version > 1)
         # These are newer versions of clips that were previously exported
         cursor.execute("""
             DELETE FROM working_clips
-            WHERE project_id = ? AND progress = 0 AND version > 1
+            WHERE project_id = ? AND exported_at IS NULL AND version > 1
         """, (project_id,))
 
         deleted_count = cursor.rowcount

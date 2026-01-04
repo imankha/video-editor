@@ -182,32 +182,27 @@ highlights_data TEXT -- JSON: [{start_time, end_time, keyframes}]
 ### 5. Feature Envy: Clip Name Derivation
 **Smell**: Feature Envy, Duplicated Code
 
+**Status**: ✅ ANALYZED - Intentional Strategic Duplication
+
 **Locations**:
-- [queries.py](src/backend/app/queries.py) - `derive_clip_name()`
-- [soccerTags.js](src/frontend/src/modes/annotate/constants/soccerTags.js) - `deriveClipName()`
+- [queries.py](src/backend/app/queries.py) - `derive_clip_name()` (15 tests)
+- [soccerTags.js](src/frontend/src/modes/annotate/constants/soccerTags.js) - `generateClipName()`
 
-**Problem**: Same business logic implemented in both Python and JavaScript.
+**Analysis**:
+The same business logic exists in both Python and JavaScript, but this is **intentional** due to different use cases:
 
-```python
-# Backend (Python)
-def derive_clip_name(custom_name, rating, tags):
-    if custom_name: return custom_name
-    adjective = RATING_ADJECTIVES[rating]
-    return f"{adjective} {', '.join(tags[:-1])} and {tags[-1]}"
-```
+1. **Frontend** (`generateClipName`): Used in Annotate mode for **live preview** of clips being created. These clips are in-browser only and not yet persisted to the database. Calling an API would add unnecessary latency during real-time editing.
 
-```javascript
-// Frontend (JavaScript)
-export function deriveClipName(customName, rating, tags) {
-    if (customName) return customName;
-    const adjective = RATING_ADJECTIVES[rating];
-    return `${adjective} ${tags.slice(0,-1).join(', ')} and ${tags.at(-1)}`;
-}
-```
+2. **Backend** (`derive_clip_name`): Used in API responses to derive names for **already-saved clips**. Also handles the `stored_name` parameter for custom names.
 
-**Refactoring**: Derive name server-side only, include in API responses.
+**Verification**:
+- Backend has 15 unit tests including 4 "frontend parity" tests
+- Tests like `test_frontend_parity_brilliant_goal` verify both produce identical output
+- Tag name conversion (full → short) happens on TSV export, so both receive short names
 
-**Effort**: Low (0.5 days)
+**Decision**: Keep both implementations. The latency cost of server-side-only derivation during real-time editing outweighs the duplication cost. Both are tested and match.
+
+**Effort**: N/A (no refactoring needed)
 
 ---
 
@@ -285,17 +280,23 @@ USER_ID = "a"  # Single-user hardcoded (kept as-is, clear intent)
 ### 9. Inconsistent Naming: progress vs exported_at
 **Smell**: Inconsistent Naming, Middle Man
 
-**Location**: [clips.py](src/backend/app/routers/clips.py), [database.py](src/backend/app/database.py)
+**Status**: ✅ COMPLETED
+
+**Location**: [clips.py](src/backend/app/routers/clips.py), [database.py](src/backend/app/database.py), [projects.py](src/backend/app/routers/projects.py)
 
 **Problem**: Database migration left dual concepts:
 - `progress INTEGER` - Old field (0 = not exported, 1 = exported)
 - `exported_at TIMESTAMP` - New field (NULL = not exported)
 
-Both are checked in different places, creating confusion.
+Both were checked in different places, creating confusion.
 
-**Refactoring**: Complete migration to `exported_at`, remove `progress`.
+**Resolution**:
+- Fresh installs use only `exported_at` (no `progress` column in schema)
+- Migration code in `database.py` converts old `progress` values to `exported_at` timestamps
+- Updated `discard_uncommitted_changes()` in `projects.py` to use `exported_at IS NULL` instead of `progress = 0`
+- All queries now consistently use `exported_at`
 
-**Effort**: Medium (1 day)
+**Effort**: Low (0.5 hours - was simpler than estimated)
 
 ---
 
@@ -453,11 +454,11 @@ async def export(...):
 | High | App.jsx God Class | 2-3 days | Very High | **In Progress** (Phase 1-3 ✅, Phase 4 pending) |
 | Medium | OpenCV Frame Extraction | 2-3 days | Medium | Workaround applied, FFmpeg refactor pending |
 | Medium | JSON Primitive Obsession | 1-2 days | Medium | Pending |
-| Medium | Feature Envy (clip name) | 0.5 days | Low | Pending |
+| Medium | Feature Envy (clip name) | N/A | Low | ✅ Analyzed - Intentional |
 | Medium | Long Parameter Lists | 1 day | Medium | Pending |
 | Low | Unused transform_data | 0.5 hours | Low | Skipped (too integrated) |
 | Low | Magic Numbers | 2-3 hours | Low | ✅ Video processing constants done |
-| Medium | progress/exported_at | 1 day | Medium | Pending |
+| Medium | progress/exported_at | 0.5 hours | Medium | ✅ Completed |
 
 ---
 
