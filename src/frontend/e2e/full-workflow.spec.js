@@ -188,8 +188,8 @@ test.describe('Full Workflow - Using Carlsbad Test Data', () => {
     await page.locator('button:has-text("Create")').click();
     await page.waitForTimeout(1000);
 
-    // Verify project was created - check in the project list
-    await expect(page.locator('text=Carlsbad Highlights')).toBeVisible();
+    // Verify project was created - check in the project list (use first() since multiple may exist from prior runs)
+    await expect(page.locator('text=Carlsbad Highlights').first()).toBeVisible();
 
     // Verify via API
     const projects = await request.get(`${API_BASE}/projects`);
@@ -257,8 +257,8 @@ test.describe('Clip Editing Tests', () => {
       await nameInput.fill('Edited Clip Name');
       await page.waitForTimeout(500);
 
-      // Verify the name changed in the sidebar
-      await expect(page.locator('text=Edited Clip Name')).toBeVisible();
+      // Verify the name changed in the sidebar (use title attribute to avoid matching tooltip)
+      await expect(page.locator('[title*="Edited Clip Name"]').first()).toBeVisible();
       console.log('Successfully edited clip name');
     }
   });

@@ -48,7 +48,13 @@
       "Bash(src/backend/.venv/Scripts/python.exe:*)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nMigrate annotations from TSV files to SQLite database\n\n- Store annotations in dedicated `annotations` table with game_id foreign key\n- Cache aggregate counts \\(clip_count, brilliant_count, etc.\\) on games table\n- Remove all TSV file operations - annotations now DB-only\n- Add ON DELETE CASCADE for automatic cleanup when game deleted\n- Add tests for annotation behavior and aggregate calculations\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(src/backend/.venv/Scripts/python.exe test_with_data.py)",
+      "Bash(src/backend/.venv/Scripts/python.exe test_websocket.py)",
+      "Bash(npx playwright install chromium)",
+      "Bash(npx playwright test --list)",
+      "Bash(npx playwright test \"Edit clip name\" --reporter=line)",
+      "Bash(npx playwright test:*)"
     ],
     "deny": [],
     "ask": []
