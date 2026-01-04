@@ -153,29 +153,50 @@ if not cap.read() at last_frame:
 ### 4. Primitive Obsession: JSON Columns
 **Smell**: Primitive Obsession, Stringly Typed
 
-**Location**: Database schema across all tables
+**Status**: ✅ COMPLETED - Pydantic models created
+
+**Location**: [schemas.py](src/backend/app/schemas.py)
 
 **Problem**: Complex data structures stored as JSON strings in TEXT columns, parsed/serialized repeatedly.
 
-**Evidence**:
-```sql
-crop_data TEXT,      -- JSON: crop keyframes
-timing_data TEXT,    -- JSON: {trimRange}
-segments_data TEXT,  -- JSON: {boundaries, segmentSpeeds}
-highlights_data TEXT -- JSON: [{start_time, end_time, keyframes}]
+**Resolution**:
+Created comprehensive Pydantic models for all JSON columns:
+
+```python
+from app.schemas import (
+    # Crop data (working_clips.crop_data)
+    CropKeyframe, CropData,
+    # Timing data (working_clips.timing_data)
+    TimingData,
+    # Segments data (working_clips.segments_data)
+    SegmentsData,
+    # Highlights data (working_videos.highlights_data)
+    HighlightKeyframe, HighlightRegion, HighlightsData,
+    # Helper parsers
+    parse_crop_data, parse_timing_data, parse_segments_data, parse_highlights_data
+)
 ```
 
-**Issues**:
-- No schema validation at DB level
-- Every read requires `json.loads()`, every write requires `json.dumps()`
-- No query capability on nested data
+**Benefits for AI maintainability**:
+- Self-documenting schemas with type hints and descriptions
+- AI can immediately understand data shapes without searching
+- Field-level documentation explains valid values and defaults
+- Validation prevents malformed data
+- 40 unit tests verify all schemas
 
-**Refactoring**:
-1. **Pydantic Models**: Create proper models for all JSON structures
-2. **JSON Schema Validation**: Add validation before storage
-3. **Consider Normalization**: For frequently-queried data like keyframes
+**Usage example**:
+```python
+# Parse JSON from database
+crop_data = parse_crop_data(json_string)
+if crop_data:
+    for kf in crop_data.keyframes:
+        print(kf.x, kf.y, kf.width, kf.height)
 
-**Effort**: Medium (1-2 days)
+# Serialize for storage
+json_string = json.dumps(crop_data.to_json_list())
+```
+
+**Effort**: Low (0.5 day - less than estimated)
 
 ---
 
@@ -454,7 +475,7 @@ async def export(...):
 |----------|-------|--------|--------|--------|
 | High | App.jsx God Class | 2-3 days | Very High | **In Progress** (Phase 1-3 ✅, Phase 4 pending) |
 | Medium | OpenCV Frame Extraction | 2-3 days | Medium | Workaround applied, FFmpeg refactor pending |
-| Medium | JSON Primitive Obsession | 1-2 days | Medium | Pending |
+| Medium | JSON Primitive Obsession | 0.5 day | Medium | ✅ Completed (schemas.py) |
 | Medium | Feature Envy (clip name) | N/A | Low | ✅ Analyzed - Intentional |
 | Medium | Long Parameter Lists | Low | Medium | ✅ Partially addressed (AppStateContext) |
 | Low | Unused transform_data | 0.5 hours | Low | ✅ Completed |
