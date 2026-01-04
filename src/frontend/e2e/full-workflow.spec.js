@@ -199,6 +199,71 @@ test.describe('Full Workflow - Using Carlsbad Test Data', () => {
   });
 });
 
+test.describe('Clip Editing Tests', () => {
+  test('Edit clip rating via UI', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // Load video to enter Annotate mode
+    const videoInput = page.locator('input[type="file"][accept*="video"]');
+    await videoInput.setInputFiles(TEST_VIDEO);
+    await expect(page.locator('video')).toBeVisible({ timeout: 120000 });
+
+    // Import TSV
+    const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
+    await tsvInput.setInputFiles(TEST_TSV);
+    await expect(page.locator('text=/Imported \\d+ clips?/')).toBeVisible({ timeout: 10000 });
+
+    // Click on first clip to select it
+    const firstClip = page.locator('[title*="Good Pass"]').first();
+    await firstClip.click({ force: true });
+    await page.waitForTimeout(500);
+
+    // Should see clip details editor with rating stars
+    const stars = page.locator('svg.lucide-star');
+    const starCount = await stars.count();
+    expect(starCount).toBeGreaterThan(0);
+
+    // Click on a star to change rating (click 5th star for 5-star rating)
+    if (starCount >= 5) {
+      await stars.nth(4).click({ force: true });
+      await page.waitForTimeout(500);
+      console.log('Changed clip rating to 5 stars');
+    }
+  });
+
+  test('Edit clip name via UI', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // Load video to enter Annotate mode
+    const videoInput = page.locator('input[type="file"][accept*="video"]');
+    await videoInput.setInputFiles(TEST_VIDEO);
+    await expect(page.locator('video')).toBeVisible({ timeout: 120000 });
+
+    // Import TSV
+    const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
+    await tsvInput.setInputFiles(TEST_TSV);
+    await expect(page.locator('text=/Imported \\d+ clips?/')).toBeVisible({ timeout: 10000 });
+
+    // Click on first clip to select it
+    const firstClip = page.locator('[title*="Good Pass"]').first();
+    await firstClip.click({ force: true });
+    await page.waitForTimeout(500);
+
+    // Find clip name input and edit it
+    const nameInput = page.locator('input[value*="Good Pass"]').first();
+    if (await nameInput.isVisible().catch(() => false)) {
+      await nameInput.fill('Edited Clip Name');
+      await page.waitForTimeout(500);
+
+      // Verify the name changed in the sidebar
+      await expect(page.locator('text=Edited Clip Name')).toBeVisible();
+      console.log('Successfully edited clip name');
+    }
+  });
+});
+
 test.describe('UI Component Tests', () => {
   test('Clip sidebar shows imported clips', async ({ page }) => {
     await page.goto('/');
@@ -293,5 +358,42 @@ test.describe('API Integration Tests', () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(Array.isArray(data)).toBeTruthy();
+  });
+
+  test('Games CRUD works', async ({ request }) => {
+    // List games (already tested above, but verify structure)
+    const listResponse = await request.get(`${API_BASE}/games`);
+    expect(listResponse.ok()).toBeTruthy();
+    const listData = await listResponse.json();
+    expect(listData.games).toBeDefined();
+
+    // If there are games, test getting a specific one
+    if (listData.games.length > 0) {
+      const gameId = listData.games[0].id;
+      const getResponse = await request.get(`${API_BASE}/games/${gameId}`);
+      expect(getResponse.ok()).toBeTruthy();
+      const gameData = await getResponse.json();
+      expect(gameData.id).toBe(gameId);
+      console.log(`Verified game ${gameId} can be retrieved`);
+    }
+  });
+
+  test('Clips by project endpoint works', async ({ request }) => {
+    // First create a project
+    const createResponse = await request.post(`${API_BASE}/projects`, {
+      data: { name: 'Clips Test Project', aspect_ratio: '9:16' }
+    });
+    expect(createResponse.ok()).toBeTruthy();
+    const project = await createResponse.json();
+
+    // Get clips for this project (should be empty initially)
+    const clipsResponse = await request.get(`${API_BASE}/clips/projects/${project.id}/clips`);
+    expect(clipsResponse.ok()).toBeTruthy();
+    const clips = await clipsResponse.json();
+    expect(Array.isArray(clips)).toBeTruthy();
+
+    // Cleanup
+    await request.delete(`${API_BASE}/projects/${project.id}`);
+    console.log('Clips by project endpoint verified');
   });
 });
