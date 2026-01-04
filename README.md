@@ -182,7 +182,7 @@ projects (
 -- Working clips: Clips in projects with framing edits
 working_clips (
     id, project_id, raw_clip_id, uploaded_filename,
-    progress,              -- 0 = not exported, 1 = exported
+    exported_at,           -- NULL = not exported, timestamp = exported
     sort_order, version,   -- Version increments on re-export
     crop_data,             -- JSON: crop keyframes
     timing_data,           -- JSON: {trimRange}
@@ -382,7 +382,7 @@ To add a new transition type, create a class implementing `TransitionStrategy` a
 ### Running Tests
 
 ```bash
-# Frontend unit tests (231 tests)
+# Frontend unit tests (235 tests)
 cd src/frontend && npm test
 
 # Backend unit tests (159 tests)
