@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 /**
  * Full Workflow E2E Test
@@ -21,6 +22,10 @@ import fs from 'fs';
  */
 
 const API_BASE = 'http://localhost:8000/api';
+
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Test data paths - relative to project root
 const TEST_DATA_DIR = path.resolve(__dirname, '../../../formal annotations/12.6.carlsbad');

@@ -1,11 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Playwright configuration for E2E tests
  * Run with: npx playwright test
  * Debug with: npx playwright test --ui
  */
+
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Test data directory - contains video and TSV files for testing
 const TEST_DATA_DIR = path.resolve(__dirname, '../../formal annotations/12.6.carlsbad');
