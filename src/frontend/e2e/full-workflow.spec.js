@@ -58,15 +58,16 @@ test.describe('Full Workflow - Using Carlsbad Test Data', () => {
   });
 
   test('1. Project Manager loads correctly', async ({ page }) => {
-    // Should see Project Manager on fresh load with Games tab active
+    // Should see Project Manager on fresh load with Projects tab active (default)
     // Use locator with has-text for buttons that contain icons
     await expect(page.locator('button:has-text("Games")')).toBeVisible();
     await expect(page.locator('button:has-text("Projects")')).toBeVisible();
-    await expect(page.locator('button:has-text("Add Game")')).toBeVisible();
-
-    // Switch to Projects tab and verify New Project button
-    await page.locator('button:has-text("Projects")').click();
+    // Default tab is 'projects', so "New Project" button is visible
     await expect(page.locator('button:has-text("New Project")')).toBeVisible();
+
+    // Switch to Games tab and verify Add Game button
+    await page.locator('button:has-text("Games")').click();
+    await expect(page.locator('button:has-text("Add Game")')).toBeVisible();
   });
 
   test('2. Annotate Mode - Upload video and import TSV', async ({ page }) => {
