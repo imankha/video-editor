@@ -59,14 +59,14 @@ test.describe('Full Workflow - Using Carlsbad Test Data', () => {
 
   test('1. Project Manager loads correctly', async ({ page }) => {
     // Should see Project Manager on fresh load with Games tab active
-    // Use role-based selectors to avoid matching other text containing "Games" or "Projects"
-    await expect(page.getByRole('button', { name: 'Games' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Projects' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add Game' })).toBeVisible();
+    // Use locator with has-text for buttons that contain icons
+    await expect(page.locator('button:has-text("Games")')).toBeVisible();
+    await expect(page.locator('button:has-text("Projects")')).toBeVisible();
+    await expect(page.locator('button:has-text("Add Game")')).toBeVisible();
 
     // Switch to Projects tab and verify New Project button
-    await page.getByRole('button', { name: 'Projects' }).click();
-    await expect(page.getByRole('button', { name: 'New Project' })).toBeVisible();
+    await page.locator('button:has-text("Projects")').click();
+    await expect(page.locator('button:has-text("New Project")')).toBeVisible();
   });
 
   test('2. Annotate Mode - Upload video and import TSV', async ({ page }) => {
@@ -175,20 +175,20 @@ test.describe('Full Workflow - Using Carlsbad Test Data', () => {
 
   test('5. Create project manually and add clips', async ({ page, request }) => {
     // Switch to Projects tab first
-    await page.getByRole('button', { name: 'Projects' }).click();
+    await page.locator('button:has-text("Projects")').click();
     await page.waitForTimeout(500);
 
     // Create a new project via UI
-    await page.getByRole('button', { name: 'New Project' }).click();
+    await page.locator('button:has-text("New Project")').click();
     await page.waitForTimeout(500);
     // Use the actual placeholder text from the modal
     await page.getByPlaceholder('My Highlight Reel').fill('Carlsbad Highlights');
-    await page.getByRole('button', { name: '9:16' }).click();
-    await page.getByRole('button', { name: 'Create' }).click();
+    await page.locator('button:has-text("9:16")').click();
+    await page.locator('button:has-text("Create")').click();
     await page.waitForTimeout(1000);
 
     // Verify project was created - check in the project list
-    await expect(page.getByText('Carlsbad Highlights')).toBeVisible();
+    await expect(page.locator('text=Carlsbad Highlights')).toBeVisible();
 
     // Verify via API
     const projects = await request.get(`${API_BASE}/projects`);
@@ -282,7 +282,9 @@ test.describe('API Integration Tests', () => {
     }
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
-    expect(Array.isArray(data)).toBeTruthy();
+    // API returns { games: [...] } not a direct array
+    expect(data.games).toBeDefined();
+    expect(Array.isArray(data.games)).toBeTruthy();
   });
 
   test('Raw clips endpoint responds', async ({ request }) => {
