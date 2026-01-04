@@ -28,6 +28,7 @@ import base64
 from ...websocket import export_progress, manager
 from ...services.clip_cache import get_clip_cache
 from ...services.transitions import apply_transition
+from ...services.clip_pipeline import process_clip_with_pipeline
 from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR
 from ...services.ffmpeg_service import get_video_duration
 
@@ -101,87 +102,16 @@ async def process_single_clip(
 ) -> str:
     """
     Process a single clip with its crop/trim/speed settings.
+    Uses ClipProcessingPipeline to ensure correct ordering of operations.
     Uses caching to avoid re-processing unchanged clips.
     Returns path to processed clip.
     """
     clip_index = clip_data['clipIndex']
 
-    # Save video to temp
-    input_path = os.path.join(temp_dir, f"input_{clip_index}.mp4")
-    content = await video_file.read()
-    with open(input_path, 'wb') as f:
-        f.write(content)
+    # Read video content
+    video_content = await video_file.read()
 
-    # Compute content hash for cache key (first 1MB + size for speed)
-    content_sample = content[:1024 * 1024]  # First 1MB
-    content_hash = hashlib.sha256(content_sample).hexdigest()[:12]
-    content_identity = f"{content_hash}|{len(content)}"
-
-    # Output path for this clip
-    output_path = os.path.join(temp_dir, f"processed_{clip_index}.mp4")
-
-    # Convert crop keyframes to expected format
-    keyframes = [
-        {
-            'time': kf['time'],
-            'x': kf['x'],
-            'y': kf['y'],
-            'width': kf['width'],
-            'height': kf['height']
-        }
-        for kf in clip_data.get('cropKeyframes', [])
-    ]
-
-    # Build segment_data from clip's segments
-    segment_data = None
-    segments = clip_data.get('segments')
-    trim_range = clip_data.get('trimRange')
-
-    if segments or trim_range:
-        segment_data = {}
-
-        if trim_range:
-            segment_data['trim_start'] = trim_range.get('start', 0)
-            segment_data['trim_end'] = trim_range.get('end', clip_data.get('duration', 0))
-
-        # Convert segment speeds if present
-        if segments and segments.get('segmentSpeeds'):
-            boundaries = segments.get('boundaries', [])
-            speeds = segments.get('segmentSpeeds', {})
-
-            segment_list = []
-            for i in range(len(boundaries) - 1):
-                segment_list.append({
-                    'start': boundaries[i],
-                    'end': boundaries[i + 1],
-                    'speed': speeds.get(str(i), 1.0)
-                })
-            segment_data['segments'] = segment_list
-
-    # Check cache before processing
-    cache = get_clip_cache()
-    cache_key = cache.generate_key(
-        cache_type='framing',
-        video_id=content_identity,
-        crop_keyframes=keyframes,
-        segment_data=segment_data,
-        target_fps=target_fps,
-        export_mode=export_mode,
-        include_audio=include_audio
-    )
-
-    cached_path = cache.get(cache_key)
-    if cached_path:
-        # Cache hit - copy to output path
-        shutil.copy2(cached_path, output_path)
-        logger.info(f"[Multi-Clip] Cache HIT for clip {clip_index}")
-        if progress_callback:
-            progress_callback(1, 1, "Using cached result", 'cached')
-        return output_path
-
-    logger.info(f"[Multi-Clip] Processing clip {clip_index}: {len(keyframes)} keyframes")
-
-    # Check AI upscaler
+    # Check AI upscaler availability
     if AIVideoUpscaler is None:
         raise HTTPException(
             status_code=503,
@@ -201,25 +131,21 @@ async def process_single_clip(
             detail={"error": "AI SR model failed to load"}
         )
 
-    # Process with AIVideoUpscaler (run in thread to not block async)
-    await asyncio.to_thread(
-        upscaler.process_video_with_upscale,
-        input_path=input_path,
-        output_path=output_path,
-        keyframes=keyframes,
+    # Get cache instance
+    cache = get_clip_cache()
+
+    # Use pipeline for guaranteed correct ordering of operations
+    output_path = await process_clip_with_pipeline(
+        clip_data=clip_data,
+        video_content=video_content,
+        temp_dir=temp_dir,
         target_fps=target_fps,
         export_mode=export_mode,
-        progress_callback=progress_callback,
-        segment_data=segment_data,
-        include_audio=include_audio
+        include_audio=include_audio,
+        cache=cache,
+        upscaler=upscaler,
+        progress_callback=progress_callback
     )
-
-    # Save to cache for future use
-    try:
-        cache.put(output_path, cache_key)
-        logger.info(f"[Multi-Clip] Cached clip {clip_index}")
-    except Exception as e:
-        logger.warning(f"[Multi-Clip] Failed to cache clip {clip_index}: {e}")
 
     return output_path
 
