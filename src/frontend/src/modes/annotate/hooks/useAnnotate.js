@@ -59,6 +59,46 @@ function parseTimeToSeconds(timeStr) {
 }
 
 /**
+ * Format seconds to M:SS for TSV export
+ * Matches the import format exactly
+ */
+function formatSecondsForTsv(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Generate TSV content from clip regions for export
+ * Format matches the import format exactly
+ * @param {Array} clipRegions - Array of clip region objects
+ * @returns {string} TSV content ready for download
+ */
+export function generateTsvContent(clipRegions) {
+  // Header row
+  const header = REQUIRED_COLUMNS.join('\t');
+
+  // Sort by endTime to match display order
+  const sorted = [...clipRegions].sort((a, b) => a.endTime - b.endTime);
+
+  // Generate data rows
+  const rows = sorted.map(region => {
+    const startTime = formatSecondsForTsv(region.startTime);
+    const rating = region.rating || DEFAULT_RATING;
+    const tags = (region.tags || []).join(',');
+    const clipName = region.name || '';
+    // Calculate duration with 1 decimal precision
+    const duration = ((region.endTime - region.startTime) || DEFAULT_CLIP_DURATION).toFixed(1);
+    // Sanitize notes: replace tabs and newlines with spaces
+    const notes = (region.notes || '').replace(/[\t\r\n]/g, ' ');
+
+    return [startTime, rating, tags, clipName, duration, notes].join('\t');
+  });
+
+  return [header, ...rows].join('\n');
+}
+
+/**
  * Validate a TSV file content and return parsed annotations or errors
  * @param {string} content - Raw TSV file content
  * @returns {{ success: boolean, annotations?: Array, errors?: Array }}
