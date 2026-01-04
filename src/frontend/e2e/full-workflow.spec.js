@@ -59,23 +59,25 @@ test.describe('Full Workflow - Using Carlsbad Test Data', () => {
 
   test('1. Project Manager loads correctly', async ({ page }) => {
     // Should see Project Manager on fresh load with Games tab active
-    await expect(page.locator('text=Games')).toBeVisible();
-    await expect(page.locator('text=Projects')).toBeVisible();
-    await expect(page.locator('text=Add Game')).toBeVisible();
+    // Use role-based selectors to avoid matching other text containing "Games" or "Projects"
+    await expect(page.getByRole('button', { name: 'Games' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Projects' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add Game' })).toBeVisible();
 
     // Switch to Projects tab and verify New Project button
-    await page.click('button:has-text("Projects")');
-    await expect(page.locator('text=New Project')).toBeVisible();
+    await page.getByRole('button', { name: 'Projects' }).click();
+    await expect(page.getByRole('button', { name: 'New Project' })).toBeVisible();
   });
 
   test('2. Annotate Mode - Upload video and import TSV', async ({ page }) => {
-    // Click Add Game to trigger file picker, then set file on hidden input
+    // Set file on hidden input to trigger Annotate mode
     const videoInput = page.locator('input[type="file"][accept*="video"]');
     await videoInput.setInputFiles(TEST_VIDEO);
 
     // Wait for video to load and Annotate mode to activate
     await expect(page.locator('video')).toBeVisible({ timeout: 120000 });
-    await expect(page.locator('text=Clips')).toBeVisible();
+    // Use heading selector to avoid matching multiple elements containing "Clips"
+    await expect(page.getByRole('heading', { name: 'Clips' })).toBeVisible();
     console.log('Video loaded successfully');
 
     // Import TSV file
@@ -173,18 +175,20 @@ test.describe('Full Workflow - Using Carlsbad Test Data', () => {
 
   test('5. Create project manually and add clips', async ({ page, request }) => {
     // Switch to Projects tab first
-    await page.click('button:has-text("Projects")');
+    await page.getByRole('button', { name: 'Projects' }).click();
     await page.waitForTimeout(500);
 
     // Create a new project via UI
-    await page.click('text=New Project');
-    await page.fill('input[placeholder*="Project name"]', 'Carlsbad Highlights');
-    await page.click('button:has-text("9:16")');
-    await page.click('button:has-text("Create")');
+    await page.getByRole('button', { name: 'New Project' }).click();
+    await page.waitForTimeout(500);
+    // Use the actual placeholder text from the modal
+    await page.getByPlaceholder('My Highlight Reel').fill('Carlsbad Highlights');
+    await page.getByRole('button', { name: '9:16' }).click();
+    await page.getByRole('button', { name: 'Create' }).click();
     await page.waitForTimeout(1000);
 
-    // Verify project was created
-    await expect(page.locator('text=Carlsbad Highlights')).toBeVisible();
+    // Verify project was created - check in the project list
+    await expect(page.getByText('Carlsbad Highlights')).toBeVisible();
 
     // Verify via API
     const projects = await request.get(`${API_BASE}/projects`);
@@ -230,15 +234,16 @@ test.describe('UI Component Tests', () => {
     await tsvInput.setInputFiles(TEST_TSV);
     await page.waitForTimeout(2000);
 
-    // Click on first clip
-    const firstClip = page.locator('text=Good Pass').first();
+    // Click on first clip - use force to bypass any overlapping elements
+    const firstClip = page.locator('[title*="Good Pass"]').first();
     if (await firstClip.isVisible().catch(() => false)) {
-      await firstClip.click();
+      await firstClip.click({ force: true });
       await page.waitForTimeout(500);
 
-      // Should see rating UI elements
-      const hasRatingUI = await page.locator('[data-rating], button:has(svg[class*="star"]), .star').count() > 0;
+      // Should see rating UI elements (stars in the clip details editor)
+      const hasRatingUI = await page.locator('svg.lucide-star').count() > 0;
       console.log('Rating UI visible:', hasRatingUI);
+      expect(hasRatingUI).toBeTruthy();
     }
   });
 });
@@ -271,6 +276,10 @@ test.describe('API Integration Tests', () => {
 
   test('Games list endpoint works', async ({ request }) => {
     const response = await request.get(`${API_BASE}/games`);
+    // Log response details for debugging
+    if (!response.ok()) {
+      console.log('Games endpoint failed:', response.status(), await response.text());
+    }
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(Array.isArray(data)).toBeTruthy();
