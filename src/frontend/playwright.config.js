@@ -1,10 +1,15 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'path';
 
 /**
  * Playwright configuration for E2E tests
  * Run with: npx playwright test
  * Debug with: npx playwright test --ui
  */
+
+// Test data directory - contains video and TSV files for testing
+const TEST_DATA_DIR = path.resolve(__dirname, '../../formal annotations/12.6.carlsbad');
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false, // Run tests sequentially for workflow tests
@@ -18,6 +23,8 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    // Pass test data paths to tests
+    testDataDir: TEST_DATA_DIR,
   },
 
   projects: [
@@ -34,8 +41,8 @@ export default defineConfig({
   webServer: undefined, // Manual server start for now
 
   // Increase timeout for video processing operations
-  timeout: 120000, // 2 minutes per test
+  timeout: 300000, // 5 minutes per test (video uploads take time)
   expect: {
-    timeout: 30000, // 30 seconds for assertions
+    timeout: 60000, // 60 seconds for assertions
   },
 });

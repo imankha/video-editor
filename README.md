@@ -396,22 +396,24 @@ cd src/frontend && npm run test:e2e
 
 # E2E with visual UI (for debugging)
 npm run test:e2e:ui
-
-# Full workflow test with video (set TEST_VIDEO_PATH)
-TEST_VIDEO_PATH=/path/to/test.mp4 npm run test:e2e
 ```
+
+### E2E Test Data
+
+Tests use data from `formal annotations/12.6.carlsbad/`:
+- **Video**: `wcfc-vs-carlsbad-sc-2025-11-02-2025-12-08.mp4` (2.5GB)
+- **TSV**: `12.6.carlsbad.tsv` (25 annotated clips)
 
 ### E2E Test Coverage
 
 The `e2e/full-workflow.spec.js` covers:
 1. Project Manager loads correctly
-2. Annotate Mode - Import TSV and Export
-3. Create Project and add clips
-4. Select Project and enter Framing mode
-5. Mode switching - Framing to Overlay
-6. Full export workflow (requires video file)
-7. UI Component Tests (star rating, timeline, keyboard shortcuts)
-8. API Integration Tests (health, projects CRUD, clips)
+2. Annotate Mode - Upload video and import TSV
+3. Annotate Mode - Export TSV round-trip
+4. Full workflow - Annotate to Project (import into projects)
+5. Create project manually
+6. UI Component Tests (clip sidebar, star rating)
+7. API Integration Tests (health, projects CRUD, games, clips)
 
 ### Manual Testing
 - See [MANUAL_TEST.md](MANUAL_TEST.md) for manual UI procedures
