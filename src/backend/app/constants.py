@@ -108,3 +108,16 @@ TAG_SHORT_NAMES: Dict[str, str] = {
 def get_tag_short_name(tag: str) -> str:
     """Get the short name for a tag, returning the tag itself if no mapping exists."""
     return TAG_SHORT_NAMES.get(tag, tag)
+
+
+# =============================================================================
+# Video Processing Constants
+# =============================================================================
+
+# Maximum output resolution (1440p cap)
+# Prevents over-upscaling small crops and keeps file sizes reasonable
+VIDEO_MAX_WIDTH: int = 2560
+VIDEO_MAX_HEIGHT: int = 1440
+
+# AI upscaling factor (Real-ESRGAN uses 4x by default)
+AI_UPSCALE_FACTOR: int = 4

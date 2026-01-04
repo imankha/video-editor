@@ -22,6 +22,8 @@ import threading
 from datetime import datetime
 import json
 
+from ..constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR
+
 # Import utilities
 from . import utils
 from .utils import setup_torchvision_compatibility, detect_aspect_ratio, enhance_frame_opencv
@@ -652,12 +654,12 @@ class AIVideoUpscaler:
         crop_w = int(initial_crop['width'])
         crop_h = int(initial_crop['height'])
 
-        # Ideal 4x SR size
-        sr_w = crop_w * 4
-        sr_h = crop_h * 4
+        # Ideal upscaled size (4x for Real-ESRGAN)
+        sr_w = crop_w * AI_UPSCALE_FACTOR
+        sr_h = crop_h * AI_UPSCALE_FACTOR
 
-        # Clamp to a sane max (1440p for quality, avoids over-upscaling small crops)
-        max_w, max_h = 2560, 1440  # 1440p cap
+        # Clamp to max resolution (1440p for quality, avoids over-upscaling small crops)
+        max_w, max_h = VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT
         scale_limit = min(max_w / sr_w, max_h / sr_h, 1.0)
 
         target_w = int(sr_w * scale_limit)

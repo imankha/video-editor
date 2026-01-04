@@ -28,6 +28,7 @@ import base64
 from ...websocket import export_progress, manager
 from ...services.clip_cache import get_clip_cache
 from ...services.transitions import apply_transition
+from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR
 from ...services.ffmpeg_service import get_video_duration
 
 logger = logging.getLogger(__name__)
@@ -71,11 +72,11 @@ def calculate_multi_clip_resolution(
         else:
             return (1920, 1080)
 
-    # Calculate target resolution (4x upscale, capped at 1440p)
-    sr_w = int(min_crop_width * 4)
-    sr_h = int(min_crop_height * 4)
+    # Calculate target resolution (upscaled, capped at max resolution)
+    sr_w = int(min_crop_width * AI_UPSCALE_FACTOR)
+    sr_h = int(min_crop_height * AI_UPSCALE_FACTOR)
 
-    max_w, max_h = 2560, 1440
+    max_w, max_h = VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT
     scale_limit = min(max_w / sr_w, max_h / sr_h, 1.0)
 
     target_w = int(sr_w * scale_limit)

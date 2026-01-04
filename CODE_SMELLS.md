@@ -261,23 +261,24 @@ transform_data TEXT,  -- Reserved for future use
 ### 8. Magic Numbers/Strings
 **Smell**: Magic Number, Magic String
 
-**Locations throughout codebase**:
+**Status**: PARTIALLY COMPLETED - Video processing constants extracted
 
+**Completed**:
+- ✅ Extracted `VIDEO_MAX_WIDTH = 2560` and `VIDEO_MAX_HEIGHT = 1440` to [constants.py](src/backend/app/constants.py)
+- ✅ Extracted `AI_UPSCALE_FACTOR = 4` to constants.py
+- ✅ Updated [ai_upscaler/__init__.py](src/backend/app/ai_upscaler/__init__.py) to use constants
+- ✅ Updated [multi_clip.py](src/backend/app/routers/export/multi_clip.py) to use constants
+
+**Remaining**:
 ```python
-# export.py
-max_w, max_h = 2560, 1440  # Why these values?
-sr_w = int(min_crop_width * 4)  # 4x upscale - not documented
-
 # database.py
-USER_ID = "a"  # Single-user hardcoded
+USER_ID = "a"  # Single-user hardcoded (kept as-is, clear intent)
 
 # App.jsx
-// Line 3900: Maximum file size: 4GB - not enforced, just in docs
+// Maximum file size: 4GB - mentioned in docs but not enforced
 ```
 
-**Refactoring**: Extract to named constants with documentation.
-
-**Effort**: Low (2-3 hours)
+**Effort**: Low (remaining items are minor)
 
 ---
 
@@ -454,8 +455,8 @@ async def export(...):
 | Medium | JSON Primitive Obsession | 1-2 days | Medium | Pending |
 | Medium | Feature Envy (clip name) | 0.5 days | Low | Pending |
 | Medium | Long Parameter Lists | 1 day | Medium | Pending |
-| Low | Unused transform_data | 0.5 hours | Low | Pending |
-| Low | Magic Numbers | 2-3 hours | Low | Pending |
+| Low | Unused transform_data | 0.5 hours | Low | Skipped (too integrated) |
+| Low | Magic Numbers | 2-3 hours | Low | ✅ Video processing constants done |
 | Medium | progress/exported_at | 1 day | Medium | Pending |
 
 ---
