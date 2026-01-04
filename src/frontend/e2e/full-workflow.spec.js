@@ -58,26 +58,24 @@ test.describe('Full Workflow - Using Carlsbad Test Data', () => {
   });
 
   test('1. Project Manager loads correctly', async ({ page }) => {
-    // Should see Project Manager on fresh load
+    // Should see Project Manager on fresh load with Games tab active
+    await expect(page.locator('text=Games')).toBeVisible();
+    await expect(page.locator('text=Projects')).toBeVisible();
+    await expect(page.locator('text=Add Game')).toBeVisible();
+
+    // Switch to Projects tab and verify New Project button
+    await page.click('button:has-text("Projects")');
     await expect(page.locator('text=New Project')).toBeVisible();
-    await expect(page.locator('text=Annotate Game')).toBeVisible();
   });
 
   test('2. Annotate Mode - Upload video and import TSV', async ({ page }) => {
-    // Navigate to Annotate mode
-    await page.click('text=Annotate Game');
-    await page.waitForTimeout(1000);
-
-    // Should see Annotate UI
-    await expect(page.locator('text=Clips')).toBeVisible();
-
-    // Upload the test video
-    console.log('Uploading video:', TEST_VIDEO);
+    // Click Add Game to trigger file picker, then set file on hidden input
     const videoInput = page.locator('input[type="file"][accept*="video"]');
     await videoInput.setInputFiles(TEST_VIDEO);
 
-    // Wait for video to load (this may take a while for large files)
+    // Wait for video to load and Annotate mode to activate
     await expect(page.locator('video')).toBeVisible({ timeout: 120000 });
+    await expect(page.locator('text=Clips')).toBeVisible();
     console.log('Video loaded successfully');
 
     // Import TSV file
@@ -95,9 +93,10 @@ test.describe('Full Workflow - Using Carlsbad Test Data', () => {
   });
 
   test('3. Annotate Mode - Export TSV round-trip', async ({ page }) => {
-    // Navigate to Annotate mode and import TSV
-    await page.click('text=Annotate Game');
-    await page.waitForTimeout(1000);
+    // Load video to enter Annotate mode
+    const videoInput = page.locator('input[type="file"][accept*="video"]');
+    await videoInput.setInputFiles(TEST_VIDEO);
+    await expect(page.locator('video')).toBeVisible({ timeout: 120000 });
 
     // Import TSV
     const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
@@ -130,16 +129,12 @@ test.describe('Full Workflow - Using Carlsbad Test Data', () => {
     // 6. Switch to Overlay mode
     // 7. Export final video
 
-    // Step 1: Navigate to Annotate mode
-    await page.click('text=Annotate Game');
-    await page.waitForTimeout(1000);
-
-    // Step 2: Upload video
+    // Step 1: Load video to enter Annotate mode
     const videoInput = page.locator('input[type="file"][accept*="video"]');
     await videoInput.setInputFiles(TEST_VIDEO);
     await expect(page.locator('video')).toBeVisible({ timeout: 120000 });
 
-    // Step 3: Import TSV
+    // Step 2: Import TSV
     const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
     await tsvInput.setInputFiles(TEST_TSV);
     await expect(page.locator('text=/Imported \\d+ clips?/')).toBeVisible({ timeout: 10000 });
@@ -177,6 +172,10 @@ test.describe('Full Workflow - Using Carlsbad Test Data', () => {
   });
 
   test('5. Create project manually and add clips', async ({ page, request }) => {
+    // Switch to Projects tab first
+    await page.click('button:has-text("Projects")');
+    await page.waitForTimeout(500);
+
     // Create a new project via UI
     await page.click('text=New Project');
     await page.fill('input[placeholder*="Project name"]', 'Carlsbad Highlights');
@@ -198,8 +197,12 @@ test.describe('Full Workflow - Using Carlsbad Test Data', () => {
 test.describe('UI Component Tests', () => {
   test('Clip sidebar shows imported clips', async ({ page }) => {
     await page.goto('/');
-    await page.click('text=Annotate Game');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('networkidle');
+
+    // Load video to enter Annotate mode
+    const videoInput = page.locator('input[type="file"][accept*="video"]');
+    await videoInput.setInputFiles(TEST_VIDEO);
+    await expect(page.locator('video')).toBeVisible({ timeout: 120000 });
 
     // Import TSV
     const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
@@ -215,8 +218,12 @@ test.describe('UI Component Tests', () => {
 
   test('Star rating is visible for clips', async ({ page }) => {
     await page.goto('/');
-    await page.click('text=Annotate Game');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('networkidle');
+
+    // Load video to enter Annotate mode
+    const videoInput = page.locator('input[type="file"][accept*="video"]');
+    await videoInput.setInputFiles(TEST_VIDEO);
+    await expect(page.locator('video')).toBeVisible({ timeout: 120000 });
 
     // Import TSV
     const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
