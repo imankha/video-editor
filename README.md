@@ -371,17 +371,51 @@ To add a new transition type, create a class implementing `TransitionStrategy` a
 
 ## Testing
 
+### Test Organization
+
+| Type | Location | Framework | Run Command |
+|------|----------|-----------|-------------|
+| **Backend Unit** | `src/backend/tests/` | pytest | `pytest tests/ -v` |
+| **Frontend Unit** | Co-located with source (`*.test.js`) | Vitest | `npm test` |
+| **E2E/Integration** | `src/frontend/e2e/` | Playwright | `npm run test:e2e` |
+
+### Running Tests
+
 ```bash
-# Frontend tests (231 tests)
+# Frontend unit tests (231 tests)
 cd src/frontend && npm test
 
-# Backend tests (159 tests)
+# Backend unit tests (159 tests)
 cd src/backend && .venv/Scripts/python -m pytest tests/ -v
 
-# Manual/integration test scripts
-# See scripts/ folder for API, WebSocket, and browser tests
-# See MANUAL_TEST.md for manual UI procedures
+# E2E tests (requires backend + frontend running)
+# Terminal 1: cd src/backend && uvicorn app.main:app --port 8000
+# Terminal 2: cd src/frontend && npm run dev
+# Terminal 3:
+cd src/frontend && npm run test:e2e
+
+# E2E with visual UI (for debugging)
+npm run test:e2e:ui
+
+# Full workflow test with video (set TEST_VIDEO_PATH)
+TEST_VIDEO_PATH=/path/to/test.mp4 npm run test:e2e
 ```
+
+### E2E Test Coverage
+
+The `e2e/full-workflow.spec.js` covers:
+1. Project Manager loads correctly
+2. Annotate Mode - Import TSV and Export
+3. Create Project and add clips
+4. Select Project and enter Framing mode
+5. Mode switching - Framing to Overlay
+6. Full export workflow (requires video file)
+7. UI Component Tests (star rating, timeline, keyboard shortcuts)
+8. API Integration Tests (health, projects CRUD, clips)
+
+### Manual Testing
+- See [MANUAL_TEST.md](MANUAL_TEST.md) for manual UI procedures
+- See `scripts/` folder for API and WebSocket test scripts
 
 ---
 
