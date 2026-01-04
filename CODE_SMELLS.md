@@ -68,10 +68,13 @@ const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
 - ✅ Added 4 unit tests for AppStateContext
 - All 219 frontend tests and 159 backend tests pass
 
-**Phase 4: Video State Unification** (0.5 day)
-- Create `useVideoState(mode)` hook that returns the appropriate video state
-- Replaces separate `videoFile`, `overlayVideoFile`, `annotateVideoFile`
-- Simplifies VideoPlayer integration
+**Phase 4: Video State Unification** ✅ COMPLETED
+- ✅ Created [useCurrentVideoState.js](src/frontend/src/hooks/useCurrentVideoState.js) hook
+  - Returns unified video state based on editorMode: url, metadata, file, isLoading, hasVideo
+  - Eliminates conditional video URL logic in VideoPlayer
+  - Also exports `useHasAnyVideo` helper
+- ✅ Integrated into App.jsx - VideoPlayer now uses `currentVideoState.url`
+- All 235 frontend tests and 272 backend tests pass
 
 **Testing Strategy**:
 - Each phase should leave the app fully functional

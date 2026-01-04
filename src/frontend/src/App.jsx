@@ -30,6 +30,7 @@ import { AnnotateMode, useAnnotate, useAnnotateState, ClipsSidePanel, NotesOverl
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
 import { AppStateProvider } from './contexts';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from './utils/videoMetadata';
+import { useCurrentVideoState } from './hooks/useCurrentVideoState';
 
 // Feature flags for experimental features
 // Set to true to enable model comparison UI (for A/B testing different AI models)
@@ -1694,6 +1695,15 @@ function App() {
     return null;
   }, [overlayVideoFile, hasMultipleClips, hasFramingEdits, videoFile]);
 
+  // Unified video state based on current editor mode
+  // This hook provides a single interface to access video state regardless of mode
+  const currentVideoState = useCurrentVideoState(
+    editorMode,
+    { videoUrl, metadata, videoFile, isLoading },
+    { overlayVideoUrl: effectiveOverlayVideoUrl, overlayVideoMetadata: effectiveOverlayMetadata, overlayVideoFile: effectiveOverlayFile, isLoadingWorkingVideo },
+    { annotateVideoUrl, annotateVideoMetadata, annotateVideoFile, isLoading: false }
+  );
+
   // Player detection for click-to-track feature
   // Only enabled when in overlay mode AND playhead is in a highlight region
   const playerDetectionEnabled = editorMode === 'overlay' && isTimeInEnabledRegion(currentTime);
@@ -2454,8 +2464,8 @@ function App() {
    * - Overlay video (effectiveOverlayVideoUrl) persists even when viewing framing
    * - Reloading would reset all crop/segment/highlight state
    *
-   * The VideoPlayer automatically switches between videos based on mode:
-   *   videoUrl={editorMode === 'overlay' && effectiveOverlayVideoUrl ? effectiveOverlayVideoUrl : videoUrl}
+   * The VideoPlayer uses currentVideoState.url (from useCurrentVideoState hook)
+   * which automatically selects the correct video based on editorMode.
    *
    * Pass-through behavior: If no framing edits were made AND only a single clip,
    * the original video is used directly in overlay mode (via effectiveOverlayVideoUrl).
@@ -3547,11 +3557,7 @@ function App() {
           >
           <VideoPlayer
             videoRef={videoRef}
-            videoUrl={
-              editorMode === 'annotate' && annotateVideoUrl ? annotateVideoUrl :
-              editorMode === 'overlay' && effectiveOverlayVideoUrl ? effectiveOverlayVideoUrl :
-              videoUrl
-            }
+            videoUrl={currentVideoState.url}
             handlers={handlers}
             onFileSelect={handleFileSelect}
             overlays={[
