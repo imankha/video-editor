@@ -117,7 +117,6 @@ def ensure_database():
                 crop_data TEXT,
                 timing_data TEXT,
                 segments_data TEXT,
-                transform_data TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id),
                 FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id)

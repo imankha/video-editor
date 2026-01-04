@@ -187,7 +187,7 @@ working_clips (
     crop_data,             -- JSON: crop keyframes
     timing_data,           -- JSON: {trimRange}
     segments_data,         -- JSON: {boundaries, segmentSpeeds}
-    transform_data, created_at
+    created_at
 )
 
 -- Working videos: Framing mode output

@@ -238,15 +238,17 @@ The same business logic exists in both Python and JavaScript, but this is **inte
 ### 7. Speculative Generality: transform_data Column
 **Smell**: Speculative Generality, Dead Code
 
+**Status**: ✅ COMPLETED
+
 **Location**: [database.py](src/backend/app/database.py) - `working_clips` table
 
-**Problem**: `transform_data` column is defined but never used anywhere.
+**Problem**: `transform_data` column was defined but never used anywhere.
 
-```sql
-transform_data TEXT,  -- Reserved for future use
-```
-
-**Refactoring**: Remove unused column (or implement the feature).
+**Resolution**:
+- Removed from new database schema (fresh installs won't have this column)
+- Removed from Pydantic models in clips.py
+- Removed from all SELECT, INSERT, UPDATE queries
+- Migration kept for backward compatibility (existing DBs have harmless column)
 
 **Effort**: Low (0.5 hours)
 
@@ -455,7 +457,7 @@ async def export(...):
 | Medium | JSON Primitive Obsession | 1-2 days | Medium | Pending |
 | Medium | Feature Envy (clip name) | N/A | Low | ✅ Analyzed - Intentional |
 | Medium | Long Parameter Lists | Low | Medium | ✅ Partially addressed (AppStateContext) |
-| Low | Unused transform_data | 0.5 hours | Low | Skipped (too integrated) |
+| Low | Unused transform_data | 0.5 hours | Low | ✅ Completed |
 | Low | Magic Numbers | 2-3 hours | Low | ✅ Video processing constants done |
 | Medium | progress/exported_at | 0.5 hours | Medium | ✅ Completed |
 
