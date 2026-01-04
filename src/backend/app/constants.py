@@ -121,3 +121,14 @@ VIDEO_MAX_HEIGHT: int = 1440
 
 # AI upscaling factor (Real-ESRGAN uses 4x by default)
 AI_UPSCALE_FACTOR: int = 4
+
+
+# =============================================================================
+# User/Database Constants
+# =============================================================================
+
+# Default user ID for single-user mode
+# This application is designed for single-user desktop use.
+# The user ID creates a namespace for user_data storage.
+# Future multi-user support would require authentication and dynamic user IDs.
+DEFAULT_USER_ID: str = "a"

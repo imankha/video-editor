@@ -13,11 +13,13 @@ import logging
 from pathlib import Path
 from contextlib import contextmanager
 
+from .constants import DEFAULT_USER_ID
+
 logger = logging.getLogger(__name__)
 
 # Base path for user data
 USER_DATA_BASE = Path(__file__).parent.parent.parent.parent / "user_data"
-USER_ID = "a"  # Single user for now
+USER_ID = DEFAULT_USER_ID  # See constants.py for documentation
 USER_DATA_PATH = USER_DATA_BASE / USER_ID
 DATABASE_PATH = USER_DATA_PATH / "database.sqlite"
 
