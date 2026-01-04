@@ -209,30 +209,29 @@ The same business logic exists in both Python and JavaScript, but this is **inte
 ### 6. Long Parameter Lists
 **Smell**: Long Parameter List, Data Clump
 
+**Status**: ✅ PARTIALLY ADDRESSED
+
 **Locations**:
-- [export.py](src/backend/app/routers/export.py) - `process_single_clip()` has 8 parameters
-- [App.jsx](src/frontend/src/App.jsx) - `ExportButton` receives 25+ props (lines 3801-3845)
+- [multi_clip.py](src/backend/app/routers/export/multi_clip.py) - `process_single_clip()` has 8 parameters
+- [App.jsx](src/frontend/src/App.jsx) - `ExportButton` receives ~16 props (down from 25+)
 
-**Evidence**:
-```jsx
-<ExportButton
-  videoFile={...}
-  cropKeyframes={...}
-  highlightRegions={...}
-  isHighlightEnabled={...}
-  segmentData={...}
-  disabled={...}
-  includeAudio={...}
-  // ... 18 more props
-/>
-```
+**Progress**:
 
-**Refactoring**:
-1. **Parameter Object**: Create `ExportConfig` object
-2. **Context**: Use React Context for shared export state
-3. **Builder Pattern**: For backend export configuration
+1. **Frontend (ExportButton)**: Significantly improved via AppStateContext (Phase 3)
+   - Reduced from 25+ props to ~16 props
+   - 7+ props now derived from context: `editorMode`, `projectId`, `projectName`, `onExportStart`, `onExportEnd`, `isExternallyExporting`, `externalProgress`
+   - Remaining props are mode-specific data that must be passed (video file, keyframes, etc.)
 
-**Effort**: Low-Medium (1 day)
+2. **Backend**: `ProcessingConfig` dataclass exists in [video_processor.py](src/backend/app/services/video_processor.py)
+   - Contains: `target_fps`, `export_mode`, `include_audio`, `crop_keyframes`, `segment_data`
+   - Could be used more consistently across export functions
+   - Current 8 parameters in `process_single_clip` are reasonable
+
+**Remaining Work** (low priority):
+- Refactor `process_single_clip` to use `ProcessingConfig` dataclass
+- Consider grouping remaining ExportButton props into typed objects
+
+**Effort**: Low (remaining items are minor improvements)
 
 ---
 
@@ -455,7 +454,7 @@ async def export(...):
 | Medium | OpenCV Frame Extraction | 2-3 days | Medium | Workaround applied, FFmpeg refactor pending |
 | Medium | JSON Primitive Obsession | 1-2 days | Medium | Pending |
 | Medium | Feature Envy (clip name) | N/A | Low | ✅ Analyzed - Intentional |
-| Medium | Long Parameter Lists | 1 day | Medium | Pending |
+| Medium | Long Parameter Lists | Low | Medium | ✅ Partially addressed (AppStateContext) |
 | Low | Unused transform_data | 0.5 hours | Low | Skipped (too integrated) |
 | Low | Magic Numbers | 2-3 hours | Low | ✅ Video processing constants done |
 | Medium | progress/exported_at | 0.5 hours | Medium | ✅ Completed |
