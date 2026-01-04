@@ -322,7 +322,7 @@ Both were checked in different places, creating confusion.
 
 ---
 
-### 10. Nested Callbacks: Export Progress
+### 10. Nested Callbacks: Export Progress ✅ COMPLETED
 **Smell**: Callback Hell, Message Chain
 
 **Location**: [export.py](src/backend/app/routers/export.py) - progress_callback usage
@@ -336,9 +336,15 @@ async def process_single_clip(..., progress_callback, ...):
         progress_callback(1, 1, "Using cached result", 'cached')
 ```
 
-**Refactoring**:
-1. **Observer Pattern**: Use events/pub-sub for progress
-2. **AsyncIO Queues**: Use proper async patterns
+**Solution Implemented**:
+- ✅ Created [progress_reporter.py](src/backend/app/services/progress_reporter.py) with:
+  - `ProgressReporter` class that centralizes progress tracking
+  - `ProgressPhase` enum for typed phase management
+  - `create_clip_progress_reporter()` helper for multi-clip exports
+  - Backward-compatible `as_callback()` and `from_callback()` methods
+  - Sub-reporter pattern for nested operations
+- ✅ Added 24 tests in [test_progress_reporter.py](src/backend/tests/test_progress_reporter.py)
+- New code should use `ProgressReporter` instead of ad-hoc callbacks
 
 **Effort**: Medium (1 day)
 
@@ -404,7 +410,7 @@ isHighlightEnabled={editorMode === 'overlay' && highlightRegions.length > 0}
 
 ---
 
-### 14. Incomplete Error Handling
+### 14. Incomplete Error Handling ✅ COMPLETED
 **Smell**: Incomplete Library Class
 
 **Location**: Various FFmpeg subprocess calls
@@ -418,7 +424,14 @@ if result.returncode != 0:
     raise RuntimeError(f"FFmpeg fade transition failed: {result.stderr}")
 ```
 
-**Refactoring**: Create FFmpegError class, parse common error patterns.
+**Solution Implemented**:
+- ✅ Created [ffmpeg_errors.py](src/backend/app/services/ffmpeg_errors.py) with:
+  - `FFmpegError` exception class with categorized error types
+  - `FFmpegErrorType` enum (FILE_NOT_FOUND, PERMISSION_DENIED, INVALID_DATA, etc.)
+  - `run_ffmpeg()` helper function for standardized error handling
+  - Error pattern matching for common FFmpeg errors
+- ✅ Added 32 tests in [test_ffmpeg_errors.py](src/backend/tests/test_ffmpeg_errors.py)
+- New code should use `run_ffmpeg()` for consistent error handling
 
 **Effort**: Low (0.5 days)
 
