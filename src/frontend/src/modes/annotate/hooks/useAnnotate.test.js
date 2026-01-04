@@ -110,6 +110,45 @@ describe('useAnnotate', () => {
 
       expect(parts[0]).toBe('61:01');
     });
+
+    it('converts full tag names to short names', () => {
+      const clipRegions = [{
+        id: 'clip_1',
+        startTime: 60,
+        endTime: 75,
+        name: 'Test Clip',
+        // Full names from UI
+        tags: ['Passing Range', 'Interceptions', 'Dribbling'],
+        notes: '',
+        rating: 4
+      }];
+
+      const result = generateTsvContent(clipRegions);
+      const lines = result.split('\n');
+      const parts = lines[1].split('\t');
+
+      // Should be converted to short names
+      expect(parts[2]).toBe('Pass,Interception,Dribble');
+    });
+
+    it('keeps short names unchanged', () => {
+      const clipRegions = [{
+        id: 'clip_1',
+        startTime: 30,
+        endTime: 45,
+        name: 'Test',
+        // Already short names
+        tags: ['Pass', 'Dribble', 'Goal'],
+        notes: '',
+        rating: 5
+      }];
+
+      const result = generateTsvContent(clipRegions);
+      const lines = result.split('\n');
+      const parts = lines[1].split('\t');
+
+      expect(parts[2]).toBe('Pass,Dribble,Goal');
+    });
   });
 
   describe('validateTsvContent', () => {
@@ -154,6 +193,26 @@ describe('useAnnotate', () => {
 
       expect(result.success).toBe(false);
       expect(result.errors[0]).toContain('Invalid tags');
+    });
+
+    it('accepts full tag names on import', () => {
+      const content = `start_time\trating\ttags\tclip_name\tclip_duration\tnotes
+2:30\t5\tPassing Range,Interceptions,Dribbling\tTest\t15.0\t`;
+
+      const result = validateTsvContent(content);
+
+      expect(result.success).toBe(true);
+      expect(result.annotations[0].tags).toEqual(['Passing Range', 'Interceptions', 'Dribbling']);
+    });
+
+    it('accepts short tag names on import', () => {
+      const content = `start_time\trating\ttags\tclip_name\tclip_duration\tnotes
+2:30\t5\tPass,Interception,Dribble\tTest\t15.0\t`;
+
+      const result = validateTsvContent(content);
+
+      expect(result.success).toBe(true);
+      expect(result.annotations[0].tags).toEqual(['Pass', 'Interception', 'Dribble']);
     });
   });
 
