@@ -2307,6 +2307,7 @@ function App() {
   }, [isHighlightEnabled, getHighlightKeyframesForExport, getSegmentExportData, duration, editorMode]);
 
   // If no project selected and not in annotate mode, show ProjectManager
+  console.log('[App] Render check - selectedProject:', selectedProject, 'editorMode:', editorMode, 'showProjectManager:', !selectedProject && editorMode !== 'annotate');
   if (!selectedProject && editorMode !== 'annotate') {
     return (
       <AppStateProvider value={appStateValue}>

@@ -146,6 +146,9 @@ export function AnnotateContainer({
       setAnnotateVideoMetadata(videoMetadata);
       setAnnotateGameId(game.id);
 
+      // Transition to annotate mode IMMEDIATELY
+      setEditorMode('annotate');
+
       console.log('[AnnotateContainer] Set up with game ID:', game.id);
 
       // Upload video to server in background
@@ -215,11 +218,14 @@ export function AnnotateContainer({
         importAnnotations(gameData.annotations);
       }
 
+      // Transition to annotate mode
+      setEditorMode('annotate');
+
       console.log('[AnnotateContainer] Successfully loaded game:', gameId);
     } catch (err) {
       console.error('[AnnotateContainer] Failed to load game:', err);
     }
-  }, [getGame, getGameVideoUrl, annotateVideoUrl, resetAnnotate, importAnnotations]);
+  }, [getGame, getGameVideoUrl, annotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode]);
 
   /**
    * Helper function to call the annotate export API

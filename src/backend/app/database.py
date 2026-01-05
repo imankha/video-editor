@@ -6,8 +6,14 @@ Tables are created automatically on first access or when missing.
 
 The database and directories are auto-created on demand, so deleting
 the user_data/a folder will simply reset the app to a clean state.
+
+Test Isolation:
+Set the TEST_USER_ID environment variable to use a different user namespace.
+This prevents test data from polluting the manual testing database.
+Example: TEST_USER_ID=test_abc123 uvicorn app.main:app --port 8000
 """
 
+import os
 import sqlite3
 import logging
 from pathlib import Path
@@ -19,7 +25,15 @@ logger = logging.getLogger(__name__)
 
 # Base path for user data
 USER_DATA_BASE = Path(__file__).parent.parent.parent.parent / "user_data"
-USER_ID = DEFAULT_USER_ID  # See constants.py for documentation
+
+# Use TEST_USER_ID env var if set, otherwise use default
+# This allows E2E tests to use isolated user namespaces
+TEST_USER_ID = os.environ.get("TEST_USER_ID")
+USER_ID = TEST_USER_ID if TEST_USER_ID else DEFAULT_USER_ID
+
+if TEST_USER_ID:
+    logger.info(f"Using test user namespace: {TEST_USER_ID}")
+
 USER_DATA_PATH = USER_DATA_BASE / USER_ID
 DATABASE_PATH = USER_DATA_PATH / "database.sqlite"
 
