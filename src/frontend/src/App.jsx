@@ -28,7 +28,16 @@ import { ProjectHeader } from './components/ProjectHeader';
 // Mode-specific imports
 import { useCrop, useSegments, FramingMode, CropOverlay } from './modes/framing';
 import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay, useOverlayState } from './modes/overlay';
-import { AnnotateMode, useAnnotate, useAnnotateState, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from './modes/annotate';
+import { AnnotateMode, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from './modes/annotate';
+// Container imports for mode-specific logic encapsulation
+import {
+  AnnotateContainer,
+  AnnotateSidebar,
+  AnnotateVideoOverlays,
+  AnnotateVideoControls,
+  AnnotateTimeline,
+  AnnotateExportPanel,
+} from './containers';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
 import { AppStateProvider } from './contexts';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from './utils/videoMetadata';
@@ -83,33 +92,8 @@ function App() {
 
   // Note: modeSwitchDialog now comes from useEditorStore (see above)
 
-  // Annotate mode state (consolidated via useAnnotateState hook)
-  const {
-    annotateVideoFile,
-    annotateVideoUrl,
-    annotateVideoMetadata,
-    annotateGameId,
-    setAnnotateVideoFile,
-    setAnnotateVideoUrl,
-    setAnnotateVideoMetadata,
-    setAnnotateGameId,
-    isCreatingAnnotatedVideo,
-    setIsCreatingAnnotatedVideo,
-    isImportingToProjects,
-    setIsImportingToProjects,
-    isUploadingGameVideo,
-    setIsUploadingGameVideo,
-    annotatePlaybackSpeed,
-    setAnnotatePlaybackSpeed,
-    annotateFullscreen,
-    setAnnotateFullscreen,
-    showAnnotateOverlay,
-    setShowAnnotateOverlay,
-    annotateSelectedLayer,
-    setAnnotateSelectedLayer,
-    annotateContainerRef,
-    annotateFileInputRef,
-  } = useAnnotateState();
+  // NOTE: Annotate mode state is now provided by AnnotateContainer
+  // The container is called after all its required props are available (see below)
 
   // Export state from Zustand store (see stores/exportStore.js)
   const {
@@ -122,8 +106,7 @@ function App() {
     setGlobalExportProgress,
   } = useExportStore();
 
-  // Ref to track previous isPlaying state for detecting pause transitions
-  const wasPlayingRef = useRef(false);
+  // NOTE: wasPlayingRef for pause transition detection is now in AnnotateContainer
 
   // Ref to track if user has made explicit edits to current clip (vs auto-generated defaults)
   // Resets when clip selection changes. Prevents saving default state as "user edits"
@@ -392,28 +375,84 @@ function App() {
     getTimelineScale,
   } = useTimelineZoom();
 
-  // Annotate mode state management (lifted to App level for sidebar/MVC pattern)
+  // AnnotateContainer - encapsulates all annotate mode state and handlers
+  // Returns state and handlers for use in render. Effects run internally.
+  const annotate = AnnotateContainer({
+    // Video controls
+    videoRef,
+    currentTime,
+    duration,
+    isPlaying,
+    togglePlay,
+    stepForward,
+    stepBackward,
+    restart,
+    seek,
+    // Game management
+    createGame,
+    uploadGameVideo,
+    getGame,
+    getGameVideoUrl,
+    saveAnnotationsDebounced,
+    // Project management
+    fetchProjects,
+    projectCreationSettings,
+    // Navigation
+    onBackToProjects: () => setEditorMode('project-manager'),
+    setEditorMode,
+    // Settings modal - defined below after state is set up
+    onOpenProjectCreationSettings: () => setShowProjectCreationSettings(true),
+    // Downloads
+    downloadsCount,
+    onOpenDownloads: () => setShowDownloads(true),
+  });
+
+  // Destructure annotate container values for convenience
   const {
+    annotateVideoUrl,
+    annotateVideoMetadata,
+    annotateFullscreen,
+    showAnnotateOverlay,
+    annotateSelectedLayer,
+    annotatePlaybackSpeed,
+    annotateContainerRef,
+    annotateFileInputRef,
+    isCreatingAnnotatedVideo,
+    isImportingToProjects,
+    isUploadingGameVideo,
+    hasAnnotateClips,
     clipRegions,
-    regionsWithLayout: annotateRegionsWithLayout,
-    selectedRegionId: annotateSelectedRegionId,
-    selectedRegion: annotateSelectedRegion,
-    hasClips: hasAnnotateClips,
-    clipCount: annotateClipCount,
+    annotateRegionsWithLayout,
+    annotateSelectedRegionId,
+    annotateClipCount,
     isLoadingAnnotations,
-    initialize: initializeAnnotate,
-    reset: resetAnnotate,
-    addClipRegion,
+    ANNOTATE_MAX_NOTES_LENGTH,
+    // Handlers
+    handleGameVideoSelect,
+    handleLoadGame,
+    handleCreateAnnotatedVideo,
+    handleImportIntoProjects,
+    handleToggleFullscreen,
+    handleAddClipFromButton,
+    handleFullscreenCreateClip,
+    handleFullscreenUpdateClip,
+    handleOverlayClose,
+    handleOverlayResume,
+    handleSelectRegion: handleSelectAnnotateRegion,
+    setAnnotatePlaybackSpeed,
+    setAnnotateSelectedLayer,
+    // Clip region actions
     updateClipRegion,
     deleteClipRegion,
-    selectRegion: selectAnnotateRegion,
-    moveRegionStart: moveAnnotateRegionStart,
-    moveRegionEnd: moveAnnotateRegionEnd,
-    getRegionAtTime: getAnnotateRegionAtTime,
-    getExportData: getAnnotateExportData,
     importAnnotations,
-    MAX_NOTES_LENGTH: ANNOTATE_MAX_NOTES_LENGTH,
-  } = useAnnotate(annotateVideoMetadata);
+    getAnnotateRegionAtTime,
+    getAnnotateExportData,
+    selectAnnotateRegion,
+    // Computed
+    effectiveDuration: annotateEffectiveDuration,
+    // Cleanup
+    clearAnnotateState,
+  } = annotate;
 
   // Frame tolerance for selection - approximately 5 pixels on each side
   // Derived selection state - computed from playhead position and keyframes
@@ -783,77 +822,8 @@ function App() {
     }
   };
 
-  /**
-   * Handle game video selection for Annotate mode
-   * Transitions to annotate mode where user can extract clips from full game footage.
-   *
-   * Uses an upsert pattern:
-   * 1. Create game row immediately (just name) → get game ID instantly
-   * 2. Use local object URL for immediate playback
-   * 3. Upload video to server in background
-   * 4. Annotations can be saved immediately since we have game ID
-   */
-  const handleGameVideoSelect = async (file) => {
-    if (!file) return;
-
-    try {
-      console.log('[App] handleGameVideoSelect: Processing', file.name);
-
-      // Extract video metadata (fast, local operation)
-      const videoMetadata = await extractVideoMetadata(file);
-      console.log('[App] Extracted game video metadata:', videoMetadata);
-
-      // Create local object URL for IMMEDIATE playback
-      const localVideoUrl = URL.createObjectURL(file);
-
-      // Clean up any existing annotate video URL (only if it was an object URL)
-      if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(annotateVideoUrl);
-      }
-
-      // Create game row IMMEDIATELY (just name, no video yet)
-      // This gives us a game ID for saving annotations right away
-      // Include video metadata so loading is instant (no need to re-extract)
-      const gameName = file.name.replace(/\.[^/.]+$/, ''); // Remove extension for game name
-      console.log('[App] Creating game row:', gameName);
-      const game = await createGame(gameName, {
-        duration: videoMetadata.duration,
-        width: videoMetadata.width,
-        height: videoMetadata.height,
-        size: videoMetadata.size,
-      });
-      console.log('[App] Game created with ID:', game.id);
-
-      // Set annotate state with LOCAL video URL and game ID
-      setAnnotateVideoFile(file);
-      setAnnotateVideoUrl(localVideoUrl);
-      setAnnotateVideoMetadata(videoMetadata);
-      setAnnotateGameId(game.id); // Set immediately - annotations can save now!
-
-      // Transition to annotate mode IMMEDIATELY
-      setEditorMode('annotate');
-      console.log('[App] Transitioned to Annotate mode with game ID:', game.id);
-
-      // Upload video to server in background
-      console.log('[App] Starting background video upload...');
-      setIsUploadingGameVideo(true);
-      uploadGameVideo(game.id, file)
-        .then(() => {
-          console.log('[App] Background video upload complete for game:', game.id);
-          setIsUploadingGameVideo(false);
-        })
-        .catch((uploadErr) => {
-          console.error('[App] Background video upload failed:', uploadErr);
-          setIsUploadingGameVideo(false);
-          // Video upload failed, but annotations are still saved
-          // User can re-upload video later if needed
-        });
-
-    } catch (err) {
-      console.error('[App] Failed to process game video:', err);
-      throw err; // Re-throw so FileUpload can handle the error
-    }
-  };
+  // NOTE: Annotate mode handlers (handleGameVideoSelect, handleLoadGame, etc.)
+  // are now provided by AnnotateContainer (see destructuring above)
 
   /**
    * Handle exiting Annotate mode
@@ -861,439 +831,20 @@ function App() {
    */
   const handleExitAnnotateMode = useCallback(() => {
     console.log('[App] Exiting Annotate mode');
-
-    // Clean up annotate video URL (only if it was an object URL)
-    if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(annotateVideoUrl);
-    }
-
-    // Clear annotate state
-    setAnnotateVideoFile(null);
-    setAnnotateVideoUrl(null);
-    setAnnotateVideoMetadata(null);
-    setAnnotateGameId(null);
-    setIsUploadingGameVideo(false);
-
-    // Return to framing mode (no video loaded state)
+    clearAnnotateState();
     setEditorMode('framing');
-  }, [annotateVideoUrl]);
+  }, [clearAnnotateState]);
 
-  /**
-   * Handle loading a saved game into annotate mode
-   * Fetches game data from server and restores video + annotations
-   * Uses stored metadata for instant loading (no extraction needed)
-   */
-  const handleLoadGame = useCallback(async (gameId) => {
-    console.log('[App] Loading game:', gameId);
-
-    try {
-      // Fetch full game data including annotations and metadata
-      const gameData = await getGame(gameId);
-      console.log('[App] Loaded game data:', gameData);
-
-      // Get the video URL for this game
-      const videoUrl = getGameVideoUrl(gameId);
-      console.log('[App] Game video URL:', videoUrl);
-
-      // Use stored metadata if available, otherwise null (VideoPlayer will provide it)
-      let videoMetadata = null;
-      if (gameData.video_duration && gameData.video_width && gameData.video_height) {
-        console.log('[App] Using stored video metadata (instant load)');
-        videoMetadata = {
-          duration: gameData.video_duration,
-          width: gameData.video_width,
-          height: gameData.video_height,
-          size: gameData.video_size,
-          aspectRatio: gameData.video_width / gameData.video_height,
-          fileName: gameData.name,
-          format: 'mp4',
-        };
-      } else {
-        console.log('[App] No stored metadata - video will load without blocking');
-      }
-
-      // Clean up any existing annotate video URL (only if it was an object URL)
-      if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(annotateVideoUrl);
-      }
-
-      // Reset annotate state before loading new game (prevents clip accumulation)
-      resetAnnotate();
-
-      // Set annotate state with the game's video - don't wait for metadata!
-      setAnnotateVideoFile(null); // No file object, using URL
-      setAnnotateVideoUrl(videoUrl);
-      setAnnotateVideoMetadata(videoMetadata); // May be null, that's OK
-      setAnnotateGameId(gameId); // Track which game we're editing
-
-      // Import saved annotations if they exist
-      if (gameData.annotations && gameData.annotations.length > 0) {
-        console.log('[App] Importing', gameData.annotations.length, 'saved annotations');
-        importAnnotations(gameData.annotations);
-      }
-
-      // Transition to annotate mode immediately - video loads in parallel
-      setEditorMode('annotate');
-
-      console.log('[App] Successfully loaded game into Annotate mode with game ID:', gameId);
-    } catch (err) {
-      console.error('[App] Failed to load game:', err);
-    }
-  }, [getGame, getGameVideoUrl, annotateVideoUrl, resetAnnotate, importAnnotations]);
-
-  /**
-   * Helper function to call the annotate export API
-   * @param {Array} clipData - Clip data to export
-   * @param {boolean} saveToDb - Whether to save to database and create projects
-   * @param {Object} settings - Project creation settings (optional, only used when saveToDb=true)
-   * @returns {Promise<Object>} - API response
-   */
-  const callAnnotateExportApi = useCallback(async (clipData, saveToDb, settings = null) => {
-    // Generate unique export ID for progress tracking
-    const exportId = `exp_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-    let eventSource = null;
-
-    // Start listening for progress updates
-    try {
-      eventSource = new EventSource(`http://localhost:8000/api/annotate/progress/${exportId}`);
-      eventSource.onmessage = (event) => {
-        try {
-          const progress = JSON.parse(event.data);
-          setExportProgress(progress);
-          if (progress.done) {
-            eventSource?.close();
-          }
-        } catch (e) {
-          console.warn('[App] Failed to parse progress:', e);
-        }
-      };
-      eventSource.onerror = () => {
-        // Connection closed or error - clean up silently
-        eventSource?.close();
-      };
-    } catch (e) {
-      console.warn('[App] Failed to connect to progress endpoint:', e);
-    }
-
-    const formData = new FormData();
-    formData.append('save_to_db', saveToDb ? 'true' : 'false');
-    formData.append('export_id', exportId);
-
-    // Include project creation settings when saving to DB
-    if (saveToDb && settings) {
-      formData.append('settings_json', JSON.stringify(settings));
-    }
-
-    // Format clips for API (remove position field if present)
-    const clipsForApi = clipData.map(clip => ({
-      start_time: clip.start_time,
-      end_time: clip.end_time,
-      name: clip.name,
-      notes: clip.notes || '',
-      rating: clip.rating || 3,
-      tags: clip.tags || []
-    }));
-
-    formData.append('clips_json', JSON.stringify(clipsForApi));
-
-    // Use game_id if loading from server, otherwise upload video file
-    if (annotateGameId) {
-      formData.append('game_id', annotateGameId.toString());
-    } else if (annotateVideoFile) {
-      formData.append('video', annotateVideoFile);
-    } else {
-      eventSource?.close();
-      throw new Error('No video source available');
-    }
-
-    try {
-      const response = await fetch('http://localhost:8000/api/annotate/export', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Export failed: ${response.status}`);
-      }
-
-      return await response.json();
-    } finally {
-      // Ensure EventSource is closed
-      eventSource?.close();
-      // Clear progress after a short delay to show completion
-      setTimeout(() => setExportProgress(null), 1000);
-    }
-  }, [annotateVideoFile, annotateGameId]);
-
-  /**
-   * Trigger downloads from export result
-   */
-  const triggerAnnotateDownloads = async (downloads) => {
-    if (!downloads) return;
-
-    // 1. Download annotations.tsv
-    if (downloads.annotations?.url) {
-      console.log('[App] Downloading annotations TSV...');
-      const a = document.createElement('a');
-      a.href = `http://localhost:8000${downloads.annotations.url}`;
-      a.download = downloads.annotations.filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      console.log('[App] Downloaded:', downloads.annotations.filename);
-    }
-
-    // 2. Download clips compilation video
-    if (downloads.clips_compilation?.url) {
-      console.log('[App] Downloading clips compilation...');
-      // Small delay to avoid browser blocking multiple downloads
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const a = document.createElement('a');
-      a.href = `http://localhost:8000${downloads.clips_compilation.url}`;
-      a.download = downloads.clips_compilation.filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      console.log('[App] Downloaded:', downloads.clips_compilation.filename);
-    }
-  };
-
-  /**
-   * Create Annotated Video - Downloads compilation video, stays on annotate screen
-   * (Annotations are auto-saved to the game's JSON file)
-   */
-  const handleCreateAnnotatedVideo = useCallback(async (clipData) => {
-    console.log('[App] Create annotated video requested with clips:', clipData);
-
-    // Need either a video file (new upload) or game ID (loaded from server)
-    const hasVideoSource = annotateVideoFile || annotateGameId;
-    if (!hasVideoSource || !clipData || clipData.length === 0) {
-      console.error('[App] Cannot export: no video source or clips');
-      return;
-    }
-
-    setIsCreatingAnnotatedVideo(true);
-    try {
-      console.log('[App] Creating annotated video (download only)...');
-
-      const result = await callAnnotateExportApi(clipData, false);
-
-      console.log('[App] Annotated video created:', {
-        success: result.success,
-        downloads: Object.keys(result.downloads || {})
-      });
-
-      // Download only the clips compilation video (annotations are auto-saved separately)
-      if (result.downloads?.clips_compilation?.url) {
-        console.log('[App] Downloading clips compilation...');
-        const a = document.createElement('a');
-        a.href = `http://localhost:8000${result.downloads.clips_compilation.url}`;
-        a.download = result.downloads.clips_compilation.filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        console.log('[App] Downloaded:', result.downloads.clips_compilation.filename);
-      }
-
-      // Show success - stay on annotate screen
-      console.log('[App] ✅ STAYING ON ANNOTATE SCREEN - NOT navigating to projects');
-      alert(`${result.message}\n\nVideo downloaded successfully!`);
-
-      console.log('[App] Create annotated video complete - still on annotate screen');
-
-    } catch (err) {
-      console.error('[App] Create annotated video failed:', err);
-      alert(`Failed to create video: ${err.message}`);
-    } finally {
-      setIsCreatingAnnotatedVideo(false);
-    }
-  }, [annotateVideoFile, annotateGameId, callAnnotateExportApi]);
-
-  /**
-   * Import Into Projects - Saves to DB, creates projects, downloads files, navigates to projects
-   */
-  const handleImportIntoProjects = useCallback(async (clipData) => {
-    console.log('[App] 🔄 IMPORT INTO PROJECTS - Will navigate to projects when done');
-    console.log('[App] Import into projects requested with clips:', clipData);
-    console.log('[App] Using project creation settings:', projectCreationSettings);
-
-    // Need either a video file (new upload) or game ID (loaded from server)
-    const hasVideoSource = annotateVideoFile || annotateGameId;
-    if (!hasVideoSource || !clipData || clipData.length === 0) {
-      console.error('[App] Cannot export: no video source or clips');
-      return;
-    }
-
-    setIsImportingToProjects(true);
-    try {
-      console.log('[App] Importing clips into projects...');
-
-      // Pass project creation settings to the API
-      const result = await callAnnotateExportApi(clipData, true, projectCreationSettings);
-
-      console.log('[App] Import response:', {
-        success: result.success,
-        rawClipsCount: result.created?.raw_clips?.length,
-        projectsCount: result.created?.projects?.length,
-        downloads: Object.keys(result.downloads || {})
-      });
-
-      // Note: Clips compilation video is NOT generated when importing into projects
-      // It's only generated for "Download Clips Review" mode
-      // The clips are saved directly to the database instead
-
-      // Clean up annotate state (only revoke blob URLs)
-      if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(annotateVideoUrl);
-      }
-      setAnnotateVideoFile(null);
-      setAnnotateVideoUrl(null);
-      setAnnotateVideoMetadata(null);
-      setAnnotateGameId(null);
-      setIsUploadingGameVideo(false);
-      resetAnnotate();
-
-      // Refresh projects list
-      await fetchProjects();
-
-      // Show success message
-      const projectsCreated = result.created?.projects?.length || 0;
-      const clipsCreated = result.created?.raw_clips?.length || 0;
-      const serverMessage = result.message || `Created ${clipsCreated} clips and ${projectsCreated} projects`;
-
-      console.log(`[App] ${serverMessage}`);
-      alert(`Import complete!\n\n${serverMessage}`);
-
-      // Return to Project Manager
-      setEditorMode('project-manager');
-
-      console.log('[App] Import into projects complete');
-
-    } catch (err) {
-      console.error('[App] Import into projects failed:', err);
-      alert(`Import failed: ${err.message}\n\nNote: If clips were being saved, they may still be on the server.`);
-    } finally {
-      setIsImportingToProjects(false);
-    }
-  }, [annotateVideoFile, annotateVideoUrl, annotateGameId, resetAnnotate, fetchProjects, callAnnotateExportApi, projectCreationSettings]);
-
-  /**
-   * Handle fullscreen toggle for Annotate mode
-   */
-  const handleAnnotateToggleFullscreen = useCallback(() => {
-    if (!annotateContainerRef.current) return;
-
-    if (!annotateFullscreen) {
-      // Enter fullscreen
-      if (annotateContainerRef.current.requestFullscreen) {
-        annotateContainerRef.current.requestFullscreen();
-      }
-    } else {
-      // Exit fullscreen
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
-    }
-  }, [annotateFullscreen]);
-
-  /**
-   * Handle Add Clip button click (non-fullscreen mode)
-   * Pauses video and shows the clip creation overlay
-   */
-  const handleAddClipFromButton = useCallback(() => {
-    // Pause the video
-    if (videoRef.current && !videoRef.current.paused) {
-      videoRef.current.pause();
-    }
-    // Show the overlay
-    setShowAnnotateOverlay(true);
-  }, []);
-
-  /**
-   * Handle creating a clip from fullscreen overlay
-   */
-  const handleAnnotateFullscreenCreateClip = useCallback((clipData) => {
-    // clipData: { startTime, duration, rating, notes, tags, name }
-    const newRegion = addClipRegion(
-      clipData.startTime,
-      clipData.duration,
-      clipData.notes,
-      clipData.rating,
-      '', // position (not used - tags can be from any position)
-      clipData.tags,
-      clipData.name
-    );
-    if (newRegion) {
-      seek(newRegion.startTime);
-    }
-    setShowAnnotateOverlay(false);
-  }, [addClipRegion, seek]);
-
-  /**
-   * Handle updating an existing clip from fullscreen overlay
-   */
-  const handleAnnotateFullscreenUpdateClip = useCallback((regionId, updates) => {
-    // updates: { duration, rating, notes, tags, name }
-    updateClipRegion(regionId, updates);
-    setShowAnnotateOverlay(false);
-  }, [updateClipRegion]);
-
-  /**
-   * Handle closing the fullscreen overlay without creating a clip
-   */
-  const handleAnnotateOverlayClose = useCallback(() => {
-    setShowAnnotateOverlay(false);
-  }, []);
-
-  /**
-   * Handle resuming playback from fullscreen overlay
-   */
-  const handleAnnotateOverlayResume = useCallback(() => {
-    setShowAnnotateOverlay(false);
-    togglePlay();
-  }, [togglePlay]);
-
-  /**
-   * Handle annotate region selection - selects the region AND seeks to its start
-   * Also switches to 'clips' layer for arrow key navigation
-   */
-  const handleSelectAnnotateRegion = useCallback((regionId) => {
-    console.log('[handleSelectAnnotateRegion] Called with regionId:', regionId);
-    console.log('[handleSelectAnnotateRegion] clipRegions count:', clipRegions.length);
-    const region = clipRegions.find(r => r.id === regionId);
-    console.log('[handleSelectAnnotateRegion] Found region:', region ? region.name : 'NOT FOUND');
-    if (region) {
-      selectAnnotateRegion(regionId);
-      seek(region.startTime);
-      setAnnotateSelectedLayer('clips');
-    } else {
-      console.warn('[handleSelectAnnotateRegion] Region not found! Available IDs:', clipRegions.map(r => r.id));
-    }
-  }, [clipRegions, selectAnnotateRegion, seek]);
-
-  /**
-   * Auto-select annotate clip when playhead is over a region
-   * Uses selectAnnotateRegion directly to avoid seeking (which would cause feedback loop)
-   *
-   * IMPORTANT: If the currently selected region also contains the playhead,
-   * we don't override the selection. This handles overlapping clips where
-   * user manually selects one clip but another clip also covers that time.
-   */
-  useEffect(() => {
-    if (editorMode !== 'annotate' || !annotateVideoUrl) return;
-
-    const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
-    if (regionAtPlayhead && regionAtPlayhead.id !== annotateSelectedRegionId) {
-      // Check if currently selected region also contains the playhead
-      // If so, don't override - user's manual selection takes priority
-      const currentSelection = clipRegions.find(r => r.id === annotateSelectedRegionId);
-      if (currentSelection && currentTime >= currentSelection.startTime && currentTime <= currentSelection.endTime) {
-        return; // Current selection still contains playhead, don't override
-      }
-      selectAnnotateRegion(regionAtPlayhead.id);
-    }
-  }, [editorMode, annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions]);
+  // NOTE: The following annotate handlers are now provided by AnnotateContainer:
+  // - handleLoadGame
+  // - handleCreateAnnotatedVideo
+  // - handleImportIntoProjects
+  // - handleToggleFullscreen
+  // - handleAddClipFromButton
+  // - handleFullscreenCreateClip / handleFullscreenUpdateClip
+  // - handleOverlayClose / handleOverlayResume
+  // - handleSelectAnnotateRegion
+  // Effects for auto-select, playback speed sync, fullscreen detection are also in container.
 
   /**
    * Handle clip selection from sidebar
@@ -1445,92 +996,8 @@ function App() {
     }
   }, [includeAudio, videoRef]);
 
-  // Annotate mode: sync playback speed with video element
-  useEffect(() => {
-    if (editorMode === 'annotate' && videoRef.current) {
-      videoRef.current.playbackRate = annotatePlaybackSpeed;
-    }
-  }, [annotatePlaybackSpeed, editorMode, videoRef]);
-
-  // Annotate mode: update metadata from video element when it loads
-  // This handles cases where stored metadata is missing (old games)
-  useEffect(() => {
-    if (editorMode !== 'annotate' || !annotateVideoUrl || !videoRef.current) return;
-
-    const video = videoRef.current;
-
-    const handleLoadedMetadata = () => {
-      // Only update if we don't already have metadata
-      if (!annotateVideoMetadata || !annotateVideoMetadata.duration) {
-        console.log('[App] Annotate video loaded, extracting metadata from element');
-        setAnnotateVideoMetadata({
-          duration: video.duration,
-          width: video.videoWidth,
-          height: video.videoHeight,
-          aspectRatio: video.videoWidth / video.videoHeight,
-          fileName: annotateVideoMetadata?.fileName || 'game.mp4',
-          format: 'mp4',
-          size: annotateVideoMetadata?.size,
-          resolution: `${video.videoWidth}x${video.videoHeight}`,
-        });
-      }
-    };
-
-    // If video is already loaded, update metadata immediately
-    if (video.readyState >= 1) {
-      handleLoadedMetadata();
-    } else {
-      video.addEventListener('loadedmetadata', handleLoadedMetadata);
-      return () => video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-    }
-  }, [editorMode, annotateVideoUrl, annotateVideoMetadata, videoRef]);
-
-  // Annotate mode: detect fullscreen changes
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      const isFullscreen = !!document.fullscreenElement;
-      setAnnotateFullscreen(isFullscreen);
-      // Close overlay when exiting fullscreen
-      if (!isFullscreen) {
-        setShowAnnotateOverlay(false);
-      }
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
-
-  // Annotate mode: show overlay when TRANSITIONING from playing to paused while in fullscreen
-  // (not when entering fullscreen while already paused)
-  useEffect(() => {
-    // Detect pause transition: was playing, now paused
-    const justPaused = wasPlayingRef.current && !isPlaying;
-
-    // Update ref for next render
-    wasPlayingRef.current = isPlaying;
-
-    // Only show overlay when pause transition happens while in fullscreen
-    if (editorMode === 'annotate' && annotateFullscreen && justPaused) {
-      setShowAnnotateOverlay(true);
-    }
-  }, [editorMode, annotateFullscreen, isPlaying]);
-
-  // Annotate mode: auto-save annotations when they change
-  // Uses debounced save to avoid excessive API calls during rapid edits
-  useEffect(() => {
-    if (editorMode === 'annotate' && annotateGameId && clipRegions.length > 0) {
-      // Convert clipRegions to export format for saving
-      const annotationsForSave = clipRegions.map(region => ({
-        start_time: region.startTime,
-        end_time: region.endTime,
-        name: region.name,
-        tags: region.tags || [],
-        notes: region.notes || '',
-        rating: region.rating || 3
-      }));
-      saveAnnotationsDebounced(annotateGameId, annotationsForSave);
-    }
-  }, [editorMode, annotateGameId, clipRegions, saveAnnotationsDebounced]);
+  // NOTE: Annotate mode effects (playback speed sync, metadata extraction, fullscreen detection,
+  // pause overlay, auto-save annotations) are now handled by AnnotateContainer.
 
   // DERIVED STATE: Single source of truth
   // - If dragging: show live preview (dragCrop)
@@ -1653,7 +1120,7 @@ function App() {
     editorMode,
     { videoUrl, metadata, videoFile, isLoading },
     { overlayVideoUrl: effectiveOverlayVideoUrl, overlayVideoMetadata: effectiveOverlayMetadata, overlayVideoFile: effectiveOverlayFile, isLoadingWorkingVideo },
-    { annotateVideoUrl, annotateVideoMetadata, annotateVideoFile, isLoading: false }
+    { annotateVideoUrl, annotateVideoMetadata, annotateVideoFile: null, isLoading: false }
   );
 
   // Player detection for click-to-track feature
@@ -3198,10 +2665,7 @@ function App() {
                     clearSelection();
                     // Clear annotate state if in annotate mode
                     if (editorMode === 'annotate') {
-                      setAnnotateVideoFile(null);
-                      setAnnotateVideoUrl(null);
-                      setAnnotateVideoMetadata(null);
-                      setIsUploadingGameVideo(false);
+                      clearAnnotateState();
                     }
                     // Refresh project list to show updated progress/status
                     fetchProjects();
@@ -3405,10 +2869,10 @@ function App() {
                     currentTime={currentTime}
                     videoDuration={annotateVideoMetadata?.duration || 0}
                     existingClip={existingClip}
-                    onCreateClip={handleAnnotateFullscreenCreateClip}
-                    onUpdateClip={handleAnnotateFullscreenUpdateClip}
-                    onResume={handleAnnotateOverlayResume}
-                    onClose={handleAnnotateOverlayClose}
+                    onCreateClip={handleFullscreenCreateClip}
+                    onUpdateClip={handleFullscreenUpdateClip}
+                    onResume={handleOverlayResume}
+                    onClose={handleOverlayClose}
                   />
                 );
               })(),
@@ -3464,7 +2928,7 @@ function App() {
               playbackSpeed={annotatePlaybackSpeed}
               onSpeedChange={setAnnotatePlaybackSpeed}
               isFullscreen={annotateFullscreen}
-              onToggleFullscreen={handleAnnotateToggleFullscreen}
+              onToggleFullscreen={handleToggleFullscreen}
               onAddClip={handleAddClipFromButton}
             />
           )}

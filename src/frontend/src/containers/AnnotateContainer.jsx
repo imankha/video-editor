@@ -619,6 +619,7 @@ export function AnnotateContainer({
     importAnnotations,
     getAnnotateRegionAtTime,
     getAnnotateExportData,
+    selectAnnotateRegion, // Raw select for keyboard shortcuts (doesn't seek)
 
     // Computed
     effectiveDuration,
