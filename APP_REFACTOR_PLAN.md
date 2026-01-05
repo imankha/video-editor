@@ -238,7 +238,7 @@ Each task is a separate commit. If issues arise:
 | 1.1 useVideoStore | ✅ Complete | 78864e3 | 26 |
 | 1.2 useClipStore | ✅ Complete | 8f63c96 | 30 |
 | 2.1 useKeyboardShortcuts | ✅ Complete | 2117a0f | 22 |
-| 2.2 useExportWebSocket | ✅ Complete | (pending) | 0 |
+| 2.2 useExportWebSocket | ✅ Complete | 62b9cbb | 0 |
 | 3.1 AnnotateContainer | ⬜ Pending | - | - |
 | 3.2 OverlayContainer | ⬜ Pending | - | - |
 | 3.3 FramingContainer | ⬜ Pending | - | - |
