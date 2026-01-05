@@ -71,7 +71,6 @@ class CutTransition(TransitionStrategy):
                     escaped_path = path.replace("'", "'\\''")
                     f.write(f"file '{escaped_path}'\n")
 
-            # Build FFmpeg command
             cmd = [
                 'ffmpeg', '-y',
                 '-f', 'concat',

@@ -218,10 +218,7 @@ def concatenate_with_fade(
     if not clip_paths:
         return False
 
-    # Get clip durations
     durations = [get_video_duration(path) for path in clip_paths]
-
-    # Build complex filter
     filter_parts = []
     video_labels = []
     audio_labels = []
@@ -318,10 +315,9 @@ def concatenate_with_dissolve(
         shutil.copy2(clip_paths[0], output_path)
         return True
 
-    # Get clip durations
     durations = [get_video_duration(path) for path in clip_paths]
 
-    # Build xfade chain for video
+    # Video xfade chain
     video_filter_parts = []
     current_label = "[0:v]"
     cumulative_duration = durations[0]

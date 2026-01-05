@@ -56,10 +56,9 @@ class DissolveTransition(TransitionStrategy):
             return True
 
         try:
-            # Get clip durations
             durations = [get_video_duration(path) for path in clip_paths]
 
-            # Build xfade chain for video
+            # xfade filter chain for dissolve transitions
             # Example: [0:v][1:v]xfade=transition=dissolve:duration=0.5:offset=D0[v01]
             #          [v01][2:v]xfade=transition=dissolve:duration=0.5:offset=D1[outv]
             video_filter_parts = []
@@ -91,11 +90,9 @@ class DissolveTransition(TransitionStrategy):
                     )
                     current_audio = output_label
 
-            # Combine filters
             all_filters = video_filter_parts + audio_filter_parts
             filter_complex = ';'.join(all_filters)
 
-            # Build FFmpeg command
             cmd = ['ffmpeg', '-y']
             for path in clip_paths:
                 cmd.extend(['-i', path])

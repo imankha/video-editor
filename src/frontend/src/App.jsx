@@ -31,6 +31,7 @@ import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUti
 import { AppStateProvider } from './contexts';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from './utils/videoMetadata';
 import { useCurrentVideoState } from './hooks/useCurrentVideoState';
+import { useEditorStore, useExportStore } from './stores';
 
 // Feature flags for experimental features
 // Set to true to enable model comparison UI (for A/B testing different AI models)
@@ -41,8 +42,17 @@ function App() {
   // Temporary state for live drag/resize preview (null when not dragging)
   const [dragCrop, setDragCrop] = useState(null);
 
-  // Editor mode state ('framing' | 'overlay' | 'annotate')
-  const [editorMode, setEditorMode] = useState('framing');
+  // Editor mode state from Zustand store (see stores/editorStore.js)
+  const {
+    editorMode,
+    setEditorMode,
+    modeSwitchDialog,
+    openModeSwitchDialog,
+    closeModeSwitchDialog,
+    confirmModeSwitch,
+    selectedLayer,
+    setSelectedLayer,
+  } = useEditorStore();
 
   // Overlay mode state (consolidated via useOverlayState hook)
   const {
@@ -69,8 +79,7 @@ function App() {
   // Track if framing has changed since last export (for showing warning on Overlay button)
   const [framingChangedSinceExport, setFramingChangedSinceExport] = useState(false);
 
-  // Mode switch confirmation dialog state
-  const [modeSwitchDialog, setModeSwitchDialog] = useState({ isOpen: false, pendingMode: null });
+  // Note: modeSwitchDialog now comes from useEditorStore (see above)
 
   // Annotate mode state (consolidated via useAnnotateState hook)
   const {
@@ -100,17 +109,17 @@ function App() {
     annotateFileInputRef,
   } = useAnnotateState();
 
-  // Export progress tracking (for SSE updates)
-  // { current: number, total: number, phase: string, message: string }
-  const [exportProgress, setExportProgress] = useState(null);
-
-  // Track which project is currently exporting (for showing status on project cards)
-  // { projectId: number, stage: 'framing' | 'overlay', exportId: string } | null
-  const [exportingProject, setExportingProject] = useState(null);
-
-  // Global export progress from WebSocket (persists across navigation)
-  // { progress: number, message: string }
-  const [globalExportProgress, setGlobalExportProgress] = useState(null);
+  // Export state from Zustand store (see stores/exportStore.js)
+  const {
+    exportProgress,
+    setExportProgress,
+    exportingProject,
+    startExport,
+    clearExport,
+    globalExportProgress,
+    setGlobalExportProgress,
+    clearGlobalExportProgress,
+  } = useExportStore();
   const exportWebSocketRef = useRef(null);
 
   // Ref to track previous isPlaying state for detecting pause transitions
@@ -120,8 +129,7 @@ function App() {
   // Resets when clip selection changes. Prevents saving default state as "user edits"
   const clipHasUserEditsRef = useRef(false);
 
-  // Layer selection state for arrow key navigation
-  const [selectedLayer, setSelectedLayer] = useState('playhead'); // 'playhead' | 'crop' | 'highlight'
+  // Note: selectedLayer now comes from useEditorStore (see above)
 
   // Audio state - synced between export settings and playback (Framing mode only)
   const [includeAudio, setIncludeAudio] = useState(true);
@@ -242,15 +250,15 @@ function App() {
       // Handle completion
       if (data.status === 'complete') {
         console.log('[App] Export complete via global WebSocket');
-        setExportingProject(null);
-        setGlobalExportProgress(null);
+        clearExport();
+        clearGlobalExportProgress();
         // Refresh projects to show updated state
         fetchProjects();
         refreshDownloadsCount();
       } else if (data.status === 'error') {
         console.error('[App] Export error via global WebSocket:', data.message);
-        setExportingProject(null);
-        setGlobalExportProgress(null);
+        clearExport();
+        clearGlobalExportProgress();
       }
     };
 
@@ -2718,7 +2726,7 @@ function App() {
     // This would invalidate the existing working video
     if (editorMode === 'framing' && newMode === 'overlay' && overlayVideoUrl && framingChangedSinceExport) {
       console.log('[App] Uncommitted framing changes detected - showing confirmation dialog');
-      setModeSwitchDialog({ isOpen: true, pendingMode: 'overlay' });
+      openModeSwitchDialog('overlay');
       return; // Don't switch yet - wait for dialog action
     }
 
@@ -2794,12 +2802,12 @@ function App() {
    * Mode switch dialog handlers
    */
   const handleModeSwitchCancel = useCallback(() => {
-    setModeSwitchDialog({ isOpen: false, pendingMode: null });
+    closeModeSwitchDialog();
   }, []);
 
   const handleModeSwitchExport = useCallback(() => {
     // Close dialog and trigger export
-    setModeSwitchDialog({ isOpen: false, pendingMode: null });
+    closeModeSwitchDialog();
     console.log('[App] User chose to export first - triggering export');
 
     // Trigger export via ref (this will export and then proceed to overlay mode via onProceedToOverlay)
@@ -2837,14 +2845,14 @@ function App() {
         setFramingChangedSinceExport(false);
 
         // Now switch to overlay mode
-        setModeSwitchDialog({ isOpen: false, pendingMode: null });
+        closeModeSwitchDialog();
         setEditorMode('overlay');
       } catch (err) {
         console.error('[App] Failed to restore clip states:', err);
-        setModeSwitchDialog({ isOpen: false, pendingMode: null });
+        closeModeSwitchDialog();
       }
     } else {
-      setModeSwitchDialog({ isOpen: false, pendingMode: null });
+      closeModeSwitchDialog();
     }
   }, [selectedProjectId, fetchProjectClips, loadProjectClips, getClipFileUrl, selectedProject, discardUncommittedChanges]);
 
@@ -2880,6 +2888,16 @@ function App() {
     hasKeyframeAt: hasHighlightKeyframeAt,
   }), [highlightKeyframes, isHighlightEndKeyframeExplicit, copiedHighlight, isHighlightEnabled, highlightDuration, toggleHighlightEnabled, updateHighlightDuration, addOrUpdateHighlightKeyframe, removeHighlightKeyframe, copyHighlightKeyframe, pasteHighlightKeyframe, interpolateHighlight, hasHighlightKeyframeAt]);
 
+  // Backward-compatible wrapper for setExportingProject
+  // Components should migrate to using useExportStore directly
+  const setExportingProject = useCallback((value) => {
+    if (value === null) {
+      clearExport();
+    } else {
+      startExport(value.projectId, value.stage, value.exportId);
+    }
+  }, [clearExport, startExport]);
+
   // App-level shared state for context (reduces prop drilling to ExportButton, ModeSwitcher, ProjectManager)
   const appStateValue = useMemo(() => ({
     // Editor mode
@@ -2904,6 +2922,7 @@ function App() {
     selectedProjectId,
     selectedProject,
     exportingProject,
+    setExportingProject,
     globalExportProgress,
     downloadsCount,
     refreshDownloadsCount,

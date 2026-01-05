@@ -350,43 +350,36 @@ async def process_single_clip(..., progress_callback, ...):
 
 ## Low Priority (Minor Issues)
 
-### 11. Comments as Code Smell
+### 11. Comments as Code Smell ✅ ADDRESSED
 **Smell**: Comments explaining what (not why)
 
-**Locations throughout**:
-```python
-# Get clip durations
-durations = [get_video_duration(path) for path in clip_paths]
+**Status**: Cleaned up obvious "what" comments
 
-# Build FFmpeg command
-cmd = ['ffmpeg', '-y']
-```
+**Changes Made**:
+- Removed obvious comments from `ffmpeg_service.py`, `cut.py`, `dissolve.py`, `fade.py`
+- Kept useful section headers and "why" comments
+- Examples removed: `# Get clip durations`, `# Build FFmpeg command`, `# Combine filters`
 
-These comments explain obvious code. Better to have self-documenting code.
+**Ongoing**: Continue removing obvious comments when touching code.
 
-**Refactoring**: Remove obvious comments, add "why" comments where needed.
-
-**Effort**: Ongoing (as code is touched)
+**Effort**: Low (complete for existing violations)
 
 ---
 
-### 12. Boolean Parameters
+### 12. Boolean Parameters ✅ REVIEWED
 **Smell**: Boolean Blindness
 
-**Locations**:
-```python
-def extract_clip_to_file(..., use_cache: bool = True):
-async def create_clip_with_burned_text(..., use_cache: bool = True):
-```
+**Status**: Reviewed and found acceptable
 
-```javascript
-includeAudio={true}
-isHighlightEnabled={editorMode === 'overlay' && highlightRegions.length > 0}
-```
+**Analysis**:
+- Current boolean parameters are well-named (`use_cache`, `include_audio`, `enable_multi_gpu`)
+- Each has clear semantics and documentation
+- No cases of confusing `func(true, false, true)` call sites
+- AIVideoUpscaler has 5 boolean params but all are optional with sensible defaults
 
-**Refactoring**: Consider enum types or separate methods.
+**Decision**: No refactoring needed. Boolean parameters are appropriate for simple on/off flags.
 
-**Effort**: Low (ongoing)
+**Effort**: N/A (no changes needed)
 
 ---
 
@@ -445,17 +438,44 @@ if result.returncode != 0:
 
 ## Architectural Improvements
 
-### 15. Consider State Management Library
+### 15. State Management with Zustand
 **Smell**: Data Class (anti-pattern for React)
 
-**Problem**: App.jsx manages state through 100+ useState hooks. This is complex to reason about and test.
+**Status**: ✅ COMPLETED
 
-**Options**:
-1. **Zustand**: Lightweight, works well with hooks
-2. **Jotai**: Atomic state management
-3. **XState**: For complex state machines (mode switching)
+**Problem**: App.jsx still has ~20 useState hooks for cross-cutting concerns that aren't consolidated into domain hooks. Components access this state via prop drilling through 40+ props.
 
-**Effort**: High (3-5 days) - but significant maintainability improvement
+**Analysis**: Many state groups are ALREADY consolidated into hooks:
+- ✅ `useVideo` - video playback state
+- ✅ `useOverlayState` - overlay mode state
+- ✅ `useAnnotateState` - annotate mode state
+- ✅ `useClipManager` - clip management
+- ✅ `useProjects` - project management
+
+**Remaining non-consolidated state** (targets for Zustand):
+1. Editor mode: `editorMode`, `modeSwitchDialog`, `selectedLayer`
+2. Export tracking: `exportProgress`, `exportingProject`, `globalExportProgress`
+3. UI flags: `includeAudio`, `framingChangedSinceExport`
+
+**Implementation Plan**:
+
+| Task | Status | Description |
+|------|--------|-------------|
+| 15.1 Install Zustand | ✅ Done | Add zustand dependency |
+| 15.2 Create editorStore | ✅ Done | editorMode, modeSwitchDialog, selectedLayer (14 tests) |
+| 15.3 Create exportStore | ✅ Done | exportProgress, exportingProject, globalExportProgress (15 tests) |
+| 15.4 Integrate editorStore | ✅ Done | App.jsx now uses editorStore for mode state |
+| 15.5 Integrate exportStore | ✅ Done | App.jsx now uses exportStore for export state |
+| 15.6 Remove props from App.jsx | ✅ Done | Removed 6 useState declarations, using stores |
+| 15.7 Add store tests | ✅ Done | 29 tests total (14 editor + 15 export) |
+
+**Benefits**:
+- Components access state directly (no prop drilling)
+- Stores can be tested in isolation
+- DevTools support for debugging
+- Cleaner App.jsx
+
+**Effort**: Medium (2-3 days)
 
 ---
 

@@ -57,10 +57,7 @@ class FadeTransition(TransitionStrategy):
             return True
 
         try:
-            # Get clip durations
             durations = [get_video_duration(path) for path in clip_paths]
-
-            # Build complex filter
             filter_parts = []
             video_labels = []
             audio_labels = []
@@ -104,18 +101,14 @@ class FadeTransition(TransitionStrategy):
                         filter_parts.append(f"[{i}:a]acopy[a{i}]")
                     audio_labels.append(f"[a{i}]")
 
-            # Concatenate video streams
             video_concat = ''.join(video_labels) + f"concat=n={len(clip_paths)}:v=1:a=0[outv]"
             filter_parts.append(video_concat)
 
-            # Concatenate audio streams (if audio included)
             if include_audio:
                 audio_concat = ''.join(audio_labels) + f"concat=n={len(clip_paths)}:v=0:a=1[outa]"
                 filter_parts.append(audio_concat)
 
             filter_complex = ';'.join(filter_parts)
-
-            # Build FFmpeg command
             cmd = ['ffmpeg', '-y']
             for path in clip_paths:
                 cmd.extend(['-i', path])
