@@ -265,8 +265,8 @@ Each task is a separate commit. If issues arise:
 | 2.1 useKeyboardShortcuts | ✅ Complete | 2117a0f | 22 |
 | 2.2 useExportWebSocket | ✅ Complete | 62b9cbb | 0 |
 | 3.1 AnnotateContainer | 🟡 Partial | 4045a8c | 0 |
-| 3.2 OverlayContainer | 🟡 Partial | - | 0 |
-| 3.3 FramingContainer | 🟡 Partial | - | 0 |
+| 3.2 OverlayContainer | 🟡 Partial | f060820 | 0 |
+| 3.3 FramingContainer | 🟡 Partial | f060820 | 0 |
 
 ---
 
