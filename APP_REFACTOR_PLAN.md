@@ -181,7 +181,7 @@ src/frontend/src/
 ---
 
 #### Task 3.2: Extract OverlayContainer
-**Status**: ⬜ Pending
+**Status**: 🟡 Partial (Container created, App.jsx integration pending)
 
 **Content to extract**:
 - Overlay-specific handlers
@@ -189,14 +189,19 @@ src/frontend/src/
 - Player detection UI
 - Uses: useOverlayState, useHighlightRegions, usePlayerDetection
 
-**Files to modify**:
-- Create: `containers/OverlayContainer.jsx`
-- Update: `App.jsx`
+**Files created**:
+- `containers/OverlayContainer.jsx` - Contains:
+  - `OverlayContainer` - Hook managing overlay state/handlers
+  - `OverlayVideoOverlays` - Highlight and player detection overlays
+  - `OverlayTimeline` - Timeline component wrapper
+
+**Pending**:
+- Update `App.jsx` to use the new container
 
 ---
 
 #### Task 3.3: Extract FramingContainer
-**Status**: ⬜ Pending
+**Status**: 🟡 Partial (Container created, App.jsx integration pending)
 
 **Why last**: Most coupled, depends on crop/segment state
 
@@ -207,9 +212,14 @@ src/frontend/src/
 - Framing UI
 - Uses: useCrop, useSegments, videoStore, clipStore
 
-**Files to modify**:
-- Create: `containers/FramingContainer.jsx`
-- Update: `App.jsx`
+**Files created**:
+- `containers/FramingContainer.jsx` - Contains:
+  - `FramingContainer` - Hook managing crop/segment state/handlers
+  - `FramingVideoOverlay` - Crop overlay component
+  - `FramingTimeline` - Timeline component wrapper
+
+**Pending**:
+- Update `App.jsx` to use the new container
 
 ---
 
@@ -220,8 +230,8 @@ src/frontend/src/
 - [x] 2.1 Extract useKeyboardShortcuts + tests → Run tests → Commit
 - [x] 2.2 Extract useExportWebSocket → Run tests → Commit
 - [~] 3.1 Extract AnnotateContainer → Container created, App.jsx integration pending
-- [ ] 3.2 Extract OverlayContainer → Run tests → Commit
-- [ ] 3.3 Extract FramingContainer → Run tests → Commit
+- [~] 3.2 Extract OverlayContainer → Container created, App.jsx integration pending
+- [~] 3.3 Extract FramingContainer → Container created, App.jsx integration pending
 
 ---
 
@@ -255,8 +265,8 @@ Each task is a separate commit. If issues arise:
 | 2.1 useKeyboardShortcuts | ✅ Complete | 2117a0f | 22 |
 | 2.2 useExportWebSocket | ✅ Complete | 62b9cbb | 0 |
 | 3.1 AnnotateContainer | 🟡 Partial | 4045a8c | 0 |
-| 3.2 OverlayContainer | ⬜ Pending | - | - |
-| 3.3 FramingContainer | ⬜ Pending | - | - |
+| 3.2 OverlayContainer | 🟡 Partial | - | 0 |
+| 3.3 FramingContainer | 🟡 Partial | - | 0 |
 
 ---
 
@@ -276,8 +286,10 @@ If this refactoring is continued by another session:
 - `src/frontend/src/stores/` - Zustand stores
 - `src/frontend/src/hooks/useVideo.js` - Template for store conversion
 - `src/frontend/src/hooks/useClipManager.js` - Template for store conversion
-- `src/frontend/src/containers/` - Mode containers (AnnotateContainer created)
-- `src/frontend/src/containers/AnnotateContainer.jsx` - Contains hook and helper components for Annotate mode
+- `src/frontend/src/containers/` - Mode containers (all three created)
+- `src/frontend/src/containers/AnnotateContainer.jsx` - Hook and helper components for Annotate mode
+- `src/frontend/src/containers/OverlayContainer.jsx` - Hook and helper components for Overlay mode
+- `src/frontend/src/containers/FramingContainer.jsx` - Hook and helper components for Framing mode
 
 ### Test Commands
 ```bash
