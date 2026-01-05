@@ -7,6 +7,7 @@ import useZoom from './hooks/useZoom';
 import useTimelineZoom from './hooks/useTimelineZoom';
 import { useClipManager } from './hooks/useClipManager';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useExportWebSocket } from './hooks/useExportWebSocket';
 import { useProjects } from './hooks/useProjects';
 import { useProjectClips } from './hooks/useProjectClips';
 import { useGames } from './hooks/useGames';
@@ -119,9 +120,7 @@ function App() {
     clearExport,
     globalExportProgress,
     setGlobalExportProgress,
-    clearGlobalExportProgress,
   } = useExportStore();
-  const exportWebSocketRef = useRef(null);
 
   // Ref to track previous isPlaying state for detecting pause transitions
   const wasPlayingRef = useRef(false);
@@ -213,72 +212,16 @@ function App() {
   // Export button ref (for triggering export programmatically)
   const exportButtonRef = useRef(null);
 
-  // Manage global WebSocket for export progress (persists across navigation)
-  useEffect(() => {
-    // Only connect if we have an active export with an exportId
-    if (!exportingProject?.exportId) {
-      // Clean up any existing connection
-      if (exportWebSocketRef.current) {
-        exportWebSocketRef.current.close();
-        exportWebSocketRef.current = null;
-      }
-      setGlobalExportProgress(null);
-      return;
-    }
+  // Export progress WebSocket (connects when export is in progress)
+  // @see hooks/useExportWebSocket.js for implementation
+  const handleExportComplete = useCallback(() => {
+    fetchProjects();
+    refreshDownloadsCount();
+  }, [fetchProjects, refreshDownloadsCount]);
 
-    const exportId = exportingProject.exportId;
-    console.log('[App] Connecting global WebSocket for export:', exportId);
-
-    // Use same host as the page to go through Vite proxy
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws/export/${exportId}`;
-    const ws = new WebSocket(wsUrl);
-    exportWebSocketRef.current = ws;
-
-    ws.onopen = () => {
-      console.log('[App] Global export WebSocket connected');
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log('[App] Global export progress:', data);
-
-      setGlobalExportProgress({
-        progress: Math.round(data.progress),
-        message: data.message || ''
-      });
-
-      // Handle completion
-      if (data.status === 'complete') {
-        console.log('[App] Export complete via global WebSocket');
-        clearExport();
-        clearGlobalExportProgress();
-        // Refresh projects to show updated state
-        fetchProjects();
-        refreshDownloadsCount();
-      } else if (data.status === 'error') {
-        console.error('[App] Export error via global WebSocket:', data.message);
-        clearExport();
-        clearGlobalExportProgress();
-      }
-    };
-
-    ws.onerror = (error) => {
-      console.error('[App] Global export WebSocket error:', error);
-    };
-
-    ws.onclose = () => {
-      console.log('[App] Global export WebSocket disconnected');
-      exportWebSocketRef.current = null;
-    };
-
-    // Cleanup on unmount or when exportingProject changes
-    return () => {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
-      }
-    };
-  }, [exportingProject?.exportId, fetchProjects, refreshDownloadsCount]);
+  useExportWebSocket({
+    onExportComplete: handleExportComplete,
+  });
 
   // Project clips (only active when project selected)
   const {

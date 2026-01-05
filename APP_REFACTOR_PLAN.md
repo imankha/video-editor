@@ -133,7 +133,7 @@ src/frontend/src/
 ---
 
 #### Task 2.2: Extract useExportWebSocket
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 **Current**: WebSocket setup in App.jsx (lines 216-280)
 
@@ -203,7 +203,7 @@ src/frontend/src/
 - [x] 1.1 Create useVideoStore + tests → Run tests → Commit
 - [x] 1.2 Create useClipStore + tests → Run tests → Commit
 - [x] 2.1 Extract useKeyboardShortcuts + tests → Run tests → Commit
-- [ ] 2.2 Extract useExportWebSocket → Run tests → Commit
+- [x] 2.2 Extract useExportWebSocket → Run tests → Commit
 - [ ] 3.1 Extract AnnotateContainer → Run tests → Commit
 - [ ] 3.2 Extract OverlayContainer → Run tests → Commit
 - [ ] 3.3 Extract FramingContainer → Run tests → Commit
@@ -237,8 +237,8 @@ Each task is a separate commit. If issues arise:
 |------|--------|--------|-------|
 | 1.1 useVideoStore | ✅ Complete | 78864e3 | 26 |
 | 1.2 useClipStore | ✅ Complete | 8f63c96 | 30 |
-| 2.1 useKeyboardShortcuts | ✅ Complete | (pending) | 22 |
-| 2.2 useExportWebSocket | ⬜ Pending | - | - |
+| 2.1 useKeyboardShortcuts | ✅ Complete | 2117a0f | 22 |
+| 2.2 useExportWebSocket | ✅ Complete | (pending) | 0 |
 | 3.1 AnnotateContainer | ⬜ Pending | - | - |
 | 3.2 OverlayContainer | ⬜ Pending | - | - |
 | 3.3 FramingContainer | ⬜ Pending | - | - |
