@@ -11,3 +11,4 @@
 export { useEditorStore } from './editorStore';
 export { useExportStore } from './exportStore';
 export { useVideoStore } from './videoStore';
+export { useClipStore } from './clipStore';

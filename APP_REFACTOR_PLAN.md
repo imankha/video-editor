@@ -89,7 +89,7 @@ src/frontend/src/
 ---
 
 #### Task 1.2: Convert useClipManager → useClipStore
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 **Current**: `useClipManager` hook
 - clips, selectedClipId, selectedClip
@@ -201,7 +201,7 @@ src/frontend/src/
 ## Execution Checklist
 
 - [x] 1.1 Create useVideoStore + tests → Run tests → Commit
-- [ ] 1.2 Create useClipStore + tests → Run tests → Commit
+- [x] 1.2 Create useClipStore + tests → Run tests → Commit
 - [ ] 2.1 Extract useKeyboardShortcuts + tests → Run tests → Commit
 - [ ] 2.2 Extract useExportWebSocket → Run tests → Commit
 - [ ] 3.1 Extract AnnotateContainer → Run tests → Commit
@@ -235,8 +235,8 @@ Each task is a separate commit. If issues arise:
 
 | Task | Status | Commit | Tests |
 |------|--------|--------|-------|
-| 1.1 useVideoStore | ✅ Complete | (pending) | 26 |
-| 1.2 useClipStore | ⬜ Pending | - | - |
+| 1.1 useVideoStore | ✅ Complete | 78864e3 | 26 |
+| 1.2 useClipStore | ✅ Complete | (pending) | 30 |
 | 2.1 useKeyboardShortcuts | ⬜ Pending | - | - |
 | 2.2 useExportWebSocket | ⬜ Pending | - | - |
 | 3.1 AnnotateContainer | ⬜ Pending | - | - |
