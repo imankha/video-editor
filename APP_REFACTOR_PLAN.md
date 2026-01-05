@@ -111,7 +111,7 @@ src/frontend/src/
 ### Phase 2: Extract Utility Hooks
 
 #### Task 2.1: Extract useKeyboardShortcuts
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 **Current**: 3 useEffect blocks in App.jsx (lines 2133-2315)
 - Spacebar play/pause handler
@@ -202,7 +202,7 @@ src/frontend/src/
 
 - [x] 1.1 Create useVideoStore + tests → Run tests → Commit
 - [x] 1.2 Create useClipStore + tests → Run tests → Commit
-- [ ] 2.1 Extract useKeyboardShortcuts + tests → Run tests → Commit
+- [x] 2.1 Extract useKeyboardShortcuts + tests → Run tests → Commit
 - [ ] 2.2 Extract useExportWebSocket → Run tests → Commit
 - [ ] 3.1 Extract AnnotateContainer → Run tests → Commit
 - [ ] 3.2 Extract OverlayContainer → Run tests → Commit
@@ -236,8 +236,8 @@ Each task is a separate commit. If issues arise:
 | Task | Status | Commit | Tests |
 |------|--------|--------|-------|
 | 1.1 useVideoStore | ✅ Complete | 78864e3 | 26 |
-| 1.2 useClipStore | ✅ Complete | (pending) | 30 |
-| 2.1 useKeyboardShortcuts | ⬜ Pending | - | - |
+| 1.2 useClipStore | ✅ Complete | 8f63c96 | 30 |
+| 2.1 useKeyboardShortcuts | ✅ Complete | (pending) | 22 |
 | 2.2 useExportWebSocket | ⬜ Pending | - | - |
 | 3.1 AnnotateContainer | ⬜ Pending | - | - |
 | 3.2 OverlayContainer | ⬜ Pending | - | - |

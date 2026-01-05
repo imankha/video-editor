@@ -6,6 +6,7 @@ import { useVideo } from './hooks/useVideo';
 import useZoom from './hooks/useZoom';
 import useTimelineZoom from './hooks/useTimelineZoom';
 import { useClipManager } from './hooks/useClipManager';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useProjects } from './hooks/useProjects';
 import { useProjectClips } from './hooks/useProjectClips';
 import { useGames } from './hooks/useGames';
@@ -2129,191 +2130,32 @@ function App() {
     detrimEnd();
   };
 
-  // Keyboard handler: Space bar toggles play/pause
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      // Don't handle if typing in an input or textarea
-      const tagName = event.target.tagName.toLowerCase();
-      if (tagName === 'input' || tagName === 'textarea') {
-        return;
-      }
-
-      // Only handle spacebar if any video is loaded (framing, overlay, or annotate mode)
-      const hasVideo = videoUrl || effectiveOverlayVideoUrl || annotateVideoUrl;
-      if (event.code === 'Space' && hasVideo) {
-        // Prevent default spacebar behavior (page scroll)
-        event.preventDefault();
-        togglePlay();
-      }
-    };
-
-    // Add event listener
-    document.addEventListener('keydown', handleKeyDown);
-
-    // Cleanup on unmount
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [videoUrl, effectiveOverlayVideoUrl, annotateVideoUrl, togglePlay]);
-
-  // Keyboard handler: Ctrl-C/Cmd-C copies crop, Ctrl-V/Cmd-V pastes crop
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      // Only handle if any video is loaded (framing or overlay mode)
-      const hasVideo = videoUrl || effectiveOverlayVideoUrl;
-      if (!hasVideo) return;
-
-      // Check for Ctrl-C or Cmd-C (Mac)
-      if ((event.ctrlKey || event.metaKey) && event.code === 'KeyC') {
-        // Only prevent default if no text is selected (to allow normal browser copy)
-        if (window.getSelection().toString().length === 0) {
-          event.preventDefault();
-          handleCopyCrop();
-        }
-      }
-
-      // Check for Ctrl-V or Cmd-V (Mac)
-      if ((event.ctrlKey || event.metaKey) && event.code === 'KeyV') {
-        // Only prevent default if we have crop data to paste
-        if (copiedCrop) {
-          event.preventDefault();
-          handlePasteCrop();
-        }
-      }
-    };
-
-    // Add event listener
-    document.addEventListener('keydown', handleKeyDown);
-
-    // Cleanup on unmount
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [videoUrl, effectiveOverlayVideoUrl, currentTime, duration, copiedCrop, copyCropKeyframe, pasteCropKeyframe]);
-
-  // Keyboard handler: Arrow keys for layer-specific navigation
-  useEffect(() => {
-    const handleArrowKeys = (event) => {
-      // Only handle arrow keys
-      if (event.code !== 'ArrowLeft' && event.code !== 'ArrowRight') return;
-
-      // Don't handle if modifier keys are pressed (let other shortcuts work)
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-
-      // Handle annotate mode: layer-dependent navigation
-      if (editorMode === 'annotate' && annotateVideoUrl) {
-        event.preventDefault();
-        const isLeft = event.code === 'ArrowLeft';
-
-        // If playhead layer is selected, step frames
-        if (annotateSelectedLayer === 'playhead') {
-          if (isLeft) {
-            stepBackward();
-          } else {
-            stepForward();
-          }
-          return;
-        }
-
-        // Clips layer: navigate between annotated clips
-        if (clipRegions.length > 0) {
-          // Sort regions by startTime
-          const sortedRegions = [...clipRegions].sort((a, b) => a.startTime - b.startTime);
-
-          // Find current region index
-          let currentIndex = sortedRegions.findIndex(r => r.id === annotateSelectedRegionId);
-          if (currentIndex === -1) {
-            // No region selected, select first or last based on direction
-            currentIndex = isLeft ? sortedRegions.length : -1;
-          }
-
-          // Navigate to next/previous region
-          const targetIndex = isLeft
-            ? Math.max(0, currentIndex - 1)
-            : Math.min(sortedRegions.length - 1, currentIndex + 1);
-
-          if (targetIndex !== currentIndex || currentIndex === -1) {
-            const targetRegion = sortedRegions[targetIndex];
-            selectAnnotateRegion(targetRegion.id);
-            seek(targetRegion.startTime);
-          }
-        }
-        return;
-      }
-
-      // Only handle if any video is loaded (framing or overlay mode)
-      const hasVideo = videoUrl || effectiveOverlayVideoUrl;
-      if (!hasVideo) return;
-
-      event.preventDefault();
-
-      const isLeft = event.code === 'ArrowLeft';
-      const direction = isLeft ? -1 : 1;
-
-      switch (selectedLayer) {
-        case 'playhead': {
-          // Move playhead one frame in the direction
-          if (isLeft) {
-            stepBackward();
-          } else {
-            stepForward();
-          }
-          break;
-        }
-
-        case 'crop': {
-          // Navigate to next/previous crop keyframe
-          // Selection is derived from playhead position, so just seek to keyframe time
-          if (keyframes.length === 0) break;
-
-          let targetIndex;
-          if (selectedCropKeyframeIndex === null) {
-            // No keyframe selected, select based on direction
-            targetIndex = isLeft ? keyframes.length - 1 : 0;
-          } else {
-            // Move to next/previous keyframe
-            targetIndex = selectedCropKeyframeIndex + direction;
-            // Clamp to valid range
-            targetIndex = Math.max(0, Math.min(targetIndex, keyframes.length - 1));
-          }
-
-          if (targetIndex !== selectedCropKeyframeIndex) {
-            const keyframe = keyframes[targetIndex];
-            const keyframeTime = keyframe.frame / framerate;
-            seek(keyframeTime); // Selection updates automatically via useMemo
-          }
-          break;
-        }
-
-        case 'highlight': {
-          // Navigate to next/previous highlight keyframe
-          // Selection is derived from playhead position, so just seek to keyframe time
-          if (highlightKeyframes.length === 0 || !isHighlightEnabled) break;
-
-          let targetIndex;
-          if (selectedHighlightKeyframeIndex === null) {
-            // No keyframe selected, select based on direction
-            targetIndex = isLeft ? highlightKeyframes.length - 1 : 0;
-          } else {
-            // Move to next/previous keyframe
-            targetIndex = selectedHighlightKeyframeIndex + direction;
-            // Clamp to valid range
-            targetIndex = Math.max(0, Math.min(targetIndex, highlightKeyframes.length - 1));
-          }
-
-          if (targetIndex !== selectedHighlightKeyframeIndex) {
-            const keyframe = highlightKeyframes[targetIndex];
-            const keyframeTime = keyframe.frame / highlightFramerate;
-            seek(keyframeTime); // Selection updates automatically via useMemo
-          }
-          break;
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleArrowKeys);
-    return () => document.removeEventListener('keydown', handleArrowKeys);
-  }, [videoUrl, effectiveOverlayVideoUrl, selectedLayer, selectedCropKeyframeIndex, selectedHighlightKeyframeIndex, keyframes, highlightKeyframes, framerate, highlightFramerate, isHighlightEnabled, stepForward, stepBackward, seek, editorMode, annotateVideoUrl, clipRegions, annotateSelectedRegionId, selectAnnotateRegion, annotateSelectedLayer]);
+  // Keyboard shortcuts (space bar, copy/paste, arrow keys)
+  // @see hooks/useKeyboardShortcuts.js for implementation
+  useKeyboardShortcuts({
+    hasVideo: Boolean(videoUrl || effectiveOverlayVideoUrl || annotateVideoUrl),
+    togglePlay,
+    stepForward,
+    stepBackward,
+    seek,
+    editorMode,
+    selectedLayer,
+    copiedCrop,
+    onCopyCrop: handleCopyCrop,
+    onPasteCrop: handlePasteCrop,
+    keyframes,
+    framerate,
+    selectedCropKeyframeIndex,
+    highlightKeyframes,
+    highlightFramerate,
+    selectedHighlightKeyframeIndex,
+    isHighlightEnabled,
+    annotateVideoUrl,
+    annotateSelectedLayer,
+    clipRegions,
+    annotateSelectedRegionId,
+    selectAnnotateRegion,
+  });
 
   // Handle crop changes during drag/resize (live preview)
   const handleCropChange = (newCrop) => {
