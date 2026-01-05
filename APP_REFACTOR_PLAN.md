@@ -150,7 +150,7 @@ src/frontend/src/
 ### Phase 3: Extract Mode Containers
 
 #### Task 3.1: Extract AnnotateContainer
-**Status**: ⬜ Pending
+**Status**: 🟡 Partial (Container created, App.jsx integration pending)
 
 **Why first**: Most isolated mode, fewest dependencies on other modes
 
@@ -159,9 +159,24 @@ src/frontend/src/
 - Annotate-specific UI rendering
 - Uses: useAnnotateState, useAnnotate, useGames
 
-**Files to modify**:
-- Create: `containers/AnnotateContainer.jsx`
-- Update: `App.jsx`
+**Files created**:
+- `containers/AnnotateContainer.jsx` - Contains:
+  - `AnnotateContainer` - Hook-like function managing all annotate state/handlers
+  - `AnnotateSidebar` - Sidebar component wrapper
+  - `AnnotateVideoOverlays` - Video overlay components
+  - `AnnotateVideoControls` - Controls component wrapper
+  - `AnnotateTimeline` - Timeline component wrapper
+  - `AnnotateExportPanel` - Export UI component
+- `containers/index.js` - Barrel export
+
+**Pending**:
+- Update `App.jsx` to use the new container (complex integration due to shared videoRef and video controls)
+
+**Integration Notes**:
+- The container is designed as a hook that takes shared dependencies (videoRef, seek, togglePlay, etc.)
+- Returns all annotate-specific state and handlers
+- Helper components wrap the annotate UI for clean JSX
+- Full integration requires removing ~500 lines from App.jsx and replacing with container calls
 
 ---
 
@@ -204,7 +219,7 @@ src/frontend/src/
 - [x] 1.2 Create useClipStore + tests → Run tests → Commit
 - [x] 2.1 Extract useKeyboardShortcuts + tests → Run tests → Commit
 - [x] 2.2 Extract useExportWebSocket → Run tests → Commit
-- [ ] 3.1 Extract AnnotateContainer → Run tests → Commit
+- [~] 3.1 Extract AnnotateContainer → Container created, App.jsx integration pending
 - [ ] 3.2 Extract OverlayContainer → Run tests → Commit
 - [ ] 3.3 Extract FramingContainer → Run tests → Commit
 
@@ -239,7 +254,7 @@ Each task is a separate commit. If issues arise:
 | 1.2 useClipStore | ✅ Complete | 8f63c96 | 30 |
 | 2.1 useKeyboardShortcuts | ✅ Complete | 2117a0f | 22 |
 | 2.2 useExportWebSocket | ✅ Complete | 62b9cbb | 0 |
-| 3.1 AnnotateContainer | ⬜ Pending | - | - |
+| 3.1 AnnotateContainer | 🟡 Partial | - | - |
 | 3.2 OverlayContainer | ⬜ Pending | - | - |
 | 3.3 FramingContainer | ⬜ Pending | - | - |
 
@@ -261,6 +276,8 @@ If this refactoring is continued by another session:
 - `src/frontend/src/stores/` - Zustand stores
 - `src/frontend/src/hooks/useVideo.js` - Template for store conversion
 - `src/frontend/src/hooks/useClipManager.js` - Template for store conversion
+- `src/frontend/src/containers/` - Mode containers (AnnotateContainer created)
+- `src/frontend/src/containers/AnnotateContainer.jsx` - Contains hook and helper components for Annotate mode
 
 ### Test Commands
 ```bash
