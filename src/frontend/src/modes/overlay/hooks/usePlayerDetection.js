@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { API_BASE } from '../../../config';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = API_BASE;
 
 /**
  * usePlayerDetection - Hook to fetch player detections for the current video frame

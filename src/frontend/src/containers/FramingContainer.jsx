@@ -1,16 +1,14 @@
 import { useEffect, useCallback, useMemo, useRef } from 'react';
-import { useCrop, useSegments, FramingMode, CropOverlay } from '../modes/framing';
-import { useClipManager } from '../hooks/useClipManager';
+import { FramingMode, CropOverlay } from '../modes/framing';
+import { API_BASE } from '../config';
 
 /**
- * FramingContainer - Encapsulates all Framing mode logic and UI
+ * FramingContainer - Encapsulates Framing mode logic and computed state
  *
- * This container manages:
- * - Crop keyframe management (add, update, delete, interpolate)
- * - Segment management (split, trim, speed control)
- * - Multi-clip workflow (clip switching, state persistence)
- * - Auto-save of framing edits to backend
- * - Copy/paste crop keyframes
+ * This container receives state from App.jsx's hooks (useCrop, useSegments, useClipManager)
+ * and returns derived state and handlers specific to Framing mode.
+ *
+ * Pattern: Takes state as props, returns derived values and handlers (like OverlayContainer)
  *
  * @param {Object} props - Dependencies from App.jsx
  * @see APP_REFACTOR_PLAN.md Task 3.3 for refactoring context
@@ -22,7 +20,6 @@ export function FramingContainer({
   metadata,
   currentTime,
   duration,
-  framerate,
   isPlaying,
   seek,
 
@@ -32,77 +29,84 @@ export function FramingContainer({
 
   // Editor mode
   editorMode,
+  setEditorMode,
+
+  // Crop state and actions (from useCrop in App.jsx)
+  keyframes,
+  aspectRatio,
+  framerate,
+  isEndKeyframeExplicit,
+  copiedCrop,
+  addOrUpdateKeyframe,
+  removeKeyframe,
+  copyCropKeyframe,
+  pasteCropKeyframe,
+  getCropDataAtTime,
+  interpolateCrop,
+  hasKeyframeAt,
+  getKeyframesForExport,
+  deleteKeyframesInRange,
+  cleanupTrimKeyframes,
+  restoreCropState,
+  updateAspectRatio,
+  resetCrop,
+
+  // Segment state and actions (from useSegments in App.jsx)
+  segments,
+  segmentBoundaries,
+  segmentSpeeds,
+  trimRange,
+  trimHistory,
+  sourceDuration,
+  visualDuration,
+  trimmedDuration,
+  segmentVisualLayout,
+  segmentFramerate,
+  initializeSegments,
+  resetSegments,
+  restoreSegmentState,
+  addSegmentBoundary,
+  removeSegmentBoundary,
+  setSegmentSpeed,
+  toggleTrimSegment,
+  getSegmentAtTime,
+  getSegmentExportData,
+  isTimeVisible,
+  clampToVisibleRange,
+  sourceTimeToVisualTime,
+  visualTimeToSourceTime,
+  createFrameRangeKey,
+  isSegmentTrimmed,
+  detrimStart,
+  detrimEnd,
+
+  // Clip state and actions (from useClipManager in App.jsx)
+  clips,
+  selectedClipId,
+  selectedClip,
+  hasClips,
+  globalAspectRatio,
+  globalTransition,
+  addClip,
+  deleteClip,
+  selectClip,
+  reorderClips,
+  updateClipData,
+  setGlobalAspectRatio,
+  setGlobalTransition,
+  getClipExportData,
 
   // Highlight hook (for coordinated trim operations)
   highlightHook,
 
+  // Project clips hook (for backend persistence)
+  saveFramingEdits,
+
   // Callbacks
   onCropChange,
   onUserEdit,
+  setFramingChangedSinceExport,
 }) {
-  // Crop management hook
-  const {
-    keyframes,
-    aspectRatio,
-    isEndKeyframeExplicit,
-    copiedCrop,
-    initialize: initializeCrop,
-    reset: resetCrop,
-    addOrUpdateKeyframe,
-    removeKeyframe,
-    copyCropKeyframe,
-    pasteCropKeyframe,
-    getCropDataAtTime,
-    interpolateCrop,
-    hasKeyframeAt,
-    getKeyframesForExport,
-    deleteKeyframesInRange,
-    cleanupTrimKeyframes,
-    restoreState: restoreCropState,
-    updateAspectRatio,
-  } = useCrop(metadata, null);
-
-  // Segment management hook
-  const {
-    segments,
-    boundaries: segmentBoundaries,
-    segmentSpeeds,
-    trimRange,
-    setTrimRange,
-    initializeWithDuration: initializeSegments,
-    reset: resetSegments,
-    getSegmentAtTime,
-    addSplit,
-    removeSplit,
-    setSegmentSpeed,
-    toggleTrimSegment,
-    detrimStart,
-    detrimEnd,
-    getExportData: getSegmentExportData,
-    clampToVisibleRange,
-    restoreState: restoreSegmentState,
-  } = useSegments();
-
-  // Clip management
-  const {
-    clips,
-    selectedClipId,
-    selectedClip,
-    selectedClipIndex,
-    hasClips,
-    globalAspectRatio,
-    globalTransition,
-    addClip,
-    deleteClip,
-    selectClip,
-    reorderClips,
-    updateClipData,
-    setGlobalAspectRatio,
-    setGlobalTransition,
-    getExportData: getClipExportData,
-    calculateCenteredCrop,
-  } = useClipManager();
-
   // Refs for auto-save debouncing
   const pendingFramingSaveRef = useRef(null);
   const clipHasUserEditsRef = useRef(false);
@@ -223,24 +227,33 @@ export function FramingContainer({
     };
 
     try {
-      const formData = new FormData();
-      formData.append('crop_data', JSON.stringify(keyframes));
-      formData.append('segments_data', JSON.stringify(segmentState));
-      formData.append('timing_data', JSON.stringify({ trimRange }));
+      // Save to local clip manager state
+      updateClipData(selectedClipId, {
+        segments: segmentState,
+        cropKeyframes: keyframes,
+        trimRange: trimRange
+      });
 
-      await fetch(
-        `http://localhost:8000/api/clips/projects/${selectedProjectId}/clips/${currentClip.workingClipId}`,
-        {
-          method: 'PUT',
-          body: formData
+      // Save to backend
+      if (saveFramingEdits) {
+        const result = await saveFramingEdits(currentClip.workingClipId, {
+          cropKeyframes: keyframes,
+          segments: segmentState,
+          trimRange: trimRange
+        });
+
+        // If backend created a new version, update local clip's workingClipId
+        if (result?.newClipId) {
+          console.log('[FramingContainer] Clip versioned, updating workingClipId:', currentClip.workingClipId, '->', result.newClipId);
+          updateClipData(selectedClipId, { workingClipId: result.newClipId });
         }
-      );
+      }
 
-      console.log('[FramingContainer] Saved framing state for clip:', currentClip.workingClipId);
+      console.log('[FramingContainer] Saved framing state for clip:', selectedClipId);
     } catch (e) {
       console.error('[FramingContainer] Failed to save framing state:', e);
     }
-  }, [selectedClipId, selectedProjectId, clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange]);
+  }, [selectedClipId, selectedProjectId, clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange, updateClipData, saveFramingEdits]);
 
   /**
    * Auto-save framing edits (debounced)
@@ -275,7 +288,8 @@ export function FramingContainer({
     addOrUpdateKeyframe(currentTime, cropData, duration);
     onCropChange?.(null);
     onUserEdit?.();
-  }, [currentTime, framerate, duration, addOrUpdateKeyframe, onCropChange, onUserEdit]);
+    setFramingChangedSinceExport?.(true);
+  }, [currentTime, framerate, duration, addOrUpdateKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport]);
 
   /**
    * Coordinated segment trim handler
@@ -337,7 +351,8 @@ export function FramingContainer({
 
     toggleTrimSegment(segmentIndex);
     onUserEdit?.();
-  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, toggleTrimSegment, highlightHook, onUserEdit]);
+    setFramingChangedSinceExport?.(true);
+  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, toggleTrimSegment, highlightHook, onUserEdit, setFramingChangedSinceExport]);
 
   /**
    * Coordinated de-trim handler for start
@@ -380,7 +395,8 @@ export function FramingContainer({
 
     detrimStart();
     onUserEdit?.();
-  }, [trimRange, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, detrimStart, highlightHook, onUserEdit]);
+    setFramingChangedSinceExport?.(true);
+  }, [trimRange, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, detrimStart, highlightHook, onUserEdit, setFramingChangedSinceExport]);
 
   /**
    * Coordinated de-trim handler for end
@@ -426,7 +442,8 @@ export function FramingContainer({
 
     detrimEnd();
     onUserEdit?.();
-  }, [trimRange, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, detrimEnd, highlightHook, onUserEdit]);
+    setFramingChangedSinceExport?.(true);
+  }, [trimRange, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, detrimEnd, highlightHook, onUserEdit, setFramingChangedSinceExport]);
 
   /**
    * Handle keyframe click (seek to keyframe time)
@@ -442,7 +459,8 @@ export function FramingContainer({
     clipHasUserEditsRef.current = true;
     removeKeyframe(time, duration);
     onUserEdit?.();
-  }, [duration, removeKeyframe, onUserEdit]);
+    setFramingChangedSinceExport?.(true);
+  }, [duration, removeKeyframe, onUserEdit, setFramingChangedSinceExport]);
 
   /**
    * Handler for copy crop at current time
@@ -460,8 +478,39 @@ export function FramingContainer({
     if (videoUrl && copiedCrop) {
       pasteCropKeyframe(time, duration);
       onUserEdit?.();
+      setFramingChangedSinceExport?.(true);
     }
-  }, [videoUrl, currentTime, copiedCrop, duration, pasteCropKeyframe, onUserEdit]);
+  }, [videoUrl, currentTime, copiedCrop, duration, pasteCropKeyframe, onUserEdit, setFramingChangedSinceExport]);
+
+  /**
+   * Handle segment boundary add (split)
+   */
+  const handleAddSplit = useCallback((time) => {
+    clipHasUserEditsRef.current = true;
+    addSegmentBoundary(time);
+    onUserEdit?.();
+    setFramingChangedSinceExport?.(true);
+  }, [addSegmentBoundary, onUserEdit, setFramingChangedSinceExport]);
+
+  /**
+   * Handle segment boundary remove
+   */
+  const handleRemoveSplit = useCallback((time) => {
+    clipHasUserEditsRef.current = true;
+    removeSegmentBoundary(time);
+    onUserEdit?.();
+    setFramingChangedSinceExport?.(true);
+  }, [removeSegmentBoundary, onUserEdit, setFramingChangedSinceExport]);
+
+  /**
+   * Handle segment speed change
+   */
+  const handleSegmentSpeedChange = useCallback((segmentIndex, speed) => {
+    clipHasUserEditsRef.current = true;
+    setSegmentSpeed(segmentIndex, speed);
+    onUserEdit?.();
+    setFramingChangedSinceExport?.(true);
+  }, [setSegmentSpeed, onUserEdit, setFramingChangedSinceExport]);
 
   /**
    * Get filtered keyframes for export (handles trim range)
@@ -555,70 +604,8 @@ export function FramingContainer({
   }, [keyframes, segmentBoundaries, segmentSpeeds, trimRange, editorMode, selectedClipId, selectedProjectId, autoSaveFramingEdits, clips]);
 
   return {
-    // Crop state
-    keyframes,
-    aspectRatio,
-    isEndKeyframeExplicit,
-    copiedCrop,
-    currentCropState,
-
-    // Crop actions
-    initializeCrop,
-    resetCrop,
-    addOrUpdateKeyframe,
-    removeKeyframe,
-    copyCropKeyframe,
-    pasteCropKeyframe,
-    getCropDataAtTime,
-    interpolateCrop,
-    hasKeyframeAt,
-    getKeyframesForExport,
-    deleteKeyframesInRange,
-    cleanupTrimKeyframes,
-    restoreCropState,
-    updateAspectRatio,
-
-    // Segment state
-    segments,
-    segmentBoundaries,
-    segmentSpeeds,
-    trimRange,
-
-    // Segment actions
-    initializeSegments,
-    resetSegments,
-    getSegmentAtTime,
-    addSplit,
-    removeSplit,
-    setSegmentSpeed,
-    toggleTrimSegment,
-    detrimStart,
-    detrimEnd,
-    getSegmentExportData,
-    clampToVisibleRange,
-    restoreSegmentState,
-
-    // Clip state
-    clips,
-    selectedClipId,
-    selectedClip,
-    selectedClipIndex,
-    hasClips,
-    globalAspectRatio,
-    globalTransition,
-
-    // Clip actions
-    addClip,
-    deleteClip,
-    selectClip,
-    reorderClips,
-    updateClipData,
-    setGlobalAspectRatio,
-    setGlobalTransition,
-    getClipExportData,
-    calculateCenteredCrop,
-
     // Derived state
+    currentCropState,
     hasFramingEdits,
     clipsWithCurrentState,
     getFilteredKeyframesForExport,
@@ -633,6 +620,9 @@ export function FramingContainer({
     handleKeyframeDelete,
     handleCopyCrop,
     handlePasteCrop,
+    handleAddSplit,
+    handleRemoveSplit,
+    handleSegmentSpeedChange,
 
     // Persistence
     saveCurrentClipState,

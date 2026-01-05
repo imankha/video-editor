@@ -214,7 +214,6 @@ def ensure_database():
             "ALTER TABLE working_clips ADD COLUMN crop_data TEXT",
             "ALTER TABLE working_clips ADD COLUMN timing_data TEXT",
             "ALTER TABLE working_clips ADD COLUMN segments_data TEXT",
-            "ALTER TABLE working_clips ADD COLUMN transform_data TEXT",
             # working_videos overlay edit storage
             "ALTER TABLE working_videos ADD COLUMN highlights_data TEXT",
             "ALTER TABLE working_videos ADD COLUMN text_overlays TEXT",

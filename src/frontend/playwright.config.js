@@ -8,11 +8,13 @@ import { fileURLToPath } from 'url';
  * Debug with: npx playwright test --ui
  *
  * Test Isolation:
- * When webServer is enabled, the backend starts with TEST_USER_ID set to a unique
- * value per test run. This creates an isolated database namespace so test data
- * doesn't pollute the manual testing database (user "a").
+ * 1. Backend runs on port 8001 (not 8000) to avoid conflicts with manual dev server
+ * 2. TEST_USER_ID is set to a unique value per test run for database isolation
+ * 3. Frontend uses VITE_API_PORT=8001 to connect to the test backend
  *
- * Manual testing should use the normal server without TEST_USER_ID:
+ * You can keep your manual dev server running on port 8000 while running E2E tests.
+ *
+ * Manual testing uses the normal server:
  *   cd src/backend && uvicorn app.main:app --port 8000
  */
 
@@ -30,6 +32,10 @@ const dateStr = now.toISOString().replace(/[-:T]/g, '').slice(0, 14);
 const randomSuffix = Math.random().toString(36).substring(2, 8);
 const TEST_USER_ID = `test_${dateStr}_${randomSuffix}`;
 
+// E2E test ports - different from dev server ports for isolation
+const E2E_API_PORT = 8001;      // Backend port (dev uses 8000)
+const E2E_FRONTEND_PORT = 5174; // Frontend port (dev uses 5173)
+
 // Check if we should use automatic server startup
 // Set MANUAL_SERVERS=1 to skip automatic startup (for debugging)
 const useManualServers = process.env.MANUAL_SERVERS === '1';
@@ -43,7 +49,7 @@ export default defineConfig({
   reporter: 'html',
 
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: `http://localhost:${E2E_FRONTEND_PORT}`,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -62,12 +68,15 @@ export default defineConfig({
   // Starts both backend and frontend with test isolation
   webServer: useManualServers ? undefined : [
     {
-      // Backend with TEST_USER_ID for isolation
-      // The env property passes TEST_USER_ID to the subprocess
-      command: 'python -m uvicorn app.main:app --port 8000',
+      // Backend on port 8001 (not 8000) for isolation from manual dev server
+      // TEST_USER_ID creates isolated database namespace
+      // Use venv Python on Windows, system python elsewhere
+      command: process.platform === 'win32'
+        ? `.venv\\Scripts\\python.exe -m uvicorn app.main:app --port ${E2E_API_PORT}`
+        : `python -m uvicorn app.main:app --port ${E2E_API_PORT}`,
       cwd: path.resolve(__dirname, '../backend'),
-      port: 8000,
-      reuseExistingServer: !process.env.CI,
+      port: E2E_API_PORT,
+      reuseExistingServer: false,
       timeout: 120000,
       env: {
         ...process.env,
@@ -75,11 +84,16 @@ export default defineConfig({
       },
     },
     {
-      // Frontend dev server
-      command: 'npm run dev',
-      port: 5173,
-      reuseExistingServer: !process.env.CI,
+      // Frontend dev server on different port, configured to use test backend
+      // Uses port 5174 (not 5173) to avoid conflicts with manual dev server
+      command: `npm run dev -- --port ${E2E_FRONTEND_PORT}`,
+      port: E2E_FRONTEND_PORT,
+      reuseExistingServer: false, // Must start fresh with test API port
       timeout: 60000,
+      env: {
+        ...process.env,
+        VITE_API_PORT: String(E2E_API_PORT),
+      },
     },
   ],
 
@@ -89,7 +103,7 @@ export default defineConfig({
     timeout: 60000, // 60 seconds for assertions
   },
 
-  // Global setup/teardown for test data cleanup
-  globalSetup: undefined,
+  // Global setup/teardown
+  globalSetup: './e2e/global-setup.js',    // Checks port availability, displays test info
   globalTeardown: './e2e/global-teardown.js', // Cleans up old test_* directories
 });

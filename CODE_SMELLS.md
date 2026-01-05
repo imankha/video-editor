@@ -11,7 +11,7 @@ This document identifies Martin Fowler-style code smells and refactoring opportu
 
 **Location**: [App.jsx](src/frontend/src/App.jsx)
 
-**Status**: IN PROGRESS - Analysis complete, detailed refactoring plan created
+**Status**: IN PROGRESS - See [APP_REFACTOR_PLAN.md](APP_REFACTOR_PLAN.md) for detailed plan
 
 **Problem**:
 - Single file handles ALL application state for 3 different modes
@@ -20,70 +20,41 @@ This document identifies Martin Fowler-style code smells and refactoring opportu
 - Handles video state for 3 separate video players
 - Contains business logic that should be in hooks/services
 
-**Evidence**:
-```javascript
-// Lines 38-120: ~80 useState declarations
-const [videoFile, setVideoFile] = useState(null);
-const [dragCrop, setDragCrop] = useState(null);
-const [editorMode, setEditorMode] = useState('framing');
-const [overlayVideoFile, setOverlayVideoFile] = useState(null);
-const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
-// ... 70+ more
+**Authoritative Plan**: [APP_REFACTOR_PLAN.md](APP_REFACTOR_PLAN.md)
+
+**Current Progress** (from APP_REFACTOR_PLAN.md):
+
+| Phase | Task | Status |
+|-------|------|--------|
+| 1.1 | Create useVideoStore | ✅ Complete |
+| 1.2 | Create useClipStore | ✅ Complete |
+| 2.1 | Extract useKeyboardShortcuts | ✅ Complete |
+| 2.2 | Extract useExportWebSocket | ✅ Complete |
+| 3.1 | Extract AnnotateContainer | 🟡 Container created, App.jsx integration pending |
+| 3.2 | Extract OverlayContainer | 🟡 Container created, App.jsx integration pending |
+| 3.3 | Extract FramingContainer | 🟡 Container created, App.jsx integration pending |
+
+**Target Architecture**:
+```
+src/frontend/src/
+├── App.jsx                        (~200 lines - down from 4088)
+├── containers/
+│   ├── AnnotateContainer.jsx      (~800 lines) ✅ Created
+│   ├── OverlayContainer.jsx       (~700 lines) ✅ Created
+│   └── FramingContainer.jsx       (~900 lines) ✅ Created
+├── stores/
+│   ├── videoStore.js              ✅ Created
+│   └── clipStore.js               ✅ Created
+└── hooks/
+    ├── useKeyboardShortcuts.js    ✅ Created
+    └── useExportWebSocket.js      ✅ Created
 ```
 
-**Current Architecture Analysis** (completed):
-- Mode components already exist: `FramingMode.jsx`, `OverlayMode.jsx`, `AnnotateMode.jsx`
-- Contexts already exist: `CropContext.jsx`, `HighlightContext.jsx`
-- State is passed from App.jsx to mode components via 40+ props per component
-- The "prop drilling" pattern is the main issue
+**Next Step**: Integrate containers into App.jsx (replace ~500 lines per container)
 
-**Refactoring Plan** (incremental approach):
+**Effort**: High (2-3 days remaining for integration)
 
-**Phase 1: Create Mode State Hooks** ✅ COMPLETED
-- ~~Create `useFramingState.js`~~ - Framing already uses `useCrop` and `useSegments` hooks
-- ✅ Created [useOverlayState.js](src/frontend/src/modes/overlay/hooks/useOverlayState.js) (23 tests)
-  - Consolidates overlay video state, clip metadata, drag state, effect type
-  - Provides `loadOverlayVideoFromUrl()`, `loadOverlayVideoFromFile()`, `resetOverlayState()`
-- ✅ Created [useAnnotateState.js](src/frontend/src/modes/annotate/hooks/useAnnotateState.js) (23 tests)
-  - Consolidates annotate video state, game ID, loading states, playback settings
-  - Provides `loadAnnotateVideoFromUrl()`, `loadAnnotateVideoFromFile()`, `resetAnnotateState()`, `toggleFullscreen()`, `cyclePlaybackSpeed()`
-- ✅ Added comprehensive tests for [useHighlightRegions.js](src/frontend/src/modes/overlay/hooks/useHighlightRegions.test.js) (53 tests)
-- All 215 frontend tests pass
-
-**Phase 2: Mode State Integration** ✅ COMPLETED
-- ✅ App.jsx now uses `useOverlayState()` hook instead of 8 individual useState calls
-  - Removed: overlayVideoFile, overlayVideoUrl, overlayVideoMetadata, overlayClipMetadata, isLoadingWorkingVideo, dragHighlight, selectedHighlightKeyframeTime, highlightEffectType
-  - Also removed overlay persistence refs (pendingOverlaySaveRef, overlayDataLoadedRef)
-- ✅ App.jsx now uses `useAnnotateState()` hook instead of 12 individual useState calls
-  - Removed: annotateVideoFile, annotateVideoUrl, annotateVideoMetadata, annotateGameId, isCreatingAnnotatedVideo, isImportingToProjects, isUploadingGameVideo, annotatePlaybackSpeed, annotateFullscreen, showAnnotateOverlay, annotateSelectedLayer
-  - Also removed annotate refs (annotateContainerRef, annotateFileInputRef)
-- All 215 frontend tests and 159 backend tests pass
-
-**Phase 3: Cross-Mode State Management** ✅ COMPLETED
-- ✅ Created [AppStateContext.jsx](src/frontend/src/contexts/AppStateContext.jsx) following existing context pattern
-- ✅ Context provides: editorMode, selectedProject, exportingProject, globalExportProgress, downloadsCount
-- ✅ Updated ExportButton to use context (reduced 8 props)
-- ✅ Updated ModeSwitcher to use context (reduced 2 props: hasProject, hasWorkingVideo)
-- ✅ Updated ProjectManager to use context (reduced 2 props: downloadsCount, exportingProject)
-- ✅ Added 4 unit tests for AppStateContext
-- All 219 frontend tests and 159 backend tests pass
-
-**Phase 4: Video State Unification** ✅ COMPLETED
-- ✅ Created [useCurrentVideoState.js](src/frontend/src/hooks/useCurrentVideoState.js) hook
-  - Returns unified video state based on editorMode: url, metadata, file, isLoading, hasVideo
-  - Eliminates conditional video URL logic in VideoPlayer
-  - Also exports `useHasAnyVideo` helper
-- ✅ Integrated into App.jsx - VideoPlayer now uses `currentVideoState.url`
-- All 235 frontend tests and 272 backend tests pass
-
-**Testing Strategy**:
-- Each phase should leave the app fully functional
-- Run `npm run build` after each phase
-- Manual testing of each mode after changes
-
-**Effort**: High (2-3 days)
-
-**Priority**: This is the next major refactoring target
+**Priority**: This is the active refactoring target
 
 ---
 
@@ -512,20 +483,20 @@ async def export(...):
 
 | Priority | Issue | Effort | Impact | Status |
 |----------|-------|--------|--------|--------|
-| High | App.jsx God Class | 2-3 days | Very High | **In Progress** (Phase 1-3 ✅, Phase 4 pending) |
+| High | App.jsx God Class | 2-3 days | Very High | **In Progress** - See [APP_REFACTOR_PLAN.md](APP_REFACTOR_PLAN.md) |
 | Medium | OpenCV Frame Extraction | 2-3 days | Medium | Workaround applied, FFmpeg refactor pending |
 | Medium | JSON Primitive Obsession | 0.5 day | Medium | ✅ Completed (schemas.py) |
 | Medium | Feature Envy (clip name) | N/A | Low | ✅ Analyzed - Intentional |
 | Medium | Long Parameter Lists | Low | Medium | ✅ Partially addressed (AppStateContext) |
 | Low | Unused transform_data | 0.5 hours | Low | ✅ Completed |
-| Low | Magic Numbers | 2-3 hours | Low | ✅ Video processing constants done |
+| Low | Magic Numbers | 2-3 hours | Low | ✅ Completed |
 | Medium | progress/exported_at | 0.5 hours | Medium | ✅ Completed |
 
 ---
 
 ## Recommended Refactoring Order
 
-1. **Next**: App.jsx mode extraction (follow 4-phase plan above)
+1. **Active**: App.jsx container integration (see [APP_REFACTOR_PLAN.md](APP_REFACTOR_PLAN.md))
 2. **Ongoing**: Address smaller issues as files are touched
 
 ---
@@ -533,7 +504,7 @@ async def export(...):
 ## Notes for AI Assistants
 
 When working on this codebase:
-1. **App.jsx**: Treat this file carefully. It's large and interconnected. Follow the 4-phase refactoring plan incrementally. Small changes can have unexpected effects.
+1. **App.jsx**: Read [APP_REFACTOR_PLAN.md](APP_REFACTOR_PLAN.md) first. It contains the complete refactoring plan with progress tracking. The file is large and interconnected - small changes can have unexpected effects.
 2. **Export pipeline**: Test with actual video files after changes. FFmpeg behavior varies. Use the new transition strategy pattern for adding new transition types.
 3. **Database migrations**: The codebase uses auto-migration. Test with existing databases.
 4. **Mode interactions**: Changes in one mode may affect others through shared state.

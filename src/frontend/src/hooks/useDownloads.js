@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { API_BASE } from '../config';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE_URL = `${API_BASE}/api`;
 
 /**
  * useDownloads - Manages downloads panel state and API interactions
@@ -43,7 +44,7 @@ export function useDownloads(isOpen = false) {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/downloads`, {
+      const response = await fetch(`${API_BASE_URL}/downloads`, {
         signal: currentController.signal
       });
 

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
+import { API_BASE } from '../config';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE_URL = `${API_BASE}/api`;
 
 /**
  * useProjectClips - Manages working clips for a project
@@ -31,7 +32,7 @@ export function useProjectClips(projectId) {
       return [];
     }
 
-    const url = `${API_BASE}/clips/projects/${effectiveProjectId}/clips`;
+    const url = `${API_BASE_URL}/clips/projects/${effectiveProjectId}/clips`;
     console.log('[useProjectClips] Fetching from URL:', url);
 
     setLoading(true);
@@ -65,7 +66,7 @@ export function useProjectClips(projectId) {
       const formData = new FormData();
       formData.append('raw_clip_id', rawClipId.toString());
 
-      const response = await fetch(`${API_BASE}/clips/projects/${projectId}/clips`, {
+      const response = await fetch(`${API_BASE_URL}/clips/projects/${projectId}/clips`, {
         method: 'POST',
         body: formData
       });
@@ -97,7 +98,7 @@ export function useProjectClips(projectId) {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${API_BASE}/clips/projects/${projectId}/clips`, {
+      const response = await fetch(`${API_BASE_URL}/clips/projects/${projectId}/clips`, {
         method: 'POST',
         body: formData
       });
@@ -127,7 +128,7 @@ export function useProjectClips(projectId) {
     setError(null);
     try {
       const response = await fetch(
-        `${API_BASE}/clips/projects/${projectId}/clips/${clipId}`,
+        `${API_BASE_URL}/clips/projects/${projectId}/clips/${clipId}`,
         { method: 'DELETE' }
       );
       if (!response.ok) throw new Error('Failed to remove clip');
@@ -154,7 +155,7 @@ export function useProjectClips(projectId) {
     setError(null);
     try {
       const response = await fetch(
-        `${API_BASE}/clips/projects/${projectId}/clips/reorder`,
+        `${API_BASE_URL}/clips/projects/${projectId}/clips/reorder`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -215,7 +216,7 @@ export function useProjectClips(projectId) {
       console.log('[useProjectClips] Saving framing edits for clip:', clipId, updatePayload);
 
       const response = await fetch(
-        `${API_BASE}/clips/projects/${projectId}/clips/${clipId}`,
+        `${API_BASE_URL}/clips/projects/${projectId}/clips/${clipId}`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -259,7 +260,7 @@ export function useProjectClips(projectId) {
   const getClipFileUrl = useCallback((clipId, overrideProjectId = null) => {
     const effectiveProjectId = overrideProjectId ?? projectId;
     if (!effectiveProjectId) return null;
-    return `${API_BASE}/clips/projects/${effectiveProjectId}/clips/${clipId}/file`;
+    return `${API_BASE_URL}/clips/projects/${effectiveProjectId}/clips/${clipId}/file`;
   }, [projectId]);
 
   return {

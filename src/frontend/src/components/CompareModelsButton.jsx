@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { FlaskConical, Loader, FolderOpen } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE } from '../config';
 
 /**
  * Generate a unique ID for tracking export progress
@@ -137,7 +138,7 @@ export default function CompareModelsButton({ videoFile, cropKeyframes, highligh
 
       // Send to comparison endpoint (returns JSON, not file)
       const response = await axios.post(
-        'http://localhost:8000/api/export/upscale-comparison',
+        `${API_BASE}/api/export/upscale-comparison`,
         formData,
         {
           headers: {

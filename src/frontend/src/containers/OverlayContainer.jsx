@@ -1,6 +1,7 @@
-import { useEffect, useCallback, useMemo, useRef } from 'react';
-import { useOverlayState, useHighlightRegions, OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay } from '../modes/overlay';
+import { useEffect, useCallback, useMemo } from 'react';
+import { OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay } from '../modes/overlay';
 import { extractVideoMetadata } from '../utils/videoMetadata';
+import { API_BASE } from '../config';
 
 /**
  * OverlayContainer - Encapsulates all Overlay mode logic and UI
@@ -12,6 +13,10 @@ import { extractVideoMetadata } from '../utils/videoMetadata';
  * - Highlight keyframe management within regions
  * - Effect type selection (brightness_boost, original, dark_overlay)
  * - Persistence of overlay data to backend
+ *
+ * NOTE: Overlay state and highlight regions are passed as props from App.jsx
+ * to avoid duplicate state. App.jsx owns these hooks; OverlayContainer
+ * orchestrates them and provides derived state/handlers.
  *
  * @param {Object} props - Dependencies from App.jsx
  * @see APP_REFACTOR_PLAN.md Task 3.2 for refactoring context
@@ -49,56 +54,50 @@ export function OverlayContainer({
   setEditorMode,
   setSelectedLayer,
 
-  // Highlight hook instance (from App.jsx)
-  highlightHook,
+  // Overlay state from useOverlayState hook (passed from App.jsx to avoid duplicate state)
+  overlayVideoFile,
+  overlayVideoUrl,
+  overlayVideoMetadata,
+  overlayClipMetadata,
+  isLoadingWorkingVideo,
+  setOverlayVideoFile,
+  setOverlayVideoUrl,
+  setOverlayVideoMetadata,
+  setOverlayClipMetadata,
+  setIsLoadingWorkingVideo,
+  dragHighlight,
+  setDragHighlight,
+  selectedHighlightKeyframeTime,
+  setSelectedHighlightKeyframeTime,
+  highlightEffectType,
+  setHighlightEffectType,
+  pendingOverlaySaveRef,
+  overlayDataLoadedRef,
+
+  // Highlight regions from useHighlightRegions hook (passed from App.jsx to avoid duplicate state)
+  highlightRegions,
+  highlightBoundaries,
+  highlightRegionKeyframes,
+  highlightRegionsFramerate,
+  initializeHighlightRegions,
+  resetHighlightRegions,
+  addHighlightRegion,
+  deleteHighlightRegion,
+  moveHighlightRegionStart,
+  moveHighlightRegionEnd,
+  toggleHighlightRegion,
+  addHighlightRegionKeyframe,
+  removeHighlightRegionKeyframe,
+  getRegionAtTime,
+  isTimeInEnabledRegion,
+  getRegionHighlightAtTime,
+  getRegionsForExport,
+  restoreHighlightRegions,
+  initializeHighlightRegionsFromClips,
 
   // Callbacks
   onOverlayDataSaved,
 }) {
-  // Overlay mode state (consolidated via useOverlayState hook)
-  const {
-    overlayVideoFile,
-    overlayVideoUrl,
-    overlayVideoMetadata,
-    overlayClipMetadata,
-    isLoadingWorkingVideo,
-    setOverlayVideoFile,
-    setOverlayVideoUrl,
-    setOverlayVideoMetadata,
-    setOverlayClipMetadata,
-    setIsLoadingWorkingVideo,
-    dragHighlight,
-    setDragHighlight,
-    selectedHighlightKeyframeTime,
-    setSelectedHighlightKeyframeTime,
-    highlightEffectType,
-    setHighlightEffectType,
-    pendingOverlaySaveRef,
-    overlayDataLoadedRef,
-  } = useOverlayState();
-
-  // Highlight regions hook
-  const {
-    regions: highlightRegions,
-    boundaries: highlightBoundaries,
-    keyframes: highlightRegionKeyframes,
-    framerate: highlightRegionsFramerate,
-    initialize: initializeHighlightRegions,
-    reset: resetHighlightRegions,
-    addRegion: addHighlightRegion,
-    deleteRegion: deleteHighlightRegion,
-    moveRegionStart: moveHighlightRegionStart,
-    moveRegionEnd: moveHighlightRegionEnd,
-    toggleRegion: toggleHighlightRegion,
-    addOrUpdateKeyframe: addHighlightRegionKeyframe,
-    removeKeyframe: removeHighlightRegionKeyframe,
-    getRegionAtTime,
-    isTimeInEnabledRegion,
-    getRegionHighlightAtTime,
-    getRegionsForExport,
-    restoreRegions: restoreHighlightRegions,
-    initializeFromClipMetadata: initializeHighlightRegionsFromClips,
-  } = useHighlightRegions(overlayVideoMetadata?.duration || duration);
 
   // DERIVED STATE: Check for framing edits
   const hasFramingEdits = useMemo(() => {
@@ -298,7 +297,7 @@ export function OverlayContainer({
         formData.append('text_overlays', JSON.stringify(data.textOverlays || []));
         formData.append('effect_type', data.effectType || 'original');
 
-        await fetch(`http://localhost:8000/api/export/projects/${saveProjectId}/overlay-data`, {
+        await fetch(`${API_BASE}/api/export/projects/${saveProjectId}/overlay-data`, {
           method: 'PUT',
           body: formData
         });
@@ -320,7 +319,7 @@ export function OverlayContainer({
     try {
       console.log('[OverlayContainer] Loading overlay data for project:', projectId);
       const response = await fetch(
-        `http://localhost:8000/api/export/projects/${projectId}/overlay-data`
+        `${API_BASE}/api/export/projects/${projectId}/overlay-data`
       );
       const data = await response.json();
 
@@ -338,53 +337,8 @@ export function OverlayContainer({
     }
   }, [restoreHighlightRegions, setHighlightEffectType]);
 
-  // Effect: Initialize highlight regions when overlay video duration is available
-  useEffect(() => {
-    const highlightDuration = overlayVideoMetadata?.duration || duration;
-    if (highlightDuration && highlightDuration > 0) {
-      initializeHighlightRegions(highlightDuration);
-    }
-  }, [overlayVideoMetadata?.duration, duration, initializeHighlightRegions]);
-
-  // Effect: Auto-create highlight regions from clip metadata when transitioning from Framing
-  useEffect(() => {
-    if (overlayClipMetadata && overlayVideoMetadata && highlightRegions.length === 0) {
-      const count = initializeHighlightRegionsFromClips(
-        overlayClipMetadata,
-        overlayVideoMetadata.width,
-        overlayVideoMetadata.height
-      );
-
-      if (count > 0) {
-        console.log(`[OverlayContainer] Auto-created ${count} highlight regions from clip metadata`);
-      }
-
-      setOverlayClipMetadata(null);
-    }
-  }, [overlayClipMetadata, overlayVideoMetadata, highlightRegions.length, initializeHighlightRegionsFromClips]);
-
-  // Effect: Load overlay data when entering overlay mode
-  useEffect(() => {
-    const effectiveDuration = overlayVideoMetadata?.duration || framingMetadata?.duration;
-    if (editorMode === 'overlay' && selectedProjectId && !overlayDataLoadedRef.current && effectiveDuration) {
-      loadOverlayData(selectedProjectId, effectiveDuration);
-    }
-
-    if (editorMode !== 'overlay') {
-      overlayDataLoadedRef.current = false;
-    }
-  }, [editorMode, selectedProjectId, loadOverlayData, overlayVideoMetadata?.duration, framingMetadata?.duration]);
-
-  // Effect: Auto-save overlay data when highlight regions or effect type changes
-  useEffect(() => {
-    if (editorMode === 'overlay' && overlayDataLoadedRef.current && selectedProjectId) {
-      saveOverlayData({
-        highlightRegions: getRegionsForExport(),
-        textOverlays: [],
-        effectType: highlightEffectType
-      });
-    }
-  }, [highlightRegions, highlightEffectType, editorMode, selectedProjectId, saveOverlayData, getRegionsForExport]);
+  // NOTE: Effects for highlight region initialization and persistence are in App.jsx
+  // OverlayContainer only provides derived state and handlers to avoid duplicate effects
 
   return {
     // Video state

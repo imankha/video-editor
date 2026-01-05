@@ -150,16 +150,16 @@ src/frontend/src/
 ### Phase 3: Extract Mode Containers
 
 #### Task 3.1: Extract AnnotateContainer
-**Status**: 🟡 Partial (Container created, App.jsx integration pending)
+**Status**: ✅ Complete (Container created and integrated into App.jsx)
 
 **Why first**: Most isolated mode, fewest dependencies on other modes
 
-**Content to extract**:
-- Annotate-specific handlers (lines 755-1340)
-- Annotate-specific UI rendering
+**Content extracted**:
+- Annotate-specific handlers (game loading, clip creation, TSV import/export)
+- Annotate-specific state management
 - Uses: useAnnotateState, useAnnotate, useGames
 
-**Files created**:
+**Files**:
 - `containers/AnnotateContainer.jsx` - Contains:
   - `AnnotateContainer` - Hook-like function managing all annotate state/handlers
   - `AnnotateSidebar` - Sidebar component wrapper
@@ -169,39 +169,38 @@ src/frontend/src/
   - `AnnotateExportPanel` - Export UI component
 - `containers/index.js` - Barrel export
 
-**Pending**:
-- Update `App.jsx` to use the new container (complex integration due to shared videoRef and video controls)
-
-**Integration Notes**:
-- The container is designed as a hook that takes shared dependencies (videoRef, seek, togglePlay, etc.)
-- Returns all annotate-specific state and handlers
-- Helper components wrap the annotate UI for clean JSX
-- Full integration requires removing ~500 lines from App.jsx and replacing with container calls
+**Integration**:
+- App.jsx calls `AnnotateContainer({...})` at line ~380
+- Returns all annotate-specific state and handlers via destructuring
+- Helper components used in JSX for annotate mode rendering
 
 ---
 
 #### Task 3.2: Extract OverlayContainer
-**Status**: 🟡 Partial (Container created, App.jsx integration pending)
+**Status**: ✅ Complete (Container created and integrated into App.jsx)
 
-**Content to extract**:
-- Overlay-specific handlers
-- Highlight management UI
-- Player detection UI
-- Uses: useOverlayState, useHighlightRegions, usePlayerDetection
+**Content extracted**:
+- Overlay-specific derived state (hasFramingEdits, hasMultipleClips, effectiveOverlay*)
+- Highlight region state and handlers (from useHighlightRegions)
+- Player detection state (playerDetectionEnabled, playerDetections)
+- Highlight interaction handlers (handleHighlightChange, handleHighlightComplete, handlePlayerSelect)
+- Uses: useOverlayState, useHighlightRegions, usePlayerDetection (internally)
 
-**Files created**:
+**Files**:
 - `containers/OverlayContainer.jsx` - Contains:
-  - `OverlayContainer` - Hook managing overlay state/handlers
+  - `OverlayContainer` - Hook-like function managing overlay state/handlers
   - `OverlayVideoOverlays` - Highlight and player detection overlays
   - `OverlayTimeline` - Timeline component wrapper
 
-**Pending**:
-- Update `App.jsx` to use the new container
+**Integration**:
+- App.jsx calls `OverlayContainer({...})` at line ~462
+- State is passed as props (not internal hooks) to avoid duplicate state
+- Returns derived state and handlers via destructuring
 
 ---
 
 #### Task 3.3: Extract FramingContainer
-**Status**: 🟡 Partial (Container created, App.jsx integration pending)
+**Status**: ✅ Complete (Container created and integrated into App.jsx)
 
 **Why last**: Most coupled, depends on crop/segment state
 
@@ -212,14 +211,17 @@ src/frontend/src/
 - Framing UI
 - Uses: useCrop, useSegments, videoStore, clipStore
 
-**Files created**:
+**Files**:
 - `containers/FramingContainer.jsx` - Contains:
-  - `FramingContainer` - Hook managing crop/segment state/handlers
-  - `FramingVideoOverlay` - Crop overlay component
+  - `FramingContainer` - Hook-like function managing framing state/handlers
+  - `FramingVideoOverlay` - Crop overlay component wrapper
   - `FramingTimeline` - Timeline component wrapper
 
-**Pending**:
-- Update `App.jsx` to use the new container
+**Integration**:
+- App.jsx calls `FramingContainer({...})` at line ~538
+- State is passed as props (pattern matches OverlayContainer)
+- Returns derived state (currentCropState, hasFramingEdits, clipsWithCurrentState)
+- Returns handlers for crop/segment operations
 
 ---
 
@@ -229,9 +231,9 @@ src/frontend/src/
 - [x] 1.2 Create useClipStore + tests → Run tests → Commit
 - [x] 2.1 Extract useKeyboardShortcuts + tests → Run tests → Commit
 - [x] 2.2 Extract useExportWebSocket → Run tests → Commit
-- [~] 3.1 Extract AnnotateContainer → Container created, App.jsx integration pending
-- [~] 3.2 Extract OverlayContainer → Container created, App.jsx integration pending
-- [~] 3.3 Extract FramingContainer → Container created, App.jsx integration pending
+- [x] 3.1 Extract AnnotateContainer → ✅ Container created and integrated into App.jsx
+- [x] 3.2 Extract OverlayContainer → ✅ Container created and integrated into App.jsx
+- [x] 3.3 Extract FramingContainer → ✅ Container created and integrated into App.jsx
 
 ---
 
@@ -264,9 +266,9 @@ Each task is a separate commit. If issues arise:
 | 1.2 useClipStore | ✅ Complete | 8f63c96 | 30 |
 | 2.1 useKeyboardShortcuts | ✅ Complete | 2117a0f | 22 |
 | 2.2 useExportWebSocket | ✅ Complete | 62b9cbb | 0 |
-| 3.1 AnnotateContainer | 🟡 Partial | 4045a8c | 0 |
-| 3.2 OverlayContainer | 🟡 Partial | f060820 | 0 |
-| 3.3 FramingContainer | 🟡 Partial | f060820 | 0 |
+| 3.1 AnnotateContainer | ✅ Complete | - | 0 |
+| 3.2 OverlayContainer | ✅ Complete | f060820 | 0 |
+| 3.3 FramingContainer | ✅ Complete | - | 0 |
 
 ---
 

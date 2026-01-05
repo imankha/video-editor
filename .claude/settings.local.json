@@ -54,7 +54,8 @@
       "Bash(npx playwright install chromium)",
       "Bash(npx playwright test --list)",
       "Bash(npx playwright test \"Edit clip name\" --reporter=line)",
-      "Bash(npx playwright test:*)"
+      "Bash(npx playwright test:*)",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []

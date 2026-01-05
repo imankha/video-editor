@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Download, Loader, Upload, Settings, Image } from 'lucide-react';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { useDownloads } from './hooks/useDownloads';
+import { API_BASE } from './config';
 import { useVideo } from './hooks/useVideo';
 import useZoom from './hooks/useZoom';
 import useTimelineZoom from './hooks/useTimelineZoom';
@@ -27,7 +28,7 @@ import { ProjectCreationSettings } from './components/ProjectCreationSettings';
 import { ProjectHeader } from './components/ProjectHeader';
 // Mode-specific imports
 import { useCrop, useSegments, FramingMode, CropOverlay } from './modes/framing';
-import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay, useOverlayState } from './modes/overlay';
+import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay, PlayerDetectionOverlay, useOverlayState } from './modes/overlay';
 import { AnnotateMode, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from './modes/annotate';
 // Container imports for mode-specific logic encapsulation
 import {
@@ -37,6 +38,12 @@ import {
   AnnotateVideoControls,
   AnnotateTimeline,
   AnnotateExportPanel,
+  OverlayContainer,
+  OverlayVideoOverlays,
+  OverlayTimeline,
+  FramingContainer,
+  FramingVideoOverlay,
+  FramingTimeline,
 } from './containers';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
 import { AppStateProvider } from './contexts';
@@ -454,6 +461,206 @@ function App() {
     clearAnnotateState,
   } = annotate;
 
+  // OverlayContainer - encapsulates all overlay mode state and handlers
+  // Returns derived state and handlers for use in render. Effects run internally.
+  const overlay = OverlayContainer({
+    // Video controls
+    videoRef,
+    currentTime,
+    duration,
+    isPlaying,
+    seek,
+    // Framing video state (for pass-through mode)
+    framingVideoUrl: videoUrl,
+    framingMetadata: metadata,
+    framingVideoFile: videoFile,
+    // Keyframes and segments from Framing mode
+    keyframes,
+    segments,
+    segmentSpeeds,
+    segmentBoundaries,
+    trimRange,
+    // Project context
+    selectedProjectId,
+    selectedProject,
+    // Clips state
+    clips,
+    hasClips,
+    // Editor mode
+    editorMode,
+    setEditorMode,
+    setSelectedLayer,
+    // Overlay state from useOverlayState hook
+    overlayVideoFile,
+    overlayVideoUrl,
+    overlayVideoMetadata,
+    overlayClipMetadata,
+    isLoadingWorkingVideo,
+    setOverlayVideoFile,
+    setOverlayVideoUrl,
+    setOverlayVideoMetadata,
+    setOverlayClipMetadata,
+    setIsLoadingWorkingVideo,
+    dragHighlight,
+    setDragHighlight,
+    selectedHighlightKeyframeTime,
+    setSelectedHighlightKeyframeTime,
+    highlightEffectType,
+    setHighlightEffectType,
+    pendingOverlaySaveRef,
+    overlayDataLoadedRef,
+    // Highlight regions from useHighlightRegions hook
+    highlightRegions,
+    highlightBoundaries,
+    highlightRegionKeyframes,
+    highlightRegionsFramerate,
+    initializeHighlightRegions,
+    resetHighlightRegions,
+    addHighlightRegion,
+    deleteHighlightRegion,
+    moveHighlightRegionStart,
+    moveHighlightRegionEnd,
+    toggleHighlightRegion,
+    addHighlightRegionKeyframe,
+    removeHighlightRegionKeyframe,
+    getRegionAtTime,
+    isTimeInEnabledRegion,
+    getRegionHighlightAtTime,
+    getRegionsForExport,
+    restoreHighlightRegions,
+    initializeHighlightRegionsFromClips,
+    // Callbacks
+    onOverlayDataSaved: () => setFramingChangedSinceExport(false),
+  });
+
+  // FramingContainer - encapsulates framing mode logic and computed state
+  // Returns derived state and handlers for crop/segment operations
+  const framing = FramingContainer({
+    // Video element ref and state
+    videoRef,
+    videoUrl,
+    metadata,
+    currentTime,
+    duration,
+    isPlaying,
+    seek,
+
+    // Project context
+    selectedProjectId,
+    selectedProject,
+
+    // Editor mode
+    editorMode,
+    setEditorMode,
+
+    // Crop state and actions (from useCrop)
+    keyframes,
+    aspectRatio,
+    framerate,
+    isEndKeyframeExplicit,
+    copiedCrop,
+    addOrUpdateKeyframe,
+    removeKeyframe,
+    copyCropKeyframe,
+    pasteCropKeyframe,
+    getCropDataAtTime,
+    interpolateCrop,
+    hasKeyframeAt,
+    getKeyframesForExport,
+    deleteKeyframesInRange,
+    cleanupTrimKeyframes,
+    restoreCropState,
+    updateAspectRatio,
+    resetCrop,
+
+    // Segment state and actions (from useSegments)
+    segments,
+    segmentBoundaries,
+    segmentSpeeds,
+    trimRange,
+    trimHistory,
+    sourceDuration,
+    visualDuration,
+    trimmedDuration,
+    segmentVisualLayout,
+    segmentFramerate,
+    initializeSegments,
+    resetSegments,
+    restoreSegmentState,
+    addSegmentBoundary: addBoundary => addSegmentBoundary(addBoundary),
+    removeSegmentBoundary: removeSegmentBoundary,
+    setSegmentSpeed,
+    toggleTrimSegment,
+    getSegmentAtTime,
+    getSegmentExportData,
+    isTimeVisible,
+    clampToVisibleRange,
+    sourceTimeToVisualTime,
+    visualTimeToSourceTime,
+    createFrameRangeKey,
+    isSegmentTrimmed,
+    detrimStart,
+    detrimEnd,
+
+    // Clip state and actions (from useClipManager)
+    clips,
+    selectedClipId,
+    selectedClip,
+    hasClips,
+    globalAspectRatio,
+    globalTransition,
+    addClip,
+    deleteClip,
+    selectClip,
+    reorderClips,
+    updateClipData,
+    setGlobalAspectRatio,
+    setGlobalTransition,
+    getClipExportData,
+
+    // Highlight hook (for coordinated trim operations)
+    highlightHook: {
+      keyframes: highlightKeyframes,
+      framerate: highlightFramerate,
+      duration: effectiveHighlightMetadata?.duration || duration,
+      getHighlightDataAtTime: getHighlightDataAtTime,
+      deleteKeyframesInRange: deleteHighlightKeyframesInRange,
+      addOrUpdateKeyframe: addOrUpdateHighlightKeyframe,
+      cleanupTrimKeyframes: cleanupHighlightTrimKeyframes,
+    },
+
+    // Project clips hook (for backend persistence)
+    saveFramingEdits,
+
+    // Callbacks
+    onCropChange: setDragCrop,
+    onUserEdit: () => { clipHasUserEditsRef.current = true; },
+    setFramingChangedSinceExport,
+  });
+
+  // Destructure framing container values for convenience
+  // Note: Some values have different names to avoid conflicts with inline definitions
+  // that have additional logic (e.g., dragCrop handling in currentCropState)
+  const {
+    currentCropState: framingCurrentCropState,
+    hasFramingEdits: framingHasFramingEdits,
+    clipsWithCurrentState: framingClipsWithCurrentState,
+    getFilteredKeyframesForExport: framingGetFilteredKeyframesForExport,
+    handleCropChange: framingHandleCropChange,
+    handleCropComplete: framingHandleCropComplete,
+    handleTrimSegment: framingHandleTrimSegment,
+    handleDetrimStart: framingHandleDetrimStart,
+    handleDetrimEnd: framingHandleDetrimEnd,
+    handleKeyframeClick: framingHandleKeyframeClick,
+    handleKeyframeDelete: framingHandleKeyframeDelete,
+    handleCopyCrop: framingHandleCopyCrop,
+    handlePasteCrop: framingHandlePasteCrop,
+    handleAddSplit: framingHandleAddSplit,
+    handleRemoveSplit: framingHandleRemoveSplit,
+    handleSegmentSpeedChange: framingHandleSegmentSpeedChange,
+    saveCurrentClipState: framingSaveCurrentClipState,
+  } = framing;
+
   // Frame tolerance for selection - approximately 5 pixels on each side
   // Derived selection state - computed from playhead position and keyframes
   // This eliminates race conditions between auto-selection and manual selection
@@ -782,7 +989,7 @@ function App() {
       const formData = new FormData();
       formData.append('video', file);
 
-      const chaptersResponse = await fetch('http://localhost:8000/api/export/chapters', {
+      const chaptersResponse = await fetch('${API_BASE}/api/export/chapters', {
         method: 'POST',
         body: formData,
       });
@@ -1023,96 +1230,25 @@ function App() {
     };
   }, [dragCrop, keyframes, currentTime, interpolateCrop]);
 
-  // DERIVED STATE: Current highlight state
-  // Shows highlight when playhead is in an enabled region
-  const currentHighlightState = useMemo(() => {
-    // If dragging, show the drag highlight
-    if (dragHighlight) {
-      return {
-        x: dragHighlight.x,
-        y: dragHighlight.y,
-        radiusX: dragHighlight.radiusX,
-        radiusY: dragHighlight.radiusY,
-        opacity: dragHighlight.opacity,
-        color: dragHighlight.color
-      };
-    }
-
-    // Check if we're in an enabled region
-    if (!isTimeInEnabledRegion(currentTime)) {
-      return null;
-    }
-
-    // Get interpolated/exact highlight from the region at current time
-    const highlight = getRegionHighlightAtTime(currentTime);
-    if (!highlight) return null;
-
-    return {
-      x: highlight.x,
-      y: highlight.y,
-      radiusX: highlight.radiusX,
-      radiusY: highlight.radiusY,
-      opacity: highlight.opacity,
-      color: highlight.color
-    };
-  }, [dragHighlight, currentTime, isTimeInEnabledRegion, getRegionHighlightAtTime]);
-
-  // DERIVED STATE: Check if any framing edits have been made
-  // Used to determine if video needs to be exported before overlay mode
-  const hasFramingEdits = useMemo(() => {
-    // Check for crop edits: more than 2 keyframes means user added intermediate keyframes
-    // or if start/end keyframes differ (user moved the crop)
-    const hasCropEdits = keyframes.length > 2 || (
-      keyframes.length === 2 &&
-      (keyframes[0].x !== keyframes[1].x ||
-       keyframes[0].y !== keyframes[1].y ||
-       keyframes[0].width !== keyframes[1].width ||
-       keyframes[0].height !== keyframes[1].height)
-    );
-
-    // Check for trim edits
-    const hasTrimEdits = trimRange !== null;
-
-    // Check for speed edits
-    const hasSpeedEdits = Object.values(segmentSpeeds).some(speed => speed !== 1);
-
-    // Check for segment splits (more than default boundaries)
-    const hasSegmentSplits = segmentBoundaries.length > 2;
-
-    return hasCropEdits || hasTrimEdits || hasSpeedEdits || hasSegmentSplits;
-  }, [keyframes, trimRange, segmentSpeeds, segmentBoundaries]);
-
-  // Check if we have multiple clips (requires export before overlay)
-  const hasMultipleClips = clips.length > 1;
-
-  // DERIVED STATE: Effective overlay video (pass-through or rendered)
-  // Pass-through only allowed when: single clip AND no framing edits
-  const effectiveOverlayVideoUrl = useMemo(() => {
-    // If we have a rendered overlay video, always use it
-    if (overlayVideoUrl) return overlayVideoUrl;
-    // Pass-through only for single clip with no edits
-    if (!hasMultipleClips && !hasFramingEdits && videoUrl) return videoUrl;
-    // Otherwise, no overlay video available (must export first)
-    return null;
-  }, [overlayVideoUrl, hasMultipleClips, hasFramingEdits, videoUrl]);
-
-  const effectiveOverlayMetadata = useMemo(() => {
-    // If we have rendered overlay metadata, use it
-    if (overlayVideoMetadata) return overlayVideoMetadata;
-    // Pass-through only for single clip with no edits
-    if (!hasMultipleClips && !hasFramingEdits && metadata) return metadata;
-    // Otherwise, no metadata
-    return null;
-  }, [overlayVideoMetadata, hasMultipleClips, hasFramingEdits, metadata]);
-
-  const effectiveOverlayFile = useMemo(() => {
-    // If we have a rendered overlay file, use it
-    if (overlayVideoFile) return overlayVideoFile;
-    // Pass-through only for single clip with no edits
-    if (!hasMultipleClips && !hasFramingEdits && videoFile) return videoFile;
-    // Otherwise, no file
-    return null;
-  }, [overlayVideoFile, hasMultipleClips, hasFramingEdits, videoFile]);
+  // DERIVED STATE: From OverlayContainer
+  // These values are computed by OverlayContainer and aliased here for compatibility
+  // NOTE: handleProceedToOverlay is defined in App.jsx (has additional framing save logic)
+  const {
+    currentHighlightState,
+    hasFramingEdits,
+    hasMultipleClips,
+    effectiveOverlayVideoUrl,
+    effectiveOverlayMetadata,
+    effectiveOverlayFile,
+    playerDetectionEnabled,
+    playerDetections,
+    isDetectionLoading,
+    isDetectionUploading,
+    detectionError,
+    handlePlayerSelect,
+    handleHighlightChange,
+    handleHighlightComplete,
+  } = overlay;
 
   // Unified video state based on current editor mode
   // This hook provides a single interface to access video state regardless of mode
@@ -1123,60 +1259,8 @@ function App() {
     { annotateVideoUrl, annotateVideoMetadata, annotateVideoFile: null, isLoading: false }
   );
 
-  // Player detection for click-to-track feature
-  // Only enabled when in overlay mode AND playhead is in a highlight region
-  const playerDetectionEnabled = editorMode === 'overlay' && isTimeInEnabledRegion(currentTime);
-
-  const {
-    detections: playerDetections,
-    isLoading: isDetectionLoading,
-    isUploading: isDetectionUploading,
-    error: detectionError
-  } = usePlayerDetection({
-    videoFile: effectiveOverlayFile,
-    currentTime,
-    framerate: highlightRegionsFramerate || 30,
-    enabled: playerDetectionEnabled,
-    confidenceThreshold: 0.5
-  });
-
-  // Handle player selection from detection overlay
-  // When user clicks on a detected player box, create a keyframe at that position
-  // The highlight region has permanent start/end keyframes; user clicks add intermediate keyframes
-  const handlePlayerSelect = useCallback((playerData) => {
-    // playerData contains: { x, y, radiusX, radiusY, confidence }
-
-    // Get the current highlight region
-    const region = getRegionAtTime(currentTime);
-    if (!region) {
-      console.warn('[App] No highlight region at current time');
-      return;
-    }
-
-    // Use default highlight appearance
-    const defaultOpacity = currentHighlightState?.opacity ?? 0.3;
-    const defaultColor = currentHighlightState?.color ?? '#FFFF00';
-
-    // Create keyframe at clicked position
-    const highlight = {
-      x: playerData.x,
-      y: playerData.y,
-      radiusX: playerData.radiusX,
-      radiusY: playerData.radiusY,
-      opacity: defaultOpacity,
-      color: defaultColor
-    };
-
-    console.log('[App] Player selected, adding keyframe:', {
-      time: currentTime,
-      position: { x: playerData.x, y: playerData.y },
-      region: { start: region.startTime, end: region.endTime }
-    });
-
-    addHighlightRegionKeyframe(currentTime, highlight, duration);
-  }, [
-    currentTime, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime
-  ]);
+  // NOTE: Player detection (playerDetectionEnabled, playerDetections, isDetectionLoading,
+  // isDetectionUploading, detectionError) and handlePlayerSelect are now provided by OverlayContainer
 
   // Debug: Log keyframes changes (disabled - too frequent, use React DevTools instead)
 
@@ -1585,27 +1669,7 @@ function App() {
     setDragCrop(null); // Clear drag preview
   };
 
-  // Handle highlight changes during drag/resize
-  const handleHighlightChange = (newHighlight) => {
-    setDragHighlight(newHighlight);
-  };
-
-  // Handle highlight complete (create/update keyframe in enabled region)
-  const handleHighlightComplete = (highlightData) => {
-    // Always use currentTime - the keyframe will be created/moved to the exact frame
-    // the user is viewing, ensuring no mismatch between display and data
-    if (!isTimeInEnabledRegion(currentTime)) {
-      console.warn('[App] Cannot add highlight keyframe - not in enabled region');
-      setDragHighlight(null);
-      return;
-    }
-
-    const frame = Math.round(currentTime * highlightRegionsFramerate);
-    console.log(`[App] Highlight keyframe at ${currentTime.toFixed(2)}s (frame ${frame}): pos=(${highlightData.x},${highlightData.y}), r=${highlightData.radiusX}x${highlightData.radiusY}`);
-
-    addHighlightRegionKeyframe(currentTime, highlightData);
-    setDragHighlight(null);
-  };
+  // NOTE: handleHighlightChange and handleHighlightComplete are now provided by OverlayContainer
 
   // Handle keyframe click (seek to keyframe time - selection is derived automatically)
   const handleKeyframeClick = (time, index) => {
@@ -1758,7 +1822,7 @@ function App() {
         formData.append('text_overlays', JSON.stringify(data.textOverlays || []));
         formData.append('effect_type', data.effectType || 'original');
 
-        await fetch(`http://localhost:8000/api/export/projects/${saveProjectId}/overlay-data`, {
+        await fetch(`${API_BASE}/api/export/projects/${saveProjectId}/overlay-data`, {
           method: 'PUT',
           body: formData
         });
@@ -1779,7 +1843,7 @@ function App() {
     try {
       console.log('[App] Loading overlay data for project:', projectId);
       const response = await fetch(
-        `http://localhost:8000/api/export/projects/${projectId}/overlay-data`
+        `${API_BASE}/api/export/projects/${projectId}/overlay-data`
       );
       const data = await response.json();
 
@@ -1884,7 +1948,7 @@ function App() {
               timing_data: JSON.stringify({ trimRange })
             };
             // Use sendBeacon for reliable async save on page unload
-            const url = `http://localhost:8000/api/clips/projects/${selectedProjectId}/clips/${currentClip.workingClipId}`;
+            const url = `${API_BASE}/api/clips/projects/${selectedProjectId}/clips/${currentClip.workingClipId}`;
             navigator.sendBeacon(url, JSON.stringify(payload));
           }
         }
@@ -1899,7 +1963,7 @@ function App() {
           formData.append('text_overlays', JSON.stringify([]));
           formData.append('effect_type', highlightEffectType || 'original');
           // Use fetch with keepalive for FormData
-          fetch(`http://localhost:8000/api/export/projects/${selectedProjectId}/overlay-data`, {
+          fetch(`${API_BASE}/api/export/projects/${selectedProjectId}/overlay-data`, {
             method: 'PUT',
             body: formData,
             keepalive: true
@@ -1993,7 +2057,7 @@ function App() {
         formData.append('highlights_data', JSON.stringify(getRegionsForExport() || []));
         formData.append('text_overlays', JSON.stringify([]));
         formData.append('effect_type', highlightEffectType || 'original');
-        fetch(`http://localhost:8000/api/export/projects/${selectedProjectId}/overlay-data`, {
+        fetch(`${API_BASE}/api/export/projects/${selectedProjectId}/overlay-data`, {
           method: 'PUT',
           body: formData
         }).catch(e => console.error('[App] Failed to flush overlay save:', e));
@@ -2307,7 +2371,6 @@ function App() {
   }, [isHighlightEnabled, getHighlightKeyframesForExport, getSegmentExportData, duration, editorMode]);
 
   // If no project selected and not in annotate mode, show ProjectManager
-  console.log('[App] Render check - selectedProject:', selectedProject, 'editorMode:', editorMode, 'showProjectManager:', !selectedProject && editorMode !== 'annotate');
   if (!selectedProject && editorMode !== 'annotate') {
     return (
       <AppStateProvider value={appStateValue}>
@@ -2336,7 +2399,7 @@ function App() {
             const project = await selectProject(id);
 
             // Update last_opened_at timestamp (non-blocking)
-            fetch(`http://localhost:8000/api/projects/${id}/state?update_last_opened=true`, {
+            fetch(`${API_BASE}/api/projects/${id}/state?update_last_opened=true`, {
               method: 'PATCH'
             }).catch(e => console.error('[App] Failed to update last_opened_at:', e));
 
@@ -2435,7 +2498,7 @@ function App() {
               // Load in background (non-blocking)
               (async () => {
                 try {
-                  const workingVideoUrl = `http://localhost:8000/api/projects/${id}/working-video`;
+                  const workingVideoUrl = `${API_BASE}/api/projects/${id}/working-video`;
                   const response = await fetch(workingVideoUrl);
                   if (response.ok) {
                     const blob = await response.blob();
@@ -2480,7 +2543,7 @@ function App() {
             const project = await selectProject(id);
 
             // Update last_opened_at timestamp (non-blocking)
-            fetch(`http://localhost:8000/api/projects/${id}/state?update_last_opened=true`, {
+            fetch(`${API_BASE}/api/projects/${id}/state?update_last_opened=true`, {
               method: 'PATCH'
             }).catch(e => console.error('[App] Failed to update last_opened_at:', e));
 
@@ -2558,7 +2621,7 @@ function App() {
               setIsLoadingWorkingVideo(true);
               (async () => {
                 try {
-                  const response = await fetch(`http://localhost:8000/api/projects/${id}/working-video`);
+                  const response = await fetch(`${API_BASE}/api/projects/${id}/working-video`);
                   if (response.ok) {
                     const workingVideoBlob = await response.blob();
                     const workingVideoObjectUrl = URL.createObjectURL(workingVideoBlob);

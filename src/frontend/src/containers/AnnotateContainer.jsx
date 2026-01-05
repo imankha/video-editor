@@ -4,6 +4,7 @@ import { useAnnotateState, useAnnotate, AnnotateMode, ClipsSidePanel, NotesOverl
 import { FileUpload } from '../components/FileUpload';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore } from '../stores';
+import { API_BASE } from '../config';
 
 /**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
@@ -235,7 +236,7 @@ export function AnnotateContainer({
     let eventSource = null;
 
     try {
-      eventSource = new EventSource(`http://localhost:8000/api/annotate/progress/${exportId}`);
+      eventSource = new EventSource(`${API_BASE}/api/annotate/progress/${exportId}`);
       eventSource.onmessage = (event) => {
         try {
           const progress = JSON.parse(event.data);
@@ -283,7 +284,7 @@ export function AnnotateContainer({
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/annotate/export', {
+      const response = await fetch('${API_BASE}/api/annotate/export', {
         method: 'POST',
         body: formData,
       });
@@ -326,7 +327,7 @@ export function AnnotateContainer({
       if (result.downloads?.clips_compilation?.url) {
         console.log('[AnnotateContainer] Downloading clips compilation...');
         const a = document.createElement('a');
-        a.href = `http://localhost:8000${result.downloads.clips_compilation.url}`;
+        a.href = `${API_BASE}${result.downloads.clips_compilation.url}`;
         a.download = result.downloads.clips_compilation.filename;
         document.body.appendChild(a);
         a.click();

@@ -31,11 +31,7 @@ export const useEditorStore = create((set, get) => ({
   /**
    * Set the editor mode directly (use when no confirmation needed)
    */
-  setEditorMode: (mode) => {
-    console.log('[EditorStore] setEditorMode called:', mode, 'from:', get().editorMode);
-    console.trace('[EditorStore] setEditorMode stack trace');
-    set({ editorMode: mode });
-  },
+  setEditorMode: (mode) => set({ editorMode: mode }),
 
   /**
    * Open the mode switch confirmation dialog
