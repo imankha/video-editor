@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { API_BASE } from '../config';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE_URL = `${API_BASE}/api`;
 
 /**
  * useDownloads - Manages downloads panel state and API interactions
@@ -43,7 +44,7 @@ export function useDownloads(isOpen = false) {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/downloads`, {
+      const response = await fetch(`${API_BASE_URL}/downloads`, {
         signal: currentController.signal
       });
 
@@ -77,7 +78,7 @@ export function useDownloads(isOpen = false) {
    */
   const fetchCount = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/downloads/count`);
+      const response = await fetch(`${API_BASE_URL}/downloads/count`);
       if (!response.ok) throw new Error('Failed to fetch count');
       const data = await response.json();
       setCount(data.count || 0);
@@ -94,7 +95,7 @@ export function useDownloads(isOpen = false) {
   const deleteDownload = useCallback(async (downloadId, removeFile = false) => {
     try {
       const response = await fetch(
-        `${API_BASE}/downloads/${downloadId}?remove_file=${removeFile}`,
+        `${API_BASE_URL}/downloads/${downloadId}?remove_file=${removeFile}`,
         { method: 'DELETE' }
       );
 
@@ -117,7 +118,7 @@ export function useDownloads(isOpen = false) {
    * Returns the URL that can be used for download
    */
   const getDownloadUrl = useCallback((downloadId) => {
-    return `${API_BASE}/downloads/${downloadId}/file`;
+    return `${API_BASE_URL}/downloads/${downloadId}/file`;
   }, []);
 
   /**

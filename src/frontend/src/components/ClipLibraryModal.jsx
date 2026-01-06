@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Star, Check } from 'lucide-react';
+import { API_BASE } from '../config';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE_URL = `${API_BASE}/api`;
 
 /**
  * ClipLibraryModal - Select clips from the raw clips library
@@ -23,7 +24,7 @@ export function ClipLibraryModal({
     const fetchClips = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${API_BASE}/clips/raw`);
+        const response = await fetch(`${API_BASE_URL}/clips/raw`);
         if (response.ok) {
           const data = await response.json();
           setClips(data);

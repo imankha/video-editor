@@ -6,18 +6,34 @@ Tables are created automatically on first access or when missing.
 
 The database and directories are auto-created on demand, so deleting
 the user_data/a folder will simply reset the app to a clean state.
+
+Test Isolation:
+Set the TEST_USER_ID environment variable to use a different user namespace.
+This prevents test data from polluting the manual testing database.
+Example: TEST_USER_ID=test_abc123 uvicorn app.main:app --port 8000
 """
 
+import os
 import sqlite3
 import logging
 from pathlib import Path
 from contextlib import contextmanager
 
+from .constants import DEFAULT_USER_ID
+
 logger = logging.getLogger(__name__)
 
 # Base path for user data
 USER_DATA_BASE = Path(__file__).parent.parent.parent.parent / "user_data"
-USER_ID = "a"  # Single user for now
+
+# Use TEST_USER_ID env var if set, otherwise use default
+# This allows E2E tests to use isolated user namespaces
+TEST_USER_ID = os.environ.get("TEST_USER_ID")
+USER_ID = TEST_USER_ID if TEST_USER_ID else DEFAULT_USER_ID
+
+if TEST_USER_ID:
+    logger.info(f"Using test user namespace: {TEST_USER_ID}")
+
 USER_DATA_PATH = USER_DATA_BASE / USER_ID
 DATABASE_PATH = USER_DATA_PATH / "database.sqlite"
 
@@ -117,7 +133,6 @@ def ensure_database():
                 crop_data TEXT,
                 timing_data TEXT,
                 segments_data TEXT,
-                transform_data TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id),
                 FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id)
@@ -199,7 +214,6 @@ def ensure_database():
             "ALTER TABLE working_clips ADD COLUMN crop_data TEXT",
             "ALTER TABLE working_clips ADD COLUMN timing_data TEXT",
             "ALTER TABLE working_clips ADD COLUMN segments_data TEXT",
-            "ALTER TABLE working_clips ADD COLUMN transform_data TEXT",
             # working_videos overlay edit storage
             "ALTER TABLE working_videos ADD COLUMN highlights_data TEXT",
             "ALTER TABLE working_videos ADD COLUMN text_overlays TEXT",

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
+import { API_BASE } from '../config';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE_URL = `${API_BASE}/api`;
 
 /**
  * useProjects - Manages project state and API interactions
@@ -26,7 +27,7 @@ export function useProjects() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/projects`);
+      const response = await fetch(`${API_BASE_URL}/projects`);
       if (!response.ok) throw new Error('Failed to fetch projects');
       const data = await response.json();
       setProjects(data);
@@ -47,7 +48,7 @@ export function useProjects() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/projects/${projectId}`);
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}`);
       if (!response.ok) throw new Error('Failed to fetch project');
       const data = await response.json();
       return data;
@@ -83,7 +84,7 @@ export function useProjects() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/projects`, {
+      const response = await fetch(`${API_BASE_URL}/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, aspect_ratio: aspectRatio })
@@ -111,7 +112,7 @@ export function useProjects() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/projects/${projectId}`, {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error('Failed to delete project');
@@ -161,7 +162,7 @@ export function useProjects() {
    */
   const discardUncommittedChanges = useCallback(async (projectId) => {
     try {
-      const response = await fetch(`${API_BASE}/projects/${projectId}/discard-uncommitted`, {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/discard-uncommitted`, {
         method: 'POST'
       });
       if (!response.ok) throw new Error('Failed to discard uncommitted changes');

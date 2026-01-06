@@ -11,6 +11,7 @@ export { default as OverlayTimelineDefault } from './OverlayTimeline';
 export { default as useHighlight } from './hooks/useHighlight';
 export { default as useHighlightRegions } from './hooks/useHighlightRegions';
 export { default as usePlayerDetection } from './hooks/usePlayerDetection';
+export { default as useOverlayState } from './hooks/useOverlayState';
 
 // Layers
 export { default as HighlightLayer } from './layers/HighlightLayer';

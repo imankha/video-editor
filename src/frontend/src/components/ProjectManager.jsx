@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image } from 'lucide-react';
+import { useAppState } from '../contexts';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -24,12 +25,18 @@ export function ProjectManager({
   onLoadGame,
   onDeleteGame,
   onFetchGames,
-  // Downloads props
-  downloadsCount = 0,
+  // Downloads props - now optional, from context
+  downloadsCount: downloadsCountProp,
   onOpenDownloads,
-  // Export state
-  exportingProject = null, // { projectId, stage: 'framing' | 'overlay' } | null
+  // Export state - now optional, from context
+  exportingProject: exportingProjectProp,
 }) {
+  // Get downloads and export state from context
+  const { downloadsCount: contextDownloadsCount, exportingProject: contextExportingProject } = useAppState();
+
+  // Use props if provided, otherwise fall back to context
+  const downloadsCount = downloadsCountProp ?? contextDownloadsCount ?? 0;
+  const exportingProject = exportingProjectProp ?? contextExportingProject;
   const [activeTab, setActiveTab] = useState('projects'); // 'games' | 'projects'
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
 

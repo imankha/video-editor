@@ -54,13 +54,12 @@ CREATE TABLE working_clips (
     project_id INTEGER,
     raw_clip_id INTEGER,          -- Links to raw_clips table
     uploaded_filename TEXT,        -- For directly uploaded clips
-    progress INTEGER DEFAULT 0,    -- 0=not exported, 1+=exported
+    exported_at TEXT,              -- NULL=not exported, timestamp=exported
     sort_order INTEGER,
     version INTEGER DEFAULT 1,     -- Increment on each post-export modification
     crop_data TEXT,                -- JSON: crop keyframes
     timing_data TEXT,              -- JSON: trim range
-    segments_data TEXT,            -- JSON: segment boundaries/speeds
-    transform_data TEXT            -- JSON: other transforms
+    segments_data TEXT             -- JSON: segment boundaries/speeds
 );
 
 -- working_videos: Exported working video for overlay editing
