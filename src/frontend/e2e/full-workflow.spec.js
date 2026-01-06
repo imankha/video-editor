@@ -161,7 +161,46 @@ test.describe('Full Workflow Tests', () => {
     expect(isDisabled).toBeNull(); // null means not disabled
   });
 
-  test('5. Create project manually', async ({ page, request }) => {
+  test('5. Create Annotated Video API call succeeds', async ({ page }) => {
+    await enterAnnotateMode(page);
+
+    // Wait for video upload to complete - button changes from "Uploading video..." to "Create Annotated Video"
+    // This can take a while for large videos
+    const exportButton = page.locator('button:has-text("Create Annotated Video")');
+    await expect(exportButton).toBeVisible({ timeout: 120000 }); // 2 minute timeout for upload
+    await expect(exportButton).toBeEnabled({ timeout: 10000 });
+
+    // Intercept the export API request to verify:
+    // 1. The URL is correctly formed (not literal '${API_BASE}')
+    // 2. The request succeeds
+    let capturedUrl = null;
+
+    await page.route('**/api/annotate/export', async (route) => {
+      capturedUrl = route.request().url();
+      console.log(`[Test] Intercepted request to: ${capturedUrl}`);
+      // Continue to the actual server
+      await route.continue();
+    });
+
+    // Also intercept any malformed URL that would indicate the template literal bug
+    await page.route('**/${API_BASE}/**', async (route) => {
+      console.log(`[Test] ERROR: Caught malformed URL with literal ${API_BASE}: ${route.request().url()}`);
+      // Fail the route - this should never happen
+      await route.abort('failed');
+    });
+
+    // Click the export button
+    await exportButton.click();
+
+    // Wait for the export progress to start (UI feedback)
+    await page.waitForTimeout(3000);
+
+    // Verify the correct URL was called
+    expect(capturedUrl).not.toBeNull();
+    expect(capturedUrl).toContain('/api/annotate/export');
+  });
+
+  test('6. Create project manually', async ({ page, request }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     await page.locator('button:has-text("Projects")').click();
