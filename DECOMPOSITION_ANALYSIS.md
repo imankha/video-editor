@@ -1,5 +1,55 @@
 # App.jsx Decomposition Analysis
 
+## Quick Context for New AI Sessions
+
+### What is this app?
+A video editor with 4 modes:
+- **Project Manager**: Select/create projects and games
+- **Framing Mode**: Crop, trim, speed adjust video clips
+- **Overlay Mode**: Add highlight effects to players
+- **Annotate Mode**: Mark clips in game footage for extraction
+
+### Current Architecture (already completed)
+Previous refactoring created:
+- **Zustand Stores**: `editorStore.js`, `exportStore.js`, `videoStore.js`, `clipStore.js`
+- **Containers**: Hook-like functions that manage mode-specific state (NOT React components)
+  - `AnnotateContainer.jsx` (~900 lines) - annotate state/handlers
+  - `OverlayContainer.jsx` (~600 lines) - overlay state/handlers
+  - `FramingContainer.jsx` (~800 lines) - framing state/handlers
+- **Extracted Hooks**: `useKeyboardShortcuts.js`, `useExportWebSocket.js`
+
+### The Container Pattern
+Containers are **functions that return objects**, not components:
+```jsx
+// Usage in App.jsx:
+const annotate = AnnotateContainer({ videoRef, currentTime, ... });
+const { annotateVideoUrl, handleCreateAnnotatedVideo, ... } = annotate;
+```
+
+### Key Files
+```
+src/frontend/src/
+├── App.jsx              (3401 lines - THIS IS WHAT WE'RE SPLITTING)
+├── containers/
+│   ├── AnnotateContainer.jsx
+│   ├── OverlayContainer.jsx
+│   └── FramingContainer.jsx
+├── stores/
+│   ├── editorStore.js   (editorMode, selectedLayer)
+│   └── exportStore.js   (exportProgress)
+├── hooks/
+│   ├── useVideo.js      (video playback)
+│   ├── useClipManager.js (multi-clip management)
+│   ├── useProjects.js   (project CRUD)
+│   └── useGames.js      (game management)
+└── modes/
+    ├── framing/         (useCrop, useSegments, FramingMode component)
+    ├── overlay/         (useHighlight, OverlayMode component)
+    └── annotate/        (AnnotateMode, AnnotateControls components)
+```
+
+---
+
 ## Testing Requirement
 
 > **IMPORTANT**: After completing each task, run all tests and fix any failures before proceeding:
@@ -43,15 +93,17 @@ The containers (AnnotateContainer, OverlayContainer, FramingContainer) extract *
 
 Each task has a detailed file in the `refactor-tasks/` folder.
 
-| Task | Description | Impact | Detailed Instructions |
-|------|-------------|--------|----------------------|
-| 01 | Extract FramingModeView | -500 lines | [TASK-01-extract-framing-mode-view.md](refactor-tasks/TASK-01-extract-framing-mode-view.md) |
-| 02 | Extract AnnotateModeView | -400 lines | [TASK-02-extract-annotate-mode-view.md](refactor-tasks/TASK-02-extract-annotate-mode-view.md) |
-| 03 | Extract OverlayModeView | -400 lines | [TASK-03-extract-overlay-mode-view.md](refactor-tasks/TASK-03-extract-overlay-mode-view.md) |
-| 04 | Move handleTrimSegment to FramingContainer | -200 lines | [TASK-04-move-trim-handler-to-container.md](refactor-tasks/TASK-04-move-trim-handler-to-container.md) |
-| 05 | Move clipsWithCurrentState to FramingContainer | -90 lines | [TASK-05-move-clips-with-state-to-container.md](refactor-tasks/TASK-05-move-clips-with-state-to-container.md) |
-| 06 | Move Copy/Paste Handlers | -50 lines | [TASK-06-move-copy-paste-handlers.md](refactor-tasks/TASK-06-move-copy-paste-handlers.md) |
-| 07 | Final Cleanup | verify ~150 lines | [TASK-07-final-cleanup.md](refactor-tasks/TASK-07-final-cleanup.md) |
+| Task | Description | Impact | Status | Detailed Instructions |
+|------|-------------|--------|--------|----------------------|
+| 01 | Extract FramingModeView | -500 lines | ⬜ Not Started | [TASK-01](refactor-tasks/TASK-01-extract-framing-mode-view.md) |
+| 02 | Extract AnnotateModeView | -400 lines | ⬜ Not Started | [TASK-02](refactor-tasks/TASK-02-extract-annotate-mode-view.md) |
+| 03 | Extract OverlayModeView | -400 lines | ⬜ Not Started | [TASK-03](refactor-tasks/TASK-03-extract-overlay-mode-view.md) |
+| 04 | Move handleTrimSegment | -200 lines | ⬜ Not Started | [TASK-04](refactor-tasks/TASK-04-move-trim-handler-to-container.md) |
+| 05 | Move clipsWithCurrentState | -90 lines | ⬜ Not Started | [TASK-05](refactor-tasks/TASK-05-move-clips-with-state-to-container.md) |
+| 06 | Move Copy/Paste Handlers | -50 lines | ⬜ Not Started | [TASK-06](refactor-tasks/TASK-06-move-copy-paste-handlers.md) |
+| 07 | Final Cleanup | verify ~150 lines | ⬜ Not Started | [TASK-07](refactor-tasks/TASK-07-final-cleanup.md) |
+
+> **Update this table** as tasks are completed: ⬜ Not Started → 🔄 In Progress → ✅ Complete
 
 ---
 
@@ -205,31 +257,57 @@ Each task is a separate commit. If issues arise:
 
 ---
 
+## How to Start (New AI Session)
+
+### Step 1: Verify clean state
+```bash
+cd src/frontend && npm test          # Should pass
+cd src/frontend && npx playwright test  # Should pass (18 tests)
+```
+
+### Step 2: Check progress
+Look at the Task List table above - find the first ⬜ Not Started task.
+
+### Step 3: Read the task file
+Open the task file from `refactor-tasks/TASK-XX-*.md` and follow the step-by-step instructions.
+
+### Step 4: After completing a task
+1. Run all tests
+2. Fix any failures
+3. Commit the changes
+4. Update the Task List table (⬜ → ✅)
+5. Proceed to next task
+
+---
+
 ## Handover Notes
 
 If this refactoring is continued by another session:
 
 1. **Read this file first** - It contains the complete plan
-2. **Check which tasks are done** - Look for commits
+2. **Check the Task List table** - Find first incomplete task
 3. **Run all tests before starting** - Ensure clean state
 4. **Follow the task order** - Tasks are ordered by dependency
 5. **Commit after each task** - Enables easy rollback
-6. **Update progress** - Mark tasks complete
+6. **Update the Task List table** - Mark tasks complete
 
 ### Key Files to Understand
-- `src/frontend/src/App.jsx` - The file being split
-- `src/frontend/src/containers/` - Mode containers
+- `src/frontend/src/App.jsx` - The file being split (3401 lines)
+- `src/frontend/src/containers/` - Mode containers (hook-like functions)
 - `src/frontend/src/modes/` - Will contain mode views (created by tasks)
 - `refactor-tasks/` - Detailed instructions for each task
 
 ### Test Commands
 ```bash
-# Frontend unit tests
+# Frontend unit tests (264+ tests)
 cd src/frontend && npm test
 
-# E2E tests
+# E2E tests (18 tests)
 cd src/frontend && npx playwright test
 
 # Run specific E2E test
 cd src/frontend && npx playwright test "test name"
+
+# Check App.jsx line count
+wc -l src/frontend/src/App.jsx
 ```
