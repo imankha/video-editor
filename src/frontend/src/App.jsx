@@ -989,7 +989,7 @@ function App() {
       const formData = new FormData();
       formData.append('video', file);
 
-      const chaptersResponse = await fetch('${API_BASE}/api/export/chapters', {
+      const chaptersResponse = await fetch(`${API_BASE}/api/export/chapters`, {
         method: 'POST',
         body: formData,
       });

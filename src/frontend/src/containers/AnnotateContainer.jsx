@@ -284,7 +284,7 @@ export function AnnotateContainer({
     }
 
     try {
-      const response = await fetch('${API_BASE}/api/annotate/export', {
+      const response = await fetch(`${API_BASE}/api/annotate/export`, {
         method: 'POST',
         body: formData,
       });

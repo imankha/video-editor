@@ -321,7 +321,7 @@ const ExportButton = forwardRef(function ExportButton({
 
         if (isMultiClip) {
           // Multi-clip export: Use multi-clip endpoint
-          endpoint = '${API_BASE}/api/export/multi-clip';
+          endpoint = `${API_BASE}/api/export/multi-clip`;
 
           // Append all clip files - handle both local files and project clips (URL-based)
           for (let index = 0; index < clips.length; index++) {
@@ -372,7 +372,7 @@ const ExportButton = forwardRef(function ExportButton({
 
         } else {
           // Single clip export: Use existing AI upscale endpoint
-          endpoint = '${API_BASE}/api/export/upscale';
+          endpoint = `${API_BASE}/api/export/upscale`;
 
           formData.append('keyframes_json', JSON.stringify(cropKeyframes));
           // Audio setting only applies to framing export (overlay preserves whatever audio is in input)
@@ -394,7 +394,7 @@ const ExportButton = forwardRef(function ExportButton({
         // They are handled separately in Overlay mode after the video is cropped/upscaled.
       } else {
         // Overlay mode: Use simple overlay endpoint (no crop, no AI, no trim)
-        endpoint = '${API_BASE}/api/export/overlay';
+        endpoint = `${API_BASE}/api/export/overlay`;
 
         // Add highlight regions (new multi-region format)
         if (highlightRegions && highlightRegions.length > 0) {
@@ -459,7 +459,7 @@ const ExportButton = forwardRef(function ExportButton({
             saveFormData.append('clips_data', JSON.stringify(clips || []));
 
             const saveResponse = await axios.post(
-              '${API_BASE}/api/export/framing',
+              `${API_BASE}/api/export/framing`,
               saveFormData,
               { headers: { 'Content-Type': 'multipart/form-data' } }
             );
@@ -530,7 +530,7 @@ const ExportButton = forwardRef(function ExportButton({
             }));
 
             const saveResponse = await axios.post(
-              '${API_BASE}/api/export/final',
+              `${API_BASE}/api/export/final`,
               saveFormData,
               { headers: { 'Content-Type': 'multipart/form-data' } }
             );
