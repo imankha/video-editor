@@ -7,8 +7,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-
-const API_BASE = 'http://localhost:8000';
+import { API_BASE } from '../config';
 
 export function useGames() {
   const [games, setGames] = useState([]);

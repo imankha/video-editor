@@ -27,34 +27,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/games", tags=["games"])
 
-# Rating adjectives for clip name generation (must match frontend soccerTags.js)
-RATING_ADJECTIVES = {
-    5: 'Brilliant',
-    4: 'Good',
-    3: 'Interesting',
-    2: 'Unfortunate',
-    1: 'Bad'
-}
-
-# Tag name to short name mapping (must match frontend soccerTags.js)
-TAG_SHORT_NAMES = {
-    'Goals': 'Goal',
-    'Assists': 'Assist',
-    'Dribbling': 'Dribble',
-    'Movement Off Ball': 'Movement',
-    'Passing Range': 'Pass',
-    'Chance Creation': 'Chance Creation',
-    'Possession Play': 'Possession',
-    'Transitions': 'Transition',
-    'Tackles': 'Tackle',
-    'Interceptions': 'Interception',
-    '1v1 Defense': '1v1 Defense',
-    'Build-Up Passing': 'Build-Up',
-    'Shot Stopping': 'Save',
-    'Command of Area': 'Command',
-    'Distribution': 'Distribution',
-    '1v1 Saves': '1v1 Save',
-}
+# Import rating constants from shared module (single source of truth)
+from app.constants import (
+    RATING_ADJECTIVES,
+    TAG_SHORT_NAMES,
+    get_rating_adjective,
+    get_tag_short_name,
+)
 
 
 def generate_clip_name(rating: int, tags: list) -> str:
@@ -65,10 +44,10 @@ def generate_clip_name(rating: int, tags: list) -> str:
     if not tags:
         return ''
 
-    adjective = RATING_ADJECTIVES.get(rating, 'Interesting')
+    adjective = get_rating_adjective(rating)
 
     # Convert tag names to short names
-    short_names = [TAG_SHORT_NAMES.get(tag, tag) for tag in tags]
+    short_names = [get_tag_short_name(tag) for tag in tags]
 
     # Join with "and" for multiple tags
     if len(short_names) == 1:

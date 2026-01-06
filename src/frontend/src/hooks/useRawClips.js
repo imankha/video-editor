@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
+import { API_BASE } from '../config';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE_URL = `${API_BASE}/api`;
 
 /**
  * useRawClips - Manages the raw clips library
@@ -20,7 +21,7 @@ export function useRawClips() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/clips/raw`);
+      const response = await fetch(`${API_BASE_URL}/clips/raw`);
       if (!response.ok) throw new Error('Failed to fetch raw clips');
       const data = await response.json();
       setRawClips(data);
@@ -38,7 +39,7 @@ export function useRawClips() {
    * Get URL for a raw clip file
    */
   const getRawClipFileUrl = useCallback((clipId) => {
-    return `${API_BASE}/clips/raw/${clipId}/file`;
+    return `${API_BASE_URL}/clips/raw/${clipId}/file`;
   }, []);
 
   // Fetch on mount

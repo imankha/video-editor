@@ -1,24 +1,46 @@
-import { useState, useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { extractVideoMetadata, createVideoURL, revokeVideoURL, getFramerate } from '../utils/videoUtils';
 import { validateVideoFile } from '../utils/fileValidation';
+import { useVideoStore } from '../stores';
 
 /**
  * Custom hook for managing video state and playback
+ *
+ * Uses useVideoStore internally for shared state management.
+ * This enables other components to access video state without prop drilling.
+ *
  * @param {Function} getSegmentAtTime - Optional function to get segment info at a given time
  * @param {Function} clampToVisibleRange - Optional function to clamp time to visible (non-trimmed) range
  * @returns {Object} Video state and control functions
+ *
+ * @see stores/videoStore.js for the underlying state store
+ * @see APP_REFACTOR_PLAN.md for refactoring context
  */
 export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const videoRef = useRef(null);
-  const [videoFile, setVideoFile] = useState(null);
-  const [videoUrl, setVideoUrl] = useState(null);
-  const [metadata, setMetadata] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [isSeeking, setIsSeeking] = useState(false);
-  const [error, setError] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+
+  // Get state and setters from the store
+  const {
+    videoFile,
+    videoUrl,
+    metadata,
+    isPlaying,
+    currentTime,
+    duration,
+    isSeeking,
+    error,
+    isLoading,
+    setVideoFile,
+    setVideoUrl,
+    setMetadata,
+    setIsPlaying,
+    setCurrentTime,
+    setDuration,
+    setIsSeeking,
+    setError,
+    setIsLoading,
+    setVideoLoaded,
+  } = useVideoStore();
 
   /**
    * Load a video file
@@ -40,7 +62,6 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       // Clean up previous video
       if (videoUrl) {
         revokeVideoURL(videoUrl);
-        setIsPlaying(false);
       }
 
       // Extract metadata
@@ -49,12 +70,13 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       // Create blob URL
       const url = createVideoURL(file);
 
-      setVideoFile(file);
-      setVideoUrl(url);
-      setMetadata(videoMetadata);
-      setDuration(videoMetadata.duration);
-      setCurrentTime(0);
-      setIsLoading(false);
+      // Batch update all video state
+      setVideoLoaded({
+        file,
+        url,
+        metadata: videoMetadata,
+        duration: videoMetadata.duration,
+      });
     } catch (err) {
       setError(err.message || 'Failed to load video');
       setIsLoading(false);
@@ -75,7 +97,6 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       // Clean up previous video
       if (videoUrl) {
         revokeVideoURL(videoUrl);
-        setIsPlaying(false);
       }
 
       // Fetch the video from URL
@@ -93,12 +114,13 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       // Create blob URL
       const blobUrl = createVideoURL(file);
 
-      setVideoFile(file);
-      setVideoUrl(blobUrl);
-      setMetadata(videoMetadata);
-      setDuration(videoMetadata.duration);
-      setCurrentTime(0);
-      setIsLoading(false);
+      // Batch update all video state
+      setVideoLoaded({
+        file,
+        url: blobUrl,
+        metadata: videoMetadata,
+        duration: videoMetadata.duration,
+      });
 
       return file; // Return the file so caller can use it
     } catch (err) {

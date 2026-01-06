@@ -5,7 +5,7 @@ This module handles WebSocket connections and progress tracking for video export
 """
 
 from fastapi import WebSocket, WebSocketDisconnect
-from typing import Dict
+from typing import Dict, List
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,35 +20,64 @@ class ConnectionManager:
     Manages WebSocket connections for export progress updates.
 
     Stores active connections by export_id and provides methods for:
-    - Connecting new WebSocket clients
+    - Connecting new WebSocket clients (supports multiple clients per export)
     - Disconnecting clients
-    - Sending progress updates
+    - Broadcasting progress updates to all clients
     """
 
     def __init__(self):
-        # Store active connections by export_id
-        self.active_connections: Dict[str, WebSocket] = {}
+        # Store active connections by export_id (multiple connections per export supported)
+        self.active_connections: Dict[str, List[WebSocket]] = {}
 
     async def connect(self, export_id: str, websocket: WebSocket):
-        """Accept a WebSocket connection and store it by export_id"""
+        """Accept a WebSocket connection and add it to the list for this export_id"""
         await websocket.accept()
-        self.active_connections[export_id] = websocket
-        logger.info(f"WebSocket connected for export_id: {export_id}")
+        if export_id not in self.active_connections:
+            self.active_connections[export_id] = []
+        self.active_connections[export_id].append(websocket)
+        logger.info(f"[WS] WebSocket CONNECTED for export_id: {export_id} (now {len(self.active_connections[export_id])} clients)")
 
-    def disconnect(self, export_id: str):
+    def disconnect(self, export_id: str, websocket: WebSocket = None):
         """Remove a WebSocket connection"""
         if export_id in self.active_connections:
-            del self.active_connections[export_id]
-            logger.info(f"WebSocket disconnected for export_id: {export_id}")
+            if websocket:
+                # Remove specific websocket
+                try:
+                    self.active_connections[export_id].remove(websocket)
+                    logger.info(f"WebSocket disconnected for export_id: {export_id} ({len(self.active_connections[export_id])} clients remaining)")
+                except ValueError:
+                    pass  # WebSocket not in list
+                # Clean up empty lists
+                if not self.active_connections[export_id]:
+                    del self.active_connections[export_id]
+            else:
+                # Remove all connections for this export_id
+                del self.active_connections[export_id]
+                logger.info(f"All WebSockets disconnected for export_id: {export_id}")
 
     async def send_progress(self, export_id: str, data: dict):
-        """Send progress update to a specific export's WebSocket connection"""
+        """Broadcast progress update to all WebSocket connections for this export"""
         if export_id in self.active_connections:
-            try:
-                await self.active_connections[export_id].send_json(data)
-            except Exception as e:
-                logger.error(f"Error sending progress to {export_id}: {e}")
-                self.disconnect(export_id)
+            connections = self.active_connections[export_id]
+            failed_connections = []
+            success_count = 0
+
+            for ws in connections:
+                try:
+                    await ws.send_json(data)
+                    success_count += 1
+                except Exception as e:
+                    logger.error(f"[WS] Error sending to one client for {export_id}: {e}")
+                    failed_connections.append(ws)
+
+            # Remove failed connections
+            for ws in failed_connections:
+                self.disconnect(export_id, ws)
+
+            if success_count > 0:
+                logger.info(f"[WS] Sent progress to {success_count} client(s) for {export_id}: {data.get('progress', 0):.1f}%")
+        else:
+            logger.error(f"[WS] No active connections for {export_id} - progress update DROPPED")
 
 
 # Global instance of the connection manager
@@ -62,6 +91,7 @@ async def websocket_export_progress(websocket: WebSocket, export_id: str):
     This function should be registered as a WebSocket endpoint in the main app
     or a router.
     """
+    logger.info(f"[WS] WebSocket endpoint HIT for export_id: {export_id}")
     await manager.connect(export_id, websocket)
     try:
         # Keep connection alive and wait for messages
@@ -74,4 +104,4 @@ async def websocket_export_progress(websocket: WebSocket, export_id: str):
     except Exception as e:
         logger.error(f"WebSocket error for {export_id}: {e}")
     finally:
-        manager.disconnect(export_id)
+        manager.disconnect(export_id, websocket)

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Crop, Sparkles, Scissors, Loader2 } from 'lucide-react';
+import { useAppState } from '../../contexts';
 
 /**
  * ModeSwitcher - Tab toggle for switching between editor modes.
@@ -14,8 +15,8 @@ import { Crop, Sparkles, Scissors, Loader2 } from 'lucide-react';
  * @param {string} mode - Current mode ('annotate' | 'framing' | 'overlay')
  * @param {function} onModeChange - Callback when mode changes
  * @param {boolean} disabled - Whether the switcher is disabled
- * @param {boolean} hasProject - Whether a project is selected
- * @param {boolean} hasWorkingVideo - Whether the project has a working video
+ * @param {boolean} hasProject - Whether a project is selected (optional, from context)
+ * @param {boolean} hasWorkingVideo - Whether the project has a working video (optional, from context)
  * @param {boolean} hasOverlayVideo - Whether an overlay video is loaded (from export)
  * @param {boolean} framingOutOfSync - Whether framing has changed since last export
  * @param {boolean} hasAnnotateVideo - Whether an annotate video is loaded
@@ -25,13 +26,19 @@ export function ModeSwitcher({
   mode,
   onModeChange,
   disabled = false,
-  hasProject = false,
-  hasWorkingVideo = false,
+  hasProject: hasProjectProp,
+  hasWorkingVideo: hasWorkingVideoProp,
   hasOverlayVideo = false,
   framingOutOfSync = false,
   hasAnnotateVideo = false,
   isLoadingWorkingVideo = false,
 }) {
+  // Get project state from context
+  const { selectedProject } = useAppState();
+
+  // Use props if provided, otherwise derive from context
+  const hasProject = hasProjectProp ?? !!selectedProject;
+  const hasWorkingVideo = hasWorkingVideoProp ?? (selectedProject?.working_video_id != null);
   // Define mode configurations for project mode
   const modes = [
     {

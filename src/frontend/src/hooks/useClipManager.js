@@ -1,7 +1,11 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo, useEffect } from 'react';
+import { useClipStore } from '../stores';
 
 /**
  * useClipManager - Manages the list of clips and their metadata
+ *
+ * Uses useClipStore internally for shared state management.
+ * This enables other components to access clip state without prop drilling.
  *
  * Each clip stores:
  * - id: unique identifier (local or from backend working_clip_id)
@@ -20,22 +24,28 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
  * - selectedClipId: currently selected clip
  * - globalAspectRatio: shared aspect ratio across all clips
  * - globalTransition: transition settings between clips
+ *
+ * @see stores/clipStore.js for the underlying state store
+ * @see APP_REFACTOR_PLAN.md for refactoring context
  */
 export function useClipManager() {
-  // Array of clip objects
-  const [clips, setClips] = useState([]);
-
-  // Currently selected clip ID
-  const [selectedClipId, setSelectedClipId] = useState(null);
-
-  // Global aspect ratio (applies to all clips)
-  const [globalAspectRatio, setGlobalAspectRatioState] = useState('9:16');
-
-  // Global transition settings
-  const [globalTransition, setGlobalTransition] = useState({
-    type: 'cut',
-    duration: 0.5
-  });
+  // Get state and actions from the store
+  const {
+    clips,
+    selectedClipId,
+    globalAspectRatio,
+    globalTransition,
+    setClips,
+    setSelectedClipId,
+    setGlobalAspectRatioState,
+    setGlobalTransition,
+    addClipToStore,
+    deleteClipFromStore,
+    updateClipInStore,
+    reorderClipsInStore,
+    clearAllClips,
+    setProjectClips,
+  } = useClipStore();
 
   /**
    * Generate a unique clip ID
@@ -124,10 +134,10 @@ export function useClipManager() {
       trimRange: null
     };
 
-    setClips(prev => [...prev, newClip]);
+    addClipToStore(newClip);
 
     return id;
-  }, [generateClipId]);
+  }, [generateClipId, addClipToStore]);
 
   /**
    * Add a clip from a project (loaded from backend)
@@ -198,10 +208,10 @@ export function useClipManager() {
       trimRange: savedTrimRange
     };
 
-    setClips(prev => [...prev, newClip]);
+    addClipToStore(newClip);
 
     return id;
-  }, [generateClipId]);
+  }, [generateClipId, addClipToStore]);
 
   /**
    * Load all clips from a project
@@ -213,12 +223,7 @@ export function useClipManager() {
    */
   const loadProjectClips = useCallback(async (projectClips, getClipFileUrl, getVideoMetadata, projectAspectRatio) => {
     // Clear existing clips
-    setClips([]);
-    setSelectedClipId(null);
-
-    if (projectAspectRatio) {
-      setGlobalAspectRatioState(projectAspectRatio);
-    }
+    clearAllClips();
 
     // Fetch all metadata in parallel for faster loading
     const clipPromises = projectClips.map(async (projectClip) => {
@@ -243,16 +248,20 @@ export function useClipManager() {
       }
     }
 
+    // Set aspect ratio if provided
+    if (projectAspectRatio) {
+      setGlobalAspectRatioState(projectAspectRatio);
+    }
+
     return createdIds;
-  }, [addClipFromProject]);
+  }, [addClipFromProject, clearAllClips, setGlobalAspectRatioState]);
 
   /**
    * Clear all clips (used when switching projects)
    */
   const clearClips = useCallback(() => {
-    setClips([]);
-    setSelectedClipId(null);
-  }, []);
+    clearAllClips();
+  }, [clearAllClips]);
 
   /**
    * Effect to ensure the first clip is always selected when clips exist
@@ -270,22 +279,8 @@ export function useClipManager() {
    * @param {string} clipId - ID of the clip to delete
    */
   const deleteClip = useCallback((clipId) => {
-    setClips(prev => {
-      const newClips = prev.filter(clip => clip.id !== clipId);
-
-      // If we deleted the selected clip, select another one
-      if (selectedClipId === clipId) {
-        if (newClips.length > 0) {
-          // Select the first remaining clip
-          setSelectedClipId(newClips[0].id);
-        } else {
-          setSelectedClipId(null);
-        }
-      }
-
-      return newClips;
-    });
-  }, [selectedClipId]);
+    deleteClipFromStore(clipId);
+  }, [deleteClipFromStore]);
 
   /**
    * Select a clip by ID
@@ -304,13 +299,8 @@ export function useClipManager() {
    * @param {number} toIndex - Destination index
    */
   const reorderClips = useCallback((fromIndex, toIndex) => {
-    setClips(prev => {
-      const newClips = [...prev];
-      const [removed] = newClips.splice(fromIndex, 1);
-      newClips.splice(toIndex, 0, removed);
-      return newClips;
-    });
-  }, []);
+    reorderClipsInStore(fromIndex, toIndex);
+  }, [reorderClipsInStore]);
 
   /**
    * Update data for a specific clip
@@ -318,11 +308,8 @@ export function useClipManager() {
    * @param {Object} data - Data to merge into the clip
    */
   const updateClipData = useCallback((clipId, data) => {
-    setClips(prev => prev.map(clip => {
-      if (clip.id !== clipId) return clip;
-      return { ...clip, ...data };
-    }));
-  }, []);
+    updateClipInStore(clipId, data);
+  }, [updateClipInStore]);
 
   /**
    * Update the global aspect ratio
@@ -383,7 +370,7 @@ export function useClipManager() {
 
       return { ...clip, cropKeyframes: newKeyframes };
     }));
-  }, [globalAspectRatio, calculateCenteredCrop]);
+  }, [globalAspectRatio, calculateCenteredCrop, setGlobalAspectRatioState, setClips]);
 
   /**
    * Get export data for all clips

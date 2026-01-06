@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { formatTimeSimple } from '../../../utils/timeFormat';
+import { getAllTags } from '../constants/soccerTags';
 
 /**
  * useAnnotate - Manages clip regions for extracting clips from full game footage
@@ -25,21 +26,19 @@ import { formatTimeSimple } from '../../../utils/timeFormat';
  * - 5 star -> !!
  */
 
-// Allowed tags from the formal spec (must match parser_linter.py)
+// Allowed tags - includes both short names and full names for flexibility
+// Short names are the canonical form used in TSV files
 const ALLOWED_TAGS = new Set([
-  "Goal",
-  "Assist",
-  "Dribble",
-  "Movement",
-  "Pass",
-  "Chance Creation",
-  "Possession",
-  "Transition",
-  "Tackle",
-  "Interception",
-  "1v1 Defense",
-  "Build-Up",
-  "1v1 Save",
+  // Short names (used in TSV)
+  "Goal", "Assist", "Dribble", "Movement",
+  "Pass", "Chance Creation", "Possession", "Transition",
+  "Tackle", "Interception", "1v1 Defense", "Build-Up",
+  "Save", "Command", "Distribution", "1v1 Save",
+  // Full names (used in UI)
+  "Goals", "Assists", "Dribbling", "Movement Off Ball",
+  "Passing Range", "Possession Play", "Transitions",
+  "Tackles", "Interceptions", "Build-Up Passing",
+  "Shot Stopping", "Command of Area", "1v1 Saves",
 ]);
 
 // Required TSV columns in order
@@ -47,6 +46,28 @@ const REQUIRED_COLUMNS = ['start_time', 'rating', 'tags', 'clip_name', 'clip_dur
 
 // Time format regex: M:SS or MM:SS
 const TIME_REGEX = /^\d{1,2}:\d{2}$/;
+
+// Build name-to-shortName mapping from soccerTags
+// This allows exporting with full names or short names and getting consistent TSV output
+const NAME_TO_SHORT_NAME = (() => {
+  const map = {};
+  for (const tag of getAllTags()) {
+    // Map full name to short name
+    map[tag.name] = tag.shortName;
+    // Also map short name to itself (for tags already in short form)
+    map[tag.shortName] = tag.shortName;
+  }
+  return map;
+})();
+
+/**
+ * Convert a tag name to its TSV-compatible short name
+ * @param {string} tagName - Full tag name or short name
+ * @returns {string} Short name for TSV
+ */
+function toShortName(tagName) {
+  return NAME_TO_SHORT_NAME[tagName] || tagName;
+}
 
 /**
  * Parse time string (M:SS or MM:SS) to seconds
@@ -56,6 +77,47 @@ function parseTimeToSeconds(timeStr) {
   const minutes = parseInt(parts[0], 10);
   const seconds = parseInt(parts[1], 10);
   return minutes * 60 + seconds;
+}
+
+/**
+ * Format seconds to M:SS for TSV export
+ * Matches the import format exactly
+ */
+function formatSecondsForTsv(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Generate TSV content from clip regions for export
+ * Format matches the import format exactly
+ * @param {Array} clipRegions - Array of clip region objects
+ * @returns {string} TSV content ready for download
+ */
+export function generateTsvContent(clipRegions) {
+  // Header row
+  const header = REQUIRED_COLUMNS.join('\t');
+
+  // Sort by endTime to match display order
+  const sorted = [...clipRegions].sort((a, b) => a.endTime - b.endTime);
+
+  // Generate data rows
+  const rows = sorted.map(region => {
+    const startTime = formatSecondsForTsv(region.startTime);
+    const rating = region.rating || DEFAULT_RATING;
+    // Convert tags to short names for TSV compatibility
+    const tags = (region.tags || []).map(toShortName).join(',');
+    const clipName = region.name || '';
+    // Calculate duration with 1 decimal precision
+    const duration = ((region.endTime - region.startTime) || DEFAULT_CLIP_DURATION).toFixed(1);
+    // Sanitize notes: replace tabs and newlines with spaces
+    const notes = (region.notes || '').replace(/[\t\r\n]/g, ' ');
+
+    return [startTime, rating, tags, clipName, duration, notes].join('\t');
+  });
+
+  return [header, ...rows].join('\n');
 }
 
 /**

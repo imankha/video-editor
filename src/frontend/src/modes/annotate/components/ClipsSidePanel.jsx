@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
-import { Scissors, Upload, X, AlertCircle, Loader } from 'lucide-react';
+import { Scissors, Upload, Download, X, AlertCircle, Loader } from 'lucide-react';
 import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
-import { validateTsvContent } from '../hooks/useAnnotate';
+import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
 
 /**
  * ClipsSidePanel - Left sidebar for managing clip regions in Annotate mode
@@ -63,6 +63,23 @@ export function ClipsSidePanel({
     setImportErrors(null);
   };
 
+  const handleExportClick = () => {
+    if (clipRegions.length === 0) return;
+
+    const tsvContent = generateTsvContent(clipRegions);
+    const blob = new Blob([tsvContent], { type: 'text/tab-separated-values' });
+    const url = URL.createObjectURL(blob);
+
+    // Create temporary link and trigger download
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'annotations.tsv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="w-[352px] bg-gray-900/95 border-r border-gray-700 flex flex-col h-full">
       {/* Header */}
@@ -74,14 +91,24 @@ export function ClipsSidePanel({
         </div>
         <p className="text-xs text-gray-500 mb-3">Click timeline to add clip</p>
 
-        {/* Import Button */}
-        <button
-          onClick={handleImportClick}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors"
-        >
-          <Upload size={16} />
-          Import TSV
-        </button>
+        {/* Import/Export Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={handleImportClick}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors"
+          >
+            <Upload size={16} />
+            Import
+          </button>
+          <button
+            onClick={handleExportClick}
+            disabled={clipRegions.length === 0}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download size={16} />
+            Export
+          </button>
+        </div>
         <input
           ref={fileInputRef}
           type="file"

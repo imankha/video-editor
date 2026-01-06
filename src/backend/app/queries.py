@@ -8,15 +8,7 @@ multiple files.
 
 from typing import List, Optional
 
-
-# Rating adjectives for clip name generation (matches frontend soccerTags.js)
-RATING_ADJECTIVES = {
-    5: 'Brilliant',
-    4: 'Good',
-    3: 'Interesting',
-    2: 'Unfortunate',
-    1: 'Bad'
-}
+from app.constants import RATING_ADJECTIVES, get_rating_adjective
 
 
 def derive_clip_name(stored_name: Optional[str], rating: int, tags: List[str]) -> str:
@@ -42,7 +34,7 @@ def derive_clip_name(stored_name: Optional[str], rating: int, tags: List[str]) -
     if not tags:
         return ''
 
-    adjective = RATING_ADJECTIVES.get(rating, 'Interesting')
+    adjective = get_rating_adjective(rating)
 
     # Tags are already short names (Goal, Assist, Dribble, etc.)
     if len(tags) == 1:

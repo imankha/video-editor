@@ -72,7 +72,6 @@ class WorkingClipResponse(BaseModel):
     crop_data: Optional[str] = None
     timing_data: Optional[str] = None
     segments_data: Optional[str] = None
-    transform_data: Optional[str] = None
 
 
 class WorkingClipUpdate(BaseModel):
@@ -80,7 +79,6 @@ class WorkingClipUpdate(BaseModel):
     crop_data: Optional[str] = None
     timing_data: Optional[str] = None
     segments_data: Optional[str] = None
-    transform_data: Optional[str] = None
 
 
 # ============ RAW CLIPS (LIBRARY) ============
@@ -190,7 +188,6 @@ async def list_project_clips(project_id: int):
                 wc.crop_data,
                 wc.timing_data,
                 wc.segments_data,
-                wc.transform_data,
                 rc.filename as raw_filename,
                 rc.name as raw_name,
                 rc.notes as raw_notes,
@@ -220,8 +217,7 @@ async def list_project_clips(project_id: int):
                 sort_order=clip['sort_order'],
                 crop_data=clip['crop_data'],
                 timing_data=clip['timing_data'],
-                segments_data=clip['segments_data'],
-                transform_data=clip['transform_data']
+                segments_data=clip['segments_data']
             ))
         return result
 
@@ -401,7 +397,7 @@ async def update_working_clip(
         # Fetch current clip data
         cursor.execute("""
             SELECT id, project_id, raw_clip_id, uploaded_filename, exported_at, sort_order, version,
-                   crop_data, timing_data, segments_data, transform_data
+                   crop_data, timing_data, segments_data
             FROM working_clips
             WHERE id = ? AND project_id = ?
         """, (clip_id, project_id))
@@ -437,8 +433,8 @@ async def update_working_clip(
             cursor.execute("""
                 INSERT INTO working_clips (
                     project_id, raw_clip_id, uploaded_filename, sort_order, version,
-                    crop_data, timing_data, segments_data, transform_data
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    crop_data, timing_data, segments_data
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 project_id,
                 current_clip['raw_clip_id'],
@@ -448,7 +444,6 @@ async def update_working_clip(
                 normalize_json_data(update.crop_data if update.crop_data is not None else current_clip['crop_data']),
                 normalize_json_data(update.timing_data if update.timing_data is not None else current_clip['timing_data']),
                 normalize_json_data(update.segments_data if update.segments_data is not None else current_clip['segments_data']),
-                update.transform_data if update.transform_data is not None else current_clip['transform_data'],
                 # exported_at defaults to NULL for new version (not exported yet)
             ))
             conn.commit()
@@ -479,9 +474,6 @@ async def update_working_clip(
         if update.segments_data is not None:
             updates.append("segments_data = ?")
             params.append(normalize_json_data(update.segments_data))
-        if update.transform_data is not None:
-            updates.append("transform_data = ?")
-            params.append(update.transform_data)
 
         if updates:
             params.append(clip_id)

@@ -83,17 +83,30 @@ video-editor/
 │   │       ├── models.py           # Pydantic request/response models
 │   │       ├── queries.py          # Shared SQL query helpers
 │   │       ├── websocket.py        # WebSocket manager for progress
+│   │       ├── constants.py        # Shared constants (ratings, tags, colors)
 │   │       ├── routers/            # API endpoints
 │   │       │   ├── projects.py     # Project CRUD, state persistence
 │   │       │   ├── clips.py        # Raw clips library + working clips
 │   │       │   ├── games.py        # Game footage storage, annotations
 │   │       │   ├── annotate.py     # Annotate export (creates clips + projects)
-│   │       │   ├── export.py       # Framing/overlay export, rendering
+│   │       │   ├── export/         # Export endpoints (split by mode)
+│   │       │   │   ├── __init__.py     # Aggregates sub-routers
+│   │       │   │   ├── framing.py      # /crop, /upscale, /framing endpoints
+│   │       │   │   ├── overlay.py      # /overlay, /final endpoints
+│   │       │   │   └── multi_clip.py   # /multi-clip, /chapters endpoints
 │   │       │   ├── downloads.py    # Gallery/final video management
 │   │       │   ├── detection.py    # YOLO player/ball detection
 │   │       │   └── health.py       # Health checks
-│   │       └── services/
-│   │           └── clip_cache.py   # Clip caching to avoid re-encoding
+│   │       └── services/           # Business logic layer
+│   │           ├── clip_cache.py       # Clip caching to avoid re-encoding
+│   │           ├── video_processor.py  # Abstract GPU processing interface
+│   │           ├── ffmpeg_service.py   # FFmpeg helper functions
+│   │           ├── local_gpu_processor.py  # Local GPU implementation
+│   │           └── transitions/        # Video transition strategies
+│   │               ├── base.py         # TransitionStrategy interface
+│   │               ├── cut.py          # Simple concatenation
+│   │               ├── fade.py         # Fade to black transition
+│   │               └── dissolve.py     # Cross-dissolve transition
 │   │
 │   └── frontend/                   # React + Vite frontend
 │       └── src/
@@ -115,7 +128,9 @@ video-editor/
 │           ├── modes/              # Mode-specific code
 │           │   ├── framing/        # Crop, segments, overlays
 │           │   ├── overlay/        # Highlight regions
+│           │   │   └── hooks/useOverlayState.js  # Consolidated overlay state
 │           │   └── annotate/       # Clip marking, metadata
+│           │       └── hooks/useAnnotateState.js # Consolidated annotate state
 │           ├── controllers/        # Pure state machines
 │           │   └── keyframeController.js
 │           └── utils/              # Utilities
@@ -167,12 +182,12 @@ projects (
 -- Working clips: Clips in projects with framing edits
 working_clips (
     id, project_id, raw_clip_id, uploaded_filename,
-    progress,              -- 0 = not exported, 1 = exported
+    exported_at,           -- NULL = not exported, timestamp = exported
     sort_order, version,   -- Version increments on re-export
     crop_data,             -- JSON: crop keyframes
     timing_data,           -- JSON: {trimRange}
     segments_data,         -- JSON: {boundaries, segmentSpeeds}
-    transform_data, created_at
+    created_at
 )
 
 -- Working videos: Framing mode output
@@ -283,15 +298,126 @@ keyframe = {
 
 ---
 
+## Services Layer
+
+The backend uses a services layer for GPU-intensive operations, designed for future extensibility to WebGPU or cloud processing (RunPod).
+
+### Video Processor Interface
+
+```python
+from app.services import VideoProcessor, ProcessingBackend, ProcessorFactory
+
+# Available backends (enum)
+ProcessingBackend.LOCAL_GPU   # Current: Real-ESRGAN on local GPU
+ProcessingBackend.WEB_GPU     # Future: Browser-based processing
+ProcessingBackend.RUNPOD      # Future: Cloud GPU processing
+ProcessingBackend.CPU_ONLY    # Fallback: CPU-only processing
+
+# Get a processor
+processor = ProcessorFactory.create(ProcessingBackend.LOCAL_GPU)
+
+# Process a clip
+result = await processor.process_clip(ProcessingConfig(
+    input_path="/path/to/input.mp4",
+    output_path="/path/to/output.mp4",
+    target_width=1080,
+    use_ai_upscale=True
+))
+```
+
+### Shared Constants
+
+All rating and tag constants are centralized in `app/constants.py`:
+
+```python
+from app.constants import (
+    RATING_ADJECTIVES,      # {5: 'Brilliant', 4: 'Good', ...}
+    RATING_NOTATION,        # {5: '!!', 4: '!', 3: '!?', ...}
+    RATING_COLORS_HEX,      # FFmpeg format: {5: '0x66BB6A', ...}
+    TAG_SHORT_NAMES,        # {'Goals': 'Goal', 'Assists': 'Assist', ...}
+    get_rating_adjective,   # Helper functions
+    get_rating_color_hex,
+)
+```
+
+### Transition Strategies
+
+Video clip concatenation uses the Strategy pattern for extensibility:
+
+```python
+from app.services.transitions import TransitionFactory, apply_transition
+
+# Create specific transition strategy
+strategy = TransitionFactory.create('dissolve')  # 'cut', 'fade', or 'dissolve'
+success = strategy.concatenate(
+    clip_paths=['clip1.mp4', 'clip2.mp4'],
+    output_path='output.mp4',
+    duration=0.5,  # transition duration in seconds
+    include_audio=True
+)
+
+# Or use convenience function
+success = apply_transition(
+    transition_type='fade',
+    clip_paths=['clip1.mp4', 'clip2.mp4'],
+    output_path='output.mp4',
+    duration=0.5
+)
+```
+
+To add a new transition type, create a class implementing `TransitionStrategy` and register it with `TransitionFactory.register()`.
+
+---
+
 ## Testing
 
-```bash
-# Backend persistence tests (22 tests)
-cd src/backend && python ../../test_persistence.py
+### Test Organization
 
-# Manual UI testing
-# See MANUAL_TEST.md for procedures
+| Type | Location | Framework | Run Command |
+|------|----------|-----------|-------------|
+| **Backend Unit** | `src/backend/tests/` | pytest | `pytest tests/ -v` |
+| **Frontend Unit** | Co-located with source (`*.test.js`) | Vitest | `npm test` |
+| **E2E/Integration** | `src/frontend/e2e/` | Playwright | `npm run test:e2e` |
+
+### Running Tests
+
+```bash
+# Frontend unit tests (235 tests)
+cd src/frontend && npm test
+
+# Backend unit tests (159 tests)
+cd src/backend && .venv/Scripts/python -m pytest tests/ -v
+
+# E2E tests (requires backend + frontend running)
+# Terminal 1: cd src/backend && uvicorn app.main:app --port 8000
+# Terminal 2: cd src/frontend && npm run dev
+# Terminal 3:
+cd src/frontend && npm run test:e2e
+
+# E2E with visual UI (for debugging)
+npm run test:e2e:ui
 ```
+
+### E2E Test Data
+
+Tests use data from `formal annotations/12.6.carlsbad/`:
+- **Video**: `wcfc-vs-carlsbad-sc-2025-11-02-2025-12-08.mp4` (2.5GB)
+- **TSV**: `12.6.carlsbad.tsv` (25 annotated clips)
+
+### E2E Test Coverage
+
+The `e2e/full-workflow.spec.js` covers:
+1. Project Manager loads correctly
+2. Annotate Mode - Upload video and import TSV
+3. Annotate Mode - Export TSV round-trip
+4. Full workflow - Annotate to Project (import into projects)
+5. Create project manually
+6. UI Component Tests (clip sidebar, star rating)
+7. API Integration Tests (health, projects CRUD, games, clips)
+
+### Manual Testing
+- See [MANUAL_TEST.md](MANUAL_TEST.md) for manual UI procedures
+- See `scripts/` folder for API and WebSocket test scripts
 
 ---
 
@@ -322,8 +448,10 @@ See [KNOWN_BUGS.md](KNOWN_BUGS.md) for current issues and workarounds.
 
 ## Additional Documentation
 
+- [CODE_SMELLS.md](CODE_SMELLS.md) - Refactoring opportunities and completed improvements
 - [DEVELOPMENT.md](DEVELOPMENT.md) - Development setup guide
 - [MANUAL_TEST.md](MANUAL_TEST.md) - Manual testing procedures
+- [KNOWN_BUGS.md](KNOWN_BUGS.md) - Known issues and workarounds
 - [prompt_preamble](prompt_preamble) - Detailed context for debugging
 - [docs/](docs/) - Original phase specifications (historical)
 

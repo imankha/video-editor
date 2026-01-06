@@ -3,7 +3,7 @@ API Routers for the Video Editor backend.
 
 This package contains FastAPI routers organized by functionality:
 - health.py: Health check and status endpoints
-- export.py: Video export endpoints (crop, upscale, overlay)
+- export/: Video export endpoints (split into framing, overlay, multi_clip sub-modules)
 - detection.py: YOLO-based object detection endpoints
 - annotate.py: Annotate mode export (extract clips from game footage)
 - projects.py: Project CRUD endpoints

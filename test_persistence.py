@@ -202,8 +202,7 @@ class PersistenceTest:
         framing_data = {
             "crop_data": json.dumps({"x": 100, "y": 50, "width": 1920, "height": 1080}),
             "timing_data": json.dumps({"speed": 1.5, "trim_start": 2.0, "trim_end": 15.0}),
-            "segments_data": json.dumps([{"type": "keep", "start": 0, "end": 10}]),
-            "transform_data": json.dumps({"rotate": 0, "flip_h": False})
+            "segments_data": json.dumps([{"type": "keep", "start": 0, "end": 10}])
         }
 
         response = requests.put(
