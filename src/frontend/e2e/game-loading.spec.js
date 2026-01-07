@@ -9,10 +9,15 @@ import { fileURLToPath } from 'url';
  * Tests the flow of loading a saved game into annotate mode.
  * This test captures console logs to debug the "blink" issue where
  * clicking a game doesn't transition to annotate mode.
+ *
+ * Test Isolation: Each test run uses a unique user ID via X-User-ID header.
  */
 
 // E2E tests use dev port 8000 (see playwright.config.js)
 const API_BASE = 'http://localhost:8000/api';
+
+// Unique test user ID for this test run (isolates E2E data from dev data)
+const TEST_USER_ID = `e2e_gameload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,7 +26,26 @@ const TEST_DATA_DIR = path.resolve(__dirname, '../../../formal annotations/12.6.
 const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-vs-carlsbad-sc-2025-11-02-2025-12-08.mp4');
 const TEST_TSV = path.join(TEST_DATA_DIR, '12.6.carlsbad.tsv');
 
+/**
+ * Set up page to add X-User-ID header to all API requests.
+ * This isolates test data from development data.
+ */
+async function setupTestUserContext(page) {
+  await page.route('**/api/**', async (route) => {
+    const headers = {
+      ...route.request().headers(),
+      'X-User-ID': TEST_USER_ID,
+    };
+    await route.continue({ headers });
+  });
+}
+
 test.describe('Game Loading Debug', () => {
+  test.beforeEach(async ({ page }) => {
+    await setupTestUserContext(page);
+    console.log(`[E2E] Test user ID: ${TEST_USER_ID}`);
+  });
+
   test('Load saved game into annotate mode', async ({ page }) => {
     // Collect all console logs
     const consoleLogs = [];
@@ -79,7 +103,7 @@ test.describe('Game Loading Debug', () => {
       await page.waitForTimeout(2000);
 
       // Go back to project manager
-      await page.locator('button:has-text("Projects")').click();
+      await page.locator('button:has-text("← Projects")').click();
       await page.waitForTimeout(1000);
 
       // Should be back at project manager

@@ -26,7 +26,7 @@ import ffmpeg
 from ...models import CropKeyframe
 from ...websocket import export_progress, manager
 from ...interpolation import generate_crop_filter
-from ...database import get_db_connection, WORKING_VIDEOS_PATH
+from ...database import get_db_connection, get_working_videos_path
 from ...queries import latest_working_clips_subquery
 
 logger = logging.getLogger(__name__)
@@ -387,7 +387,7 @@ async def export_framing(
 
         # Generate unique filename
         filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
-        file_path = WORKING_VIDEOS_PATH / filename
+        file_path = get_working_videos_path() / filename
 
         # Save the video file
         content = await video.read()
@@ -481,7 +481,7 @@ async def get_working_video(project_id: int):
         if not result:
             raise HTTPException(status_code=404, detail="Working video not found")
 
-        file_path = WORKING_VIDEOS_PATH / result['filename']
+        file_path = get_working_videos_path() / result['filename']
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Video file not found")
 

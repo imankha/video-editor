@@ -29,8 +29,8 @@ export default async function globalTeardown() {
   let cleaned = 0;
 
   for (const entry of entries) {
-    // Only clean up test_* directories
-    if (!entry.isDirectory() || !entry.name.startsWith('test_')) {
+    // Only clean up test_* and e2e_* directories
+    if (!entry.isDirectory() || (!entry.name.startsWith('test_') && !entry.name.startsWith('e2e_'))) {
       continue;
     }
 

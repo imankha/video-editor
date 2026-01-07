@@ -23,7 +23,7 @@ import re
 import shutil
 import asyncio
 
-from app.database import get_db_connection, RAW_CLIPS_PATH, DOWNLOADS_PATH, GAMES_PATH, ensure_directories
+from app.database import get_db_connection, get_raw_clips_path, get_downloads_path, get_games_path, ensure_directories
 from app.services.clip_cache import get_clip_cache
 
 logger = logging.getLogger(__name__)
@@ -328,7 +328,7 @@ async def download_file(filename: str):
         logger.error(f"[Download] VALIDATION ERROR - Path traversal attempt detected: {filename}")
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    file_path = DOWNLOADS_PATH / filename
+    file_path = get_downloads_path() / filename
 
     if not file_path.exists():
         logger.error(f"[Download] VALIDATION ERROR - File not found: {file_path}")
@@ -512,7 +512,7 @@ async def export_clips(
                 logger.error(f"[Export] VALIDATION ERROR - Game {game_id_int} has no video uploaded")
                 raise HTTPException(status_code=400, detail="Game has no video uploaded")
 
-            source_path = str(GAMES_PATH / row['video_filename'])
+            source_path = str(get_games_path() / row['video_filename'])
             original_filename = row['name'] + ".mp4"
 
             if not os.path.exists(source_path):
@@ -592,7 +592,7 @@ async def export_clips(
                 used_names.add(unique_name)
 
                 filename = f"{unique_name}.mp4"
-                output_path = str(RAW_CLIPS_PATH / filename)
+                output_path = str(get_raw_clips_path() / filename)
 
                 # Extract clip to raw_clips folder
                 success = await extract_clip_to_file(
@@ -699,7 +699,7 @@ async def export_clips(
         step += 1
         update_progress(step, total_steps, 'tsv', 'Generating annotations TSV...')
         tsv_filename = f"{video_base}_{download_id}_annotations.tsv"
-        tsv_path = DOWNLOADS_PATH / tsv_filename
+        tsv_path = get_downloads_path() / tsv_filename
         tsv_content = generate_annotations_tsv(all_clips, original_filename)
         with open(tsv_path, 'w', encoding='utf-8') as f:
             f.write(tsv_content)
@@ -738,7 +738,7 @@ async def export_clips(
                 step += 1
                 update_progress(step, total_steps, 'concatenating', f'Merging {len(burned_clip_paths)} clips into compilation...')
                 compilation_filename = f"{video_base}_{download_id}_clips_review.mp4"
-                compilation_path = str(DOWNLOADS_PATH / compilation_filename)
+                compilation_path = str(get_downloads_path() / compilation_filename)
 
                 if await concatenate_videos(burned_clip_paths, compilation_path):
                     compilation_size = os.path.getsize(compilation_path)

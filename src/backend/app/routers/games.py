@@ -21,7 +21,7 @@ import logging
 import mimetypes
 import json
 
-from app.database import get_db_connection, GAMES_PATH, ensure_directories
+from app.database import get_db_connection, get_games_path, ensure_directories
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ async def create_game(
         if video and video.filename:
             original_ext = os.path.splitext(video.filename)[1] or ".mp4"
             video_filename = f"{base_name}{original_ext}"
-            video_path = GAMES_PATH / video_filename
+            video_path = get_games_path() / video_filename
 
             # Stream to file in chunks to handle large files
             with open(video_path, 'wb') as f:
@@ -202,12 +202,12 @@ async def upload_game_video(
             base_name = uuid.uuid4().hex[:12]
         original_ext = os.path.splitext(video.filename or "video.mp4")[1] or ".mp4"
         video_filename = f"{base_name}{original_ext}"
-        video_path = GAMES_PATH / video_filename
+        video_path = get_games_path() / video_filename
 
         try:
             # Delete old video if exists and different filename
             if old_video_filename and old_video_filename != video_filename:
-                old_video_path = GAMES_PATH / old_video_filename
+                old_video_path = get_games_path() / old_video_filename
                 if old_video_path.exists():
                     old_video_path.unlink()
                     logger.info(f"Deleted old video: {old_video_filename}")
@@ -350,7 +350,7 @@ async def delete_game(game_id: int):
 
         # Delete video file (if exists)
         if video_filename:
-            video_path = GAMES_PATH / video_filename
+            video_path = get_games_path() / video_filename
             if video_path.exists():
                 video_path.unlink()
                 logger.info(f"Deleted game video: {video_filename}")
@@ -379,7 +379,7 @@ async def get_game_video(game_id: int, request: Request):
         if not video_filename:
             raise HTTPException(status_code=404, detail="Video not yet uploaded")
 
-        video_path = GAMES_PATH / video_filename
+        video_path = get_games_path() / video_filename
 
         if not video_path.exists():
             raise HTTPException(status_code=404, detail="Video file not found")

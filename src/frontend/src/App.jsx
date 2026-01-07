@@ -981,10 +981,12 @@ function App() {
 
   // Keyboard shortcuts (space bar, copy/paste, arrow keys)
   // @see hooks/useKeyboardShortcuts.js for implementation
-  // NOTE: Annotate mode keyboard shortcuts are now handled inside AnnotateScreen
-  // to avoid duplicate state. We pass null for annotate-related props here.
+  // NOTE: Annotate and Overlay mode keyboard shortcuts are now handled inside
+  // their respective Screen components (AnnotateScreen, OverlayScreen) because
+  // they have their own useVideo instances with the correct videoRef.
+  // App.jsx only handles Framing mode shortcuts.
   useKeyboardShortcuts({
-    hasVideo: Boolean(videoUrl || effectiveOverlayVideoUrl) || editorMode === 'annotate',
+    hasVideo: editorMode === 'framing' && Boolean(videoUrl),
     togglePlay,
     stepForward,
     stepBackward,
@@ -1905,8 +1907,6 @@ function App() {
           // Downloads
           downloadsCount={downloadsCount}
           onOpenDownloads={() => setIsDownloadsPanelOpen(true)}
-          // Shared refs
-          videoRef={videoRef}
           // Initial file from ProjectManager (if user selected file before navigating)
           initialFile={pendingAnnotateFile}
           onInitialFileHandled={() => setPendingAnnotateFile(null)}
@@ -2061,8 +2061,6 @@ function App() {
               fetchProjects();
               refreshDownloadsCount();
             }}
-            // Shared refs
-            videoRef={videoRef}
             // Framing data (for pass-through mode and comparison)
             framingVideoUrl={videoUrl}
             framingMetadata={metadata}
@@ -2079,6 +2077,49 @@ function App() {
             // Audio settings
             includeAudio={includeAudio}
             onIncludeAudioChange={setIncludeAudio}
+            // Overlay state (from App.jsx's useOverlayState instance)
+            // IMPORTANT: Pass these to avoid state isolation issue where
+            // OverlayScreen would have its own separate useOverlayState instance
+            overlayVideoFile={overlayVideoFile}
+            overlayVideoUrl={overlayVideoUrl}
+            overlayVideoMetadata={overlayVideoMetadata}
+            overlayClipMetadata={overlayClipMetadata}
+            isLoadingWorkingVideo={isLoadingWorkingVideo}
+            setOverlayVideoFile={setOverlayVideoFile}
+            setOverlayVideoUrl={setOverlayVideoUrl}
+            setOverlayVideoMetadata={setOverlayVideoMetadata}
+            setOverlayClipMetadata={setOverlayClipMetadata}
+            setIsLoadingWorkingVideo={setIsLoadingWorkingVideo}
+            dragHighlight={dragHighlight}
+            setDragHighlight={setDragHighlight}
+            selectedHighlightKeyframeTime={selectedHighlightKeyframeTime}
+            setSelectedHighlightKeyframeTime={setSelectedHighlightKeyframeTime}
+            highlightEffectType={highlightEffectType}
+            setHighlightEffectType={setHighlightEffectType}
+            pendingOverlaySaveRef={pendingOverlaySaveRef}
+            overlayDataLoadedRef={overlayDataLoadedRef}
+            // Highlight regions state (from App.jsx's useHighlightRegions instance)
+            // IMPORTANT: Same state isolation fix - App.jsx loads overlay data and
+            // restores highlight regions, so we must pass from App.jsx's instance
+            highlightBoundaries={highlightBoundaries}
+            highlightRegions={highlightRegions}
+            highlightRegionKeyframes={highlightRegionKeyframes}
+            highlightRegionsFramerate={highlightRegionsFramerate}
+            initializeHighlightRegions={initializeHighlightRegions}
+            initializeHighlightRegionsFromClips={initializeHighlightRegionsFromClips}
+            addHighlightRegion={addHighlightRegion}
+            deleteHighlightRegion={deleteHighlightRegion}
+            moveHighlightRegionStart={moveHighlightRegionStart}
+            moveHighlightRegionEnd={moveHighlightRegionEnd}
+            toggleHighlightRegion={toggleHighlightRegion}
+            addHighlightRegionKeyframe={addHighlightRegionKeyframe}
+            removeHighlightRegionKeyframe={removeHighlightRegionKeyframe}
+            isTimeInEnabledRegion={isTimeInEnabledRegion}
+            getRegionAtTime={getRegionAtTime}
+            getRegionHighlightAtTime={getRegionHighlightAtTime}
+            getRegionsForExport={getRegionsForExport}
+            resetHighlightRegions={resetHighlightRegions}
+            restoreHighlightRegions={restoreHighlightRegions}
           />
         )}
 

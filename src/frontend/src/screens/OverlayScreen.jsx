@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { OverlayModeView } from '../modes';
 import { OverlayContainer } from '../containers';
-import { useHighlight, useHighlightRegions, useOverlayState } from '../modes/overlay';
+import { useHighlight } from '../modes/overlay';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
@@ -15,17 +15,14 @@ import { API_BASE } from '../config';
  * This component owns all overlay-specific hooks and state:
  * - useHighlight - highlight keyframe management
  * - useHighlightRegions - highlight region management
- * - useOverlayState - overlay video state
  * - useVideo - video playback (without segment awareness)
  * - useZoom - video zoom/pan
  * - useTimelineZoom - timeline zoom
  * - OverlayContainer - overlay logic and handlers
  *
- * Props from App.jsx are minimal:
- * - projectId - current project ID
- * - project - current project object
- * - onNavigate - navigation callback
- * - onExportComplete - callback when export finishes
+ * IMPORTANT: Overlay video state (overlayVideoUrl, etc.) is passed from App.jsx
+ * as props to avoid state isolation issues. App.jsx owns the useOverlayState
+ * instance and passes it down.
  *
  * @see tasks/PHASE2-ARCHITECTURE-PLAN.md for architecture context
  */
@@ -40,9 +37,6 @@ export function OverlayScreen({
 
   // Export callback
   onExportComplete,
-
-  // Shared refs (temporary - will be moved to stores later)
-  videoRef,
 
   // Framing data (needed for pass-through mode and comparison)
   framingVideoUrl,
@@ -61,35 +55,59 @@ export function OverlayScreen({
   // Audio settings
   includeAudio,
   onIncludeAudioChange,
+
+  // Overlay state (passed from App.jsx to avoid state isolation)
+  // IMPORTANT: These come from App.jsx's useOverlayState instance, not a local one
+  overlayVideoFile,
+  overlayVideoUrl,
+  overlayVideoMetadata,
+  overlayClipMetadata,
+  isLoadingWorkingVideo,
+  setOverlayVideoFile,
+  setOverlayVideoUrl,
+  setOverlayVideoMetadata,
+  setOverlayClipMetadata,
+  setIsLoadingWorkingVideo,
+  dragHighlight,
+  setDragHighlight,
+  selectedHighlightKeyframeTime,
+  setSelectedHighlightKeyframeTime,
+  highlightEffectType,
+  setHighlightEffectType,
+  pendingOverlaySaveRef,
+  overlayDataLoadedRef,
+
+  // Highlight regions state (passed from App.jsx to avoid state isolation)
+  // IMPORTANT: These come from App.jsx's useHighlightRegions instance
+  highlightBoundaries,
+  highlightRegions,
+  highlightRegionKeyframes,
+  highlightRegionsFramerate,
+  initializeHighlightRegions,
+  initializeHighlightRegionsFromClips,
+  addHighlightRegion,
+  deleteHighlightRegion,
+  moveHighlightRegionStart,
+  moveHighlightRegionEnd,
+  toggleHighlightRegion,
+  addHighlightRegionKeyframe,
+  removeHighlightRegionKeyframe,
+  isTimeInEnabledRegion,
+  getRegionAtTime,
+  getRegionHighlightAtTime,
+  getRegionsForExport,
+  resetHighlightRegions,
+  restoreHighlightRegions,
 }) {
   // Local state
   const [selectedLayer, setSelectedLayer] = useState('playhead');
   const exportButtonRef = useRef(null);
 
-  // Overlay state hook
-  const {
-    overlayVideoFile,
-    overlayVideoUrl,
-    overlayVideoMetadata,
-    overlayClipMetadata,
-    isLoadingWorkingVideo,
-    setOverlayVideoFile,
-    setOverlayVideoUrl,
-    setOverlayVideoMetadata,
-    setOverlayClipMetadata,
-    setIsLoadingWorkingVideo,
-    dragHighlight,
-    setDragHighlight,
-    selectedHighlightKeyframeTime,
-    setSelectedHighlightKeyframeTime,
-    highlightEffectType,
-    setHighlightEffectType,
-    pendingOverlaySaveRef,
-    overlayDataLoadedRef,
-  } = useOverlayState();
-
   // Video hook - without segment awareness for overlay mode
+  // IMPORTANT: We use the videoRef from this hook (not from App.jsx props)
+  // This ensures seek/play/pause work correctly with the video element
   const {
+    videoRef,
     videoUrl,
     metadata,
     isPlaying,
@@ -113,7 +131,7 @@ export function OverlayScreen({
   const effectiveOverlayFile = overlayVideoFile || framingVideoFile;
   const effectiveHighlightMetadata = overlayVideoMetadata || framingMetadata;
 
-  // Highlight hook
+  // Highlight hook (still local - for keyframe-based highlighting, not region-based)
   const {
     keyframes: highlightKeyframes,
     framerate: highlightFramerate,
@@ -125,28 +143,8 @@ export function OverlayScreen({
     reset: resetHighlight,
   } = useHighlight(effectiveHighlightMetadata, null);
 
-  // Highlight regions hook
-  const {
-    boundaries: highlightBoundaries,
-    regions: highlightRegions,
-    keyframes: highlightRegionKeyframes,
-    framerate: highlightRegionsFramerate,
-    initializeWithDuration: initializeHighlightRegions,
-    initializeFromClipMetadata: initializeHighlightRegionsFromClips,
-    addRegion: addHighlightRegion,
-    deleteRegionByIndex: deleteHighlightRegion,
-    moveRegionStart: moveHighlightRegionStart,
-    moveRegionEnd: moveHighlightRegionEnd,
-    toggleRegionEnabled: toggleHighlightRegion,
-    addOrUpdateKeyframe: addHighlightRegionKeyframe,
-    removeKeyframe: removeHighlightRegionKeyframe,
-    isTimeInEnabledRegion,
-    getRegionAtTime,
-    getHighlightAtTime: getRegionHighlightAtTime,
-    getRegionsForExport,
-    reset: resetHighlightRegions,
-    restoreRegions: restoreHighlightRegions,
-  } = useHighlightRegions(effectiveHighlightMetadata);
+  // Note: Highlight regions state is now passed as props from App.jsx
+  // to avoid state isolation issues (same fix as useOverlayState)
 
   // Zoom hooks
   const {
@@ -244,13 +242,46 @@ export function OverlayScreen({
     handleHighlightComplete,
   } = overlay;
 
-  // Initialize highlight regions when video duration is available
+  // Note: Highlight region initialization is handled by App.jsx
+  // App.jsx initializes default regions and restores saved regions from backend
+  // Since state is now passed as props, we don't need to initialize here
+
+  // Keyboard shortcuts for overlay mode
+  // IMPORTANT: We handle shortcuts here (not in App.jsx's useKeyboardShortcuts)
+  // because we use OverlayScreen's useVideo instance which has the correct videoRef
   useEffect(() => {
-    const highlightDuration = overlayVideoMetadata?.duration || duration;
-    if (highlightDuration && highlightDuration > 0) {
-      initializeHighlightRegions(highlightDuration);
-    }
-  }, [overlayVideoMetadata?.duration, duration, initializeHighlightRegions]);
+    const handleKeyDown = (event) => {
+      // Don't handle if typing in an input or textarea
+      const tagName = event.target?.tagName?.toLowerCase();
+      if (tagName === 'input' || tagName === 'textarea') {
+        return;
+      }
+
+      // Space bar: Toggle play/pause
+      if (event.code === 'Space' && effectiveOverlayVideoUrl) {
+        event.preventDefault();
+        togglePlay();
+        return;
+      }
+
+      // Arrow keys: Step forward/backward
+      if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
+        if (!effectiveOverlayVideoUrl) return;
+        // Don't handle if modifier keys are pressed
+        if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+        event.preventDefault();
+        if (event.code === 'ArrowLeft') {
+          stepBackward();
+        } else {
+          stepForward();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [effectiveOverlayVideoUrl, togglePlay, stepForward, stepBackward]);
 
   return (
     <OverlayModeView

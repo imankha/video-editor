@@ -312,24 +312,24 @@ class ClipCache:
         )
 
 
-# Global cache instance - initialized lazily
-_clip_cache: Optional[ClipCache] = None
+# Per-user cache instances - initialized lazily
+_clip_caches: Dict[str, ClipCache] = {}
 
 
 def get_clip_cache() -> ClipCache:
     """
-    Get the global clip cache instance.
+    Get the clip cache instance for the current user.
 
-    Lazily initializes the cache on first access.
+    Lazily initializes the cache on first access per user.
     """
-    global _clip_cache
+    from app.database import get_clip_cache_path
+    from app.user_context import get_current_user_id
 
-    if _clip_cache is None:
-        from app.database import CLIP_CACHE_PATH
-        _clip_cache = ClipCache(CLIP_CACHE_PATH)
+    user_id = get_current_user_id()
 
-    return _clip_cache
+    if user_id not in _clip_caches:
+        cache_path = get_clip_cache_path()
+        cache_path.mkdir(parents=True, exist_ok=True)
+        _clip_caches[user_id] = ClipCache(cache_path)
 
-
-# Convenience alias
-clip_cache = property(lambda self: get_clip_cache())
+    return _clip_caches[user_id]

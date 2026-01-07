@@ -21,8 +21,8 @@ import logging
 
 from app.database import (
     get_db_connection,
-    RAW_CLIPS_PATH,
-    UPLOADS_PATH
+    get_raw_clips_path,
+    get_uploads_path,
 )
 from app.queries import latest_working_clips_subquery, derive_clip_name
 
@@ -151,7 +151,7 @@ async def get_raw_clip_file(clip_id: int):
         if not clip:
             raise HTTPException(status_code=404, detail="Raw clip not found")
 
-        file_path = RAW_CLIPS_PATH / clip['filename']
+        file_path = get_raw_clips_path() / clip['filename']
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Clip file not found")
 
@@ -296,7 +296,7 @@ async def add_clip_to_project(
             # Generate unique filename
             ext = os.path.splitext(file.filename)[1] or '.mp4'
             uploaded_filename = f"{uuid.uuid4().hex}{ext}"
-            file_path = UPLOADS_PATH / uploaded_filename
+            file_path = get_uploads_path() / uploaded_filename
 
             # Save file
             content = await file.read()
@@ -361,10 +361,10 @@ async def get_working_clip_file(project_id: int, clip_id: int):
 
         # Determine file path
         if clip['raw_clip_id']:
-            file_path = RAW_CLIPS_PATH / clip['raw_filename']
+            file_path = get_raw_clips_path() / clip['raw_filename']
             filename = clip['raw_filename']
         else:
-            file_path = UPLOADS_PATH / clip['uploaded_filename']
+            file_path = get_uploads_path() / clip['uploaded_filename']
             filename = clip['uploaded_filename']
 
         if not file_path.exists():

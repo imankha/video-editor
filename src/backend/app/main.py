@@ -15,9 +15,10 @@ Architecture:
 - routers/detection.py: YOLO-based object detection endpoints
 """
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 import traceback
 import sys
 import os
@@ -33,9 +34,35 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import routers and websocket handler
-from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, downloads_router
+from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, downloads_router, auth_router
 from app.websocket import websocket_export_progress
 from app.database import init_database
+from app.user_context import set_current_user_id, get_current_user_id
+from app.constants import DEFAULT_USER_ID
+
+
+class UserContextMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to set user context from X-User-ID header.
+
+    This enables request-based user isolation for testing.
+    In normal use (no header), the default user ID is used.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        # Get user ID from header, default to 'a'
+        user_id = request.headers.get('X-User-ID', DEFAULT_USER_ID)
+
+        # Sanitize: only allow alphanumeric, underscore, dash
+        sanitized = ''.join(c for c in user_id if c.isalnum() or c in '_-')
+        if not sanitized:
+            sanitized = DEFAULT_USER_ID
+
+        # Set user context for this request
+        set_current_user_id(sanitized)
+
+        response = await call_next(request)
+        return response
 
 # Environment detection
 ENV = os.getenv("ENV", "development")
@@ -60,6 +87,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add user context middleware (must be after CORS)
+app.add_middleware(UserContextMiddleware)
+
 # Include routers
 app.include_router(health_router)
 app.include_router(export_router)
@@ -69,6 +99,7 @@ app.include_router(projects_router)
 app.include_router(clips_router)
 app.include_router(games_router)
 app.include_router(downloads_router)
+app.include_router(auth_router)
 
 
 # WebSocket endpoint for export progress

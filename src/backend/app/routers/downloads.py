@@ -14,7 +14,7 @@ import os
 import re
 import logging
 
-from app.database import get_db_connection, FINAL_VIDEOS_PATH
+from app.database import get_db_connection, get_final_videos_path
 from app.queries import latest_final_videos_subquery
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ async def list_downloads():
         downloads = []
         for row in rows:
             # Get file size if file exists
-            file_path = FINAL_VIDEOS_PATH / row['filename']
+            file_path = get_final_videos_path() / row['filename']
             file_size = None
             if file_path.exists():
                 file_size = file_path.stat().st_size
@@ -129,7 +129,7 @@ async def download_file(download_id: int):
 
         logger.info(f"[Download] Found: stored_filename={row['filename']}, project_name={row['project_name']}")
 
-        file_path = FINAL_VIDEOS_PATH / row['filename']
+        file_path = get_final_videos_path() / row['filename']
         if not file_path.exists():
             logger.error(f"[Download] File missing: {file_path}")
             raise HTTPException(status_code=404, detail="Video file not found")
@@ -182,7 +182,7 @@ async def delete_download(download_id: int, remove_file: bool = False):
 
         # Optionally remove the file
         if remove_file:
-            file_path = FINAL_VIDEOS_PATH / row['filename']
+            file_path = get_final_videos_path() / row['filename']
             if file_path.exists():
                 try:
                     os.remove(file_path)

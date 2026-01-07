@@ -37,9 +37,6 @@ export function AnnotateScreen({
   downloadsCount,
   onOpenDownloads,
 
-  // Shared refs (temporary - will be moved to stores later)
-  videoRef,
-
   // Initial file from ProjectManager (if user selected file before navigating)
   initialFile,
   onInitialFileHandled,
@@ -63,7 +60,10 @@ export function AnnotateScreen({
   exportProgress,
 }) {
   // Video hook - without segment awareness for annotate mode
+  // IMPORTANT: We use the videoRef from this hook (not from App.jsx props)
+  // This ensures seek/play/pause work correctly with the video element
   const {
+    videoRef,
     currentTime,
     duration,
     isPlaying,
@@ -102,7 +102,7 @@ export function AnnotateScreen({
     fetchProjects,
     projectCreationSettings,
     onBackToProjects,
-    setEditorMode: () => {}, // Not used in screen context
+    setEditorMode: onNavigate, // Use onNavigate for mode changes (e.g., Import Into Projects)
     onOpenProjectCreationSettings,
     downloadsCount,
     onOpenDownloads,

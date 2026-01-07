@@ -1,92 +1,120 @@
 """
 Database configuration and initialization for Video Editor.
 
-Uses SQLite with the database file stored in user_data/a/database.sqlite.
+Uses SQLite with the database file stored in user_data/<user_id>/database.sqlite.
 Tables are created automatically on first access or when missing.
 
 The database and directories are auto-created on demand, so deleting
-the user_data/a folder will simply reset the app to a clean state.
+the user_data/<user_id> folder will simply reset the app to a clean state.
 
-Test Isolation:
-Set the TEST_USER_ID environment variable to use a different user namespace.
-This prevents test data from polluting the manual testing database.
-Example: TEST_USER_ID=test_abc123 uvicorn app.main:app --port 8000
+User Isolation:
+The current user ID is determined by the X-User-ID header on each request.
+This enables E2E tests to use isolated user namespaces without polluting
+the development database. If no header is provided, the default user 'a' is used.
 """
 
-import os
 import sqlite3
 import logging
 from pathlib import Path
 from contextlib import contextmanager
 
-from .constants import DEFAULT_USER_ID
+from .user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
 # Base path for user data
 USER_DATA_BASE = Path(__file__).parent.parent.parent.parent / "user_data"
 
-# Use TEST_USER_ID env var if set, otherwise use default
-# This allows E2E tests to use isolated user namespaces
-TEST_USER_ID = os.environ.get("TEST_USER_ID")
-USER_ID = TEST_USER_ID if TEST_USER_ID else DEFAULT_USER_ID
-
-if TEST_USER_ID:
-    logger.info(f"Using test user namespace: {TEST_USER_ID}")
-
-USER_DATA_PATH = USER_DATA_BASE / USER_ID
-DATABASE_PATH = USER_DATA_PATH / "database.sqlite"
-
-# Subdirectories for video storage
-RAW_CLIPS_PATH = USER_DATA_PATH / "raw_clips"
-UPLOADS_PATH = USER_DATA_PATH / "uploads"
-WORKING_VIDEOS_PATH = USER_DATA_PATH / "working_videos"
-FINAL_VIDEOS_PATH = USER_DATA_PATH / "final_videos"
-DOWNLOADS_PATH = USER_DATA_PATH / "downloads"  # Temporary export downloads
-GAMES_PATH = USER_DATA_PATH / "games"  # Game source videos
-CLIP_CACHE_PATH = USER_DATA_PATH / "clip_cache"  # Cached burned-in clips for reuse
-
-# Track if we've already initialized this session
-_initialized = False
+# Track initialized user namespaces (per user_id)
+_initialized_users: set = set()
 
 
 def get_user_data_path() -> Path:
-    """Get the user data directory path."""
-    return USER_DATA_PATH
+    """Get the user data directory path for the current user."""
+    return USER_DATA_BASE / get_current_user_id()
 
 
 def get_database_path() -> Path:
-    """Get the database file path."""
-    return DATABASE_PATH
+    """Get the database file path for the current user."""
+    return get_user_data_path() / "database.sqlite"
+
+
+# Dynamic path getters for video storage subdirectories
+def get_raw_clips_path() -> Path:
+    """Get the raw clips directory path for the current user."""
+    return get_user_data_path() / "raw_clips"
+
+
+def get_uploads_path() -> Path:
+    """Get the uploads directory path for the current user."""
+    return get_user_data_path() / "uploads"
+
+
+def get_working_videos_path() -> Path:
+    """Get the working videos directory path for the current user."""
+    return get_user_data_path() / "working_videos"
+
+
+def get_final_videos_path() -> Path:
+    """Get the final videos directory path for the current user."""
+    return get_user_data_path() / "final_videos"
+
+
+def get_downloads_path() -> Path:
+    """Get the downloads directory path for the current user."""
+    return get_user_data_path() / "downloads"
+
+
+def get_games_path() -> Path:
+    """Get the games directory path for the current user."""
+    return get_user_data_path() / "games"
+
+
+def get_clip_cache_path() -> Path:
+    """Get the clip cache directory path for the current user."""
+    return get_user_data_path() / "clip_cache"
+
+
 
 
 def ensure_directories():
     """
-    Ensure all required directories exist.
+    Ensure all required directories exist for the current user.
     Called automatically before database access.
     """
-    for directory in [USER_DATA_PATH, RAW_CLIPS_PATH, UPLOADS_PATH,
-                      WORKING_VIDEOS_PATH, FINAL_VIDEOS_PATH, DOWNLOADS_PATH, GAMES_PATH, CLIP_CACHE_PATH]:
+    directories = [
+        get_user_data_path(),
+        get_raw_clips_path(),
+        get_uploads_path(),
+        get_working_videos_path(),
+        get_final_videos_path(),
+        get_downloads_path(),
+        get_games_path(),
+        get_clip_cache_path(),
+    ]
+    for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
 
 
 def ensure_database():
     """
-    Ensure database exists with all required tables.
+    Ensure database exists with all required tables for the current user.
     Called automatically before each database access.
     This makes the app resilient to the user_data folder being deleted.
     """
-    global _initialized
+    global _initialized_users
+    user_id = get_current_user_id()
+    db_path = get_database_path()
 
     # Quick path: if already initialized and DB exists, skip
-    if _initialized and DATABASE_PATH.exists():
+    if user_id in _initialized_users and db_path.exists():
         return
 
     # Ensure directories exist
     ensure_directories()
 
     # Create/verify tables
-    conn = sqlite3.connect(str(DATABASE_PATH))
+    conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -333,8 +361,8 @@ def ensure_database():
             pass
 
         conn.commit()
-        _initialized = True
-        logger.debug("Database verified/initialized")
+        _initialized_users.add(user_id)
+        logger.debug(f"Database verified/initialized for user: {user_id}")
 
     finally:
         conn.close()
@@ -352,7 +380,7 @@ def get_db_connection():
     # Ensure database exists before connecting
     ensure_database()
 
-    conn = sqlite3.connect(str(DATABASE_PATH))
+    conn = sqlite3.connect(str(get_database_path()))
     conn.row_factory = sqlite3.Row  # Return rows as dictionaries
     try:
         yield conn
@@ -362,18 +390,26 @@ def get_db_connection():
 
 def init_database():
     """
-    Initialize the database and create all required directories.
+    Initialize the database and create all required directories for the current user.
     Called on application startup for logging purposes.
     Also called automatically by get_db_connection() if needed.
     """
-    global _initialized
-
-    logger.info("Initializing database...")
+    user_id = get_current_user_id()
+    logger.info(f"Initializing database for user: {user_id}...")
 
     # Ensure directories exist
     ensure_directories()
-    for directory in [USER_DATA_PATH, RAW_CLIPS_PATH, UPLOADS_PATH,
-                      WORKING_VIDEOS_PATH, FINAL_VIDEOS_PATH, DOWNLOADS_PATH, GAMES_PATH, CLIP_CACHE_PATH]:
+    directories = [
+        get_user_data_path(),
+        get_raw_clips_path(),
+        get_uploads_path(),
+        get_working_videos_path(),
+        get_final_videos_path(),
+        get_downloads_path(),
+        get_games_path(),
+        get_clip_cache_path(),
+    ]
+    for directory in directories:
         logger.info(f"Ensured directory exists: {directory}")
 
     # Ensure database tables exist
@@ -382,12 +418,13 @@ def init_database():
 
 
 def is_database_initialized() -> bool:
-    """Check if the database file exists and has tables."""
-    if not DATABASE_PATH.exists():
+    """Check if the database file exists and has tables for the current user."""
+    db_path = get_database_path()
+    if not db_path.exists():
         return False
 
     try:
-        conn = sqlite3.connect(str(DATABASE_PATH))
+        conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -402,8 +439,9 @@ def is_database_initialized() -> bool:
 
 def reset_initialized_flag():
     """
-    Reset the initialization flag. Useful for testing or when
+    Reset the initialization flag for the current user. Useful for testing or when
     the database has been manually deleted.
     """
-    global _initialized
-    _initialized = False
+    global _initialized_users
+    user_id = get_current_user_id()
+    _initialized_users.discard(user_id)
