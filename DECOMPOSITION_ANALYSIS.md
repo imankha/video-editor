@@ -64,7 +64,7 @@ src/frontend/src/
 
 ---
 
-## Current State: 3401 lines
+## Current State: 2530 lines (after refactoring from 3401)
 
 ### Structure Breakdown
 
@@ -95,13 +95,15 @@ Each task has a detailed file in the `refactor-tasks/` folder.
 
 | Task | Description | Impact | Status | Detailed Instructions |
 |------|-------------|--------|--------|----------------------|
-| 01 | Extract FramingModeView | -500 lines | ⬜ Not Started | [TASK-01](refactor-tasks/TASK-01-extract-framing-mode-view.md) |
-| 02 | Extract AnnotateModeView | -400 lines | ⬜ Not Started | [TASK-02](refactor-tasks/TASK-02-extract-annotate-mode-view.md) |
-| 03 | Extract OverlayModeView | -400 lines | ⬜ Not Started | [TASK-03](refactor-tasks/TASK-03-extract-overlay-mode-view.md) |
-| 04 | Move handleTrimSegment | -200 lines | ⬜ Not Started | [TASK-04](refactor-tasks/TASK-04-move-trim-handler-to-container.md) |
-| 05 | Move clipsWithCurrentState | -90 lines | ⬜ Not Started | [TASK-05](refactor-tasks/TASK-05-move-clips-with-state-to-container.md) |
-| 06 | Move Copy/Paste Handlers | -50 lines | ⬜ Not Started | [TASK-06](refactor-tasks/TASK-06-move-copy-paste-handlers.md) |
-| 07 | Final Cleanup | verify ~150 lines | ⬜ Not Started | [TASK-07](refactor-tasks/TASK-07-final-cleanup.md) |
+| 01 | Extract FramingModeView | -500 lines | ✅ Complete | [TASK-01](refactor-tasks/TASK-01-extract-framing-mode-view.md) |
+| 02 | Extract AnnotateModeView | -400 lines | ✅ Complete | [TASK-02](refactor-tasks/TASK-02-extract-annotate-mode-view.md) |
+| 03 | Extract OverlayModeView | -400 lines | ✅ Complete | [TASK-03](refactor-tasks/TASK-03-extract-overlay-mode-view.md) |
+| 04 | Move handleTrimSegment | -200 lines | ✅ Complete | [TASK-04](refactor-tasks/TASK-04-move-trim-handler-to-container.md) |
+| 05 | Move clipsWithCurrentState | -90 lines | ✅ Complete | [TASK-05](refactor-tasks/TASK-05-move-clips-with-state-to-container.md) |
+| 06 | Move Copy/Paste Handlers | -50 lines | ✅ Complete | [TASK-06](refactor-tasks/TASK-06-move-copy-paste-handlers.md) |
+| 07 | Final Cleanup | verify ~150 lines | ✅ Complete | [TASK-07](refactor-tasks/TASK-07-final-cleanup.md) |
+
+**Refactoring Complete!** Total reduction: 871 lines (25.6% reduction from 3401 to 2530 lines).
 
 > **Update this table** as tasks are completed: ⬜ Not Started → 🔄 In Progress → ✅ Complete
 

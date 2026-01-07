@@ -20,8 +20,8 @@ import { fileURLToPath } from 'url';
  *   cd src/frontend && npx playwright test --ui
  */
 
-// E2E tests run on port 8001 (see playwright.config.js)
-const API_BASE = 'http://localhost:8001/api';
+// E2E tests use dev port 8000 (see playwright.config.js)
+const API_BASE = 'http://localhost:8000/api';
 
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -32,31 +32,11 @@ const TEST_DATA_DIR = path.resolve(__dirname, '../../../formal annotations/12.6.
 const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-vs-carlsbad-sc-2025-11-02-2025-12-08.mp4');
 const TEST_TSV = path.join(TEST_DATA_DIR, '12.6.carlsbad.tsv');
 
-// Shared state for the test suite
-let sharedGameUploaded = false;
-
 /**
- * Helper: Upload video and import TSV (only called once per suite)
+ * Helper: Upload video and import TSV
+ * Each test uploads fresh to ensure clips are available (simpler and more reliable)
  */
-async function uploadGameOnce(page) {
-  if (sharedGameUploaded) {
-    console.log('[Setup] Game already uploaded, loading from Games tab');
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    await page.locator('button:has-text("Games")').click();
-    await page.waitForTimeout(500);
-
-    // Try to load existing game
-    const loadButton = page.locator('button:has-text("Load")').first();
-    if (await loadButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await loadButton.click();
-      await expect(page.locator('video')).toBeVisible({ timeout: 30000 });
-      return;
-    }
-    // If no game found, fall through to upload
-    console.log('[Setup] No existing game found, uploading fresh');
-  }
-
+async function enterAnnotateModeWithClips(page) {
   console.log('[Setup] Uploading video...');
   await page.goto('/');
   await page.waitForLoadState('networkidle');
@@ -73,16 +53,16 @@ async function uploadGameOnce(page) {
   await expect(page.locator('text=/Imported \\d+ clips?/')).toBeVisible({ timeout: 10000 });
   console.log('[Setup] TSV imported');
 
-  // Wait for auto-save
-  await page.waitForTimeout(2000);
-  sharedGameUploaded = true;
+  // Wait for clips to appear in sidebar
+  await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 5000 });
+  console.log('[Setup] Clips visible');
 }
 
 /**
- * Helper: Enter annotate mode with existing game or upload if needed
+ * Helper: Enter annotate mode by uploading video and TSV
  */
 async function enterAnnotateMode(page) {
-  await uploadGameOnce(page);
+  await enterAnnotateModeWithClips(page);
 }
 
 // ============================================================================
@@ -91,12 +71,12 @@ async function enterAnnotateMode(page) {
 
 test.describe('Full Workflow Tests', () => {
   test.beforeAll(async ({ request }) => {
-    // Check if backend is running
+    // Check if backend is running (uses dev port 8000)
     try {
       const health = await request.get(`${API_BASE}/health`);
       expect(health.ok()).toBeTruthy();
     } catch (e) {
-      throw new Error('Backend not running. Start with: cd src/backend && uvicorn app.main:app --port 8000');
+      throw new Error('Backend not running on port 8000. Start it with: cd src/backend && uvicorn app.main:app');
     }
 
     // Check if test files exist
@@ -123,8 +103,8 @@ test.describe('Full Workflow Tests', () => {
   });
 
   test('2. Annotate Mode - Upload video and import TSV', async ({ page }) => {
-    // This test does the initial upload (will be reused by subsequent tests)
-    await uploadGameOnce(page);
+    // Upload video and import TSV
+    await enterAnnotateModeWithClips(page);
 
     // Verify annotate mode is active
     await expect(page.getByRole('heading', { name: 'Clips' })).toBeVisible();
@@ -152,13 +132,15 @@ test.describe('Full Workflow Tests', () => {
   test('4. Import button is visible in annotate mode', async ({ page }) => {
     await enterAnnotateMode(page);
 
-    // Verify "Import Into Projects" button is visible and enabled
+    // Wait for video upload to complete first (button shows "Uploading video..." until done)
+    // The upload enables the "Create Annotated Video" button, which shares the same disabled conditions
+    const createVideoButton = page.locator('button:has-text("Create Annotated Video")');
+    await expect(createVideoButton).toBeEnabled({ timeout: 120000 }); // 2 min for video upload
+
+    // Now verify "Import Into Projects" button is visible and enabled
     const importButton = page.locator('button:has-text("Import Into Projects")');
     await expect(importButton).toBeVisible({ timeout: 5000 });
-
-    // Button should be enabled when we have clips
-    const isDisabled = await importButton.getAttribute('disabled');
-    expect(isDisabled).toBeNull(); // null means not disabled
+    await expect(importButton).toBeEnabled({ timeout: 10000 });
   });
 
   test('5. Create Annotated Video API call succeeds', async ({ page }) => {

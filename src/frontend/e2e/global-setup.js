@@ -1,8 +1,8 @@
 /**
  * Global setup for Playwright E2E tests
  *
- * Runs before all tests to display test configuration info.
- * E2E tests use port 8001 so they don't conflict with the manual dev server (8000).
+ * Simple setup - just displays info.
+ * No port checking needed since reuseExistingServer: true handles everything.
  */
 
 import net from 'net';
@@ -36,57 +36,20 @@ function isPortInUse(port) {
 export default async function globalSetup() {
   console.log('\n=== E2E Test Setup ===\n');
 
-  // Check if E2E backend port (8001) is in use
-  const e2ePortInUse = await isPortInUse(8001);
+  // Check if dev servers are already running (informational)
+  const backendRunning = await isPortInUse(8000);
+  const frontendRunning = await isPortInUse(5173);
 
-  if (e2ePortInUse) {
-    console.error(`
-╔════════════════════════════════════════════════════════════════════╗
-║                      PORT 8001 IN USE                              ║
-╠════════════════════════════════════════════════════════════════════╣
-║                                                                    ║
-║  E2E tests need port 8001 for their isolated backend server.       ║
-║  Something is already using this port.                             ║
-║                                                                    ║
-║  Check what's using port 8001:                                     ║
-║    netstat -ano | findstr :8001  (Windows)                         ║
-║    lsof -i :8001                 (Linux/Mac)                       ║
-║                                                                    ║
-║  Note: Your manual dev server on port 8000 is fine - E2E tests     ║
-║  run on a separate port to avoid conflicts.                        ║
-║                                                                    ║
-╚════════════════════════════════════════════════════════════════════╝
-`);
-    throw new Error('Port 8001 is already in use. E2E tests need this port for isolation.');
+  if (backendRunning && frontendRunning) {
+    console.log('✓ Using your running dev servers (fast!)');
+    console.log('  Backend:  http://localhost:8000');
+    console.log('  Frontend: http://localhost:5173\n');
+  } else if (backendRunning || frontendRunning) {
+    console.log('⚠ Partial dev servers detected:');
+    console.log(`  Backend:  ${backendRunning ? 'running' : 'will start'}`);
+    console.log(`  Frontend: ${frontendRunning ? 'running' : 'will start'}\n`);
+  } else {
+    console.log('ℹ No dev servers running - Playwright will start them');
+    console.log('  Tip: Start dev servers first for faster test runs!\n');
   }
-
-  // Check E2E frontend port (5174)
-  const e2eFrontendPortInUse = await isPortInUse(5174);
-  if (e2eFrontendPortInUse) {
-    console.error(`
-╔════════════════════════════════════════════════════════════════════╗
-║                      PORT 5174 IN USE                              ║
-╠════════════════════════════════════════════════════════════════════╣
-║                                                                    ║
-║  E2E tests need port 5174 for their frontend dev server.           ║
-║  Something is already using this port.                             ║
-║                                                                    ║
-╚════════════════════════════════════════════════════════════════════╝
-`);
-    throw new Error('Port 5174 is already in use. E2E tests need this port.');
-  }
-
-  // Check manual dev server status (informational)
-  const devBackendRunning = await isPortInUse(8000);
-  const devFrontendRunning = await isPortInUse(5173);
-
-  console.log('✓ Port 8001 is available for E2E test backend');
-  console.log('✓ Port 5174 is available for E2E test frontend');
-  if (devBackendRunning) {
-    console.log('ℹ Dev backend running on port 8000 (E2E tests use separate port)');
-  }
-  if (devFrontendRunning) {
-    console.log('ℹ Dev frontend running on port 5173 (E2E tests use separate port)');
-  }
-  console.log('✓ E2E tests will use an isolated test database\n');
 }

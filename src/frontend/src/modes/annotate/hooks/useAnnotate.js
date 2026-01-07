@@ -620,19 +620,30 @@ export default function useAnnotate(videoMetadata) {
    * Handles both camelCase (TSV parser) and snake_case (backend API) field names
    * If duration is not yet available, queues annotations for later processing
    * @param {Array} annotations - Array of parsed annotations
+   * @param {number} [overrideDuration] - Optional duration to use (bypasses state check)
+   *        Useful when loading saved games where we know the duration from metadata
    * @returns {number} - Number of clips imported (0 if queued for later)
    */
-  const importAnnotations = useCallback((annotations) => {
+  const importAnnotations = useCallback((annotations, overrideDuration = null) => {
     if (!annotations || annotations.length === 0) {
       return 0;
     }
 
+    // Use override duration if provided, otherwise use state duration
+    const effectiveDuration = overrideDuration ?? duration;
+
     // If duration not available yet, queue for later
-    if (!duration) {
+    if (!effectiveDuration) {
       console.log('[useAnnotate] Duration not available, queueing', annotations.length, 'annotations for later');
       setPendingAnnotations(annotations);
       setIsLoadingAnnotations(true);
       return 0;
+    }
+
+    // If we have an override duration, also set it in state for future operations
+    if (overrideDuration && !duration) {
+      console.log('[useAnnotate] Setting duration from override:', overrideDuration);
+      setDuration(overrideDuration);
     }
 
     const newRegions = annotations.map((annotation, index) => {
@@ -645,8 +656,8 @@ export default function useAnnotate(videoMetadata) {
 
       return {
         id: generateClipId(),
-        startTime: Math.max(0, Math.min(startTime, duration - MIN_CLIP_DURATION)),
-        endTime: Math.min(endTime, duration),
+        startTime: Math.max(0, Math.min(startTime, effectiveDuration - MIN_CLIP_DURATION)),
+        endTime: Math.min(endTime, effectiveDuration),
         name: annotation.name || '',
         position: '',
         tags: annotation.tags || [],

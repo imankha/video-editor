@@ -11,8 +11,8 @@ import { fileURLToPath } from 'url';
  * clicking a game doesn't transition to annotate mode.
  */
 
-// E2E tests run on port 8001 (see playwright.config.js)
-const API_BASE = 'http://localhost:8001/api';
+// E2E tests use dev port 8000 (see playwright.config.js)
+const API_BASE = 'http://localhost:8000/api';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

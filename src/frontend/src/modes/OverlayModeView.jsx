@@ -1,0 +1,285 @@
+import { VideoPlayer } from '../components/VideoPlayer';
+import { Controls } from '../components/Controls';
+import ZoomControls from '../components/ZoomControls';
+import ExportButton from '../components/ExportButton';
+import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from './overlay';
+
+/**
+ * OverlayModeView - Complete view for Overlay mode
+ *
+ * This component contains all overlay-specific JSX that was previously in App.jsx.
+ * It receives state and handlers as props from App.jsx.
+ *
+ * @see DECOMPOSITION_ANALYSIS.md for refactoring context
+ */
+export function OverlayModeView({
+  // Video state
+  videoRef,
+  effectiveOverlayVideoUrl,
+  effectiveOverlayMetadata,
+  effectiveOverlayFile,
+  currentTime,
+  duration,
+  isPlaying,
+  handlers,
+
+  // Playback controls
+  togglePlay,
+  stepForward,
+  stepBackward,
+  restart,
+  seek,
+
+  // Highlight state
+  currentHighlightState,
+  highlightRegions,
+  highlightBoundaries,
+  highlightRegionKeyframes,
+  highlightRegionsFramerate,
+  highlightEffectType,
+  isTimeInEnabledRegion,
+
+  // Highlight handlers
+  onHighlightChange,
+  onHighlightComplete,
+  onAddHighlightRegion,
+  onDeleteHighlightRegion,
+  onMoveHighlightRegionStart,
+  onMoveHighlightRegionEnd,
+  onRemoveHighlightKeyframe,
+  onToggleHighlightRegion,
+  onSelectedKeyframeChange,
+  onHighlightEffectTypeChange,
+
+  // Player detection
+  playerDetectionEnabled,
+  playerDetections,
+  isDetectionLoading,
+  isDetectionUploading,
+  onPlayerSelect,
+
+  // Zoom
+  zoom,
+  panOffset,
+  MIN_ZOOM,
+  MAX_ZOOM,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
+  onZoomByWheel,
+  onPanChange,
+
+  // Timeline zoom
+  timelineZoom,
+  timelineScrollPosition,
+  onTimelineZoomByWheel,
+  onTimelineScrollPositionChange,
+  getTimelineScale,
+
+  // Layers
+  selectedLayer,
+  onLayerSelect,
+
+  // Export
+  exportButtonRef,
+  getRegionsForExport,
+  includeAudio,
+  onIncludeAudioChange,
+  onExportComplete,
+
+  // Mode switching
+  onSwitchToFraming,
+  hasFramingEdits,
+  hasMultipleClips,
+  framingVideoUrl,
+}) {
+  // Show "export required" message if no overlay video but framing has edits
+  const showExportRequired = !effectiveOverlayVideoUrl && framingVideoUrl && (hasFramingEdits || hasMultipleClips);
+
+  return (
+    <>
+      {/* Video Metadata - use overlay metadata */}
+      {effectiveOverlayMetadata && (
+        <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
+          <div className="flex items-center justify-between text-sm text-gray-300">
+            <span className="font-semibold text-white">{effectiveOverlayMetadata.fileName}</span>
+            <div className="flex space-x-6">
+              <span>
+                <span className="text-gray-400">Resolution:</span>{' '}
+                {effectiveOverlayMetadata.width}x{effectiveOverlayMetadata.height}
+              </span>
+              {effectiveOverlayMetadata.framerate && (
+                <span>
+                  <span className="text-gray-400">Framerate:</span>{' '}
+                  {effectiveOverlayMetadata.framerate} fps
+                </span>
+              )}
+              <span>
+                <span className="text-gray-400">Format:</span>{' '}
+                {effectiveOverlayMetadata.format?.toUpperCase() || 'MP4'}
+              </span>
+              <span>
+                <span className="text-gray-400">Size:</span>{' '}
+                {(effectiveOverlayMetadata.size / (1024 * 1024)).toFixed(2)} MB
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Editor Area */}
+      <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
+        {/* Controls Bar */}
+        {effectiveOverlayVideoUrl && (
+          <div className="mb-6 flex gap-4 items-center">
+            <div className="ml-auto">
+              <ZoomControls
+                zoom={zoom}
+                onZoomIn={onZoomIn}
+                onZoomOut={onZoomOut}
+                onResetZoom={onResetZoom}
+                minZoom={MIN_ZOOM}
+                maxZoom={MAX_ZOOM}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Video Player with overlay-specific overlays */}
+        <div className="relative bg-gray-900 rounded-lg">
+          <VideoPlayer
+            videoRef={videoRef}
+            videoUrl={effectiveOverlayVideoUrl}
+            handlers={handlers}
+            overlays={[
+              // HighlightOverlay - highlight box around player
+              currentHighlightState && effectiveOverlayMetadata && (
+                <HighlightOverlay
+                  key="highlight"
+                  videoRef={videoRef}
+                  videoMetadata={effectiveOverlayMetadata}
+                  currentHighlight={currentHighlightState}
+                  onHighlightChange={onHighlightChange}
+                  onHighlightComplete={onHighlightComplete}
+                  isEnabled={isTimeInEnabledRegion(currentTime)}
+                  effectType={highlightEffectType}
+                  zoom={zoom}
+                  panOffset={panOffset}
+                />
+              ),
+              // PlayerDetectionOverlay - AI-detected player boxes
+              effectiveOverlayMetadata && playerDetectionEnabled && (
+                <PlayerDetectionOverlay
+                  key="player-detection"
+                  videoRef={videoRef}
+                  videoMetadata={effectiveOverlayMetadata}
+                  detections={playerDetections}
+                  isLoading={isDetectionLoading || isDetectionUploading}
+                  onPlayerSelect={onPlayerSelect}
+                  zoom={zoom}
+                  panOffset={panOffset}
+                />
+              ),
+            ].filter(Boolean)}
+            zoom={zoom}
+            panOffset={panOffset}
+            onZoomChange={onZoomByWheel}
+            onPanChange={onPanChange}
+          />
+
+          {/* Controls */}
+          {effectiveOverlayVideoUrl && (
+            <Controls
+              isPlaying={isPlaying}
+              currentTime={currentTime}
+              duration={effectiveOverlayMetadata?.duration || duration}
+              onTogglePlay={togglePlay}
+              onStepForward={stepForward}
+              onStepBackward={stepBackward}
+              onRestart={restart}
+            />
+          )}
+        </div>
+
+        {/* Overlay Mode Timeline */}
+        {effectiveOverlayVideoUrl && (
+          <OverlayMode
+            videoRef={videoRef}
+            videoUrl={effectiveOverlayVideoUrl}
+            metadata={effectiveOverlayMetadata}
+            currentTime={currentTime}
+            duration={effectiveOverlayMetadata?.duration || duration}
+            highlightRegions={highlightRegions}
+            highlightBoundaries={highlightBoundaries}
+            highlightKeyframes={highlightRegionKeyframes}
+            highlightFramerate={highlightRegionsFramerate}
+            onAddHighlightRegion={onAddHighlightRegion}
+            onDeleteHighlightRegion={onDeleteHighlightRegion}
+            onMoveHighlightRegionStart={onMoveHighlightRegionStart}
+            onMoveHighlightRegionEnd={onMoveHighlightRegionEnd}
+            onRemoveHighlightKeyframe={onRemoveHighlightKeyframe}
+            onToggleHighlightRegion={onToggleHighlightRegion}
+            onSelectedKeyframeChange={onSelectedKeyframeChange}
+            onHighlightChange={onHighlightChange}
+            onHighlightComplete={onHighlightComplete}
+            zoom={zoom}
+            panOffset={panOffset}
+            visualDuration={effectiveOverlayMetadata?.duration || duration}
+            selectedLayer={selectedLayer}
+            onLayerSelect={onLayerSelect}
+            onSeek={seek}
+            sourceTimeToVisualTime={(t) => t}
+            visualTimeToSourceTime={(t) => t}
+            timelineZoom={timelineZoom}
+            onTimelineZoomByWheel={onTimelineZoomByWheel}
+            timelineScale={getTimelineScale()}
+            timelineScrollPosition={timelineScrollPosition}
+            onTimelineScrollPositionChange={onTimelineScrollPositionChange}
+            trimRange={null}
+            isPlaying={isPlaying}
+          />
+        )}
+
+        {/* Export Required Message */}
+        {showExportRequired && (
+          <div className="mt-6 bg-purple-900/30 border border-purple-500/50 rounded-lg p-6 text-center">
+            <p className="text-purple-200 font-medium mb-2">
+              Export required for overlay mode
+            </p>
+            <p className="text-purple-300/70 text-sm mb-4">
+              {hasMultipleClips
+                ? 'You have multiple clips loaded. Export first to combine them into a single video before adding overlays.'
+                : 'You have made edits in Framing mode. Export first to apply them before adding overlays.'}
+            </p>
+            <button
+              onClick={onSwitchToFraming}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              Switch to Framing Mode
+            </button>
+          </div>
+        )}
+
+        {/* Export Button */}
+        {effectiveOverlayVideoUrl && (
+          <div className="mt-6">
+            <ExportButton
+              ref={exportButtonRef}
+              videoFile={effectiveOverlayFile}
+              cropKeyframes={[]}
+              highlightRegions={getRegionsForExport()}
+              isHighlightEnabled={highlightRegions.length > 0}
+              segmentData={null}
+              disabled={!effectiveOverlayFile}
+              includeAudio={includeAudio}
+              onIncludeAudioChange={onIncludeAudioChange}
+              highlightEffectType={highlightEffectType}
+              onHighlightEffectTypeChange={onHighlightEffectTypeChange}
+              onExportComplete={onExportComplete}
+            />
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
