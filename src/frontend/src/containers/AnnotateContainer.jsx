@@ -214,9 +214,11 @@ export function AnnotateContainer({
       setAnnotateGameId(gameId);
 
       // Import saved annotations if they exist
+      // Pass duration directly to avoid race condition with state updates
       if (gameData.annotations && gameData.annotations.length > 0) {
-        console.log('[AnnotateContainer] Importing', gameData.annotations.length, 'saved annotations');
-        importAnnotations(gameData.annotations);
+        const gameDuration = videoMetadata?.duration || gameData.video_duration;
+        console.log('[AnnotateContainer] Importing', gameData.annotations.length, 'saved annotations with duration:', gameDuration);
+        importAnnotations(gameData.annotations, gameDuration);
       }
 
       // Transition to annotate mode
@@ -240,6 +242,7 @@ export function AnnotateContainer({
       eventSource.onmessage = (event) => {
         try {
           const progress = JSON.parse(event.data);
+          console.log('[AnnotateContainer] SSE progress:', progress.current, '/', progress.total, '=', Math.round((progress.current / progress.total) * 100) + '%', progress.message);
           setExportProgress(progress);
           if (progress.done) {
             eventSource?.close();

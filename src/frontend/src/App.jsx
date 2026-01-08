@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Download, Loader, Upload, Settings, Image } from 'lucide-react';
+import { Image } from 'lucide-react';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { useDownloads } from './hooks/useDownloads';
 import { API_BASE } from './config';
@@ -13,47 +13,33 @@ import { useProjects } from './hooks/useProjects';
 import { useProjectClips } from './hooks/useProjectClips';
 import { useGames } from './hooks/useGames';
 import { useSettings } from './hooks/useSettings';
-import { VideoPlayer } from './components/VideoPlayer';
-import { Controls } from './components/Controls';
 import { FileUpload } from './components/FileUpload';
 import { ClipSelectorSidebar } from './components/ClipSelectorSidebar';
 import AspectRatioSelector from './components/AspectRatioSelector';
-import ZoomControls from './components/ZoomControls';
-import ExportButton from './components/ExportButton';
-import CompareModelsButton from './components/CompareModelsButton';
 import DebugInfo from './components/DebugInfo';
 import { ConfirmationDialog, ModeSwitcher } from './components/shared';
 import { ProjectManager } from './components/ProjectManager';
 import { ProjectCreationSettings } from './components/ProjectCreationSettings';
 import { ProjectHeader } from './components/ProjectHeader';
-// Mode-specific imports
-import { useCrop, useSegments, FramingMode, CropOverlay } from './modes/framing';
-import { useHighlight, useHighlightRegions, OverlayMode, HighlightOverlay, PlayerDetectionOverlay, useOverlayState } from './modes/overlay';
-import { AnnotateMode, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from './modes/annotate';
+// Mode-specific imports (hooks only - components now in mode views)
+import { useCrop, useSegments } from './modes/framing';
+import { useHighlight, useHighlightRegions, useOverlayState } from './modes/overlay';
+// ClipsSidePanel now rendered inside AnnotateScreen
+// Note: Mode views (FramingModeView, AnnotateModeView, OverlayModeView) are now
+// imported directly by their Screen components
+// Screen components (self-contained, own their hooks)
+import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
 // Container imports for mode-specific logic encapsulation
+// Note: AnnotateContainer is now only used inside AnnotateScreen (single source of truth)
 import {
-  AnnotateContainer,
-  AnnotateSidebar,
-  AnnotateVideoOverlays,
-  AnnotateVideoControls,
-  AnnotateTimeline,
-  AnnotateExportPanel,
   OverlayContainer,
-  OverlayVideoOverlays,
-  OverlayTimeline,
   FramingContainer,
-  FramingVideoOverlay,
-  FramingTimeline,
 } from './containers';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from './utils/keyframeUtils';
 import { AppStateProvider } from './contexts';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from './utils/videoMetadata';
 import { useCurrentVideoState } from './hooks/useCurrentVideoState';
 import { useEditorStore, useExportStore } from './stores';
-
-// Feature flags for experimental features
-// Set to true to enable model comparison UI (for A/B testing different AI models)
-const ENABLE_MODEL_COMPARISON = false;
 
 function App() {
   const [videoFile, setVideoFile] = useState(null);
@@ -104,8 +90,6 @@ function App() {
 
   // Export state from Zustand store (see stores/exportStore.js)
   const {
-    exportProgress,
-    setExportProgress,
     exportingProject,
     startExport,
     clearExport,
@@ -188,6 +172,11 @@ function App() {
 
   // Settings modal state
   const [showProjectCreationSettings, setShowProjectCreationSettings] = useState(false);
+
+  // Pending file for annotate mode (set from ProjectManager, consumed by AnnotateScreen)
+  const [pendingAnnotateFile, setPendingAnnotateFile] = useState(null);
+  // Pending game ID for annotate mode (set when loading saved game from ProjectManager)
+  const [pendingGameId, setPendingGameId] = useState(null);
 
   // Downloads panel state
   const [isDownloadsPanelOpen, setIsDownloadsPanelOpen] = useState(false);
@@ -316,23 +305,12 @@ function App() {
 
   const {
     keyframes: highlightKeyframes,
-    isEndKeyframeExplicit: isHighlightEndKeyframeExplicit,
-    copiedHighlight,
     framerate: highlightFramerate,
     isEnabled: isHighlightEnabled,
-    highlightDuration,
-    toggleEnabled: toggleHighlightEnabled,
-    updateHighlightDuration,
     addOrUpdateKeyframe: addOrUpdateHighlightKeyframe,
-    removeKeyframe: removeHighlightKeyframe,
     deleteKeyframesInRange: deleteHighlightKeyframesInRange,
     cleanupTrimKeyframes: cleanupHighlightTrimKeyframes,
-    copyHighlightKeyframe,
-    pasteHighlightKeyframe,
-    interpolateHighlight,
-    hasKeyframeAt: hasHighlightKeyframeAt,
     getHighlightDataAtTime,
-    getKeyframesForExport: getHighlightKeyframesForExport,
     reset: resetHighlight,
   } = useHighlight(effectiveHighlightMetadata, effectiveHighlightTrimRange);
 
@@ -382,84 +360,17 @@ function App() {
     getTimelineScale,
   } = useTimelineZoom();
 
-  // AnnotateContainer - encapsulates all annotate mode state and handlers
-  // Returns state and handlers for use in render. Effects run internally.
-  const annotate = AnnotateContainer({
-    // Video controls
-    videoRef,
-    currentTime,
-    duration,
-    isPlaying,
-    togglePlay,
-    stepForward,
-    stepBackward,
-    restart,
-    seek,
-    // Game management
-    createGame,
-    uploadGameVideo,
-    getGame,
-    getGameVideoUrl,
-    saveAnnotationsDebounced,
-    // Project management
-    fetchProjects,
-    projectCreationSettings,
-    // Navigation
-    onBackToProjects: () => setEditorMode('project-manager'),
-    setEditorMode,
-    // Settings modal - defined below after state is set up
-    onOpenProjectCreationSettings: () => setShowProjectCreationSettings(true),
-    // Downloads
-    downloadsCount,
-    onOpenDownloads: () => setShowDownloads(true),
-  });
+  // Annotate mode: AnnotateContainer is now ONLY called inside AnnotateScreen
+  // This eliminates duplicate state between App.jsx and AnnotateScreen.
+  // App.jsx just handles navigation - actual game loading happens in AnnotateScreen.
 
-  // Destructure annotate container values for convenience
-  const {
-    annotateVideoUrl,
-    annotateVideoMetadata,
-    annotateFullscreen,
-    showAnnotateOverlay,
-    annotateSelectedLayer,
-    annotatePlaybackSpeed,
-    annotateContainerRef,
-    annotateFileInputRef,
-    isCreatingAnnotatedVideo,
-    isImportingToProjects,
-    isUploadingGameVideo,
-    hasAnnotateClips,
-    clipRegions,
-    annotateRegionsWithLayout,
-    annotateSelectedRegionId,
-    annotateClipCount,
-    isLoadingAnnotations,
-    ANNOTATE_MAX_NOTES_LENGTH,
-    // Handlers
-    handleGameVideoSelect,
-    handleLoadGame,
-    handleCreateAnnotatedVideo,
-    handleImportIntoProjects,
-    handleToggleFullscreen,
-    handleAddClipFromButton,
-    handleFullscreenCreateClip,
-    handleFullscreenUpdateClip,
-    handleOverlayClose,
-    handleOverlayResume,
-    handleSelectRegion: handleSelectAnnotateRegion,
-    setAnnotatePlaybackSpeed,
-    setAnnotateSelectedLayer,
-    // Clip region actions
-    updateClipRegion,
-    deleteClipRegion,
-    importAnnotations,
-    getAnnotateRegionAtTime,
-    getAnnotateExportData,
-    selectAnnotateRegion,
-    // Computed
-    effectiveDuration: annotateEffectiveDuration,
-    // Cleanup
-    clearAnnotateState,
-  } = annotate;
+  // Handler for loading saved games from ProjectManager
+  // Sets pendingGameId and navigates to annotate mode - AnnotateScreen handles actual loading
+  const handleLoadGame = useCallback((gameId) => {
+    console.log('[App] Loading game - setting pendingGameId:', gameId);
+    setPendingGameId(gameId);
+    setEditorMode('annotate');
+  }, [setEditorMode]);
 
   // OverlayContainer - encapsulates all overlay mode state and handlers
   // Returns derived state and handlers for use in render. Effects run internally.
@@ -638,14 +549,9 @@ function App() {
     setFramingChangedSinceExport,
   });
 
-  // Destructure framing container values for convenience
-  // Note: Some values have different names to avoid conflicts with inline definitions
-  // that have additional logic (e.g., dragCrop handling in currentCropState)
+  // Destructure framing container values for use in render
   const {
-    currentCropState: framingCurrentCropState,
-    hasFramingEdits: framingHasFramingEdits,
     clipsWithCurrentState: framingClipsWithCurrentState,
-    getFilteredKeyframesForExport: framingGetFilteredKeyframesForExport,
     handleCropChange: framingHandleCropChange,
     handleCropComplete: framingHandleCropComplete,
     handleTrimSegment: framingHandleTrimSegment,
@@ -655,9 +561,6 @@ function App() {
     handleKeyframeDelete: framingHandleKeyframeDelete,
     handleCopyCrop: framingHandleCopyCrop,
     handlePasteCrop: framingHandlePasteCrop,
-    handleAddSplit: framingHandleAddSplit,
-    handleRemoveSplit: framingHandleRemoveSplit,
-    handleSegmentSpeedChange: framingHandleSegmentSpeedChange,
     saveCurrentClipState: framingSaveCurrentClipState,
   } = framing;
 
@@ -678,211 +581,8 @@ function App() {
     return index !== -1 ? index : null;
   }, [videoUrl, currentTime, highlightFramerate, highlightKeyframes, isHighlightEnabled]);
 
-  /**
-   * Clips with current clip's live state merged.
-   * Since clip state (keyframes, segments) is managed in useCrop/useSegments hooks,
-   * we need to merge the current clip's live state before export.
-   */
-  const clipsWithCurrentState = useMemo(() => {
-    if (!hasClips || !clips || !selectedClipId) return clips;
-
-    // Helper to convert frame-based keyframes to time-based for export
-    const convertKeyframesToTime = (keyframes, clipFramerate) => {
-      if (!keyframes || !Array.isArray(keyframes)) return [];
-      return keyframes.map(kf => {
-        // If already has 'time', it's already converted
-        if (kf.time !== undefined) return kf;
-        // Convert frame to time
-        const time = kf.frame / clipFramerate;
-        const { frame, ...rest } = kf;
-        return { time, ...rest };
-      });
-    };
-
-    // Helper to calculate default crop for a given aspect ratio
-    const calculateDefaultCrop = (sourceWidth, sourceHeight, targetAspectRatio) => {
-      if (!sourceWidth || !sourceHeight) {
-        return { x: 0, y: 0, width: 0, height: 0 };
-      }
-      const [ratioW, ratioH] = targetAspectRatio.split(':').map(Number);
-      const targetRatio = ratioW / ratioH;
-      const videoRatio = sourceWidth / sourceHeight;
-
-      let cropWidth, cropHeight;
-      if (videoRatio > targetRatio) {
-        cropHeight = sourceHeight;
-        cropWidth = cropHeight * targetRatio;
-      } else {
-        cropWidth = sourceWidth;
-        cropHeight = cropWidth / targetRatio;
-      }
-
-      const x = (sourceWidth - cropWidth) / 2;
-      const y = (sourceHeight - cropHeight) / 2;
-
-      return {
-        x: Math.round(x),
-        y: Math.round(y),
-        width: Math.round(cropWidth),
-        height: Math.round(cropHeight)
-      };
-    };
-
-    // Use getKeyframesForExport() for current clip (proper conversion)
-    const currentClipExportKeyframes = getKeyframesForExport();
-
-    // Debug logging
-    console.log('[clipsWithCurrentState] Building export state:');
-    console.log('  - selectedClipId:', selectedClipId);
-    console.log('  - currentClipExportKeyframes:', currentClipExportKeyframes?.length, currentClipExportKeyframes);
-    console.log('  - segmentSpeeds:', segmentSpeeds);
-
-    return clips.map(clip => {
-      if (clip.id === selectedClipId) {
-        // Current clip: use live state from hooks
-        const result = {
-          ...clip,
-          cropKeyframes: currentClipExportKeyframes,
-          segments: {
-            boundaries: segmentBoundaries,
-            segmentSpeeds: segmentSpeeds,
-            trimRange: trimRange
-          },
-          trimRange: trimRange
-        };
-        console.log(`  - Clip ${clip.id} (CURRENT):`, result.cropKeyframes?.length, 'keyframes, speeds:', result.segments.segmentSpeeds);
-        return result;
-      }
-      // Other clips: convert saved keyframes from frame to time
-      let convertedKeyframes = convertKeyframesToTime(clip.cropKeyframes, clip.framerate || 30);
-
-      // FIX: If no keyframes were saved (race condition on fast clip add),
-      // generate default keyframes based on clip dimensions and global aspect ratio
-      if (convertedKeyframes.length === 0 && clip.sourceWidth && clip.sourceHeight && clip.duration) {
-        const defaultCrop = calculateDefaultCrop(clip.sourceWidth, clip.sourceHeight, globalAspectRatio);
-        convertedKeyframes = [
-          { time: 0, ...defaultCrop },
-          { time: clip.duration, ...defaultCrop }
-        ];
-        console.log(`  - Clip ${clip.id} (saved): EMPTY keyframes - generated defaults:`, convertedKeyframes);
-      } else {
-        console.log(`  - Clip ${clip.id} (saved): raw=${clip.cropKeyframes?.length}, converted=${convertedKeyframes?.length} keyframes, segments:`, clip.segments);
-      }
-
-      return {
-        ...clip,
-        cropKeyframes: convertedKeyframes
-      };
-    });
-  }, [clips, selectedClipId, getKeyframesForExport, segmentBoundaries, segmentSpeeds, trimRange, hasClips, globalAspectRatio]);
-
-  /**
-   * Save current clip's framing edits (debounced auto-save)
-   * This is the auto-save function that gets called continuously as user makes edits
-   */
-  const autoSaveFramingEdits = useCallback(async () => {
-    // Don't save if no clip selected or not in framing mode
-    if (!selectedClipId || editorMode !== 'framing') return;
-
-    // Cancel pending debounced save
-    if (pendingFramingSaveRef.current) {
-      clearTimeout(pendingFramingSaveRef.current);
-    }
-
-    // Debounce: wait 2 seconds after last change
-    pendingFramingSaveRef.current = setTimeout(async () => {
-      const saveClipId = selectedClipId; // Capture for closure
-      const currentClip = clips.find(c => c.id === saveClipId);
-
-      // Only save if this is a project clip with a backend ID
-      if (!currentClip?.workingClipId || !selectedProjectId) return;
-
-      try {
-        const segmentState = {
-          boundaries: segmentBoundaries,
-          segmentSpeeds: segmentSpeeds,
-          trimRange: trimRange,
-        };
-
-        // Save to local clip manager state first
-        updateClipData(saveClipId, {
-          segments: segmentState,
-          cropKeyframes: keyframes,
-          trimRange: trimRange
-        });
-
-        // Save to backend
-        const result = await saveFramingEdits(currentClip.workingClipId, {
-          cropKeyframes: keyframes,
-          segments: segmentState,
-          trimRange: trimRange
-        });
-
-        // If backend created a new version, update local clip's workingClipId
-        if (result.newClipId) {
-          console.log('[App] Clip versioned, updating workingClipId:', currentClip.workingClipId, '->', result.newClipId);
-          updateClipData(saveClipId, { workingClipId: result.newClipId });
-        }
-
-        console.log('[App] Framing edits auto-saved for clip:', saveClipId);
-      } catch (e) {
-        console.error('[App] Failed to auto-save framing edits:', e);
-      }
-    }, 2000);
-  }, [selectedClipId, editorMode, segmentBoundaries, segmentSpeeds, trimRange, keyframes, updateClipData, clips, selectedProjectId, saveFramingEdits]);
-
-  /**
-   * Save current clip's state before switching (immediate, non-debounced)
-   */
-  const saveCurrentClipState = useCallback(async () => {
-    if (!selectedClipId) {
-      console.log('[App] saveCurrentClipState: No selectedClipId, skipping');
-      return;
-    }
-
-    // Cancel any pending auto-save since we're saving immediately
-    if (pendingFramingSaveRef.current) {
-      clearTimeout(pendingFramingSaveRef.current);
-      pendingFramingSaveRef.current = null;
-    }
-
-    // Save current segment state including speeds
-    const segmentState = {
-      boundaries: segmentBoundaries,
-      segmentSpeeds: segmentSpeeds,
-      trimRange: trimRange,
-    };
-
-    console.log('[App] saveCurrentClipState for clip:', selectedClipId);
-    console.log('  - keyframes to save:', keyframes?.length, keyframes);
-    console.log('  - segmentState:', segmentState);
-
-    // Save to local clip manager state
-    updateClipData(selectedClipId, {
-      segments: segmentState,
-      cropKeyframes: keyframes,
-      trimRange: trimRange
-    });
-
-    // If this is a project clip, also save to backend
-    const currentClip = clips.find(c => c.id === selectedClipId);
-    if (currentClip?.workingClipId && selectedProjectId) {
-      console.log('[App] Saving framing edits to backend for working clip:', currentClip.workingClipId);
-      const result = await saveFramingEdits(currentClip.workingClipId, {
-        cropKeyframes: keyframes,
-        segments: segmentState,
-        trimRange: trimRange
-      });
-
-      // If backend created a new version, update local clip's workingClipId
-      if (result.newClipId) {
-        console.log('[App] Clip versioned in saveCurrentClipState, updating workingClipId:', currentClip.workingClipId, '->', result.newClipId);
-        updateClipData(selectedClipId, { workingClipId: result.newClipId });
-      }
-    }
-
-    console.log('[App] Saved state for clip:', selectedClipId);
-  }, [selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, keyframes, updateClipData, clips, selectedProjectId, saveFramingEdits]);
+  // NOTE: clipsWithCurrentState, autoSaveFramingEdits, and framingSaveCurrentClipState
+  // are now managed by FramingContainer and accessed via framingClipsWithCurrentState, etc.
 
   /**
    * Calculate clip metadata for overlay mode from loaded project clips
@@ -975,73 +675,8 @@ function App() {
     }
   };
 
-  /**
-   * Handle pre-framed video selection for Overlay mode (skip Framing)
-   * Extracts chapter metadata from the video and goes directly to Overlay mode
-   */
-  const handleFramedVideoSelect = async (file) => {
-    if (!file) return;
-
-    try {
-      console.log('[App] handleFramedVideoSelect: Processing', file.name);
-
-      // Extract chapters from the video using backend
-      const formData = new FormData();
-      formData.append('video', file);
-
-      const chaptersResponse = await fetch(`${API_BASE}/api/export/chapters`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      let clipMetadata = null;
-      if (chaptersResponse.ok) {
-        const chaptersData = await chaptersResponse.json();
-        const chapters = chaptersData.chapters || [];
-
-        if (chapters.length > 0) {
-          // Convert chapters to source_clips format
-          clipMetadata = {
-            source_clips: chapters.map((chapter, index) => ({
-              index,
-              name: chapter.title,
-              fileName: chapter.title,
-              start_time: chapter.start_time,
-              end_time: chapter.end_time,
-              duration: chapter.end_time - chapter.start_time
-            }))
-          };
-          console.log('[App] Extracted chapter metadata:', clipMetadata);
-        } else {
-          console.log('[App] No chapters found in video, will create single region');
-        }
-      } else {
-        console.warn('[App] Failed to extract chapters, will create single region');
-      }
-
-      // Transition to overlay mode with the video file
-      await handleProceedToOverlay(file, clipMetadata);
-
-      console.log('[App] Successfully transitioned to Overlay mode with framed video');
-    } catch (err) {
-      console.error('[App] Failed to process framed video:', err);
-      throw err; // Re-throw so FileUpload can handle the error
-    }
-  };
-
   // NOTE: Annotate mode handlers (handleGameVideoSelect, handleLoadGame, etc.)
   // are now provided by AnnotateContainer (see destructuring above)
-
-  /**
-   * Handle exiting Annotate mode
-   * Clears annotate state and returns to no-video state
-   */
-  const handleExitAnnotateMode = useCallback(() => {
-    console.log('[App] Exiting Annotate mode');
-    clearAnnotateState();
-    setEditorMode('framing');
-  }, [clearAnnotateState]);
-
   // NOTE: The following annotate handlers are now provided by AnnotateContainer:
   // - handleLoadGame
   // - handleCreateAnnotatedVideo
@@ -1060,7 +695,7 @@ function App() {
     if (clipId === selectedClipId) return;
 
     // Save current clip's state
-    saveCurrentClipState();
+    framingSaveCurrentClipState();
 
     // Find the clip to load
     const clip = clips.find(c => c.id === clipId);
@@ -1120,7 +755,7 @@ function App() {
     }
 
     console.log('[App] Switched to clip:', clipId, clip.fileName);
-  }, [selectedClipId, saveCurrentClipState, clips, selectClip, resetSegments, resetCrop, resetHighlight, resetHighlightRegions, loadVideo, loadVideoFromUrl, restoreSegmentState, restoreCropState, selectedProject, globalAspectRatio, updateAspectRatio]);
+  }, [selectedClipId, framingSaveCurrentClipState, clips, selectClip, resetSegments, resetCrop, resetHighlight, resetHighlightRegions, loadVideo, loadVideoFromUrl, restoreSegmentState, restoreCropState, selectedProject, globalAspectRatio, updateAspectRatio]);
 
   /**
    * Handle clip deletion from sidebar
@@ -1252,11 +887,13 @@ function App() {
 
   // Unified video state based on current editor mode
   // This hook provides a single interface to access video state regardless of mode
+  // Note: Annotate state is now owned by AnnotateScreen, so we pass null here.
+  // AnnotateScreen handles its own video state internally.
   const currentVideoState = useCurrentVideoState(
     editorMode,
     { videoUrl, metadata, videoFile, isLoading },
     { overlayVideoUrl: effectiveOverlayVideoUrl, overlayVideoMetadata: effectiveOverlayMetadata, overlayVideoFile: effectiveOverlayFile, isLoadingWorkingVideo },
-    { annotateVideoUrl, annotateVideoMetadata, annotateVideoFile: null, isLoading: false }
+    { annotateVideoUrl: null, annotateVideoMetadata: null, annotateVideoFile: null, isLoading: false }
   );
 
   // NOTE: Player detection (playerDetectionEnabled, playerDetections, isDetectionLoading,
@@ -1336,298 +973,18 @@ function App() {
     // If neither has keyframe, don't change selectedLayer
   }, [selectedCropKeyframeIndex, selectedHighlightKeyframeIndex, videoUrl, selectedLayer]);
 
-  // Handler functions for copy/paste (defined BEFORE useEffect to avoid initialization errors)
-  const handleCopyCrop = (time = currentTime) => {
-    if (videoUrl) {
-      copyCropKeyframe(time);
-    }
-  };
-
-  const handlePasteCrop = (time = currentTime) => {
-    if (videoUrl && copiedCrop) {
-      pasteCropKeyframe(time, duration);
-      // Note: Don't move playhead - paste happens at current playhead position
-    }
-  };
-
-  // Handler functions for highlight copy/paste
-  const handleCopyHighlight = (time = currentTime) => {
-    if (videoUrl && isHighlightEnabled) {
-      copyHighlightKeyframe(time);
-    }
-  };
-
-  const handlePasteHighlight = (time = currentTime) => {
-    if (videoUrl && copiedHighlight && isHighlightEnabled) {
-      pasteHighlightKeyframe(time, duration);
-      // Note: Don't move playhead - paste happens at current playhead position
-    }
-  };
-
-  /**
-   * Coordinated segment trim handler
-   * This function ensures keyframes are properly managed when trimming segments:
-   * 1. Deletes all crop and highlight keyframes in the trimmed region
-   * 2. Updates the boundary crop and highlight keyframes with data from the furthest keyframes in the trimmed region
-   * 3. Toggles the segment trim state
-   *
-   * Both crop and highlight keyframes use identical trim logic for consistency.
-   */
-  const handleTrimSegment = (segmentIndex) => {
-    if (!duration || segmentIndex < 0 || segmentIndex >= segments.length) return;
-
-    // Mark that user has made an edit (enables auto-save)
-    clipHasUserEditsRef.current = true;
-
-    const segment = segments[segmentIndex];
-    const isCurrentlyTrimmed = segment.isTrimmed;
-
-    console.log(`[App] Trim segment ${segmentIndex}: ${segment.start.toFixed(2)}s-${segment.end.toFixed(2)}s, isTrimmed=${isCurrentlyTrimmed}, cropKFs=${keyframes.length}, highlightKFs=${highlightKeyframes.length}`);
-
-    // INVARIANT: Can only trim edge segments
-    if (process.env.NODE_ENV === 'development') {
-      if (!isCurrentlyTrimmed && !segment.isFirst && !segment.isLast) {
-        console.error('⚠️ INVARIANT VIOLATION: Attempting to trim non-edge segment:', segmentIndex);
-        return;
-      }
-    }
-
-    if (!isCurrentlyTrimmed) {
-      // We're about to trim this segment
-
-      // ========== CROP KEYFRAMES ==========
-      // Step 1: Find the furthest crop keyframe in the trimmed region to preserve its data
-      let boundaryTime;
-      let furthestCropKeyframeInTrimmedRegion = null;
-
-      if (segment.isLast) {
-        // Trimming from the end
-        boundaryTime = segment.start;
-
-        // Find the furthest keyframe before or at the segment end
-        for (let i = keyframes.length - 1; i >= 0; i--) {
-          const kfTime = keyframes[i].frame / framerate;
-          if (kfTime >= segment.start && kfTime <= segment.end) {
-            furthestCropKeyframeInTrimmedRegion = keyframes[i];
-            break;
-          }
-        }
-      } else if (segment.isFirst) {
-        // Trimming from the start
-        boundaryTime = segment.end;
-
-        // Find the furthest keyframe after or at the segment start
-        for (let i = 0; i < keyframes.length; i++) {
-          const kfTime = keyframes[i].frame / framerate;
-          if (kfTime >= segment.start && kfTime <= segment.end) {
-            furthestCropKeyframeInTrimmedRegion = keyframes[i];
-          }
-        }
-      }
-
-      // Step 2: If we found a crop keyframe in the trimmed region, get its data
-      // Otherwise, interpolate at the furthest point in the trimmed region
-      let cropDataToPreserve = null;
-      if (furthestCropKeyframeInTrimmedRegion) {
-        const kfTime = furthestCropKeyframeInTrimmedRegion.frame / framerate;
-        cropDataToPreserve = getCropDataAtTime(kfTime);
-      } else {
-        // No keyframe in trimmed region, interpolate at the far edge
-        const edgeTime = segment.isLast ? segment.end : segment.start;
-        cropDataToPreserve = getCropDataAtTime(edgeTime);
-      }
-
-      // Step 3: Delete crop keyframes in the trimmed range
-      deleteKeyframesInRange(segment.start, segment.end, duration);
-
-      // Step 4: Reconstitute the permanent keyframe at the boundary
-      // The permanent keyframe (frame 0 or end) was deleted in the trimmed range,
-      // so we reconstitute it at the new boundary with origin='permanent'
-      if (cropDataToPreserve && boundaryTime !== undefined) {
-        addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration, 'permanent');
-      }
-
-      // ========== HIGHLIGHT KEYFRAMES ==========
-      // Step 1: Find the furthest highlight keyframe in the trimmed region to preserve its data
-      let furthestHighlightKeyframeInTrimmedRegion = null;
-
-      if (segment.isLast) {
-        // Trimming from the end
-        // Find the furthest keyframe before or at the segment end
-        for (let i = highlightKeyframes.length - 1; i >= 0; i--) {
-          const kfTime = highlightKeyframes[i].frame / framerate;
-          if (kfTime >= segment.start && kfTime <= segment.end) {
-            furthestHighlightKeyframeInTrimmedRegion = highlightKeyframes[i];
-            break;
-          }
-        }
-      } else if (segment.isFirst) {
-        // Trimming from the start
-        // Find the furthest keyframe after or at the segment start
-        for (let i = 0; i < highlightKeyframes.length; i++) {
-          const kfTime = highlightKeyframes[i].frame / framerate;
-          if (kfTime >= segment.start && kfTime <= segment.end) {
-            furthestHighlightKeyframeInTrimmedRegion = highlightKeyframes[i];
-          }
-        }
-      }
-
-      // Step 2: If we found a highlight keyframe in the trimmed region, get its data
-      // Otherwise, interpolate at the furthest point in the trimmed region
-      let highlightDataToPreserve = null;
-      if (furthestHighlightKeyframeInTrimmedRegion) {
-        const kfTime = furthestHighlightKeyframeInTrimmedRegion.frame / framerate;
-        highlightDataToPreserve = getHighlightDataAtTime(kfTime);
-      } else {
-        // No keyframe in trimmed region, interpolate at the far edge
-        const edgeTime = segment.isLast ? segment.end : segment.start;
-        highlightDataToPreserve = getHighlightDataAtTime(edgeTime);
-      }
-
-      // Step 3: Delete highlight keyframes in the trimmed range
-      deleteHighlightKeyframesInRange(segment.start, segment.end, duration);
-
-      // Step 4: Reconstitute the permanent highlight keyframe at the boundary
-      // The permanent keyframe was deleted in the trimmed range,
-      // so we reconstitute it at the new boundary with origin='permanent'
-      if (highlightDataToPreserve && boundaryTime !== undefined) {
-        addOrUpdateHighlightKeyframe(boundaryTime, highlightDataToPreserve, duration, 'permanent');
-      }
-    }
-    // Note: Cleanup of trim keyframes is now automatic via useEffect watching trimRange
-
-    // Step 5: Toggle the trim state (this works for both trimming and restoring)
-
-    // NOTE: Keyframe state updates happen asynchronously via React's batching.
-    // Check the "[App] Keyframes changed" log to see the actual updated state.
-    // setTimeout closures capture stale variables and show incorrect state.
-
-    toggleTrimSegment(segmentIndex);
-  };
-
-  /**
-   * Coordinated de-trim handler for start
-   * This function ensures keyframes are properly reconstituted when un-trimming from start:
-   * 1. Gets the keyframe data at the current trim boundary
-   * 2. Deletes the keyframe at the trim boundary
-   * 3. Reconstitutes the keyframe at frame 0
-   * 4. Calls the original detrimStart function
-   */
-  const handleDetrimStart = () => {
-    if (!trimRange || !duration) return;
-
-    // Mark that user has made an edit (enables auto-save)
-    clipHasUserEditsRef.current = true;
-
-    console.log(`[App] Detrim start: boundary=${trimRange.start.toFixed(2)}s, cropKFs=${keyframes.length}, highlightKFs=${highlightKeyframes.length}`);
-
-    // The current trim boundary is trimRange.start
-    const boundaryTime = trimRange.start;
-    const boundaryFrame = Math.round(boundaryTime * framerate);
-
-    // ========== CROP KEYFRAMES ==========
-    // Get data from keyframe at the trim boundary
-    const cropDataAtBoundary = getCropDataAtTime(boundaryTime);
-
-    // Delete the keyframe at the trim boundary (if it exists and is not frame 0)
-    if (boundaryFrame > 0) {
-      const cropKfAtBoundary = keyframes.find(kf => kf.frame === boundaryFrame);
-      if (cropKfAtBoundary && cropKfAtBoundary.origin === 'permanent') {
-        // We need to delete this keyframe - use a small range around it
-        deleteKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
-      }
-    }
-
-    // Reconstitute the keyframe at frame 0
-    if (cropDataAtBoundary) {
-      addOrUpdateKeyframe(0, cropDataAtBoundary, duration, 'permanent');
-    }
-
-    // ========== HIGHLIGHT KEYFRAMES ==========
-    // Get data from keyframe at the trim boundary
-    const highlightDataAtBoundary = getHighlightDataAtTime(boundaryTime);
-
-    // Delete the keyframe at the trim boundary (if it exists and is not frame 0)
-    if (boundaryFrame > 0) {
-      const highlightKfAtBoundary = highlightKeyframes.find(kf => kf.frame === boundaryFrame);
-      if (highlightKfAtBoundary && highlightKfAtBoundary.origin === 'permanent') {
-        deleteHighlightKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
-      }
-    }
-
-    // Reconstitute the keyframe at frame 0
-    if (highlightDataAtBoundary) {
-      addOrUpdateHighlightKeyframe(0, highlightDataAtBoundary, duration, 'permanent');
-    }
-
-    // Call the original detrimStart function to update trimRange
-    detrimStart();
-  };
-
-  /**
-   * Coordinated de-trim handler for end
-   * This function ensures keyframes are properly reconstituted when un-trimming from end:
-   * 1. Gets the keyframe data at the current trim boundary
-   * 2. Deletes the keyframe at the trim boundary
-   * 3. Reconstitutes the keyframe at the original end position
-   * 4. Calls the original detrimEnd function
-   */
-  const handleDetrimEnd = () => {
-    if (!trimRange || !duration) return;
-
-    // Mark that user has made an edit (enables auto-save)
-    clipHasUserEditsRef.current = true;
-
-    console.log(`[App] Detrim end: boundary=${trimRange.end.toFixed(2)}s, cropKFs=${keyframes.length}, highlightKFs=${highlightKeyframes.length}`);
-
-    // The current trim boundary is trimRange.end
-    const boundaryTime = trimRange.end;
-    const boundaryFrame = Math.round(boundaryTime * framerate);
-    const endFrame = Math.round(duration * framerate);
-
-    // ========== CROP KEYFRAMES ==========
-    // Get data from keyframe at the trim boundary
-    const cropDataAtBoundary = getCropDataAtTime(boundaryTime);
-
-    // Delete the keyframe at the trim boundary (if it exists and is not the end frame)
-    if (boundaryFrame < endFrame) {
-      const cropKfAtBoundary = keyframes.find(kf => kf.frame === boundaryFrame);
-      if (cropKfAtBoundary && cropKfAtBoundary.origin === 'permanent') {
-        deleteKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
-      }
-    }
-
-    // Reconstitute the keyframe at the original end
-    if (cropDataAtBoundary) {
-      addOrUpdateKeyframe(duration, cropDataAtBoundary, duration, 'permanent');
-    }
-
-    // ========== HIGHLIGHT KEYFRAMES ==========
-    // Get data from keyframe at the trim boundary
-    const highlightDataAtBoundary = getHighlightDataAtTime(boundaryTime);
-    const highlightEndFrame = Math.round(highlightDuration * highlightFramerate);
-
-    // Delete the keyframe at the trim boundary (if it exists and is not the highlight end frame)
-    if (boundaryFrame < highlightEndFrame) {
-      const highlightKfAtBoundary = highlightKeyframes.find(kf => kf.frame === boundaryFrame);
-      if (highlightKfAtBoundary && highlightKfAtBoundary.origin === 'permanent') {
-        deleteHighlightKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
-      }
-    }
-
-    // Reconstitute the keyframe at the highlight end
-    if (highlightDataAtBoundary && boundaryTime < highlightDuration) {
-      addOrUpdateHighlightKeyframe(highlightDuration, highlightDataAtBoundary, duration, 'permanent');
-    }
-
-    // Call the original detrimEnd function to update trimRange
-    detrimEnd();
-  };
+  // NOTE: handleCopyCrop/handlePasteCrop and handleCropChange/handleCropComplete/handleKeyframeClick/handleKeyframeDelete
+  // are now provided by FramingContainer and accessed via framingHandle* versions
+  // NOTE: handleHighlightChange and handleHighlightComplete are provided by OverlayContainer
 
   // Keyboard shortcuts (space bar, copy/paste, arrow keys)
   // @see hooks/useKeyboardShortcuts.js for implementation
+  // NOTE: Annotate and Overlay mode keyboard shortcuts are now handled inside
+  // their respective Screen components (AnnotateScreen, OverlayScreen) because
+  // they have their own useVideo instances with the correct videoRef.
+  // App.jsx only handles Framing mode shortcuts.
   useKeyboardShortcuts({
-    hasVideo: Boolean(videoUrl || effectiveOverlayVideoUrl || annotateVideoUrl),
+    hasVideo: editorMode === 'framing' && Boolean(videoUrl),
     togglePlay,
     stepForward,
     stepBackward,
@@ -1635,8 +992,8 @@ function App() {
     editorMode,
     selectedLayer,
     copiedCrop,
-    onCopyCrop: handleCopyCrop,
-    onPasteCrop: handlePasteCrop,
+    onCopyCrop: framingHandleCopyCrop,
+    onPasteCrop: framingHandlePasteCrop,
     keyframes,
     framerate,
     selectedCropKeyframeIndex,
@@ -1644,65 +1001,13 @@ function App() {
     highlightFramerate,
     selectedHighlightKeyframeIndex,
     isHighlightEnabled,
-    annotateVideoUrl,
-    annotateSelectedLayer,
-    clipRegions,
-    annotateSelectedRegionId,
-    selectAnnotateRegion,
+    // Annotate mode props - keyboard handling is now in AnnotateScreen
+    annotateVideoUrl: null,
+    annotateSelectedLayer: null,
+    clipRegions: [],
+    annotateSelectedRegionId: null,
+    selectAnnotateRegion: null,
   });
-
-  // Handle crop changes during drag/resize (live preview)
-  const handleCropChange = (newCrop) => {
-    setDragCrop(newCrop);
-  };
-
-  // Handle crop complete (create keyframe and clear drag state)
-  const handleCropComplete = (cropData) => {
-    const frame = Math.round(currentTime * framerate);
-    const isUpdate = keyframes.some(kf => kf.frame === frame);
-    console.log(`[App] Crop ${isUpdate ? 'update' : 'add'} at ${currentTime.toFixed(2)}s (frame ${frame}): x=${cropData.x}, y=${cropData.y}, ${cropData.width}x${cropData.height}`);
-
-    // Mark that user has made an edit (enables auto-save)
-    clipHasUserEditsRef.current = true;
-
-    addOrUpdateKeyframe(currentTime, cropData, duration);
-    setDragCrop(null); // Clear drag preview
-  };
-
-  // NOTE: handleHighlightChange and handleHighlightComplete are now provided by OverlayContainer
-
-  // Handle keyframe click (seek to keyframe time - selection is derived automatically)
-  const handleKeyframeClick = (time, index) => {
-    seek(time);
-    setSelectedLayer('crop');
-  };
-
-  // Handle keyframe delete (pass duration to removeKeyframe)
-  // Selection automatically becomes null when keyframe no longer exists (derived state)
-  const handleKeyframeDelete = (time) => {
-    // Mark that user has made an edit (enables auto-save)
-    clipHasUserEditsRef.current = true;
-    removeKeyframe(time, duration);
-  };
-
-  // Handle highlight keyframe click (seek - selection is derived automatically)
-  const handleHighlightKeyframeClick = (time, index) => {
-    seek(time);
-    setSelectedLayer('highlight');
-  };
-
-  // Handle highlight keyframe delete
-  // Selection automatically becomes null when keyframe no longer exists (derived state)
-  const handleHighlightKeyframeDelete = (time) => {
-    removeHighlightKeyframe(time, duration);
-  };
-
-  // Handle highlight duration change
-  const handleHighlightDurationChange = (newDuration) => {
-    updateHighlightDuration(newDuration, duration);
-    // Sync playhead to the new duration position
-    seek(newDuration);
-  };
 
   /**
    * Handle transition from Framing to Overlay mode
@@ -1717,7 +1022,7 @@ function App() {
       if (selectedClipId && pendingFramingSaveRef.current) {
         clearTimeout(pendingFramingSaveRef.current);
         pendingFramingSaveRef.current = null;
-        await saveCurrentClipState();
+        await framingSaveCurrentClipState();
       }
 
       // Create URL for the rendered video
@@ -1892,37 +1197,7 @@ function App() {
     }
   }, [highlightRegions, highlightEffectType, editorMode, selectedProjectId, saveOverlayData, getRegionsForExport]);
 
-  /**
-   * Reset user edit tracking when clip selection changes
-   * This prevents auto-save from saving default state as "user edits"
-   */
-  useEffect(() => {
-    clipHasUserEditsRef.current = false;
-  }, [selectedClipId]);
-
-  /**
-   * Auto-save framing data when keyframes, segments, or trim range changes
-   * Only saves if:
-   * - User has made explicit edits (clipHasUserEditsRef), OR
-   * - Clip was loaded with saved data (not just auto-generated defaults)
-   */
-  useEffect(() => {
-    if (editorMode !== 'framing' || !selectedClipId || !selectedProjectId) return;
-
-    // Check if clip was loaded with saved data (vs being a fresh/clean clip)
-    const currentClip = clips.find(c => c.id === selectedClipId);
-    const clipHadSavedData = currentClip && (
-      (currentClip.cropKeyframes && currentClip.cropKeyframes.length > 0) ||
-      (currentClip.segments && Object.keys(currentClip.segments).length > 0 &&
-        (currentClip.segments.userSplits?.length > 0 || Object.keys(currentClip.segments.segmentSpeeds || {}).length > 0)) ||
-      currentClip.trimRange != null
-    );
-
-    // Only save if user has made edits OR clip had saved data
-    if (clipHasUserEditsRef.current || clipHadSavedData) {
-      autoSaveFramingEdits();
-    }
-  }, [keyframes, segmentBoundaries, segmentSpeeds, trimRange, editorMode, selectedClipId, selectedProjectId, autoSaveFramingEdits, clips]);
+  // NOTE: User edit tracking reset and auto-save useEffects are now in FramingContainer
 
   /**
    * Save all pending changes before browser close or navigation
@@ -2069,7 +1344,7 @@ function App() {
       clearTimeout(pendingFramingSaveRef.current);
       pendingFramingSaveRef.current = null;
       // Fire immediate save (non-debounced)
-      saveCurrentClipState().catch(e => console.error('[App] Failed to flush framing save:', e));
+      framingSaveCurrentClipState().catch(e => console.error('[App] Failed to flush framing save:', e));
     }
 
     // Switch the mode
@@ -2112,7 +1387,7 @@ function App() {
         }
       }, 100);
     }
-  }, [editorMode, selectedProjectId, getRegionsForExport, highlightEffectType, saveCurrentClipState, videoRef, videoUrl, currentTime, hasClips, clips, selectedClip, loadVideoFromUrl, getClipFileUrl, restoreSegmentState, restoreCropState, overlayVideoUrl, framingChangedSinceExport]);
+  }, [editorMode, selectedProjectId, getRegionsForExport, highlightEffectType, framingSaveCurrentClipState, videoRef, videoUrl, currentTime, hasClips, clips, selectedClip, loadVideoFromUrl, getClipFileUrl, restoreSegmentState, restoreCropState, overlayVideoUrl, framingChangedSinceExport]);
 
   /**
    * Mode switch dialog handlers
@@ -2186,23 +1461,6 @@ function App() {
     interpolateCrop,
     hasKeyframeAt,
   }), [keyframes, isEndKeyframeExplicit, aspectRatio, copiedCrop, updateAspectRatio, addOrUpdateKeyframe, removeKeyframe, copyCropKeyframe, pasteCropKeyframe, interpolateCrop, hasKeyframeAt]);
-
-  // Prepare highlight context value
-  const highlightContextValue = useMemo(() => ({
-    keyframes: highlightKeyframes,
-    isEndKeyframeExplicit: isHighlightEndKeyframeExplicit,
-    copiedHighlight,
-    isEnabled: isHighlightEnabled,
-    highlightDuration,
-    toggleEnabled: toggleHighlightEnabled,
-    updateHighlightDuration,
-    addOrUpdateKeyframe: addOrUpdateHighlightKeyframe,
-    removeKeyframe: removeHighlightKeyframe,
-    copyHighlightKeyframe,
-    pasteHighlightKeyframe,
-    interpolateHighlight,
-    hasKeyframeAt: hasHighlightKeyframeAt,
-  }), [highlightKeyframes, isHighlightEndKeyframeExplicit, copiedHighlight, isHighlightEnabled, highlightDuration, toggleHighlightEnabled, updateHighlightDuration, addOrUpdateHighlightKeyframe, removeHighlightKeyframe, copyHighlightKeyframe, pasteHighlightKeyframe, interpolateHighlight, hasHighlightKeyframeAt]);
 
   // Backward-compatible wrapper for setExportingProject
   // Components should migrate to using useExportStore directly
@@ -2305,79 +1563,13 @@ function App() {
     return filtered;
   }, [getKeyframesForExport, getSegmentExportData, duration]);
 
-  /**
-   * Get filtered highlight keyframes for export
-   *
-   * In FRAMING mode: Filters keyframes based on trim range (includes surrounding keyframes for interpolation)
-   * In OVERLAY mode: Returns ALL keyframes (overlay video is already trimmed, so no filtering needed)
-   */
-  const getFilteredHighlightKeyframesForExport = useMemo(() => {
-    if (!isHighlightEnabled) {
-      return []; // Don't export if highlight layer is disabled
-    }
-
-    const allKeyframes = getHighlightKeyframesForExport();
-
-    // In overlay mode, return all keyframes - the video is already trimmed,
-    // and highlight keyframes are on the new video's timeline
-    if (editorMode === 'overlay') {
-      return allKeyframes;
-    }
-
-    // Framing mode: Apply trim filtering
-    const segmentData = getSegmentExportData();
-
-    // If no trimming, return all keyframes
-    if (!segmentData || (!segmentData.trim_start && !segmentData.trim_end)) {
-      return allKeyframes;
-    }
-
-    const trimStart = segmentData.trim_start || 0;
-    const trimEnd = segmentData.trim_end || duration || Infinity;
-
-    // Find keyframes needed for proper interpolation:
-    // 1. All keyframes within trim range
-    // 2. Last keyframe BEFORE trim start (for interpolation at trim start)
-    // 3. First keyframe AFTER trim end (for interpolation at trim end)
-    let lastBeforeTrimStart = null;
-    let firstAfterTrimEnd = null;
-    const keyframesInRange = [];
-
-    allKeyframes.forEach(kf => {
-      if (kf.time >= trimStart && kf.time <= trimEnd) {
-        // Keyframe is within trim range
-        keyframesInRange.push(kf);
-      } else if (kf.time < trimStart) {
-        // Track last keyframe before trim start
-        if (!lastBeforeTrimStart || kf.time > lastBeforeTrimStart.time) {
-          lastBeforeTrimStart = kf;
-        }
-      } else if (kf.time > trimEnd) {
-        // Track first keyframe after trim end
-        if (!firstAfterTrimEnd || kf.time < firstAfterTrimEnd.time) {
-          firstAfterTrimEnd = kf;
-        }
-      }
-    });
-
-    // Combine all needed keyframes
-    const filtered = [
-      ...(lastBeforeTrimStart ? [lastBeforeTrimStart] : []),
-      ...keyframesInRange,
-      ...(firstAfterTrimEnd ? [firstAfterTrimEnd] : [])
-    ];
-
-    return filtered;
-  }, [isHighlightEnabled, getHighlightKeyframesForExport, getSegmentExportData, duration, editorMode]);
-
   // If no project selected and not in annotate mode, show ProjectManager
   if (!selectedProject && editorMode !== 'annotate') {
     return (
       <AppStateProvider value={appStateValue}>
       <div className="min-h-screen bg-gray-900">
-        {/* Hidden file input for Annotate Game - triggers file picker directly */}
+        {/* Hidden file input for Annotate Game - triggers navigation to annotate mode */}
         <input
-          ref={annotateFileInputRef}
           type="file"
           accept="video/*"
           className="hidden"
@@ -2385,11 +1577,14 @@ function App() {
             const file = e.target.files?.[0];
             if (file) {
               clearSelection();
-              handleGameVideoSelect(file);
+              // Store file to pass to AnnotateScreen
+              setPendingAnnotateFile(file);
+              setEditorMode('annotate');
             }
             // Reset input so same file can be selected again
             e.target.value = '';
           }}
+          id="annotate-file-input"
         />
         <ProjectManager
           projects={projects}
@@ -2652,8 +1847,8 @@ function App() {
           onCreateProject={createProject}
           onDeleteProject={deleteProject}
           onAnnotate={() => {
-            // Directly open file picker instead of showing empty annotate mode
-            annotateFileInputRef.current?.click();
+            // Trigger file picker - when file selected, onChange navigates to annotate mode
+            document.getElementById('annotate-file-input')?.click();
           }}
           // Games props
           games={games}
@@ -2699,23 +1894,37 @@ function App() {
         />
       )}
 
-      {/* Sidebar - Annotate mode */}
-      {editorMode === 'annotate' && annotateVideoUrl && (
-        <ClipsSidePanel
-          clipRegions={clipRegions}
-          selectedRegionId={annotateSelectedRegionId}
-          onSelectRegion={handleSelectAnnotateRegion}
-          onUpdateRegion={updateClipRegion}
-          onDeleteRegion={deleteClipRegion}
-          onImportAnnotations={importAnnotations}
-          maxNotesLength={ANNOTATE_MAX_NOTES_LENGTH}
-          clipCount={annotateClipCount}
-          videoDuration={annotateVideoMetadata?.duration}
-          isLoading={isLoadingAnnotations}
+      {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
+      {editorMode === 'annotate' && (
+        <AnnotateScreen
+          // Navigation
+          onNavigate={setEditorMode}
+          onBackToProjects={() => setEditorMode('project-manager')}
+          // Settings modal
+          onOpenProjectCreationSettings={() => setShowProjectCreationSettings(true)}
+          // Downloads
+          downloadsCount={downloadsCount}
+          onOpenDownloads={() => setIsDownloadsPanelOpen(true)}
+          // Initial file from ProjectManager (if user selected file before navigating)
+          initialFile={pendingAnnotateFile}
+          onInitialFileHandled={() => setPendingAnnotateFile(null)}
+          // Initial game ID (when loading a saved game from ProjectManager)
+          initialGameId={pendingGameId}
+          onInitialGameHandled={() => setPendingGameId(null)}
+          // Game management hooks
+          createGame={createGame}
+          uploadGameVideo={uploadGameVideo}
+          getGame={getGame}
+          getGameVideoUrl={getGameVideoUrl}
+          saveAnnotationsDebounced={saveAnnotationsDebounced}
+          // Project hooks
+          fetchProjects={fetchProjects}
+          projectCreationSettings={projectCreationSettings}
         />
       )}
 
-      {/* Main Content */}
+      {/* Main Content - For framing/overlay modes */}
+      {editorMode !== 'annotate' && (
       <div className="flex-1 overflow-auto">
         <div className="container mx-auto px-4 py-8">
           {/* Header */}
@@ -2727,10 +1936,8 @@ function App() {
                   onClick={() => {
                     // Clear project selection
                     clearSelection();
-                    // Clear annotate state if in annotate mode
-                    if (editorMode === 'annotate') {
-                      clearAnnotateState();
-                    }
+                    // Note: Annotate state is now owned by AnnotateScreen and will be
+                    // cleaned up when the screen unmounts (mode changes)
                     // Refresh project list to show updated progress/status
                     fetchProjects();
                     // Return to project manager
@@ -2786,563 +1993,135 @@ function App() {
                 disabled={isLoading}
                 hasOverlayVideo={!!overlayVideoUrl}
                 framingOutOfSync={framingChangedSinceExport && !!overlayVideoUrl}
-                hasAnnotateVideo={!!annotateVideoUrl}
+                hasAnnotateVideo={editorMode === 'annotate'}  // AnnotateScreen handles its own video state
                 isLoadingWorkingVideo={isLoadingWorkingVideo}
                 // Note: hasProject and hasWorkingVideo are now from AppStateContext
               />
-              {/* Annotate mode - show file upload when no game video loaded */}
-              {editorMode === 'annotate' && !annotateVideoUrl && (
-                <FileUpload
-                  onGameVideoSelect={handleGameVideoSelect}
-                  isLoading={isLoading}
-                />
-              )}
+              {/* Annotate mode file upload is now handled by AnnotateScreen */}
             </div>
           </div>
 
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 bg-red-500/20 border border-red-500 rounded-lg p-4">
-            <p className="text-red-200 font-semibold mb-1">❌ Error</p>
-            <p className="text-red-300 text-sm">{error}</p>
-          </div>
-        )}
-
-        {/* Video Metadata - Framing/Overlay modes */}
-        {metadata && editorMode !== 'annotate' && (
-          <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
-            <div className="flex items-center justify-between text-sm text-gray-300">
-              <span className="font-semibold text-white">{metadata.fileName}</span>
-              <div className="flex space-x-6">
-                <span>
-                  <span className="text-gray-400">Resolution:</span>{' '}
-                  {metadata.width}x{metadata.height}
-                </span>
-                {metadata.framerate && (
-                  <span>
-                    <span className="text-gray-400">Framerate:</span>{' '}
-                    {metadata.framerate} fps
-                  </span>
-                )}
-                <span>
-                  <span className="text-gray-400">Format:</span>{' '}
-                  {metadata.format.toUpperCase()}
-                </span>
-                <span>
-                  <span className="text-gray-400">Size:</span>{' '}
-                  {(metadata.size / (1024 * 1024)).toFixed(2)} MB
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Video Metadata - Annotate mode */}
-        {editorMode === 'annotate' && annotateVideoMetadata && !annotateFullscreen && (
-          <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
-            <div className="flex items-center justify-between text-sm text-gray-300">
-              <span className="font-semibold text-white truncate max-w-md" title={annotateVideoMetadata.fileName}>
-                {annotateVideoMetadata.fileName}
-              </span>
-              <div className="flex space-x-6">
-                <span>
-                  <span className="text-gray-400">Resolution:</span>{' '}
-                  {annotateVideoMetadata.resolution}
-                </span>
-                <span>
-                  <span className="text-gray-400">Format:</span>{' '}
-                  {annotateVideoMetadata.format?.toUpperCase() || 'MP4'}
-                </span>
-                <span>
-                  <span className="text-gray-400">Size:</span>{' '}
-                  {annotateVideoMetadata.sizeFormatted || `${(annotateVideoMetadata.size / (1024 * 1024)).toFixed(2)} MB`}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Main Editor Area */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
-          {/* Controls Bar */}
-          {videoUrl && (
-            <div className="mb-6 flex gap-4 items-center">
-              <div className="ml-auto">
-                <ZoomControls
-                  zoom={zoom}
-                  onZoomIn={zoomIn}
-                  onZoomOut={zoomOut}
-                  onResetZoom={resetZoom}
-                  minZoom={MIN_ZOOM}
-                  maxZoom={MAX_ZOOM}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Video Player with mode-specific overlays */}
-          {/* Use appropriate video URL based on mode: annotate -> overlay -> framing */}
-          {/* Wrap in ref container for annotate fullscreen */}
-          <div
-            ref={annotateContainerRef}
-            className="relative bg-gray-900 rounded-lg"
-          >
-          <VideoPlayer
+        {/* Mode-specific views */}
+        {editorMode === 'framing' && (
+          <FramingScreen
+            // Project context
+            projectId={selectedProjectId}
+            project={selectedProject}
+            // Export callback
+            onExportComplete={() => {
+              fetchProjects();
+              refreshDownloadsCount();
+            }}
+            // Shared video state (from App.jsx)
             videoRef={videoRef}
-            videoUrl={currentVideoState.url}
+            videoUrl={videoUrl}
+            metadata={metadata}
+            videoFile={videoFile}
+            currentTime={currentTime}
+            duration={duration}
+            isPlaying={isPlaying}
+            isLoading={isLoading}
+            error={error}
             handlers={handlers}
-            onFileSelect={handleFileSelect}
-            overlays={[
-              // Framing mode overlay (CropOverlay)
-              editorMode === 'framing' && videoUrl && currentCropState && metadata && (
-                <CropOverlay
-                  key="crop"
-                  videoRef={videoRef}
-                  videoMetadata={metadata}
-                  currentCrop={currentCropState}
-                  aspectRatio={aspectRatio}
-                  onCropChange={handleCropChange}
-                  onCropComplete={handleCropComplete}
-                  zoom={zoom}
-                  panOffset={panOffset}
-                  selectedKeyframeIndex={selectedCropKeyframeIndex}
-                />
-              ),
-              // Annotate mode overlay (NotesOverlay) - shows name, rating notation, and notes for region at playhead
-              editorMode === 'annotate' && annotateVideoUrl && (() => {
-                const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
-                return (regionAtPlayhead?.name || regionAtPlayhead?.notes) ? (
-                  <NotesOverlay
-                    key="annotate-notes"
-                    name={regionAtPlayhead.name}
-                    notes={regionAtPlayhead.notes}
-                    rating={regionAtPlayhead.rating}
-                    isVisible={true}
-                    isFullscreen={annotateFullscreen}
-                  />
-                ) : null;
-              })(),
-              // Annotate mode fullscreen overlay - appears when paused in fullscreen
-              // If playhead is inside an existing clip, edit that clip; otherwise create new
-              editorMode === 'annotate' && annotateVideoUrl && showAnnotateOverlay && (() => {
-                const existingClip = getAnnotateRegionAtTime(currentTime);
-                return (
-                  <AnnotateFullscreenOverlay
-                    key="annotate-fullscreen"
-                    isVisible={showAnnotateOverlay}
-                    currentTime={currentTime}
-                    videoDuration={annotateVideoMetadata?.duration || 0}
-                    existingClip={existingClip}
-                    onCreateClip={handleFullscreenCreateClip}
-                    onUpdateClip={handleFullscreenUpdateClip}
-                    onResume={handleOverlayResume}
-                    onClose={handleOverlayClose}
-                  />
-                );
-              })(),
-              // Overlay mode overlay (HighlightOverlay) - uses overlay video metadata
-              // Only render when we have a currentHighlightState (playhead is in a region)
-              editorMode === 'overlay' && effectiveOverlayVideoUrl && currentHighlightState && effectiveOverlayMetadata && (
-                <HighlightOverlay
-                  key="highlight"
-                  videoRef={videoRef}
-                  videoMetadata={effectiveOverlayMetadata}
-                  currentHighlight={currentHighlightState}
-                  onHighlightChange={handleHighlightChange}
-                  onHighlightComplete={handleHighlightComplete}
-                  isEnabled={isTimeInEnabledRegion(currentTime)}
-                  effectType={highlightEffectType}
-                  zoom={zoom}
-                  panOffset={panOffset}
-                />
-              ),
-              // Player detection overlay - shows clickable boxes around detected players
-              // Only render when in overlay mode and playhead is in a highlight region
-              editorMode === 'overlay' && effectiveOverlayVideoUrl && effectiveOverlayMetadata && playerDetectionEnabled && (
-                <PlayerDetectionOverlay
-                  key="player-detection"
-                  videoRef={videoRef}
-                  videoMetadata={effectiveOverlayMetadata}
-                  detections={playerDetections}
-                  isLoading={isDetectionLoading || isDetectionUploading}
-                  onPlayerSelect={handlePlayerSelect}
-                  zoom={zoom}
-                  panOffset={panOffset}
-                />
-              ),
-            ].filter(Boolean)}
-            zoom={zoom}
-            panOffset={panOffset}
-            onZoomChange={zoomByWheel}
-            onPanChange={updatePan}
-            isFullscreen={editorMode === 'annotate' && annotateFullscreen}
-            clipRating={editorMode === 'annotate' ? getAnnotateRegionAtTime(currentTime)?.rating ?? null : null}
+            loadVideo={loadVideo}
+            loadVideoFromUrl={loadVideoFromUrl}
+            togglePlay={togglePlay}
+            seek={seek}
+            stepForward={stepForward}
+            stepBackward={stepBackward}
+            restart={restart}
+            setVideoFile={setVideoFile}
+            // Highlight hook (for coordinated trim operations)
+            highlightHook={{
+              deleteHighlightKeyframesInRange,
+              cleanupHighlightTrimKeyframes,
+            }}
+            // Audio settings
+            includeAudio={includeAudio}
+            onIncludeAudioChange={setIncludeAudio}
+            // Overlay transition handler
+            onProceedToOverlay={handleProceedToOverlay}
           />
-          {/* Controls - inside video container to match video width */}
-          {/* Annotate mode uses AnnotateControls with speed and fullscreen */}
-          {editorMode === 'annotate' && annotateVideoUrl && (
-            <AnnotateControls
-              isPlaying={isPlaying}
-              currentTime={currentTime}
-              duration={annotateVideoMetadata?.duration || duration}
-              onTogglePlay={togglePlay}
-              onStepForward={stepForward}
-              onStepBackward={stepBackward}
-              onRestart={restart}
-              playbackSpeed={annotatePlaybackSpeed}
-              onSpeedChange={setAnnotatePlaybackSpeed}
-              isFullscreen={annotateFullscreen}
-              onToggleFullscreen={handleToggleFullscreen}
-              onAddClip={handleAddClipFromButton}
-            />
-          )}
-          {/* Framing and Overlay modes use regular Controls */}
-          {((editorMode === 'framing' && videoUrl) || (editorMode === 'overlay' && effectiveOverlayVideoUrl)) && (
-            <Controls
-              isPlaying={isPlaying}
-              currentTime={currentTime}
-              duration={
-                editorMode === 'overlay' ? (effectiveOverlayMetadata?.duration || duration) :
-                duration
-              }
-              onTogglePlay={togglePlay}
-              onStepForward={stepForward}
-              onStepBackward={stepBackward}
-              onRestart={restart}
-            />
-          )}
-          </div>
+        )}
 
-          {/* Mode-specific content (overlays + timelines) */}
-          {videoUrl && editorMode === 'framing' && (
-            <FramingMode
-              videoRef={videoRef}
-              videoUrl={videoUrl}
-              metadata={metadata}
-              currentTime={currentTime}
-              duration={duration}
-              cropContextValue={cropContextValue}
-              currentCropState={currentCropState}
-              aspectRatio={aspectRatio}
-              cropKeyframes={keyframes}
-              framerate={framerate}
-              selectedCropKeyframeIndex={selectedCropKeyframeIndex}
-              copiedCrop={copiedCrop}
-              onCropChange={handleCropChange}
-              onCropComplete={handleCropComplete}
-              onCropKeyframeClick={handleKeyframeClick}
-              onCropKeyframeDelete={handleKeyframeDelete}
-              onCropKeyframeCopy={handleCopyCrop}
-              onCropKeyframePaste={handlePasteCrop}
-              zoom={zoom}
-              panOffset={panOffset}
-              segments={segments}
-              segmentBoundaries={segmentBoundaries}
-              segmentVisualLayout={segmentVisualLayout}
-              visualDuration={visualDuration || duration}
-              trimRange={trimRange}
-              trimHistory={trimHistory}
-              onAddSegmentBoundary={(time) => { clipHasUserEditsRef.current = true; addSegmentBoundary(time); }}
-              onRemoveSegmentBoundary={(time) => { clipHasUserEditsRef.current = true; removeSegmentBoundary(time); }}
-              onSegmentSpeedChange={(idx, speed) => { clipHasUserEditsRef.current = true; setSegmentSpeed(idx, speed); }}
-              onSegmentTrim={handleTrimSegment}
-              onDetrimStart={handleDetrimStart}
-              onDetrimEnd={handleDetrimEnd}
-              sourceTimeToVisualTime={sourceTimeToVisualTime}
-              visualTimeToSourceTime={visualTimeToSourceTime}
-              selectedLayer={selectedLayer}
-              onLayerSelect={setSelectedLayer}
-              onSeek={seek}
-              timelineZoom={timelineZoom}
-              onTimelineZoomByWheel={timelineZoomByWheel}
-              timelineScale={getTimelineScale()}
-              timelineScrollPosition={timelineScrollPosition}
-              onTimelineScrollPositionChange={updateTimelineScrollPosition}
-              isPlaying={isPlaying}
-            />
-          )}
-
-          {/* Overlay mode - uses rendered video or pass-through if no framing edits */}
-          {effectiveOverlayVideoUrl && editorMode === 'overlay' && (
-            <OverlayMode
-              videoRef={videoRef}
-              videoUrl={effectiveOverlayVideoUrl}
-              metadata={effectiveOverlayMetadata}
-              currentTime={currentTime}
-              duration={effectiveOverlayMetadata?.duration || duration}
-              // Highlight regions (self-contained regions with keyframes)
-              highlightRegions={highlightRegions}
-              highlightBoundaries={highlightBoundaries}
-              highlightKeyframes={highlightRegionKeyframes}
-              highlightFramerate={highlightRegionsFramerate}
-              onAddHighlightRegion={addHighlightRegion}
-              onDeleteHighlightRegion={deleteHighlightRegion}
-              onMoveHighlightRegionStart={moveHighlightRegionStart}
-              onMoveHighlightRegionEnd={moveHighlightRegionEnd}
-              onRemoveHighlightKeyframe={removeHighlightRegionKeyframe}
-              onToggleHighlightRegion={toggleHighlightRegion}
-              onSelectedKeyframeChange={setSelectedHighlightKeyframeTime}
-              // Highlight interaction
-              onHighlightChange={handleHighlightChange}
-              onHighlightComplete={handleHighlightComplete}
-              // Zoom
-              zoom={zoom}
-              panOffset={panOffset}
-              visualDuration={effectiveOverlayMetadata?.duration || duration}
-              selectedLayer={selectedLayer}
-              onLayerSelect={setSelectedLayer}
-              onSeek={seek}
-              // NOTE: Overlay mode uses identity functions - no segment transformations
-              // The overlay video is a fresh render without speed/trim segments
-              sourceTimeToVisualTime={(t) => t}
-              visualTimeToSourceTime={(t) => t}
-              timelineZoom={timelineZoom}
-              onTimelineZoomByWheel={timelineZoomByWheel}
-              timelineScale={getTimelineScale()}
-              timelineScrollPosition={timelineScrollPosition}
-              onTimelineScrollPositionChange={updateTimelineScrollPosition}
-              trimRange={null}  // No trimming in overlay mode
-              isPlaying={isPlaying}
-            />
-          )}
-
-          {/* Annotate mode - timeline for extracting clips */}
-          {annotateVideoUrl && editorMode === 'annotate' && (
-            <AnnotateMode
-              currentTime={currentTime}
-              duration={annotateVideoMetadata?.duration || 0}
-              isPlaying={isPlaying}
-              onSeek={seek}
-              regions={annotateRegionsWithLayout}
-              selectedRegionId={annotateSelectedRegionId}
-              onSelectRegion={handleSelectAnnotateRegion}
-              onDeleteRegion={deleteClipRegion}
-              selectedLayer={annotateSelectedLayer}
-              onLayerSelect={setAnnotateSelectedLayer}
-            />
-          )}
-
-          {/* Annotate mode - Export Button */}
-          {annotateVideoUrl && editorMode === 'annotate' && (
-            <div className="mt-6">
-              <div className="space-y-3">
-                {/* Export Settings */}
-                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
-                  <div className="text-sm font-medium text-gray-300 mb-3">
-                    Annotate Settings
-                  </div>
-                  <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
-                    Extracts marked clips and loads them into Framing mode
-                  </div>
-                </div>
-
-                {/* Export buttons */}
-                <div className="space-y-2">
-                  {/* Progress bar (shown during export) */}
-                  {exportProgress && (
-                    <div className="bg-gray-800 rounded-lg p-3 mb-2">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-gray-300">{exportProgress.message}</span>
-                        {exportProgress.total > 0 && (
-                          <span className="text-xs text-gray-500">
-                            {Math.round((exportProgress.current / exportProgress.total) * 100)}%
-                          </span>
-                        )}
-                      </div>
-                      <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${
-                            exportProgress.done ? 'bg-green-500' : 'bg-blue-500'
-                          }`}
-                          style={{
-                            width: exportProgress.total > 0
-                              ? `${(exportProgress.current / exportProgress.total) * 100}%`
-                              : '0%'
-                          }}
-                        />
-                      </div>
-                      {exportProgress.phase === 'clips' && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {exportProgress.current > 0 && 'Using cache for unchanged clips'}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Create Annotated Video - stays on screen */}
-                  <button
-                    onClick={() => handleCreateAnnotatedVideo(getAnnotateExportData())}
-                    disabled={!hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo}
-                    className={`w-full px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                      !hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo
-                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                        : 'bg-green-600 hover:bg-green-700 text-white'
-                    }`}
-                  >
-                    {isUploadingGameVideo ? (
-                      <>
-                        <Loader className="animate-spin" size={18} />
-                        <span>Uploading video...</span>
-                      </>
-                    ) : isCreatingAnnotatedVideo ? (
-                      <>
-                        <Loader className="animate-spin" size={18} />
-                        <span>Processing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download size={18} />
-                        <span>Create Annotated Video</span>
-                      </>
-                    )}
-                  </button>
-
-                  {/* Import Into Projects - navigates to projects */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleImportIntoProjects(getAnnotateExportData())}
-                      disabled={!hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo}
-                      className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                        !hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white'
-                      }`}
-                    >
-                      {isImportingToProjects ? (
-                        <>
-                          <Loader className="animate-spin" size={18} />
-                          <span>Processing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Upload size={18} />
-                          <span>Import Into Projects</span>
-                        </>
-                      )}
-                    </button>
-                    {/* Settings button */}
-                    <button
-                      onClick={() => setShowProjectCreationSettings(true)}
-                      className="px-3 py-3 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
-                      title="Project creation settings"
-                    >
-                      <Settings size={18} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Message when in Overlay mode but export is required */}
-          {editorMode === 'overlay' && !effectiveOverlayVideoUrl && videoUrl && (hasFramingEdits || hasMultipleClips) && (
-            <div className="mt-6 bg-purple-900/30 border border-purple-500/50 rounded-lg p-6 text-center">
-              <p className="text-purple-200 font-medium mb-2">
-                Export required for overlay mode
-              </p>
-              <p className="text-purple-300/70 text-sm mb-4">
-                {hasMultipleClips
-                  ? 'You have multiple clips loaded. Export first to combine them into a single video before adding overlays.'
-                  : 'You have made edits in Framing mode. Export first to apply them before adding overlays.'}
-              </p>
-              <button
-                onClick={() => handleModeChange('framing')}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                Switch to Framing Mode
-              </button>
-            </div>
-          )}
-
-          {/* Export Button - show for current mode's video */}
-          {((editorMode === 'framing' && videoUrl) || (editorMode === 'overlay' && effectiveOverlayVideoUrl)) && (
-            <div className="mt-6">
-              <ExportButton
-                ref={exportButtonRef}
-                videoFile={editorMode === 'overlay' ? effectiveOverlayFile : videoFile}
-                cropKeyframes={editorMode === 'framing' ? getFilteredKeyframesForExport : []}
-                highlightRegions={editorMode === 'overlay' ? getRegionsForExport() : []}
-                isHighlightEnabled={editorMode === 'overlay' && highlightRegions.length > 0}
-                segmentData={editorMode === 'framing' ? getSegmentExportData() : null}
-                disabled={editorMode === 'framing' ? !videoFile : !effectiveOverlayFile}
-                includeAudio={includeAudio}
-                onIncludeAudioChange={setIncludeAudio}
-                highlightEffectType={highlightEffectType}
-                onHighlightEffectTypeChange={setHighlightEffectType}
-                onProceedToOverlay={handleProceedToOverlay}
-                // Multi-clip props (use clipsWithCurrentState to include current clip's live keyframes)
-                clips={editorMode === 'framing' && hasClips ? clipsWithCurrentState : null}
-                globalAspectRatio={globalAspectRatio}
-                globalTransition={globalTransition}
-                // Callback for refreshing data after export (not from context)
-                onExportComplete={() => {
-                  fetchProjects();
-                  refreshDownloadsCount();
-                }}
-                // Note: editorMode, projectId, projectName, onExportStart, onExportEnd,
-                // isExternallyExporting, externalProgress are now from AppStateContext
-              />
-            </div>
-          )}
-
-          {/* Model Comparison Button (for testing different AI models) */}
-          {ENABLE_MODEL_COMPARISON && videoUrl && (
-            <div className="mt-6">
-              <CompareModelsButton
-                videoFile={videoFile}
-                cropKeyframes={getFilteredKeyframesForExport}
-                highlightKeyframes={getFilteredHighlightKeyframesForExport}
-                segmentData={getSegmentExportData()}
-                disabled={!videoFile}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Instructions */}
-        {!videoUrl && !isLoading && !error && (
-          <div className="mt-8 text-center text-gray-400">
-            <div className="max-w-2xl mx-auto space-y-4">
-              <h2 className="text-xl font-semibold text-white mb-4">
-                Getting Started
-              </h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4 text-sm">
-                <div className="bg-white/5 rounded-lg p-4">
-                  <div className="text-2xl mb-2">📤</div>
-                  <h3 className="font-semibold text-white mb-1">1. Upload</h3>
-                  <p>Upload your game footage to get started</p>
-                </div>
-                <div className="bg-white/5 rounded-lg p-4">
-                  <div className="text-2xl mb-2">✂️</div>
-                  <h3 className="font-semibold text-white mb-1">2. Trim</h3>
-                  <p>Cut out the boring parts and keep only the action</p>
-                </div>
-                <div className="bg-white/5 rounded-lg p-4">
-                  <div className="text-2xl mb-2">🎯</div>
-                  <h3 className="font-semibold text-white mb-1">3. Zoom</h3>
-                  <p>Follow your player with dynamic crop keyframes</p>
-                </div>
-                <div className="bg-white/5 rounded-lg p-4">
-                  <div className="text-2xl mb-2">🐌</div>
-                  <h3 className="font-semibold text-white mb-1">4. Slow-Mo</h3>
-                  <p>Create slow motion segments for key moments</p>
-                </div>
-                <div className="bg-white/5 rounded-lg p-4">
-                  <div className="text-2xl mb-2">🚀</div>
-                  <h3 className="font-semibold text-white mb-1">5. Export</h3>
-                  <p>Play the video to make sure it's perfect and hit export to leverage AI Upscale</p>
-                </div>
-              </div>
-              <div className="mt-6 text-xs text-gray-500">
-                <p>Supported formats: MP4, MOV, WebM</p>
-                <p>Maximum file size: 4GB</p>
-              </div>
-            </div>
-          </div>
+        {editorMode === 'overlay' && (
+          <OverlayScreen
+            // Project context
+            projectId={selectedProjectId}
+            project={selectedProject}
+            // Navigation
+            onNavigate={setEditorMode}
+            onSwitchToFraming={() => handleModeChange('framing')}
+            // Export callback
+            onExportComplete={() => {
+              fetchProjects();
+              refreshDownloadsCount();
+            }}
+            // Framing data (for pass-through mode and comparison)
+            framingVideoUrl={videoUrl}
+            framingMetadata={metadata}
+            framingVideoFile={videoFile}
+            framingKeyframes={keyframes}
+            framingSegments={segments}
+            framingSegmentSpeeds={segmentSpeeds}
+            framingSegmentBoundaries={segmentBoundaries}
+            framingTrimRange={trimRange}
+            framingClips={clips}
+            hasFramingClips={hasClips}
+            hasFramingEdits={hasFramingEdits}
+            hasMultipleClips={hasMultipleClips}
+            // Audio settings
+            includeAudio={includeAudio}
+            onIncludeAudioChange={setIncludeAudio}
+            // Overlay state (from App.jsx's useOverlayState instance)
+            // IMPORTANT: Pass these to avoid state isolation issue where
+            // OverlayScreen would have its own separate useOverlayState instance
+            overlayVideoFile={overlayVideoFile}
+            overlayVideoUrl={overlayVideoUrl}
+            overlayVideoMetadata={overlayVideoMetadata}
+            overlayClipMetadata={overlayClipMetadata}
+            isLoadingWorkingVideo={isLoadingWorkingVideo}
+            setOverlayVideoFile={setOverlayVideoFile}
+            setOverlayVideoUrl={setOverlayVideoUrl}
+            setOverlayVideoMetadata={setOverlayVideoMetadata}
+            setOverlayClipMetadata={setOverlayClipMetadata}
+            setIsLoadingWorkingVideo={setIsLoadingWorkingVideo}
+            dragHighlight={dragHighlight}
+            setDragHighlight={setDragHighlight}
+            selectedHighlightKeyframeTime={selectedHighlightKeyframeTime}
+            setSelectedHighlightKeyframeTime={setSelectedHighlightKeyframeTime}
+            highlightEffectType={highlightEffectType}
+            setHighlightEffectType={setHighlightEffectType}
+            pendingOverlaySaveRef={pendingOverlaySaveRef}
+            overlayDataLoadedRef={overlayDataLoadedRef}
+            // Highlight regions state (from App.jsx's useHighlightRegions instance)
+            // IMPORTANT: Same state isolation fix - App.jsx loads overlay data and
+            // restores highlight regions, so we must pass from App.jsx's instance
+            highlightBoundaries={highlightBoundaries}
+            highlightRegions={highlightRegions}
+            highlightRegionKeyframes={highlightRegionKeyframes}
+            highlightRegionsFramerate={highlightRegionsFramerate}
+            initializeHighlightRegions={initializeHighlightRegions}
+            initializeHighlightRegionsFromClips={initializeHighlightRegionsFromClips}
+            addHighlightRegion={addHighlightRegion}
+            deleteHighlightRegion={deleteHighlightRegion}
+            moveHighlightRegionStart={moveHighlightRegionStart}
+            moveHighlightRegionEnd={moveHighlightRegionEnd}
+            toggleHighlightRegion={toggleHighlightRegion}
+            addHighlightRegionKeyframe={addHighlightRegionKeyframe}
+            removeHighlightRegionKeyframe={removeHighlightRegionKeyframe}
+            isTimeInEnabledRegion={isTimeInEnabledRegion}
+            getRegionAtTime={getRegionAtTime}
+            getRegionHighlightAtTime={getRegionHighlightAtTime}
+            getRegionsForExport={getRegionsForExport}
+            resetHighlightRegions={resetHighlightRegions}
+            restoreHighlightRegions={restoreHighlightRegions}
+          />
         )}
 
         </div>
       </div>
+      )}
 
       {/* Debug Info - Shows current branch and commit */}
       <DebugInfo />

@@ -5,50 +5,38 @@ Run with: pytest src/backend/tests/test_annotations_aggregates.py -v
 """
 
 import pytest
-import tempfile
 import shutil
 import sys
+import uuid
 from pathlib import Path
 
 # Add the app directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Set up temp directory BEFORE importing app modules
-_temp_dir = tempfile.mkdtemp()
-_temp_path = Path(_temp_dir)
+# Generate a unique test user ID for isolation
+TEST_USER_ID = f"test_aggregates_{uuid.uuid4().hex[:8]}"
 
 
 def setup_module():
-    """Set up test environment with temp paths at module load."""
-    global _temp_dir, _temp_path
-
-    # Patch the database module before it's used
-    import app.database as db
-
-    # Override paths
-    db.USER_DATA_PATH = _temp_path
-    db.DATABASE_PATH = _temp_path / "database.sqlite"
-    db.RAW_CLIPS_PATH = _temp_path / "raw_clips"
-    db.UPLOADS_PATH = _temp_path / "uploads"
-    db.WORKING_VIDEOS_PATH = _temp_path / "working_videos"
-    db.FINAL_VIDEOS_PATH = _temp_path / "final_videos"
-    db.DOWNLOADS_PATH = _temp_path / "downloads"
-    db.GAMES_PATH = _temp_path / "games"
-    db.CLIP_CACHE_PATH = _temp_path / "clip_cache"
-    db._initialized = False
-
-    # Also patch games router
-    import app.routers.games as games_router
-    games_router.GAMES_PATH = _temp_path / "games"
+    """Set up test environment with isolated user namespace."""
+    # Set the user context for tests
+    from app.user_context import set_current_user_id
+    set_current_user_id(TEST_USER_ID)
 
 
 def teardown_module():
-    """Cleanup temp directory."""
-    global _temp_dir
-    shutil.rmtree(_temp_dir, ignore_errors=True)
+    """Cleanup test user data directory."""
+    from app.database import get_user_data_path, USER_DATA_BASE
+    from app.user_context import set_current_user_id
+
+    # Set the test user context to get the right path
+    set_current_user_id(TEST_USER_ID)
+    test_path = get_user_data_path()
+    if test_path.exists():
+        shutil.rmtree(test_path, ignore_errors=True)
 
 
-# Initialize paths before importing app
+# Initialize user context before importing app
 setup_module()
 
 
@@ -59,8 +47,8 @@ from app.main import app
 
 @pytest.fixture(scope="module")
 def client():
-    """Create a test client using context manager."""
-    with TestClient(app) as c:
+    """Create a test client with test user header."""
+    with TestClient(app, headers={"X-User-ID": TEST_USER_ID}) as c:
         yield c
 
 

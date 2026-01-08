@@ -55,7 +55,12 @@
       "Bash(npx playwright test --list)",
       "Bash(npx playwright test \"Edit clip name\" --reporter=line)",
       "Bash(npx playwright test:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(test:*)",
+      "Bash(node:*)",
+      "Bash(grep:*)",
+      "Bash(ffmpeg:*)",
+      "Bash(unzip:*)"
     ],
     "deny": [],
     "ask": []

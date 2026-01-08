@@ -25,7 +25,7 @@ import subprocess
 import logging
 
 from ...websocket import export_progress, manager
-from ...database import get_db_connection, FINAL_VIDEOS_PATH
+from ...database import get_db_connection, get_final_videos_path
 
 logger = logging.getLogger(__name__)
 
@@ -370,12 +370,12 @@ async def export_final(
         # Check for existing file and add version suffix if needed
         base_filename = f"{safe_name}_final"
         filename = f"{base_filename}.mp4"
-        file_path = FINAL_VIDEOS_PATH / filename
+        file_path = get_final_videos_path() / filename
         version_suffix = 1
         while file_path.exists():
             version_suffix += 1
             filename = f"{base_filename}_{version_suffix}.mp4"
-            file_path = FINAL_VIDEOS_PATH / filename
+            file_path = get_final_videos_path() / filename
 
         # Save the video file
         content = await video.read()
@@ -436,7 +436,7 @@ async def get_final_video(project_id: int):
         if not result:
             raise HTTPException(status_code=404, detail="Final video not found")
 
-        file_path = FINAL_VIDEOS_PATH / result['filename']
+        file_path = get_final_videos_path() / result['filename']
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Video file not found")
 

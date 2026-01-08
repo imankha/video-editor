@@ -381,7 +381,7 @@ async def get_working_video(project_id: int):
     Returns the video file if it exists, 404 otherwise.
     """
     from fastapi.responses import FileResponse
-    from app.database import WORKING_VIDEOS_PATH
+    from app.database import get_working_videos_path
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -398,7 +398,7 @@ async def get_working_video(project_id: int):
         if not row or not row['filename']:
             raise HTTPException(status_code=404, detail="Working video not found")
 
-        video_path = WORKING_VIDEOS_PATH / row['filename']
+        video_path = get_working_videos_path() / row['filename']
         if not video_path.exists():
             raise HTTPException(status_code=404, detail="Working video file not found on disk")
 

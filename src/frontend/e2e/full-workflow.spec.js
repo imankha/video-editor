@@ -13,6 +13,9 @@ import { fileURLToPath } from 'url';
  * OPTIMIZATION: The video is uploaded ONCE at the start of the suite.
  * All tests that need annotate mode load the saved game instead of re-uploading.
  *
+ * Test Isolation: Each test run uses a unique user ID via X-User-ID header.
+ * This ensures E2E tests don't pollute the dev database.
+ *
  * Run with:
  *   cd src/frontend && npx playwright test
  *
@@ -20,8 +23,26 @@ import { fileURLToPath } from 'url';
  *   cd src/frontend && npx playwright test --ui
  */
 
-// E2E tests run on port 8001 (see playwright.config.js)
-const API_BASE = 'http://localhost:8001/api';
+// Always use port 8000 - the dev backend port
+const API_PORT = 8000;
+const API_BASE = `http://localhost:${API_PORT}/api`;
+
+// Unique test user ID for this test run (isolates E2E data from dev data)
+const TEST_USER_ID = `e2e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+/**
+ * Set up page to add X-User-ID header to all API requests.
+ * This isolates test data from development data.
+ */
+async function setupTestUserContext(page) {
+  await page.route('**/api/**', async (route) => {
+    const headers = {
+      ...route.request().headers(),
+      'X-User-ID': TEST_USER_ID,
+    };
+    await route.continue({ headers });
+  });
+}
 
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -32,31 +53,11 @@ const TEST_DATA_DIR = path.resolve(__dirname, '../../../formal annotations/12.6.
 const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-vs-carlsbad-sc-2025-11-02-2025-12-08.mp4');
 const TEST_TSV = path.join(TEST_DATA_DIR, '12.6.carlsbad.tsv');
 
-// Shared state for the test suite
-let sharedGameUploaded = false;
-
 /**
- * Helper: Upload video and import TSV (only called once per suite)
+ * Helper: Upload video and import TSV
+ * Each test uploads fresh to ensure clips are available (simpler and more reliable)
  */
-async function uploadGameOnce(page) {
-  if (sharedGameUploaded) {
-    console.log('[Setup] Game already uploaded, loading from Games tab');
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    await page.locator('button:has-text("Games")').click();
-    await page.waitForTimeout(500);
-
-    // Try to load existing game
-    const loadButton = page.locator('button:has-text("Load")').first();
-    if (await loadButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await loadButton.click();
-      await expect(page.locator('video')).toBeVisible({ timeout: 30000 });
-      return;
-    }
-    // If no game found, fall through to upload
-    console.log('[Setup] No existing game found, uploading fresh');
-  }
-
+async function enterAnnotateModeWithClips(page) {
   console.log('[Setup] Uploading video...');
   await page.goto('/');
   await page.waitForLoadState('networkidle');
@@ -73,16 +74,16 @@ async function uploadGameOnce(page) {
   await expect(page.locator('text=/Imported \\d+ clips?/')).toBeVisible({ timeout: 10000 });
   console.log('[Setup] TSV imported');
 
-  // Wait for auto-save
-  await page.waitForTimeout(2000);
-  sharedGameUploaded = true;
+  // Wait for clips to appear in sidebar
+  await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 5000 });
+  console.log('[Setup] Clips visible');
 }
 
 /**
- * Helper: Enter annotate mode with existing game or upload if needed
+ * Helper: Enter annotate mode by uploading video and TSV
  */
 async function enterAnnotateMode(page) {
-  await uploadGameOnce(page);
+  await enterAnnotateModeWithClips(page);
 }
 
 // ============================================================================
@@ -91,12 +92,12 @@ async function enterAnnotateMode(page) {
 
 test.describe('Full Workflow Tests', () => {
   test.beforeAll(async ({ request }) => {
-    // Check if backend is running
+    // Check if backend is running (uses dev port 8000)
     try {
       const health = await request.get(`${API_BASE}/health`);
       expect(health.ok()).toBeTruthy();
     } catch (e) {
-      throw new Error('Backend not running. Start with: cd src/backend && uvicorn app.main:app --port 8000');
+      throw new Error(`Backend not running on port ${API_PORT}. Start it with: cd src/backend && uvicorn app.main:app --port ${API_PORT}`);
     }
 
     // Check if test files exist
@@ -106,6 +107,13 @@ test.describe('Full Workflow Tests', () => {
     if (!fs.existsSync(TEST_TSV)) {
       throw new Error(`Test TSV not found: ${TEST_TSV}`);
     }
+
+    console.log(`[E2E] Test user ID: ${TEST_USER_ID}`);
+  });
+
+  test.beforeEach(async ({ page }) => {
+    // Set up test user context for API isolation on each test
+    await setupTestUserContext(page);
   });
 
   test('1. Project Manager loads correctly', async ({ page }) => {
@@ -123,8 +131,8 @@ test.describe('Full Workflow Tests', () => {
   });
 
   test('2. Annotate Mode - Upload video and import TSV', async ({ page }) => {
-    // This test does the initial upload (will be reused by subsequent tests)
-    await uploadGameOnce(page);
+    // Upload video and import TSV
+    await enterAnnotateModeWithClips(page);
 
     // Verify annotate mode is active
     await expect(page.getByRole('heading', { name: 'Clips' })).toBeVisible();
@@ -152,13 +160,15 @@ test.describe('Full Workflow Tests', () => {
   test('4. Import button is visible in annotate mode', async ({ page }) => {
     await enterAnnotateMode(page);
 
-    // Verify "Import Into Projects" button is visible and enabled
+    // Wait for video upload to complete first (button shows "Uploading video..." until done)
+    // The upload enables the "Create Annotated Video" button, which shares the same disabled conditions
+    const createVideoButton = page.locator('button:has-text("Create Annotated Video")');
+    await expect(createVideoButton).toBeEnabled({ timeout: 120000 }); // 2 min for video upload
+
+    // Now verify "Import Into Projects" button is visible and enabled
     const importButton = page.locator('button:has-text("Import Into Projects")');
     await expect(importButton).toBeVisible({ timeout: 5000 });
-
-    // Button should be enabled when we have clips
-    const isDisabled = await importButton.getAttribute('disabled');
-    expect(isDisabled).toBeNull(); // null means not disabled
+    await expect(importButton).toBeEnabled({ timeout: 10000 });
   });
 
   test('5. Create Annotated Video API call succeeds', async ({ page }) => {
@@ -217,14 +227,20 @@ test.describe('Full Workflow Tests', () => {
     // Verify project was created
     await expect(page.locator('text=Carlsbad Highlights').first()).toBeVisible();
 
-    // Verify via API
-    const projects = await request.get(`${API_BASE}/projects`);
+    // Verify via API (with test user header)
+    const projects = await request.get(`${API_BASE}/projects`, {
+      headers: { 'X-User-ID': TEST_USER_ID }
+    });
     const projectsData = await projects.json();
     expect(projectsData.some(p => p.name === 'Carlsbad Highlights')).toBeTruthy();
   });
 });
 
 test.describe('Clip Editing Tests', () => {
+  test.beforeEach(async ({ page }) => {
+    await setupTestUserContext(page);
+  });
+
   test('Edit clip rating via UI', async ({ page }) => {
     await enterAnnotateMode(page);
 
@@ -264,6 +280,10 @@ test.describe('Clip Editing Tests', () => {
 });
 
 test.describe('UI Component Tests', () => {
+  test.beforeEach(async ({ page }) => {
+    await setupTestUserContext(page);
+  });
+
   test('Clip sidebar shows imported clips', async ({ page }) => {
     await enterAnnotateMode(page);
 
@@ -288,8 +308,11 @@ test.describe('UI Component Tests', () => {
 });
 
 test.describe('API Integration Tests', () => {
+  // Helper to add test user header to API requests
+  const testHeaders = { 'X-User-ID': TEST_USER_ID };
+
   test('Health endpoint responds', async ({ request }) => {
-    const response = await request.get(`${API_BASE}/health`);
+    const response = await request.get(`${API_BASE}/health`, { headers: testHeaders });
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.status).toBe('healthy');
@@ -298,6 +321,7 @@ test.describe('API Integration Tests', () => {
   test('Projects CRUD works', async ({ request }) => {
     // Create
     const createResponse = await request.post(`${API_BASE}/projects`, {
+      headers: testHeaders,
       data: { name: 'E2E Test Project', aspect_ratio: '16:9' }
     });
     expect(createResponse.ok()).toBeTruthy();
@@ -305,16 +329,16 @@ test.describe('API Integration Tests', () => {
     expect(created.id).toBeDefined();
 
     // Read
-    const readResponse = await request.get(`${API_BASE}/projects/${created.id}`);
+    const readResponse = await request.get(`${API_BASE}/projects/${created.id}`, { headers: testHeaders });
     expect(readResponse.ok()).toBeTruthy();
 
     // Delete
-    const deleteResponse = await request.delete(`${API_BASE}/projects/${created.id}`);
+    const deleteResponse = await request.delete(`${API_BASE}/projects/${created.id}`, { headers: testHeaders });
     expect(deleteResponse.ok()).toBeTruthy();
   });
 
   test('Games list endpoint works', async ({ request }) => {
-    const response = await request.get(`${API_BASE}/games`);
+    const response = await request.get(`${API_BASE}/games`, { headers: testHeaders });
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.games).toBeDefined();
@@ -322,21 +346,21 @@ test.describe('API Integration Tests', () => {
   });
 
   test('Raw clips endpoint responds', async ({ request }) => {
-    const response = await request.get(`${API_BASE}/clips/raw`);
+    const response = await request.get(`${API_BASE}/clips/raw`, { headers: testHeaders });
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(Array.isArray(data)).toBeTruthy();
   });
 
   test('Games CRUD works', async ({ request }) => {
-    const listResponse = await request.get(`${API_BASE}/games`);
+    const listResponse = await request.get(`${API_BASE}/games`, { headers: testHeaders });
     expect(listResponse.ok()).toBeTruthy();
     const listData = await listResponse.json();
     expect(listData.games).toBeDefined();
 
     if (listData.games.length > 0) {
       const gameId = listData.games[0].id;
-      const getResponse = await request.get(`${API_BASE}/games/${gameId}`);
+      const getResponse = await request.get(`${API_BASE}/games/${gameId}`, { headers: testHeaders });
       expect(getResponse.ok()).toBeTruthy();
       const gameData = await getResponse.json();
       expect(gameData.id).toBe(gameId);
@@ -346,18 +370,19 @@ test.describe('API Integration Tests', () => {
   test('Clips by project endpoint works', async ({ request }) => {
     // Create project
     const createResponse = await request.post(`${API_BASE}/projects`, {
+      headers: testHeaders,
       data: { name: 'Clips Test Project', aspect_ratio: '9:16' }
     });
     expect(createResponse.ok()).toBeTruthy();
     const project = await createResponse.json();
 
     // Get clips
-    const clipsResponse = await request.get(`${API_BASE}/clips/projects/${project.id}/clips`);
+    const clipsResponse = await request.get(`${API_BASE}/clips/projects/${project.id}/clips`, { headers: testHeaders });
     expect(clipsResponse.ok()).toBeTruthy();
     const clips = await clipsResponse.json();
     expect(Array.isArray(clips)).toBeTruthy();
 
     // Cleanup
-    await request.delete(`${API_BASE}/projects/${project.id}`);
+    await request.delete(`${API_BASE}/projects/${project.id}`, { headers: testHeaders });
   });
 });

@@ -90,6 +90,10 @@ async def websocket_export_progress(websocket: WebSocket, export_id: str):
 
     This function should be registered as a WebSocket endpoint in the main app
     or a router.
+
+    Features:
+    - Responds to client 'ping' messages with 'pong' to keep connection alive
+    - Handles graceful disconnection
     """
     logger.info(f"[WS] WebSocket endpoint HIT for export_id: {export_id}")
     await manager.connect(export_id, websocket)
@@ -98,10 +102,19 @@ async def websocket_export_progress(websocket: WebSocket, export_id: str):
         while True:
             # Wait for any message from client (ping/pong)
             try:
-                await websocket.receive_text()
+                message = await websocket.receive_text()
+                # Respond to ping with pong to keep connection alive
+                if message == 'ping':
+                    try:
+                        await websocket.send_text('pong')
+                        logger.debug(f"[WS] Responded to ping from {export_id}")
+                    except Exception as e:
+                        logger.warning(f"[WS] Failed to send pong to {export_id}: {e}")
+                        break
             except WebSocketDisconnect:
+                logger.info(f"[WS] Client disconnected gracefully for {export_id}")
                 break
     except Exception as e:
-        logger.error(f"WebSocket error for {export_id}: {e}")
+        logger.error(f"[WS] WebSocket error for {export_id}: {e}")
     finally:
         manager.disconnect(export_id, websocket)

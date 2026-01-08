@@ -182,9 +182,13 @@ const ExportButton = forwardRef(function ExportButton({
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
 
-  // Use external progress when available and not actively exporting locally
-  const displayProgress = isExporting ? progress : (externalProgress?.progress ?? 0);
-  const displayMessage = isExporting ? progressMessage : (externalProgress?.message ?? '');
+  // Display the highest progress value between local and global
+  // Local tracks upload (0-10%), global tracks processing (10-100%)
+  // Using Math.max ensures we show the most up-to-date progress regardless of source
+  const displayProgress = Math.max(progress, externalProgress?.progress ?? 0);
+  const displayMessage = (externalProgress?.progress ?? 0) > progress
+    ? (externalProgress?.message ?? '')
+    : progressMessage;
   const [error, setError] = useState(null);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
   const wsRef = useRef(null);
@@ -237,6 +241,9 @@ const ExportButton = forwardRef(function ExportButton({
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
+      // Keepalive interval to prevent proxy/browser timeouts
+      let keepaliveInterval = null;
+
       // Set a timeout in case connection takes too long
       const timeout = setTimeout(() => {
         console.warn('[ExportButton] WebSocket connection timeout after 3s, readyState:', ws.readyState);
@@ -246,6 +253,19 @@ const ExportButton = forwardRef(function ExportButton({
       ws.onopen = () => {
         clearTimeout(timeout);
         console.log('[ExportButton] WebSocket CONNECTED successfully, readyState:', ws.readyState);
+
+        // Start keepalive pings every 30 seconds to prevent timeouts
+        keepaliveInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            try {
+              ws.send('ping');
+              console.log('[ExportButton] Sent keepalive ping');
+            } catch (e) {
+              console.warn('[ExportButton] Failed to send keepalive:', e);
+            }
+          }
+        }, 30000);
+
         resolve();
       };
 
@@ -259,18 +279,21 @@ const ExportButton = forwardRef(function ExportButton({
 
         // Close connection if complete or error
         if (data.status === 'complete' || data.status === 'error') {
+          if (keepaliveInterval) clearInterval(keepaliveInterval);
           ws.close();
         }
       };
 
       ws.onerror = (error) => {
         clearTimeout(timeout);
+        if (keepaliveInterval) clearInterval(keepaliveInterval);
         console.error('[ExportButton] WebSocket ERROR - readyState:', ws.readyState, 'error:', error);
         console.error('[ExportButton] Check browser Network tab for WebSocket connection details');
         resolve(); // Resolve anyway to not block export
       };
 
       ws.onclose = (event) => {
+        if (keepaliveInterval) clearInterval(keepaliveInterval);
         console.log('[ExportButton] WebSocket CLOSED - code:', event.code, 'reason:', event.reason, 'wasClean:', event.wasClean);
         wsRef.current = null;
       };
