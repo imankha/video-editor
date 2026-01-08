@@ -9,11 +9,13 @@ Production use: Single user mode with default user ID.
 Test use: Each test suite logs in with a unique user ID for isolation.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import logging
+import shutil
 
 from app.user_context import get_current_user_id
+from app.database import get_user_data_path
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -68,3 +70,40 @@ async def login(request: LoginRequest):
 async def whoami():
     """Return the current user ID from request context."""
     return {"user_id": get_current_user_id()}
+
+
+@router.delete("/user")
+async def delete_user():
+    """
+    Delete the current user's entire data folder.
+
+    This removes ALL data for the current user including:
+    - Database (projects, clips, games, annotations)
+    - All video files (raw clips, working videos, final videos)
+    - All cached data
+
+    Use with caution! This is primarily for test cleanup.
+    """
+    user_id = get_current_user_id()
+    user_path = get_user_data_path()
+
+    if not user_path.exists():
+        logger.info(f"User folder does not exist: {user_id}")
+        return {"message": f"User {user_id} has no data to delete", "deleted": False}
+
+    # Safety check: don't delete the default user in production
+    if user_id == "a" and not user_id.startswith("e2e_"):
+        logger.warning(f"Attempted to delete default user 'a' - blocking for safety")
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot delete default user. Use a test user ID for cleanup."
+        )
+
+    try:
+        logger.info(f"Deleting user folder: {user_path}")
+        shutil.rmtree(user_path)
+        logger.info(f"Successfully deleted user: {user_id}")
+        return {"message": f"Deleted all data for user {user_id}", "deleted": True}
+    except Exception as e:
+        logger.error(f"Failed to delete user folder: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete user data: {e}")

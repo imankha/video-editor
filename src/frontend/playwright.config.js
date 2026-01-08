@@ -27,7 +27,8 @@ const __dirname = path.dirname(__filename);
 // Test data directory - contains video and TSV files for testing
 const TEST_DATA_DIR = path.resolve(__dirname, '../../formal annotations/12.6.carlsbad');
 
-// Use dev ports - if servers running, reuse them; if not, start them
+// Always use dev ports - simpler configuration
+// reuseExistingServer: true means it will use your running dev servers if available
 const API_PORT = 8000;
 const FRONTEND_PORT = 5173;
 
@@ -56,8 +57,10 @@ export default defineConfig({
     trace: 'retain-on-failure', // Keep traces for failed tests (helps debugging)
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    // Pass test data paths to tests
+    // Pass test data paths and API config to tests
     testDataDir: TEST_DATA_DIR,
+    apiBase: `http://localhost:${API_PORT}/api`,
+    apiPort: API_PORT,
   },
 
   projects: [
@@ -83,7 +86,10 @@ export default defineConfig({
     },
     {
       // Frontend dev server
-      command: `npm run dev -- --port ${FRONTEND_PORT}`,
+      // Set VITE_API_PORT so Vite's proxy targets the correct backend port
+      command: process.platform === 'win32'
+        ? `set VITE_API_PORT=${API_PORT}&& npm run dev -- --port ${FRONTEND_PORT}`
+        : `VITE_API_PORT=${API_PORT} npm run dev -- --port ${FRONTEND_PORT}`,
       port: FRONTEND_PORT,
       reuseExistingServer: true, // Use running server if available
       timeout: 60000,

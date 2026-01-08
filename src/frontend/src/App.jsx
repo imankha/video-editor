@@ -90,8 +90,6 @@ function App() {
 
   // Export state from Zustand store (see stores/exportStore.js)
   const {
-    exportProgress,
-    setExportProgress,
     exportingProject,
     startExport,
     clearExport,
@@ -1922,8 +1920,6 @@ function App() {
           // Project hooks
           fetchProjects={fetchProjects}
           projectCreationSettings={projectCreationSettings}
-          // Export state
-          exportProgress={exportProgress}
         />
       )}
 

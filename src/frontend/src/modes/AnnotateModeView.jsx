@@ -1,6 +1,7 @@
 import { Download, Loader, Upload, Settings } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
+import { useExportStore } from '../stores';
 
 /**
  * AnnotateModeView - Complete view for Annotate mode
@@ -57,8 +58,7 @@ export function AnnotateModeView({
   annotateSelectedLayer,
   onLayerSelect,
 
-  // Export state
-  exportProgress,
+  // Export state (exportProgress is read directly from store for reactivity)
   isCreatingAnnotatedVideo,
   isImportingToProjects,
   isUploadingGameVideo,
@@ -74,6 +74,9 @@ export function AnnotateModeView({
   onZoomChange,
   onPanChange,
 }) {
+  // Read exportProgress directly from store for proper reactivity during SSE updates
+  const { exportProgress } = useExportStore();
+
   return (
     <>
       {/* Video Metadata - Annotate mode */}

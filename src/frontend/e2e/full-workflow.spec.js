@@ -23,8 +23,9 @@ import { fileURLToPath } from 'url';
  *   cd src/frontend && npx playwright test --ui
  */
 
-// E2E tests use dev port 8000 (see playwright.config.js)
-const API_BASE = 'http://localhost:8000/api';
+// Always use port 8000 - the dev backend port
+const API_PORT = 8000;
+const API_BASE = `http://localhost:${API_PORT}/api`;
 
 // Unique test user ID for this test run (isolates E2E data from dev data)
 const TEST_USER_ID = `e2e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -96,7 +97,7 @@ test.describe('Full Workflow Tests', () => {
       const health = await request.get(`${API_BASE}/health`);
       expect(health.ok()).toBeTruthy();
     } catch (e) {
-      throw new Error('Backend not running on port 8000. Start it with: cd src/backend && uvicorn app.main:app');
+      throw new Error(`Backend not running on port ${API_PORT}. Start it with: cd src/backend && uvicorn app.main:app --port ${API_PORT}`);
     }
 
     // Check if test files exist

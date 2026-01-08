@@ -55,9 +55,6 @@ export function AnnotateScreen({
   // Project hooks
   fetchProjects,
   projectCreationSettings,
-
-  // Export state from store
-  exportProgress,
 }) {
   // Video hook - without segment awareness for annotate mode
   // IMPORTANT: We use the videoRef from this hook (not from App.jsx props)
@@ -351,8 +348,7 @@ export function AnnotateScreen({
         // Layer selection
         annotateSelectedLayer={annotateSelectedLayer}
         onLayerSelect={setAnnotateSelectedLayer}
-        // Export state
-        exportProgress={exportProgress}
+        // Export state (exportProgress is read from store in AnnotateModeView)
         isCreatingAnnotatedVideo={isCreatingAnnotatedVideo}
         isImportingToProjects={isImportingToProjects}
         isUploadingGameVideo={isUploadingGameVideo}

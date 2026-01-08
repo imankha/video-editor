@@ -36,20 +36,29 @@ function isPortInUse(port) {
 export default async function globalSetup() {
   console.log('\n=== E2E Test Setup ===\n');
 
-  // Check if dev servers are already running (informational)
-  const backendRunning = await isPortInUse(8000);
-  const frontendRunning = await isPortInUse(5173);
+  // Always use dev ports - simpler configuration
+  const backendPort = 8000;
+  const frontendPort = 5173;
+  const modeLabel = 'Dev ports (8000/5173)';
+
+  // Check if servers are already running (informational)
+  const backendRunning = await isPortInUse(backendPort);
+  const frontendRunning = await isPortInUse(frontendPort);
+
+  console.log(`Mode: ${modeLabel}\n`);
 
   if (backendRunning && frontendRunning) {
-    console.log('✓ Using your running dev servers (fast!)');
-    console.log('  Backend:  http://localhost:8000');
-    console.log('  Frontend: http://localhost:5173\n');
+    console.log('✓ Using your running servers (fast!)');
+    console.log(`  Backend:  http://localhost:${backendPort}`);
+    console.log(`  Frontend: http://localhost:${frontendPort}\n`);
   } else if (backendRunning || frontendRunning) {
-    console.log('⚠ Partial dev servers detected:');
-    console.log(`  Backend:  ${backendRunning ? 'running' : 'will start'}`);
-    console.log(`  Frontend: ${frontendRunning ? 'running' : 'will start'}\n`);
+    console.log('⚠ Partial servers detected:');
+    console.log(`  Backend:  ${backendRunning ? 'running' : 'will start'} (port ${backendPort})`);
+    console.log(`  Frontend: ${frontendRunning ? 'running' : 'will start'} (port ${frontendPort})\n`);
   } else {
-    console.log('ℹ No dev servers running - Playwright will start them');
-    console.log('  Tip: Start dev servers first for faster test runs!\n');
+    console.log('ℹ No servers running - Playwright will start them');
+    console.log(`  Backend:  port ${backendPort}`);
+    console.log(`  Frontend: port ${frontendPort}`);
+    console.log('  Tip: Start servers first for faster test runs!\n');
   }
 }

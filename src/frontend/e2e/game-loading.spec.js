@@ -13,8 +13,9 @@ import { fileURLToPath } from 'url';
  * Test Isolation: Each test run uses a unique user ID via X-User-ID header.
  */
 
-// E2E tests use dev port 8000 (see playwright.config.js)
-const API_BASE = 'http://localhost:8000/api';
+// Always use port 8000 - the dev backend port
+const API_PORT = 8000;
+const API_BASE = `http://localhost:${API_PORT}/api`;
 
 // Unique test user ID for this test run (isolates E2E data from dev data)
 const TEST_USER_ID = `e2e_gameload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

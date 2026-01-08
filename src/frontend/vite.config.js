@@ -20,6 +20,9 @@ export default defineConfig({
         target: `http://localhost:${API_PORT}`,
         ws: true,
         changeOrigin: true,
+        // Increase timeouts for long-running WebSocket connections (AI upscaling can take 10+ minutes)
+        timeout: 600000, // 10 minutes
+        proxyTimeout: 600000, // 10 minutes
       }
     }
   },

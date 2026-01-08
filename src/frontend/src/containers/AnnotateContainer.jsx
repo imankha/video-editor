@@ -242,6 +242,7 @@ export function AnnotateContainer({
       eventSource.onmessage = (event) => {
         try {
           const progress = JSON.parse(event.data);
+          console.log('[AnnotateContainer] SSE progress:', progress.current, '/', progress.total, '=', Math.round((progress.current / progress.total) * 100) + '%', progress.message);
           setExportProgress(progress);
           if (progress.done) {
             eventSource?.close();

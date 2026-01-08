@@ -561,14 +561,18 @@ async def export_clips(
                     'done': done
                 }
 
-        # Initialize progress tracking
-        total_steps = len(clips) + 2  # clips + TSV + concatenation
-        if should_save_to_db:
-            total_steps += len([c for c in clips if c.get('rating', 3) >= min_rating_for_library])  # raw clip extraction
-        update_progress(0, total_steps, 'starting', 'Initializing export...')
-
         # Separate clips by rating using configurable threshold
         good_clips = [c for c in clips if c.get('rating', 3) >= min_rating_for_library]
+
+        # Initialize progress tracking
+        # Calculate total_steps based on mode:
+        # - save_to_db=true: extract good clips + TSV (no burned-in compilation)
+        # - save_to_db=false: burned-in clips + TSV + concatenation
+        if should_save_to_db:
+            total_steps = len(good_clips) + 1  # extracting good clips + TSV
+        else:
+            total_steps = len(clips) + 2  # burned-in clips + TSV + concatenation
+        update_progress(0, total_steps, 'starting', 'Initializing export...')
         all_clips = clips
 
         used_names = set()
