@@ -56,7 +56,7 @@ User Workflow:
 1. **Annotate Mode**: Mark clip regions on full game footage
    - Add metadata (tags, rating 1-5, notes)
    - Export creates raw clips (4+ stars) + projects
-   - Outputs: `raw_clips/` files + `annotations.tsv`
+   - Annotations stored in SQLite `annotations` table
 
 2. **Framing Mode**: Edit individual clips within a project
    - Crop keyframes with spline interpolation
@@ -84,6 +84,7 @@ video-editor/
 │   │       ├── queries.py          # Shared SQL query helpers
 │   │       ├── websocket.py        # WebSocket manager for progress
 │   │       ├── constants.py        # Shared constants (ratings, tags, colors)
+│   │       ├── user_context.py     # Per-request user isolation (for tests)
 │   │       ├── routers/            # API endpoints
 │   │       │   ├── projects.py     # Project CRUD, state persistence
 │   │       │   ├── clips.py        # Raw clips library + working clips
@@ -96,7 +97,8 @@ video-editor/
 │   │       │   │   └── multi_clip.py   # /multi-clip, /chapters endpoints
 │   │       │   ├── downloads.py    # Gallery/final video management
 │   │       │   ├── detection.py    # YOLO player/ball detection
-│   │       │   └── health.py       # Health checks
+│   │       │   ├── health.py       # Health checks
+│   │       │   └── auth.py         # User isolation (for E2E tests)
 │   │       └── services/           # Business logic layer
 │   │           ├── clip_cache.py       # Clip caching to avoid re-encoding
 │   │           ├── video_processor.py  # Abstract GPU processing interface
@@ -110,7 +112,7 @@ video-editor/
 │   │
 │   └── frontend/                   # React + Vite frontend
 │       └── src/
-│           ├── App.jsx             # Main container (3900+ lines)
+│           ├── App.jsx             # Main container (~2200 lines)
 │           ├── components/         # Shared UI components
 │           │   ├── VideoPlayer.jsx
 │           │   ├── ProjectManager.jsx
@@ -125,7 +127,24 @@ video-editor/
 │           │   ├── useVideo.js
 │           │   ├── useGames.js
 │           │   └── useKeyframeController.js
+│           ├── screens/            # Top-level screen components
+│           │   ├── ProjectsScreen.jsx
+│           │   ├── AnnotateScreen.jsx
+│           │   ├── FramingScreen.jsx
+│           │   └── OverlayScreen.jsx
+│           ├── containers/         # Container components (state + logic)
+│           │   ├── AnnotateContainer.jsx
+│           │   ├── FramingContainer.jsx
+│           │   └── OverlayContainer.jsx
+│           ├── stores/             # Zustand state stores
+│           │   ├── clipStore.js
+│           │   ├── editorStore.js
+│           │   ├── exportStore.js
+│           │   └── videoStore.js
 │           ├── modes/              # Mode-specific code
+│           │   ├── FramingModeView.jsx
+│           │   ├── OverlayModeView.jsx
+│           │   ├── AnnotateModeView.jsx
 │           │   ├── framing/        # Crop, segments, overlays
 │           │   ├── overlay/        # Highlight regions
 │           │   │   └── hooks/useOverlayState.js  # Consolidated overlay state
@@ -142,13 +161,13 @@ video-editor/
 │   ├── database.sqlite
 │   ├── raw_clips/                  # Library clips (from Annotate)
 │   ├── uploads/                    # Direct uploads
-│   ├── games/                      # Full game videos + TSV
+│   ├── games/                      # Full game videos
 │   ├── working_videos/             # Framing output
 │   ├── final_videos/               # Overlay output
 │   ├── clip_cache/                 # Cached processed clips
 │   └── downloads/                  # Temp export files
 │
-├── test_persistence.py             # 22 backend persistence tests
+├── test_persistence.py             # Backend persistence tests
 ├── MANUAL_TEST.md                  # Manual testing procedures
 ├── KNOWN_BUGS.md                   # Known issues
 └── prompt_preamble                 # Project context for AI assistants
@@ -205,8 +224,18 @@ final_videos (
 
 -- Games: Full game footage for Annotate mode
 games (
-    id, name, video_filename, annotations_filename,
-    video_duration, video_width, video_height, video_size, created_at
+    id, name, video_filename,
+    clip_count, brilliant_count, good_count,  -- Aggregate counts (cached)
+    interesting_count, mistake_count, blunder_count,
+    aggregate_score, created_at
+)
+
+-- Annotations: Marked regions in game footage (replaces TSV files)
+annotations (
+    id, game_id,               -- FK to games with ON DELETE CASCADE
+    start_time, end_time,      -- Time range in seconds
+    name, rating, tags, notes, -- Metadata (rating 1-5)
+    created_at, updated_at
 )
 ```
 
@@ -382,10 +411,10 @@ To add a new transition type, create a class implementing `TransitionStrategy` a
 ### Running Tests
 
 ```bash
-# Frontend unit tests (235 tests)
+# Frontend unit tests (342 tests)
 cd src/frontend && npm test
 
-# Backend unit tests (159 tests)
+# Backend unit tests (274 tests)
 cd src/backend && .venv/Scripts/python -m pytest tests/ -v
 
 # E2E tests (requires backend + frontend running)
@@ -406,14 +435,22 @@ Tests use data from `formal annotations/12.6.carlsbad/`:
 
 ### E2E Test Coverage
 
-The `e2e/full-workflow.spec.js` covers:
-1. Project Manager loads correctly
-2. Annotate Mode - Upload video and import TSV
-3. Annotate Mode - Export TSV round-trip
-4. Full workflow - Annotate to Project (import into projects)
-5. Create project manually
-6. UI Component Tests (clip sidebar, star rating)
-7. API Integration Tests (health, projects CRUD, games, clips)
+Tests are organized across multiple spec files:
+
+**`full-workflow.spec.js`** - Core workflow and API tests:
+- Project Manager loading, Annotate Mode (video upload, TSV import/export)
+- Project creation, UI component tests (clip sidebar, star rating, clip editing)
+- API integration tests (health, projects CRUD, games, clips)
+
+**`regression-tests.spec.js`** - Smoke and full regression tests:
+- Annotate: video frame loading, TSV import, timeline navigation
+- Framing: video loading, export creates working video
+- Overlay: video loading, highlight region initialization
+- Import Into Projects workflow
+
+**`game-loading.spec.js`** - Game loading specific tests:
+- Load saved game into annotate mode
+- Editor mode state changes on game load
 
 ### Manual Testing
 - See [MANUAL_TEST.md](MANUAL_TEST.md) for manual UI procedures
