@@ -1,20 +1,7 @@
 # Wrangler configuration for ReelBallers Landing Page
 name = "video-editor"
 compatibility_date = "2024-01-01"
+main = "worker.js"
 
-# Build output directory (Vite builds to dist/)
-[site]
-bucket = "./dist"
-
-# D1 Database for signups
-[[d1_databases]]
-binding = "DB"
-database_name = "reelballers-signups"
-database_id = "YOUR_D1_DATABASE_ID"  # Replace after: wrangler d1 create reelballers-signups
-
-# Environment-specific config
-[env.production]
-name = "reelballers-landing"
-
-[env.preview]
-name = "reelballers-landing-preview"
+# Static assets from Vite build output
+assets = { directory = "./dist" }

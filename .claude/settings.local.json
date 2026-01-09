@@ -70,7 +70,8 @@
       "Bash(if [ -d \"C:/Users/imank/projects/video-editor/app\" ])",
       "Bash(then echo \"WARNING: app/ folder still exists\")",
       "Bash(else echo \"OK: app/ folder correctly removed\")",
-      "Bash(fi)"
+      "Bash(fi)",
+      "WebFetch(domain:developers.cloudflare.com)"
     ],
     "deny": [],
     "ask": []
