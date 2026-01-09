@@ -44,13 +44,13 @@ export default defineConfig({
   // - json: Structured results for AI/automated analysis
   // - list: Console output during test runs
   reporter: [
-    ['html', { outputFolder: 'test-results/html' }],
-    ['json', { outputFile: 'test-results/results.json' }],
+    ['html', { outputFolder: path.join(__dirname, 'test-results/html') }],
+    ['json', { outputFile: path.join(__dirname, 'test-results/results.json') }],
     ['list'],
   ],
 
   // Output directory for test artifacts (screenshots, traces, videos)
-  outputDir: 'test-results/artifacts',
+  outputDir: path.join(__dirname, 'test-results/artifacts'),
 
   use: {
     baseURL: `http://localhost:${FRONTEND_PORT}`,

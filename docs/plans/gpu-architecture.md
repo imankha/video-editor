@@ -192,9 +192,11 @@ video-editor/
 ├── deploy/
 │   └── cloudflare/         # Workers + Pages config
 │
-└── plans/
+└── docs/plans/             # All planning docs
     ├── deployment.md
-    └── gpu-architecture.md
+    ├── gpu-architecture.md
+    ├── landingpage.md
+    └── tasks.md
 ```
 
 **Future (when RunPod is implemented):**

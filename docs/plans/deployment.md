@@ -30,7 +30,7 @@ api.reelballers.com   → Cloudflare Worker (API router)
 - **Output directory**: `dist`
 - **Domain**: `reelballers.com`
 
-See `plans/landingpage.md` for landing-specific roadmap.
+See `landingpage.md` for landing-specific roadmap.
 
 ### Main App
 - **Project name**: `reelballers-app`
@@ -174,23 +174,6 @@ bucket_name = "reelballers-videos"
 
 ---
 
-## Terraform (Optional)
-
-Infrastructure as code available in `docs/plans/cloudflare_runpod_deploy_package/terraform/`:
-- Cloudflare Pages project
-- R2 bucket
-- Worker routes
-- DNS records
-
-```bash
-cd docs/plans/cloudflare_runpod_deploy_package/terraform
-terraform init
-terraform plan
-terraform apply
-```
-
----
-
 ## Deployment Commands
 
 ### Initial Setup
@@ -249,21 +232,82 @@ wrangler rollback
 
 ---
 
-## Reference Implementation
+## Reference Patterns (Pseudo-code)
 
-Full working code available in:
-`docs/plans/cloudflare_runpod_deploy_package/`
+These patterns guide AI code generation. Adapt as needed.
 
+### Worker Router Pattern
 ```
-├── terraform/          # Infrastructure as code
-├── wrangler/
-│   ├── src/
-│   │   ├── worker-entry.js
-│   │   ├── topup.js
-│   │   ├── webhook.js
-│   │   └── debit_and_runpod.js
-│   ├── migrations/
-│   │   └── 0001-init.sql
-│   └── wrangler.toml
-└── README.md
+// Entry point routes by path prefix
+router(request):
+  if path.startsWith('/topup')  → topupHandler(request)
+  if path.startsWith('/webhook') → webhookHandler(request)
+  if path.startsWith('/debit')   → debitHandler(request)
+  else → 404
+```
+
+### Top-up Flow Pattern
+```
+topupHandler(request):
+  uid = getCookie('uid') OR generateUUID()
+  session = stripe.createCheckoutSession({
+    payment_method_types: ['card'],
+    metadata: { uid },
+    success_url, cancel_url
+  })
+  return redirect(session.url) + setCookie('uid', uid)
+```
+
+### Webhook Pattern
+```
+webhookHandler(request):
+  signature = request.headers['stripe-signature']
+  event = stripe.verifyWebhook(body, signature, secret)
+  if event.type == 'checkout.session.completed':
+    uid = event.data.metadata.uid
+    amount = event.data.amount_total
+    db.exec("UPDATE wallet SET balance_cents = balance_cents + ? WHERE uid = ?", amount, uid)
+    db.exec("INSERT INTO ledger (uid, change_cents, reason) VALUES (?, ?, 'topup')", uid, amount)
+  return 200
+```
+
+### Debit + RunPod Pattern
+```
+debitHandler(request):
+  uid = getCookie('uid')
+  cost = calculateJobCost(request.params)
+  balance = db.query("SELECT balance_cents FROM wallet WHERE uid = ?", uid)
+  if balance < cost → return 402 "Insufficient funds"
+
+  db.exec("UPDATE wallet SET balance_cents = balance_cents - ? WHERE uid = ?", cost, uid)
+  db.exec("INSERT INTO ledger (uid, change_cents, reason) VALUES (?, ?, 'debit')", uid, -cost)
+
+  job = runpod.createJob({ input: request.params })
+  return { job_id: job.id, status: 'queued' }
+```
+
+### Terraform Resources (Reference)
+```
+cloudflare_pages_project     → name, build_command, directory
+cloudflare_r2_bucket         → bucket_name
+cloudflare_worker_route      → pattern: "api.domain.com/*"
+cloudflare_record            → A record, proxied: true
+```
+
+### Wrangler Config Pattern
+```toml
+name = "wallet-api"
+main = "src/worker-entry.js"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wallet-db"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "reelballers-videos"
+
+[vars]
+SUCCESS_URL = "https://app.reelballers.com/success"
 ```
