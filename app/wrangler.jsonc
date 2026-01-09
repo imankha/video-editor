@@ -1,5 +1,8 @@
 {
   "name": "video-editor",
   "compatibility_date": "2026-01-09",
-  "main": "./index.js"
+  "main": "./index.js",
+  "routes": [
+    { "pattern": "reelballers.com", "custom_domain": true }
+  ]
 }
