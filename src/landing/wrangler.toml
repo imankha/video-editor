@@ -1,5 +1,5 @@
 # Wrangler configuration for ReelBallers Landing Page
-name = "reelballers-landing"
+name = "video-editor"
 compatibility_date = "2024-01-01"
 
 # Build output directory (Vite builds to dist/)

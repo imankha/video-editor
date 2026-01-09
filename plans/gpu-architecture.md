@@ -2,224 +2,193 @@
 
 ## Overview
 
-This document outlines the future architecture for GPU-accelerated processing in ReelBallers, supporting both WebGPU (client-side) and RunPod (cloud fallback).
+All GPU workloads run on RunPod serverless. Quality is the differentiator - no compromises with browser-based inference.
 
-## Current State
-
-All GPU workloads currently run on the local backend server:
-- `src/backend/app/` - Python FastAPI with PyTorch/ONNX for AI models
-- Uses CUDA when available, falls back to CPU
-
-## Target Architecture
-
-### Frontend (WebGPU)
-For users with WebGPU-capable browsers/hardware:
+## Architecture
 
 ```
-src/frontend/
-├── src/
-│   ├── gpu/
-│   │   ├── webgpu-detector.ts    # Detect WebGPU capability
-│   │   ├── shader-manager.ts     # Load and compile shaders
-│   │   ├── upscaler.ts           # WebGPU super-resolution
-│   │   └── tracker.ts            # WebGPU player detection
-│   └── workers/
-│       └── gpu-worker.ts         # Off-main-thread processing
+┌─────────────────────────────────────────────────────────────┐
+│                     FRONTEND (Cloudflare Pages)             │
+│                                                             │
+│   User uploads video → Request GPU job → Poll for result    │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  API (Cloudflare Workers)                    │
+│                                                             │
+│   /debit  → Check wallet → Trigger RunPod → Return job ID   │
+│   /status → Poll RunPod job status                          │
+│   /webhook → RunPod completion callback                     │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    RunPod Serverless                         │
+│                                                             │
+│   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│   │  Upscale    │  │   Track     │  │   Export    │        │
+│   │  (4x SR)    │  │  (YOLO)     │  │  (FFmpeg)   │        │
+│   └─────────────┘  └─────────────┘  └─────────────┘        │
+│                                                             │
+│   Input: R2 presigned URL                                   │
+│   Output: R2 presigned URL                                  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Backend Split
-Separate API logic from GPU processing:
+## RunPod Endpoints
 
-```
-src/backend/
-├── api/                          # FastAPI REST/WebSocket
-│   ├── main.py
-│   ├── routes/
-│   │   ├── projects.py
-│   │   ├── export.py
-│   │   └── tracking.py
-│   └── services/
-│       └── job_manager.py        # Queue GPU jobs
-│
-├── gpu/                          # GPU processing module
-│   ├── __init__.py
-│   ├── base.py                   # Abstract GPU processor
-│   ├── local.py                  # Local CUDA/CPU
-│   ├── runpod.py                 # RunPod client
-│   └── models/
-│       ├── upscaler.py
-│       └── tracker.py
-│
-└── shared/                       # Shared utilities
-    ├── config.py
-    └── types.py
-```
-
-### RunPod Integration
-Cloud GPU fallback for users without WebGPU:
-
-```
-deploy/
-├── cloudflare/                   # Main app (existing)
-└── runpod/
-    ├── handler.py                # RunPod serverless handler
-    ├── requirements.txt
-    └── Dockerfile
-```
-
-## Processing Flow
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                        FRONTEND                               │
-│                                                               │
-│  ┌─────────────┐    ┌─────────────────────────────────────┐  │
-│  │   WebGPU    │    │         GPU Worker (Web)            │  │
-│  │  Available? │───►│  - Real-time preview upscaling      │  │
-│  └─────────────┘    │  - Lightweight tracking inference   │  │
-│        │ No         └─────────────────────────────────────┘  │
-│        ▼                                                      │
-│  ┌─────────────┐                                             │
-│  │  Fallback   │                                             │
-│  │  to Cloud   │                                             │
-│  └─────────────┘                                             │
-└────────┬─────────────────────────────────────────────────────┘
-         │
-         ▼
-┌──────────────────────────────────────────────────────────────┐
-│                        BACKEND API                            │
-│                                                               │
-│  ┌─────────────┐    ┌─────────────────────────────────────┐  │
-│  │  Job Queue  │───►│         GPU Router                  │  │
-│  └─────────────┘    │                                     │  │
-│                     │  ┌───────────┐    ┌──────────────┐  │  │
-│                     │  │  Local    │    │   RunPod     │  │  │
-│                     │  │  CUDA     │    │  Serverless  │  │  │
-│                     │  └───────────┘    └──────────────┘  │  │
-│                     └─────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-```
-
-## WebGPU Capability Detection
-
-```typescript
-async function detectGPUCapability(): Promise<GPUCapability> {
-  // Check WebGPU support
-  if (!navigator.gpu) {
-    return { type: 'none', fallback: 'runpod' };
+### 1. Upscale Endpoint
+```python
+# Input
+{
+  "task": "upscale",
+  "input_url": "https://r2.../input.mp4",
+  "output_url": "https://r2.../output.mp4",  # presigned PUT
+  "params": {
+    "model": "RealESRGAN_x4plus",  # or SwinIR_4x_GAN
+    "scale": 4
   }
+}
 
-  const adapter = await navigator.gpu.requestAdapter();
-  if (!adapter) {
-    return { type: 'none', fallback: 'runpod' };
+# Output
+{
+  "status": "completed",
+  "output_url": "https://r2.../output.mp4",
+  "stats": {
+    "frames": 1200,
+    "duration_sec": 45.2,
+    "model": "RealESRGAN_x4plus"
   }
-
-  const info = await adapter.requestAdapterInfo();
-  const limits = adapter.limits;
-
-  // Check if GPU is powerful enough for our workloads
-  const isHighEnd = limits.maxBufferSize >= 1024 * 1024 * 256; // 256MB
-
-  return {
-    type: isHighEnd ? 'webgpu-full' : 'webgpu-limited',
-    vendor: info.vendor,
-    fallback: isHighEnd ? null : 'runpod-heavy'
-  };
 }
 ```
 
-## RunPod Serverless Handler
-
+### 2. Track Endpoint
 ```python
-# deploy/runpod/handler.py
-import runpod
+# Input
+{
+  "task": "track",
+  "input_url": "https://r2.../input.mp4",
+  "params": {
+    "model": "yolov8",
+    "classes": ["person"],
+    "confidence": 0.5
+  }
+}
 
-def handler(event):
-    """
-    RunPod serverless handler for GPU workloads.
+# Output
+{
+  "status": "completed",
+  "tracks": [
+    {
+      "id": 1,
+      "frames": [
+        {"frame": 0, "bbox": [x, y, w, h], "confidence": 0.92},
+        ...
+      ]
+    }
+  ]
+}
+```
 
-    Input:
-      - task: 'upscale' | 'track' | 'export'
-      - input_url: S3/R2 URL to input file
-      - params: Task-specific parameters
+### 3. Export Endpoint
+```python
+# Input
+{
+  "task": "export",
+  "input_url": "https://r2.../input.mp4",
+  "output_url": "https://r2.../output.mp4",
+  "params": {
+    "crop": {"x": 100, "y": 50, "w": 1080, "h": 1920},
+    "upscale": true,
+    "upscale_model": "RealESRGAN_x4plus",
+    "format": "mp4",
+    "quality": "high"
+  }
+}
+```
 
-    Output:
-      - output_url: S3/R2 URL to result
-      - metadata: Processing stats
-    """
-    task = event['input']['task']
+## Docker Image
 
-    if task == 'upscale':
-        return upscale_handler(event)
-    elif task == 'track':
-        return track_handler(event)
-    elif task == 'export':
-        return export_handler(event)
+```dockerfile
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
 
-    return {'error': f'Unknown task: {task}'}
+# Install dependencies
+RUN pip install \
+    runpod \
+    opencv-python-headless \
+    basicsr \
+    realesrgan \
+    ultralytics \
+    ffmpeg-python
 
-runpod.serverless.start({'handler': handler})
+# Copy model weights (baked into image for fast cold start)
+COPY weights/ /app/weights/
+
+# Copy handler
+COPY handler.py /app/handler.py
+
+CMD ["python", "/app/handler.py"]
+```
+
+## Cost Model
+
+| GPU | Cost/sec | Use Case |
+|-----|----------|----------|
+| RTX 3090 | $0.00031 | Development/testing |
+| RTX 4090 | $0.00044 | Standard processing |
+| A40 | $0.00025 | Production (best value) |
+
+**Example costs:**
+- 1 min video upscale (~30 sec processing): ~$0.008
+- 5 min video full export (~3 min processing): ~$0.045
+
+## File Flow
+
+```
+1. Frontend uploads to R2 (presigned PUT)
+2. Frontend calls /debit with R2 input URL
+3. Worker debits wallet, triggers RunPod with presigned URLs
+4. RunPod downloads from R2, processes, uploads result to R2
+5. RunPod calls webhook OR frontend polls /status
+6. Frontend downloads result from R2 (presigned GET)
 ```
 
 ## Migration Path
 
-### Phase 1: Backend Split (Low Risk)
-1. Refactor `src/backend/app/` into `api/` and `gpu/` modules
-2. Keep all functionality identical, just better organized
-3. Add abstract GPU processor interface
+### Phase 1: Current State
+- Local Python backend with CUDA
+- Works for development and single-user
 
-### Phase 2: RunPod Integration (Medium Risk)
-1. Create RunPod serverless endpoint
-2. Add RunPod client to backend
-3. Implement job routing (local vs cloud)
-4. Add R2 storage for file transfers
+### Phase 2: RunPod Integration
+1. Create RunPod serverless template
+2. Build and push Docker image with models
+3. Add `/debit` endpoint to trigger jobs
+4. Add `/status` endpoint for polling
+5. Add R2 upload/download to frontend
 
-### Phase 3: WebGPU (Higher Risk)
-1. Research ONNX.js / Transformers.js for model inference
-2. Implement WebGPU upscaler for preview (lower quality, faster)
-3. Keep full-quality processing on backend/RunPod
-4. Add capability detection and graceful fallback
+### Phase 3: Remove Local Backend
+1. Frontend talks directly to Cloudflare Workers
+2. All GPU work goes to RunPod
+3. Local backend only needed for development
 
-## Key Decisions
-
-1. **Preview vs Export Quality**
-   - WebGPU: Fast preview (2x upscale, simpler models)
-   - RunPod/Local: Full quality export (4x upscale, best models)
-
-2. **Model Format**
-   - WebGPU: ONNX models via onnxruntime-web
-   - RunPod: PyTorch models (same as current)
-
-3. **File Transfer**
-   - Use Cloudflare R2 as intermediary storage
-   - Presigned URLs for secure uploads/downloads
-
-4. **Cost Management**
-   - WebGPU: Free (client hardware)
-   - RunPod: Pay per second, ~$0.00025/sec for A40
-   - Strategy: Use WebGPU when possible, RunPod for heavy lifts
-
-## Folder Structure (Tomorrow)
+## Folder Structure
 
 ```
 video-editor/
 ├── src/
-│   ├── frontend/           # React app (unchanged)
-│   │   └── src/
-│   │       └── gpu/        # NEW: WebGPU modules
-│   │
-│   ├── backend/
-│   │   ├── api/            # NEW: FastAPI routes/services
-│   │   ├── gpu/            # NEW: GPU processing abstraction
-│   │   └── shared/         # NEW: Shared code
-│   │
-│   └── landing/            # Landing page (separate deploy)
+│   ├── frontend/           # React app
+│   ├── backend/            # Local dev only (optional)
+│   └── landing/            # Marketing site
 │
 ├── deploy/
-│   ├── cloudflare/         # Main app deployment
-│   └── runpod/             # NEW: Serverless GPU functions
+│   ├── cloudflare/         # Workers + Pages config
+│   └── runpod/
+│       ├── handler.py      # Serverless handler
+│       ├── Dockerfile
+│       └── requirements.txt
 │
 └── plans/
-    ├── tasks.md
-    └── gpu-architecture.md # This file
+    ├── deployment.md
+    └── gpu-architecture.md
 ```
