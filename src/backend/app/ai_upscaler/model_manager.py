@@ -24,6 +24,10 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Configurable weights directory - defaults to 'weights' for local dev
+# Set WEIGHTS_DIR env var for different environments (e.g., RunPod: /app/weights)
+WEIGHTS_DIR = os.environ.get('WEIGHTS_DIR', 'weights')
+
 
 class BaseModelBackend(ABC):
     """Abstract base class for SR model backends"""
@@ -75,22 +79,22 @@ class RealESRGANBackend(BaseModelBackend):
                 'RealESRGAN_x4plus': {
                     'model': RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4),
                     'url': 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth',
-                    'path': 'weights/RealESRGAN_x4plus.pth'
+                    'path': f'{WEIGHTS_DIR}/RealESRGAN_x4plus.pth'
                 },
                 'RealESRGAN_x4plus_anime_6B': {
                     'model': RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=6, num_grow_ch=32, scale=4),
                     'url': 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth',
-                    'path': 'weights/RealESRGAN_x4plus_anime_6B.pth'
+                    'path': f'{WEIGHTS_DIR}/RealESRGAN_x4plus_anime_6B.pth'
                 },
                 'realesr-general-x4v3': {
                     'model': SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu'),
                     'url': 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth',
-                    'path': 'weights/realesr-general-x4v3.pth'
+                    'path': f'{WEIGHTS_DIR}/realesr-general-x4v3.pth'
                 },
                 'realesr_general_x4v3': {  # Alias with underscores
                     'model': SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu'),
                     'url': 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth',
-                    'path': 'weights/realesr-general-x4v3.pth'
+                    'path': f'{WEIGHTS_DIR}/realesr-general-x4v3.pth'
                 }
             }
 
@@ -102,10 +106,10 @@ class RealESRGANBackend(BaseModelBackend):
 
             # Download weights if needed
             if not os.path.exists(model_path):
-                os.makedirs('weights', exist_ok=True)
+                os.makedirs(WEIGHTS_DIR, exist_ok=True)
                 logger.info(f"Downloading {self.model_variant} weights...")
                 import wget
-                wget.download(config['url'], out='weights/')
+                wget.download(config['url'], out=WEIGHTS_DIR)
                 logger.info("\nWeights downloaded successfully!")
 
             # Determine tile settings
@@ -162,18 +166,18 @@ class SwinIRBackend(BaseModelBackend):
 
             # Model configurations
             if self.model_variant == 'SwinIR_4x_GAN':
-                model_path = 'weights/003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth'
+                model_path = f'{WEIGHTS_DIR}/003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth'
                 url = 'https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth'
             else:  # SwinIR_4x
-                model_path = 'weights/003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_PSNR.pth'
+                model_path = f'{WEIGHTS_DIR}/003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_PSNR.pth'
                 url = 'https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_PSNR.pth'
 
             # Download if needed
             if not os.path.exists(model_path):
-                os.makedirs('weights', exist_ok=True)
+                os.makedirs(WEIGHTS_DIR, exist_ok=True)
                 logger.info(f"Downloading {self.model_variant} weights...")
                 import wget
-                wget.download(url, out='weights/')
+                wget.download(url, out=WEIGHTS_DIR)
                 logger.info("\nWeights downloaded successfully!")
 
             # Create model
@@ -247,13 +251,13 @@ class HATBackend(BaseModelBackend):
 
             # Model configurations
             if self.model_variant == 'HAT_4x':
-                model_path = 'weights/HAT_SRx4_ImageNet-pretrain.pth'
+                model_path = f'{WEIGHTS_DIR}/HAT_SRx4_ImageNet-pretrain.pth'
                 url = 'https://github.com/XPixelGroup/HAT/releases/download/v1.0.0/HAT_SRx4_ImageNet-pretrain.pth'
                 embed_dim = 180
                 depths = [6, 6, 6, 6, 6, 6]
                 num_heads = [6, 6, 6, 6, 6, 6]
             else:  # HAT_Large_4x
-                model_path = 'weights/HAT-L_SRx4_ImageNet-pretrain.pth'
+                model_path = f'{WEIGHTS_DIR}/HAT-L_SRx4_ImageNet-pretrain.pth'
                 url = 'https://github.com/XPixelGroup/HAT/releases/download/v1.0.0/HAT-L_SRx4_ImageNet-pretrain.pth'
                 embed_dim = 210
                 depths = [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
@@ -261,10 +265,10 @@ class HATBackend(BaseModelBackend):
 
             # Download if needed
             if not os.path.exists(model_path):
-                os.makedirs('weights', exist_ok=True)
+                os.makedirs(WEIGHTS_DIR, exist_ok=True)
                 logger.info(f"Downloading {self.model_variant} weights...")
                 import wget
-                wget.download(url, out='weights/')
+                wget.download(url, out=WEIGHTS_DIR)
                 logger.info("\nWeights downloaded successfully!")
 
             # Create model

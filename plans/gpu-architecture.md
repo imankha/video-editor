@@ -108,7 +108,9 @@ All GPU workloads run on RunPod serverless. Quality is the differentiator - no c
 }
 ```
 
-## Docker Image
+## Docker Image (Future - Not Yet Implemented)
+
+When implementing RunPod, create `deploy/runpod/Dockerfile`:
 
 ```dockerfile
 FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
@@ -125,11 +127,16 @@ RUN pip install \
 # Copy model weights (baked into image for fast cold start)
 COPY weights/ /app/weights/
 
+# Set weights directory for model_manager.py
+ENV WEIGHTS_DIR=/app/weights
+
 # Copy handler
 COPY handler.py /app/handler.py
 
 CMD ["python", "/app/handler.py"]
 ```
+
+**Note**: The `WEIGHTS_DIR` env var is already supported in `model_manager.py`.
 
 ## Cost Model
 
@@ -174,21 +181,36 @@ CMD ["python", "/app/handler.py"]
 
 ## Folder Structure
 
+**Current:**
 ```
 video-editor/
 ├── src/
 │   ├── frontend/           # React app
-│   ├── backend/            # Local dev only (optional)
+│   ├── backend/            # Local dev (weights in src/backend/weights/)
 │   └── landing/            # Marketing site
 │
 ├── deploy/
-│   ├── cloudflare/         # Workers + Pages config
-│   └── runpod/
-│       ├── handler.py      # Serverless handler
-│       ├── Dockerfile
-│       └── requirements.txt
+│   └── cloudflare/         # Workers + Pages config
 │
 └── plans/
     ├── deployment.md
     └── gpu-architecture.md
 ```
+
+**Future (when RunPod is implemented):**
+```
+deploy/
+└── runpod/                 # TO BE CREATED
+    ├── handler.py          # Serverless handler
+    ├── Dockerfile          # With WEIGHTS_DIR=/app/weights
+    └── requirements.txt
+```
+
+## Weights Configuration
+
+Model weights path is configurable via `WEIGHTS_DIR` environment variable:
+
+| Environment | WEIGHTS_DIR | Location |
+|-------------|-------------|----------|
+| Local dev | (default) | `src/backend/weights/` |
+| RunPod | `/app/weights` | Baked into Docker image |
