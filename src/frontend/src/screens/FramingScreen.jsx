@@ -4,17 +4,23 @@ import { FramingContainer } from '../containers';
 import { useCrop, useSegments } from '../modes/framing';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
+import { useVideo } from '../hooks/useVideo';
 import { useClipManager } from '../hooks/useClipManager';
 import { useProjectClips } from '../hooks/useProjectClips';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ClipSelectorSidebar } from '../components/ClipSelectorSidebar';
+import { FileUpload } from '../components/FileUpload';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { API_BASE } from '../config';
+import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useClipStore } from '../stores';
+import { useProject } from '../contexts/ProjectContext';
 
 /**
  * FramingScreen - Self-contained screen for Framing mode
  *
- * This component owns framing-specific hooks and state:
+ * This component owns all framing-related hooks and state:
+ * - useVideo - video playback (NOW OWNED BY THIS SCREEN)
  * - useCrop - crop keyframe management
  * - useSegments - segment/trim management
  * - useZoom - video zoom/pan
@@ -22,54 +28,62 @@ import { API_BASE } from '../config';
  * - useClipManager - multi-clip management
  * - FramingContainer - framing logic and handlers
  *
- * Video state is passed from App.jsx (shared across modes).
+ * Reads project data from stores/contexts:
+ * - useProject - project context (id, aspect ratio)
+ * - useProjectDataStore - loaded clips from ProjectsScreen
+ * - useFramingStore - persistent framing state
  *
- * @see tasks/PHASE2-ARCHITECTURE-PLAN.md for architecture context
+ * @see AppJSX_REDUCTION/TASK-03-self-contained-framing-screen.md
  */
 export function FramingScreen({
-  // Project context
-  projectId,
-  project,
-
-  // Export callback
+  // Legacy integration callbacks (will be simplified in Task 07)
   onExportComplete,
-
-  // Shared video state (from App.jsx)
-  videoRef,
-  videoUrl,
-  metadata,
-  videoFile,
-  currentTime,
-  duration,
-  isPlaying,
-  isLoading,
-  error,
-  handlers,
-  loadVideo,
-  loadVideoFromUrl,
-  togglePlay,
-  seek,
-  stepForward,
-  stepBackward,
-  restart,
-  setVideoFile,
-
-  // Highlight hook (for coordinated trim operations)
-  highlightHook,
-
-  // Audio settings
-  includeAudio,
-  onIncludeAudioChange,
-
-  // Overlay transition handler
   onProceedToOverlay,
+  // Cross-mode coordination for trim operations
+  highlightHook,
+  // Export button ref (for mode switch dialog to trigger export)
+  exportButtonRef: externalExportButtonRef,
 }) {
+  // Navigation - use editorStore which App.jsx subscribes to
+  const setEditorMode = useEditorStore(state => state.setEditorMode);
+
+  // Project context
+  const { projectId, project, aspectRatio: projectAspectRatio, refresh: refreshProject } = useProject();
+
+  // Loaded project data from ProjectsScreen
+  const loadedClips = useProjectDataStore(state => state.clips);
+  const projectDataReset = useProjectDataStore(state => state.reset);
+
+  // Framing persistent state
+  const {
+    includeAudio,
+    setIncludeAudio,
+    videoFile: storedVideoFile,
+    setVideoFile: setStoredVideoFile,
+    framingChangedSinceExport,
+    setFramingChangedSinceExport,
+  } = useFramingStore();
+
+  // Overlay store - for setting working video on export
+  const {
+    setWorkingVideo,
+    setClipMetadata: setOverlayClipMetadata,
+    reset: resetOverlayStore,
+  } = useOverlayStore();
+
   // Local state
   const [dragCrop, setDragCrop] = useState(null);
   const [selectedLayer, setSelectedLayer] = useState('playhead');
+  const [videoFile, setVideoFile] = useState(null);
   const clipHasUserEditsRef = useRef(false);
   const pendingFramingSaveRef = useRef(null);
-  const exportButtonRef = useRef(null);
+  const localExportButtonRef = useRef(null);
+  const initialLoadDoneRef = useRef(false);
+  const previousClipIdRef = useRef(null);
+  const isRestoringClipStateRef = useRef(false);
+
+  // Use external ref if provided (for mode switch dialog), otherwise use local ref
+  const exportButtonRef = externalExportButtonRef || localExportButtonRef;
 
   // Multi-clip management hook
   const {
@@ -104,7 +118,7 @@ export function FramingScreen({
     getClipFileUrl
   } = useProjectClips(projectId);
 
-  // Segments hook
+  // Segments hook (needed for useVideo initialization)
   const {
     boundaries: segmentBoundaries,
     segments,
@@ -134,6 +148,26 @@ export function FramingScreen({
     detrimStart,
     detrimEnd,
   } = useSegments();
+
+  // Video hook - NOW OWNED BY THIS SCREEN
+  const {
+    videoRef,
+    videoUrl,
+    metadata,
+    isPlaying,
+    currentTime,
+    duration,
+    error,
+    isLoading,
+    loadVideo,
+    loadVideoFromUrl,
+    togglePlay,
+    seek,
+    stepForward,
+    stepBackward,
+    restart,
+    handlers,
+  } = useVideo(getSegmentAtTime, clampToVisibleRange);
 
   // Crop hook
   const {
@@ -191,7 +225,7 @@ export function FramingScreen({
     selectedProjectId: projectId,
     selectedProject: project,
     editorMode: 'framing',
-    setEditorMode: () => {}, // Not used in screen context
+    setEditorMode: setEditorMode,
     keyframes,
     aspectRatio,
     framerate,
@@ -251,11 +285,14 @@ export function FramingScreen({
     setGlobalAspectRatio,
     setGlobalTransition,
     getClipExportData,
-    highlightHook,
+    highlightHook: highlightHook || {
+      deleteHighlightKeyframesInRange: () => {},
+      cleanupHighlightTrimKeyframes: () => {},
+    },
     saveFramingEdits,
     onCropChange: setDragCrop,
     onUserEdit: () => { clipHasUserEditsRef.current = true; },
-    setFramingChangedSinceExport: () => {}, // TODO: Move to store
+    setFramingChangedSinceExport,
   });
 
   const {
@@ -271,6 +308,191 @@ export function FramingScreen({
     handlePasteCrop: framingHandlePasteCrop,
     saveCurrentClipState: framingSaveCurrentClipState,
   } = framing;
+
+  // Initialize from loaded project data (from ProjectsScreen)
+  useEffect(() => {
+    if (!initialLoadDoneRef.current && loadedClips.length > 0 && clips.length === 0) {
+      console.log('[FramingScreen] Initializing from loaded clips:', loadedClips.length);
+      initialLoadDoneRef.current = true;
+
+      // Load clips into clip manager
+      const loadClipsAsync = async () => {
+        const getMetadataFromUrl = async (url) => await extractVideoMetadataFromUrl(url);
+        const getClipUrl = (clipId) => getClipFileUrl(clipId, projectId);
+
+        await loadProjectClips(
+          loadedClips.map(c => ({
+            id: c.id,
+            filename: c.filename,
+            duration: c.duration,
+            segments_data: c.segments_data,
+            crop_data: c.crop_data,
+          })),
+          getClipUrl,
+          getMetadataFromUrl,
+          projectAspectRatio || '9:16'
+        );
+
+        // Load first clip video
+        const firstClip = loadedClips[0];
+        if (firstClip?.url) {
+          console.log('[FramingScreen] Loading first clip video:', firstClip.url);
+          const file = await loadVideoFromUrl(firstClip.url, firstClip.filename || 'clip.mp4');
+          if (file) {
+            setVideoFile(file);
+          }
+
+          // Restore first clip's framing state
+          if (firstClip.segments_data || firstClip.crop_data) {
+            const clipMetadata = await extractVideoMetadataFromUrl(firstClip.url);
+
+            if (firstClip.segments_data) {
+              try {
+                const savedSegments = JSON.parse(firstClip.segments_data);
+                restoreSegmentState(savedSegments, clipMetadata?.duration || 0);
+              } catch (e) {
+                console.warn('[FramingScreen] Failed to parse segments_data:', e);
+              }
+            }
+
+            if (firstClip.crop_data) {
+              try {
+                const savedCropKeyframes = JSON.parse(firstClip.crop_data);
+                if (savedCropKeyframes.length > 0) {
+                  const endFrame = Math.round((clipMetadata?.duration || 0) * (clipMetadata?.framerate || 30));
+                  restoreCropState(savedCropKeyframes, endFrame);
+                }
+              } catch (e) {
+                console.warn('[FramingScreen] Failed to parse crop_data:', e);
+              }
+            }
+          }
+
+          // Set previousClipIdRef so clip switching effect doesn't try to reload
+          // We need to wait for selectedClipId to be set by useClipManager
+          setTimeout(() => {
+            const currentSelectedId = useClipStore.getState().selectedClipId;
+            if (currentSelectedId) {
+              previousClipIdRef.current = currentSelectedId;
+            }
+          }, 100);
+        }
+      };
+
+      loadClipsAsync();
+    }
+  }, [loadedClips, clips.length, projectId, projectAspectRatio, loadProjectClips, getClipFileUrl, loadVideoFromUrl, restoreSegmentState, restoreCropState]);
+
+  // Set aspect ratio from project (only if different to avoid loops)
+  useEffect(() => {
+    if (projectAspectRatio && projectAspectRatio !== aspectRatio) {
+      updateAspectRatio(projectAspectRatio);
+    }
+  }, [projectAspectRatio, aspectRatio, updateAspectRatio]);
+
+  // Refs to capture current state for clip switching (avoids stale closures)
+  const currentSegmentStateRef = useRef({ segmentBoundaries, segmentSpeeds, trimRange });
+  const currentKeyframesRef = useRef(keyframes);
+
+  // Keep refs updated with current values
+  useEffect(() => {
+    currentSegmentStateRef.current = { segmentBoundaries, segmentSpeeds, trimRange };
+  }, [segmentBoundaries, segmentSpeeds, trimRange]);
+
+  useEffect(() => {
+    currentKeyframesRef.current = keyframes;
+  }, [keyframes]);
+
+  // Handle clip switching - save previous clip's state and load new clip's state
+  useEffect(() => {
+    // Skip if no clip is selected
+    if (!selectedClipId) return;
+
+    // Skip if it's the same clip (no switch happening)
+    if (selectedClipId === previousClipIdRef.current) return;
+
+    const previousClipId = previousClipIdRef.current;
+    const newClip = clips.find(c => c.id === selectedClipId);
+
+    if (!newClip) {
+      console.warn('[FramingScreen] Selected clip not found:', selectedClipId);
+      return;
+    }
+
+    console.log('[FramingScreen] Switching clips:', previousClipId, '->', selectedClipId);
+
+    const switchClip = async () => {
+      // Prevent re-entry during restoration
+      if (isRestoringClipStateRef.current) return;
+      isRestoringClipStateRef.current = true;
+
+      try {
+        // 1. Save previous clip's state to clipStore (if there was a previous clip)
+        if (previousClipId && clipHasUserEditsRef.current) {
+          const prevClip = clips.find(c => c.id === previousClipId);
+          if (prevClip) {
+            console.log('[FramingScreen] Saving previous clip state:', previousClipId);
+            const { segmentBoundaries: bounds, segmentSpeeds: speeds, trimRange: trim } = currentSegmentStateRef.current;
+            const kfs = currentKeyframesRef.current;
+            const segmentState = {
+              boundaries: bounds,
+              segmentSpeeds: speeds,
+              trimRange: trim,
+            };
+            updateClipData(previousClipId, {
+              segments: segmentState,
+              cropKeyframes: kfs,
+              trimRange: trim
+            });
+          }
+        }
+
+        // 2. Load new clip's video
+        if (newClip.fileUrl) {
+          console.log('[FramingScreen] Loading new clip video:', newClip.fileUrl);
+          const file = await loadVideoFromUrl(newClip.fileUrl, newClip.fileName || 'clip.mp4');
+          if (file) {
+            setVideoFile(file);
+          }
+        } else if (newClip.file) {
+          console.log('[FramingScreen] Loading new clip from file:', newClip.fileName);
+          await loadVideo(newClip.file);
+          setVideoFile(newClip.file);
+        }
+
+        // 3. Restore new clip's segments state
+        if (newClip.segments) {
+          console.log('[FramingScreen] Restoring segments for clip:', selectedClipId);
+          restoreSegmentState(newClip.segments, newClip.duration || 0);
+        } else {
+          // Initialize with default segments
+          resetSegments();
+          if (newClip.duration) {
+            initializeSegments(newClip.duration);
+          }
+        }
+
+        // 4. Restore new clip's crop keyframes
+        if (newClip.cropKeyframes && newClip.cropKeyframes.length > 0) {
+          console.log('[FramingScreen] Restoring crop keyframes for clip:', selectedClipId, newClip.cropKeyframes.length, 'keyframes');
+          const endFrame = Math.round((newClip.duration || 0) * (newClip.framerate || 30));
+          restoreCropState(newClip.cropKeyframes, endFrame);
+        } else {
+          // Reset crop to let it initialize with defaults
+          resetCrop();
+        }
+
+        // Reset edit tracking for new clip
+        clipHasUserEditsRef.current = false;
+
+      } finally {
+        isRestoringClipStateRef.current = false;
+        previousClipIdRef.current = selectedClipId;
+      }
+    };
+
+    switchClip();
+  }, [selectedClipId, clips, updateClipData, loadVideoFromUrl, loadVideo, restoreSegmentState, resetSegments, initializeSegments, restoreCropState, resetCrop]);
 
   // Derived selection state
   const selectedCropKeyframeIndex = useMemo(() => {
@@ -358,6 +580,34 @@ export function FramingScreen({
     ];
   }, [getKeyframesForExport, getSegmentExportData, duration]);
 
+  // Keyboard shortcuts (space bar, copy/paste, arrow keys)
+  // FramingScreen owns its own useVideo, so it handles its own keyboard shortcuts
+  useKeyboardShortcuts({
+    hasVideo: Boolean(videoUrl),
+    togglePlay,
+    stepForward,
+    stepBackward,
+    seek,
+    editorMode: 'framing',
+    selectedLayer,
+    copiedCrop,
+    onCopyCrop: framingHandleCopyCrop,
+    onPasteCrop: framingHandlePasteCrop,
+    keyframes,
+    framerate,
+    selectedCropKeyframeIndex,
+    // Not used in framing mode
+    highlightKeyframes: [],
+    highlightFramerate: 30,
+    selectedHighlightKeyframeIndex: null,
+    isHighlightEnabled: false,
+    annotateVideoUrl: null,
+    annotateSelectedLayer: null,
+    clipRegions: [],
+    annotateSelectedRegionId: null,
+    selectAnnotateRegion: null,
+  });
+
   // Handle file selection
   const handleFileSelect = async (file) => {
     try {
@@ -376,9 +626,109 @@ export function FramingScreen({
     }
   };
 
+  // Handle proceed to overlay
+  const handleProceedToOverlayInternal = useCallback(async (renderedVideoBlob, clipMetadata) => {
+    console.log('[FramingScreen] Starting overlay transition...');
+
+    // Save pending edits (non-blocking - continue even if this fails)
+    try {
+      await framingSaveCurrentClipState();
+      console.log('[FramingScreen] Saved current clip state');
+    } catch (err) {
+      console.warn('[FramingScreen] Failed to save clip state (continuing):', err);
+    }
+
+    // Set working video in overlay store so OverlayScreen can access it
+    // This is critical - if this fails, overlay mode won't work
+    let workingVideoSet = false;
+    try {
+      console.log('[FramingScreen] Creating blob URL and extracting metadata...');
+      const url = URL.createObjectURL(renderedVideoBlob);
+      const meta = await extractVideoMetadata(renderedVideoBlob);
+      console.log('[FramingScreen] Video metadata extracted:', { duration: meta?.duration, width: meta?.width, height: meta?.height });
+
+      setWorkingVideo({ file: renderedVideoBlob, url, metadata: meta });
+      workingVideoSet = true;
+
+      if (clipMetadata) {
+        setOverlayClipMetadata(clipMetadata);
+        console.log('[FramingScreen] Clip metadata set:', clipMetadata?.source_clips?.length, 'clips');
+      }
+      console.log('[FramingScreen] Working video set in overlay store');
+    } catch (err) {
+      console.error('[FramingScreen] Failed to set working video:', err);
+      // Don't proceed to overlay if we couldn't set the working video
+      // User would see broken overlay mode
+      throw new Error(`Failed to prepare video for overlay mode: ${err.message}`);
+    }
+
+    // Clear the "framing changed" flag since we just exported
+    setFramingChangedSinceExport(false);
+
+    // Call parent handler (for any legacy cleanup)
+    if (onProceedToOverlay) {
+      try {
+        await onProceedToOverlay(renderedVideoBlob, clipMetadata);
+      } catch (err) {
+        console.warn('[FramingScreen] Parent onProceedToOverlay failed (continuing):', err);
+      }
+    }
+
+    // Navigate to overlay mode only if working video was set successfully
+    if (workingVideoSet) {
+      console.log('[FramingScreen] Navigating to overlay mode');
+      setEditorMode('overlay');
+    } else {
+      console.error('[FramingScreen] Cannot navigate to overlay - working video not set');
+    }
+  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode]);
+
+  // Handle clip selection from sidebar
+  const handleSelectClip = useCallback((clipId) => {
+    if (clipId !== selectedClipId) {
+      selectClip(clipId);
+    }
+  }, [selectedClipId, selectClip]);
+
+  // Handle clip deletion from sidebar
+  const handleDeleteClip = useCallback((clipId) => {
+    deleteClip(clipId);
+  }, [deleteClip]);
+
+  // Handle adding clip from sidebar
+  const handleAddClipFromSidebar = useCallback((file) => {
+    handleFileSelect(file);
+  }, [handleFileSelect]);
+
+  // If no clips and no video, show file upload
+  if (!hasClips && !videoUrl) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <FileUpload onFileSelect={handleFileSelect} />
+      </div>
+    );
+  }
+
   return (
-    <FramingModeView
-      // Video state
+    <div className="flex h-full">
+      {/* Sidebar - show when clips exist */}
+      {hasClips && clips.length > 0 && (
+        <ClipSelectorSidebar
+          clips={clips}
+          selectedClipId={selectedClipId}
+          onSelectClip={handleSelectClip}
+          onAddClip={handleAddClipFromSidebar}
+          onDeleteClip={handleDeleteClip}
+          onReorderClips={reorderClips}
+          globalTransition={globalTransition}
+          onTransitionChange={setGlobalTransition}
+        />
+      )}
+
+      {/* Main content */}
+      <div className="flex-1">
+        <FramingModeView
+      // Video state - now owned by this screen
       videoRef={videoRef}
       videoUrl={videoUrl}
       metadata={metadata}
@@ -456,12 +806,14 @@ export function FramingScreen({
       getFilteredKeyframesForExport={getFilteredKeyframesForExport}
       getSegmentExportData={getSegmentExportData}
       includeAudio={includeAudio}
-      onIncludeAudioChange={onIncludeAudioChange}
-      onProceedToOverlay={onProceedToOverlay}
+      onIncludeAudioChange={setIncludeAudio}
+      onProceedToOverlay={handleProceedToOverlayInternal}
       onExportComplete={onExportComplete}
       // Context
       cropContextValue={cropContextValue}
     />
+      </div>
+    </div>
   );
 }
 

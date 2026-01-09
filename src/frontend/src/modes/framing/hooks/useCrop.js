@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { timeToFrame } from '../../../utils/videoUtils';
 import { interpolateCropSpline } from '../../../utils/splineInterpolation';
 import useKeyframeController from '../../../hooks/useKeyframeController';
@@ -120,7 +120,38 @@ export default function useCrop(videoMetadata, trimRange = null) {
 
   // Extract stable references from keyframeManager to avoid dependency array issues
   // Using the object directly would cause re-runs on every render
-  const { needsInitialization, initializeKeyframes } = keyframeManager;
+  const {
+    needsInitialization,
+    initializeKeyframes,
+    keyframes,
+    isEndKeyframeExplicit,
+    updateAllKeyframes,
+    restoreKeyframes,
+    addOrUpdateKeyframe,
+    removeKeyframe,
+    deleteKeyframesInRange,
+    cleanupTrimKeyframes,
+    reset: resetKeyframes,
+    interpolate,
+    hasKeyframeAt,
+    getKeyframeAt,
+    copiedData,
+    copyKeyframe,
+    pasteKeyframe,
+    getDataAtTime,
+    getKeyframesForExport: getKeyframesForExportFn,
+  } = keyframeManager;
+
+  // Refs to track state for callbacks without causing infinite loops
+  // These allow reading current values without adding to dependency arrays
+  const keyframesRef = useRef(keyframes);
+  keyframesRef.current = keyframes;
+
+  const isEndKeyframeExplicitRef = useRef(isEndKeyframeExplicit);
+  isEndKeyframeExplicitRef.current = isEndKeyframeExplicit;
+
+  // Track when keyframes were just restored to skip orientation mismatch reinitialization
+  const justRestoredRef = useRef(false);
 
   /**
    * Auto-initialize keyframes when metadata loads
@@ -144,8 +175,11 @@ export default function useCrop(videoMetadata, trimRange = null) {
       // force re-initialization. This handles aspect ratio changes when switching clips.
       // We compare orientation (ratio > 1 = landscape, ratio < 1 = portrait) rather than
       // exact dimensions to avoid breaking manual resize functionality.
-      if (!shouldInitialize && !trimRange && keyframeManager.keyframes.length > 0) {
-        const firstKeyframe = keyframeManager.keyframes[0];
+      // Use ref to read keyframes without adding to dependency array (prevents infinite loop)
+      // SKIP this check if keyframes were just restored from saved data
+      const currentKeyframes = keyframesRef.current;
+      if (!shouldInitialize && !trimRange && currentKeyframes.length > 0 && !justRestoredRef.current) {
+        const firstKeyframe = currentKeyframes[0];
         if (firstKeyframe?.width && firstKeyframe?.height) {
           const keyframeRatio = firstKeyframe.width / firstKeyframe.height;
           const [ratioW, ratioH] = aspectRatio.split(':').map(Number);
@@ -162,6 +196,11 @@ export default function useCrop(videoMetadata, trimRange = null) {
         }
       }
 
+      // Clear the justRestored flag after the check
+      if (justRestoredRef.current) {
+        justRestoredRef.current = false;
+      }
+
       if (shouldInitialize) {
         const defaultCrop = calculateDefaultCrop(
           videoMetadata.width,
@@ -172,17 +211,22 @@ export default function useCrop(videoMetadata, trimRange = null) {
         initializeKeyframes(defaultCrop, totalFrames);
       }
     }
-  }, [videoMetadata, aspectRatio, needsInitialization, initializeKeyframes, calculateDefaultCrop, framerate, trimRange, keyframeManager.keyframes]);
+  }, [videoMetadata, aspectRatio, needsInitialization, initializeKeyframes, calculateDefaultCrop, framerate, trimRange]);
 
   /**
    * Update aspect ratio and recalculate all keyframes
    * If end keyframe hasn't been explicitly set, both start and end get same values
+   * Uses refs to read keyframes/isEndKeyframeExplicit to keep callback stable
    */
   const updateAspectRatio = useCallback((newRatio) => {
     setAspectRatio(newRatio);
 
+    // Use refs to read current values without adding to dependency array
+    const currentKeyframes = keyframesRef.current;
+    const currentIsEndExplicit = isEndKeyframeExplicitRef.current;
+
     // Recalculate all keyframes with new aspect ratio
-    if (keyframeManager.keyframes.length > 0 && videoMetadata?.width && videoMetadata?.height) {
+    if (currentKeyframes.length > 0 && videoMetadata?.width && videoMetadata?.height) {
       // Get the new default crop for this aspect ratio
       const newCrop = calculateDefaultCrop(
         videoMetadata.width,
@@ -192,12 +236,12 @@ export default function useCrop(videoMetadata, trimRange = null) {
 
       const totalFrames = timeToFrame(videoMetadata.duration, framerate);
 
-      keyframeManager.updateAllKeyframes(kf => {
+      updateAllKeyframes(kf => {
         // Preserve origin
         const origin = kf.origin || 'user';
 
         // If end hasn't been explicitly set, use default for all keyframes
-        if (!keyframeManager.isEndKeyframeExplicit) {
+        if (!currentIsEndExplicit) {
           return {
             frame: kf.frame,
             origin,
@@ -226,21 +270,21 @@ export default function useCrop(videoMetadata, trimRange = null) {
       });
 
     }
-  }, [keyframeManager, videoMetadata, calculateDefaultCrop, framerate]);
+  }, [updateAllKeyframes, videoMetadata, calculateDefaultCrop, framerate]);
 
   /**
    * Copy the crop keyframe at the specified time
    */
   const copyCropKeyframe = useCallback((time) => {
-    return keyframeManager.copyKeyframe(time, cropDataKeys);
-  }, [keyframeManager]);
+    return copyKeyframe(time, cropDataKeys);
+  }, [copyKeyframe]);
 
   /**
    * Paste the copied crop data at the specified time
    */
   const pasteCropKeyframe = useCallback((time, duration) => {
-    return keyframeManager.pasteKeyframe(time, duration);
-  }, [keyframeManager]);
+    return pasteKeyframe(time, duration);
+  }, [pasteKeyframe]);
 
   /**
    * Get the interpolated crop data at a specific time
@@ -248,19 +292,20 @@ export default function useCrop(videoMetadata, trimRange = null) {
    * Useful for copying crop state from one time to another
    */
   const getCropDataAtTime = useCallback((time) => {
-    return keyframeManager.getDataAtTime(time, cropDataKeys);
-  }, [keyframeManager]);
+    return getDataAtTime(time, cropDataKeys);
+  }, [getDataAtTime]);
 
   /**
    * Get keyframes in time-based format for export
    * Converts frame numbers to time for backend compatibility
    */
   const getKeyframesForExport = useCallback(() => {
-    return keyframeManager.getKeyframesForExport(cropDataKeys);
-  }, [keyframeManager]);
+    return getKeyframesForExportFn(cropDataKeys);
+  }, [getKeyframesForExportFn]);
 
   /**
    * Restore crop keyframes from saved state (for clip switching)
+   * Sets justRestoredRef to prevent orientation mismatch reinitialization
    */
   const restoreState = useCallback((savedKeyframes, endFrame) => {
     if (!savedKeyframes || savedKeyframes.length === 0) {
@@ -268,32 +313,34 @@ export default function useCrop(videoMetadata, trimRange = null) {
       return;
     }
     console.log('[useCrop] Restoring keyframes:', savedKeyframes.length, 'endFrame:', endFrame);
-    keyframeManager.restoreKeyframes(savedKeyframes, endFrame);
-  }, [keyframeManager]);
+    // Set flag to prevent orientation mismatch reinitialization
+    justRestoredRef.current = true;
+    restoreKeyframes(savedKeyframes, endFrame);
+  }, [restoreKeyframes]);
 
   return {
     // State
     aspectRatio,
-    keyframes: keyframeManager.keyframes,
-    isEndKeyframeExplicit: keyframeManager.isEndKeyframeExplicit,
-    copiedCrop: keyframeManager.copiedData,
+    keyframes,
+    isEndKeyframeExplicit,
+    copiedCrop: copiedData,
     framerate,
 
     // Actions
     updateAspectRatio,
-    addOrUpdateKeyframe: keyframeManager.addOrUpdateKeyframe,
-    removeKeyframe: keyframeManager.removeKeyframe,
-    deleteKeyframesInRange: keyframeManager.deleteKeyframesInRange,
-    cleanupTrimKeyframes: keyframeManager.cleanupTrimKeyframes,
+    addOrUpdateKeyframe,
+    removeKeyframe,
+    deleteKeyframesInRange,
+    cleanupTrimKeyframes,
     copyCropKeyframe,
     pasteCropKeyframe,
-    reset: keyframeManager.reset,
+    reset: resetKeyframes,
     restoreState,
 
     // Queries
-    interpolateCrop: keyframeManager.interpolate,
-    hasKeyframeAt: keyframeManager.hasKeyframeAt,
-    getKeyframeAt: keyframeManager.getKeyframeAt,
+    interpolateCrop: interpolate,
+    hasKeyframeAt,
+    getKeyframeAt,
     getCropDataAtTime,
     calculateDefaultCrop,
     getKeyframesForExport

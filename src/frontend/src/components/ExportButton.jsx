@@ -224,7 +224,8 @@ const ExportButton = forwardRef(function ExportButton({
 
   /**
    * Connect to WebSocket for real-time progress updates
-   * Returns a Promise that resolves when the connection is established
+   * Returns a Promise that resolves when the connection is established,
+   * or resolves with completion data when the export finishes
    */
   const connectWebSocket = (exportId) => {
     return new Promise((resolve, reject) => {
@@ -244,14 +245,18 @@ const ExportButton = forwardRef(function ExportButton({
       // Keepalive interval to prevent proxy/browser timeouts
       let keepaliveInterval = null;
 
+      // Track if we've received the initial connection
+      let connected = false;
+
       // Set a timeout in case connection takes too long
       const timeout = setTimeout(() => {
         console.warn('[ExportButton] WebSocket connection timeout after 3s, readyState:', ws.readyState);
-        resolve(); // Resolve anyway to not block export
+        if (!connected) resolve({ connected: false }); // Resolve anyway to not block export
       }, 3000);
 
       ws.onopen = () => {
         clearTimeout(timeout);
+        connected = true;
         console.log('[ExportButton] WebSocket CONNECTED successfully, readyState:', ws.readyState);
 
         // Start keepalive pings every 30 seconds to prevent timeouts
@@ -266,15 +271,18 @@ const ExportButton = forwardRef(function ExportButton({
           }
         }, 30000);
 
-        resolve();
+        resolve({ connected: true, ws });
       };
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         console.log('[ExportButton] Progress update:', data);
 
-        // Update progress from WebSocket
-        setProgress(Math.round(data.progress));
+        // Update progress from WebSocket - but NEVER go backwards
+        // This prevents race conditions where late WebSocket messages
+        // overwrite our manually-set 100% progress
+        const newProgress = Math.round(data.progress);
+        setProgress(prev => Math.max(prev, newProgress));
         setProgressMessage(data.message || '');
 
         // Close connection if complete or error
@@ -287,9 +295,9 @@ const ExportButton = forwardRef(function ExportButton({
       ws.onerror = (error) => {
         clearTimeout(timeout);
         if (keepaliveInterval) clearInterval(keepaliveInterval);
-        console.error('[ExportButton] WebSocket ERROR - readyState:', ws.readyState, 'error:', error);
-        console.error('[ExportButton] Check browser Network tab for WebSocket connection details');
-        resolve(); // Resolve anyway to not block export
+        // Log at debug level - WebSocket errors are expected when browser is closed
+        console.log('[ExportButton] WebSocket error (export continues on server):', error);
+        if (!connected) resolve({ connected: false }); // Resolve anyway to not block export
       };
 
       ws.onclose = (event) => {
@@ -298,6 +306,36 @@ const ExportButton = forwardRef(function ExportButton({
         wsRef.current = null;
       };
     });
+  };
+
+  /**
+   * Wait for export job to complete by polling status
+   * Used when WebSocket disconnects or as fallback
+   */
+  const pollJobStatus = async (jobId) => {
+    const maxAttempts = 600; // 10 minutes with 1 second interval
+    const pollInterval = 1000;
+
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        const response = await axios.get(`${API_BASE}/api/exports/${jobId}`);
+        const job = response.data;
+
+        if (job.status === 'complete') {
+          return { success: true, job };
+        } else if (job.status === 'error') {
+          return { success: false, error: job.error };
+        }
+
+        // Still processing, wait and continue
+        await new Promise(r => setTimeout(r, pollInterval));
+      } catch (err) {
+        console.warn('[ExportButton] Poll failed, retrying:', err.message);
+        await new Promise(r => setTimeout(r, pollInterval));
+      }
+    }
+
+    return { success: false, error: 'Export timed out' };
   };
 
   const handleExport = async () => {
@@ -461,10 +499,25 @@ const ExportButton = forwardRef(function ExportButton({
       // Create blob from response
       const blob = new Blob([response.data], { type: 'video/mp4' });
 
-      // Close WebSocket
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+      // Don't close WebSocket immediately - let it receive the final progress update
+      // The WebSocket will close itself when it receives status: 'complete'
+      // Add a fallback timeout to close it if we don't receive completion
+      const wsCloseTimeout = setTimeout(() => {
+        if (wsRef.current) {
+          console.log('[ExportButton] Closing WebSocket after timeout (no completion message received)');
+          wsRef.current.close();
+          wsRef.current = null;
+        }
+      }, 5000); // 5 second timeout for final message
+
+      // Store timeout ref so we can clear it if WebSocket closes normally
+      const currentWs = wsRef.current;
+      if (currentWs) {
+        const originalOnClose = currentWs.onclose;
+        currentWs.onclose = (event) => {
+          clearTimeout(wsCloseTimeout);
+          if (originalOnClose) originalOnClose.call(currentWs, event);
+        };
       }
 
       // In Framing mode, save to database then transition to Overlay mode
@@ -511,12 +564,14 @@ const ExportButton = forwardRef(function ExportButton({
           setProgress(0);
           setProgressMessage('');
         } catch (err) {
-          console.error('Failed to save working video or transition to overlay:', err);
-          setError(err.message || 'Failed to save working video');
+          console.error('Failed to transition to overlay mode:', err);
+          // Use the actual error message - it may contain specific details
+          setError(err.message || 'Failed to transition to overlay mode');
           setIsExporting(false);
           handleExportEnd();
-          setProgress(0);
-          setProgressMessage('');
+          // Don't reset progress to 0 - keep it at 100 to show export succeeded
+          // The error is in the transition, not the export itself
+          setProgressMessage('Export complete, but overlay transition failed');
         }
       } else {
         // Overlay mode - download the video AND save to database

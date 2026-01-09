@@ -231,6 +231,36 @@ def ensure_database():
             )
         """)
 
+        # Export jobs - track background export tasks for durability
+        # Progress is NOT stored here (ephemeral, WebSocket only)
+        # Only state transitions: pending -> processing -> complete/error
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS export_jobs (
+                id TEXT PRIMARY KEY,
+                project_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                error TEXT,
+                input_data TEXT NOT NULL,
+                output_video_id INTEGER,
+                output_filename TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Indexes for export_jobs
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_export_jobs_project
+            ON export_jobs(project_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_export_jobs_status
+            ON export_jobs(status)
+        """)
+
         # Migration: Add new columns to existing tables (silently ignore if already exists)
         migrations = [
             # raw_clips new columns
@@ -338,6 +368,16 @@ def ensure_database():
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_working_clips_project_version
                 ON working_clips(project_id, version DESC)
+            """)
+            # Index for version lookup by raw_clip_id (for the NOT EXISTS anti-join)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_working_clips_project_raw_clip_version
+                ON working_clips(project_id, raw_clip_id, version DESC)
+            """)
+            # Index for version lookup by uploaded_filename
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_working_clips_project_upload_version
+                ON working_clips(project_id, uploaded_filename, version DESC)
             """)
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_working_videos_project_version

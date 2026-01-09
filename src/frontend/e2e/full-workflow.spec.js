@@ -6,11 +6,11 @@ import { fileURLToPath } from 'url';
 /**
  * Full Workflow E2E Test
  *
- * Uses test data from: formal annotations/12.6.carlsbad/
- * - Video: wcfc-vs-carlsbad-sc-2025-11-02-2025-12-08.mp4
- * - TSV: 12.6.carlsbad.tsv
+ * Uses test data from: formal annotations/test.short/
+ * - Video: wcfc-carlsbad-trimmed.mp4 (1.5 min clip from 45:10-46:40)
+ * - TSV: test.short.tsv (3 clips with adjusted timestamps)
  *
- * OPTIMIZATION: The video is uploaded ONCE at the start of the suite.
+ * OPTIMIZATION: Uses a short 1.5 minute video for fast test runs.
  * All tests that need annotate mode load the saved game instead of re-uploading.
  *
  * Test Isolation: Each test run uses a unique user ID via X-User-ID header.
@@ -49,20 +49,39 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Test data paths - relative to project root
-const TEST_DATA_DIR = path.resolve(__dirname, '../../../formal annotations/12.6.carlsbad');
-const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-vs-carlsbad-sc-2025-11-02-2025-12-08.mp4');
-const TEST_TSV = path.join(TEST_DATA_DIR, '12.6.carlsbad.tsv');
+// Uses a short 1.5 minute video for fast test runs
+const TEST_DATA_DIR = path.resolve(__dirname, '../../../formal annotations/test.short');
+const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-carlsbad-trimmed.mp4');
+const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
 
 /**
  * Helper: Upload video and import TSV
  * Each test uploads fresh to ensure clips are available (simpler and more reliable)
+ *
+ * Flow (updated for Task 05):
+ * 1. Navigate to home (ProjectsScreen)
+ * 2. Click "Games" tab then "Add Game" to enter annotate mode
+ * 3. AnnotateScreen shows FileUpload component
+ * 4. Upload video file
  */
 async function enterAnnotateModeWithClips(page) {
-  console.log('[Setup] Uploading video...');
+  console.log('[Setup] Navigating to annotate mode...');
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
+  // Click Games tab to show Add Game button
+  await page.locator('button:has-text("Games")').click();
+  await page.waitForTimeout(500);
+
+  // Click Add Game to navigate to annotate mode
+  await page.locator('button:has-text("Add Game")').click();
+  await page.waitForTimeout(1000);
+
+  // Wait for FileUpload component in AnnotateScreen
+  // The file input is hidden, but we can still set files on it
+  console.log('[Setup] Uploading video...');
   const videoInput = page.locator('input[type="file"][accept*="video"]');
+  await expect(videoInput).toBeAttached({ timeout: 10000 });
   await videoInput.setInputFiles(TEST_VIDEO);
   await expect(page.locator('video')).toBeVisible({ timeout: 120000 });
   console.log('[Setup] Video loaded');
@@ -75,7 +94,7 @@ async function enterAnnotateModeWithClips(page) {
   console.log('[Setup] TSV imported');
 
   // Wait for clips to appear in sidebar
-  await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('text=Great Control Pass').first()).toBeVisible({ timeout: 5000 });
   console.log('[Setup] Clips visible');
 }
 
@@ -136,7 +155,7 @@ test.describe('Full Workflow Tests', () => {
 
     // Verify annotate mode is active
     await expect(page.getByRole('heading', { name: 'Clips' })).toBeVisible();
-    await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=Great Control Pass').first()).toBeVisible({ timeout: 5000 });
   });
 
   test('3. Annotate Mode - Export TSV round-trip', async ({ page }) => {
@@ -153,8 +172,8 @@ test.describe('Full Workflow Tests', () => {
     const downloadPath = await download.path();
     const content = fs.readFileSync(downloadPath, 'utf8');
     expect(content).toContain('start_time\trating\ttags');
-    expect(content).toContain('Good Pass');
-    expect(content).toContain('Great Dribbling');
+    expect(content).toContain('Great Control Pass');
+    expect(content).toContain('Full Effort Play');
   });
 
   test('4. Import button is visible in annotate mode', async ({ page }) => {
@@ -245,7 +264,7 @@ test.describe('Clip Editing Tests', () => {
     await enterAnnotateMode(page);
 
     // Click on first clip
-    const firstClip = page.locator('[title*="Good Pass"]').first();
+    const firstClip = page.locator('[title*="Great Control Pass"]').first();
     await firstClip.click({ force: true });
     await page.waitForTimeout(500);
 
@@ -265,12 +284,12 @@ test.describe('Clip Editing Tests', () => {
     await enterAnnotateMode(page);
 
     // Click on first clip
-    const firstClip = page.locator('[title*="Good Pass"]').first();
+    const firstClip = page.locator('[title*="Great Control Pass"]').first();
     await firstClip.click({ force: true });
     await page.waitForTimeout(500);
 
     // Edit clip name
-    const nameInput = page.locator('input[value*="Good Pass"]').first();
+    const nameInput = page.locator('input[value*="Great Control Pass"]').first();
     if (await nameInput.isVisible().catch(() => false)) {
       await nameInput.fill('Edited Clip Name');
       await page.waitForTimeout(500);
@@ -289,7 +308,7 @@ test.describe('UI Component Tests', () => {
 
     // Wait for clips to load, then check for clip items by title attribute
     await page.waitForTimeout(1000);
-    const clipItems = page.locator('[title*="Good Pass"], [title*="Great Dribbling"]');
+    const clipItems = page.locator('[title*="Great Control Pass"], [title*="Full Effort Play"]');
     const count = await clipItems.count();
     expect(count).toBeGreaterThan(0);
   });
@@ -297,7 +316,7 @@ test.describe('UI Component Tests', () => {
   test('Star rating is visible for clips', async ({ page }) => {
     await enterAnnotateMode(page);
 
-    const firstClip = page.locator('[title*="Good Pass"]').first();
+    const firstClip = page.locator('[title*="Great Control Pass"]').first();
     if (await firstClip.isVisible().catch(() => false)) {
       await firstClip.click({ force: true });
       await page.waitForTimeout(500);
