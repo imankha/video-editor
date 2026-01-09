@@ -6,11 +6,12 @@ A browser-based video editing application with three-mode workflow: **Annotate**
 
 | Layer | Technology |
 |-------|------------|
-| **Frontend** | React 18 + Vite (port 5173) |
+| **Frontend** | React 18 + Vite + Zustand (port 5173) |
 | **Backend** | FastAPI + Python (uvicorn, port 8000) |
 | **Database** | SQLite (`user_data/a/database.sqlite`) |
 | **Video Processing** | FFmpeg (required in PATH) |
 | **AI Upscaling** | Real-ESRGAN, RIFE (optional) |
+| **Testing** | Vitest (unit), Playwright (E2E) |
 
 ## Quick Start
 
@@ -82,7 +83,7 @@ video-editor/
 │   │       ├── database.py         # SQLite schema, migrations, paths
 │   │       ├── models.py           # Pydantic request/response models
 │   │       ├── queries.py          # Shared SQL query helpers
-│   │       ├── websocket.py        # WebSocket manager for progress
+│   │       ├── websocket.py        # WebSocket manager (silent on disconnect)
 │   │       ├── constants.py        # Shared constants (ratings, tags, colors)
 │   │       ├── user_context.py     # Per-request user isolation (for tests)
 │   │       ├── routers/            # API endpoints
@@ -90,6 +91,7 @@ video-editor/
 │   │       │   ├── clips.py        # Raw clips library + working clips
 │   │       │   ├── games.py        # Game footage storage, annotations
 │   │       │   ├── annotate.py     # Annotate export (creates clips + projects)
+│   │       │   ├── exports.py      # Durable export jobs API (NEW)
 │   │       │   ├── export/         # Export endpoints (split by mode)
 │   │       │   │   ├── __init__.py     # Aggregates sub-routers
 │   │       │   │   ├── framing.py      # /crop, /upscale, /framing endpoints
@@ -100,6 +102,7 @@ video-editor/
 │   │       │   ├── health.py       # Health checks
 │   │       │   └── auth.py         # User isolation (for E2E tests)
 │   │       └── services/           # Business logic layer
+│   │           ├── export_worker.py    # Background export job processor (NEW)
 │   │           ├── clip_cache.py       # Clip caching to avoid re-encoding
 │   │           ├── video_processor.py  # Abstract GPU processing interface
 │   │           ├── ffmpeg_service.py   # FFmpeg helper functions
@@ -112,13 +115,18 @@ video-editor/
 │   │
 │   └── frontend/                   # React + Vite frontend
 │       └── src/
-│           ├── App.jsx             # Main container (~2200 lines)
+│           ├── App.jsx             # Mode router (~345 lines, down from 2200)
 │           ├── components/         # Shared UI components
 │           │   ├── VideoPlayer.jsx
 │           │   ├── ProjectManager.jsx
 │           │   ├── ClipSelectorSidebar.jsx
-│           │   ├── ExportButton.jsx
+│           │   ├── ExportButton.jsx    # Includes WebSocket + health check
 │           │   ├── DownloadsPanel.jsx
+│           │   ├── shared/             # Shared components
+│           │   │   ├── ConfirmationDialog.jsx
+│           │   │   ├── ExportProgress.jsx
+│           │   │   ├── ModeSwitcher.jsx
+│           │   │   └── ServerStatus.jsx  # Server health banner (NEW)
 │           │   └── timeline/       # Timeline components
 │           ├── hooks/              # State management
 │           │   ├── useProjects.js
@@ -126,30 +134,39 @@ video-editor/
 │           │   ├── useClipManager.js
 │           │   ├── useVideo.js
 │           │   ├── useGames.js
+│           │   ├── useProjectLoader.js   # Project loading logic (NEW)
 │           │   └── useKeyframeController.js
-│           ├── screens/            # Top-level screen components
-│           │   ├── ProjectsScreen.jsx
-│           │   ├── AnnotateScreen.jsx
-│           │   ├── FramingScreen.jsx
-│           │   └── OverlayScreen.jsx
+│           ├── screens/            # Self-contained screen components
+│           │   ├── ProjectsScreen.jsx    # Owns project selection
+│           │   ├── AnnotateScreen.jsx    # Owns annotate workflow
+│           │   ├── FramingScreen.jsx     # Owns video/crop/segment hooks
+│           │   └── OverlayScreen.jsx     # Owns highlight hooks
 │           ├── containers/         # Container components (state + logic)
 │           │   ├── AnnotateContainer.jsx
 │           │   ├── FramingContainer.jsx
 │           │   └── OverlayContainer.jsx
+│           ├── contexts/           # React contexts
+│           │   ├── AppStateContext.jsx
+│           │   ├── ProjectContext.jsx    # Project data provider (NEW)
+│           │   └── index.js
 │           ├── stores/             # Zustand state stores
 │           │   ├── clipStore.js
 │           │   ├── editorStore.js
 │           │   ├── exportStore.js
-│           │   └── videoStore.js
+│           │   ├── videoStore.js
+│           │   ├── navigationStore.js    # App navigation state (NEW)
+│           │   ├── framingStore.js       # Framing persistence (NEW)
+│           │   ├── overlayStore.js       # Overlay state (NEW)
+│           │   └── projectDataStore.js   # Loaded project data (NEW)
 │           ├── modes/              # Mode-specific code
 │           │   ├── FramingModeView.jsx
 │           │   ├── OverlayModeView.jsx
 │           │   ├── AnnotateModeView.jsx
 │           │   ├── framing/        # Crop, segments, overlays
 │           │   ├── overlay/        # Highlight regions
-│           │   │   └── hooks/useOverlayState.js  # Consolidated overlay state
+│           │   │   └── hooks/useOverlayState.js
 │           │   └── annotate/       # Clip marking, metadata
-│           │       └── hooks/useAnnotateState.js # Consolidated annotate state
+│           │       └── hooks/useAnnotateState.js
 │           ├── controllers/        # Pure state machines
 │           │   └── keyframeController.js
 │           └── utils/              # Utilities
@@ -167,9 +184,11 @@ video-editor/
 │   ├── clip_cache/                 # Cached processed clips
 │   └── downloads/                  # Temp export files
 │
+├── plans/                          # Planning documents
+│   └── tasks.md                    # Remaining tasks and roadmap
 ├── test_persistence.py             # Backend persistence tests
 ├── MANUAL_TEST.md                  # Manual testing procedures
-├── KNOWN_BUGS.md                   # Known issues
+├── CODE_SMELLS.md                  # Refactoring opportunities
 └── prompt_preamble                 # Project context for AI assistants
 ```
 
@@ -237,6 +256,18 @@ annotations (
     name, rating, tags, notes, -- Metadata (rating 1-5)
     created_at, updated_at
 )
+
+-- Export jobs: Durable background export tracking (NEW)
+export_jobs (
+    id TEXT PRIMARY KEY,       -- UUID like 'export_abc123'
+    project_id, type,          -- 'framing' | 'overlay' | 'multi_clip'
+    status,                    -- 'pending' | 'processing' | 'complete' | 'error'
+    error,                     -- Error message if failed
+    input_data,                -- JSON blob of export parameters
+    output_video_id,           -- FK to working_videos or final_videos
+    output_filename,           -- Path to output file
+    created_at, started_at, completed_at
+)
 ```
 
 ### Version Identity Rules
@@ -298,10 +329,37 @@ annotations (
 
 ## Key Frontend Patterns
 
+### Architecture (Post-Refactor)
+
+App.jsx was reduced from **2200 lines to ~345 lines** by making screens self-contained:
+
+```jsx
+// App.jsx is now a simple mode router
+function App() {
+  const { editorMode } = useEditorStore();
+
+  if (!selectedProject && editorMode !== 'annotate') {
+    return <ProjectsScreen />;
+  }
+
+  return (
+    <ProjectProvider>
+      {editorMode === 'framing' && <FramingScreen />}
+      {editorMode === 'overlay' && <OverlayScreen />}
+      {editorMode === 'annotate' && <AnnotateScreen />}
+      <DownloadsPanel />
+    </ProjectProvider>
+  );
+}
+```
+
+Each screen owns its hooks internally - no prop drilling from App.jsx.
+
 ### State Management
+- **Zustand stores**: Global state (editorStore, exportStore, navigationStore, etc.)
+- **Screen-owned hooks**: Each screen initializes its own useVideo, useCrop, etc.
+- **Contexts**: ProjectContext for shared project data
 - **useKeyframeController**: Pure state machine for keyframe operations
-- **Contexts**: CropContext, HighlightContext to avoid prop drilling
-- **Hooks per domain**: useProjects, useClipManager, useVideo, etc.
 
 ### Keyframe System
 ```javascript
@@ -411,10 +469,10 @@ To add a new transition type, create a class implementing `TransitionStrategy` a
 ### Running Tests
 
 ```bash
-# Frontend unit tests (342 tests)
+# Frontend unit tests (348 tests)
 cd src/frontend && npm test
 
-# Backend unit tests (274 tests)
+# Backend unit tests
 cd src/backend && .venv/Scripts/python -m pytest tests/ -v
 
 # E2E tests (requires backend + frontend running)
@@ -442,11 +500,13 @@ Tests are organized across multiple spec files:
 - Project creation, UI component tests (clip sidebar, star rating, clip editing)
 - API integration tests (health, projects CRUD, games, clips)
 
-**`regression-tests.spec.js`** - Smoke and full regression tests:
-- Annotate: video frame loading, TSV import, timeline navigation
-- Framing: video loading, export creates working video
-- Overlay: video loading, highlight region initialization
-- Import Into Projects workflow
+**`regression-tests.spec.js`** - Comprehensive regression tests:
+- **Smoke tests** (@smoke): Quick sanity checks for each mode
+- **Annotate**: video frame loading, TSV import, timeline navigation
+- **Framing**: video loading, export creates working video, auto-navigate to overlay
+- **Overlay**: video loading after export, highlight region initialization
+- **Import Into Projects**: Full annotation → project workflow
+- **Video first frame validation**: Ensures video content actually renders (not just metadata)
 
 **`game-loading.spec.js`** - Game loading specific tests:
 - Load saved game into annotate mode
@@ -460,8 +520,33 @@ Tests are organized across multiple spec files:
 
 ## Common Patterns
 
+### Durable Export Architecture
+
+Exports are designed to survive browser closes:
+
+```
+┌─────────────┐                  ┌─────────────┐
+│  Frontend   │                  │   Backend   │
+│             │                  │             │
+│ Start Export│──POST /exports──►│ Create job  │
+│             │◄─── job_id ──────│ Return ID   │
+│             │                  │             │
+│  WebSocket  │◄── progress ─────│ (optional)  │
+│  (optional) │                  │             │
+│             │                  │             │
+│ On Return   │──GET /projects──►│ Check jobs  │
+│             │◄── status ───────│             │
+└─────────────┘                  └─────────────┘
+```
+
+**Key Design Principle:** WebSocket is optional, not required.
+- Connected → show real-time progress
+- Disconnected → export continues silently, no errors
+- User returns → check database for completion status
+
 ### Export Progress
-- WebSocket connection for real-time updates
+- WebSocket connection for real-time updates (optional)
+- Health check before export starts (3s timeout)
 - Progress stages: init (10%) -> processing (20-80%) -> encoding (80-100%)
 - Clip caching prevents re-encoding unchanged clips
 
@@ -479,18 +564,21 @@ file_path = RAW_CLIPS_PATH / filename  # NOT f-strings
 
 ---
 
-## Known Issues
+## Roadmap & Known Issues
 
-See [KNOWN_BUGS.md](KNOWN_BUGS.md) for current issues and workarounds.
+See [plans/tasks.md](plans/tasks.md) for:
+- Remaining refactoring tasks (AnnotateScreen, Gallery, App.jsx cleanup)
+- OpenCV to FFmpeg migration (backend video processing)
+- Known issues and architectural decisions
 
 ## Additional Documentation
 
-- [CODE_SMELLS.md](CODE_SMELLS.md) - Refactoring opportunities and completed improvements
-- [DEVELOPMENT.md](DEVELOPMENT.md) - Development setup guide
-- [MANUAL_TEST.md](MANUAL_TEST.md) - Manual testing procedures
-- [KNOWN_BUGS.md](KNOWN_BUGS.md) - Known issues and workarounds
-- [prompt_preamble](prompt_preamble) - Detailed context for debugging
-- [docs/](docs/) - Original phase specifications (historical)
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - Development setup guide
+- [docs/MANUAL_TEST.md](docs/MANUAL_TEST.md) - Manual testing procedures
+- [docs/REFERENCE/](docs/REFERENCE/) - AI upscaling and model testing docs
+- [src/backend/README.md](src/backend/README.md) - Backend setup and API reference
+- [src/backend/MULTI_GPU_GUIDE.md](src/backend/MULTI_GPU_GUIDE.md) - Multi-GPU AI upscaling
+- [prompt_preamble](prompt_preamble) - Detailed context for AI assistants
 
 ---
 
