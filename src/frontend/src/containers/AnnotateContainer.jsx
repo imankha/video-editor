@@ -234,6 +234,20 @@ export function AnnotateContainer({
    * Helper function to call the annotate export API
    */
   const callAnnotateExportApi = useCallback(async (clipData, saveToDb, settings = null) => {
+    // Quick health check before starting export
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const healthResponse = await fetch(`${API_BASE}/api/health`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!healthResponse.ok) {
+        throw new Error('Server health check failed');
+      }
+    } catch (healthErr) {
+      console.error('[AnnotateContainer] Server health check failed:', healthErr);
+      throw new Error('Cannot connect to server. Please ensure the backend server is running on port 8000.');
+    }
+
     const exportId = `exp_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
     let eventSource = null;
 

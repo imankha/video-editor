@@ -202,13 +202,13 @@ function App() {
   if (!selectedProject && editorMode !== 'annotate') {
     return (
       <ProjectsScreen
-        onClipsLoaded={handleProjectClipsLoaded}
-        onWorkingVideoLoaded={handleProjectWorkingVideoLoaded}
-        onStateReset={handleProjectStateReset}
-        onLoadGame={handleLoadGame}
-        onProjectSelected={selectProject}
-        onAnnotateWithFile={handleAnnotateWithFile}
-      />
+          onClipsLoaded={handleProjectClipsLoaded}
+          onWorkingVideoLoaded={handleProjectWorkingVideoLoaded}
+          onStateReset={handleProjectStateReset}
+          onLoadGame={handleLoadGame}
+          onProjectSelected={selectProject}
+          onAnnotateWithFile={handleAnnotateWithFile}
+        />
     );
   }
 

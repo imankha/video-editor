@@ -3,6 +3,7 @@
 export { ConfirmationDialog } from './ConfirmationDialog';
 export { ExportProgress } from './ExportProgress';
 export { ModeSwitcher } from './ModeSwitcher';
+// ServerStatus removed - relying on operation-specific error handling instead
 
 // Re-exports from parent components/ directory for cleaner imports
 export { Controls } from '../Controls';

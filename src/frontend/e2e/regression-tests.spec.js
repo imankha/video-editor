@@ -106,11 +106,15 @@ async function waitForVideoFirstFrame(page, timeout = 15000) {
   const state = await video.evaluate(v => ({ hasSrc: !!v.src, readyState: v.readyState }));
   expect(state.hasSrc).toBeTruthy();
 
-  // Wait for video to have actual dimensions (means content loaded)
+  // Wait for video to have actual dimensions AND be ready to display
+  // readyState >= 2 (HAVE_CURRENT_DATA) means at least the current frame is available
   await page.waitForFunction(() => {
     const v = document.querySelector('video');
-    return v && v.videoWidth > 0 && v.videoHeight > 0;
+    return v && v.videoWidth > 0 && v.videoHeight > 0 && v.readyState >= 2;
   }, { timeout });
+
+  // Extra wait for frame to be fully rendered (some browsers need this)
+  await page.waitForTimeout(100);
 
   // Verify video has actual content (not all black/blank)
   const hasContent = await video.evaluate(v => {
@@ -146,8 +150,7 @@ async function waitForExportComplete(page, progressCheckInterval = 5000) {
   let exportStarted = false;
 
   // Progress-based timeout tracking
-  // Instead of a hard timeout, we only fail if no progress is made for 2 minutes.
-  // AI upscaling can have slow phases (model loading, initialization) that take time.
+  // Instead of a hard timeout, we only fail if no progress is made for 30 seconds.
   // As long as progress keeps increasing, the export can run indefinitely.
   let lastProgress = -1;
   let lastProgressTime = Date.now();
@@ -308,10 +311,10 @@ async function waitForExportComplete(page, progressCheckInterval = 5000) {
       console.log(`[Full] Progress increased to ${currentProgress}%`);
     }
 
-    // Check for stall - no progress for 2 minutes
+    // Check for stall - no progress for 30 seconds
     const timeSinceProgress = Date.now() - lastProgressTime;
-    if (exportStarted && hasExportActivity && timeSinceProgress > 120000) {
-      throw new Error(`Export stalled - no progress for 2 minutes (stuck at ${lastProgress}%)`);
+    if (exportStarted && hasExportActivity && timeSinceProgress > 30000) {
+      throw new Error(`Export stalled - no progress for 30s (stuck at ${lastProgress}%)`);
     }
 
     // Log progress periodically
@@ -577,7 +580,7 @@ async function ensureWorkingVideoExists(page) {
   // Export using the short test video
   const exportButton = page.locator('button:has-text("Export")').first();
   await exportButton.click();
-  await waitForExportComplete(page); // Progress-based: fails only if no progress for 2 min
+  await waitForExportComplete(page); // Progress-based: fails only if no progress for 30s
 
   // Return updated project info
   const newProjects = await page.evaluate(async () => {
@@ -980,7 +983,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Wait for export to complete - AI upscaling can take a while
     // maxTimeout: 5 minutes, SLA check every 30 seconds (default)
-    await waitForExportComplete(page); // Progress-based: fails only if no progress for 2 min
+    await waitForExportComplete(page); // Progress-based: fails only if no progress for 30s
 
     // Verify export succeeded by checking if we're now in Overlay mode with a video loaded
     // The Export button triggers transition to Overlay mode upon completion
@@ -1207,7 +1210,7 @@ test.describe('Full Coverage Tests @full', () => {
    * Verifies that the export progress indicator continues to update
    * throughout the export process (not stuck due to infinite loop).
    *
-   * SLA: Progress must increase at least once every 2 minutes.
+   * SLA: Progress must increase at least once every 30 seconds.
    * Test waits for export to complete, only fails if progress stalls.
    */
   test('Framing: export progress advances properly @full', async ({ page }) => {
@@ -1226,11 +1229,10 @@ test.describe('Full Coverage Tests @full', () => {
     await expect(exportingButton).toBeVisible({ timeout: 10000 });
     console.log('[Full] Export started');
 
-    // SLA monitoring: progress must increase at least once every 2 minutes
-    // AI upscaling can have slow phases (model loading, initialization)
+    // SLA monitoring: progress must increase at least once every 30 seconds
     let lastProgress = 0;
     let lastProgressTime = Date.now();
-    const SLA_TIMEOUT = 125000; // 2 min 5 sec (2 min SLA + 5s buffer)
+    const SLA_TIMEOUT = 35000; // 35 seconds (30s SLA + 5s buffer)
 
     while (true) {
       await page.waitForTimeout(5000); // Check every 5 seconds

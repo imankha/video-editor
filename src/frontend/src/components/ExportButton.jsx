@@ -195,6 +195,7 @@ const ExportButton = forwardRef(function ExportButton({
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
   const handleExportRef = useRef(null);
+  const wsDisconnectedDuringExportRef = useRef(false);
 
   // Map effect type to toggle position
   const effectTypeToPosition = { 'brightness_boost': 0, 'original': 1, 'dark_overlay': 2 };
@@ -297,12 +298,22 @@ const ExportButton = forwardRef(function ExportButton({
         if (keepaliveInterval) clearInterval(keepaliveInterval);
         // Log at debug level - WebSocket errors are expected when browser is closed
         console.log('[ExportButton] WebSocket error (export continues on server):', error);
-        if (!connected) resolve({ connected: false }); // Resolve anyway to not block export
+        if (!connected) {
+          wsDisconnectedDuringExportRef.current = true;
+          resolve({ connected: false }); // Resolve anyway to not block export
+        }
       };
 
       ws.onclose = (event) => {
         if (keepaliveInterval) clearInterval(keepaliveInterval);
         console.log('[ExportButton] WebSocket CLOSED - code:', event.code, 'reason:', event.reason, 'wasClean:', event.wasClean);
+
+        // Track if WebSocket disconnected during export (not a clean close with completion)
+        // Code 1006 indicates abnormal closure (server died, network issue, etc.)
+        if (event.code === 1006 || (!event.wasClean && connected)) {
+          wsDisconnectedDuringExportRef.current = true;
+        }
+
         wsRef.current = null;
       };
     });
@@ -357,9 +368,30 @@ const ExportButton = forwardRef(function ExportButton({
 
     setIsExporting(true);
     setProgress(0);
-    setProgressMessage('Uploading...');
+    setProgressMessage('Checking server...');
     setError(null);
     uploadCompleteRef.current = false;
+    wsDisconnectedDuringExportRef.current = false;
+
+    // Quick health check before starting export
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const healthResponse = await fetch(`${API_BASE}/api/health`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!healthResponse.ok) {
+        throw new Error('Server health check failed');
+      }
+    } catch (healthErr) {
+      console.error('[ExportButton] Server health check failed:', healthErr);
+      setError('Cannot connect to server. Please ensure the backend server is running on port 8000.');
+      setProgressMessage('Server unreachable');
+      setIsExporting(false);
+      handleExportEnd();
+      return;
+    }
+
+    setProgressMessage('Uploading...');
 
     // Generate unique export ID
     const exportId = generateExportId();
@@ -644,8 +676,20 @@ const ExportButton = forwardRef(function ExportButton({
         wsRef.current = null;
       }
 
-      // If response is a blob (error response), we need to convert it to text/JSON
-      if (err.response?.data instanceof Blob) {
+      // Detect network errors (server unreachable)
+      const isNetworkError = !err.response && (
+        err.code === 'ERR_NETWORK' ||
+        err.code === 'ECONNREFUSED' ||
+        err.message?.includes('Network Error') ||
+        err.message?.includes('Failed to fetch') ||
+        wsDisconnectedDuringExportRef.current
+      );
+
+      if (isNetworkError) {
+        setError('Cannot connect to server. Please ensure the backend server is running on port 8000.');
+        setProgressMessage('Server unreachable');
+      } else if (err.response?.data instanceof Blob) {
+        // If response is a blob (error response), we need to convert it to text/JSON
         try {
           const errorText = await err.response.data.text();
           const errorData = JSON.parse(errorText);
@@ -669,7 +713,10 @@ const ExportButton = forwardRef(function ExportButton({
       setIsExporting(false);
       handleExportEnd();
       setProgress(0);
-      setProgressMessage('');
+      // Don't clear progressMessage if we set it to 'Server unreachable'
+      if (!isNetworkError) {
+        setProgressMessage('');
+      }
     }
   };
 
