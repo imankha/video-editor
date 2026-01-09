@@ -60,7 +60,8 @@
       "Bash(node:*)",
       "Bash(grep:*)",
       "Bash(ffmpeg:*)",
-      "Bash(unzip:*)"
+      "Bash(unzip:*)",
+      "Bash(npm run test:e2e:*)"
     ],
     "deny": [],
     "ask": []

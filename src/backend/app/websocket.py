@@ -56,28 +56,36 @@ class ConnectionManager:
                 logger.info(f"All WebSockets disconnected for export_id: {export_id}")
 
     async def send_progress(self, export_id: str, data: dict):
-        """Broadcast progress update to all WebSocket connections for this export"""
-        if export_id in self.active_connections:
-            connections = self.active_connections[export_id]
-            failed_connections = []
-            success_count = 0
+        """
+        Broadcast progress update to all WebSocket connections for this export.
 
-            for ws in connections:
-                try:
-                    await ws.send_json(data)
-                    success_count += 1
-                except Exception as e:
-                    logger.error(f"[WS] Error sending to one client for {export_id}: {e}")
-                    failed_connections.append(ws)
+        This is fire-and-forget: if no clients are connected, the update is
+        silently dropped. This is expected behavior - the export continues
+        regardless of whether anyone is watching.
+        """
+        if export_id not in self.active_connections:
+            # No one listening - that's fine, export continues silently
+            return
 
-            # Remove failed connections
-            for ws in failed_connections:
-                self.disconnect(export_id, ws)
+        connections = self.active_connections[export_id]
+        failed_connections = []
+        success_count = 0
 
-            if success_count > 0:
-                logger.info(f"[WS] Sent progress to {success_count} client(s) for {export_id}: {data.get('progress', 0):.1f}%")
-        else:
-            logger.error(f"[WS] No active connections for {export_id} - progress update DROPPED")
+        for ws in connections:
+            try:
+                await ws.send_json(data)
+                success_count += 1
+            except Exception as e:
+                # Client disconnected, will be cleaned up
+                logger.debug(f"[WS] Client disconnected for {export_id}: {e}")
+                failed_connections.append(ws)
+
+        # Remove failed connections
+        for ws in failed_connections:
+            self.disconnect(export_id, ws)
+
+        if success_count > 0:
+            logger.debug(f"[WS] Sent progress to {success_count} client(s) for {export_id}: {data.get('progress', 0):.1f}%")
 
 
 # Global instance of the connection manager

@@ -35,8 +35,10 @@ logger = logging.getLogger(__name__)
 
 # Import routers and websocket handler
 from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, downloads_router, auth_router
+from app.routers.exports import router as exports_router
 from app.websocket import websocket_export_progress
 from app.database import init_database
+from app.services.export_worker import recover_orphaned_jobs
 from app.user_context import set_current_user_id, get_current_user_id
 from app.constants import DEFAULT_USER_ID
 
@@ -100,6 +102,7 @@ app.include_router(clips_router)
 app.include_router(games_router)
 app.include_router(downloads_router)
 app.include_router(auth_router)
+app.include_router(exports_router, prefix="/api")
 
 
 # WebSocket endpoint for export progress
@@ -184,6 +187,13 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
+
+    # Recover any orphaned export jobs from previous server run
+    try:
+        await recover_orphaned_jobs()
+        logger.info("Orphaned export jobs recovery complete")
+    except Exception as e:
+        logger.warning(f"Failed to recover orphaned jobs: {e}")
 
 
 @app.exception_handler(Exception)

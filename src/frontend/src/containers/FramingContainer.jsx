@@ -256,21 +256,6 @@ export function FramingContainer({
   }, [selectedClipId, selectedProjectId, clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange, updateClipData, saveFramingEdits]);
 
   /**
-   * Auto-save framing edits (debounced)
-   */
-  const autoSaveFramingEdits = useCallback(async () => {
-    if (!selectedClipId || editorMode !== 'framing') return;
-
-    if (pendingFramingSaveRef.current) {
-      clearTimeout(pendingFramingSaveRef.current);
-    }
-
-    pendingFramingSaveRef.current = setTimeout(async () => {
-      await saveCurrentClipState();
-    }, 2000);
-  }, [selectedClipId, editorMode, saveCurrentClipState]);
-
-  /**
    * Handle crop changes during drag/resize (live preview)
    */
   const handleCropChange = useCallback((newCrop) => {
@@ -586,22 +571,35 @@ export function FramingContainer({
     clipHasUserEditsRef.current = false;
   }, [selectedClipId]);
 
+  // Ref to hold the latest save function (avoids stale closures and infinite loops)
+  const saveCurrentClipStateRef = useRef(saveCurrentClipState);
+  useEffect(() => {
+    saveCurrentClipStateRef.current = saveCurrentClipState;
+  }, [saveCurrentClipState]);
+
   // Effect: Auto-save framing data when keyframes/segments change
+  // IMPORTANT: Only trigger on actual data changes, not on function/clips reference changes
   useEffect(() => {
     if (editorMode !== 'framing' || !selectedClipId || !selectedProjectId) return;
+    if (!clipHasUserEditsRef.current) return;
 
-    const currentClip = clips.find(c => c.id === selectedClipId);
-    const clipHadSavedData = currentClip && (
-      (currentClip.cropKeyframes && currentClip.cropKeyframes.length > 0) ||
-      (currentClip.segments && Object.keys(currentClip.segments).length > 0 &&
-        (currentClip.segments.userSplits?.length > 0 || Object.keys(currentClip.segments.segmentSpeeds || {}).length > 0)) ||
-      currentClip.trimRange != null
-    );
-
-    if (clipHasUserEditsRef.current || clipHadSavedData) {
-      autoSaveFramingEdits();
+    // Debounce save - clear any pending timeout
+    if (pendingFramingSaveRef.current) {
+      clearTimeout(pendingFramingSaveRef.current);
     }
-  }, [keyframes, segmentBoundaries, segmentSpeeds, trimRange, editorMode, selectedClipId, selectedProjectId, autoSaveFramingEdits, clips]);
+
+    pendingFramingSaveRef.current = setTimeout(async () => {
+      // Use ref to get latest function without it being in deps
+      await saveCurrentClipStateRef.current();
+    }, 2000);
+
+    // Cleanup on unmount or when deps change
+    return () => {
+      if (pendingFramingSaveRef.current) {
+        clearTimeout(pendingFramingSaveRef.current);
+      }
+    };
+  }, [keyframes, segmentBoundaries, segmentSpeeds, trimRange, editorMode, selectedClipId, selectedProjectId]);
 
   return {
     // Derived state
@@ -626,7 +624,6 @@ export function FramingContainer({
 
     // Persistence
     saveCurrentClipState,
-    autoSaveFramingEdits,
     pendingFramingSaveRef,
     clipHasUserEditsRef,
   };

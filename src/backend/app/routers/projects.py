@@ -80,6 +80,9 @@ async def list_projects():
         # - LEFT JOIN with clip_stats subquery for clip counts (latest versions only)
         # - LEFT JOIN with working_videos for overlay edit info
         # - LEFT JOIN with final_videos for completion status
+        #
+        # Optimization: Uses NOT EXISTS anti-join pattern instead of window functions
+        # This is faster in SQLite as it can use indexes effectively
         cursor.execute("""
             SELECT
                 p.id,
@@ -105,7 +108,8 @@ async def list_projects():
                 CASE WHEN fv.id IS NOT NULL THEN 1 ELSE 0 END as has_final_video
             FROM projects p
             LEFT JOIN (
-                -- Subquery for clip counts per project (latest version of each clip only)
+                -- Subquery for clip counts per project (latest version only)
+                -- Uses NOT EXISTS pattern which is faster than window functions
                 SELECT
                     wc.project_id,
                     COUNT(*) as total,
@@ -116,19 +120,19 @@ async def list_projects():
                         wc.timing_data IS NOT NULL
                     ) THEN 1 ELSE 0 END) as in_progress
                 FROM working_clips wc
-                WHERE wc.id IN (
-                    -- Get latest version of each clip across ALL projects
-                    -- Partition by (project_id, clip_identity) to handle versions correctly
-                    SELECT id FROM (
-                        SELECT
-                            wc2.id,
-                            ROW_NUMBER() OVER (
-                                PARTITION BY wc2.project_id, COALESCE(rc2.end_time, wc2.uploaded_filename)
-                                ORDER BY wc2.version DESC
-                            ) as rn
-                        FROM working_clips wc2
-                        LEFT JOIN raw_clips rc2 ON wc2.raw_clip_id = rc2.id
-                    ) WHERE rn = 1
+                LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+                WHERE NOT EXISTS (
+                    -- Exclude if there's a newer version of this same clip
+                    SELECT 1 FROM working_clips wc2
+                    LEFT JOIN raw_clips rc2 ON wc2.raw_clip_id = rc2.id
+                    WHERE wc2.project_id = wc.project_id
+                      AND wc2.version > wc.version
+                      AND (
+                          -- Same raw clip (identified by end_time)
+                          (rc2.end_time IS NOT NULL AND rc.end_time IS NOT NULL AND rc2.end_time = rc.end_time)
+                          -- OR same uploaded file
+                          OR (wc2.raw_clip_id IS NULL AND wc.raw_clip_id IS NULL AND wc2.uploaded_filename = wc.uploaded_filename)
+                      )
                 )
                 GROUP BY wc.project_id
             ) clip_stats ON p.id = clip_stats.project_id
