@@ -1,10 +1,12 @@
 # Download weights for different super-resolution models
-# Run this script from the video-editor root directory
+# Run from anywhere - weights go to src/backend/weights/
 # PowerShell version for Windows
 
 $ErrorActionPreference = "Stop"
 
-$WEIGHTS_DIR = "weights"
+# Get the directory where this script is located
+$SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
+$WEIGHTS_DIR = Join-Path $SCRIPT_DIR "..\weights"
 if (!(Test-Path $WEIGHTS_DIR)) {
     New-Item -ItemType Directory -Path $WEIGHTS_DIR | Out-Null
 }

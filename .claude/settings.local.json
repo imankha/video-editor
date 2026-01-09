@@ -61,7 +61,16 @@
       "Bash(grep:*)",
       "Bash(ffmpeg:*)",
       "Bash(unzip:*)",
-      "Bash(npm run test:e2e:*)"
+      "Bash(npm run test:e2e:*)",
+      "Bash(dir /b \"C:\\\\Users\\\\imank\\\\projects\\\\video-editor\")",
+      "Bash(dir /b \"C:\\\\Users\\\\imank\\\\projects\\\\video-editor\\\\src\\\\landing\")",
+      "Bash(dir /s /b \"C:\\\\Users\\\\imank\\\\projects\\\\video-editor\\\\deploy\")",
+      "Bash(dir /b \"C:\\\\Users\\\\imank\\\\projects\\\\video-editor\\\\scripts\")",
+      "Bash(dir /b \"C:\\\\Users\\\\imank\\\\projects\\\\video-editor\\\\deploy\\\\cloudflare\")",
+      "Bash(if [ -d \"C:/Users/imank/projects/video-editor/app\" ])",
+      "Bash(then echo \"WARNING: app/ folder still exists\")",
+      "Bash(else echo \"OK: app/ folder correctly removed\")",
+      "Bash(fi)"
     ],
     "deny": [],
     "ask": []

@@ -1,10 +1,12 @@
 #!/bin/bash
 # Download weights for different super-resolution models
-# Run this script from the video-editor root directory
+# Run from anywhere - weights go to src/backend/weights/
 
 set -e
 
-WEIGHTS_DIR="weights"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WEIGHTS_DIR="$SCRIPT_DIR/../weights"
 mkdir -p "$WEIGHTS_DIR"
 
 echo "==========================================="

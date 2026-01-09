@@ -17,8 +17,8 @@ import time
 import argparse
 from pathlib import Path
 
-# Add backend to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src' / 'backend'))
+# Add backend to path (file is now in src/backend/tests/)
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def list_models():
     """List all available SR models."""
