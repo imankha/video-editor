@@ -1,14 +1,13 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
-import { Image } from 'lucide-react';
+import { useMemo, useRef, useCallback } from 'react';
 import { DownloadsPanel } from './components/DownloadsPanel';
-import { useDownloads } from './hooks/useDownloads';
+import { GalleryButton } from './components/GalleryButton';
 import { useProjects } from './hooks/useProjects';
 import { ConfirmationDialog, ModeSwitcher } from './components/shared';
 import DebugInfo from './components/DebugInfo';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore } from './stores';
+import { useEditorStore, useExportStore, useFramingStore, useOverlayStore } from './stores';
 
 /**
  * App.jsx - Main application shell
@@ -52,27 +51,15 @@ function App() {
   const workingVideo = useOverlayStore(state => state.workingVideo);
   const isLoadingWorkingVideo = useOverlayStore(state => state.isLoadingWorkingVideo);
 
-  // Project data store - for checking loaded clips
-  const loadedClips = useProjectDataStore(state => state.clips);
-
   // Project management
   const {
     selectedProject,
     selectedProjectId,
-    hasProjects,
     fetchProjects,
     selectProject,
     clearSelection,
-    refreshSelectedProject,
     discardUncommittedChanges
   } = useProjects();
-
-  // Pending file for annotate mode (set by ProjectsScreen when user clicks Add Game)
-  const [pendingAnnotateFile, setPendingAnnotateFile] = useState(null);
-
-  // Downloads panel state
-  const [isDownloadsPanelOpen, setIsDownloadsPanelOpen] = useState(false);
-  const { count: downloadsCount, fetchCount: refreshDownloadsCount } = useDownloads();
 
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);
@@ -80,8 +67,8 @@ function App() {
   // Export completion callback - used by Screen components to refresh data
   const handleExportComplete = useCallback(() => {
     fetchProjects();
-    refreshDownloadsCount();
-  }, [fetchProjects, refreshDownloadsCount]);
+    // Downloads count is auto-refreshed by DownloadsPanel via galleryStore
+  }, [fetchProjects]);
 
   // Handler for loading saved games from ProjectManager
   // Sets pendingGameId in sessionStorage and navigates to annotate mode
@@ -91,33 +78,8 @@ function App() {
     setEditorMode('annotate');
   }, [setEditorMode]);
 
-  // Handler for when user selects a file for annotate mode (from ProjectsScreen Add Game button)
-  const handleAnnotateWithFile = useCallback((file) => {
-    console.log('[App] Annotate with file:', file.name);
-    setPendingAnnotateFile(file);
-    setEditorMode('annotate');
-  }, [setEditorMode]);
-
-  // Integration callbacks for ProjectsScreen
-  const handleProjectStateReset = useCallback(() => {
-    console.log('[App] Resetting state for new project');
-    // Project data store will be reset by FramingScreen on mount
-    clearSelection();
-  }, [clearSelection]);
-
-  const handleProjectClipsLoaded = useCallback(async ({ projectAspectRatio }) => {
-    console.log('[App] Clips loaded callback - aspect ratio:', projectAspectRatio);
-    // Clip loading is now handled by FramingScreen
-  }, []);
-
-  const handleProjectWorkingVideoLoaded = useCallback(async ({ file, url, metadata, clipMetadata }) => {
-    console.log('[App] Working video loaded callback');
-    // Working video is now managed by OverlayScreen via overlayStore
-  }, []);
-
   // Computed state for UI
   const hasOverlayVideo = !!workingVideo?.url;
-  const hasClips = loadedClips && loadedClips.length > 0;
 
   // Handle mode change between Framing and Overlay
   const handleModeChange = useCallback((newMode) => {
@@ -183,8 +145,6 @@ function App() {
     setExportingProject,
     globalExportProgress,
     setGlobalExportProgress,
-    downloadsCount,
-    refreshDownloadsCount,
   }), [
     editorMode,
     setEditorMode,
@@ -194,20 +154,15 @@ function App() {
     setExportingProject,
     globalExportProgress,
     setGlobalExportProgress,
-    downloadsCount,
-    refreshDownloadsCount,
   ]);
 
   // If no project selected and not in annotate mode, show ProjectsScreen
   if (!selectedProject && editorMode !== 'annotate') {
     return (
       <ProjectsScreen
-          onClipsLoaded={handleProjectClipsLoaded}
-          onWorkingVideoLoaded={handleProjectWorkingVideoLoaded}
-          onStateReset={handleProjectStateReset}
+          onStateReset={clearSelection}
           onLoadGame={handleLoadGame}
           onProjectSelected={selectProject}
-          onAnnotateWithFile={handleAnnotateWithFile}
         />
     );
   }
@@ -217,12 +172,7 @@ function App() {
     <AppStateProvider value={appStateValue}>
     <div className="h-screen overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
-      {editorMode === 'annotate' && (
-        <AnnotateScreen
-          initialFile={pendingAnnotateFile}
-          onInitialFileConsumed={() => setPendingAnnotateFile(null)}
-        />
-      )}
+      {editorMode === 'annotate' && <AnnotateScreen />}
 
       {/* Main Content - For framing/overlay modes */}
       {editorMode !== 'annotate' && (
@@ -252,20 +202,7 @@ function App() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              {/* Gallery button */}
-              <button
-                onClick={() => setIsDownloadsPanelOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-700 rounded-lg transition-colors"
-                title="Gallery"
-              >
-                <Image size={18} className="text-purple-400" />
-                <span className="text-sm text-gray-400">Gallery</span>
-                {downloadsCount > 0 && (
-                  <span className="px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
-                    {downloadsCount > 9 ? '9+' : downloadsCount}
-                  </span>
-                )}
-              </button>
+              <GalleryButton />
               {/* Mode toggle */}
               <ModeSwitcher
                 mode={editorMode}
@@ -302,14 +239,10 @@ function App() {
 
       {/* Downloads Panel */}
       <DownloadsPanel
-        isOpen={isDownloadsPanelOpen}
-        onClose={() => setIsDownloadsPanelOpen(false)}
         onOpenProject={(projectId) => {
           selectProject(projectId);
           setEditorMode('overlay');
-          setIsDownloadsPanelOpen(false);
         }}
-        onCountChange={refreshDownloadsCount}
       />
 
       {/* Mode Switch Confirmation Dialog */}

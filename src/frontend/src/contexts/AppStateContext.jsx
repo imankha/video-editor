@@ -7,7 +7,8 @@ import { createContext, useContext } from 'react';
  * - Editor mode (editorMode, setEditorMode)
  * - Selected project (selectedProjectId, selectedProject)
  * - Export progress (exportingProject, globalExportProgress)
- * - Downloads count (downloadsCount, refreshDownloadsCount)
+ *
+ * Note: Downloads count is now managed by galleryStore (useGalleryStore)
  */
 const AppStateContext = createContext(null);
 
