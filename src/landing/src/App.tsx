@@ -14,11 +14,10 @@ function App() {
             Share Your Player's Brilliance
           </h2>
           <p className="text-xl text-gray-300 mb-4 max-w-2xl mx-auto">
-            Professional-quality highlight reels from your footage.
-            AI upscaling turns grainy video into recruiting-ready content.
+            Higher quality highlights in seconds.
           </p>
           <p className="text-lg text-purple-400 mb-12">
-            Perfect for Instagram, TikTok, and college recruiting reels.
+            Turn your game footage into recruiting-ready reels for Instagram, TikTok, and college coaches.
           </p>
 
           {/* Features */}
@@ -86,6 +85,7 @@ function App() {
                 <ul className="text-gray-400 text-sm space-y-2">
                   <li>• Upload your games once</li>
                   <li>• Streamlined editor built for speed</li>
+                  <li>• Annotate key plays and build your clips database</li>
                   <li>• Generate videos from simple queries</li>
                   <li>• Reuse clips across multiple formats</li>
                   <li>• Professional quality in minutes</li>
@@ -107,7 +107,7 @@ function App() {
               </div>
               <div className="bg-white/5 backdrop-blur rounded-xl p-6 text-left">
                 <p className="text-gray-300 text-sm mb-4">
-                  "The AI upscaling is incredible. Our sideline footage looked so professional that a D1 coach asked what camera we used."
+                  "The AI upscaling is incredible. Our footage looked so professional that a D1 coach asked what camera we used."
                 </p>
                 <p className="text-purple-400 font-semibold text-sm">— Sarah M., Soccer Mom</p>
                 <p className="text-gray-500 text-xs">Daughter committed to play D2</p>
@@ -124,12 +124,9 @@ function App() {
 
           {/* CTA */}
           <div className="max-w-md mx-auto bg-white/5 backdrop-blur-lg rounded-2xl p-8">
-            <h3 className="text-2xl font-bold text-white mb-2">Coming Soon</h3>
-            <p className="text-gray-400 mb-4">
-              Be the first to turn your game footage into college-ready highlights.
-            </p>
-            <p className="text-purple-400 text-sm">
-              Join the waitlist for early access and founding member pricing.
+            <h3 className="text-2xl font-bold text-white mb-2">Ready to Get Started?</h3>
+            <p className="text-gray-400">
+              Turn your game footage into college-ready highlights today.
             </p>
           </div>
         </div>
