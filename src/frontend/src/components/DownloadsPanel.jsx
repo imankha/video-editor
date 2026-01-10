@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image } from 'lucide-react';
 import { useDownloads } from '../hooks/useDownloads';
+import { useGalleryStore } from '../stores/galleryStore';
 
 /**
  * DownloadsPanel - Slide-out panel for managing final video downloads
@@ -16,11 +17,13 @@ import { useDownloads } from '../hooks/useDownloads';
  * - Guards against stale state updates
  */
 export function DownloadsPanel({
-  isOpen,
-  onClose,
   onOpenProject,  // (projectId) => void - Navigate to project
-  onCountChange   // () => void - Callback when count changes (for refreshing header badge)
 }) {
+  // Gallery state from store
+  const isOpen = useGalleryStore((state) => state.isOpen);
+  const close = useGalleryStore((state) => state.close);
+  const setCount = useGalleryStore((state) => state.setCount);
+
   const {
     downloads,
     loadState,
@@ -34,6 +37,13 @@ export function DownloadsPanel({
     formatDate
   } = useDownloads(isOpen);
 
+  // Sync download count to gallery store
+  useEffect(() => {
+    if (downloads) {
+      setCount(downloads.length);
+    }
+  }, [downloads, setCount]);
+
   // State for video preview modal
   const [playingVideo, setPlayingVideo] = useState(null);
 
@@ -44,11 +54,8 @@ export function DownloadsPanel({
   const handleDelete = async (e, download) => {
     e.stopPropagation();
     if (window.confirm(`Delete "${download.filename}"?`)) {
-      const success = await deleteDownload(download.id, true);
-      if (success && onCountChange) {
-        // Notify parent to refresh the badge count
-        onCountChange();
-      }
+      await deleteDownload(download.id, true);
+      // Count will auto-update via the useEffect when downloads changes
     }
   };
 
@@ -68,7 +75,7 @@ export function DownloadsPanel({
     e.stopPropagation();
     if (onOpenProject) {
       onOpenProject(download.project_id);
-      onClose();
+      close();
     }
   };
 
@@ -196,7 +203,7 @@ export function DownloadsPanel({
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/50 z-40"
-        onClick={onClose}
+        onClick={close}
       />
 
       {/* Panel */}
@@ -213,7 +220,7 @@ export function DownloadsPanel({
             )}
           </div>
           <button
-            onClick={onClose}
+            onClick={close}
             className="p-1 hover:bg-gray-700 rounded transition-colors"
           >
             <X size={20} className="text-gray-400" />

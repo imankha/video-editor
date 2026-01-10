@@ -16,3 +16,4 @@ export { useNavigationStore, useCurrentMode, useProjectId, useNavigate } from '.
 export { useProjectDataStore, useProjectClipsData, useSelectedClipIndex, useWorkingVideo, useProjectAspectRatio } from './projectDataStore';
 export { useFramingStore, useFramingVideoFile, useFramingIncludeAudio, useFramingChangedSinceExport } from './framingStore';
 export { useOverlayStore, useOverlayWorkingVideo, useOverlayClipMetadata, useOverlayEffectType, useOverlayIsLoading } from './overlayStore';
+export { useGalleryStore, useGalleryIsOpen, useGalleryCount, useGalleryActions } from './galleryStore';

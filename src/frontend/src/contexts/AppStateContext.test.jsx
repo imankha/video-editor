@@ -25,8 +25,6 @@ describe('AppStateContext', () => {
         setExportingProject: vi.fn(),
         globalExportProgress: null,
         setGlobalExportProgress: vi.fn(),
-        downloadsCount: 5,
-        refreshDownloadsCount: vi.fn(),
       };
 
       const wrapper = ({ children }) => (
@@ -40,7 +38,6 @@ describe('AppStateContext', () => {
       expect(result.current.editorMode).toBe('framing');
       expect(result.current.selectedProjectId).toBe(123);
       expect(result.current.selectedProject.name).toBe('Test Project');
-      expect(result.current.downloadsCount).toBe(5);
       expect(result.current.exportingProject).toBeNull();
     });
 
@@ -57,8 +54,6 @@ describe('AppStateContext', () => {
         setExportingProject,
         globalExportProgress: null,
         setGlobalExportProgress: vi.fn(),
-        downloadsCount: 0,
-        refreshDownloadsCount: vi.fn(),
       };
 
       const wrapper = ({ children }) => (
@@ -83,8 +78,6 @@ describe('AppStateContext', () => {
         setExportingProject: vi.fn(),
         globalExportProgress: { progress: 50, message: 'Processing...' },
         setGlobalExportProgress: vi.fn(),
-        downloadsCount: 0,
-        refreshDownloadsCount: vi.fn(),
       };
 
       const wrapper = ({ children }) => (

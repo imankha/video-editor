@@ -2,7 +2,7 @@
 
 ## Summary
 
-App.jsx has been reduced from **2181 lines** to **345 lines** (84% reduction). Target is ~150 lines.
+App.jsx has been reduced from **2181 lines** to **278 lines** (87% reduction). Target was ~150 lines.
 
 The following tasks from `mostly_implemented/AppJSX_REDUCTION/` remain incomplete:
 
@@ -10,8 +10,8 @@ The following tasks from `mostly_implemented/AppJSX_REDUCTION/` remain incomplet
 
 ## Task 1: Finalize AnnotateScreen (TASK-05)
 
-**Status:** Not Started
-**Estimated Impact:** -50 to -100 lines from App.jsx
+**Status:** COMPLETED
+**Actual Impact:** -16 lines from App.jsx (319 → 303)
 
 ### Goal
 Make AnnotateScreen fully self-contained like FramingScreen and OverlayScreen.
@@ -35,8 +35,8 @@ AnnotateScreen still receives props from App.jsx:
 
 ## Task 2: Gallery Store (TASK-06)
 
-**Status:** Not Started
-**Estimated Impact:** -30 to -50 lines from App.jsx
+**Status:** COMPLETED
+**Actual Impact:** -26 lines from App.jsx (345 → 319)
 
 ### Goal
 Make DownloadsPanel/Gallery self-contained via a Zustand store.
@@ -66,8 +66,8 @@ Make DownloadsPanel/Gallery self-contained via a Zustand store.
 
 ## Task 3: Final App.jsx Cleanup (TASK-07)
 
-**Status:** Not Started
-**Estimated Impact:** Get App.jsx to ~150 lines
+**Status:** COMPLETED
+**Actual Impact:** -25 lines from App.jsx (303 → 278)
 
 ### Goal
 Remove all remaining dead code from App.jsx after Tasks 1-2 complete.
@@ -229,7 +229,8 @@ These have already been implemented:
 ### Success Metrics
 | Metric | Original | Current | Target |
 |--------|----------|---------|--------|
-| App.jsx lines | 2181 | 345 | ~150 |
-| Props to FramingScreen | 50+ | 0 | 0 |
-| Props to OverlayScreen | 60+ | 0 | 0 |
-| Props to AnnotateScreen | 15+ | ~5 | 0 |
+| App.jsx lines | 2181 | 278 | ~150 |
+| Props to FramingScreen | 50+ | 2 | 0 |
+| Props to OverlayScreen | 60+ | 1 | 0 |
+| Props to AnnotateScreen | 15+ | 0 | 0 |
+| Props to ProjectsScreen | N/A | 3 | 0 |

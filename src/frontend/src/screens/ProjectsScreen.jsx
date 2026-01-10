@@ -1,13 +1,13 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ProjectManager } from '../components/ProjectManager';
 import { DownloadsPanel } from '../components/DownloadsPanel';
 import { useProjects } from '../hooks/useProjects';
 import { useGames } from '../hooks/useGames';
-import { useDownloads } from '../hooks/useDownloads';
 import { useProjectLoader } from '../hooks/useProjectLoader';
 import { useNavigationStore } from '../stores/navigationStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useExportStore } from '../stores/exportStore';
+import { useGalleryStore } from '../stores/galleryStore';
 import { AppStateProvider } from '../contexts';
 import { API_BASE } from '../config';
 
@@ -18,25 +18,19 @@ import { API_BASE } from '../config';
  * - useProjects - project CRUD operations
  * - useGames - game CRUD operations
  * - useProjectLoader - project loading with clips and working video
- * - useDownloads - downloads count
+ * - useGalleryStore - downloads count
  *
- * Integration callbacks (for legacy App.jsx integration during transition):
- * - onClipsLoaded - called when clips are loaded (App.jsx needs to update its state)
- * - onWorkingVideoLoaded - called when working video is loaded
- * - onStateReset - called before loading new project (App.jsx clears its state)
+ * Props:
+ * - onStateReset - called before loading new project (App.jsx clears selection)
+ * - onLoadGame - callback to navigate to annotate mode with game ID
+ * - onProjectSelected - callback to sync selectedProject with App.jsx
  *
  * @see AppJSX_REDUCTION/TASK-02-self-contained-projects-screen.md
  */
 export function ProjectsScreen({
-  // Legacy integration callbacks (will be removed in Task 07)
-  onClipsLoaded,
-  onWorkingVideoLoaded,
-  onStateReset,
+  onStateReset, // Called before loading new project
   onLoadGame: onLoadGameProp, // Callback to set pendingGameId in App.jsx
   onProjectSelected, // Callback to sync selectedProject with App.jsx's useProjects
-  onAnnotateWithFile, // Callback when user selects a file for annotate mode
-  // Settings
-  onOpenProjectCreationSettings,
 }) {
   const navigate = useNavigationStore(state => state.navigate);
   const setEditorMode = useEditorStore(state => state.setEditorMode);
@@ -58,14 +52,14 @@ export function ProjectsScreen({
     deleteGame,
   } = useGames();
 
-  // Downloads
-  const { count: downloadsCount, fetchCount: refreshDownloadsCount } = useDownloads();
-
   // Project loading
   const { loadProject } = useProjectLoader();
 
+  // Gallery store for downloads panel
+  const openGallery = useGalleryStore(state => state.open);
+  const downloadsCount = useGalleryStore(state => state.count);
+
   // Local UI state
-  const [isDownloadsPanelOpen, setIsDownloadsPanelOpen] = useState(false);
   const [loadingProjectId, setLoadingProjectId] = useState(null);
 
   // Track in-progress exports discovered on page load
@@ -73,9 +67,6 @@ export function ProjectsScreen({
 
   // Export store for global export state
   const { exportingProject, startExport, setGlobalExportProgress } = useExportStore();
-
-  // File input ref for Add Game
-  const annotateFileInputRef = useRef(null);
 
   // Check for in-progress exports on mount
   // This allows users to return and see exports that were running when they left
@@ -192,10 +183,7 @@ export function ProjectsScreen({
       }
 
       // Load project with all associated data
-      const result = await loadProject(project, {
-        onClipsLoaded,
-        onWorkingVideoLoaded,
-      });
+      const result = await loadProject(project);
 
       // Sync with editorStore for legacy compatibility
       setEditorMode(result.mode);
@@ -206,7 +194,7 @@ export function ProjectsScreen({
     } finally {
       setLoadingProjectId(null);
     }
-  }, [selectProject, loadProject, setEditorMode, onStateReset, onClipsLoaded, onWorkingVideoLoaded, onProjectSelected]);
+  }, [selectProject, loadProject, setEditorMode, onStateReset, onProjectSelected]);
 
   // Handle project selection with mode override
   const handleSelectProjectWithMode = useCallback(async (projectId, options = {}) => {
@@ -231,8 +219,6 @@ export function ProjectsScreen({
       const result = await loadProject(project, {
         mode: options.mode,
         clipIndex: options.clipIndex,
-        onClipsLoaded,
-        onWorkingVideoLoaded,
       });
 
       // Sync with editorStore for legacy compatibility
@@ -244,7 +230,7 @@ export function ProjectsScreen({
     } finally {
       setLoadingProjectId(null);
     }
-  }, [selectProject, loadProject, setEditorMode, onStateReset, onClipsLoaded, onWorkingVideoLoaded, onProjectSelected]);
+  }, [selectProject, loadProject, setEditorMode, onStateReset, onProjectSelected]);
 
   // Handle game loading (navigate to annotate)
   const handleLoadGame = useCallback((gameId) => {
@@ -256,25 +242,10 @@ export function ProjectsScreen({
   }, [onLoadGameProp]);
 
   // Handle annotate (navigate to annotate mode)
-  // Trigger file input to open file dialog immediately
+  // AnnotateScreen will show FileUpload component for file selection
   const handleAnnotate = useCallback(() => {
-    // Trigger file input to open file dialog
-    annotateFileInputRef.current?.click();
-  }, []);
-
-  // Handle file selection for annotate mode
-  const handleAnnotateFileChange = useCallback((event) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      console.log('[ProjectsScreen] File selected for annotate:', files[0].name);
-      // Call callback with the selected file
-      if (onAnnotateWithFile) {
-        onAnnotateWithFile(files[0]);
-      }
-    }
-    // Reset input so same file can be selected again
-    event.target.value = '';
-  }, [onAnnotateWithFile]);
+    setEditorMode('annotate');
+  }, [setEditorMode]);
 
   // Compute exporting project from either global store or discovered pending exports
   const activeExportingProject = exportingProject || (() => {
@@ -296,22 +267,11 @@ export function ProjectsScreen({
     selectedProject: null,
     exportingProject: activeExportingProject,
     downloadsCount,
-    refreshDownloadsCount,
   };
 
   return (
     <AppStateProvider value={appStateValue}>
       <div className="min-h-screen bg-gray-900">
-        {/* Hidden file input for Add Game - triggers file dialog immediately */}
-        <input
-          ref={annotateFileInputRef}
-          type="file"
-          accept="video/mp4,video/quicktime,video/webm"
-          onChange={handleAnnotateFileChange}
-          className="hidden"
-          multiple
-        />
-
         <ProjectManager
           projects={projects}
           loading={projectsLoading || loadingProjectId !== null}
@@ -327,18 +287,14 @@ export function ProjectsScreen({
           onLoadGame={handleLoadGame}
           onDeleteGame={deleteGame}
           onFetchGames={fetchGames}
-          onOpenDownloads={() => setIsDownloadsPanelOpen(true)}
+          onOpenDownloads={openGallery}
         />
 
         {/* Downloads Panel */}
         <DownloadsPanel
-          isOpen={isDownloadsPanelOpen}
-          onClose={() => setIsDownloadsPanelOpen(false)}
           onOpenProject={(projectId) => {
             handleSelectProjectWithMode(projectId, { mode: 'overlay' });
-            setIsDownloadsPanelOpen(false);
           }}
-          onCountChange={refreshDownloadsCount}
         />
       </div>
     </AppStateProvider>

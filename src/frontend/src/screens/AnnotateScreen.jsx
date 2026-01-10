@@ -7,9 +7,9 @@ import useZoom from '../hooks/useZoom';
 import { useGames } from '../hooks/useGames';
 import { useProjects } from '../hooks/useProjects';
 import { useSettings } from '../hooks/useSettings';
-import { useDownloads } from '../hooks/useDownloads';
 import { FileUpload } from '../components/FileUpload';
 import { useEditorStore } from '../stores/editorStore';
+import { useGalleryStore } from '../stores/galleryStore';
 
 /**
  * AnnotateScreen - Self-contained screen for Annotate mode
@@ -23,7 +23,7 @@ import { useEditorStore } from '../stores/editorStore';
  * - useZoom - video zoom/pan
  * - useGames - game management
  * - useSettings - project creation settings
- * - useDownloads - downloads count
+ * - useGalleryStore - downloads count and panel state
  * - Keyboard shortcuts for annotate mode
  *
  * Data flow:
@@ -32,7 +32,7 @@ import { useEditorStore } from '../stores/editorStore';
  *
  * @see AppJSX_REDUCTION/TASK-05-finalize-annotate-screen.md
  */
-export function AnnotateScreen({ initialFile, onInitialFileConsumed }) {
+export function AnnotateScreen() {
   // Editor mode (for navigation between screens)
   // NOTE: Using editorStore (not navigationStore) because App.jsx renders based on editorStore
   const setEditorMode = useEditorStore(state => state.setEditorMode);
@@ -56,8 +56,9 @@ export function AnnotateScreen({ initialFile, onInitialFileConsumed }) {
     resetSettings,
   } = useSettings();
 
-  // Downloads
-  const { count: downloadsCount, fetchCount: refreshDownloadsCount } = useDownloads();
+  // Gallery (for downloads panel)
+  const openGallery = useGalleryStore(state => state.open);
+  const downloadsCount = useGalleryStore(state => state.count);
 
   // Local UI state
   const [showProjectCreationSettings, setShowProjectCreationSettings] = useState(false);
@@ -105,11 +106,9 @@ export function AnnotateScreen({ initialFile, onInitialFileConsumed }) {
   }, [setEditorMode]);
 
   const handleOpenDownloads = useCallback(() => {
-    // Navigate to project-manager and open downloads panel
-    // For now, we'll use session storage to signal downloads should open
-    sessionStorage.setItem('openDownloadsPanel', 'true');
-    setEditorMode('project-manager');
-  }, [setEditorMode]);
+    // Open the gallery panel directly (it's rendered by App.jsx)
+    openGallery();
+  }, [openGallery]);
 
   const handleOpenProjectCreationSettings = useCallback(() => {
     setShowProjectCreationSettings(true);
@@ -183,9 +182,6 @@ export function AnnotateScreen({ initialFile, onInitialFileConsumed }) {
     // Cleanup
     clearAnnotateState,
   } = annotate;
-
-  // Note: File selection is now handled entirely by this screen's FileUpload component
-  // No more initialFile prop from App.jsx (File objects can't be serialized to sessionStorage)
 
   // Handle initial game ID from sessionStorage (when loading a saved game)
   useEffect(() => {
@@ -275,18 +271,6 @@ export function AnnotateScreen({ initialFile, onInitialFileConsumed }) {
   // State is cleared explicitly when needed:
   // - After importing clips to projects (in handleImportIntoProjects)
   // - When loading a new game (state is reset before loading new data)
-
-  // Handle initialFile from ProjectsScreen (when user clicks Add Game and selects a file)
-  useEffect(() => {
-    if (initialFile && !annotateVideoUrl) {
-      console.log('[AnnotateScreen] Processing initial file:', initialFile.name);
-      handleGameVideoSelect(initialFile);
-      // Clear the pending file so it's not re-processed
-      if (onInitialFileConsumed) {
-        onInitialFileConsumed();
-      }
-    }
-  }, [initialFile]); // Minimal deps to avoid re-triggering
 
   // Show file upload when no video is loaded
   if (!annotateVideoUrl) {

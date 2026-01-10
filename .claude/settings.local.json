@@ -72,7 +72,9 @@
       "Bash(else echo \"OK: app/ folder correctly removed\")",
       "Bash(fi)",
       "WebFetch(domain:developers.cloudflare.com)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(ffprobe:*)"
     ],
     "deny": [],
     "ask": []

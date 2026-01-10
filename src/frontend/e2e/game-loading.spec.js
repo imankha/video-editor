@@ -86,7 +86,14 @@ test.describe('Game Loading Debug', () => {
       // Create a game first by uploading a video
       console.log('No games found, creating one...');
 
-      // Click "Add Game" which triggers file picker
+      // Click "Add Game" button to navigate to annotate mode
+      await page.locator('button:has-text("Add Game")').click();
+
+      // Wait for AnnotateScreen to load (FileUpload component)
+      await expect(page.locator('button:has-text("Annotate")')).toBeVisible({ timeout: 10000 });
+      console.log('AnnotateScreen loaded');
+
+      // Find the hidden file input and upload video
       const videoInput = page.locator('input[type="file"][accept*="video"]');
       await videoInput.setInputFiles(TEST_VIDEO);
 

@@ -704,7 +704,7 @@ export function FramingScreen({
   if (!hasClips && !videoUrl) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <FileUpload onFileSelect={handleFileSelect} />
+        <FileUpload onGameVideoSelect={handleFileSelect} />
       </div>
     );
   }
