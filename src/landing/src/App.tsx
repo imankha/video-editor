@@ -9,11 +9,11 @@ function App() {
 
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl md:text-6xl font-bold text-white mb-6">
-            Stop Scrubbing Through 10 Hours of Game Footage
+            Share Your Player's Brilliance
           </h2>
           <p className="text-xl text-gray-300 mb-4 max-w-2xl mx-auto">
-            ReelBallers builds a searchable database of every clip your player appears in.
-            Find their best moments instantly. Generate highlight reels in minutes, not days.
+            Professional-quality highlight reels from your sideline footage.
+            AI upscaling turns grainy video into recruiting-ready content.
           </p>
           <p className="text-lg text-purple-400 mb-12">
             Perfect for Instagram, TikTok, and college recruiting reels.
@@ -22,24 +22,17 @@ function App() {
           {/* Features */}
           <div className="grid md:grid-cols-3 gap-6 mb-16">
             <div className="bg-white/10 backdrop-blur rounded-xl p-6 text-left">
-              <div className="text-3xl mb-3">🔍</div>
-              <h3 className="text-lg font-semibold text-white mb-2">Instant Clip Database</h3>
+              <div className="text-3xl mb-3">🎬</div>
+              <h3 className="text-lg font-semibold text-white mb-2">Dynamic Player Framing</h3>
               <p className="text-gray-400 text-sm">
-                Every game automatically indexed. Search "goals", "assists", or "defensive plays" and get results in seconds.
+                Our unique technology smoothly follows your player across the field, keeping them centered in every frame. Get close to the action without manual editing.
               </p>
             </div>
             <div className="bg-white/10 backdrop-blur rounded-xl p-6 text-left">
               <div className="text-3xl mb-3">✨</div>
               <h3 className="text-lg font-semibold text-white mb-2">AI-Enhanced Quality</h3>
               <p className="text-gray-400 text-sm">
-                Grainy sideline footage? Our AI upscaling makes it look professional. Perfect for recruiting videos.
-              </p>
-            </div>
-            <div className="bg-white/10 backdrop-blur rounded-xl p-6 text-left">
-              <div className="text-3xl mb-3">🎬</div>
-              <h3 className="text-lg font-semibold text-white mb-2">Animated Smart Framing</h3>
-              <p className="text-gray-400 text-sm">
-                Our unique technology smoothly follows your player across the field. No more static crops.
+                Grainy sideline footage? Our AI upscaling makes it look professional. Perfect for recruiting videos that impress coaches.
               </p>
             </div>
             <div className="bg-white/10 backdrop-blur rounded-xl p-6 text-left">
@@ -53,14 +46,21 @@ function App() {
               <div className="text-3xl mb-3">🎯</div>
               <h3 className="text-lg font-semibold text-white mb-2">AI Player Highlighting</h3>
               <p className="text-gray-400 text-sm">
-                Automatically circle or spotlight your player so coaches never lose track of them.
+                Easily spotlight your player so coaches never lose track of them in game footage.
               </p>
             </div>
             <div className="bg-white/10 backdrop-blur rounded-xl p-6 text-left">
-              <div className="text-3xl mb-3">🆓</div>
-              <h3 className="text-lg font-semibold text-white mb-2">Free Annotation Tools</h3>
+              <div className="text-3xl mb-3">🔍</div>
+              <h3 className="text-lg font-semibold text-white mb-2">Clip Library</h3>
               <p className="text-gray-400 text-sm">
-                Add arrows, circles, and text overlays to break down plays. Great for coaches and parents alike.
+                Build a searchable database of your player's best moments. Reuse the same clips across different videos and formats instantly.
+              </p>
+            </div>
+            <div className="bg-white/10 backdrop-blur rounded-xl p-6 text-left">
+              <div className="text-3xl mb-3">🏷️</div>
+              <h3 className="text-lg font-semibold text-white mb-2">Tag & Rate Clips</h3>
+              <p className="text-gray-400 text-sm">
+                Organize clips with tags and ratings. Export annotated videos so players can study their own performance.
               </p>
             </div>
           </div>
@@ -70,23 +70,23 @@ function App() {
             <h3 className="text-2xl font-bold text-white mb-4 text-center">The College Recruiting Problem</h3>
             <div className="grid md:grid-cols-2 gap-8">
               <div>
-                <h4 className="text-red-400 font-semibold mb-2">Without ReelBallers</h4>
+                <h4 className="text-red-400 font-semibold mb-2">The Old Way</h4>
                 <ul className="text-gray-400 text-sm space-y-2">
                   <li>• Watch 10+ hours of game footage</li>
                   <li>• Manually timestamp every good play</li>
-                  <li>• Edit clips one by one in iMovie</li>
+                  <li>• Juggle multiple editing tools</li>
                   <li>• Re-export every time you find a better clip</li>
-                  <li>• Takes weeks to make one highlight reel</li>
+                  <li>• Weeks to make one highlight reel</li>
                 </ul>
               </div>
               <div>
                 <h4 className="text-green-400 font-semibold mb-2">With ReelBallers</h4>
                 <ul className="text-gray-400 text-sm space-y-2">
                   <li>• Upload your games once</li>
-                  <li>• AI indexes every appearance</li>
-                  <li>• Search and select your best clips</li>
-                  <li>• Generate highlight reel instantly</li>
-                  <li>• Update anytime with new footage</li>
+                  <li>• Streamlined editor built for speed</li>
+                  <li>• Generate videos from simple queries</li>
+                  <li>• Reuse clips across multiple formats</li>
+                  <li>• Professional quality in minutes</li>
                 </ul>
               </div>
             </div>
@@ -98,7 +98,7 @@ function App() {
             <div className="grid md:grid-cols-3 gap-6">
               <div className="bg-white/5 backdrop-blur rounded-xl p-6 text-left">
                 <p className="text-gray-300 text-sm mb-4">
-                  "I used to spend entire weekends editing highlight clips. Now I upload the game and have a shareable reel before we even get home."
+                  "I can prep and push my son's best plays to Instagram in minutes. What used to take me all weekend now happens during halftime of the next game."
                 </p>
                 <p className="text-purple-400 font-semibold text-sm">— Mike T., Soccer Dad</p>
                 <p className="text-gray-500 text-xs">Son plays U16 club soccer</p>
@@ -112,7 +112,7 @@ function App() {
               </div>
               <div className="bg-white/5 backdrop-blur rounded-xl p-6 text-left">
                 <p className="text-gray-300 text-sm mb-4">
-                  "The animated framing that follows my son across the field is something I've never seen anywhere else. Game changer for recruiting videos."
+                  "The way it follows my son across the field is something I've never seen anywhere else. Game changer for recruiting videos."
                 </p>
                 <p className="text-purple-400 font-semibold text-sm">— James R., Soccer Dad</p>
                 <p className="text-gray-500 text-xs">Son plays ECNL</p>
