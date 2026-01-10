@@ -14,7 +14,7 @@ function App() {
             Share Your Player's Brilliance
           </h2>
           <p className="text-xl text-gray-300 mb-4 max-w-2xl mx-auto">
-            Higher quality highlights in seconds.
+            Higher quality highlights in minutes.
           </p>
           <p className="text-lg text-purple-400 mb-12">
             Turn your game footage into recruiting-ready reels for Instagram, TikTok, and college coaches.
