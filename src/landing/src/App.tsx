@@ -12,7 +12,7 @@ function App() {
             Share Your Player's Brilliance
           </h2>
           <p className="text-xl text-gray-300 mb-4 max-w-2xl mx-auto">
-            Professional-quality highlight reels from your sideline footage.
+            Professional-quality highlight reels from your footage.
             AI upscaling turns grainy video into recruiting-ready content.
           </p>
           <p className="text-lg text-purple-400 mb-12">
@@ -32,7 +32,7 @@ function App() {
               <div className="text-3xl mb-3">✨</div>
               <h3 className="text-lg font-semibold text-white mb-2">AI-Enhanced Quality</h3>
               <p className="text-gray-400 text-sm">
-                Grainy sideline footage? Our AI upscaling makes it look professional. Perfect for recruiting videos that impress coaches.
+                Grainy footage? Our AI upscaling makes it look professional. Perfect for recruiting videos that impress coaches.
               </p>
             </div>
             <div className="bg-white/10 backdrop-blur rounded-xl p-6 text-left">
