@@ -1,10 +1,12 @@
+import { LogoWithText } from './components/Logo'
+
 function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Hero Section */}
       <div className="container mx-auto px-4 py-16">
         <nav className="flex justify-between items-center mb-16">
-          <h1 className="text-2xl font-bold text-white">ReelBallers</h1>
+          <LogoWithText />
         </nav>
 
         <div className="max-w-4xl mx-auto text-center">
