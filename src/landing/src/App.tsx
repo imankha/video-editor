@@ -31,7 +31,7 @@ function App() {
               </div>
               <h3 className="text-xl font-semibold text-white mb-3">Dynamic Player Framing</h3>
               <p className="text-gray-400">
-                Our unique technology smoothly follows your player across the field, keeping them centered in every frame. Get close to the action without manual editing.
+                Our unique technology smoothly follows your player across the field, keeping them centered in every frame.
               </p>
             </div>
             <div className="bg-white/5 backdrop-blur rounded-2xl p-8 text-center hover:bg-white/10 transition-colors">
@@ -40,7 +40,7 @@ function App() {
               </div>
               <h3 className="text-xl font-semibold text-white mb-3">AI-Enhanced Quality</h3>
               <p className="text-gray-400">
-                Grainy footage? Our AI upscaling makes it look professional. Perfect for recruiting videos that impress coaches.
+                Grainy footage? Our AI upscaling makes it look professional.
               </p>
             </div>
             <div className="bg-white/5 backdrop-blur rounded-2xl p-8 text-center hover:bg-white/10 transition-colors">
