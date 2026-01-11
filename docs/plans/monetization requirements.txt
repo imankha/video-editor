@@ -1,0 +1,322 @@
+ReelBallers Monetization Spec
+
+Model: Pay-Per-Render Using “Render Minutes”
+
+1. Monetization Philosophy (Non-Functional Requirement)
+
+Users pay only for GPU-intensive operations:
+
+Framing
+
+Highlight Overlay
+
+Any combined “final render” pipeline
+
+All non-GPU features remain accessible without payment:
+
+Annotation
+
+Clip DB
+
+Query-based highlight assembly
+
+Preview playback
+
+Monetization must feel:
+
+Outcome-based (“I paid for this result”)
+
+Transparent (no surprise charges)
+
+Fair (clear link between cost and processing)
+
+2. Billing Unit: Render Minutes
+Definition
+
+Render Minute = 1 minute of finished video processed through GPU-intensive rendering.
+
+Render Minutes are consumed only when a final render is executed, not during previews or drafts.
+
+Scope
+
+Render Minutes apply to:
+
+Dynamic framing
+
+AI upscaling
+
+Highlight overlay
+
+Any combined pipeline that invokes GPU rendering
+
+Render Minutes do not apply to:
+
+Annotation
+
+Clip tagging
+
+Query-based clip selection
+
+Timeline edits without rendering
+
+Preview-quality playback
+
+3. Render Cost Calculation (User-Facing Requirement)
+
+Before a render starts, the system must:
+
+Calculate:
+
+Total output duration (in minutes, rounded up to nearest 0.1 or 0.5)
+
+Render Minutes required
+
+Display clearly:
+
+“This render will use X Render Minutes”
+
+If user does not have enough Render Minutes:
+
+Block render
+
+Present purchase flow
+
+4. Render Minutes Packages
+Requirements
+
+Render Minutes must be purchasable in simple, round bundles
+
+Prices must be displayed in USD
+
+Packages should scale with a volume discount
+
+Example Package Structure (Editable)
+Package Name	Render Minutes	Price
+Starter	10 minutes	$10
+Standard	25 minutes	$20
+Power	60 minutes	$40
+
+NOTE: These values are placeholders — pricing can be tuned later without changing system logic.
+
+5. Free Allocation (Optional but Supported)
+
+System should support:
+
+One-time or recurring free Render Minutes
+
+Example use cases:
+
+New user onboarding
+
+Monthly allowance
+
+Promotional credits
+
+Requirements:
+
+Free Render Minutes are consumed before paid minutes
+
+UI should label them clearly (e.g. “Free Render Minutes”)
+
+6. Render Consumption Rules
+Core Rules
+
+Render Minutes are deducted:
+
+Once per unique final render
+
+At render start or render completion (choose one, but be consistent)
+
+Re-downloading or re-sharing a completed render:
+
+Must not consume additional Render Minutes
+
+Re-rendering after changes:
+
+Consumes Render Minutes again (new output)
+
+Caching Requirement
+
+Identical renders (same inputs + settings) should:
+
+Be recognized
+
+Not double-charge if re-accessed
+
+7. User Balance Management
+System Must Track
+
+For each user:
+
+Total Render Minutes purchased
+
+Render Minutes remaining
+
+Render Minutes consumed (audit log)
+
+Display Requirements
+
+User must be able to see:
+
+Current Render Minutes balance
+
+Estimated Render Minutes required before rendering
+
+Render history (timestamp, minutes used, output reference)
+
+8. Purchase Flow (Stripe)
+Requirements
+
+Stripe Checkout or Stripe Elements
+
+One-time purchases (no subscription required)
+
+Support:
+
+Credit card
+
+Apple Pay / Google Pay (if enabled in Stripe)
+
+Flow
+
+User attempts render
+
+System checks balance
+
+If insufficient:
+
+Modal or page:
+
+“You need X Render Minutes”
+
+Package options
+
+On successful Stripe payment:
+
+Render Minutes are credited immediately
+
+User returns to render confirmation
+
+9. UI Surface Areas (High-Level)
+A. Render Confirmation Screen
+
+Must show:
+
+Output duration
+
+Render Minutes required
+
+Render Minutes available
+
+CTA:
+
+“Render Highlight” (enabled)
+
+“Buy Render Minutes” (if insufficient)
+
+B. Purchase Screen
+
+Must show:
+
+What Render Minutes are
+
+What they are used for
+
+Available packages
+
+Stripe checkout entry point
+
+C. Account / Usage Screen
+
+Must show:
+
+Remaining Render Minutes
+
+Render history
+
+Link to purchase more
+
+10. Error & Edge Case Handling
+Required Behaviors
+
+If render fails:
+
+Render Minutes must not be consumed
+
+If render partially completes:
+
+Either:
+
+No charge, or
+
+Partial charge (choose one globally)
+
+(Strong recommendation: no charge unless successful)
+
+11. Abuse & Cost Control (Non-UI Requirements)
+
+System must support:
+
+Hard caps per render
+
+Rate limiting for concurrent renders
+
+Admin override of user balances
+
+Ability to disable rendering for an account
+
+12. Tech Stack Alignment (Constraints Only)
+
+Implementation must:
+
+Use Stripe for payments
+
+Store balances in existing DB (Cloudflare-backed)
+
+Be accessible from React/Vite frontend
+
+Be enforceable server-side (Python / Unicorn)
+
+Never trust client-side balance checks alone
+
+13. Language & Copy Guidelines (Important)
+
+Always use:
+
+“Render Minutes” (not credits)
+
+“Processing” or “Rendering” (not “AI compute”)
+
+“Final highlight” (not “GPU job”)
+
+Example copy:
+
+“Rendering applies professional framing and player highlighting. This takes time and compute, which is why it uses Render Minutes.”
+
+14. Explicit Non-Requirements (Do NOT Build Yet)
+
+No subscriptions
+
+No per-feature pricing
+
+No dynamic pricing
+
+No refunds automation
+
+No marketplace or bundles tied to seasons
+
+These can be layered later.
+
+15. Success Criteria
+
+This monetization system is successful if:
+
+Users can create value without paying
+
+Payment happens at the moment of perceived magic
+
+Render costs are predictable
+
+GPU costs scale linearly with revenue
+
+Parents understand exactly what they paid for
