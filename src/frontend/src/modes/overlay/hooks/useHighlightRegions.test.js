@@ -68,7 +68,7 @@ describe('useHighlightRegions', () => {
   // ============================================================================
 
   describe('addRegion', () => {
-    it('creates 5-second region with start and end keyframes', () => {
+    it('creates 2-second region with start and end keyframes', () => {
       const { result } = renderHook(() => useHighlightRegions(defaultVideoMetadata));
 
       act(() => {
@@ -85,7 +85,7 @@ describe('useHighlightRegions', () => {
 
       const region = result.current.regions[0];
       expect(region.startTime).toBeCloseTo(5, 1);
-      expect(region.endTime).toBeCloseTo(10, 1);
+      expect(region.endTime).toBeCloseTo(7, 1); // 2-second duration: 5 + 2 = 7
       expect(region.enabled).toBe(true);
       expect(region.keyframes).toHaveLength(2);
       expect(region.keyframes[0].origin).toBe('permanent');
@@ -127,12 +127,12 @@ describe('useHighlightRegions', () => {
       });
 
       act(() => {
-        result.current.addRegion(5);
+        result.current.addRegion(5); // Creates region 5-7 (2-second duration)
       });
 
       let secondId;
       act(() => {
-        secondId = result.current.addRegion(7); // Overlaps with 5-10
+        secondId = result.current.addRegion(6); // Overlaps with 5-7
       });
 
       expect(secondId).toBeNull();
@@ -438,13 +438,13 @@ describe('useHighlightRegions', () => {
       });
 
       act(() => {
-        result.current.addRegion(5);
+        result.current.addRegion(5); // Creates region 5-7
       });
 
       const initialKeyframes = result.current.regions[0].keyframes.length;
 
       act(() => {
-        result.current.addOrUpdateKeyframe(7, { x: 500, y: 500, radiusX: 50, radiusY: 80 });
+        result.current.addOrUpdateKeyframe(6, { x: 500, y: 500, radiusX: 50, radiusY: 80 }); // 6 is within 5-7
       });
 
       expect(result.current.regions[0].keyframes.length).toBeGreaterThan(initialKeyframes);
@@ -499,7 +499,7 @@ describe('useHighlightRegions', () => {
       });
 
       act(() => {
-        result.current.addRegion(5);
+        result.current.addRegion(5); // Creates region 5-7
       });
 
       act(() => {
@@ -508,7 +508,7 @@ describe('useHighlightRegions', () => {
 
       let success;
       act(() => {
-        success = result.current.addOrUpdateKeyframe(7, { x: 100, y: 100 });
+        success = result.current.addOrUpdateKeyframe(6, { x: 100, y: 100 }); // 6 is within 5-7
       });
 
       expect(success).toBe(false);
@@ -524,17 +524,17 @@ describe('useHighlightRegions', () => {
       });
 
       act(() => {
-        result.current.addRegion(5);
+        result.current.addRegion(5); // Creates region 5-7
       });
 
       act(() => {
-        result.current.addOrUpdateKeyframe(7, { x: 100, y: 100 });
+        result.current.addOrUpdateKeyframe(6, { x: 100, y: 100 }); // 6 is within 5-7
       });
 
       const keyframeCount = result.current.regions[0].keyframes.length;
 
       act(() => {
-        result.current.removeKeyframe(7);
+        result.current.removeKeyframe(6);
       });
 
       expect(result.current.regions[0].keyframes.length).toBeLessThan(keyframeCount);
@@ -656,13 +656,13 @@ describe('useHighlightRegions', () => {
       });
 
       act(() => {
-        result.current.addRegion(5);
+        result.current.addRegion(5); // Creates region 5-7
       });
 
-      const region = result.current.getRegionAtTime(7);
+      const region = result.current.getRegionAtTime(6); // 6 is within 5-7
       expect(region).toBeDefined();
-      expect(region.startTime).toBeLessThanOrEqual(7);
-      expect(region.endTime).toBeGreaterThanOrEqual(7);
+      expect(region.startTime).toBeLessThanOrEqual(6);
+      expect(region.endTime).toBeGreaterThanOrEqual(6);
     });
 
     it('returns null when no region at time', () => {
@@ -690,10 +690,10 @@ describe('useHighlightRegions', () => {
       });
 
       act(() => {
-        result.current.addRegion(5);
+        result.current.addRegion(5); // Creates region 5-7
       });
 
-      expect(result.current.isTimeInEnabledRegion(7)).toBe(true);
+      expect(result.current.isTimeInEnabledRegion(6)).toBe(true); // 6 is within 5-7
     });
 
     it('returns false for time in disabled region', () => {
@@ -704,14 +704,14 @@ describe('useHighlightRegions', () => {
       });
 
       act(() => {
-        result.current.addRegion(5);
+        result.current.addRegion(5); // Creates region 5-7
       });
 
       act(() => {
         result.current.toggleRegionEnabled(0, false);
       });
 
-      expect(result.current.isTimeInEnabledRegion(7)).toBe(false);
+      expect(result.current.isTimeInEnabledRegion(6)).toBe(false); // 6 is within 5-7
     });
 
     it('returns false for time outside all regions', () => {
@@ -738,10 +738,10 @@ describe('useHighlightRegions', () => {
       });
 
       act(() => {
-        result.current.addRegion(5);
+        result.current.addRegion(5); // Creates region 5-7
       });
 
-      const highlight = result.current.getHighlightAtTime(7);
+      const highlight = result.current.getHighlightAtTime(6); // 6 is within 5-7
       expect(highlight).toBeDefined();
       expect(highlight).toHaveProperty('x');
       expect(highlight).toHaveProperty('y');
@@ -757,14 +757,14 @@ describe('useHighlightRegions', () => {
       });
 
       act(() => {
-        result.current.addRegion(5);
+        result.current.addRegion(5); // Creates region 5-7
       });
 
       act(() => {
         result.current.toggleRegionEnabled(0, false);
       });
 
-      const highlight = result.current.getHighlightAtTime(7);
+      const highlight = result.current.getHighlightAtTime(6); // 6 is within 5-7
       expect(highlight).toBeNull();
     });
 

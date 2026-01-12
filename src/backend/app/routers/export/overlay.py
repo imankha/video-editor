@@ -25,7 +25,15 @@ import subprocess
 import logging
 
 from ...websocket import export_progress, manager
-from ...database import get_db_connection, get_final_videos_path
+from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path
+from ...highlight_transform import (
+    transform_all_regions_to_raw,
+    transform_all_regions_to_working,
+)
+from ...services.image_extractor import (
+    extract_player_images_for_region,
+    list_highlight_images,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -460,6 +468,10 @@ async def save_overlay_data(
     Called by frontend auto-save when user modifies highlights in Overlay mode.
     Saves to working_videos table for the project's current working video.
 
+    Also transforms and saves highlight data to source raw_clips for cross-project
+    reuse. The transformation converts from working video space to raw clip space,
+    accounting for crop, trim, and speed changes.
+
     Request (form data):
     - highlights_data: JSON string of highlight regions
     - text_overlays: JSON string of text overlay configs
@@ -468,6 +480,7 @@ async def save_overlay_data(
     Response:
     - success: boolean
     - saved_at: timestamp
+    - raw_clips_updated: number of raw clips updated with defaults
     """
     logger.info(f"[Overlay Data] Saving for project {project_id}")
 
@@ -498,15 +511,238 @@ async def save_overlay_data(
             WHERE id = ?
         """, (highlights_data, text_overlays, effect_type, project['working_video_id']))
 
+        # Transform and save highlight data to source raw_clips
+        raw_clips_updated = 0
+
+        if highlights_data and highlights_data != "[]":
+            try:
+                regions = json.loads(highlights_data)
+
+                if regions:
+                    raw_clips_updated = await _save_highlights_to_raw_clips(
+                        project_id=project_id,
+                        regions=regions,
+                        cursor=cursor
+                    )
+            except json.JSONDecodeError as e:
+                logger.warning(f"[Overlay Data] Failed to parse highlights: {e}")
+
         conn.commit()
 
-        logger.info(f"[Overlay Data] Saved for working_video {project['working_video_id']}")
+        logger.info(f"[Overlay Data] Saved for working_video {project['working_video_id']}, "
+                   f"updated {raw_clips_updated} raw_clips")
 
         return JSONResponse({
             'success': True,
             'saved_at': datetime.now().isoformat(),
-            'working_video_id': project['working_video_id']
+            'working_video_id': project['working_video_id'],
+            'raw_clips_updated': raw_clips_updated
         })
+
+
+async def _save_highlights_to_raw_clips(
+    project_id: int,
+    regions: list,
+    cursor
+) -> int:
+    """
+    Transform highlight regions to raw clip space and save to raw_clips.
+
+    Returns the number of raw clips updated.
+    """
+    # Get working clips with framing data and raw clip info
+    cursor.execute("""
+        SELECT wc.id, wc.raw_clip_id, wc.crop_data, wc.segments_data,
+               rc.filename as raw_filename
+        FROM working_clips wc
+        JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+        WHERE wc.project_id = ? AND wc.raw_clip_id IS NOT NULL
+    """, (project_id,))
+
+    working_clips = cursor.fetchall()
+
+    if not working_clips:
+        logger.info("[Overlay Data] No working clips with raw_clip_id found")
+        return 0
+
+    # Get working video dimensions
+    cursor.execute("""
+        SELECT wv.filename
+        FROM working_videos wv
+        JOIN projects p ON p.working_video_id = wv.id
+        WHERE p.id = ?
+    """, (project_id,))
+    wv_result = cursor.fetchone()
+
+    # Default dimensions if we can't determine from video
+    working_video_dims = {'width': 1080, 'height': 1920}
+
+    if wv_result:
+        # Try to get actual dimensions from the working video file
+        import cv2
+        from ...database import get_working_videos_path
+        wv_path = get_working_videos_path() / wv_result['filename']
+        if wv_path.exists():
+            cap = cv2.VideoCapture(str(wv_path))
+            if cap.isOpened():
+                working_video_dims = {
+                    'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                    'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                }
+                cap.release()
+
+    logger.info(f"[Overlay Data] Working video dimensions: {working_video_dims}")
+
+    clips_updated = 0
+
+    for clip in working_clips:
+        raw_clip_id = clip['raw_clip_id']
+        raw_filename = clip['raw_filename']
+
+        # Parse framing data
+        crop_keyframes = []
+        segments_data = {}
+
+        if clip['crop_data']:
+            try:
+                crop_keyframes = json.loads(clip['crop_data'])
+            except json.JSONDecodeError:
+                pass
+
+        if clip['segments_data']:
+            try:
+                segments_data = json.loads(clip['segments_data'])
+            except json.JSONDecodeError:
+                pass
+
+        # Transform regions to raw clip space
+        raw_regions = transform_all_regions_to_raw(
+            regions=regions,
+            crop_keyframes=crop_keyframes,
+            segments_data=segments_data,
+            working_video_dims=working_video_dims,
+            framerate=30.0
+        )
+
+        if not raw_regions:
+            logger.info(f"[Overlay Data] No regions transformed for raw_clip {raw_clip_id}")
+            continue
+
+        # Extract player images for each region
+        raw_clip_path = get_raw_clips_path() / raw_filename
+
+        for region in raw_regions:
+            if raw_clip_path.exists():
+                region['keyframes'] = extract_player_images_for_region(
+                    video_path=str(raw_clip_path),
+                    raw_clip_id=raw_clip_id,
+                    keyframes=region['keyframes'],
+                    framerate=30.0
+                )
+
+        # Save to raw_clips
+        cursor.execute("""
+            UPDATE raw_clips
+            SET default_highlight_regions = ?
+            WHERE id = ?
+        """, (json.dumps(raw_regions), raw_clip_id))
+
+        clips_updated += 1
+        logger.info(f"[Overlay Data] Saved {len(raw_regions)} regions to raw_clip {raw_clip_id}")
+
+    return clips_updated
+
+
+async def _load_highlights_from_raw_clips(project_id: int, cursor) -> list:
+    """
+    Load highlight regions from raw_clips and transform to working video space.
+
+    Returns transformed highlight regions ready for the current project's framing.
+    """
+    # Get working clips with framing data and raw clip defaults
+    cursor.execute("""
+        SELECT wc.id, wc.raw_clip_id, wc.crop_data, wc.segments_data,
+               rc.default_highlight_regions
+        FROM working_clips wc
+        JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+        WHERE wc.project_id = ?
+          AND rc.default_highlight_regions IS NOT NULL
+          AND rc.default_highlight_regions != '[]'
+    """, (project_id,))
+
+    working_clips = cursor.fetchall()
+
+    if not working_clips:
+        return []
+
+    # Get working video dimensions
+    cursor.execute("""
+        SELECT wv.filename
+        FROM working_videos wv
+        JOIN projects p ON p.working_video_id = wv.id
+        WHERE p.id = ?
+    """, (project_id,))
+    wv_result = cursor.fetchone()
+
+    # Default dimensions if we can't determine from video
+    working_video_dims = {'width': 1080, 'height': 1920}
+
+    if wv_result:
+        import cv2
+        from ...database import get_working_videos_path
+        wv_path = get_working_videos_path() / wv_result['filename']
+        if wv_path.exists():
+            cap = cv2.VideoCapture(str(wv_path))
+            if cap.isOpened():
+                working_video_dims = {
+                    'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                    'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                }
+                cap.release()
+
+    all_transformed_regions = []
+
+    for clip in working_clips:
+        # Parse raw clip default highlights
+        raw_regions = []
+        if clip['default_highlight_regions']:
+            try:
+                raw_regions = json.loads(clip['default_highlight_regions'])
+            except json.JSONDecodeError:
+                continue
+
+        if not raw_regions:
+            continue
+
+        # Parse framing data
+        crop_keyframes = []
+        segments_data = {}
+
+        if clip['crop_data']:
+            try:
+                crop_keyframes = json.loads(clip['crop_data'])
+            except json.JSONDecodeError:
+                pass
+
+        if clip['segments_data']:
+            try:
+                segments_data = json.loads(clip['segments_data'])
+            except json.JSONDecodeError:
+                pass
+
+        # Transform regions from raw clip space to working video space
+        transformed_regions = transform_all_regions_to_working(
+            raw_regions=raw_regions,
+            crop_keyframes=crop_keyframes,
+            segments_data=segments_data,
+            working_video_dims=working_video_dims,
+            framerate=30.0
+        )
+
+        all_transformed_regions.extend(transformed_regions)
+
+    logger.info(f"[Overlay Data] Loaded {len(all_transformed_regions)} regions from raw_clips")
+    return all_transformed_regions
 
 
 @router.get("/projects/{project_id}/overlay-data")
@@ -515,12 +751,15 @@ async def get_overlay_data(project_id: int):
     Get saved overlay editing state for a project.
 
     Called by frontend when entering Overlay mode to restore previous edits.
+    If no project-specific overlay data exists, checks source raw_clips for
+    default highlight data (from previous projects using the same clips).
 
     Response:
     - highlights_data: Parsed JSON array of highlight regions
     - text_overlays: Parsed JSON array of text overlay configs
     - effect_type: 'original' | 'brightness_boost' | 'dark_overlay'
     - has_data: boolean indicating if any data exists
+    - from_raw_clip: boolean indicating if data came from raw_clip defaults
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -535,33 +774,81 @@ async def get_overlay_data(project_id: int):
         """, (project_id,))
         result = cursor.fetchone()
 
-        if not result:
-            return JSONResponse({
-                'highlights_data': [],
-                'text_overlays': [],
-                'effect_type': 'original',
-                'has_data': False
-            })
-
-        # Parse JSON strings
+        # Parse project-specific overlay data
         highlights = []
         text_overlays = []
+        effect_type = 'original'
+        from_raw_clip = False
 
-        if result['highlights_data']:
-            try:
-                highlights = json.loads(result['highlights_data'])
-            except json.JSONDecodeError:
-                pass
+        if result:
+            if result['highlights_data']:
+                try:
+                    highlights = json.loads(result['highlights_data'])
+                except json.JSONDecodeError:
+                    pass
 
-        if result['text_overlays']:
-            try:
-                text_overlays = json.loads(result['text_overlays'])
-            except json.JSONDecodeError:
-                pass
+            if result['text_overlays']:
+                try:
+                    text_overlays = json.loads(result['text_overlays'])
+                except json.JSONDecodeError:
+                    pass
+
+            effect_type = result['effect_type'] or 'original'
+
+        # If no project-specific highlights, check raw_clips for defaults
+        if not highlights:
+            highlights = await _load_highlights_from_raw_clips(project_id, cursor)
+            if highlights:
+                from_raw_clip = True
+                logger.info(f"[Overlay Data] Using default highlights from raw_clip for project {project_id}")
 
         return JSONResponse({
             'highlights_data': highlights,
             'text_overlays': text_overlays,
-            'effect_type': result['effect_type'] or 'original',
-            'has_data': len(highlights) > 0 or len(text_overlays) > 0
+            'effect_type': effect_type,
+            'has_data': len(highlights) > 0 or len(text_overlays) > 0,
+            'from_raw_clip': from_raw_clip
         })
+
+
+@router.get("/highlights/{filename}")
+async def get_highlight_image(filename: str):
+    """
+    Serve a highlight player image by filename.
+
+    Images are extracted from raw clips during highlight persistence
+    and stored in the highlights directory for debugging/inspection.
+
+    Response:
+    - PNG image file of the player bounding box
+    """
+    # Validate filename to prevent directory traversal
+    if '..' in filename or '/' in filename or '\\' in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    highlights_dir = get_highlights_path()
+    file_path = highlights_dir / filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    return FileResponse(
+        path=str(file_path),
+        media_type="image/png",
+        filename=filename
+    )
+
+
+@router.get("/highlights")
+async def list_highlights(raw_clip_id: int = None):
+    """
+    List all highlight images, optionally filtered by raw_clip_id.
+
+    Response:
+    - images: List of image info dicts with filename, url, raw_clip_id, frame, keyframe_index
+    """
+    images = list_highlight_images(raw_clip_id)
+    return JSONResponse({
+        'images': images,
+        'count': len(images)
+    })

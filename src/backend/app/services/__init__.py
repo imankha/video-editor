@@ -25,6 +25,12 @@ from app.services.transitions import (
     DissolveTransition,
     apply_transition,
 )
+from app.services.image_extractor import (
+    extract_player_image,
+    extract_player_images_for_region,
+    get_image_url,
+    list_highlight_images,
+)
 
 # Import LocalGPUProcessor to register it with the factory
 from app.services import local_gpu_processor  # noqa: F401
@@ -54,4 +60,9 @@ __all__ = [
     'FadeTransition',
     'DissolveTransition',
     'apply_transition',
+    # Image extraction for highlights
+    'extract_player_image',
+    'extract_player_images_for_region',
+    'get_image_url',
+    'list_highlight_images',
 ]
