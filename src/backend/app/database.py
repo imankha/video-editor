@@ -75,6 +75,10 @@ def get_clip_cache_path() -> Path:
     return get_user_data_path() / "clip_cache"
 
 
+def get_highlights_path() -> Path:
+    """Get the highlights directory path for player images (cross-project reuse)."""
+    return get_user_data_path() / "highlights"
+
 
 
 def ensure_directories():
@@ -91,6 +95,7 @@ def ensure_directories():
         get_downloads_path(),
         get_games_path(),
         get_clip_cache_path(),
+        get_highlights_path(),
     ]
     for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
@@ -130,6 +135,7 @@ def ensure_database():
                 notes TEXT,
                 start_time REAL,
                 end_time REAL,
+                default_highlight_regions TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -300,6 +306,8 @@ def ensure_database():
             "ALTER TABLE games ADD COLUMN mistake_count INTEGER DEFAULT 0",
             "ALTER TABLE games ADD COLUMN blunder_count INTEGER DEFAULT 0",
             "ALTER TABLE games ADD COLUMN aggregate_score INTEGER DEFAULT 0",
+            # Default highlight data for raw clips (cross-project reuse)
+            "ALTER TABLE raw_clips ADD COLUMN default_highlight_regions TEXT",
         ]
 
         for migration in migrations:
