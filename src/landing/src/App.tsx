@@ -23,6 +23,28 @@ function App() {
             Higher quality highlights in minutes.
           </p>
 
+          {/* Before/After Demo Video */}
+          <div className="flex justify-center mb-16 px-4">
+            <div className="relative w-full md:w-auto">
+              {/* Phone frame */}
+              <div className="bg-gray-900 rounded-[2rem] md:rounded-[3rem] p-2 md:p-3 shadow-2xl border-2 md:border-4 border-gray-700">
+                {/* Screen bezel - full width on mobile, 405x720 on desktop (50% bigger) */}
+                <div className="bg-black rounded-[1.5rem] md:rounded-[2.25rem] overflow-hidden w-full aspect-[9/16] md:w-[405px] md:h-[720px]">
+                  <video
+                    src="/before_after_demo.mp4"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
+              {/* Phone notch */}
+              <div className="absolute top-3 md:top-5 left-1/2 -translate-x-1/2 w-16 md:w-24 h-4 md:h-6 bg-gray-900 rounded-full"></div>
+            </div>
+          </div>
+
           {/* Features */}
           <div className="grid md:grid-cols-3 gap-8 mb-16">
             <div className="bg-white/5 backdrop-blur rounded-2xl p-8 text-center hover:bg-white/10 transition-colors">
