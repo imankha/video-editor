@@ -11,6 +11,18 @@ import { useGalleryStore } from '../stores/galleryStore';
 import { AppStateProvider } from '../contexts';
 import { API_BASE } from '../config';
 
+// Module-level variable to pass File object to AnnotateScreen
+// (File objects can't be serialized to sessionStorage)
+let pendingGameFile = null;
+
+export function getPendingGameFile() {
+  return pendingGameFile;
+}
+
+export function clearPendingGameFile() {
+  pendingGameFile = null;
+}
+
 /**
  * ProjectsScreen - Self-contained screen for Project Manager
  *
@@ -241,9 +253,11 @@ export function ProjectsScreen({
     }
   }, [onLoadGameProp]);
 
-  // Handle annotate (navigate to annotate mode)
-  // AnnotateScreen will show FileUpload component for file selection
-  const handleAnnotate = useCallback(() => {
+  // Handle annotate with file (navigate to annotate mode with a pre-selected file)
+  // The file is stored in module-level variable and picked up by AnnotateScreen
+  const handleAnnotateWithFile = useCallback((file) => {
+    console.log('[ProjectsScreen] Navigating to annotate with file:', file.name);
+    pendingGameFile = file;
     setEditorMode('annotate');
   }, [setEditorMode]);
 
@@ -280,7 +294,7 @@ export function ProjectsScreen({
           onSelectProjectWithMode={handleSelectProjectWithMode}
           onCreateProject={createProject}
           onDeleteProject={deleteProject}
-          onAnnotate={handleAnnotate}
+          onAnnotateWithFile={handleAnnotateWithFile}
           // Games props
           games={games}
           gamesLoading={gamesLoading}
@@ -295,6 +309,7 @@ export function ProjectsScreen({
           onOpenProject={(projectId) => {
             handleSelectProjectWithMode(projectId, { mode: 'overlay' });
           }}
+          onOpenGame={handleLoadGame}
         />
       </div>
     </AppStateProvider>

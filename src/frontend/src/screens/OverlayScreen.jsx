@@ -429,6 +429,8 @@ export function OverlayScreen({
     isDetectionLoading,
     isDetectionUploading,
     detectionError,
+    showPlayerBoxes,
+    togglePlayerBoxes,
     handlePlayerSelect,
     handleHighlightChange,
     handleHighlightComplete,
@@ -553,6 +555,8 @@ export function OverlayScreen({
       isDetectionLoading={isDetectionLoading}
       isDetectionUploading={isDetectionUploading}
       onPlayerSelect={handlePlayerSelect}
+      showPlayerBoxes={showPlayerBoxes}
+      onTogglePlayerBoxes={togglePlayerBoxes}
       // Zoom
       zoom={zoom}
       panOffset={panOffset}

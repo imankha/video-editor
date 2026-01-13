@@ -7,7 +7,8 @@ import { getAllTags } from '../constants/soccerTags';
  *
  * DATA MODEL:
  * - clipRegions: Array of clip region objects, each with:
- *   - id: unique identifier
+ *   - id: unique identifier (local, for React keys)
+ *   - rawClipId: backend raw_clips table ID (null until saved)
  *   - startTime: region start in seconds
  *   - endTime: region end in seconds (calculated from startTime + duration)
  *   - name: clip name (auto-generated from rating + tags, or user-provided)
@@ -426,8 +427,10 @@ export default function useAnnotate(videoMetadata) {
 
     // Create new clip region
     // NOTE: name is only set if explicitly provided - UI derives display name from rating+tags
+    // rawClipId starts as null - set after backend save completes
     const newRegion = {
       id: generateClipId(),
+      rawClipId: null,
       startTime: clampedStart,
       endTime: Math.min(actualEndTime, duration),
       name: name || '',
@@ -509,9 +512,26 @@ export default function useAnnotate(videoMetadata) {
         updated.tags = updates.tags;
       }
 
+      // Handle rawClipId update (set after backend save)
+      if (updates.rawClipId !== undefined) {
+        updated.rawClipId = updates.rawClipId;
+      }
+
       return updated;
     }));
   }, [duration]);
+
+  /**
+   * Set the rawClipId for a region after backend save completes
+   * @param {string} regionId - Local region ID
+   * @param {number} rawClipId - Backend raw_clips table ID
+   */
+  const setRawClipId = useCallback((regionId, rawClipId) => {
+    setClipRegions(prev => prev.map(region => {
+      if (region.id !== regionId) return region;
+      return { ...region, rawClipId };
+    }));
+  }, []);
 
   /**
    * Delete a clip region
@@ -656,6 +676,7 @@ export default function useAnnotate(videoMetadata) {
 
       return {
         id: generateClipId(),
+        rawClipId: annotation.rawClipId || annotation.raw_clip_id || null,
         startTime: Math.max(0, Math.min(startTime, effectiveDuration - MIN_CLIP_DURATION)),
         endTime: Math.min(endTime, effectiveDuration),
         name: annotation.name || '',
@@ -711,6 +732,7 @@ export default function useAnnotate(videoMetadata) {
     moveRegionStart,
     moveRegionEnd,
     importAnnotations,
+    setRawClipId,
 
     // Queries
     getRegionAtTime,

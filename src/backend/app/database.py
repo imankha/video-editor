@@ -124,7 +124,8 @@ def ensure_database():
     cursor = conn.cursor()
 
     try:
-        # Raw clips - extracted from Annotate mode (4+ star only)
+        # Raw clips - extracted from Annotate mode (all clips saved in real-time)
+        # game_id links to source game, auto_project_id tracks 5-star auto-projects
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS raw_clips (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,8 +136,12 @@ def ensure_database():
                 notes TEXT,
                 start_time REAL,
                 end_time REAL,
+                game_id INTEGER,
+                auto_project_id INTEGER,
                 default_highlight_regions TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (game_id) REFERENCES games(id),
+                FOREIGN KEY (auto_project_id) REFERENCES projects(id)
             )
         """)
 
@@ -202,7 +207,7 @@ def ensure_database():
         # Games - store annotated game footage for later project creation
         # video_filename is NULL until video is uploaded (allows instant game creation)
         # Aggregate columns cache annotation counts for fast listing without parsing
-        # Annotations are stored in the annotations table (linked by game_id)
+        # Clip annotations are stored in raw_clips table (linked by game_id)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -219,23 +224,6 @@ def ensure_database():
             )
         """)
 
-        # Annotations - individual marked regions in game footage
-        # Replaces TSV file storage for better queryability and performance
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS annotations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                game_id INTEGER NOT NULL,
-                start_time REAL NOT NULL,
-                end_time REAL NOT NULL,
-                name TEXT DEFAULT '',
-                rating INTEGER DEFAULT 3 CHECK (rating >= 1 AND rating <= 5),
-                tags TEXT DEFAULT '[]',
-                notes TEXT DEFAULT '',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
-            )
-        """)
 
         # Export jobs - track background export tasks for durability
         # Progress is NOT stored here (ephemeral, WebSocket only)
@@ -330,6 +318,15 @@ def ensure_database():
             "ALTER TABLE games ADD COLUMN aggregate_score INTEGER DEFAULT 0",
             # Default highlight data for raw clips (cross-project reuse)
             "ALTER TABLE raw_clips ADD COLUMN default_highlight_regions TEXT",
+            # Raw clips source tracking (for real-time save from annotation)
+            "ALTER TABLE raw_clips ADD COLUMN game_id INTEGER",
+            "ALTER TABLE raw_clips ADD COLUMN auto_project_id INTEGER",
+            # Gallery source type tracking (brilliant_clip, custom_project, annotated_game)
+            "ALTER TABLE final_videos ADD COLUMN source_type TEXT",
+            # Source game ID for annotated exports (to navigate back to annotate mode)
+            "ALTER TABLE final_videos ADD COLUMN game_id INTEGER",
+            # Name for annotated exports (when no project is associated)
+            "ALTER TABLE final_videos ADD COLUMN name TEXT",
         ]
 
         for migration in migrations:
@@ -417,14 +414,15 @@ def ensure_database():
                 CREATE INDEX IF NOT EXISTS idx_final_videos_project_version
                 ON final_videos(project_id, version DESC)
             """)
-            # Indexes for annotations table
+            # Index for raw_clips game filtering
             cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_annotations_game_id
-                ON annotations(game_id)
+                CREATE INDEX IF NOT EXISTS idx_raw_clips_game_id
+                ON raw_clips(game_id)
             """)
+            # Composite index for natural key lookup (game_id + end_time)
             cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_annotations_rating
-                ON annotations(rating)
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_clips_game_end_time
+                ON raw_clips(game_id, end_time)
             """)
         except sqlite3.OperationalError:
             # Index already exists, ignore

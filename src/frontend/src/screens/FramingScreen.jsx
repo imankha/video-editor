@@ -324,6 +324,8 @@ export function FramingScreen({
           loadedClips.map(c => ({
             id: c.id,
             filename: c.filename,
+            name: c.name,  // Human-readable name from raw_clips
+            notes: c.notes,  // Notes from raw_clips
             duration: c.duration,
             segments_data: c.segments_data,
             crop_data: c.crop_data,

@@ -2,11 +2,11 @@
 Clip management endpoints.
 
 Two types of clips:
-1. Raw Clips - Extracted from Annotate mode (4+ star), stored in library
+1. Raw Clips - Saved in real-time during annotation, stored in library
 2. Working Clips - Assigned to projects for editing
 
 Files are stored in:
-- raw_clips/ - Clips from Annotate export
+- raw_clips/ - Clips extracted from annotated games
 - uploads/ - Clips uploaded directly to projects
 """
 
@@ -23,8 +23,10 @@ from app.database import (
     get_db_connection,
     get_raw_clips_path,
     get_uploads_path,
+    get_games_path,
 )
 from app.queries import latest_working_clips_subquery, derive_clip_name
+from app.services.ffmpeg_service import extract_clip
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/clips", tags=["clips"])
@@ -52,7 +54,38 @@ class RawClipResponse(BaseModel):
     notes: Optional[str] = None
     start_time: Optional[float] = None
     end_time: Optional[float] = None
+    game_id: Optional[int] = None
+    auto_project_id: Optional[int] = None
     created_at: str
+
+
+class RawClipCreate(BaseModel):
+    """Request body for creating a raw clip during annotation."""
+    game_id: int
+    start_time: float
+    end_time: float
+    name: str = ""
+    rating: int = 3
+    tags: List[str] = []
+    notes: str = ""
+
+
+class RawClipUpdate(BaseModel):
+    """Request body for updating a raw clip."""
+    name: Optional[str] = None
+    rating: Optional[int] = None
+    tags: Optional[List[str]] = None
+    notes: Optional[str] = None
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+
+
+class RawClipSaveResponse(BaseModel):
+    """Response from creating a raw clip."""
+    raw_clip_id: int
+    filename: str
+    project_created: bool = False
+    project_id: Optional[int] = None
 
 
 class WorkingClipCreate(BaseModel):
@@ -84,15 +117,30 @@ class WorkingClipUpdate(BaseModel):
 # ============ RAW CLIPS (LIBRARY) ============
 
 @router.get("/raw", response_model=List[RawClipResponse])
-async def list_raw_clips():
-    """List all raw clips in the library."""
+async def list_raw_clips(game_id: Optional[int] = None, min_rating: Optional[int] = None):
+    """List all raw clips in the library, optionally filtered by game and/or rating."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, filename, rating, tags, name, notes, start_time, end_time, created_at
+
+        query = """
+            SELECT id, filename, rating, tags, name, notes, start_time, end_time,
+                   game_id, auto_project_id, created_at
             FROM raw_clips
-            ORDER BY created_at DESC
-        """)
+            WHERE 1=1
+        """
+        params = []
+
+        if game_id is not None:
+            query += " AND game_id = ?"
+            params.append(game_id)
+
+        if min_rating is not None:
+            query += " AND rating >= ?"
+            params.append(min_rating)
+
+        query += " ORDER BY created_at DESC"
+
+        cursor.execute(query, params)
         clips = cursor.fetchall()
 
         result = []
@@ -107,6 +155,8 @@ async def list_raw_clips():
                 notes=clip['notes'],
                 start_time=clip['start_time'],
                 end_time=clip['end_time'],
+                game_id=clip['game_id'],
+                auto_project_id=clip['auto_project_id'],
                 created_at=clip['created_at']
             ))
         return result
@@ -118,7 +168,8 @@ async def get_raw_clip(clip_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, filename, rating, tags, name, notes, start_time, end_time, created_at
+            SELECT id, filename, rating, tags, name, notes, start_time, end_time,
+                   game_id, auto_project_id, created_at
             FROM raw_clips WHERE id = ?
         """, (clip_id,))
         clip = cursor.fetchone()
@@ -136,6 +187,8 @@ async def get_raw_clip(clip_id: int):
             notes=clip['notes'],
             start_time=clip['start_time'],
             end_time=clip['end_time'],
+            game_id=clip['game_id'],
+            auto_project_id=clip['auto_project_id'],
             created_at=clip['created_at']
         )
 
@@ -160,6 +213,348 @@ async def get_raw_clip_file(clip_id: int):
             media_type="video/mp4",
             filename=clip['filename']
         )
+
+
+def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> int:
+    """Create a 9:16 project for a 5-star clip and return the project ID."""
+    # Create the project
+    project_name = clip_name if clip_name else f"Clip {raw_clip_id}"
+    cursor.execute("""
+        INSERT INTO projects (name, aspect_ratio)
+        VALUES (?, '9:16')
+    """, (project_name,))
+    project_id = cursor.lastrowid
+
+    # Add the raw clip as a working clip in this project
+    cursor.execute("""
+        INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version)
+        VALUES (?, ?, 0, 1)
+    """, (project_id, raw_clip_id))
+
+    # Update the raw clip with the auto_project_id
+    cursor.execute("""
+        UPDATE raw_clips SET auto_project_id = ? WHERE id = ?
+    """, (project_id, raw_clip_id))
+
+    logger.info(f"Created auto-project {project_id} for 5-star clip {raw_clip_id}")
+    return project_id
+
+
+def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
+    """Delete an auto-created project if it hasn't been modified."""
+    # Check if project has been modified (has working video, final video, or multiple clips)
+    cursor.execute("""
+        SELECT p.working_video_id, p.final_video_id,
+               (SELECT COUNT(*) FROM working_clips WHERE project_id = p.id) as clip_count
+        FROM projects p WHERE p.id = ?
+    """, (project_id,))
+    project = cursor.fetchone()
+
+    if not project:
+        return False
+
+    # Don't delete if project has been worked on
+    if project['working_video_id'] or project['final_video_id'] or project['clip_count'] > 1:
+        logger.info(f"Keeping modified auto-project {project_id}")
+        return False
+
+    # Delete the working clip first (foreign key constraint)
+    cursor.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
+
+    # Delete the project
+    cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+
+    # Clear the auto_project_id from the raw clip
+    cursor.execute("""
+        UPDATE raw_clips SET auto_project_id = NULL WHERE id = ?
+    """, (raw_clip_id,))
+
+    logger.info(f"Deleted unmodified auto-project {project_id}")
+    return True
+
+
+@router.post("/raw/save", response_model=RawClipSaveResponse)
+async def save_raw_clip(clip_data: RawClipCreate):
+    """
+    Save a raw clip during annotation (real-time save).
+
+    Extracts the clip from the game video and saves it to the library.
+    If the clip is rated 5 stars, automatically creates a 9:16 project for it.
+
+    Idempotent: If a clip with the same game_id + end_time already exists,
+    returns that clip's ID instead of creating a duplicate.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Check if clip already exists (lookup by game_id + end_time as natural key)
+        cursor.execute("""
+            SELECT id, filename, rating, auto_project_id FROM raw_clips
+            WHERE game_id = ? AND end_time = ?
+        """, (clip_data.game_id, clip_data.end_time))
+        existing = cursor.fetchone()
+
+        if existing:
+            # Clip already exists - update it with new data and return existing ID
+            logger.info(f"Found existing clip {existing['id']} for game {clip_data.game_id} at end_time {clip_data.end_time}")
+
+            # Update the existing clip with any new metadata
+            cursor.execute("""
+                UPDATE raw_clips SET
+                    name = ?,
+                    rating = ?,
+                    tags = ?,
+                    notes = ?,
+                    start_time = ?
+                WHERE id = ?
+            """, (
+                clip_data.name,
+                clip_data.rating,
+                json.dumps(clip_data.tags),
+                clip_data.notes,
+                clip_data.start_time,
+                existing['id']
+            ))
+
+            # Handle 5-star project sync for existing clip
+            old_rating = existing['rating']
+            new_rating = clip_data.rating
+            project_created = False
+            project_id = existing['auto_project_id']
+
+            if new_rating == 5 and old_rating != 5 and not project_id:
+                # Upgraded to 5-star, create auto-project
+                project_id = _create_auto_project_for_clip(cursor, existing['id'], clip_data.name)
+                project_created = True
+            elif new_rating != 5 and old_rating == 5 and project_id:
+                # Downgraded from 5-star, delete auto-project
+                _delete_auto_project(cursor, existing['id'], project_id)
+                project_id = None
+
+            conn.commit()
+
+            return RawClipSaveResponse(
+                raw_clip_id=existing['id'],
+                filename=existing['filename'],
+                project_created=project_created,
+                project_id=project_id
+            )
+
+        # Get the game's video file
+        cursor.execute("""
+            SELECT video_filename FROM games WHERE id = ?
+        """, (clip_data.game_id,))
+        game = cursor.fetchone()
+
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        if not game['video_filename']:
+            raise HTTPException(status_code=400, detail="Game has no video file")
+
+        game_video_path = get_games_path() / game['video_filename']
+        if not game_video_path.exists():
+            raise HTTPException(status_code=404, detail="Game video file not found")
+
+        # Generate unique filename for the clip
+        clip_filename = f"{uuid.uuid4().hex[:12]}.mp4"
+        clip_output_path = get_raw_clips_path() / clip_filename
+
+        # Extract the clip using FFmpeg
+        success = extract_clip(
+            input_path=str(game_video_path),
+            output_path=str(clip_output_path),
+            start_time=clip_data.start_time,
+            end_time=clip_data.end_time,
+            copy_codec=True  # Fast extraction without re-encoding
+        )
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to extract clip")
+
+        # Save to database
+        cursor.execute("""
+            INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            clip_filename,
+            clip_data.rating,
+            json.dumps(clip_data.tags),
+            clip_data.name,
+            clip_data.notes,
+            clip_data.start_time,
+            clip_data.end_time,
+            clip_data.game_id
+        ))
+        raw_clip_id = cursor.lastrowid
+
+        # If 5-star clip, create auto-project
+        project_created = False
+        project_id = None
+        if clip_data.rating == 5:
+            project_id = _create_auto_project_for_clip(cursor, raw_clip_id, clip_data.name)
+            project_created = True
+
+        conn.commit()
+        logger.info(f"Saved raw clip {raw_clip_id} from game {clip_data.game_id}")
+
+        return RawClipSaveResponse(
+            raw_clip_id=raw_clip_id,
+            filename=clip_filename,
+            project_created=project_created,
+            project_id=project_id
+        )
+
+
+@router.put("/raw/{clip_id}")
+async def update_raw_clip(clip_id: int, update: RawClipUpdate):
+    """
+    Update a raw clip's metadata.
+
+    Handles 5-star sync:
+    - If rating changed TO 5: Create auto-project
+    - If rating changed FROM 5: Delete auto-project (if unmodified)
+    - If duration changed and has auto-project: Re-extract clip
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Get current clip data
+        cursor.execute("""
+            SELECT id, filename, rating, tags, name, notes, start_time, end_time,
+                   game_id, auto_project_id
+            FROM raw_clips WHERE id = ?
+        """, (clip_id,))
+        clip = cursor.fetchone()
+
+        if not clip:
+            raise HTTPException(status_code=404, detail="Raw clip not found")
+
+        old_rating = clip['rating']
+        new_rating = update.rating if update.rating is not None else old_rating
+        old_start = clip['start_time']
+        old_end = clip['end_time']
+        new_start = update.start_time if update.start_time is not None else old_start
+        new_end = update.end_time if update.end_time is not None else old_end
+        auto_project_id = clip['auto_project_id']
+        game_id = clip['game_id']
+
+        # Check if duration changed
+        duration_changed = (new_start != old_start or new_end != old_end)
+
+        # Handle rating change: 5 -> non-5
+        if old_rating == 5 and new_rating != 5 and auto_project_id:
+            _delete_auto_project(cursor, auto_project_id, clip_id)
+            auto_project_id = None
+
+        # Handle rating change: non-5 -> 5
+        project_created = False
+        if old_rating != 5 and new_rating == 5 and not auto_project_id:
+            clip_name = update.name if update.name is not None else clip['name']
+            auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name)
+            project_created = True
+
+        # Handle duration change: re-extract clip if needed
+        if duration_changed and game_id:
+            cursor.execute("SELECT video_filename FROM games WHERE id = ?", (game_id,))
+            game = cursor.fetchone()
+            if game and game['video_filename']:
+                game_video_path = get_games_path() / game['video_filename']
+                clip_output_path = get_raw_clips_path() / clip['filename']
+
+                if game_video_path.exists():
+                    # Re-extract the clip with new timing
+                    success = extract_clip(
+                        input_path=str(game_video_path),
+                        output_path=str(clip_output_path),
+                        start_time=new_start,
+                        end_time=new_end,
+                        copy_codec=True
+                    )
+                    if not success:
+                        logger.error(f"Failed to re-extract clip {clip_id}")
+
+        # Build update query
+        updates = []
+        params = []
+
+        if update.name is not None:
+            updates.append("name = ?")
+            params.append(update.name)
+        if update.rating is not None:
+            updates.append("rating = ?")
+            params.append(update.rating)
+        if update.tags is not None:
+            updates.append("tags = ?")
+            params.append(json.dumps(update.tags))
+        if update.notes is not None:
+            updates.append("notes = ?")
+            params.append(update.notes)
+        if update.start_time is not None:
+            updates.append("start_time = ?")
+            params.append(update.start_time)
+        if update.end_time is not None:
+            updates.append("end_time = ?")
+            params.append(update.end_time)
+
+        if updates:
+            params.append(clip_id)
+            cursor.execute(f"""
+                UPDATE raw_clips SET {', '.join(updates)} WHERE id = ?
+            """, params)
+
+        conn.commit()
+        logger.info(f"Updated raw clip {clip_id}")
+
+        return {
+            "success": True,
+            "project_created": project_created,
+            "project_id": auto_project_id
+        }
+
+
+@router.delete("/raw/{clip_id}")
+async def delete_raw_clip(clip_id: int):
+    """
+    Delete a raw clip from the library.
+
+    Also deletes:
+    - The video file from disk
+    - Any auto-created project (if unmodified)
+    - Working clips that reference this raw clip
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Get clip data
+        cursor.execute("""
+            SELECT filename, auto_project_id FROM raw_clips WHERE id = ?
+        """, (clip_id,))
+        clip = cursor.fetchone()
+
+        if not clip:
+            raise HTTPException(status_code=404, detail="Raw clip not found")
+
+        # Delete auto-project if exists and unmodified
+        if clip['auto_project_id']:
+            _delete_auto_project(cursor, clip['auto_project_id'], clip_id)
+
+        # Delete working clips that reference this raw clip
+        cursor.execute("DELETE FROM working_clips WHERE raw_clip_id = ?", (clip_id,))
+
+        # Delete the raw clip record
+        cursor.execute("DELETE FROM raw_clips WHERE id = ?", (clip_id,))
+
+        conn.commit()
+
+        # Delete the file from disk
+        file_path = get_raw_clips_path() / clip['filename']
+        if file_path.exists():
+            os.remove(file_path)
+            logger.info(f"Deleted clip file: {file_path}")
+
+        logger.info(f"Deleted raw clip {clip_id}")
+        return {"success": True}
 
 
 # ============ WORKING CLIPS (PROJECT CLIPS) ============

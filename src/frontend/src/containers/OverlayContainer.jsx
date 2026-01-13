@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo } from 'react';
+import { useEffect, useCallback, useMemo, useState } from 'react';
 import { OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay } from '../modes/overlay';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { API_BASE } from '../config';
@@ -138,6 +138,13 @@ export function OverlayContainer({
 
   // Player detection for click-to-track feature
   const playerDetectionEnabled = editorMode === 'overlay' && isTimeInEnabledRegion(currentTime);
+
+  // Toggle for showing/hiding player detection boxes (default: visible)
+  const [showPlayerBoxes, setShowPlayerBoxes] = useState(true);
+
+  const togglePlayerBoxes = useCallback(() => {
+    setShowPlayerBoxes(prev => !prev);
+  }, []);
 
   const {
     detections: playerDetections,
@@ -383,6 +390,8 @@ export function OverlayContainer({
     isDetectionLoading,
     isDetectionUploading,
     detectionError,
+    showPlayerBoxes,
+    togglePlayerBoxes,
 
     // Derived state
     hasFramingEdits,

@@ -142,13 +142,18 @@ export function ClipSelectorSidebar({
           <span className="ml-auto text-xs text-gray-500">{clips.length}</span>
         </div>
 
-        {/* Transition selector */}
+        {/* Transition selector - disabled for single clip */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">Transition:</span>
+          <span className={`text-xs ${clips.length <= 1 ? 'text-gray-600' : 'text-gray-400'}`}>Transition:</span>
           <select
             value={globalTransition.type}
             onChange={handleTransitionTypeChange}
-            className="flex-1 bg-gray-800 text-white text-xs rounded px-2 py-1 border border-gray-600 focus:border-purple-500 focus:outline-none"
+            disabled={clips.length <= 1}
+            className={`flex-1 text-xs rounded px-2 py-1 border focus:outline-none ${
+              clips.length <= 1
+                ? 'bg-gray-800/50 text-gray-500 border-gray-700 cursor-not-allowed'
+                : 'bg-gray-800 text-white border-gray-600 focus:border-purple-500'
+            }`}
           >
             <option value="cut">Cut</option>
             <option value="fade">Fade</option>

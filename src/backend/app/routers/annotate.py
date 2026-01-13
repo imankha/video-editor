@@ -23,7 +23,7 @@ import re
 import shutil
 import asyncio
 
-from app.database import get_db_connection, get_raw_clips_path, get_downloads_path, get_games_path, ensure_directories
+from app.database import get_db_connection, get_raw_clips_path, get_downloads_path, get_games_path, get_final_videos_path, ensure_directories
 from app.services.clip_cache import get_clip_cache
 
 logger = logging.getLogger(__name__)
@@ -751,6 +751,36 @@ async def export_clips(
                         'filename': compilation_filename,
                         'url': f"/api/annotate/download/{compilation_filename}"
                     }
+
+                    # Add to gallery (final_videos table)
+                    # No project is created - annotated exports are standalone
+                    with get_db_connection() as conn:
+                        cursor = conn.cursor()
+
+                        # Get game name for the video title
+                        game_name = video_base
+                        if game_id:
+                            cursor.execute("SELECT name FROM games WHERE id = ?", (int(game_id),))
+                            game_row = cursor.fetchone()
+                            if game_row:
+                                game_name = game_row['name']
+
+                        # Copy compilation to final_videos folder
+                        final_filename = f"{uuid.uuid4().hex[:12]}.mp4"
+                        final_path = get_final_videos_path() / final_filename
+                        shutil.copy2(compilation_path, final_path)
+
+                        # Add to final_videos table with name (no project)
+                        # Use project_id = 0 as marker for "no project"
+                        annotated_name = f"{game_name} (Annotated)"
+                        cursor.execute("""
+                            INSERT INTO final_videos (project_id, filename, version, source_type, game_id, name)
+                            VALUES (0, ?, 1, 'annotated_game', ?, ?)
+                        """, (final_filename, int(game_id) if game_id else None, annotated_name))
+                        final_video_id = cursor.lastrowid
+
+                        conn.commit()
+                        logger.info(f"Added annotated export to gallery: final_video={final_video_id}, name={annotated_name}")
 
         if should_save_to_db:
             logger.info(f"Export complete: {len(created_raw_clips)} clips saved, {len(created_projects)} projects created")

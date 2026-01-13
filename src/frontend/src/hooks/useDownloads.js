@@ -15,13 +15,15 @@ const API_BASE_URL = `${API_BASE}/api`;
  * - downloads: List of all final videos
  * - loadState: Current loading state
  * - count: Quick count for header badge
- * - Actions: fetchDownloads, deleteDownload, downloadFile
+ * - filter: Current source_type filter
+ * - Actions: fetchDownloads, deleteDownload, downloadFile, setFilter
  */
 export function useDownloads(isOpen = false) {
   const [downloads, setDownloads] = useState([]);
   const [loadState, setLoadState] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'error'
   const [count, setCount] = useState(0);
   const [error, setError] = useState(null);
+  const [filter, setFilter] = useState(null); // null | 'brilliant_clip' | 'custom_project' | 'annotated_game'
 
   // AbortController ref for cancelling requests
   const abortControllerRef = useRef(null);
@@ -29,8 +31,9 @@ export function useDownloads(isOpen = false) {
   /**
    * Fetch all downloads from the API
    * Race-safe: cancels previous request if still pending
+   * @param {string|null} sourceType - Filter by source type
    */
-  const fetchDownloads = useCallback(async () => {
+  const fetchDownloads = useCallback(async (sourceType = null) => {
     // Cancel any pending request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -44,7 +47,13 @@ export function useDownloads(isOpen = false) {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/downloads`, {
+      // Build URL with optional filter
+      let url = `${API_BASE_URL}/downloads`;
+      if (sourceType) {
+        url += `?source_type=${encodeURIComponent(sourceType)}`;
+      }
+
+      const response = await fetch(url, {
         signal: currentController.signal
       });
 
@@ -201,10 +210,10 @@ export function useDownloads(isOpen = false) {
     return groups;
   }, [downloads]);
 
-  // Fetch downloads when panel opens
+  // Fetch downloads when panel opens or filter changes
   useEffect(() => {
     if (isOpen) {
-      fetchDownloads();
+      fetchDownloads(filter);
     }
 
     // Cleanup: abort pending request on unmount or close
@@ -213,7 +222,7 @@ export function useDownloads(isOpen = false) {
         abortControllerRef.current.abort();
       }
     };
-  }, [isOpen, fetchDownloads]);
+  }, [isOpen, filter, fetchDownloads]);
 
   // Fetch count on mount (for badge)
   useEffect(() => {
@@ -226,6 +235,7 @@ export function useDownloads(isOpen = false) {
     loadState,
     count,
     error,
+    filter,
     hasDownloads: downloads.length > 0,
 
     // Computed
@@ -237,6 +247,7 @@ export function useDownloads(isOpen = false) {
     deleteDownload,
     downloadFile,
     getDownloadUrl,
+    setFilter,
 
     // Utilities
     formatFileSize,
