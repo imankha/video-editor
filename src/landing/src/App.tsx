@@ -1,12 +1,26 @@
+import { useRef } from 'react'
 import { LogoWithText } from './components/Logo'
 import { TbFocusCentered } from 'react-icons/tb'
 import { HiSparkles } from 'react-icons/hi2'
 import { FaInstagram, FaTiktok } from 'react-icons/fa'
-import { MdVideoLibrary } from 'react-icons/md'
+import { MdVideoLibrary, MdFullscreen } from 'react-icons/md'
 import { BiSolidUserVoice } from 'react-icons/bi'
 import { HiTag, HiStar } from 'react-icons/hi2'
 
 function App() {
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  const handleFullscreen = () => {
+    const video = videoRef.current
+    if (video) {
+      if (video.requestFullscreen) {
+        video.requestFullscreen()
+      } else if ((video as any).webkitEnterFullscreen) {
+        // iOS Safari
+        (video as any).webkitEnterFullscreen()
+      }
+    }
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Hero Section */}
@@ -29,8 +43,9 @@ function App() {
               {/* Phone frame - no padding on mobile for full width */}
               <div className="bg-gray-900 rounded-[1.5rem] md:rounded-[3rem] p-1.5 md:p-3 shadow-2xl border md:border-4 border-gray-700 mx-2 md:mx-0">
                 {/* Screen bezel - nearly full width on mobile, 405x720 on desktop */}
-                <div className="bg-black rounded-[1rem] md:rounded-[2.25rem] overflow-hidden w-full aspect-[9/16] md:w-[405px] md:h-[720px]">
+                <div className="bg-black rounded-[1rem] md:rounded-[2.25rem] overflow-hidden w-full aspect-[9/16] md:w-[405px] md:h-[720px] relative group">
                   <video
+                    ref={videoRef}
                     src="/before_after_demo.mp4"
                     autoPlay
                     loop
@@ -38,6 +53,14 @@ function App() {
                     playsInline
                     className="w-full h-full object-cover"
                   />
+                  {/* Fullscreen button - visible on mobile, shows on hover for desktop */}
+                  <button
+                    onClick={handleFullscreen}
+                    className="absolute bottom-4 right-4 p-2 bg-black/60 rounded-full text-white md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                    aria-label="Fullscreen"
+                  >
+                    <MdFullscreen className="w-6 h-6" />
+                  </button>
                 </div>
               </div>
               {/* Phone notch */}
