@@ -4,6 +4,7 @@ import { useAnnotateState, useAnnotate, AnnotateMode, ClipsSidePanel, NotesOverl
 import { FileUpload } from '../components/FileUpload';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore } from '../stores';
+import { useRawClipSave } from '../hooks/useRawClipSave';
 import { API_BASE } from '../config';
 
 /**
@@ -39,14 +40,10 @@ export function AnnotateContainer({
 
   // Project management
   fetchProjects,
-  projectCreationSettings,
 
   // Navigation
   onBackToProjects,
   setEditorMode,
-
-  // Settings modal
-  onOpenProjectCreationSettings,
 
   // Downloads
   downloadsCount,
@@ -91,13 +88,22 @@ export function AnnotateContainer({
     reset: resetAnnotate,
     addClipRegion,
     updateClipRegion,
-    deleteClipRegion,
+    deleteClipRegion: deleteClipRegionLocal,
     selectRegion: selectAnnotateRegion,
     getRegionAtTime: getAnnotateRegionAtTime,
     getExportData: getAnnotateExportData,
     importAnnotations,
+    setRawClipId,
     MAX_NOTES_LENGTH: ANNOTATE_MAX_NOTES_LENGTH,
   } = useAnnotate(annotateVideoMetadata);
+
+  // Real-time clip saving hook
+  const {
+    saveClip,
+    updateClip: updateClipRemote,
+    deleteClip: deleteClipRemote,
+    isSaving: isClipSaving,
+  } = useRawClipSave();
 
   // Export state from Zustand store
   const {
@@ -218,6 +224,36 @@ export function AnnotateContainer({
       if (gameData.annotations && gameData.annotations.length > 0) {
         const gameDuration = videoMetadata?.duration || gameData.video_duration;
         console.log('[AnnotateContainer] Importing', gameData.annotations.length, 'saved annotations with duration:', gameDuration);
+
+        // Check for annotations that don't have raw_clips yet (id is the raw_clip id)
+        const annotationsWithoutRawClips = gameData.annotations.filter(a => !a.id);
+
+        if (annotationsWithoutRawClips.length > 0) {
+          console.log('[AnnotateContainer] Found', annotationsWithoutRawClips.length, 'annotations without raw_clips, creating them...');
+
+          // Create raw_clips for annotations that don't have them
+          for (const annotation of annotationsWithoutRawClips) {
+            try {
+              const result = await saveClip(gameId, {
+                start_time: annotation.start_time,
+                end_time: annotation.end_time,
+                name: annotation.name || '',
+                rating: annotation.rating || 3,
+                tags: annotation.tags || [],
+                notes: annotation.notes || ''
+              });
+
+              if (result) {
+                // Update the annotation with the new raw_clip id
+                annotation.id = result.raw_clip_id;
+                console.log('[AnnotateContainer] Created raw_clip', result.raw_clip_id, 'for annotation at', annotation.end_time);
+              }
+            } catch (err) {
+              console.error('[AnnotateContainer] Failed to create raw_clip for annotation:', err);
+            }
+          }
+        }
+
         importAnnotations(gameData.annotations, gameDuration);
       }
 
@@ -228,7 +264,7 @@ export function AnnotateContainer({
     } catch (err) {
       console.error('[AnnotateContainer] Failed to load game:', err);
     }
-  }, [getGame, getGameVideoUrl, annotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode]);
+  }, [getGame, getGameVideoUrl, annotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode, saveClip]);
 
   /**
    * Helper function to call the annotate export API
@@ -363,63 +399,8 @@ export function AnnotateContainer({
     }
   }, [annotateVideoFile, annotateGameId, callAnnotateExportApi]);
 
-  /**
-   * Import Into Projects - Saves to DB, creates projects, navigates to projects
-   */
-  const handleImportIntoProjects = useCallback(async (clipData) => {
-    console.log('[AnnotateContainer] Import into projects requested with clips:', clipData);
-    console.log('[AnnotateContainer] Using project creation settings:', projectCreationSettings);
-
-    const hasVideoSource = annotateVideoFile || annotateGameId;
-    if (!hasVideoSource || !clipData || clipData.length === 0) {
-      console.error('[AnnotateContainer] Cannot export: no video source or clips');
-      return;
-    }
-
-    setIsImportingToProjects(true);
-    try {
-      console.log('[AnnotateContainer] Importing clips into projects...');
-
-      const result = await callAnnotateExportApi(clipData, true, projectCreationSettings);
-
-      console.log('[AnnotateContainer] Import response:', {
-        success: result.success,
-        rawClipsCount: result.created?.raw_clips?.length,
-        projectsCount: result.created?.projects?.length,
-        downloads: Object.keys(result.downloads || {})
-      });
-
-      // Clean up annotate state
-      if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(annotateVideoUrl);
-      }
-      setAnnotateVideoFile(null);
-      setAnnotateVideoUrl(null);
-      setAnnotateVideoMetadata(null);
-      setAnnotateGameId(null);
-      setIsUploadingGameVideo(false);
-      resetAnnotate();
-
-      await fetchProjects();
-
-      const projectsCreated = result.created?.projects?.length || 0;
-      const clipsCreated = result.created?.raw_clips?.length || 0;
-      const serverMessage = result.message || `Created ${clipsCreated} clips and ${projectsCreated} projects`;
-
-      console.log(`[AnnotateContainer] ${serverMessage}`);
-      alert(`Import complete!\n\n${serverMessage}`);
-
-      setEditorMode('project-manager');
-
-      console.log('[AnnotateContainer] Import into projects complete');
-
-    } catch (err) {
-      console.error('[AnnotateContainer] Import into projects failed:', err);
-      alert(`Import failed: ${err.message}\n\nNote: If clips were being saved, they may still be on the server.`);
-    } finally {
-      setIsImportingToProjects(false);
-    }
-  }, [annotateVideoFile, annotateVideoUrl, annotateGameId, resetAnnotate, fetchProjects, callAnnotateExportApi, projectCreationSettings]);
+  // NOTE: handleImportIntoProjects has been removed - clips are now saved in real-time during annotation
+  // The old batch import flow is no longer needed. See handleFullscreenCreateClip for real-time saving.
 
   /**
    * Handle fullscreen toggle
@@ -450,8 +431,9 @@ export function AnnotateContainer({
 
   /**
    * Handle creating a clip from fullscreen overlay
+   * Now saves to backend in real-time (if video is uploaded and we have a gameId)
    */
-  const handleFullscreenCreateClip = useCallback((clipData) => {
+  const handleFullscreenCreateClip = useCallback(async (clipData) => {
     const newRegion = addClipRegion(
       clipData.startTime,
       clipData.duration,
@@ -463,17 +445,122 @@ export function AnnotateContainer({
     );
     if (newRegion) {
       seek(newRegion.startTime);
+
+      // Save to backend if we have a game ID and video is uploaded
+      if (annotateGameId && !isUploadingGameVideo) {
+        const result = await saveClip(annotateGameId, {
+          start_time: newRegion.startTime,
+          end_time: newRegion.endTime,
+          name: newRegion.name,
+          rating: newRegion.rating,
+          tags: newRegion.tags,
+          notes: newRegion.notes
+        });
+
+        if (result?.raw_clip_id) {
+          setRawClipId(newRegion.id, result.raw_clip_id);
+          console.log('[AnnotateContainer] Clip saved to backend:', result.raw_clip_id);
+
+          if (result.project_created) {
+            console.log('[AnnotateContainer] Auto-created 5-star project:', result.project_id);
+          }
+        }
+      } else if (isUploadingGameVideo) {
+        console.log('[AnnotateContainer] Video still uploading, clip will be saved when annotations sync');
+      }
     }
     setShowAnnotateOverlay(false);
-  }, [addClipRegion, seek]);
+  }, [addClipRegion, seek, annotateGameId, isUploadingGameVideo, saveClip, setRawClipId]);
+
+  /**
+   * Update a clip region - syncs to backend
+   * This wraps the local updateClipRegion to also sync with the backend
+   */
+  const updateClipRegionWithSync = useCallback(async (regionId, updates) => {
+    // Find the region BEFORE updating to get current values
+    const region = clipRegions.find(r => r.id === regionId);
+    if (!region) {
+      console.warn('[AnnotateContainer] Region not found for update:', regionId);
+      return;
+    }
+
+    // Update locally first
+    updateClipRegion(regionId, updates);
+
+    // Skip backend sync if video is still uploading or no game ID
+    if (!annotateGameId || isUploadingGameVideo) {
+      console.log('[AnnotateContainer] Skipping backend sync - video uploading or no game ID');
+      return;
+    }
+
+    // If clip doesn't have rawClipId, save it to backend first
+    if (!region.rawClipId) {
+      console.log('[AnnotateContainer] Clip has no rawClipId, saving to backend first');
+
+      // Merge current values with updates for the save
+      const clipData = {
+        start_time: updates.startTime ?? region.startTime,
+        end_time: updates.endTime ?? region.endTime,
+        name: updates.name ?? region.name,
+        rating: updates.rating ?? region.rating,
+        tags: updates.tags ?? region.tags,
+        notes: updates.notes ?? region.notes
+      };
+
+      const result = await saveClip(annotateGameId, clipData);
+      if (result?.raw_clip_id) {
+        setRawClipId(region.id, result.raw_clip_id);
+        console.log('[AnnotateContainer] Clip saved to backend:', result.raw_clip_id);
+
+        if (result.project_created) {
+          console.log('[AnnotateContainer] Auto-created 5-star project:', result.project_id);
+        }
+      }
+    } else {
+      // Clip already has rawClipId, just update
+      const backendUpdates = {};
+      if (updates.name !== undefined) backendUpdates.name = updates.name;
+      if (updates.rating !== undefined) backendUpdates.rating = updates.rating;
+      if (updates.tags !== undefined) backendUpdates.tags = updates.tags;
+      if (updates.notes !== undefined) backendUpdates.notes = updates.notes;
+      if (updates.startTime !== undefined) backendUpdates.start_time = updates.startTime;
+      if (updates.endTime !== undefined) backendUpdates.end_time = updates.endTime;
+
+      if (Object.keys(backendUpdates).length > 0) {
+        const result = await updateClipRemote(region.rawClipId, backendUpdates);
+        if (result?.project_created) {
+          console.log('[AnnotateContainer] Auto-created 5-star project:', result.project_id);
+        }
+      }
+    }
+  }, [clipRegions, updateClipRegion, annotateGameId, isUploadingGameVideo, saveClip, updateClipRemote, setRawClipId]);
 
   /**
    * Handle updating an existing clip from fullscreen overlay
+   * Uses updateClipRegionWithSync for backend sync
    */
-  const handleFullscreenUpdateClip = useCallback((regionId, updates) => {
-    updateClipRegion(regionId, updates);
+  const handleFullscreenUpdateClip = useCallback(async (regionId, updates) => {
+    await updateClipRegionWithSync(regionId, updates);
     setShowAnnotateOverlay(false);
-  }, [updateClipRegion]);
+  }, [updateClipRegionWithSync]);
+
+  /**
+   * Delete a clip region - syncs to backend if the clip has been saved
+   */
+  const deleteClipRegion = useCallback(async (regionId) => {
+    // Find the region to get its rawClipId before deleting locally
+    const region = clipRegions.find(r => r.id === regionId);
+    const rawClipId = region?.rawClipId;
+
+    // Delete locally first
+    deleteClipRegionLocal(regionId);
+
+    // Sync to backend if the clip was saved
+    if (rawClipId) {
+      await deleteClipRemote(rawClipId);
+      console.log('[AnnotateContainer] Clip deleted from backend:', rawClipId);
+    }
+  }, [clipRegions, deleteClipRegionLocal, deleteClipRemote]);
 
   /**
    * Handle closing the fullscreen overlay without creating a clip
@@ -598,6 +685,48 @@ export function AnnotateContainer({
   // Computed: Effective duration
   const effectiveDuration = annotateVideoMetadata?.duration || videoDuration || 0;
 
+  /**
+   * Wrapper for importAnnotations that also creates raw_clips for each annotation.
+   * Used for TSV imports and any other annotation import that needs raw_clip extraction.
+   */
+  const importAnnotationsWithRawClips = useCallback(async (annotations, overrideDuration = null) => {
+    if (!annotations || annotations.length === 0 || !annotateGameId) {
+      return importAnnotations(annotations, overrideDuration);
+    }
+
+    console.log('[AnnotateContainer] Creating raw_clips for', annotations.length, 'imported annotations...');
+
+    // Create raw_clips for each annotation that doesn't have one
+    for (const annotation of annotations) {
+      // Skip if already has a raw_clip_id
+      if (annotation.raw_clip_id || annotation.rawClipId) {
+        continue;
+      }
+
+      try {
+        const result = await saveClip(annotateGameId, {
+          start_time: annotation.startTime ?? annotation.start_time ?? 0,
+          end_time: annotation.endTime ?? annotation.end_time ?? 0,
+          name: annotation.name || '',
+          rating: annotation.rating || 3,
+          tags: annotation.tags || [],
+          notes: annotation.notes || ''
+        });
+
+        if (result) {
+          // Add the raw_clip_id to the annotation
+          annotation.raw_clip_id = result.raw_clip_id;
+          console.log('[AnnotateContainer] Created raw_clip', result.raw_clip_id, 'for imported annotation');
+        }
+      } catch (err) {
+        console.error('[AnnotateContainer] Failed to create raw_clip for annotation:', err);
+      }
+    }
+
+    // Now import with rawClipIds attached
+    return importAnnotations(annotations, overrideDuration);
+  }, [annotateGameId, importAnnotations, saveClip]);
+
   return {
     // State
     annotateVideoUrl,
@@ -609,8 +738,9 @@ export function AnnotateContainer({
     annotateContainerRef,
     annotateFileInputRef,
     isCreatingAnnotatedVideo,
-    isImportingToProjects,
+    isImportingToProjects, // Kept for backwards compatibility, may be removed later
     isUploadingGameVideo,
+    isClipSaving, // Real-time clip save in progress
     hasAnnotateClips,
     exportProgress,
 
@@ -626,7 +756,6 @@ export function AnnotateContainer({
     handleGameVideoSelect,
     handleLoadGame,
     handleCreateAnnotatedVideo,
-    handleImportIntoProjects,
     handleToggleFullscreen,
     handleAddClipFromButton,
     handleFullscreenCreateClip,
@@ -637,10 +766,10 @@ export function AnnotateContainer({
     setAnnotatePlaybackSpeed,
     setAnnotateSelectedLayer,
 
-    // Clip region actions
-    updateClipRegion,
+    // Clip region actions (wrapped with backend sync)
+    updateClipRegion: updateClipRegionWithSync,
     deleteClipRegion,
-    importAnnotations,
+    importAnnotations: importAnnotationsWithRawClips,
     getAnnotateRegionAtTime,
     getAnnotateExportData,
     selectAnnotateRegion, // Raw select for keyboard shortcuts (doesn't seek)

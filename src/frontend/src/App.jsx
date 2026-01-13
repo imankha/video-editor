@@ -243,6 +243,7 @@ function App() {
           selectProject(projectId);
           setEditorMode('overlay');
         }}
+        onOpenGame={handleLoadGame}
       />
 
       {/* Mode Switch Confirmation Dialog */}

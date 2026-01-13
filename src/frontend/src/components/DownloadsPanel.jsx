@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns } from 'lucide-react';
+import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, Film, LayoutGrid } from 'lucide-react';
 import { useDownloads } from '../hooks/useDownloads';
 import { useGalleryStore } from '../stores/galleryStore';
+
+// Filter options for gallery source types (icon-only with tooltips)
+const FILTER_OPTIONS = [
+  { value: null, label: 'All', icon: LayoutGrid, color: 'text-gray-400' },
+  { value: 'brilliant_clip', label: 'Brilliant Clips', icon: Star, color: 'text-yellow-400' },
+  { value: 'custom_project', label: 'Custom Projects', icon: Folder, color: 'text-purple-400' },
+  { value: 'annotated_game', label: 'Annotated Games', icon: Film, color: 'text-green-400' },
+];
 
 /**
  * DownloadsPanel - Slide-out panel for managing final video downloads
@@ -18,6 +26,7 @@ import { useGalleryStore } from '../stores/galleryStore';
  */
 export function DownloadsPanel({
   onOpenProject,  // (projectId) => void - Navigate to project
+  onOpenGame,     // (gameId) => void - Navigate to annotate mode with game
 }) {
   // Gallery state from store
   const isOpen = useGalleryStore((state) => state.isOpen);
@@ -28,13 +37,15 @@ export function DownloadsPanel({
     downloads,
     loadState,
     error,
+    filter,
     hasDownloads,
     groupedDownloads,
     deleteDownload,
     downloadFile,
     getDownloadUrl,
     formatFileSize,
-    formatDate
+    formatDate,
+    setFilter
   } = useDownloads(isOpen);
 
   // Sync download count to gallery store
@@ -76,10 +87,33 @@ export function DownloadsPanel({
 
   const handleOpenProject = (e, download) => {
     e.stopPropagation();
-    if (onOpenProject) {
+    // For annotated game exports, navigate to the game in annotate mode
+    if (download.source_type === 'annotated_game' && download.game_id && onOpenGame) {
+      onOpenGame(download.game_id);
+      close();
+    } else if (onOpenProject && download.project_id && download.project_id !== 0) {
       onOpenProject(download.project_id);
       close();
     }
+  };
+
+  // Check if folder button should be shown for a download
+  const canOpenSource = (download) => {
+    if (download.source_type === 'annotated_game' && download.game_id && onOpenGame) {
+      return true;
+    }
+    if (download.project_id && download.project_id !== 0 && onOpenProject) {
+      return true;
+    }
+    return false;
+  };
+
+  // Get appropriate title for the folder button
+  const getOpenSourceTitle = (download) => {
+    if (download.source_type === 'annotated_game') {
+      return 'Open game';
+    }
+    return 'Open project';
   };
 
   const handleBeforeAfter = async (e, download) => {
@@ -173,23 +207,25 @@ export function DownloadsPanel({
                   >
                     <Download size={16} className="text-gray-400 hover:text-white" />
                   </button>
-                  <button
-                    onClick={(e) => handleBeforeAfter(e, download)}
-                    disabled={exportingBeforeAfter === download.id}
-                    className="p-2 hover:bg-blue-900/40 rounded transition-colors disabled:opacity-50"
-                    title="Export Before/After comparison"
-                  >
-                    {exportingBeforeAfter === download.id ? (
-                      <Loader size={16} className="text-blue-400 animate-spin" />
-                    ) : (
-                      <Columns size={16} className="text-blue-400 hover:text-blue-300" />
-                    )}
-                  </button>
-                  {onOpenProject && (
+                  {download.source_type !== 'annotated_game' && (
+                    <button
+                      onClick={(e) => handleBeforeAfter(e, download)}
+                      disabled={exportingBeforeAfter === download.id}
+                      className="p-2 hover:bg-blue-900/40 rounded transition-colors disabled:opacity-50"
+                      title="Export Before/After comparison"
+                    >
+                      {exportingBeforeAfter === download.id ? (
+                        <Loader size={16} className="text-blue-400 animate-spin" />
+                      ) : (
+                        <Columns size={16} className="text-blue-400 hover:text-blue-300" />
+                      )}
+                    </button>
+                  )}
+                  {canOpenSource(download) && (
                     <button
                       onClick={(e) => handleOpenProject(e, download)}
                       className="p-2 hover:bg-gray-600 rounded transition-colors"
-                      title="Open project"
+                      title={getOpenSourceTitle(download)}
                     >
                       <FolderOpen size={16} className="text-gray-400 hover:text-white" />
                     </button>
@@ -283,6 +319,28 @@ export function DownloadsPanel({
           >
             <X size={20} className="text-gray-400" />
           </button>
+        </div>
+
+        {/* Filter Tabs - Icon only with tooltips */}
+        <div className="flex gap-1 p-2 border-b border-gray-700 bg-gray-800/50">
+          {FILTER_OPTIONS.map((option) => {
+            const isActive = filter === option.value;
+            const Icon = option.icon;
+            return (
+              <button
+                key={option.value ?? 'all'}
+                onClick={() => setFilter(option.value)}
+                title={option.label}
+                className={`p-2 rounded-lg transition-colors ${
+                  isActive
+                    ? 'bg-purple-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
+              >
+                <Icon size={18} className={isActive ? 'text-white' : option.color} />
+              </button>
+            );
+          })}
         </div>
 
         {/* Content */}

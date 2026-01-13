@@ -1,4 +1,4 @@
-import { Download, Loader, Upload, Settings } from 'lucide-react';
+import { Download, Loader } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import { useExportStore } from '../stores';
@@ -60,13 +60,10 @@ export function AnnotateModeView({
 
   // Export state (exportProgress is read directly from store for reactivity)
   isCreatingAnnotatedVideo,
-  isImportingToProjects,
   isUploadingGameVideo,
 
   // Export handlers
   onCreateAnnotatedVideo,
-  onImportIntoProjects,
-  onOpenProjectCreationSettings,
 
   // Zoom (for video player)
   zoom,
@@ -233,9 +230,9 @@ export function AnnotateModeView({
               {/* Create Annotated Video - stays on screen */}
               <button
                 onClick={() => onCreateAnnotatedVideo(getAnnotateExportData())}
-                disabled={!hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo}
+                disabled={!hasAnnotateClips || isCreatingAnnotatedVideo || isUploadingGameVideo}
                 className={`w-full px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                  !hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo
+                  !hasAnnotateClips || isCreatingAnnotatedVideo || isUploadingGameVideo
                     ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                     : 'bg-green-600 hover:bg-green-700 text-white'
                 }`}
@@ -258,38 +255,10 @@ export function AnnotateModeView({
                 )}
               </button>
 
-              {/* Import Into Projects - navigates to projects */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => onImportIntoProjects(getAnnotateExportData())}
-                  disabled={!hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo}
-                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                    !hasAnnotateClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  }`}
-                >
-                  {isImportingToProjects ? (
-                    <>
-                      <Loader className="animate-spin" size={18} />
-                      <span>Processing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={18} />
-                      <span>Import Into Projects</span>
-                    </>
-                  )}
-                </button>
-                {/* Settings button */}
-                <button
-                  onClick={onOpenProjectCreationSettings}
-                  className="px-3 py-3 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
-                  title="Project creation settings"
-                >
-                  <Settings size={18} />
-                </button>
-              </div>
+              {/* Note: Clips are now saved in real-time to the library as you annotate */}
+              <p className="text-xs text-gray-500 text-center">
+                Clips are automatically saved to your library as you annotate
+              </p>
             </div>
           </div>
         </div>

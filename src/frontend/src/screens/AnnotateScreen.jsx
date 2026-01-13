@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
@@ -6,10 +6,9 @@ import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import { useGames } from '../hooks/useGames';
 import { useProjects } from '../hooks/useProjects';
-import { useSettings } from '../hooks/useSettings';
-import { FileUpload } from '../components/FileUpload';
 import { useEditorStore } from '../stores/editorStore';
 import { useGalleryStore } from '../stores/galleryStore';
+import { getPendingGameFile, clearPendingGameFile } from './ProjectsScreen';
 
 /**
  * AnnotateScreen - Self-contained screen for Annotate mode
@@ -28,7 +27,7 @@ import { useGalleryStore } from '../stores/galleryStore';
  *
  * Data flow:
  * - Initial game ID: sessionStorage (from ProjectsScreen game load)
- * - File selection: Internal FileUpload component (no props from App.jsx)
+ * - File selection: Via ProjectsScreen "Add Game" flow
  *
  * @see AppJSX_REDUCTION/TASK-05-finalize-annotate-screen.md
  */
@@ -49,32 +48,19 @@ export function AnnotateScreen() {
   // Projects (for import/export)
   const { fetchProjects } = useProjects();
 
-  // Settings
-  const {
-    projectCreationSettings,
-    updateProjectCreationSettings,
-    resetSettings,
-  } = useSettings();
-
   // Gallery (for downloads panel)
   const openGallery = useGalleryStore(state => state.open);
   const downloadsCount = useGalleryStore(state => state.count);
 
-  // Local UI state
-  const [showProjectCreationSettings, setShowProjectCreationSettings] = useState(false);
+  // Track if we're loading a game (ref persists across re-renders without causing them)
+  const isLoadingRef = useRef(false);
 
-  // Initial game ID from sessionStorage (when loading saved game from ProjectManager)
-  const [initialGameId, setInitialGameId] = useState(null);
-
-  // Check for pending game ID on mount
-  useEffect(() => {
-    const pendingGameId = sessionStorage.getItem('pendingGameId');
-    if (pendingGameId) {
-      console.log('[AnnotateScreen] Found pendingGameId in sessionStorage:', pendingGameId);
-      sessionStorage.removeItem('pendingGameId');
-      setInitialGameId(parseInt(pendingGameId));
+  // Check on mount if we're loading a game or file, set loading flag to prevent redirect
+  useState(() => {
+    if (sessionStorage.getItem('pendingGameId') || getPendingGameFile()) {
+      isLoadingRef.current = true;
     }
-  }, []);
+  });
 
   // Video hook - without segment awareness for annotate mode
   // IMPORTANT: We use the videoRef from this hook (not from App.jsx props)
@@ -110,11 +96,8 @@ export function AnnotateScreen() {
     openGallery();
   }, [openGallery]);
 
-  const handleOpenProjectCreationSettings = useCallback(() => {
-    setShowProjectCreationSettings(true);
-  }, []);
-
   // AnnotateContainer - encapsulates all annotate mode state and handlers
+  // NOTE: Clips are now saved in real-time during annotation, no batch import needed
   const annotate = AnnotateContainer({
     videoRef,
     currentTime,
@@ -131,10 +114,8 @@ export function AnnotateScreen() {
     getGameVideoUrl,
     saveAnnotationsDebounced,
     fetchProjects,
-    projectCreationSettings,
     onBackToProjects: handleBackToProjects,
     setEditorMode,
-    onOpenProjectCreationSettings: handleOpenProjectCreationSettings,
     downloadsCount,
     onOpenDownloads: handleOpenDownloads,
   });
@@ -147,9 +128,7 @@ export function AnnotateScreen() {
     annotateSelectedLayer,
     annotatePlaybackSpeed,
     annotateContainerRef,
-    annotateFileInputRef,
     isCreatingAnnotatedVideo,
-    isImportingToProjects,
     isUploadingGameVideo,
     hasAnnotateClips,
     clipRegions,
@@ -162,7 +141,6 @@ export function AnnotateScreen() {
     handleGameVideoSelect,
     handleLoadGame,
     handleCreateAnnotatedVideo,
-    handleImportIntoProjects,
     handleToggleFullscreen,
     handleAddClipFromButton,
     handleFullscreenCreateClip,
@@ -185,13 +163,27 @@ export function AnnotateScreen() {
 
   // Handle initial game ID from sessionStorage (when loading a saved game)
   useEffect(() => {
-    if (initialGameId && !annotateVideoUrl) {
-      console.log('[AnnotateScreen] Loading game from initialGameId:', initialGameId);
-      handleLoadGame(initialGameId);
-      // Clear the initial game ID immediately to prevent re-triggering
-      setInitialGameId(null);
+    const pendingGameId = sessionStorage.getItem('pendingGameId');
+    console.log('[AnnotateScreen] Game load effect - pendingGameId:', pendingGameId, 'videoUrl:', annotateVideoUrl, 'isLoading:', isLoadingRef.current);
+    if (pendingGameId && !annotateVideoUrl) {
+      console.log('[AnnotateScreen] Loading game from pendingGameId:', pendingGameId);
+      isLoadingRef.current = true;
+      sessionStorage.removeItem('pendingGameId');
+      handleLoadGame(parseInt(pendingGameId));
     }
-  }, [initialGameId]); // Minimal deps to avoid re-triggering
+  }, [handleLoadGame, annotateVideoUrl]);
+
+  // Handle pending game file from ProjectsScreen (when "Add Game" was clicked)
+  useEffect(() => {
+    const pendingFile = getPendingGameFile();
+    console.log('[AnnotateScreen] Pending file effect - file:', pendingFile?.name, 'videoUrl:', annotateVideoUrl, 'isLoading:', isLoadingRef.current);
+    if (pendingFile && !annotateVideoUrl) {
+      console.log('[AnnotateScreen] Loading pending game file:', pendingFile.name);
+      isLoadingRef.current = true;
+      clearPendingGameFile();
+      handleGameVideoSelect(pendingFile);
+    }
+  }, [handleGameVideoSelect, annotateVideoUrl]);
 
   // Keyboard shortcuts for annotate mode
   // These are handled here (not in App.jsx) to use the same state instance
@@ -272,16 +264,23 @@ export function AnnotateScreen() {
   // - After importing clips to projects (in handleImportIntoProjects)
   // - When loading a new game (state is reset before loading new data)
 
-  // Show file upload when no video is loaded
+  // Redirect to projects if no video and not loading
+  useEffect(() => {
+    console.log('[AnnotateScreen] Redirect check - videoUrl:', !!annotateVideoUrl, 'isLoading:', isLoadingRef.current, 'isUploading:', isUploadingGameVideo);
+    if (!annotateVideoUrl && !isLoadingRef.current && !isUploadingGameVideo) {
+      console.log('[AnnotateScreen] No video and not loading, redirecting to projects');
+      setEditorMode('projects');
+    }
+  }, [annotateVideoUrl, isUploadingGameVideo, setEditorMode]);
+
+  // If no video loaded but we're loading, render nothing (loading is fast)
   if (!annotateVideoUrl) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <FileUpload
-          onGameVideoSelect={handleGameVideoSelect}
-          isLoading={isUploadingGameVideo}
-        />
-      </div>
-    );
+    return null;
+  }
+
+  // Clear loading flag once video is ready
+  if (isLoadingRef.current) {
+    isLoadingRef.current = false;
   }
 
   return (
@@ -367,12 +366,9 @@ export function AnnotateScreen() {
         onLayerSelect={setAnnotateSelectedLayer}
         // Export state (exportProgress is read from store in AnnotateModeView)
         isCreatingAnnotatedVideo={isCreatingAnnotatedVideo}
-        isImportingToProjects={isImportingToProjects}
         isUploadingGameVideo={isUploadingGameVideo}
         // Export handlers
         onCreateAnnotatedVideo={handleCreateAnnotatedVideo}
-        onImportIntoProjects={handleImportIntoProjects}
-        onOpenProjectCreationSettings={handleOpenProjectCreationSettings}
         // Zoom (for video player)
         zoom={zoom}
         panOffset={panOffset}
@@ -381,44 +377,6 @@ export function AnnotateScreen() {
           />
         </div>
       </div>
-
-      {/* Project Creation Settings Modal - owned by this screen */}
-      {showProjectCreationSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
-            <h2 className="text-xl font-bold text-white mb-4">Project Creation Settings</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Aspect Ratio</label>
-                <select
-                  value={projectCreationSettings?.aspectRatio || '9:16'}
-                  onChange={(e) => updateProjectCreationSettings({ aspectRatio: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-700 text-white rounded"
-                >
-                  <option value="9:16">9:16 (Portrait)</option>
-                  <option value="16:9">16:9 (Landscape)</option>
-                  <option value="1:1">1:1 (Square)</option>
-                  <option value="4:5">4:5 (Instagram)</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <button
-                onClick={resetSettings}
-                className="px-4 py-2 text-gray-400 hover:text-white"
-              >
-                Reset
-              </button>
-              <button
-                onClick={() => setShowProjectCreationSettings(false)}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

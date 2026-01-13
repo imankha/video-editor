@@ -401,12 +401,20 @@ async def export_final(
         next_version = cursor.fetchone()['next_version']
         logger.info(f"[Final Export] Creating final video version {next_version} for project {project_id}")
 
-        # Create new final video entry with version number
+        # Determine source_type: check if this is an auto-created project for a 5-star clip
         cursor.execute("""
-            INSERT INTO final_videos (project_id, filename, version)
-            VALUES (?, ?, ?)
-        """, (project_id, filename, next_version))
+            SELECT id FROM raw_clips WHERE auto_project_id = ?
+        """, (project_id,))
+        is_auto_project = cursor.fetchone() is not None
+        source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
+
+        # Create new final video entry with version number and source_type
+        cursor.execute("""
+            INSERT INTO final_videos (project_id, filename, version, source_type)
+            VALUES (?, ?, ?, ?)
+        """, (project_id, filename, next_version, source_type))
         final_video_id = cursor.lastrowid
+        logger.info(f"[Final Export] Created final video id={final_video_id} with source_type={source_type}")
 
         # Update project with new final video ID
         cursor.execute("""

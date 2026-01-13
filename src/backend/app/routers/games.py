@@ -21,7 +21,7 @@ import logging
 import mimetypes
 import json
 
-from app.database import get_db_connection, get_games_path, ensure_directories
+from app.database import get_db_connection, get_games_path, get_raw_clips_path, ensure_directories
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ async def create_game(
 
     If video is provided, it's saved immediately.
     If not, video can be uploaded later via PUT /{game_id}/video.
-    Annotations are stored in the database (annotations table).
+    Clip annotations are stored in the raw_clips table.
 
     Video metadata (duration, width, height, size) can be provided to enable
     instant game loading without re-extracting metadata from the video.
@@ -331,7 +331,7 @@ async def update_annotations(
 
 @router.delete("/{game_id}")
 async def delete_game(game_id: int):
-    """Delete a game and its video file. Annotations are deleted via CASCADE."""
+    """Delete a game and its video file. Raw clips are deleted separately."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -344,7 +344,7 @@ async def delete_game(game_id: int):
 
         video_filename = row['video_filename']
 
-        # Delete from database (annotations deleted via CASCADE)
+        # Delete from database
         cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
         conn.commit()
 
@@ -523,12 +523,13 @@ def update_game_aggregates(cursor, game_id: int, annotations: list) -> None:
 
 
 def load_annotations_from_db(game_id: int) -> list:
-    """Load annotations from the database for a game."""
+    """Load annotations from raw_clips table for a game."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        # Query raw_clips as the single source of truth for clip annotations
         cursor.execute("""
             SELECT id, start_time, end_time, name, rating, tags, notes
-            FROM annotations
+            FROM raw_clips
             WHERE game_id = ?
             ORDER BY end_time
         """, (game_id,))
@@ -545,6 +546,8 @@ def load_annotations_from_db(game_id: int) -> list:
                 name = generate_clip_name(row['rating'], tags)
 
             annotations.append({
+                'id': row['id'],  # raw_clip id for frontend sync
+                'raw_clip_id': row['id'],  # Also send as raw_clip_id for importAnnotations
                 'start_time': row['start_time'],
                 'end_time': row['end_time'],
                 'name': name,
@@ -558,46 +561,110 @@ def load_annotations_from_db(game_id: int) -> list:
 
 def save_annotations_to_db(game_id: int, annotations: list) -> None:
     """
-    Save annotations to the database, replacing any existing ones.
+    Save annotations to raw_clips table, syncing with existing records.
 
-    This uses a batch replace pattern:
-    1. DELETE all existing annotations for the game
-    2. INSERT all new annotations
-    3. UPDATE aggregates on the game
+    Uses natural key (game_id, end_time) to match annotations with raw_clips.
+    - Updates existing clips' metadata (name, rating, tags, notes, start_time)
+    - Deletes clips that are no longer in the annotations list
+    - New clips are expected to be created via real-time save (with FFmpeg extraction)
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Delete existing annotations
-        cursor.execute("DELETE FROM annotations WHERE game_id = ?", (game_id,))
+        # Get existing raw_clips for this game (using end_time as natural key)
+        cursor.execute("""
+            SELECT id, end_time, filename, auto_project_id
+            FROM raw_clips
+            WHERE game_id = ?
+        """, (game_id,))
+        existing_clips = {row['end_time']: dict(row) for row in cursor.fetchall()}
 
-        # Insert new annotations
+        # Track which end_times are still present in annotations
+        annotation_end_times = set()
+
         for ann in annotations:
+            end_time = ann.get('end_time', ann.get('start_time', 0))
+            annotation_end_times.add(end_time)
+
             tags = ann.get('tags', [])
             tags_json = json.dumps(tags)
             rating = ann.get('rating', 3)
             name = ann.get('name', '')
 
             # Don't store default names - they should be computed on read
-            # A name is "default" if it matches what generate_clip_name would produce
             default_name = generate_clip_name(rating, tags)
             if name == default_name:
-                name = ''  # Store empty, will be regenerated on load
+                name = ''
 
-            cursor.execute("""
-                INSERT INTO annotations (game_id, start_time, end_time, name, rating, tags, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                game_id,
-                ann.get('start_time', 0),
-                ann.get('end_time', ann.get('start_time', 0)),
-                name,
-                rating,
-                tags_json,
-                ann.get('notes', '')
-            ))
+            if end_time in existing_clips:
+                # Update existing raw_clip metadata
+                cursor.execute("""
+                    UPDATE raw_clips
+                    SET start_time = ?, name = ?, rating = ?, tags = ?, notes = ?
+                    WHERE id = ?
+                """, (
+                    ann.get('start_time', 0),
+                    name,
+                    rating,
+                    tags_json,
+                    ann.get('notes', ''),
+                    existing_clips[end_time]['id']
+                ))
+            # else: New annotation - skip, will be created via real-time save
+
+        # Delete raw_clips that are no longer in annotations
+        for end_time, clip_data in existing_clips.items():
+            if end_time not in annotation_end_times:
+                clip_id = clip_data['id']
+                filename = clip_data['filename']
+                auto_project_id = clip_data['auto_project_id']
+
+                # Delete auto-project if exists and unmodified
+                if auto_project_id:
+                    _delete_auto_project_if_unmodified(cursor, auto_project_id)
+
+                # Delete working clips that reference this raw clip
+                cursor.execute("DELETE FROM working_clips WHERE raw_clip_id = ?", (clip_id,))
+
+                # Delete the raw clip record
+                cursor.execute("DELETE FROM raw_clips WHERE id = ?", (clip_id,))
+
+                # Delete the file from disk
+                if filename:
+                    file_path = get_raw_clips_path() / filename
+                    if file_path.exists():
+                        os.unlink(file_path)
+                        logger.info(f"Deleted clip file: {file_path}")
 
         # Update aggregates
         update_game_aggregates(cursor, game_id, annotations)
 
         conn.commit()
+
+
+def _delete_auto_project_if_unmodified(cursor, project_id: int) -> bool:
+    """Delete an auto-created project if it hasn't been modified."""
+    # Check if project has been modified (has working video, final video, or multiple clips)
+    cursor.execute("""
+        SELECT p.working_video_id, p.final_video_id,
+               (SELECT COUNT(*) FROM working_clips WHERE project_id = p.id) as clip_count
+        FROM projects p WHERE p.id = ?
+    """, (project_id,))
+    project = cursor.fetchone()
+
+    if not project:
+        return False
+
+    # Don't delete if project has been worked on
+    if project['working_video_id'] or project['final_video_id'] or project['clip_count'] > 1:
+        logger.info(f"Keeping modified auto-project {project_id}")
+        return False
+
+    # Delete the working clip first (foreign key constraint)
+    cursor.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
+
+    # Delete the project
+    cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+
+    logger.info(f"Deleted unmodified auto-project {project_id}")
+    return True

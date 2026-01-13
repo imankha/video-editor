@@ -28,6 +28,8 @@ class DownloadItem(BaseModel):
     filename: str
     created_at: str
     file_size: Optional[int]  # Size in bytes
+    source_type: Optional[str]  # 'brilliant_clip' | 'custom_project' | 'annotated_game' | None
+    game_id: Optional[int]  # For annotated_game exports, the source game ID
 
 
 class DownloadListResponse(BaseModel):
@@ -36,28 +38,44 @@ class DownloadListResponse(BaseModel):
 
 
 @router.get("", response_model=DownloadListResponse)
-async def list_downloads():
+async def list_downloads(source_type: Optional[str] = None):
     """
     List all final videos with metadata.
     Returns videos grouped with project information.
+
+    Args:
+        source_type: Filter by source type ('brilliant_clip', 'custom_project', 'annotated_game')
+                    If not provided, returns all videos.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get only the latest version of final videos per project
-        cursor.execute(f"""
+        # Build query with optional source_type filter
+        # LEFT JOIN to handle annotated exports (project_id = 0, no real project)
+        # COALESCE uses fv.name for annotated exports, p.name for project exports
+        base_query = f"""
             SELECT
                 fv.id,
                 fv.project_id,
                 fv.filename,
                 fv.created_at,
                 fv.version,
-                p.name as project_name
+                fv.source_type,
+                fv.game_id,
+                COALESCE(fv.name, p.name) as project_name
             FROM final_videos fv
-            JOIN projects p ON fv.project_id = p.id
+            LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id != 0
             WHERE fv.id IN ({latest_final_videos_subquery()})
-            ORDER BY fv.created_at DESC
-        """)
+        """
+
+        if source_type:
+            base_query += " AND fv.source_type = ?"
+            base_query += " ORDER BY fv.created_at DESC"
+            cursor.execute(base_query, (source_type,))
+        else:
+            base_query += " ORDER BY fv.created_at DESC"
+            cursor.execute(base_query)
+
         rows = cursor.fetchall()
 
         downloads = []
@@ -74,7 +92,9 @@ async def list_downloads():
                 project_name=row['project_name'],
                 filename=row['filename'],
                 created_at=row['created_at'],
-                file_size=file_size
+                file_size=file_size,
+                source_type=row['source_type'],
+                game_id=row['game_id']
             ))
 
         return DownloadListResponse(
@@ -116,9 +136,9 @@ async def download_file(download_id: int):
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT fv.filename, p.name as project_name
+            SELECT fv.filename, COALESCE(fv.name, p.name) as project_name
             FROM final_videos fv
-            LEFT JOIN projects p ON fv.project_id = p.id
+            LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id != 0
             WHERE fv.id = ?
         """, (download_id,))
         row = cursor.fetchone()

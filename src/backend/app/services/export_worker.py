@@ -391,10 +391,18 @@ async def process_overlay_export(job_id: str, project_id: int, config: dict) -> 
     # Save to database
     with get_db_connection() as conn:
         cursor = conn.cursor()
+
+        # Determine source_type: check if this is an auto-created project for a 5-star clip
         cursor.execute("""
-            INSERT INTO final_videos (project_id, filename, version)
-            VALUES (?, ?, ?)
-        """, (project_id, output_filename, next_version))
+            SELECT id FROM raw_clips WHERE auto_project_id = ?
+        """, (project_id,))
+        is_auto_project = cursor.fetchone() is not None
+        source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
+
+        cursor.execute("""
+            INSERT INTO final_videos (project_id, filename, version, source_type)
+            VALUES (?, ?, ?, ?)
+        """, (project_id, output_filename, next_version, source_type))
         final_video_id = cursor.lastrowid
 
         # Update project to point to new final video
@@ -404,7 +412,7 @@ async def process_overlay_export(job_id: str, project_id: int, config: dict) -> 
 
         conn.commit()
 
-    logger.info(f"[ExportWorker] Overlay export complete: {output_filename} (id: {final_video_id})")
+    logger.info(f"[ExportWorker] Overlay export complete: {output_filename} (id: {final_video_id}, source_type: {source_type})")
 
     return final_video_id, output_filename
 

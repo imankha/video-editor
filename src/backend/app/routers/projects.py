@@ -24,6 +24,29 @@ class ProjectCreate(BaseModel):
     aspect_ratio: str  # "16:9" or "9:16"
 
 
+class ProjectFromClipsCreate(BaseModel):
+    """Create a project pre-populated with filtered clips."""
+    name: str
+    aspect_ratio: str = "16:9"
+    game_ids: List[int] = []  # Empty = all games
+    min_rating: int = 1
+    tags: List[str] = []  # Empty = all tags
+
+
+class ClipsPreviewRequest(BaseModel):
+    """Request body for previewing clips that would be included in a project."""
+    game_ids: List[int] = []
+    min_rating: int = 1
+    tags: List[str] = []
+
+
+class ClipsPreviewResponse(BaseModel):
+    """Preview of clips matching the filter criteria."""
+    clip_count: int
+    total_duration: float  # In seconds
+    clips: List[dict]  # Brief clip info for display
+
+
 class ProjectResponse(BaseModel):
     id: int
     name: str
@@ -53,6 +76,8 @@ class WorkingClipResponse(BaseModel):
     raw_clip_id: Optional[int]
     uploaded_filename: Optional[str]
     filename: str  # Resolved filename (from raw_clips or uploaded)
+    name: Optional[str] = None  # Human-readable name from raw_clips
+    notes: Optional[str] = None  # Notes from raw_clips
     exported_at: Optional[str] = None  # ISO timestamp when clip was exported
     sort_order: int
 
@@ -194,6 +219,152 @@ async def create_project(project: ProjectCreate):
         )
 
 
+def _build_clips_filter_query(game_ids: List[int], min_rating: int, tags: List[str]):
+    """Build SQL query and params for filtering raw clips."""
+    # min_rating = 0 means "All clips" (include everything regardless of rating)
+    if min_rating <= 0:
+        query = """
+            SELECT id, filename, rating, tags, name, notes, start_time, end_time, game_id
+            FROM raw_clips
+            WHERE 1=1
+        """
+        params = []
+    else:
+        query = """
+            SELECT id, filename, rating, tags, name, notes, start_time, end_time, game_id
+            FROM raw_clips
+            WHERE COALESCE(rating, 0) >= ?
+        """
+        params = [min_rating]
+
+    if game_ids:
+        placeholders = ','.join(['?' for _ in game_ids])
+        query += f" AND game_id IN ({placeholders})"
+        params.extend(game_ids)
+
+    # Tag filtering - clips must have ALL specified tags
+    # Tags are stored as JSON array, so we need to check each tag
+    if tags:
+        for tag in tags:
+            query += " AND tags LIKE ?"
+            params.append(f'%"{tag}"%')
+
+    query += " ORDER BY created_at DESC"
+    return query, params
+
+
+@router.post("/preview-clips", response_model=ClipsPreviewResponse)
+async def preview_clips(request: ClipsPreviewRequest):
+    """
+    Preview clips that would be included in a project based on filter criteria.
+
+    Returns clip count, total duration, and brief clip info for display.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        query, params = _build_clips_filter_query(
+            request.game_ids, request.min_rating, request.tags
+        )
+        cursor.execute(query, params)
+        clips = cursor.fetchall()
+
+        total_duration = 0.0
+        clips_info = []
+
+        for clip in clips:
+            start = clip['start_time'] or 0
+            end = clip['end_time'] or 0
+            duration = max(0, end - start)
+            total_duration += duration
+
+            tags = json.loads(clip['tags']) if clip['tags'] else []
+            clips_info.append({
+                'id': clip['id'],
+                'name': clip['name'] or f"Clip {clip['id']}",
+                'rating': clip['rating'],
+                'tags': tags,
+                'duration': duration,
+                'game_id': clip['game_id']
+            })
+
+        return ClipsPreviewResponse(
+            clip_count=len(clips),
+            total_duration=total_duration,
+            clips=clips_info
+        )
+
+
+@router.post("/from-clips", response_model=ProjectResponse)
+async def create_project_from_clips(request: ProjectFromClipsCreate):
+    """
+    Create a project pre-populated with filtered clips from the library.
+
+    Filters clips by:
+    - game_ids: List of game IDs to include (empty = all games)
+    - min_rating: Minimum rating (1-5)
+    - tags: List of tags that clips must have (empty = all tags)
+    """
+    # Validate aspect ratio
+    if request.aspect_ratio not in ['16:9', '9:16', '4:3', '1:1']:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid aspect ratio: {request.aspect_ratio}"
+        )
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Get filtered clips
+        query, params = _build_clips_filter_query(
+            request.game_ids, request.min_rating, request.tags
+        )
+        cursor.execute(query, params)
+        clips = cursor.fetchall()
+
+        if not clips:
+            raise HTTPException(
+                status_code=400,
+                detail="No clips match the specified filters"
+            )
+
+        # Create the project
+        cursor.execute("""
+            INSERT INTO projects (name, aspect_ratio)
+            VALUES (?, ?)
+        """, (request.name, request.aspect_ratio))
+        project_id = cursor.lastrowid
+
+        # Add all filtered clips as working clips
+        for sort_order, clip in enumerate(clips):
+            cursor.execute("""
+                INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version)
+                VALUES (?, ?, ?, 1)
+            """, (project_id, clip['id'], sort_order))
+
+        conn.commit()
+
+        # Calculate total duration for logging
+        total_duration = sum(
+            max(0, (clip['end_time'] or 0) - (clip['start_time'] or 0))
+            for clip in clips
+        )
+
+        logger.info(
+            f"Created project {project_id} with {len(clips)} clips "
+            f"(total duration: {total_duration:.1f}s)"
+        )
+
+        return ProjectResponse(
+            id=project_id,
+            name=request.name,
+            aspect_ratio=request.aspect_ratio,
+            working_video_id=None,
+            final_video_id=None,
+            created_at=datetime.now().isoformat()
+        )
+
+
 @router.get("/{project_id}", response_model=ProjectDetailResponse)
 async def get_project(project_id: int):
     """Get project details including all working clips."""
@@ -218,7 +389,9 @@ async def get_project(project_id: int):
                 wc.uploaded_filename,
                 wc.exported_at,
                 wc.sort_order,
-                rc.filename as raw_filename
+                rc.filename as raw_filename,
+                rc.name as raw_name,
+                rc.notes as raw_notes
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             WHERE wc.project_id = ?
@@ -236,6 +409,8 @@ async def get_project(project_id: int):
                 raw_clip_id=clip['raw_clip_id'],
                 uploaded_filename=clip['uploaded_filename'],
                 filename=filename,
+                name=clip['raw_name'],
+                notes=clip['raw_notes'],
                 exported_at=clip['exported_at'],
                 sort_order=clip['sort_order']
             ))

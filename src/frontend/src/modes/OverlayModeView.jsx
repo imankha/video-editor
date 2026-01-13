@@ -3,6 +3,7 @@ import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
 import ExportButton from '../components/ExportButton';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from './overlay';
+import { Eye, EyeOff } from 'lucide-react';
 
 /**
  * OverlayModeView - Complete view for Overlay mode
@@ -57,6 +58,8 @@ export function OverlayModeView({
   isDetectionLoading,
   isDetectionUploading,
   onPlayerSelect,
+  showPlayerBoxes,
+  onTogglePlayerBoxes,
 
   // Zoom
   zoom,
@@ -132,7 +135,22 @@ export function OverlayModeView({
         {/* Controls Bar */}
         {effectiveOverlayVideoUrl && (
           <div className="mb-6 flex gap-4 items-center">
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-3">
+              {/* Player detection boxes toggle */}
+              {playerDetectionEnabled && (
+                <button
+                  onClick={onTogglePlayerBoxes}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    showPlayerBoxes
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                      : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  }`}
+                  title={showPlayerBoxes ? 'Hide player boxes' : 'Show player boxes'}
+                >
+                  {showPlayerBoxes ? <Eye size={16} /> : <EyeOff size={16} />}
+                  <span>Players</span>
+                </button>
+              )}
               <ZoomControls
                 zoom={zoom}
                 onZoomIn={onZoomIn}
@@ -167,8 +185,8 @@ export function OverlayModeView({
                   panOffset={panOffset}
                 />
               ),
-              // PlayerDetectionOverlay - AI-detected player boxes
-              effectiveOverlayMetadata && playerDetectionEnabled && (
+              // PlayerDetectionOverlay - AI-detected player boxes (toggleable)
+              effectiveOverlayMetadata && playerDetectionEnabled && showPlayerBoxes && (
                 <PlayerDetectionOverlay
                   key="player-detection"
                   videoRef={videoRef}

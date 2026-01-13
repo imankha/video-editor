@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image } from 'lucide-react';
 import { useAppState } from '../contexts';
+import { GameClipSelectorModal } from './GameClipSelectorModal';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -18,7 +19,7 @@ export function ProjectManager({
   onSelectProjectWithMode, // (projectId, options) => void - options: { mode: 'framing'|'overlay', clipIndex?: number }
   onCreateProject,
   onDeleteProject,
-  onAnnotate,
+  onAnnotateWithFile, // (file: File) => void - Navigate to annotate mode with file
   // Games props
   games = [],
   gamesLoading = false,
@@ -39,21 +40,56 @@ export function ProjectManager({
   const exportingProject = exportingProjectProp ?? contextExportingProject;
   const [activeTab, setActiveTab] = useState('projects'); // 'games' | 'projects'
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const gameFileInputRef = useRef(null);
 
-  // Fetch games when switching to games tab
+  // Handle file selection for new game
+  const handleGameFileChange = useCallback((event) => {
+    const file = event.target.files?.[0];
+    if (file && onAnnotateWithFile) {
+      onAnnotateWithFile(file);
+    }
+    // Reset input so same file can be selected again
+    event.target.value = '';
+  }, [onAnnotateWithFile]);
+
+  // Trigger file picker for new game
+  const handleAddGameClick = useCallback(() => {
+    gameFileInputRef.current?.click();
+  }, []);
+
+  // Fetch games when switching to games tab or when opening modal
   useEffect(() => {
-    if (activeTab === 'games' && onFetchGames) {
+    if ((activeTab === 'games' || showNewProjectModal) && onFetchGames) {
       onFetchGames();
     }
-  }, [activeTab, onFetchGames]);
+  }, [activeTab, showNewProjectModal, onFetchGames]);
 
-  const handleCreateProject = async (name, aspectRatio) => {
-    await onCreateProject(name, aspectRatio);
+  // Handle project creation from the new modal
+  const handleProjectCreated = useCallback(async (project) => {
+    // Refresh projects list to show the new project
+    // The modal already created the project via API
+    if (onCreateProject) {
+      // Just refresh the list - project was already created
+      // Call with null to trigger a refresh without creating
+    }
     setShowNewProjectModal(false);
-  };
+    // Select the new project to start editing
+    if (project?.id && onSelectProject) {
+      onSelectProject(project.id);
+    }
+  }, [onSelectProject]);
 
   return (
     <div className="flex-1 flex flex-col items-center p-8 bg-gray-900">
+      {/* Hidden file input for game video selection */}
+      <input
+        ref={gameFileInputRef}
+        type="file"
+        accept="video/mp4,video/quicktime,video/webm"
+        onChange={handleGameFileChange}
+        className="hidden"
+      />
+
       {/* Gallery button - fixed top right corner */}
       {onOpenDownloads && (
         <button
@@ -118,7 +154,7 @@ export function ProjectManager({
       <div className="mb-8">
         {activeTab === 'games' ? (
           <button
-            onClick={onAnnotate}
+            onClick={handleAddGameClick}
             className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
           >
             <Plus size={20} />
@@ -192,13 +228,13 @@ export function ProjectManager({
         )
       )}
 
-      {/* New Project Modal */}
-      {showNewProjectModal && (
-        <NewProjectModal
-          onClose={() => setShowNewProjectModal(false)}
-          onCreate={handleCreateProject}
-        />
-      )}
+      {/* New Project Modal - Game/Clip selector */}
+      <GameClipSelectorModal
+        isOpen={showNewProjectModal}
+        onClose={() => setShowNewProjectModal(false)}
+        onCreate={handleProjectCreated}
+        games={games}
+      />
     </div>
   );
 }
@@ -527,96 +563,6 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
         onOverlayClick={handleOverlayClick}
         isExporting={isExporting}
       />
-    </div>
-  );
-}
-
-
-/**
- * NewProjectModal - Create a new project
- */
-function NewProjectModal({ onClose, onCreate }) {
-  const [name, setName] = useState('');
-  const [aspectRatio, setAspectRatio] = useState('16:9');
-  const [creating, setCreating] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    setCreating(true);
-    await onCreate(name.trim(), aspectRatio);
-    setCreating(false);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-700">
-        <h2 className="text-xl font-bold text-white mb-4">New Project</h2>
-
-        <form onSubmit={handleSubmit}>
-          {/* Name input */}
-          <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-2">
-              Project Name
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="My Highlight Reel"
-              className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-              autoFocus
-            />
-          </div>
-
-          {/* Aspect ratio selector */}
-          <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-2">
-              Aspect Ratio
-            </label>
-            <div className="flex gap-3">
-              {[
-                { value: '16:9', label: '16:9', desc: 'Landscape (YouTube)' },
-                { value: '9:16', label: '9:16', desc: 'Portrait (TikTok/Reels)' },
-                { value: '1:1', label: '1:1', desc: 'Square (Instagram)' },
-              ].map(option => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setAspectRatio(option.value)}
-                  className={`flex-1 p-3 rounded-lg border transition-colors ${
-                    aspectRatio === option.value
-                      ? 'bg-purple-600 border-purple-500 text-white'
-                      : 'bg-gray-700 border-gray-600 text-gray-300 hover:border-gray-500'
-                  }`}
-                >
-                  <div className="font-medium">{option.label}</div>
-                  <div className="text-xs opacity-70">{option.desc}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Buttons */}
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!name.trim() || creating}
-              className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white rounded-lg transition-colors"
-            >
-              {creating ? 'Creating...' : 'Create Project'}
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }
