@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
-const SETTINGS_KEY = 'clipify_settings';
+const SETTINGS_KEY = 'reel_ballers_settings';
 
 // Default settings
 const DEFAULT_SETTINGS = {

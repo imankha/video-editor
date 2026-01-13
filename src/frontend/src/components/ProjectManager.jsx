@@ -74,7 +74,7 @@ export function ProjectManager({
       {/* Header */}
       <div className="text-center mb-6">
         <FolderOpen size={48} className="mx-auto mb-4 text-purple-400" />
-        <h1 className="text-2xl font-bold text-white mb-2">Clipify</h1>
+        <h1 className="text-2xl font-bold text-white mb-2">Reel Ballers</h1>
         <p className="text-gray-400">Manage your games and projects</p>
       </div>
 
