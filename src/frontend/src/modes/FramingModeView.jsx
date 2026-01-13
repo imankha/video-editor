@@ -18,6 +18,7 @@ export function FramingModeView({
   videoUrl,
   metadata,
   videoFile,
+  clipTitle,
   currentTime,
   duration,
   isPlaying,
@@ -122,7 +123,7 @@ export function FramingModeView({
       {metadata && (
         <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
           <div className="flex items-center justify-between text-sm text-gray-300">
-            <span className="font-semibold text-white">{metadata.fileName}</span>
+            {clipTitle && <span className="font-semibold text-white">{clipTitle}</span>}
             <div className="flex space-x-6">
               <span>
                 <span className="text-gray-400">Resolution:</span>{' '}

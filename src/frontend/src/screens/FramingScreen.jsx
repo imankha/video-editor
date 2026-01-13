@@ -643,26 +643,50 @@ export function FramingScreen({
     // Set working video in overlay store so OverlayScreen can access it
     // This is critical - if this fails, overlay mode won't work
     let workingVideoSet = false;
+    const url = URL.createObjectURL(renderedVideoBlob);
+
     try {
       console.log('[FramingScreen] Creating blob URL and extracting metadata...');
-      const url = URL.createObjectURL(renderedVideoBlob);
       const meta = await extractVideoMetadata(renderedVideoBlob);
       console.log('[FramingScreen] Video metadata extracted:', { duration: meta?.duration, width: meta?.width, height: meta?.height });
 
       setWorkingVideo({ file: renderedVideoBlob, url, metadata: meta });
       workingVideoSet = true;
-
-      if (clipMetadata) {
-        setOverlayClipMetadata(clipMetadata);
-        console.log('[FramingScreen] Clip metadata set:', clipMetadata?.source_clips?.length, 'clips');
-      }
-      console.log('[FramingScreen] Working video set in overlay store');
     } catch (err) {
-      console.error('[FramingScreen] Failed to set working video:', err);
-      // Don't proceed to overlay if we couldn't set the working video
-      // User would see broken overlay mode
-      throw new Error(`Failed to prepare video for overlay mode: ${err.message}`);
+      console.warn('[FramingScreen] Metadata extraction failed, using fallback:', err.message);
+
+      // Fallback: construct metadata from clip data and aspect ratio
+      // Calculate total duration from clip metadata
+      const totalDuration = clipMetadata?.source_clips?.length > 0
+        ? clipMetadata.source_clips[clipMetadata.source_clips.length - 1].end_time
+        : clips.reduce((sum, c) => sum + (c.duration || 0), 0);
+
+      // Determine dimensions from aspect ratio (assuming 1080p base)
+      const [ratioW, ratioH] = (globalAspectRatio || '9:16').split(':').map(Number);
+      const isPortrait = ratioH > ratioW;
+      const width = isPortrait ? 1080 : 1920;
+      const height = isPortrait ? 1920 : 1080;
+
+      const fallbackMeta = {
+        width,
+        height,
+        duration: totalDuration,
+        aspectRatio: ratioW / ratioH,
+        fileName: 'rendered_video.mp4',
+        size: renderedVideoBlob.size,
+        format: 'mp4',
+      };
+
+      console.log('[FramingScreen] Using fallback metadata:', fallbackMeta);
+      setWorkingVideo({ file: renderedVideoBlob, url, metadata: fallbackMeta });
+      workingVideoSet = true;
     }
+
+    if (clipMetadata) {
+      setOverlayClipMetadata(clipMetadata);
+      console.log('[FramingScreen] Clip metadata set:', clipMetadata?.source_clips?.length, 'clips');
+    }
+    console.log('[FramingScreen] Working video set in overlay store');
 
     // Clear the "framing changed" flag since we just exported
     setFramingChangedSinceExport(false);
@@ -683,7 +707,7 @@ export function FramingScreen({
     } else {
       console.error('[FramingScreen] Cannot navigate to overlay - working video not set');
     }
-  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode]);
+  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio]);
 
   // Handle clip selection from sidebar
   const handleSelectClip = useCallback((clipId) => {
@@ -735,6 +759,7 @@ export function FramingScreen({
       videoUrl={videoUrl}
       metadata={metadata}
       videoFile={videoFile}
+      clipTitle={selectedClip?.annotateName || selectedClip?.fileNameDisplay}
       currentTime={currentTime}
       duration={duration}
       isPlaying={isPlaying}

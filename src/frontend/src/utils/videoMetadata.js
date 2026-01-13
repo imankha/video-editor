@@ -73,6 +73,7 @@ export async function extractVideoMetadata(videoSource) {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.preload = 'metadata';
+    video.muted = true; // Helps with autoplay policies
 
     const url = URL.createObjectURL(videoSource);
 
@@ -81,13 +82,15 @@ export async function extractVideoMetadata(videoSource) {
       video.remove();
     };
 
-    // Set timeout for loading
+    // Set timeout for loading - longer timeout for large blobs
+    const timeoutMs = Math.max(30000, (videoSource.size || 0) / 500000 * 1000); // 30s min, +1s per 500KB
     const timeoutId = setTimeout(() => {
       if (video.readyState === 0) {
+        console.warn('[videoMetadata] Timeout waiting for metadata, readyState:', video.readyState, 'size:', videoSource.size);
         cleanup();
         reject(new Error('Video metadata loading timed out'));
       }
-    }, 10000); // 10 second timeout
+    }, timeoutMs);
 
     video.onloadedmetadata = () => {
       clearTimeout(timeoutId);
@@ -137,12 +140,14 @@ export async function extractVideoMetadata(videoSource) {
       resolve(metadata);
     };
 
-    video.onerror = () => {
+    video.onerror = (e) => {
       clearTimeout(timeoutId);
+      console.error('[videoMetadata] Video load error:', e);
       cleanup();
       reject(new Error('Failed to load video metadata'));
     };
 
     video.src = url;
+    video.load(); // Force the browser to start loading
   });
 }
