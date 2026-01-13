@@ -58,3 +58,6 @@ src/backend/yolov8x.pt
 /src/frontend/test-results
 /src/frontend/playwright-report
 !src/landing/public/before_after_demo.mp4
+/screenshots
+/screenshots
+src/landing/dist/
