@@ -53,10 +53,10 @@ function App() {
                     playsInline
                     className="w-full h-full object-cover"
                   />
-                  {/* Fullscreen button - visible on mobile, shows on hover for desktop */}
+                  {/* Fullscreen button - mobile only */}
                   <button
                     onClick={handleFullscreen}
-                    className="absolute bottom-4 right-4 p-2 bg-black/60 rounded-full text-white md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                    className="absolute bottom-4 right-4 p-2 bg-black/60 rounded-full text-white md:hidden"
                     aria-label="Fullscreen"
                   >
                     <MdFullscreen className="w-6 h-6" />
