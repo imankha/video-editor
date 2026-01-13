@@ -24,12 +24,12 @@ function App() {
           </p>
 
           {/* Before/After Demo Video */}
-          <div className="flex justify-center mb-16 px-4">
+          <div className="flex justify-center mb-16">
             <div className="relative w-full md:w-auto">
-              {/* Phone frame */}
-              <div className="bg-gray-900 rounded-[2rem] md:rounded-[3rem] p-2 md:p-3 shadow-2xl border-2 md:border-4 border-gray-700">
-                {/* Screen bezel - full width on mobile, 405x720 on desktop (50% bigger) */}
-                <div className="bg-black rounded-[1.5rem] md:rounded-[2.25rem] overflow-hidden w-full aspect-[9/16] md:w-[405px] md:h-[720px]">
+              {/* Phone frame - no padding on mobile for full width */}
+              <div className="bg-gray-900 rounded-[1.5rem] md:rounded-[3rem] p-1.5 md:p-3 shadow-2xl border md:border-4 border-gray-700 mx-2 md:mx-0">
+                {/* Screen bezel - nearly full width on mobile, 405x720 on desktop */}
+                <div className="bg-black rounded-[1rem] md:rounded-[2.25rem] overflow-hidden w-full aspect-[9/16] md:w-[405px] md:h-[720px]">
                   <video
                     src="/before_after_demo.mp4"
                     autoPlay
@@ -41,7 +41,7 @@ function App() {
                 </div>
               </div>
               {/* Phone notch */}
-              <div className="absolute top-3 md:top-5 left-1/2 -translate-x-1/2 w-16 md:w-24 h-4 md:h-6 bg-gray-900 rounded-full"></div>
+              <div className="absolute top-2 md:top-5 left-1/2 -translate-x-1/2 w-14 md:w-24 h-3 md:h-6 bg-gray-900 rounded-full"></div>
             </div>
           </div>
 

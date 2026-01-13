@@ -1,7 +1,4 @@
 # Wrangler configuration for ReelBallers Landing Page
 name = "video-editor"
 compatibility_date = "2024-01-01"
-main = "worker.js"
-
-# Static assets from Vite build output
-assets = { directory = "./dist" }
+pages_build_output_dir = "dist"

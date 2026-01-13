@@ -57,3 +57,4 @@ src/backend/yolov8x.pt
 /parsing annotations
 /src/frontend/test-results
 /src/frontend/playwright-report
+!src/landing/public/before_after_demo.mp4
