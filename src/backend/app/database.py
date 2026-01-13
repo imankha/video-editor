@@ -267,6 +267,28 @@ def ensure_database():
             ON export_jobs(status)
         """)
 
+        # Before/After tracking - links final videos to their source footage
+        # Used to generate before/after comparison videos
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS before_after_tracks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                final_video_id INTEGER NOT NULL,
+                raw_clip_id INTEGER,
+                source_path TEXT NOT NULL,
+                start_frame INTEGER NOT NULL,
+                end_frame INTEGER NOT NULL,
+                clip_index INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (final_video_id) REFERENCES final_videos(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Index for before_after_tracks
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_before_after_tracks_final_video
+            ON before_after_tracks(final_video_id)
+        """)
+
         # Migration: Add new columns to existing tables (silently ignore if already exists)
         migrations = [
             # raw_clips new columns

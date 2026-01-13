@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image } from 'lucide-react';
+import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns } from 'lucide-react';
 import { useDownloads } from '../hooks/useDownloads';
 import { useGalleryStore } from '../stores/galleryStore';
 
@@ -47,6 +47,9 @@ export function DownloadsPanel({
   // State for video preview modal
   const [playingVideo, setPlayingVideo] = useState(null);
 
+  // State for before/after export
+  const [exportingBeforeAfter, setExportingBeforeAfter] = useState(null);
+
   if (!isOpen) return null;
 
   const groups = groupedDownloads();
@@ -76,6 +79,49 @@ export function DownloadsPanel({
     if (onOpenProject) {
       onOpenProject(download.project_id);
       close();
+    }
+  };
+
+  const handleBeforeAfter = async (e, download) => {
+    e.stopPropagation();
+    setExportingBeforeAfter(download.id);
+
+    try {
+      // First check if before/after is available
+      const statusRes = await fetch(`/api/export/before-after/${download.id}/status`);
+      const status = await statusRes.json();
+
+      if (!status.available) {
+        alert(status.error || 'Before/After comparison not available for this video');
+        return;
+      }
+
+      // Generate the comparison video
+      const response = await fetch(`/api/export/before-after/${download.id}`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to generate comparison video');
+      }
+
+      // Download the generated video
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `before_after_${download.project_name || download.id}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error('[DownloadsPanel] Before/After export error:', error);
+      alert(`Failed to generate comparison: ${error.message}`);
+    } finally {
+      setExportingBeforeAfter(null);
     }
   };
 
@@ -126,6 +172,18 @@ export function DownloadsPanel({
                     title="Download file"
                   >
                     <Download size={16} className="text-gray-400 hover:text-white" />
+                  </button>
+                  <button
+                    onClick={(e) => handleBeforeAfter(e, download)}
+                    disabled={exportingBeforeAfter === download.id}
+                    className="p-2 hover:bg-blue-900/40 rounded transition-colors disabled:opacity-50"
+                    title="Export Before/After comparison"
+                  >
+                    {exportingBeforeAfter === download.id ? (
+                      <Loader size={16} className="text-blue-400 animate-spin" />
+                    ) : (
+                      <Columns size={16} className="text-blue-400 hover:text-blue-300" />
+                    )}
                   </button>
                   {onOpenProject && (
                     <button

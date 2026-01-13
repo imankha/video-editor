@@ -18,6 +18,7 @@ from fastapi import APIRouter
 from .framing import router as framing_router
 from .overlay import router as overlay_router
 from .multi_clip import router as multi_clip_router
+from .before_after import router as before_after_router
 
 # Create main export router
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -26,5 +27,6 @@ router = APIRouter(prefix="/api/export", tags=["export"])
 router.include_router(framing_router)
 router.include_router(overlay_router)
 router.include_router(multi_clip_router)
+router.include_router(before_after_router)
 
 __all__ = ['router']

@@ -25,7 +25,7 @@ import subprocess
 import logging
 
 from ...websocket import export_progress, manager
-from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path
+from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path, get_uploads_path
 from ...highlight_transform import (
     transform_all_regions_to_raw,
     transform_all_regions_to_working,
@@ -412,6 +412,55 @@ async def export_final(
         cursor.execute("""
             UPDATE projects SET final_video_id = ? WHERE id = ?
         """, (final_video_id, project_id))
+
+        # Track source clips for before/after comparison
+        cursor.execute("""
+            SELECT wc.id, wc.raw_clip_id, wc.uploaded_filename, wc.segments_data, wc.sort_order,
+                   rc.filename as raw_filename
+            FROM working_clips wc
+            LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            WHERE wc.project_id = ?
+            ORDER BY wc.sort_order
+        """, (project_id,))
+        working_clips = cursor.fetchall()
+
+        for idx, wc in enumerate(working_clips):
+            # Determine source path
+            if wc['raw_clip_id'] and wc['raw_filename']:
+                source_path = str(get_raw_clips_path() / wc['raw_filename'])
+            elif wc['uploaded_filename']:
+                source_path = str(get_uploads_path() / wc['uploaded_filename'])
+            else:
+                continue  # Skip if no source
+
+            # Get frame range from segments_data
+            start_frame = 0
+            end_frame = 0
+            framerate = 30.0
+
+            if wc['segments_data']:
+                try:
+                    segments = json.loads(wc['segments_data'])
+                    trim_range = segments.get('trimRange')
+                    if trim_range:
+                        start_frame = int(trim_range.get('start', 0) * framerate)
+                        end_frame = int(trim_range.get('end', 0) * framerate)
+                    elif segments.get('boundaries'):
+                        # No trim, use full clip from boundaries
+                        boundaries = segments['boundaries']
+                        if len(boundaries) >= 2:
+                            end_frame = int(boundaries[-1] * framerate)
+                except json.JSONDecodeError:
+                    pass
+
+            # Insert tracking record
+            cursor.execute("""
+                INSERT INTO before_after_tracks
+                (final_video_id, raw_clip_id, source_path, start_frame, end_frame, clip_index)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (final_video_id, wc['raw_clip_id'], source_path, start_frame, end_frame, idx))
+
+        logger.info(f"[Final Export] Tracked {len(working_clips)} source clips for before/after")
 
         conn.commit()
 
