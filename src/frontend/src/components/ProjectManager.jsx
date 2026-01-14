@@ -50,16 +50,18 @@ export function ProjectManager({
   // Filter projects based on selected filters
   const filteredProjects = useMemo(() => {
     return projects.filter(project => {
-      // Status filter
+      // Status filter - matches counting logic
       if (statusFilter !== 'all') {
         const isComplete = project.has_final_video;
-        const isInOverlay = project.has_working_video && !project.has_final_video;
-        const isEditing = project.clips_in_progress > 0 && !project.has_working_video;
-        const isNotStarted = !project.has_working_video && project.clips_in_progress === 0 && project.clips_exported === 0;
+        const isInOverlay = !isComplete && project.has_working_video;
+        const isEditing = !isComplete && !isInOverlay && project.clips_in_progress > 0;
+        const isExported = !isComplete && !isInOverlay && !isEditing && project.clips_exported > 0;
+        const isNotStarted = !isComplete && !isInOverlay && !isEditing && !isExported;
 
         if (statusFilter === 'complete' && !isComplete) return false;
         if (statusFilter === 'overlay' && !isInOverlay) return false;
         if (statusFilter === 'editing' && !isEditing) return false;
+        if (statusFilter === 'exported' && !isExported) return false;
         if (statusFilter === 'not_started' && !isNotStarted) return false;
       }
 
@@ -85,6 +87,7 @@ export function ProjectManager({
       complete: 0,
       overlay: 0,
       editing: 0,
+      exported: 0,
       not_started: 0,
       aspects: {},
       auto: 0,
@@ -92,14 +95,16 @@ export function ProjectManager({
     };
 
     projects.forEach(project => {
-      // Status counts
+      // Status counts - matches ProjectCard display logic
       if (project.has_final_video) {
         counts.complete++;
       } else if (project.has_working_video) {
         counts.overlay++;
       } else if (project.clips_in_progress > 0) {
         counts.editing++;
-      } else if (project.clips_exported === 0) {
+      } else if (project.clips_exported > 0) {
+        counts.exported++;
+      } else {
         counts.not_started++;
       }
 
@@ -116,7 +121,7 @@ export function ProjectManager({
     });
 
     // Determine which filters are useful (have more than one distinct value)
-    const statusValuesWithProjects = [counts.complete, counts.overlay, counts.editing, counts.not_started].filter(v => v > 0).length;
+    const statusValuesWithProjects = [counts.complete, counts.overlay, counts.editing, counts.exported, counts.not_started].filter(v => v > 0).length;
     counts.showStatusFilter = statusValuesWithProjects > 1;
     counts.showAspectFilter = Object.keys(counts.aspects).length > 1;
     counts.showCreationFilter = counts.auto > 0 && counts.custom > 0;
@@ -311,6 +316,7 @@ export function ProjectManager({
                         { value: 'complete', label: 'Complete', color: 'green' },
                         { value: 'overlay', label: 'In Overlay', color: 'blue' },
                         { value: 'editing', label: 'Editing', color: 'blue' },
+                        { value: 'exported', label: 'Exported', color: 'purple' },
                         { value: 'not_started', label: 'Not Started', color: 'gray' }
                       ].map(opt => {
                         const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];
