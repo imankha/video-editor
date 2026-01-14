@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder } from 'lucide-react';
 import { useAppState } from '../contexts';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
+import { Button } from './shared/Button';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -136,6 +137,39 @@ export function ProjectManager({
     filterCounts.showCreationFilter
   );
 
+  // Compute which progress statuses are present across all projects (for shared legend)
+  const progressStatuses = useMemo(() => {
+    const statuses = { done: false, exporting: false, editing: false, ready: false, pending: false };
+
+    projects.forEach(project => {
+      const { clip_count, clips_exported, clips_in_progress, has_working_video, has_overlay_edits, has_final_video } = project;
+
+      // Check clip segments
+      for (let i = 0; i < clip_count; i++) {
+        if (has_final_video || i < clips_exported) {
+          statuses.done = true;
+        } else if (i < clips_exported + clips_in_progress) {
+          statuses.editing = true;
+        } else {
+          statuses.pending = true;
+        }
+      }
+
+      // Check overlay segment
+      if (has_final_video) {
+        statuses.done = true;
+      } else if (has_overlay_edits) {
+        statuses.editing = true;
+      } else if (has_working_video) {
+        statuses.ready = true;
+      } else {
+        statuses.pending = true;
+      }
+    });
+
+    return statuses;
+  }, [projects]);
+
   // Handle file selection for new game
   const handleGameFileChange = useCallback((event) => {
     const file = event.target.files?.[0];
@@ -186,19 +220,20 @@ export function ProjectManager({
 
       {/* Gallery button - fixed top right corner */}
       {onOpenDownloads && (
-        <button
+        <Button
+          variant="outline"
+          icon={Image}
           onClick={onOpenDownloads}
-          className="fixed top-4 right-4 z-30 flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg transition-colors"
+          className="fixed top-4 right-4 z-30"
           title="Gallery"
         >
-          <Image size={18} className="text-purple-400" />
-          <span className="text-sm text-gray-300">Gallery</span>
+          Gallery
           {downloadsCount > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
+            <span className="px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
               {downloadsCount > 9 ? '9+' : downloadsCount}
             </span>
           )}
-        </button>
+        </Button>
       )}
 
       {/* Header */}
@@ -247,21 +282,23 @@ export function ProjectManager({
       {/* Action Button */}
       <div className="mb-8">
         {activeTab === 'games' ? (
-          <button
+          <Button
+            variant="success"
+            size="lg"
+            icon={Plus}
             onClick={handleAddGameClick}
-            className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
           >
-            <Plus size={20} />
             Add Game
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
+            variant="primary"
+            size="lg"
+            icon={Plus}
             onClick={() => setShowNewProjectModal(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
           >
-            <Plus size={20} />
             New Project
-          </button>
+          </Button>
         )}
       </div>
 
@@ -418,11 +455,46 @@ export function ProjectManager({
               </div>
             )}
 
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
-              {filteredProjects.length === projects.length
-                ? `Your Projects`
-                : `Showing ${filteredProjects.length} of ${projects.length} Projects`}
-            </h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
+                {filteredProjects.length === projects.length
+                  ? `Your Projects`
+                  : `Showing ${filteredProjects.length} of ${projects.length} Projects`}
+              </h2>
+              {/* Shared progress legend - only show statuses that exist */}
+              <div className="flex gap-3 text-xs text-gray-500">
+                {progressStatuses.done && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-sm bg-green-500"></span>
+                    Done
+                  </span>
+                )}
+                {progressStatuses.exporting && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-sm bg-amber-500"></span>
+                    Exporting
+                  </span>
+                )}
+                {progressStatuses.editing && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-sm bg-blue-500"></span>
+                    Editing
+                  </span>
+                )}
+                {progressStatuses.ready && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-sm bg-blue-300"></span>
+                    Ready
+                  </span>
+                )}
+                {progressStatuses.pending && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-sm bg-gray-600"></span>
+                    Not Started
+                  </span>
+                )}
+              </div>
+            </div>
             <div className="space-y-2">
               {filteredProjects.length === 0 ? (
                 <div className="text-gray-500 text-center py-4">
@@ -493,26 +565,25 @@ function GameCard({ game, onLoad, onDelete }) {
 
         <div className="flex items-center gap-2">
           {/* Load button */}
-          <button
+          <Button
+            variant="success"
+            size="sm"
+            icon={PlayCircle}
             onClick={(e) => { e.stopPropagation(); onLoad(); }}
-            className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
           >
-            <PlayCircle size={14} />
             Load
-          </button>
+          </Button>
 
           {/* Delete button */}
-          <button
+          <Button
+            variant={showDeleteConfirm ? 'danger' : 'ghost'}
+            size="sm"
+            icon={Trash2}
+            iconOnly
             onClick={handleDelete}
-            className={`p-2 rounded transition-colors ${
-              showDeleteConfirm
-                ? 'bg-red-600 text-white'
-                : 'text-gray-500 hover:text-red-400 hover:bg-gray-700 opacity-0 group-hover:opacity-100'
-            }`}
+            className={!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
             title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
-          >
-            <Trash2 size={16} />
-          </button>
+          />
         </div>
       </div>
     </div>
@@ -656,31 +727,6 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
         })}
       </div>
 
-      {/* Legend - only show if not compact */}
-      {!isCompact && (
-        <div className="flex gap-3 mt-1.5 text-xs text-gray-500">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm bg-green-500"></span>
-            Done
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm bg-amber-500"></span>
-            Exporting
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm bg-blue-500"></span>
-            Editing
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm bg-blue-300"></span>
-            Ready
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm bg-gray-600"></span>
-            Not Started
-          </span>
-        </div>
-      )}
     </div>
   );
 }
@@ -744,36 +790,38 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
             <span>{project.aspect_ratio}</span>
             <span>•</span>
             <span>{project.clip_count} clip{project.clip_count !== 1 ? 's' : ''}</span>
-            <span>•</span>
-            <span>
-              {project.has_final_video ? 'Complete' :
-               isExporting === 'overlay' ? (
-                 <span className="text-amber-400">Exporting...</span>
-               ) :
-               isExporting === 'framing' ? (
-                 <span className="text-amber-400">Exporting...</span>
-               ) :
-               project.has_working_video ? 'In Overlay' :
-               project.clips_in_progress > 0 ? (
-                 <span className="text-blue-400">Editing</span>
-               ) :
-               project.clips_exported > 0 ? 'Exported' : 'Not Started'}
-            </span>
+            {/* Only show status text for non-complete projects - complete is obvious from green bar */}
+            {!project.has_final_video && (
+              <>
+                <span>•</span>
+                <span>
+                  {isExporting === 'overlay' ? (
+                    <span className="text-amber-400">Exporting...</span>
+                  ) :
+                  isExporting === 'framing' ? (
+                    <span className="text-amber-400">Exporting...</span>
+                  ) :
+                  project.has_working_video ? 'In Overlay' :
+                  project.clips_in_progress > 0 ? (
+                    <span className="text-blue-400">Editing</span>
+                  ) :
+                  project.clips_exported > 0 ? 'Exported' : 'Not Started'}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
         {/* Delete button */}
-        <button
+        <Button
+          variant={showDeleteConfirm ? 'danger' : 'ghost'}
+          size="sm"
+          icon={Trash2}
+          iconOnly
           onClick={handleDelete}
-          className={`p-2 rounded transition-colors ${
-            showDeleteConfirm
-              ? 'bg-red-600 text-white'
-              : 'text-gray-500 hover:text-red-400 hover:bg-gray-700 opacity-0 group-hover:opacity-100'
-          }`}
+          className={!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
           title={showDeleteConfirm ? 'Click again to confirm' : 'Delete project'}
-        >
-          <Trash2 size={16} />
-        </button>
+        />
       </div>
 
       {/* Segmented progress strip - clickable segments for direct navigation */}

@@ -822,7 +822,7 @@ const ExportButton = forwardRef(function ExportButton({
         ) : (
           <>
             <Download size={20} />
-            <span>Export Video</span>
+            <span>{isFramingMode ? 'Frame Video' : 'Add Overlay'}</span>
           </>
         )}
       </button>

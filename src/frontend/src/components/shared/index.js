@@ -1,5 +1,6 @@
 // Shared component exports
 // Components in shared/ directory
+export { Button, IconButton, ButtonGroup } from './Button';
 export { ConfirmationDialog } from './ConfirmationDialog';
 export { ExportProgress } from './ExportProgress';
 export { ModeSwitcher } from './ModeSwitcher';

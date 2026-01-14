@@ -1,8 +1,9 @@
 import { useMemo, useRef, useCallback } from 'react';
+import { FolderOpen } from 'lucide-react';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
 import { useProjects } from './hooks/useProjects';
-import { ConfirmationDialog, ModeSwitcher } from './components/shared';
+import { Button, ConfirmationDialog, ModeSwitcher } from './components/shared';
 import DebugInfo from './components/DebugInfo';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
@@ -182,16 +183,17 @@ function App() {
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
               {/* Back to Projects button */}
-              <button
+              <Button
+                variant="secondary"
+                icon={FolderOpen}
                 onClick={() => {
                   clearSelection();
                   fetchProjects();
                   setEditorMode('project-manager');
                 }}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
               >
-                ← Projects
-              </button>
+                Projects
+              </Button>
               <div>
                 <h1 className="text-4xl font-bold text-white mb-2">
                   Reel Ballers

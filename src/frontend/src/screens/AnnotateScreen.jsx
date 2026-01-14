@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { FolderOpen } from 'lucide-react';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
+import { GalleryButton } from '../components/GalleryButton';
+import { Button } from '../components/shared';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import { useGames } from '../hooks/useGames';
 import { useProjects } from '../hooks/useProjects';
 import { useEditorStore } from '../stores/editorStore';
-import { useGalleryStore } from '../stores/galleryStore';
 import { getPendingGameFile, clearPendingGameFile } from './ProjectsScreen';
 
 /**
@@ -48,10 +50,6 @@ export function AnnotateScreen() {
   // Projects (for import/export)
   const { fetchProjects } = useProjects();
 
-  // Gallery (for downloads panel)
-  const openGallery = useGalleryStore(state => state.open);
-  const downloadsCount = useGalleryStore(state => state.count);
-
   // Track if we're loading a game (ref persists across re-renders without causing them)
   const isLoadingRef = useRef(false);
 
@@ -91,11 +89,6 @@ export function AnnotateScreen() {
     setEditorMode('project-manager');
   }, [setEditorMode]);
 
-  const handleOpenDownloads = useCallback(() => {
-    // Open the gallery panel directly (it's rendered by App.jsx)
-    openGallery();
-  }, [openGallery]);
-
   // AnnotateContainer - encapsulates all annotate mode state and handlers
   // NOTE: Clips are now saved in real-time during annotation, no batch import needed
   const annotate = AnnotateContainer({
@@ -116,8 +109,6 @@ export function AnnotateScreen() {
     fetchProjects,
     onBackToProjects: handleBackToProjects,
     setEditorMode,
-    downloadsCount,
-    onOpenDownloads: handleOpenDownloads,
   });
 
   const {
@@ -304,24 +295,20 @@ export function AnnotateScreen() {
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              <button
+              <Button
+                variant="secondary"
+                icon={FolderOpen}
                 onClick={handleBackToProjects}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
               >
-                ← Projects
-              </button>
+                Projects
+              </Button>
               <div>
                 <h1 className="text-4xl font-bold text-white mb-2">Annotate Game</h1>
                 <p className="text-gray-400">Mark clips to extract from your game footage</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <button
-                onClick={handleOpenDownloads}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-              >
-                Gallery {downloadsCount > 0 && `(${downloadsCount})`}
-              </button>
+              <GalleryButton />
             </div>
           </div>
           <AnnotateModeView

@@ -1,5 +1,6 @@
 import { Image } from 'lucide-react';
 import { useGalleryStore } from '../stores/galleryStore';
+import { Button } from './shared/Button';
 
 /**
  * GalleryButton - Self-contained button that opens the Downloads/Gallery panel
@@ -12,19 +13,20 @@ export function GalleryButton() {
   const count = useGalleryStore((state) => state.count);
 
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="md"
+      icon={Image}
       onClick={open}
-      className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-700 rounded-lg transition-colors"
       title="Gallery"
     >
-      <Image size={18} className="text-purple-400" />
-      <span className="text-sm text-gray-400">Gallery</span>
+      Gallery
       {count > 0 && (
         <span className="px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
           {count > 9 ? '9+' : count}
         </span>
       )}
-    </button>
+    </Button>
   );
 }
 

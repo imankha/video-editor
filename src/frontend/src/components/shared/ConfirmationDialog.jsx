@@ -1,4 +1,5 @@
 import React from 'react';
+import { Button } from './Button';
 
 /**
  * ConfirmationDialog - Modal dialog with configurable buttons
@@ -8,7 +9,7 @@ import React from 'react';
  * - title: Dialog title
  * - message: Dialog message/description
  * - buttons: Array of button configs [{ label, onClick, variant, disabled }]
- *   - variant: 'primary' (blue), 'danger' (red), 'secondary' (gray)
+ *   - variant: 'primary' (purple), 'danger' (red), 'secondary' (gray)
  * - onClose: Called when clicking outside or pressing Escape
  */
 export function ConfirmationDialog({ isOpen, title, message, buttons = [], onClose }) {
@@ -33,12 +34,6 @@ export function ConfirmationDialog({ isOpen, title, message, buttons = [], onClo
     }
   }, [isOpen]);
 
-  const variantStyles = {
-    primary: 'bg-blue-600 hover:bg-blue-700 text-white',
-    danger: 'bg-red-600 hover:bg-red-700 text-white',
-    secondary: 'bg-gray-600 hover:bg-gray-700 text-white'
-  };
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
@@ -58,16 +53,14 @@ export function ConfirmationDialog({ isOpen, title, message, buttons = [], onClo
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-700 flex justify-end gap-3">
           {buttons.map((button, index) => (
-            <button
+            <Button
               key={index}
+              variant={button.variant || 'secondary'}
               onClick={button.onClick}
               disabled={button.disabled}
-              className={`px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                variantStyles[button.variant || 'secondary']
-              }`}
             >
               {button.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
