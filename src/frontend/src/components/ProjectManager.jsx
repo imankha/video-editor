@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder } from 'lucide-react';
 import { useAppState } from '../contexts';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
 
@@ -41,6 +41,95 @@ export function ProjectManager({
   const [activeTab, setActiveTab] = useState('projects'); // 'games' | 'projects'
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const gameFileInputRef = useRef(null);
+
+  // Project filter state
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'complete' | 'overlay' | 'editing' | 'not_started'
+  const [aspectFilter, setAspectFilter] = useState('all'); // 'all' | '9:16' | '16:9' | '1:1' | '4:5'
+  const [creationFilter, setCreationFilter] = useState('all'); // 'all' | 'auto' | 'custom'
+
+  // Filter projects based on selected filters
+  const filteredProjects = useMemo(() => {
+    return projects.filter(project => {
+      // Status filter
+      if (statusFilter !== 'all') {
+        const isComplete = project.has_final_video;
+        const isInOverlay = project.has_working_video && !project.has_final_video;
+        const isEditing = project.clips_in_progress > 0 && !project.has_working_video;
+        const isNotStarted = !project.has_working_video && project.clips_in_progress === 0 && project.clips_exported === 0;
+
+        if (statusFilter === 'complete' && !isComplete) return false;
+        if (statusFilter === 'overlay' && !isInOverlay) return false;
+        if (statusFilter === 'editing' && !isEditing) return false;
+        if (statusFilter === 'not_started' && !isNotStarted) return false;
+      }
+
+      // Aspect ratio filter
+      if (aspectFilter !== 'all' && project.aspect_ratio !== aspectFilter) {
+        return false;
+      }
+
+      // Creation type filter
+      if (creationFilter !== 'all') {
+        if (creationFilter === 'auto' && !project.is_auto_created) return false;
+        if (creationFilter === 'custom' && project.is_auto_created) return false;
+      }
+
+      return true;
+    });
+  }, [projects, statusFilter, aspectFilter, creationFilter]);
+
+  // Get counts for filter badges and determine which filters are useful
+  const filterCounts = useMemo(() => {
+    const counts = {
+      all: projects.length,
+      complete: 0,
+      overlay: 0,
+      editing: 0,
+      not_started: 0,
+      aspects: {},
+      auto: 0,
+      custom: 0
+    };
+
+    projects.forEach(project => {
+      // Status counts
+      if (project.has_final_video) {
+        counts.complete++;
+      } else if (project.has_working_video) {
+        counts.overlay++;
+      } else if (project.clips_in_progress > 0) {
+        counts.editing++;
+      } else if (project.clips_exported === 0) {
+        counts.not_started++;
+      }
+
+      // Aspect ratio counts
+      const ratio = project.aspect_ratio || '9:16';
+      counts.aspects[ratio] = (counts.aspects[ratio] || 0) + 1;
+
+      // Creation type counts
+      if (project.is_auto_created) {
+        counts.auto++;
+      } else {
+        counts.custom++;
+      }
+    });
+
+    // Determine which filters are useful (have more than one distinct value)
+    const statusValuesWithProjects = [counts.complete, counts.overlay, counts.editing, counts.not_started].filter(v => v > 0).length;
+    counts.showStatusFilter = statusValuesWithProjects > 1;
+    counts.showAspectFilter = Object.keys(counts.aspects).length > 1;
+    counts.showCreationFilter = counts.auto > 0 && counts.custom > 0;
+
+    return counts;
+  }, [projects]);
+
+  // Only show filters if we have more than 1 project and at least one filter is useful
+  const showFilters = projects.length > 1 && (
+    filterCounts.showStatusFilter ||
+    filterCounts.showAspectFilter ||
+    filterCounts.showCreationFilter
+  );
 
   // Handle file selection for new game
   const handleGameFileChange = useCallback((event) => {
@@ -209,20 +298,142 @@ export function ProjectManager({
           </div>
         ) : (
           <div className="w-full max-w-2xl">
+            {/* Filters - only show when useful */}
+            {showFilters && (
+              <div className="mb-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700 space-y-3">
+                {/* Status Filter */}
+                {filterCounts.showStatusFilter && (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Status</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { value: 'all', label: 'All' },
+                        { value: 'complete', label: 'Complete', color: 'green' },
+                        { value: 'overlay', label: 'In Overlay', color: 'blue' },
+                        { value: 'editing', label: 'Editing', color: 'blue' },
+                        { value: 'not_started', label: 'Not Started', color: 'gray' }
+                      ].map(opt => {
+                        const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];
+                        if (count === 0 && opt.value !== 'all') return null;
+                        return (
+                          <button
+                            key={opt.value}
+                            onClick={() => setStatusFilter(opt.value)}
+                            className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                              statusFilter === opt.value
+                                ? opt.color === 'green' ? 'bg-green-600 text-white'
+                                  : opt.color === 'blue' ? 'bg-blue-600 text-white'
+                                  : 'bg-purple-600 text-white'
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            }`}
+                          >
+                            {opt.label} ({count})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Aspect Ratio Filter */}
+                {filterCounts.showAspectFilter && (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Aspect Ratio</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        onClick={() => setAspectFilter('all')}
+                        className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                          aspectFilter === 'all'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        All
+                      </button>
+                      {Object.entries(filterCounts.aspects).map(([ratio, count]) => (
+                        <button
+                          key={ratio}
+                          onClick={() => setAspectFilter(ratio)}
+                          className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                            aspectFilter === ratio
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          }`}
+                        >
+                          {ratio} ({count})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Creation Type Filter */}
+                {filterCounts.showCreationFilter && (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Created By</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        onClick={() => setCreationFilter('all')}
+                        className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                          creationFilter === 'all'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        All
+                      </button>
+                      <button
+                        onClick={() => setCreationFilter('auto')}
+                        className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded transition-colors ${
+                          creationFilter === 'auto'
+                            ? 'bg-yellow-600 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                        title="Auto-created from 5-star clips"
+                      >
+                        <Star size={12} className={creationFilter === 'auto' ? 'text-white' : 'text-yellow-400'} />
+                        Brilliant ({filterCounts.auto})
+                      </button>
+                      <button
+                        onClick={() => setCreationFilter('custom')}
+                        className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded transition-colors ${
+                          creationFilter === 'custom'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                        title="Manually created projects"
+                      >
+                        <Folder size={12} className={creationFilter === 'custom' ? 'text-white' : 'text-purple-400'} />
+                        Custom ({filterCounts.custom})
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
-              Your Projects
+              {filteredProjects.length === projects.length
+                ? `Your Projects`
+                : `Showing ${filteredProjects.length} of ${projects.length} Projects`}
             </h2>
             <div className="space-y-2">
-              {projects.map(project => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  onSelect={() => onSelectProject(project.id)}
-                  onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
-                  onDelete={() => onDeleteProject(project.id)}
-                  exportingProject={exportingProject}
-                />
-              ))}
+              {filteredProjects.length === 0 ? (
+                <div className="text-gray-500 text-center py-4">
+                  No projects match the current filters
+                </div>
+              ) : (
+                filteredProjects.map(project => (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    onSelect={() => onSelectProject(project.id)}
+                    onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                    onDelete={() => onDeleteProject(project.id)}
+                    exportingProject={exportingProject}
+                  />
+                ))
+              )}
             </div>
           </div>
         )
@@ -515,6 +726,9 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2">
+            {project.is_auto_created && (
+              <Star size={14} className="text-yellow-400" fill="currentColor" title="Brilliant clip project" />
+            )}
             <h3 className="text-white font-medium">{project.name}</h3>
             {isComplete && (
               <CheckCircle size={16} className="text-green-400" />

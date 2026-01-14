@@ -66,6 +66,7 @@ class ProjectListItem(BaseModel):
     has_working_video: bool
     has_overlay_edits: bool
     has_final_video: bool
+    is_auto_created: bool  # True if project was auto-created for a 5-star clip
     created_at: str
     current_mode: Optional[str] = 'framing'
     last_opened_at: Optional[str] = None
@@ -130,7 +131,11 @@ async def list_projects():
                     (wv.text_overlays IS NOT NULL AND wv.text_overlays != '[]' AND wv.text_overlays != '')
                 ) THEN 1 ELSE 0 END as has_overlay_edits,
                 -- Final video info (check if referenced final video exists)
-                CASE WHEN fv.id IS NOT NULL THEN 1 ELSE 0 END as has_final_video
+                CASE WHEN fv.id IS NOT NULL THEN 1 ELSE 0 END as has_final_video,
+                -- Check if project was auto-created for a 5-star clip
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM raw_clips rc WHERE rc.auto_project_id = p.id
+                ) THEN 1 ELSE 0 END as is_auto_created
             FROM projects p
             LEFT JOIN (
                 -- Subquery for clip counts per project (latest version only)
@@ -180,6 +185,7 @@ async def list_projects():
                 has_working_video=bool(row['has_working_video']),
                 has_overlay_edits=bool(row['has_overlay_edits']),
                 has_final_video=bool(row['has_final_video']),
+                is_auto_created=bool(row['is_auto_created']),
                 created_at=row['created_at'],
                 current_mode=row['current_mode'] or 'framing',
                 last_opened_at=row['last_opened_at']
