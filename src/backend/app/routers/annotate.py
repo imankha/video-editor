@@ -757,26 +757,46 @@ async def export_clips(
                     with get_db_connection() as conn:
                         cursor = conn.cursor()
 
-                        # Get game name for the video title
+                        # Get game name and rating counts for the video
                         game_name = video_base
+                        rating_counts_json = None
                         if game_id:
-                            cursor.execute("SELECT name FROM games WHERE id = ?", (int(game_id),))
+                            cursor.execute("""
+                                SELECT name, clip_count, brilliant_count, good_count,
+                                       interesting_count, mistake_count, blunder_count
+                                FROM games WHERE id = ?
+                            """, (int(game_id),))
                             game_row = cursor.fetchone()
                             if game_row:
                                 game_name = game_row['name']
+                                # Capture rating counts at export time (frozen snapshot)
+                                rating_counts_json = json.dumps({
+                                    'brilliant': game_row['brilliant_count'] or 0,
+                                    'good': game_row['good_count'] or 0,
+                                    'interesting': game_row['interesting_count'] or 0,
+                                    'mistake': game_row['mistake_count'] or 0,
+                                    'blunder': game_row['blunder_count'] or 0
+                                })
 
                         # Copy compilation to final_videos folder
                         final_filename = f"{uuid.uuid4().hex[:12]}.mp4"
                         final_path = get_final_videos_path() / final_filename
                         shutil.copy2(compilation_path, final_path)
 
-                        # Add to final_videos table with name (no project)
+                        # Calculate next version for this game's exports
+                        cursor.execute("""
+                            SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                            FROM final_videos WHERE game_id = ?
+                        """, (int(game_id) if game_id else None,))
+                        next_version = cursor.fetchone()['next_version']
+
+                        # Add to final_videos table with name and rating counts snapshot
                         # Use project_id = 0 as marker for "no project"
                         annotated_name = f"{game_name} (Annotated)"
                         cursor.execute("""
-                            INSERT INTO final_videos (project_id, filename, version, source_type, game_id, name)
-                            VALUES (0, ?, 1, 'annotated_game', ?, ?)
-                        """, (final_filename, int(game_id) if game_id else None, annotated_name))
+                            INSERT INTO final_videos (project_id, filename, version, source_type, game_id, name, rating_counts)
+                            VALUES (0, ?, ?, 'annotated_game', ?, ?, ?)
+                        """, (final_filename, next_version, int(game_id) if game_id else None, annotated_name, rating_counts_json))
                         final_video_id = cursor.lastrowid
 
                         conn.commit()

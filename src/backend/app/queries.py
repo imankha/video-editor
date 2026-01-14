@@ -85,10 +85,13 @@ def latest_working_clips_subquery(alias: str = "wc", project_filter: bool = True
 
 def latest_final_videos_subquery() -> str:
     """
-    Returns SQL subquery for filtering to latest version per project in final_videos.
+    Returns SQL subquery for filtering to latest version per source in final_videos.
 
-    Partitions by project_id and orders by version DESC to get the latest
-    final video for each project.
+    Partitions by:
+    - project_id for project-based exports (brilliant_clip, custom_project)
+    - game_id for annotated game exports (where project_id = 0)
+
+    Uses (project_id, COALESCE(game_id, 0)) as composite key to avoid collisions.
 
     Returns:
         SQL string for use in WHERE ... id IN (...)
@@ -102,7 +105,7 @@ def latest_final_videos_subquery() -> str:
     return """
         SELECT id FROM (
             SELECT id, ROW_NUMBER() OVER (
-                PARTITION BY project_id
+                PARTITION BY project_id, COALESCE(game_id, 0)
                 ORDER BY version DESC
             ) as rn
             FROM final_videos

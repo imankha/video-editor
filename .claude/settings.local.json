@@ -77,7 +77,8 @@
       "Bash(ffprobe:*)",
       "Bash(.venvScriptspython -m pytest tests/test_highlight_transform.py -v --tb=short)",
       "Bash(pushd \"C:\\\\Users\\\\imank\\\\projects\\\\video-editor\\\\src\\\\backend\")",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []

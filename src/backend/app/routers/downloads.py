@@ -12,6 +12,7 @@ from typing import Optional, List
 from datetime import datetime
 import os
 import re
+import json
 import logging
 
 from app.database import get_db_connection, get_final_videos_path
@@ -19,6 +20,17 @@ from app.queries import latest_final_videos_subquery
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
+
+
+class RatingCounts(BaseModel):
+    """Rating counts for annotated games"""
+    brilliant: int = 0   # Rating 5 (!!)
+    good: int = 0        # Rating 4 (!)
+    interesting: int = 0 # Rating 3 (!?)
+    mistake: int = 0     # Rating 2 (?)
+    blunder: int = 0     # Rating 1 (??)
+    total: int = 0
+    weighted_average: Optional[float] = None  # Weighted average rating
 
 
 class DownloadItem(BaseModel):
@@ -30,6 +42,7 @@ class DownloadItem(BaseModel):
     file_size: Optional[int]  # Size in bytes
     source_type: Optional[str]  # 'brilliant_clip' | 'custom_project' | 'annotated_game' | None
     game_id: Optional[int]  # For annotated_game exports, the source game ID
+    rating_counts: Optional[RatingCounts] = None  # Rating breakdown for annotated games
 
 
 class DownloadListResponse(BaseModel):
@@ -52,6 +65,7 @@ async def list_downloads(source_type: Optional[str] = None):
 
         # Build query with optional source_type filter
         # LEFT JOIN to handle annotated exports (project_id = 0, no real project)
+        # rating_counts is stored as JSON snapshot at export time (frozen, not live)
         # COALESCE uses fv.name for annotated exports, p.name for project exports
         base_query = f"""
             SELECT
@@ -62,6 +76,7 @@ async def list_downloads(source_type: Optional[str] = None):
                 fv.version,
                 fv.source_type,
                 fv.game_id,
+                fv.rating_counts,
                 COALESCE(fv.name, p.name) as project_name
             FROM final_videos fv
             LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id != 0
@@ -86,6 +101,31 @@ async def list_downloads(source_type: Optional[str] = None):
             if file_path.exists():
                 file_size = file_path.stat().st_size
 
+            # Parse stored rating counts for annotated games (frozen at export time)
+            rating_counts = None
+            if row['source_type'] == 'annotated_game' and row['rating_counts']:
+                try:
+                    c = json.loads(row['rating_counts'])
+                    brilliant = c.get('brilliant', 0)
+                    good = c.get('good', 0)
+                    interesting = c.get('interesting', 0)
+                    mistake = c.get('mistake', 0)
+                    blunder = c.get('blunder', 0)
+                    total = brilliant + good + interesting + mistake + blunder
+                    weighted_sum = (brilliant * 5) + (good * 4) + (interesting * 3) + (mistake * 2) + (blunder * 1)
+                    weighted_average = round(weighted_sum / total, 2) if total > 0 else None
+                    rating_counts = RatingCounts(
+                        brilliant=brilliant,
+                        good=good,
+                        interesting=interesting,
+                        mistake=mistake,
+                        blunder=blunder,
+                        total=total,
+                        weighted_average=weighted_average
+                    )
+                except (json.JSONDecodeError, KeyError):
+                    pass  # Invalid JSON, skip rating counts
+
             downloads.append(DownloadItem(
                 id=row['id'],
                 project_id=row['project_id'],
@@ -94,7 +134,8 @@ async def list_downloads(source_type: Optional[str] = None):
                 created_at=row['created_at'],
                 file_size=file_size,
                 source_type=row['source_type'],
-                game_id=row['game_id']
+                game_id=row['game_id'],
+                rating_counts=rating_counts
             ))
 
         return DownloadListResponse(

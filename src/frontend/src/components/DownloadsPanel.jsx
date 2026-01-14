@@ -3,6 +3,33 @@ import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Imag
 import { useDownloads } from '../hooks/useDownloads';
 import { useGalleryStore } from '../stores/galleryStore';
 
+// Rating notation symbols (chess-inspired) - matches NotesOverlay
+const RATING_NOTATION = {
+  5: '!!',  // Brilliant
+  4: '!',   // Good
+  3: '!?',  // Interesting
+  2: '?',   // Mistake
+  1: '??',  // Blunder
+};
+
+// Rating colors for badges - matches NotesOverlay
+const RATING_COLORS = {
+  5: { bg: 'bg-green-600/20', text: 'text-green-400', border: 'border-green-600/40' },  // Brilliant
+  4: { bg: 'bg-emerald-600/20', text: 'text-emerald-400', border: 'border-emerald-600/40' },  // Good
+  3: { bg: 'bg-blue-600/20', text: 'text-blue-400', border: 'border-blue-600/40' },  // Interesting
+  2: { bg: 'bg-amber-600/20', text: 'text-amber-400', border: 'border-amber-600/40' },  // Mistake
+  1: { bg: 'bg-red-600/20', text: 'text-red-400', border: 'border-red-600/40' },  // Blunder
+};
+
+// Rating field names matching backend RatingCounts model
+const RATING_FIELDS = [
+  { rating: 5, field: 'brilliant' },
+  { rating: 4, field: 'good' },
+  { rating: 3, field: 'interesting' },
+  { rating: 2, field: 'mistake' },
+  { rating: 1, field: 'blunder' },
+];
+
 // Filter options for gallery source types (icon-only with tooltips)
 const FILTER_OPTIONS = [
   { value: null, label: 'All', icon: LayoutGrid, color: 'text-gray-400' },
@@ -10,6 +37,45 @@ const FILTER_OPTIONS = [
   { value: 'custom_project', label: 'Custom Projects', icon: Folder, color: 'text-purple-400' },
   { value: 'annotated_game', label: 'Annotated Games', icon: Film, color: 'text-green-400' },
 ];
+
+/**
+ * RatingCountsBadges - Displays rating counts as badges for annotated game downloads
+ * Shows count + notation symbol (e.g., "5!!") for each rating with clips
+ */
+function RatingCountsBadges({ ratingCounts }) {
+  if (!ratingCounts) return null;
+
+  const badges = RATING_FIELDS
+    .map(({ rating, field }) => {
+      const count = ratingCounts[field] || 0;
+      if (count === 0) return null;
+      const colors = RATING_COLORS[rating];
+      const notation = RATING_NOTATION[rating];
+      return (
+        <span
+          key={rating}
+          className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border ${colors.bg} ${colors.text} ${colors.border}`}
+          title={`${count} ${field} clip${count !== 1 ? 's' : ''}`}
+        >
+          {count}{notation}
+        </span>
+      );
+    })
+    .filter(Boolean);
+
+  if (badges.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 mt-1.5">
+      {badges}
+      {ratingCounts.weighted_average != null && (
+        <span className="text-xs text-gray-500 ml-1">
+          avg: {ratingCounts.weighted_average.toFixed(1)}
+        </span>
+      )}
+    </div>
+  );
+}
 
 /**
  * DownloadsPanel - Slide-out panel for managing final video downloads
@@ -189,6 +255,10 @@ export function DownloadsPanel({
                     <span>{formatDate(download.created_at)}</span>
                     <span>{formatFileSize(download.file_size)}</span>
                   </div>
+                  {/* Rating counts for annotated games */}
+                  {download.source_type === 'annotated_game' && download.rating_counts && (
+                    <RatingCountsBadges ratingCounts={download.rating_counts} />
+                  )}
                 </div>
 
                 {/* Actions */}

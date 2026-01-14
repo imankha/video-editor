@@ -327,6 +327,8 @@ def ensure_database():
             "ALTER TABLE final_videos ADD COLUMN game_id INTEGER",
             # Name for annotated exports (when no project is associated)
             "ALTER TABLE final_videos ADD COLUMN name TEXT",
+            # Rating counts snapshot for annotated exports (frozen at export time, JSON)
+            "ALTER TABLE final_videos ADD COLUMN rating_counts TEXT",
         ]
 
         for migration in migrations:
