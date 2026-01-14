@@ -7,6 +7,7 @@ import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useVideo } from '../hooks/useVideo';
 import { useClipManager } from '../hooks/useClipManager';
 import { useProjectClips } from '../hooks/useProjectClips';
+import { useGames } from '../hooks/useGames';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ClipSelectorSidebar } from '../components/ClipSelectorSidebar';
 import { FileUpload } from '../components/FileUpload';
@@ -111,12 +112,21 @@ export function FramingScreen({
     clips: projectClips,
     fetchClips: fetchProjectClips,
     uploadClip,
+    uploadClipWithMetadata,
     addClipFromLibrary,
     removeClip: removeProjectClip,
     reorderClips: reorderProjectClips,
     saveFramingEdits,
     getClipFileUrl
   } = useProjectClips(projectId);
+
+  // Games hook (for game name display and library filters)
+  const { games, fetchGames } = useGames();
+
+  // Fetch games on mount
+  useEffect(() => {
+    fetchGames();
+  }, [fetchGames]);
 
   // Segments hook (needed for useVideo initialization)
   const {
@@ -726,6 +736,49 @@ export function FramingScreen({
     handleFileSelect(file);
   }, [handleFileSelect]);
 
+  // Handle upload with metadata from sidebar
+  const handleUploadWithMetadata = useCallback(async (uploadData) => {
+    try {
+      const clip = await uploadClipWithMetadata(uploadData);
+      if (clip) {
+        // Refresh project clips to get the new clip with proper metadata
+        await fetchProjectClips();
+        // Add to clip manager
+        const videoMetadata = await extractVideoMetadata(uploadData.file);
+        addClip(uploadData.file, videoMetadata);
+      }
+    } catch (err) {
+      console.error('[FramingScreen] Failed to upload clip with metadata:', err);
+    }
+  }, [uploadClipWithMetadata, fetchProjectClips, addClip]);
+
+  // Handle adding clip from library
+  const handleAddFromLibrary = useCallback(async (rawClipId) => {
+    try {
+      const clip = await addClipFromLibrary(rawClipId);
+      if (clip) {
+        // Refresh project clips to get the new clip
+        const updatedClips = await fetchProjectClips();
+        // Find the newly added clip and load it
+        const newClip = updatedClips?.find(c => c.raw_clip_id === rawClipId);
+        if (newClip) {
+          const clipUrl = getClipFileUrl(newClip.id, projectId);
+          const videoMetadata = await extractVideoMetadataFromUrl(clipUrl);
+          addClipFromProject({
+            id: newClip.id,
+            filename: newClip.filename,
+            name: newClip.name,
+            notes: newClip.notes,
+            duration: videoMetadata?.duration || 0,
+            game_id: newClip.game_id,
+          }, clipUrl, videoMetadata);
+        }
+      }
+    } catch (err) {
+      console.error('[FramingScreen] Failed to add clip from library:', err);
+    }
+  }, [addClipFromLibrary, fetchProjectClips, getClipFileUrl, projectId, addClipFromProject]);
+
   // If no clips and no video, show file upload
   if (!hasClips && !videoUrl) {
     return (
@@ -748,6 +801,10 @@ export function FramingScreen({
           onReorderClips={reorderClips}
           globalTransition={globalTransition}
           onTransitionChange={setGlobalTransition}
+          onUploadWithMetadata={handleUploadWithMetadata}
+          onAddFromLibrary={handleAddFromLibrary}
+          existingRawClipIds={clips.map(c => c.rawClipId).filter(Boolean)}
+          games={games}
         />
       )}
 

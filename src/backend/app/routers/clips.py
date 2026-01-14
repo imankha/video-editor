@@ -721,6 +721,120 @@ async def add_clip_to_project(
         )
 
 
+def _ensure_unique_name(cursor, name: str, game_id) -> str:
+    """
+    Ensure name is unique within the same game (or among no-game clips).
+    Appends (n) suffix if name already exists.
+    """
+    if not name:
+        return name
+
+    cursor.execute("""
+        SELECT name FROM raw_clips
+        WHERE game_id IS ? AND name LIKE ?
+    """, (game_id, f"{name}%"))
+    existing = {row['name'] for row in cursor.fetchall()}
+
+    if name not in existing:
+        return name
+
+    counter = 2
+    while f"{name} ({counter})" in existing:
+        counter += 1
+    return f"{name} ({counter})"
+
+
+@router.post("/projects/{project_id}/clips/upload-with-metadata", response_model=WorkingClipResponse)
+async def upload_clip_with_metadata(
+    project_id: int,
+    file: UploadFile = File(...),
+    name: str = Form(""),
+    rating: int = Form(3),
+    tags: str = Form("[]"),
+    notes: str = Form("")
+):
+    """
+    Upload a clip to a project with metadata.
+
+    Creates a raw_clip entry first (with game_id=NULL since it's a direct upload),
+    then adds as working_clip to the project. This ensures:
+    - Consistency: All clips have a raw_clip entry
+    - Reusability: Uploaded clips can be added to other projects from library
+    - Metadata storage: Name, rating, tags, notes are preserved
+    """
+    # Parse tags
+    try:
+        tags_list = json.loads(tags) if tags else []
+    except json.JSONDecodeError:
+        tags_list = []
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Verify project exists
+        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Ensure unique name within no-game clips
+        unique_name = _ensure_unique_name(cursor, name, None)
+
+        # Save file to raw_clips directory
+        ext = os.path.splitext(file.filename)[1] or '.mp4'
+        clip_filename = f"{uuid.uuid4().hex}{ext}"
+        file_path = get_raw_clips_path() / clip_filename
+
+        content = await file.read()
+        with open(file_path, 'wb') as f:
+            f.write(content)
+
+        logger.info(f"Saved uploaded clip: {clip_filename}")
+
+        # Create raw_clip entry (game_id=NULL for direct uploads)
+        cursor.execute("""
+            INSERT INTO raw_clips (filename, rating, tags, name, notes, game_id)
+            VALUES (?, ?, ?, ?, ?, NULL)
+        """, (
+            clip_filename,
+            rating,
+            json.dumps(tags_list),
+            unique_name,
+            notes
+        ))
+        raw_clip_id = cursor.lastrowid
+
+        # Get next sort order for project
+        cursor.execute("""
+            SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order
+            FROM working_clips
+            WHERE project_id = ?
+        """, (project_id,))
+        next_order = cursor.fetchone()['next_order']
+
+        # Add as working_clip to project
+        cursor.execute("""
+            INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version)
+            VALUES (?, ?, ?, 1)
+        """, (project_id, raw_clip_id, next_order))
+        working_clip_id = cursor.lastrowid
+
+        conn.commit()
+
+        logger.info(f"Created raw_clip {raw_clip_id} and working_clip {working_clip_id} for project {project_id}")
+
+        return WorkingClipResponse(
+            id=working_clip_id,
+            project_id=project_id,
+            raw_clip_id=raw_clip_id,
+            uploaded_filename=None,
+            filename=clip_filename,
+            name=derive_clip_name(unique_name, rating, tags_list),
+            notes=notes,
+            exported_at=None,
+            sort_order=next_order
+        )
+
+
 @router.put("/projects/{project_id}/clips/reorder")
 async def reorder_clips(project_id: int, clip_ids: List[int]):
     """Reorder clips by providing the new order of clip IDs."""

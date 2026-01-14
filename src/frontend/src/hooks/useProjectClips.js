@@ -119,6 +119,45 @@ export function useProjectClips(projectId) {
   }, [projectId, fetchClips]);
 
   /**
+   * Upload a new clip file with metadata (name, rating, tags, notes)
+   * @param {Object} uploadData - { file, name, rating, tags, notes }
+   */
+  const uploadClipWithMetadata = useCallback(async (uploadData) => {
+    if (!projectId) return null;
+
+    const { file, name, rating, tags, notes } = uploadData;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('name', name || '');
+      formData.append('rating', (rating || 3).toString());
+      formData.append('tags', JSON.stringify(tags || []));
+      formData.append('notes', notes || '');
+
+      const response = await fetch(`${API_BASE_URL}/clips/projects/${projectId}/clips/upload-with-metadata`, {
+        method: 'POST',
+        body: formData
+      });
+      if (!response.ok) throw new Error('Failed to upload clip');
+      const clip = await response.json();
+
+      // Refresh clips list
+      await fetchClips();
+
+      return clip;
+    } catch (err) {
+      setError(err.message);
+      console.error('[useProjectClips] uploadClipWithMetadata error:', err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId, fetchClips]);
+
+  /**
    * Remove a clip from the project
    */
   const removeClip = useCallback(async (clipId) => {
@@ -272,6 +311,7 @@ export function useProjectClips(projectId) {
     fetchClips,
     addClipFromLibrary,
     uploadClip,
+    uploadClipWithMetadata,
     removeClip,
     reorderClips,
     saveFramingEdits,

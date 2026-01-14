@@ -1,7 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library } from 'lucide-react';
 import { ClipLibraryModal } from './ClipLibraryModal';
+import { UploadClipModal } from './UploadClipModal';
 import { getRatingDisplay, formatDuration } from './shared/clipConstants';
+import { createGameLookup, formatClipDisplayName } from '../utils/gameNameLookup';
 
 /**
  * ClipSelectorSidebar - Sidebar for managing multiple video clips
@@ -35,27 +37,47 @@ export function ClipSelectorSidebar({
   globalTransition,
   onTransitionChange,
   onAddFromLibrary,
-  existingRawClipIds = []
+  onUploadWithMetadata,
+  existingRawClipIds = [],
+  games = []
 }) {
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [pendingUploadFile, setPendingUploadFile] = useState(null);
   const fileInputRef = useRef(null);
 
+  // Create game lookup for display names
+  const gameLookup = useMemo(() => createGameLookup(games), [games]);
+
   /**
-   * Handle file selection (supports multiple files)
+   * Handle file selection - shows upload modal for metadata entry
    */
   const handleFileChange = (e) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      // Process each selected file
-      Array.from(files).forEach(file => {
-        onAddClip(file);
-      });
-      // Reset the input so the same files can be selected again
+      // For now, handle first file with modal (can extend to queue for multiple)
+      const file = files[0];
+      setPendingUploadFile(file);
+      setShowUploadModal(true);
+      // Reset the input so the same file can be selected again
       e.target.value = '';
     }
+  };
+
+  /**
+   * Handle upload with metadata from modal
+   */
+  const handleUploadWithMetadata = async (uploadData) => {
+    if (onUploadWithMetadata) {
+      await onUploadWithMetadata(uploadData);
+    } else {
+      // Fallback to simple upload if handler not provided
+      onAddClip(uploadData.file);
+    }
+    setPendingUploadFile(null);
   };
 
   /**
@@ -223,13 +245,19 @@ export function ClipSelectorSidebar({
                 {/* Clip info */}
                 <div className="flex-1 min-w-0">
                   {/* Clip number and name on same line */}
-                  <div
-                    className="text-sm text-white truncate"
-                    title={clip.annotateName || clip.fileName}
-                  >
-                    <span className="text-gray-500 mr-1">{index + 1}.</span>
-                    {clip.annotateName || clip.fileNameDisplay || clip.fileName}
-                  </div>
+                  {(() => {
+                    const clipName = clip.annotateName || clip.fileNameDisplay || clip.fileName;
+                    const displayName = formatClipDisplayName(clipName, clip.game_id, gameLookup);
+                    return (
+                      <div
+                        className="text-sm text-white truncate"
+                        title={displayName}
+                      >
+                        <span className="text-gray-500 mr-1">{index + 1}.</span>
+                        {displayName}
+                      </div>
+                    );
+                  })()}
                   {/* Duration and source info */}
                   <div className="flex items-center gap-1.5 text-xs text-gray-500">
                     <span>{formatDuration(clip.duration)}</span>
@@ -337,6 +365,19 @@ export function ClipSelectorSidebar({
         onClose={() => setShowLibraryModal(false)}
         onSelectClip={handleLibrarySelect}
         existingClipIds={existingRawClipIds}
+        games={games}
+      />
+
+      {/* Upload Modal */}
+      <UploadClipModal
+        isOpen={showUploadModal}
+        onClose={() => {
+          setShowUploadModal(false);
+          setPendingUploadFile(null);
+        }}
+        onUpload={handleUploadWithMetadata}
+        selectedFile={pendingUploadFile}
+        existingClips={clips}
       />
 
       {/* Total duration */}
