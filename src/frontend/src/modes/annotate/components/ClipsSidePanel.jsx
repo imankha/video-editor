@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Scissors, Upload, Download, X, AlertCircle, Loader } from 'lucide-react';
+import { Button } from '../../../components/shared/Button';
 import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
 import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
@@ -93,21 +94,25 @@ export function ClipsSidePanel({
 
         {/* Import/Export Buttons */}
         <div className="flex gap-2">
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Upload}
+            className="flex-1"
             onClick={handleImportClick}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors"
           >
-            <Upload size={16} />
             Import
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Download}
+            className="flex-1"
             onClick={handleExportClick}
             disabled={clipRegions.length === 0}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Download size={16} />
             Export
-          </button>
+          </Button>
         </div>
         <input
           ref={fileInputRef}
@@ -133,12 +138,13 @@ export function ClipsSidePanel({
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-red-400 text-xs font-semibold">Import Errors</span>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={X}
+                  iconOnly
                   onClick={dismissErrors}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <X size={14} />
-                </button>
+                />
               </div>
               <div className="max-h-32 overflow-y-auto">
                 {importErrors.map((error, i) => (

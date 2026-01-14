@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Upload, Film } from 'lucide-react';
-import { StarRating, TagSelector } from './shared';
+import { X, Upload, Film, Loader } from 'lucide-react';
+import { Button, StarRating, TagSelector } from './shared';
 import { generateClipName } from '../modes/annotate/constants/soccerTags';
 import { ensureUniqueName, getExistingNamesForGame } from '../utils/uniqueName';
 
@@ -133,13 +133,14 @@ export function UploadClipModal({
             <Upload size={20} />
             Upload Clip
           </h2>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={X}
+            iconOnly
             onClick={onClose}
-            className="p-1 hover:bg-gray-700 rounded transition-colors"
             disabled={isUploading}
-          >
-            <X size={20} className="text-gray-400" />
-          </button>
+          />
         </div>
 
         {/* Content */}
@@ -199,30 +200,24 @@ export function UploadClipModal({
 
         {/* Footer */}
         <div className="p-4 border-t border-gray-700 flex gap-3">
-          <button
+          <Button
+            variant="secondary"
+            className="flex-1"
             onClick={onClose}
             disabled={isUploading}
-            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-700 text-white rounded-lg transition-colors"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
+            className="flex-1"
+            icon={isUploading ? Loader : Upload}
             onClick={handleUpload}
             disabled={isUploading || !name.trim()}
-            className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+            loading={isUploading}
           >
-            {isUploading ? (
-              <>
-                <span className="animate-spin">...</span>
-                Uploading...
-              </>
-            ) : (
-              <>
-                <Upload size={16} />
-                Upload
-              </>
-            )}
-          </button>
+            {isUploading ? 'Uploading...' : 'Upload'}
+          </Button>
         </div>
       </div>
     </div>

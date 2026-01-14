@@ -3,7 +3,7 @@ import { FolderOpen } from 'lucide-react';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
 import { useProjects } from './hooks/useProjects';
-import { Button, ConfirmationDialog, ModeSwitcher } from './components/shared';
+import { Button, ConfirmationDialog, ModeSwitcher, ToastContainer } from './components/shared';
 import DebugInfo from './components/DebugInfo';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
@@ -272,6 +272,9 @@ function App() {
           }
         ]}
       />
+
+      {/* Toast Notifications */}
+      <ToastContainer />
     </div>
     </AppStateProvider>
     </ProjectProvider>

@@ -12,6 +12,7 @@ import { useNavigationStore } from '../stores/navigationStore';
 import { useOverlayStore } from '../stores/overlayStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useFramingStore } from '../stores/framingStore';
+import { useExportStore } from '../stores/exportStore';
 
 /**
  * OverlayScreen - Self-contained screen for Overlay mode
@@ -63,6 +64,9 @@ export function OverlayScreen({
 
   // Framing store - for detecting uncommitted changes
   const hasChangedSinceExport = useFramingStore(state => state.hasChangedSinceExport);
+
+  // Export store - for dismissing "export complete" toast on changes
+  const dismissExportCompleteToast = useExportStore(state => state.dismissExportCompleteToast);
 
   // Local overlay state (drag, selection, etc.)
   const overlayState = useOverlayState();
@@ -312,6 +316,14 @@ export function OverlayScreen({
       saveOverlayData();
     }
   }, [highlightRegions, highlightEffectType, projectId, saveOverlayData]);
+
+  // Dismiss "export complete" toast when user makes changes
+  // This lets users know they need to re-export after modifying highlights
+  useEffect(() => {
+    if (overlayDataLoadedRef.current) {
+      dismissExportCompleteToast();
+    }
+  }, [highlightRegions, highlightEffectType, dismissExportCompleteToast]);
 
   // Save before unload
   useEffect(() => {

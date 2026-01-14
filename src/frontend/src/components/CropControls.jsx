@@ -1,4 +1,5 @@
 import { Crop, X, Check } from 'lucide-react';
+import { Button } from './shared/Button';
 
 /**
  * CropControls component - UI controls for the crop tool
@@ -30,36 +31,25 @@ export default function CropControls({
 
         <div className="flex gap-2">
           {hasKeyframes && (
-            <button
+            <Button
+              variant="danger"
+              size="sm"
+              icon={X}
               onClick={onClearCrop}
-              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm flex items-center gap-1 transition-colors"
               title="Clear all crop keyframes"
             >
-              <X size={14} />
               Clear
-            </button>
+            </Button>
           )}
 
-          <button
+          <Button
+            variant={isCropActive ? 'primary' : 'secondary'}
+            size="sm"
+            icon={isCropActive ? Check : Crop}
             onClick={onToggleCrop}
-            className={`px-4 py-1 rounded text-sm font-medium transition-colors flex items-center gap-1 ${
-              isCropActive
-                ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-            }`}
           >
-            {isCropActive ? (
-              <>
-                <Check size={14} />
-                Active
-              </>
-            ) : (
-              <>
-                <Crop size={14} />
-                Activate
-              </>
-            )}
-          </button>
+            {isCropActive ? 'Active' : 'Activate'}
+          </Button>
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Download, Loader, Upload, Settings } from 'lucide-react';
 import { useAnnotateState, useAnnotate, AnnotateMode, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from '../modes/annotate';
 import { FileUpload } from '../components/FileUpload';
+import { toast } from '../components/shared';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore } from '../stores';
 import { useRawClipSave } from '../hooks/useRawClipSave';
@@ -109,6 +110,8 @@ export function AnnotateContainer({
   const {
     exportProgress,
     setExportProgress,
+    setExportCompleteToastId,
+    dismissExportCompleteToast,
   } = useExportStore();
 
   // Ref to track previous isPlaying state for detecting pause transitions
@@ -388,16 +391,23 @@ export function AnnotateContainer({
         console.log('[AnnotateContainer] Downloaded:', result.downloads.clips_compilation.filename);
       }
 
-      alert(`${result.message}\n\nVideo downloaded successfully!`);
+      // Show persistent toast - dismissed when user makes changes
+      const toastId = toast.success('Annotated video created!', {
+        message: 'Your video has been downloaded successfully.',
+        duration: 0  // Persistent - dismissed when user makes changes
+      });
+      setExportCompleteToastId(toastId);
       console.log('[AnnotateContainer] Create annotated video complete');
 
     } catch (err) {
       console.error('[AnnotateContainer] Create annotated video failed:', err);
-      alert(`Failed to create video: ${err.message}`);
+      toast.error('Failed to create video', {
+        message: err.message
+      });
     } finally {
       setIsCreatingAnnotatedVideo(false);
     }
-  }, [annotateVideoFile, annotateGameId, callAnnotateExportApi]);
+  }, [annotateVideoFile, annotateGameId, callAnnotateExportApi, setExportCompleteToastId]);
 
   // NOTE: handleImportIntoProjects has been removed - clips are now saved in real-time during annotation
   // The old batch import flow is no longer needed. See handleFullscreenCreateClip for real-time saving.
@@ -612,6 +622,22 @@ export function AnnotateContainer({
       videoRef.current.playbackRate = annotatePlaybackSpeed;
     }
   }, [annotatePlaybackSpeed, videoRef]);
+
+  // Track if initial annotations have loaded (to avoid dismissing toast on initial load)
+  const annotationsLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!isLoadingAnnotations && annotateGameId) {
+      annotationsLoadedRef.current = true;
+    }
+  }, [isLoadingAnnotations, annotateGameId]);
+
+  // Effect: Dismiss "export complete" toast when user modifies clips
+  // This lets users know they need to re-export after making changes
+  useEffect(() => {
+    if (annotationsLoadedRef.current) {
+      dismissExportCompleteToast();
+    }
+  }, [clipRegions, dismissExportCompleteToast]);
 
   // Effect: Update metadata from video element when it loads
   useEffect(() => {

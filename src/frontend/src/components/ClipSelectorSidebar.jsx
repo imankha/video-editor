@@ -2,6 +2,7 @@ import { useState, useRef, useMemo } from 'react';
 import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library } from 'lucide-react';
 import { ClipLibraryModal } from './ClipLibraryModal';
 import { UploadClipModal } from './UploadClipModal';
+import { Button } from './shared/Button';
 import { getRatingDisplay, formatDuration } from './shared/clipConstants';
 import { createGameLookup, formatClipDisplayName } from '../utils/gameNameLookup';
 
@@ -279,16 +280,18 @@ export function ClipSelectorSidebar({
                 </div>
 
                 {/* Delete button */}
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={X}
+                  iconOnly
                   onClick={(e) => {
                     e.stopPropagation();
                     onDeleteClip(clip.id);
                   }}
-                  className="ml-2 p-1 rounded hover:bg-red-600/30 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                  className="ml-2 opacity-0 group-hover:opacity-100 hover:bg-red-600/30 hover:text-red-400"
                   title="Remove clip"
-                >
-                  <X size={14} />
-                </button>
+                />
               </div>
             </div>
           );
@@ -307,45 +310,53 @@ export function ClipSelectorSidebar({
         {showAddMenu ? (
           <div className="space-y-2">
             {/* Upload option */}
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={Upload}
+              fullWidth
               onClick={() => {
                 fileInputRef.current?.click();
                 setShowAddMenu(false);
               }}
-              className="w-full flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
             >
-              <Upload size={16} />
-              <span>Upload Clip</span>
-            </button>
+              Upload Clip
+            </Button>
 
             {/* Library option */}
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={Library}
+              fullWidth
               onClick={() => {
                 setShowLibraryModal(true);
                 setShowAddMenu(false);
               }}
-              className="w-full flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
             >
-              <Library size={16} />
-              <span>From Library</span>
-            </button>
+              From Library
+            </Button>
 
             {/* Cancel */}
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
+              fullWidth
               onClick={() => setShowAddMenu(false)}
-              className="w-full px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         ) : (
-          <button
+          <Button
+            variant="primary"
+            size="sm"
+            icon={Plus}
+            fullWidth
             onClick={() => setShowAddMenu(true)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
           >
-            <Plus size={16} />
-            <span>Add Clip</span>
-          </button>
+            Add Clip
+          </Button>
         )}
 
         {/* Hidden file input (supports multiple files) */}

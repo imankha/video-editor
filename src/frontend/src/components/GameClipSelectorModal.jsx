@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Filter, Clock, Film, Settings, Sliders } from 'lucide-react';
+import { Button } from './shared/Button';
 import { API_BASE } from '../config';
+import { ensureUniqueName } from '../utils/uniqueName';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -14,9 +16,10 @@ const API_BASE_URL = `${API_BASE}/api`;
  * - See total clip count and duration (real-time updates)
  * - Set project name and aspect ratio
  */
-export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [] }) {
+export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], existingProjectNames = [] }) {
   // Form state
   const [projectName, setProjectName] = useState('');
+  const [isNameManuallySet, setIsNameManuallySet] = useState(false);
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [selectedGameIds, setSelectedGameIds] = useState([]);
   const [minRating, setMinRating] = useState(0); // 0 = All clips
@@ -27,9 +30,16 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [] })
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  // Fetch raw clips on mount
+  // Fetch raw clips on mount and reset form state
   useEffect(() => {
     if (!isOpen) return;
+
+    // Reset form when modal opens
+    setProjectName('');
+    setIsNameManuallySet(false);
+    setSelectedGameIds([]);
+    setMinRating(0);
+    setSelectedTags([]);
 
     const fetchClips = async () => {
       setLoading(true);
@@ -129,6 +139,185 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [] })
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  /**
+   * Detect season from a date
+   * @param {Date} date
+   * @returns {'Winter' | 'Spring' | 'Summer' | 'Fall'}
+   */
+  const getSeason = (date) => {
+    const month = date.getMonth(); // 0-11
+    if (month >= 2 && month <= 4) return 'Spring';
+    if (month >= 5 && month <= 7) return 'Summer';
+    if (month >= 8 && month <= 10) return 'Fall';
+    return 'Winter';
+  };
+
+  /**
+   * Check if all games fall within the same season
+   * @param {Array} gameList - List of games with date/created_at
+   * @returns {{ season: string, year: number } | null}
+   */
+  const detectSeasonPattern = (gameList) => {
+    if (gameList.length === 0) return null;
+
+    const dates = gameList
+      .map(g => g.date || g.game_date || g.created_at)
+      .filter(Boolean)
+      .map(d => new Date(d));
+
+    if (dates.length === 0) return null;
+
+    const seasons = dates.map(d => ({ season: getSeason(d), year: d.getFullYear() }));
+    const firstSeason = seasons[0];
+
+    // Check if all games are in the same season and year
+    const allSameSeason = seasons.every(
+      s => s.season === firstSeason.season && s.year === firstSeason.year
+    );
+
+    if (allSameSeason) {
+      return firstSeason;
+    }
+
+    // Check if all games are in the same year (different seasons)
+    const allSameYear = seasons.every(s => s.year === firstSeason.year);
+    if (allSameYear && gameList.length <= 4) {
+      return { season: null, year: firstSeason.year };
+    }
+
+    return null;
+  };
+
+  /**
+   * Format a game date for display (e.g., "Jan 14")
+   */
+  const formatGameDate = (game) => {
+    const dateStr = game.date || game.game_date || game.created_at;
+    if (!dateStr) return null;
+
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return null;
+
+    const month = date.toLocaleString('en-US', { month: 'short' });
+    const day = date.getDate();
+    return `${month} ${day}`;
+  };
+
+  /**
+   * Generate intelligent default project name based on filters
+   *
+   * Priority:
+   * 1. Single game → "Game Name - Date" or just "Game Name"
+   * 2. 5-star only → "Brilliants" (or "Game Name Brilliants")
+   * 3. Same season games → "Fall 2024" or "Spring 2025"
+   * 4. Tags selected → Include tag names
+   * 5. Fallback → "Highlight Reel"
+   */
+  const suggestedName = useMemo(() => {
+    const parts = [];
+
+    // Determine which games we're working with
+    const activeGames = selectedGameIds.length > 0
+      ? games.filter(g => selectedGameIds.includes(g.id))
+      : gamesWithCounts;
+
+    // Check if this is a "Brilliants" collection (5-star only)
+    const isBrilliants = minRating === 5;
+
+    // === SINGLE GAME ===
+    if (activeGames.length === 1) {
+      const game = activeGames[0];
+      let gamePart = game.name;
+
+      // Try to add date
+      const dateStr = formatGameDate(game);
+      if (dateStr) {
+        gamePart = `${game.name} ${dateStr}`;
+      }
+
+      parts.push(gamePart);
+    }
+    // === MULTIPLE GAMES ===
+    else if (activeGames.length > 1) {
+      const seasonInfo = detectSeasonPattern(activeGames);
+
+      if (seasonInfo?.season) {
+        // All games in same season: "Fall 2024"
+        parts.push(`${seasonInfo.season} ${seasonInfo.year}`);
+      } else if (seasonInfo?.year) {
+        // Same year, different seasons: "2024 Highlights"
+        parts.push(`${seasonInfo.year}`);
+      } else if (activeGames.length === 2) {
+        // Two games: combine names
+        parts.push(`${activeGames[0].name} & ${activeGames[1].name}`);
+      }
+      // else: no specific pattern, will use Brilliants or tags or fallback
+    }
+
+    // === ADD BRILLIANTS LABEL ===
+    if (isBrilliants) {
+      if (parts.length === 0) {
+        parts.push('Brilliants');
+      } else {
+        parts.push('Brilliants');
+      }
+    }
+
+    // === ADD TAGS ===
+    if (selectedTags.length > 0) {
+      // Format tags nicely (capitalize, limit to 2-3)
+      const tagPart = selectedTags
+        .slice(0, 3)
+        .map(t => t.charAt(0).toUpperCase() + t.slice(1))
+        .join(' ');
+
+      if (parts.length === 0) {
+        parts.push(tagPart);
+      } else {
+        parts.push(tagPart);
+      }
+    }
+
+    // === FALLBACK ===
+    if (parts.length === 0) {
+      // Check rating for descriptive name
+      if (minRating === 4) {
+        parts.push('Good To Brilliant');
+      } else if (minRating === 3) {
+        parts.push('Highlights');
+      } else {
+        parts.push('Highlight Reel');
+      }
+    }
+
+    // Join parts with appropriate separator
+    const baseName = parts.join(' ');
+
+    // Ensure the name is unique among existing projects
+    return ensureUniqueName(baseName, existingProjectNames);
+  }, [selectedGameIds, games, gamesWithCounts, minRating, selectedTags, existingProjectNames]);
+
+  // Auto-update project name when filters change (unless manually edited)
+  useEffect(() => {
+    if (!isNameManuallySet && suggestedName) {
+      setProjectName(suggestedName);
+    }
+  }, [suggestedName, isNameManuallySet]);
+
+  // Handle manual name input
+  const handleNameChange = useCallback((e) => {
+    const value = e.target.value;
+    setProjectName(value);
+    // Mark as manually set if user types something different from suggestion
+    if (value !== suggestedName) {
+      setIsNameManuallySet(true);
+    }
+    // If user clears the field or matches suggestion, allow auto-update again
+    if (value === '' || value === suggestedName) {
+      setIsNameManuallySet(false);
+    }
+  }, [suggestedName]);
+
   // Toggle game selection
   const toggleGame = useCallback((gameId) => {
     setSelectedGameIds(prev => {
@@ -191,12 +380,13 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [] })
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <h2 className="text-xl font-bold text-white">Create Project from Clips</h2>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={X}
+            iconOnly
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-white rounded transition-colors"
-          >
-            <X size={20} />
-          </button>
+          />
         </div>
 
         {/* Content */}
@@ -360,14 +550,22 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [] })
                   <div>
                     <label className="block text-sm text-gray-400 mb-2">
                       Project Name
+                      {!isNameManuallySet && projectName && (
+                        <span className="ml-2 text-xs text-purple-400">(auto)</span>
+                      )}
                     </label>
                     <input
                       type="text"
                       value={projectName}
-                      onChange={(e) => setProjectName(e.target.value)}
+                      onChange={handleNameChange}
                       placeholder="My Highlight Reel"
                       className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                     />
+                    {!isNameManuallySet && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Name updates automatically based on your filters
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -377,20 +575,22 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [] })
 
         {/* Footer */}
         <div className="flex gap-3 p-4 border-t border-gray-700">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            className="flex-1"
             onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
+            className="flex-1"
             onClick={handleCreate}
             disabled={!projectName.trim() || preview.clip_count === 0 || creating}
-            className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+            loading={creating}
           >
             {creating ? 'Creating...' : `Create with ${preview.clip_count} Clips`}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

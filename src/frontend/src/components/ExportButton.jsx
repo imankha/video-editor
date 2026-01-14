@@ -2,8 +2,9 @@ import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 're
 import { Download, Loader } from 'lucide-react';
 import axios from 'axios';
 import ThreePositionToggle from './ThreePositionToggle';
-import { ExportProgress } from './shared';
+import { Button, Toggle, ExportProgress, toast } from './shared';
 import { useAppState } from '../contexts';
+import { useExportStore } from '../stores';
 import { API_BASE } from '../config';
 
 /**
@@ -137,6 +138,9 @@ const ExportButton = forwardRef(function ExportButton({
     globalExportProgress,
     setGlobalExportProgress,
   } = useAppState();
+
+  // Get export store for persistent toast tracking
+  const setExportCompleteToastId = useExportStore(state => state.setExportCompleteToastId);
 
   // Use props if provided, otherwise fall back to context values
   const editorMode = editorModeProp ?? contextEditorMode ?? 'framing';
@@ -659,6 +663,15 @@ const ExportButton = forwardRef(function ExportButton({
 
         setProgress(100);
         setProgressMessage('Export complete!');
+
+        // Show persistent toast notification for overlay export completion
+        // Toast stays until user makes changes to the video
+        const toastId = toast.success('Video exported!', {
+          message: projectName ? `"${projectName}" has been downloaded and saved to your gallery.` : 'Your video has been downloaded.',
+          duration: 0  // Persistent - dismissed when user makes changes
+        });
+        setExportCompleteToastId(toastId);
+
         setTimeout(() => {
           setIsExporting(false);
           handleExportEnd();
@@ -751,25 +764,14 @@ const ExportButton = forwardRef(function ExportButton({
                 {includeAudio ? 'Include audio in export' : 'Export video only'}
               </span>
             </div>
-            <button
-              onClick={() => {
-                onIncludeAudioChange(!includeAudio);
+            <Toggle
+              checked={includeAudio}
+              onChange={(value) => {
+                onIncludeAudioChange(value);
                 setAudioExplicitlySet(true);
               }}
               disabled={isCurrentlyExporting}
-              className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-                includeAudio ? 'bg-blue-600' : 'bg-gray-600'
-              } ${isCurrentlyExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-              role="switch"
-              aria-checked={includeAudio}
-              aria-label="Toggle audio"
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                  includeAudio ? 'translate-x-8' : 'translate-x-1'
-                }`}
-              />
-            </button>
+            />
           </div>
         )}
 
@@ -805,27 +807,20 @@ const ExportButton = forwardRef(function ExportButton({
       </div>
 
       {/* Single Export button for both modes */}
-      <button
+      <Button
+        variant="primary"
+        size="lg"
+        fullWidth
+        icon={isCurrentlyExporting ? Loader : Download}
         onClick={handleExport}
         disabled={disabled || isCurrentlyExporting || !videoFile}
-        className={`w-full px-6 py-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-          disabled || isCurrentlyExporting || !videoFile
-            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-            : 'bg-blue-600 hover:bg-blue-700 text-white'
-        }`}
+        className={isCurrentlyExporting ? '[&>svg]:animate-spin' : ''}
       >
-        {isCurrentlyExporting ? (
-          <>
-            <Loader className="animate-spin" size={20} />
-            <span>{isExternallyExporting && !isExporting ? 'Export in progress...' : 'Exporting...'}</span>
-          </>
-        ) : (
-          <>
-            <Download size={20} />
-            <span>{isFramingMode ? 'Frame Video' : 'Add Overlay'}</span>
-          </>
-        )}
-      </button>
+        {isCurrentlyExporting
+          ? (isExternallyExporting && !isExporting ? 'Export in progress...' : 'Exporting...')
+          : (isFramingMode ? 'Frame Video' : 'Add Overlay')
+        }
+      </Button>
 
       {/* Progress display when exporting (show for both internal and external exports) */}
       <ExportProgress

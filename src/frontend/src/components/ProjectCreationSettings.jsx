@@ -1,5 +1,6 @@
 import React from 'react';
 import { Settings, X, RotateCcw } from 'lucide-react';
+import { Button } from './shared/Button';
 
 /**
  * ProjectCreationSettings - Modal for configuring project creation rules
@@ -38,12 +39,13 @@ export function ProjectCreationSettings({
             <Settings size={20} className="text-blue-400" />
             <h2 className="text-lg font-bold text-white">Project Creation Settings</h2>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={X}
+            iconOnly
             onClick={onClose}
-            className="p-1 text-gray-400 hover:text-white rounded transition-colors"
-          >
-            <X size={20} />
-          </button>
+          />
         </div>
 
         {/* Content */}
@@ -196,19 +198,19 @@ export function ProjectCreationSettings({
 
         {/* Footer */}
         <div className="flex items-center justify-between p-4 border-t border-gray-700">
-          <button
+          <Button
+            variant="ghost"
+            icon={RotateCcw}
             onClick={onReset}
-            className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-white transition-colors"
           >
-            <RotateCcw size={16} />
             Reset to Defaults
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             onClick={onClose}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
           >
             Done
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, Film, LayoutGrid } from 'lucide-react';
+import { Button } from './shared/Button';
 import { useDownloads } from '../hooks/useDownloads';
 import { useGalleryStore } from '../stores/galleryStore';
 
@@ -330,12 +331,12 @@ export function DownloadsPanel({
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle size={32} className="text-red-400 mb-3" />
           <p className="text-gray-400 mb-4">{error || 'Failed to load downloads'}</p>
-          <button
+          <Button
+            variant="secondary"
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
           >
             Retry
-          </button>
+          </Button>
         </div>
       );
     }
@@ -383,12 +384,13 @@ export function DownloadsPanel({
               </span>
             )}
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={X}
+            iconOnly
             onClick={close}
-            className="p-1 hover:bg-gray-700 rounded transition-colors"
-          >
-            <X size={20} className="text-gray-400" />
-          </button>
+          />
         </div>
 
         {/* Filter Tabs - Icon only with tooltips */}
@@ -455,22 +457,24 @@ export function DownloadsPanel({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={Download}
                   onClick={() => {
                     console.log('[DownloadsPanel] Modal download:', { id: playingVideo.id, project_name: playingVideo.project_name });
                     downloadFile(playingVideo.id);
                   }}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors"
                 >
-                  <Download size={16} />
                   Download
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={X}
+                  iconOnly
                   onClick={() => setPlayingVideo(null)}
-                  className="p-1.5 hover:bg-gray-700 rounded transition-colors"
-                >
-                  <X size={20} className="text-gray-400" />
-                </button>
+                />
               </div>
             </div>
 

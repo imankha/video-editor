@@ -1,8 +1,14 @@
 import React from 'react';
+import { Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
+import { Button } from './shared/Button';
 import { formatTime } from '../utils/timeFormat';
 
 /**
  * Controls component - Playback controls (play/pause, time display, etc)
+ *
+ * Uses the shared Button component for consistent styling.
+ * See STYLE_GUIDE.md for button variants and usage.
+ *
  * @param {Object} props
  * @param {boolean} props.isPlaying - Whether video is playing
  * @param {number} props.currentTime - Current video time
@@ -24,94 +30,47 @@ export function Controls({
   return (
     <div className="controls-container flex items-center justify-between py-2 px-4 bg-gray-800 rounded-b-lg">
       {/* Playback controls */}
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center gap-1">
         {/* Step backward */}
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={SkipBack}
+          iconOnly
           onClick={onStepBackward}
-          className="p-1.5 hover:bg-gray-700 rounded transition-colors"
           title="Step backward (one frame)"
-        >
-          <svg
-            className="w-4 h-4 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"
-            />
-          </svg>
-        </button>
+        />
 
         {/* Play/Pause button */}
-        <button
+        <Button
+          variant="primary"
+          size="sm"
+          icon={isPlaying ? Pause : Play}
+          iconOnly
           onClick={onTogglePlay}
-          className="p-2 bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
           title={isPlaying ? 'Pause' : 'Play'}
-        >
-          {isPlaying ? (
-            <svg
-              className="w-5 h-5 text-white"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-            </svg>
-          ) : (
-            <svg
-              className="w-5 h-5 text-white"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          )}
-        </button>
+          className="rounded-full"
+        />
 
         {/* Restart button */}
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={RotateCcw}
+          iconOnly
           onClick={onRestart}
-          className="p-1.5 hover:bg-gray-700 rounded transition-colors"
           title="Restart (go to beginning)"
-        >
-          <svg
-            className="w-4 h-4 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-        </button>
+        />
 
         {/* Step forward */}
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={SkipForward}
+          iconOnly
           onClick={onStepForward}
-          className="p-1.5 hover:bg-gray-700 rounded transition-colors"
           title="Step forward (one frame)"
-        >
-          <svg
-            className="w-4 h-4 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z"
-            />
-          </svg>
-        </button>
+        />
       </div>
 
       {/* Time display */}

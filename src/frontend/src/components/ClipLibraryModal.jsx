@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { X, Star, Check, Film, Clock, Filter } from 'lucide-react';
+import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import { createGameLookup, formatClipDisplayName } from '../utils/gameNameLookup';
 
@@ -203,12 +204,13 @@ export function ClipLibraryModal({
             <Filter size={20} />
             Add from Library
           </h2>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={X}
+            iconOnly
             onClick={onClose}
-            className="p-1 hover:bg-gray-700 rounded transition-colors"
-          >
-            <X size={20} className="text-gray-400" />
-          </button>
+          />
         </div>
 
         {/* Filters */}
@@ -376,19 +378,21 @@ export function ClipLibraryModal({
 
         {/* Footer */}
         <div className="p-4 border-t border-gray-700 flex gap-3">
-          <button
+          <Button
+            variant="secondary"
+            className="flex-1"
             onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
+            className="flex-1"
             onClick={handleAdd}
             disabled={selectedIds.size === 0}
-            className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white rounded-lg transition-colors"
           >
             Add {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

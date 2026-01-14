@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useToastStore } from '../components/shared/Toast';
 
 /**
  * Export Store - Manages export progress and status tracking
@@ -10,6 +11,7 @@ import { create } from 'zustand';
  * - exportProgress: Current export progress (SSE updates)
  * - exportingProject: Which project is currently exporting
  * - globalExportProgress: WebSocket-based progress (persists across navigation)
+ * - exportCompleteToastId: ID of the "export complete" toast (for dismissing on changes)
  *
  * @see CODE_SMELLS.md #15 for refactoring context
  */
@@ -25,6 +27,9 @@ export const useExportStore = create((set, get) => ({
   // Global export progress from WebSocket (persists across navigation)
   // { progress: number, message: string } | null
   globalExportProgress: null,
+
+  // Toast ID for "export complete" notification (persists until user makes changes)
+  exportCompleteToastId: null,
 
   // Actions
 
@@ -62,6 +67,23 @@ export const useExportStore = create((set, get) => ({
    * Clear global export progress
    */
   clearGlobalExportProgress: () => set({ globalExportProgress: null }),
+
+  /**
+   * Set the export complete toast ID (for tracking persistent toast)
+   * @param {number|null} toastId
+   */
+  setExportCompleteToastId: (toastId) => set({ exportCompleteToastId: toastId }),
+
+  /**
+   * Dismiss the export complete toast (called when user makes changes)
+   */
+  dismissExportCompleteToast: () => {
+    const { exportCompleteToastId } = get();
+    if (exportCompleteToastId) {
+      useToastStore.getState().removeToast(exportCompleteToastId);
+      set({ exportCompleteToastId: null });
+    }
+  },
 
   // Computed values
 

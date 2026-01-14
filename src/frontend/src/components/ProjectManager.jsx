@@ -523,6 +523,7 @@ export function ProjectManager({
         onClose={() => setShowNewProjectModal(false)}
         onCreate={handleProjectCreated}
         games={games}
+        existingProjectNames={projects?.map(p => p.name) || []}
       />
     </div>
   );

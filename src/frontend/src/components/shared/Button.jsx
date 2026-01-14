@@ -216,4 +216,53 @@ function LoadingSpinner({ size = 16 }) {
   );
 }
 
+/**
+ * Toggle - Switch-style toggle button
+ *
+ * @example
+ * <Toggle checked={includeAudio} onChange={setIncludeAudio} />
+ * <Toggle checked={enabled} onChange={setEnabled} disabled />
+ */
+export function Toggle({
+  checked = false,
+  onChange,
+  disabled = false,
+  size = 'md',
+  className = '',
+}) {
+  const sizeStyles = {
+    sm: { track: 'h-5 w-10', thumb: 'h-3 w-3', translate: 'translate-x-5' },
+    md: { track: 'h-7 w-14', thumb: 'h-5 w-5', translate: 'translate-x-8' },
+    lg: { track: 'h-8 w-16', thumb: 'h-6 w-6', translate: 'translate-x-9' },
+  };
+
+  const styles = sizeStyles[size];
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => !disabled && onChange?.(!checked)}
+      disabled={disabled}
+      className={[
+        'relative inline-flex items-center rounded-full transition-colors',
+        'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-900',
+        styles.track,
+        checked ? 'bg-purple-600' : 'bg-gray-600',
+        disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+        className,
+      ].filter(Boolean).join(' ')}
+    >
+      <span
+        className={[
+          'inline-block transform rounded-full bg-white transition-transform',
+          styles.thumb,
+          checked ? styles.translate : 'translate-x-1',
+        ].join(' ')}
+      />
+    </button>
+  );
+}
+
 export default Button;
