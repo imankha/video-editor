@@ -24,6 +24,13 @@ from .frame_interpolator import (
     FrameInterpolator
 )
 
+# Import GPU encoder detection from ffmpeg_service
+from ..services.ffmpeg_service import (
+    get_best_encoder,
+    get_available_encoders,
+    build_video_encoding_params
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -514,22 +521,46 @@ class VideoEncoder:
         logger.info(f"Expected output frame count: {expected_output_frames}")
 
         # Set encoding parameters based on export mode (with custom overrides)
-        # OPTIMIZED: Based on A/B testing, H.264 fast preset with CRF 18 provides best speed/quality balance
-        if export_mode == "fast":
-            codec = self.ffmpeg_codec or "libx264"  # H.264 - faster encoding
-            preset = self.ffmpeg_preset or "ultrafast"
-            crf = self.ffmpeg_crf or "20"
-            logger.info(f"Encoding video with FAST settings ({codec}, 1-pass, {preset} preset, CRF {crf}) at {fps} fps...")
+        # GPU ENCODING: Use NVENC/QSV/AMF if available for 5-10x speedup
+        if self.ffmpeg_codec:
+            # Custom codec specified - use it
+            codec = self.ffmpeg_codec
+            preset = self.ffmpeg_preset or ("ultrafast" if export_mode == "fast" else "fast")
+            crf = self.ffmpeg_crf or ("20" if export_mode == "fast" else "18")
+            encoder_params = None  # Will use legacy path
+            logger.info(f"Using CUSTOM codec: {codec}, preset={preset}, CRF={crf}")
         else:
-            # OPTIMIZED: Use H.264 fast preset CRF 18 (tested to be optimal for speed without quality loss)
-            codec = self.ffmpeg_codec or "libx264"  # H.264 - fast encoding
-            preset = self.ffmpeg_preset or "fast"
-            crf = self.ffmpeg_crf or "18"
-            logger.info(f"Encoding video with QUALITY settings ({codec}, 1-pass, {preset} preset, CRF {crf}) at {fps} fps...")
+            # Auto-detect best encoder (GPU if available)
+            prefer_quality = (export_mode != "fast")
+            codec, encoder_params = get_best_encoder(prefer_quality=prefer_quality)
 
-        # Log if custom parameters are being used
-        if self.ffmpeg_codec or self.ffmpeg_preset or self.ffmpeg_crf:
-            logger.info(f"Using CUSTOM FFmpeg parameters: codec={codec}, preset={preset}, CRF={crf}")
+            # Set preset/crf for logging (actual values are in encoder_params)
+            if codec == 'h264_nvenc':
+                preset = encoder_params.get('preset', 'p4')
+                crf = encoder_params.get('cq', '19')
+                logger.info(f"Using NVIDIA NVENC GPU encoder (preset={preset}, cq={crf})")
+            elif codec == 'h264_qsv':
+                preset = encoder_params.get('preset', 'medium')
+                crf = encoder_params.get('global_quality', '19')
+                logger.info(f"Using Intel QuickSync GPU encoder (preset={preset}, quality={crf})")
+            elif codec == 'h264_amf':
+                preset = encoder_params.get('quality', 'quality')
+                crf = encoder_params.get('qp_i', '19')
+                logger.info(f"Using AMD AMF GPU encoder (quality={preset}, qp={crf})")
+            elif codec == 'h264_videotoolbox':
+                preset = 'default'
+                crf = encoder_params.get('q:v', '65')
+                logger.info(f"Using macOS VideoToolbox GPU encoder (quality={crf})")
+            else:
+                # CPU fallback
+                preset = encoder_params.get('preset', 'fast')
+                crf = encoder_params.get('crf', '18')
+                logger.info(f"Using CPU encoder ({codec}, preset={preset}, CRF={crf})")
+
+        if export_mode == "fast":
+            logger.info(f"Encoding video with FAST settings at {fps} fps...")
+        else:
+            logger.info(f"Encoding video with QUALITY settings at {fps} fps...")
 
         # Pass 1 - Analysis (only for quality mode with H.265, single-pass for H.264)
         if export_mode == "quality" and codec == "libx265":
@@ -554,7 +585,8 @@ class VideoEncoder:
             frames_pattern, input_video_path, output_path, input_framerate, fps,
             filter_complex, trim_filter, codec, preset, crf, export_mode,
             needs_interpolation, interpolation_ratio, effective_include_audio,
-            expected_output_frames, progress_callback, audio_trim_params
+            expected_output_frames, progress_callback, audio_trim_params,
+            encoder_params=encoder_params
         )
 
     def _run_ffmpeg_pass1(
@@ -653,9 +685,10 @@ class VideoEncoder:
         self, frames_pattern, input_video_path, output_path, input_framerate, fps,
         filter_complex, trim_filter, codec, preset, crf, export_mode,
         needs_interpolation, interpolation_ratio, include_audio,
-        expected_output_frames, progress_callback, audio_trim_params=None
+        expected_output_frames, progress_callback, audio_trim_params=None,
+        encoder_params=None
     ):
-        """Run FFmpeg pass 2 (encoding)"""
+        """Run FFmpeg pass 2 (encoding) - supports GPU encoders"""
         ffmpeg_pass2_start = datetime.now()
         logger.info("=" * 60)
         logger.info(f"[EXPORT_PHASE] FFMPEG_ENCODE START - {ffmpeg_pass2_start.isoformat()}")
@@ -709,21 +742,22 @@ class VideoEncoder:
                 else:
                     cmd_pass2.extend(['-map', '1:a?'])
 
-        cmd_pass2.extend([
-            '-c:v', codec,
-            '-preset', preset,
-            '-crf', crf
-        ])
-
-        # Add codec-specific parameters
-        if codec == 'libx265':
-            # H.265 specific parameters
+        # Add video encoding parameters based on codec type
+        if encoder_params and codec in ('h264_nvenc', 'h264_qsv', 'h264_amf', 'h264_videotoolbox'):
+            # GPU encoder - use encoder_params from get_best_encoder()
+            cmd_pass2.extend(build_video_encoding_params(codec, encoder_params, pixel_format='yuv420p'))
+            logger.info(f"GPU encoding: {codec} with params {encoder_params}")
+        elif codec == 'libx265':
+            # H.265 CPU encoder
+            cmd_pass2.extend(['-c:v', codec, '-preset', preset, '-crf', crf])
             if export_mode == "quality":
                 x265_params = 'pass=2:vbv-maxrate=80000:vbv-bufsize=160000:aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6'
             else:
                 x265_params = 'aq-mode=3:aq-strength=1.0:deblock=-1,-1'
             cmd_pass2.extend(['-x265-params', x265_params])
-        # libx264 uses default parameters (no special params needed for fast mode)
+        else:
+            # H.264 CPU encoder (libx264) or custom codec
+            cmd_pass2.extend(['-c:v', codec, '-preset', preset, '-crf', crf, '-pix_fmt', 'yuv420p'])
 
         # Add audio encoding parameters if audio is included
         if include_audio:
@@ -731,10 +765,9 @@ class VideoEncoder:
         else:
             cmd_pass2.extend(['-an'])  # No audio
 
-        # Add common parameters
+        # Add common parameters (pix_fmt already set by encoder params above)
         cmd_pass2.extend([
             '-r', str(fps),  # Explicit output framerate - CRITICAL for frame interpolation
-            '-pix_fmt', 'yuv420p',
             '-colorspace', 'bt709',
             '-color_primaries', 'bt709',
             '-color_trc', 'bt709',

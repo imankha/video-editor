@@ -25,6 +25,7 @@ import asyncio
 
 from app.database import get_db_connection, get_raw_clips_path, get_downloads_path, get_games_path, get_final_videos_path, ensure_directories
 from app.services.clip_cache import get_clip_cache
+from app.services.ffmpeg_service import get_encoding_command_parts
 
 logger = logging.getLogger(__name__)
 
@@ -217,19 +218,20 @@ async def create_clip_with_burned_text(
 
     filter_complex = ','.join(filter_parts)
 
+    # Use GPU encoding if available
+    encoding_params = get_encoding_command_parts(prefer_quality=True)
+
     cmd = [
         'ffmpeg', '-y',
         '-ss', format_time_for_ffmpeg(start_time),
         '-i', source_path,
         '-t', format_time_for_ffmpeg(duration),
         '-vf', filter_complex,
-        '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-c:a', 'aac',
-        output_path
     ]
+    cmd.extend(encoding_params)
+    cmd.extend(['-c:a', 'aac', output_path])
 
-    logger.info(f"Creating burned-in clip: {clip_name}")
+    logger.info(f"Creating burned-in clip: {clip_name} (encoder: {encoding_params[1]})")
 
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     _, stderr = process.communicate()

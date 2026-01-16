@@ -17,6 +17,7 @@ import logging
 import os
 
 from ...database import get_db_connection, get_final_videos_path
+from ...services.ffmpeg_service import get_encoding_command_parts
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -90,18 +91,18 @@ def generate_before_clip(source_path: str, start_frame: int, end_frame: int,
         f"x=(w-text_w)/2:y=80:borderw=3:bordercolor=black"
     )
 
+    # Use GPU encoding if available
+    encoding_params = get_encoding_command_parts(prefer_quality=False)  # Speed over quality for previews
+
     cmd = [
         'ffmpeg', '-y',
         '-ss', str(start_time),
         '-i', source_path,
         '-t', str(duration),
         '-vf', filter_complex,
-        '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '23',
-        '-an',  # No audio for before clips
-        output_path
     ]
+    cmd.extend(encoding_params)
+    cmd.extend(['-an', output_path])  # No audio for before clips
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -130,16 +131,16 @@ def generate_after_clip(final_video_path: str, output_path: str) -> bool:
         f"x=(w-text_w)/2:y=80:borderw=3:bordercolor=black"
     )
 
+    # Use GPU encoding if available
+    encoding_params = get_encoding_command_parts(prefer_quality=False)  # Speed over quality for previews
+
     cmd = [
         'ffmpeg', '-y',
         '-i', final_video_path,
         '-vf', filter_complex,
-        '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '23',
-        '-an',  # No audio
-        output_path
     ]
+    cmd.extend(encoding_params)
+    cmd.extend(['-an', output_path])  # No audio
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -167,16 +168,17 @@ def concatenate_clips(clip_paths: list, output_path: str) -> bool:
         # Concat all video streams
         filter_complex = f"{''.join(filter_parts)}concat=n={len(clip_paths)}:v=1:a=0[outv]"
 
+        # Use GPU encoding if available
+        encoding_params = get_encoding_command_parts(prefer_quality=False)
+
         cmd = [
             'ffmpeg', '-y',
             *inputs,
             '-filter_complex', filter_complex,
             '-map', '[outv]',
-            '-c:v', 'libx264',
-            '-preset', 'fast',
-            '-crf', '23',
-            output_path
         ]
+        cmd.extend(encoding_params)
+        cmd.append(output_path)
 
         logger.info(f"[Before/After] Concatenating {len(clip_paths)} clips")
         result = subprocess.run(cmd, capture_output=True, text=True)

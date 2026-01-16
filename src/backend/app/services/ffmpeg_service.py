@@ -4,6 +4,12 @@ FFmpeg Service - Helper functions for video processing with FFmpeg.
 This module provides low-level FFmpeg operations used by video processors.
 It isolates FFmpeg-specific code to make the codebase more maintainable
 and testable.
+
+GPU Encoding Support:
+- NVIDIA NVENC (h264_nvenc) - Fastest, requires NVIDIA GPU
+- Intel QuickSync (h264_qsv) - Fast, requires Intel CPU with iGPU
+- AMD AMF (h264_amf) - Fast, requires AMD GPU
+- CPU fallback (libx264) - Always available
 """
 
 import subprocess
@@ -12,8 +18,247 @@ import os
 import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# GPU ENCODER DETECTION AND CONFIGURATION
+# =============================================================================
+
+def _test_encoder_works(encoder: str) -> bool:
+    """
+    Actually test if an encoder works by running a minimal encode.
+    This catches cases where the encoder is listed but driver is too old.
+    """
+    try:
+        # Create a minimal test: encode 1 frame of black video
+        cmd = [
+            'ffmpeg', '-y',
+            '-f', 'lavfi', '-i', 'color=black:s=64x64:d=0.1',
+            '-c:v', encoder,
+            '-frames:v', '1',
+            '-f', 'null', '-'
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        return result.returncode == 0
+    except Exception as e:
+        logger.debug(f"Encoder test failed for {encoder}: {e}")
+        return False
+
+
+@lru_cache(maxsize=1)
+def get_available_encoders() -> Dict[str, bool]:
+    """
+    Check which hardware encoders are available AND working.
+    Results are cached for the lifetime of the process.
+
+    This does a runtime test of each encoder to catch driver version issues.
+
+    Returns:
+        Dictionary mapping encoder names to availability
+    """
+    try:
+        result = subprocess.run(
+            ['ffmpeg', '-encoders'],
+            capture_output=True, text=True, timeout=10
+        )
+        output = result.stdout + result.stderr
+
+        # First check which encoders are listed
+        listed_encoders = {
+            'h264_nvenc': 'h264_nvenc' in output,
+            'hevc_nvenc': 'hevc_nvenc' in output,
+            'h264_qsv': 'h264_qsv' in output,
+            'h264_amf': 'h264_amf' in output,
+            'h264_videotoolbox': 'h264_videotoolbox' in output,
+            'libx264': True
+        }
+
+        # Now actually test each listed GPU encoder to verify it works
+        encoders = {'libx264': True}  # CPU always works
+
+        for encoder in ['h264_nvenc', 'h264_qsv', 'h264_amf', 'h264_videotoolbox']:
+            if listed_encoders.get(encoder):
+                logger.info(f"Testing {encoder}...")
+                if _test_encoder_works(encoder):
+                    encoders[encoder] = True
+                    logger.info(f"  {encoder}: OK")
+                else:
+                    encoders[encoder] = False
+                    logger.warning(f"  {encoder}: Listed but not working (driver issue?)")
+
+        # Log final available encoders
+        available = [k for k, v in encoders.items() if v]
+        logger.info(f"Working H.264 encoders: {available}")
+
+        return encoders
+    except Exception as e:
+        logger.warning(f"Failed to detect encoders, using CPU fallback: {e}")
+        return {'libx264': True}
+
+
+def get_best_encoder(prefer_quality: bool = True) -> Tuple[str, Dict[str, str]]:
+    """
+    Get the best available H.264 encoder with optimal settings.
+
+    Args:
+        prefer_quality: If True, use quality-oriented settings; if False, use speed settings
+
+    Returns:
+        Tuple of (encoder_name, encoder_params_dict)
+    """
+    encoders = get_available_encoders()
+
+    # NVIDIA NVENC - Best GPU option
+    if encoders.get('h264_nvenc'):
+        if prefer_quality:
+            params = {
+                'preset': 'p4',      # Balanced (p1=fastest, p7=best quality)
+                'rc': 'vbr',         # Variable bitrate
+                'cq': '19',          # Quality level (0-51, lower=better)
+                'b:v': '0',          # Let CQ control quality
+            }
+        else:
+            params = {
+                'preset': 'p1',      # Fastest
+                'rc': 'vbr',
+                'cq': '23',
+                'b:v': '0',
+            }
+        logger.info("Using NVIDIA NVENC encoder")
+        return 'h264_nvenc', params
+
+    # Intel QuickSync
+    if encoders.get('h264_qsv'):
+        if prefer_quality:
+            params = {
+                'preset': 'medium',
+                'global_quality': '19',
+            }
+        else:
+            params = {
+                'preset': 'veryfast',
+                'global_quality': '23',
+            }
+        logger.info("Using Intel QuickSync encoder")
+        return 'h264_qsv', params
+
+    # AMD AMF
+    if encoders.get('h264_amf'):
+        if prefer_quality:
+            params = {
+                'quality': 'quality',
+                'rc': 'vbr_latency',
+                'qp_i': '19',
+                'qp_p': '19',
+            }
+        else:
+            params = {
+                'quality': 'speed',
+                'rc': 'vbr_latency',
+                'qp_i': '23',
+                'qp_p': '23',
+            }
+        logger.info("Using AMD AMF encoder")
+        return 'h264_amf', params
+
+    # macOS VideoToolbox
+    if encoders.get('h264_videotoolbox'):
+        if prefer_quality:
+            params = {
+                'q:v': '65',  # Quality 0-100
+            }
+        else:
+            params = {
+                'q:v': '50',
+            }
+        logger.info("Using macOS VideoToolbox encoder")
+        return 'h264_videotoolbox', params
+
+    # CPU fallback (libx264)
+    if prefer_quality:
+        params = {
+            'preset': 'fast',
+            'crf': '18',
+        }
+    else:
+        params = {
+            'preset': 'ultrafast',
+            'crf': '23',
+        }
+    logger.info("Using CPU (libx264) encoder")
+    return 'libx264', params
+
+
+def build_video_encoding_params(
+    encoder: str,
+    params: Dict[str, str],
+    pixel_format: str = 'yuv420p'
+) -> List[str]:
+    """
+    Build FFmpeg command-line parameters for video encoding.
+
+    Args:
+        encoder: Encoder name (e.g., 'h264_nvenc', 'libx264')
+        params: Encoder-specific parameters
+        pixel_format: Output pixel format
+
+    Returns:
+        List of FFmpeg command-line arguments
+    """
+    cmd = ['-c:v', encoder]
+
+    if encoder == 'h264_nvenc':
+        cmd.extend([
+            '-preset', params.get('preset', 'p4'),
+            '-rc', params.get('rc', 'vbr'),
+            '-cq', params.get('cq', '19'),
+            '-b:v', params.get('b:v', '0'),
+        ])
+    elif encoder == 'h264_qsv':
+        cmd.extend([
+            '-preset', params.get('preset', 'medium'),
+            '-global_quality', params.get('global_quality', '19'),
+        ])
+    elif encoder == 'h264_amf':
+        cmd.extend([
+            '-quality', params.get('quality', 'quality'),
+            '-rc', params.get('rc', 'vbr_latency'),
+        ])
+        if 'qp_i' in params:
+            cmd.extend(['-qp_i', params['qp_i'], '-qp_p', params['qp_p']])
+    elif encoder == 'h264_videotoolbox':
+        cmd.extend(['-q:v', params.get('q:v', '65')])
+    else:  # libx264
+        cmd.extend([
+            '-preset', params.get('preset', 'fast'),
+            '-crf', params.get('crf', '18'),
+        ])
+
+    cmd.extend(['-pix_fmt', pixel_format])
+
+    return cmd
+
+
+def get_encoding_command_parts(prefer_quality: bool = True) -> List[str]:
+    """
+    Get video encoding command parts using best available encoder.
+    Convenience function that combines get_best_encoder and build_video_encoding_params.
+
+    Args:
+        prefer_quality: If True, use quality settings; if False, use speed settings
+
+    Returns:
+        List of FFmpeg command-line arguments for video encoding
+    """
+    encoder, params = get_best_encoder(prefer_quality)
+    return build_video_encoding_params(encoder, params)
+
+
+# =============================================================================
+# VIDEO INFO AND METADATA
+# =============================================================================
 
 
 def get_video_duration(video_path: str) -> float:
@@ -169,16 +414,16 @@ def concatenate_with_cut(
             f.write(f"file '{escaped_path}'\n")
 
     try:
+        # Use GPU encoding if available
+        encoding_params = get_encoding_command_parts(prefer_quality=True)
+
         cmd = [
             'ffmpeg', '-y',
             '-f', 'concat',
             '-safe', '0',
             '-i', concat_file,
-            '-c:v', 'libx264',
-            '-preset', 'fast',
-            '-crf', '18',
-            '-pix_fmt', 'yuv420p',
         ]
+        cmd.extend(encoding_params)
 
         if include_audio:
             cmd.extend(['-c:a', 'aac', '-b:a', '192k'])
@@ -187,6 +432,7 @@ def concatenate_with_cut(
 
         cmd.append(output_path)
 
+        logger.info(f"Cut concat command: {' '.join(cmd[:15])}...")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return True
     except subprocess.CalledProcessError as e:
@@ -277,10 +523,12 @@ def concatenate_with_fade(
     else:
         cmd.append('-an')
 
-    cmd.extend(['-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p'])
+    # Use GPU encoding if available
+    cmd.extend(get_encoding_command_parts(prefer_quality=True))
     cmd.append(output_path)
 
     try:
+        logger.info(f"Fade concat command: {' '.join(cmd[:15])}...")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return True
     except subprocess.CalledProcessError as e:
@@ -361,10 +609,12 @@ def concatenate_with_dissolve(
     else:
         cmd.append('-an')
 
-    cmd.extend(['-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p'])
+    # Use GPU encoding if available
+    cmd.extend(get_encoding_command_parts(prefer_quality=True))
     cmd.append(output_path)
 
     try:
+        logger.info(f"Dissolve concat command: {' '.join(cmd[:15])}...")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return True
     except subprocess.CalledProcessError as e:
@@ -432,7 +682,8 @@ def extract_clip(
     if copy_codec:
         cmd.extend(['-c', 'copy'])
     else:
-        cmd.extend(['-c:v', 'libx264', '-preset', 'fast', '-crf', '18'])
+        # Use GPU encoding if available
+        cmd.extend(get_encoding_command_parts(prefer_quality=True))
         cmd.extend(['-c:a', 'aac', '-b:a', '192k'])
 
     cmd.append(output_path)
