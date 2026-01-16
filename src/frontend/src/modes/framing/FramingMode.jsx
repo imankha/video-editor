@@ -72,6 +72,7 @@ export function FramingMode({
   timelineScrollPosition,
   onTimelineScrollPositionChange,
   isPlaying = false,
+  isFullscreen = false,
   // Children (allows App.jsx to pass additional content)
   children,
 }) {
@@ -81,7 +82,7 @@ export function FramingMode({
 
       {/* FramingTimeline */}
       {videoUrl && (
-        <div className="mt-6">
+        <div className={`${isFullscreen ? 'bg-gray-900/95 border-t border-gray-700 px-4 py-2' : 'mt-6'}`}>
           <FramingTimeline
             currentTime={currentTime}
             duration={duration}

@@ -148,7 +148,7 @@ export function VideoPlayer({
     <div
       ref={containerRef}
       className={`video-player-container rounded-t-lg overflow-hidden relative outline-none ${
-        isFullscreen ? 'w-screen h-screen' : 'min-h-[60vh]'
+        isFullscreen ? 'w-full h-full' : 'min-h-[60vh]'
       }`}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
@@ -159,7 +159,7 @@ export function VideoPlayer({
     >
       {videoUrl ? (
         <div className={`relative video-container overflow-hidden ${
-          isFullscreen ? 'w-full h-screen' : 'h-[60vh]'
+          isFullscreen ? 'w-full h-full' : 'h-[60vh]'
         }`}>
           <div
             className="absolute inset-0 flex items-center justify-center"

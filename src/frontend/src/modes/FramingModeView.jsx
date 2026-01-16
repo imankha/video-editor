@@ -1,7 +1,9 @@
+import { Minimize } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
 import ExportButton from '../components/ExportButton';
+import { Button } from '../components/shared';
 import { FramingMode, CropOverlay } from './framing';
 
 /**
@@ -25,6 +27,11 @@ export function FramingModeView({
   isLoading,
   error,
   handlers,
+
+  // Fullscreen
+  fullscreenContainerRef,
+  isFullscreen,
+  onToggleFullscreen,
 
   // File handling
   onFileSelect,
@@ -119,8 +126,8 @@ export function FramingModeView({
         </div>
       )}
 
-      {/* Video Metadata */}
-      {metadata && (
+      {/* Video Metadata - hidden in fullscreen */}
+      {metadata && !isFullscreen && (
         <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
           <div className="flex items-center justify-between text-sm text-gray-300">
             {clipTitle && <span className="font-semibold text-white">{clipTitle}</span>}
@@ -149,9 +156,9 @@ export function FramingModeView({
       )}
 
       {/* Main Editor Area */}
-      <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
-        {/* Controls Bar */}
-        {videoUrl && (
+      <div className={`${isFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20'}`}>
+        {/* Controls Bar - hidden in fullscreen */}
+        {videoUrl && !isFullscreen && (
           <div className="mb-6 flex gap-4 items-center">
             <div className="ml-auto">
               <ZoomControls
@@ -161,56 +168,80 @@ export function FramingModeView({
                 onResetZoom={onResetZoom}
                 minZoom={MIN_ZOOM}
                 maxZoom={MAX_ZOOM}
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={onToggleFullscreen}
               />
             </div>
           </div>
         )}
 
-        {/* Video Player with CropOverlay */}
-        <div className="relative bg-gray-900 rounded-lg">
-          <VideoPlayer
-            videoRef={videoRef}
-            videoUrl={videoUrl}
-            handlers={handlers}
-            onFileSelect={onFileSelect}
-            overlays={[
-              videoUrl && currentCropState && metadata && (
-                <CropOverlay
-                  key="crop"
-                  videoRef={videoRef}
-                  videoMetadata={metadata}
-                  currentCrop={currentCropState}
-                  aspectRatio={aspectRatio}
-                  onCropChange={onCropChange}
-                  onCropComplete={onCropComplete}
-                  zoom={zoom}
-                  panOffset={panOffset}
-                  selectedKeyframeIndex={selectedCropKeyframeIndex}
-                />
-              ),
-            ].filter(Boolean)}
-            zoom={zoom}
-            panOffset={panOffset}
-            onZoomChange={onZoomByWheel}
-            onPanChange={onPanChange}
-          />
-
-          {/* Controls */}
-          {videoUrl && (
-            <Controls
-              isPlaying={isPlaying}
-              currentTime={currentTime}
-              duration={duration}
-              onTogglePlay={togglePlay}
-              onStepForward={stepForward}
-              onStepBackward={stepBackward}
-              onRestart={restart}
+        {/* Fullscreen container - uses fixed positioning to overlay viewport */}
+        <div
+          ref={fullscreenContainerRef}
+          className={`${isFullscreen ? 'fixed inset-0 z-[100] flex flex-col bg-gray-900' : ''}`}
+        >
+          {/* Video Player with CropOverlay */}
+          <div className={`relative bg-gray-900 ${isFullscreen ? 'flex-1 min-h-0' : 'rounded-lg'}`}>
+            <VideoPlayer
+              videoRef={videoRef}
+              videoUrl={videoUrl}
+              handlers={handlers}
+              onFileSelect={isFullscreen ? undefined : onFileSelect}
+              overlays={[
+                videoUrl && currentCropState && metadata && (
+                  <CropOverlay
+                    key="crop"
+                    videoRef={videoRef}
+                    videoMetadata={metadata}
+                    currentCrop={currentCropState}
+                    aspectRatio={aspectRatio}
+                    onCropChange={onCropChange}
+                    onCropComplete={onCropComplete}
+                    zoom={zoom}
+                    panOffset={panOffset}
+                    selectedKeyframeIndex={selectedCropKeyframeIndex}
+                    isFullscreen={isFullscreen}
+                  />
+                ),
+              ].filter(Boolean)}
+              zoom={zoom}
+              panOffset={panOffset}
+              onZoomChange={onZoomByWheel}
+              onPanChange={onPanChange}
+              isFullscreen={isFullscreen}
             />
-          )}
-        </div>
 
-        {/* Framing Mode Timeline */}
-        {videoUrl && (
+            {/* Fullscreen exit button - top right corner */}
+            {isFullscreen && (
+              <div className="absolute top-4 right-4 z-10">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={Minimize}
+                  iconOnly
+                  onClick={onToggleFullscreen}
+                  title="Exit fullscreen (Esc)"
+                  className="bg-black/50 hover:bg-black/70"
+                />
+              </div>
+            )}
+
+            {/* Controls */}
+            {videoUrl && (
+              <Controls
+                isPlaying={isPlaying}
+                currentTime={currentTime}
+                duration={duration}
+                onTogglePlay={togglePlay}
+                onStepForward={stepForward}
+                onStepBackward={stepBackward}
+                onRestart={restart}
+              />
+            )}
+          </div>
+
+          {/* Framing Mode Timeline - shown in fullscreen at bottom */}
+          {videoUrl && (
           <FramingMode
             videoRef={videoRef}
             videoUrl={videoUrl}
@@ -255,11 +286,13 @@ export function FramingModeView({
             timelineScrollPosition={timelineScrollPosition}
             onTimelineScrollPositionChange={onTimelineScrollPositionChange}
             isPlaying={isPlaying}
+            isFullscreen={isFullscreen}
           />
         )}
+        </div>
 
-        {/* Export Button */}
-        {videoUrl && (
+        {/* Export Button - hidden in fullscreen */}
+        {videoUrl && !isFullscreen && (
           <div className="mt-6">
             <ExportButton
               ref={exportButtonRef}

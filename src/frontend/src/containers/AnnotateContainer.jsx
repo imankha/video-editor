@@ -421,21 +421,11 @@ export function AnnotateContainer({
   // The old batch import flow is no longer needed. See handleFullscreenCreateClip for real-time saving.
 
   /**
-   * Handle fullscreen toggle
+   * Handle fullscreen toggle - uses CSS fixed positioning instead of browser API
    */
   const handleToggleFullscreen = useCallback(() => {
-    if (!annotateContainerRef.current) return;
-
-    if (!annotateFullscreen) {
-      if (annotateContainerRef.current.requestFullscreen) {
-        annotateContainerRef.current.requestFullscreen();
-      }
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
-    }
-  }, [annotateFullscreen]);
+    setAnnotateFullscreen(prev => !prev);
+  }, [setAnnotateFullscreen]);
 
   /**
    * Handle Add Clip button click (non-fullscreen mode)
@@ -677,19 +667,18 @@ export function AnnotateContainer({
     }
   }, [annotateVideoUrl, annotateVideoMetadata, videoRef]);
 
-  // Effect: Detect fullscreen changes
+  // Effect: Handle Escape key to exit fullscreen
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      const isFullscreen = !!document.fullscreenElement;
-      setAnnotateFullscreen(isFullscreen);
-      if (!isFullscreen) {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && annotateFullscreen) {
+        setAnnotateFullscreen(false);
         setShowAnnotateOverlay(false);
       }
     };
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [annotateFullscreen, setAnnotateFullscreen]);
 
   // Effect: Show overlay when TRANSITIONING from playing to paused while in fullscreen
   useEffect(() => {

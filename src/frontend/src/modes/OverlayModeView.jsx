@@ -2,8 +2,9 @@ import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
 import ExportButton from '../components/ExportButton';
+import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from './overlay';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Minimize } from 'lucide-react';
 
 /**
  * OverlayModeView - Complete view for Overlay mode
@@ -14,6 +15,11 @@ import { Eye, EyeOff } from 'lucide-react';
  * @see DECOMPOSITION_ANALYSIS.md for refactoring context
  */
 export function OverlayModeView({
+  // Fullscreen
+  fullscreenContainerRef,
+  isFullscreen,
+  onToggleFullscreen,
+
   // Video state
   videoRef,
   effectiveOverlayVideoUrl,
@@ -101,8 +107,8 @@ export function OverlayModeView({
 
   return (
     <>
-      {/* Video Metadata - use overlay metadata */}
-      {effectiveOverlayMetadata && (
+      {/* Video Metadata - use overlay metadata, hidden in fullscreen */}
+      {effectiveOverlayMetadata && !isFullscreen && (
         <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
           <div className="flex items-center justify-between text-sm text-gray-300">
             <span className="font-semibold text-white">{effectiveOverlayMetadata.fileName}</span>
@@ -131,9 +137,9 @@ export function OverlayModeView({
       )}
 
       {/* Main Editor Area */}
-      <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
-        {/* Controls Bar */}
-        {effectiveOverlayVideoUrl && (
+      <div className={`${isFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20'}`}>
+        {/* Controls Bar - hidden in fullscreen */}
+        {effectiveOverlayVideoUrl && !isFullscreen && (
           <div className="mb-6 flex gap-4 items-center">
             <div className="ml-auto flex items-center gap-3">
               {/* Player detection boxes toggle */}
@@ -158,14 +164,21 @@ export function OverlayModeView({
                 onResetZoom={onResetZoom}
                 minZoom={MIN_ZOOM}
                 maxZoom={MAX_ZOOM}
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={onToggleFullscreen}
               />
             </div>
           </div>
         )}
 
-        {/* Video Player with overlay-specific overlays */}
-        <div className="relative bg-gray-900 rounded-lg">
-          <VideoPlayer
+        {/* Fullscreen container - uses fixed positioning for fullscreen */}
+        <div
+          ref={fullscreenContainerRef}
+          className={`${isFullscreen ? 'fixed inset-0 z-[100] flex flex-col bg-gray-900' : ''}`}
+        >
+          {/* Video Player with overlay-specific overlays */}
+          <div className={`relative bg-gray-900 ${isFullscreen ? 'flex-1 min-h-0' : 'rounded-lg'}`}>
+            <VideoPlayer
             videoRef={videoRef}
             videoUrl={effectiveOverlayVideoUrl}
             handlers={handlers}
@@ -183,6 +196,7 @@ export function OverlayModeView({
                   effectType={highlightEffectType}
                   zoom={zoom}
                   panOffset={panOffset}
+                  isFullscreen={isFullscreen}
                 />
               ),
               // PlayerDetectionOverlay - AI-detected player boxes (toggleable)
@@ -203,25 +217,42 @@ export function OverlayModeView({
             panOffset={panOffset}
             onZoomChange={onZoomByWheel}
             onPanChange={onPanChange}
+            isFullscreen={isFullscreen}
           />
 
-          {/* Controls */}
-          {effectiveOverlayVideoUrl && (
-            <Controls
-              isPlaying={isPlaying}
-              currentTime={currentTime}
-              duration={effectiveOverlayMetadata?.duration || duration}
-              onTogglePlay={togglePlay}
-              onStepForward={stepForward}
-              onStepBackward={stepBackward}
-              onRestart={restart}
-            />
-          )}
-        </div>
+            {/* Fullscreen exit button - top right corner */}
+            {isFullscreen && (
+              <div className="absolute top-4 right-4 z-10">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={Minimize}
+                  iconOnly
+                  onClick={onToggleFullscreen}
+                  title="Exit fullscreen (Esc)"
+                  className="bg-black/50 hover:bg-black/70"
+                />
+              </div>
+            )}
 
-        {/* Overlay Mode Timeline */}
-        {effectiveOverlayVideoUrl && (
-          <OverlayMode
+            {/* Controls */}
+            {effectiveOverlayVideoUrl && (
+              <Controls
+                isPlaying={isPlaying}
+                currentTime={currentTime}
+                duration={effectiveOverlayMetadata?.duration || duration}
+                onTogglePlay={togglePlay}
+                onStepForward={stepForward}
+                onStepBackward={stepBackward}
+                onRestart={restart}
+              />
+            )}
+          </div>
+
+          {/* Overlay Mode Timeline - visible in fullscreen */}
+          <div className={`${isFullscreen ? 'bg-gray-900/95 border-t border-gray-700 px-4 py-2' : 'mt-6'}`}>
+            {effectiveOverlayVideoUrl && (
+              <OverlayMode
             videoRef={videoRef}
             videoUrl={effectiveOverlayVideoUrl}
             metadata={effectiveOverlayMetadata}
@@ -255,11 +286,14 @@ export function OverlayModeView({
             onTimelineScrollPositionChange={onTimelineScrollPositionChange}
             trimRange={null}
             isPlaying={isPlaying}
-          />
-        )}
+            isFullscreen={isFullscreen}
+              />
+            )}
+          </div>
+        </div>
 
-        {/* Export Required Message */}
-        {showExportRequired && (
+        {/* Export Required Message - hidden in fullscreen */}
+        {showExportRequired && !isFullscreen && (
           <div className="mt-6 bg-purple-900/30 border border-purple-500/50 rounded-lg p-6 text-center">
             <p className="text-purple-200 font-medium mb-2">
               Export required for overlay mode
@@ -278,8 +312,8 @@ export function OverlayModeView({
           </div>
         )}
 
-        {/* Export Button */}
-        {effectiveOverlayVideoUrl && (
+        {/* Export Button - hidden in fullscreen */}
+        {effectiveOverlayVideoUrl && !isFullscreen && (
           <div className="mt-6">
             <ExportButton
               ref={exportButtonRef}

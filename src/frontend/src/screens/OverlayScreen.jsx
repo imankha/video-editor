@@ -81,7 +81,9 @@ export function OverlayScreen({
 
   // Local state
   const [selectedLayer, setSelectedLayer] = useState('playhead');
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const exportButtonRef = useRef(null);
+  const fullscreenContainerRef = useRef(null);
   const videoLoadedFromUrlRef = useRef(null); // Track which URL we've loaded to prevent infinite loops
 
   // =========================================
@@ -487,6 +489,26 @@ export function OverlayScreen({
   }, [effectiveOverlayVideoUrl, togglePlay, stepForward, stepBackward]);
 
   // =========================================
+  // FULLSCREEN HANDLER
+  // =========================================
+
+  const handleToggleFullscreen = useCallback(() => {
+    setIsFullscreen(prev => !prev);
+  }, []);
+
+  // Escape key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
+  // =========================================
   // HANDLERS
   // =========================================
 
@@ -527,6 +549,10 @@ export function OverlayScreen({
 
   return (
     <OverlayModeView
+      // Fullscreen
+      fullscreenContainerRef={fullscreenContainerRef}
+      isFullscreen={isFullscreen}
+      onToggleFullscreen={handleToggleFullscreen}
       // Video state
       videoRef={videoRef}
       effectiveOverlayVideoUrl={effectiveOverlayVideoUrl}

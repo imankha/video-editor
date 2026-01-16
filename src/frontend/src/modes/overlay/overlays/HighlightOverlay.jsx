@@ -14,7 +14,8 @@ export default function HighlightOverlay({
   isEnabled = false,
   effectType = 'original',  // 'brightness_boost' | 'original' | 'dark_overlay'
   zoom = 1,
-  panOffset = { x: 0, y: 0 }
+  panOffset = { x: 0, y: 0 },
+  isFullscreen = false
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -79,8 +80,16 @@ export default function HighlightOverlay({
     updateVideoRect();
     window.addEventListener('resize', updateVideoRect);
 
-    return () => window.removeEventListener('resize', updateVideoRect);
-  }, [videoRef, videoMetadata, zoom, panOffset]);
+    // Double RAF ensures layout settles after fullscreen toggle
+    const rafId = requestAnimationFrame(() => {
+      requestAnimationFrame(updateVideoRect);
+    });
+
+    return () => {
+      window.removeEventListener('resize', updateVideoRect);
+      cancelAnimationFrame(rafId);
+    };
+  }, [videoRef, videoMetadata, zoom, panOffset, isFullscreen]);
 
   /**
    * Convert video coordinates to screen coordinates

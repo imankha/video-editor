@@ -14,7 +14,8 @@ export default function CropOverlay({
   onCropComplete,
   zoom = 1,
   panOffset = { x: 0, y: 0 },
-  selectedKeyframeIndex = null
+  selectedKeyframeIndex = null,
+  isFullscreen = false
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -93,8 +94,16 @@ export default function CropOverlay({
     updateVideoRect();
     window.addEventListener('resize', updateVideoRect);
 
-    return () => window.removeEventListener('resize', updateVideoRect);
-  }, [videoRef, videoMetadata, zoom, panOffset]);
+    // When fullscreen changes, recalculate after layout settles
+    const rafId = requestAnimationFrame(() => {
+      requestAnimationFrame(updateVideoRect);
+    });
+
+    return () => {
+      window.removeEventListener('resize', updateVideoRect);
+      cancelAnimationFrame(rafId);
+    };
+  }, [videoRef, videoMetadata, zoom, panOffset, isFullscreen]);
 
   /**
    * Convert video coordinates to screen coordinates (relative to container)
@@ -408,7 +417,7 @@ export default function CropOverlay({
         <rect
           width="100%"
           height="100%"
-          fill="rgba(0, 0, 0, 0.5)"
+          fill="rgba(0, 0, 0, 0.2)"
           mask="url(#cropMask)"
         />
       </svg>
@@ -421,7 +430,7 @@ export default function CropOverlay({
           top: `${screenCrop.y}px`,
           width: `${screenCrop.width}px`,
           height: `${screenCrop.height}px`,
-          boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)'
+          boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.2)'
         }}
         onMouseDown={handleCropMouseDown}
       >

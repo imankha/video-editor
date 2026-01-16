@@ -76,12 +76,14 @@ export function FramingScreen({
   const [dragCrop, setDragCrop] = useState(null);
   const [selectedLayer, setSelectedLayer] = useState('playhead');
   const [videoFile, setVideoFile] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const clipHasUserEditsRef = useRef(false);
   const pendingFramingSaveRef = useRef(null);
   const localExportButtonRef = useRef(null);
   const initialLoadDoneRef = useRef(false);
   const previousClipIdRef = useRef(null);
   const isRestoringClipStateRef = useRef(false);
+  const fullscreenContainerRef = useRef(null);
 
   // Use external ref if provided (for mode switch dialog), otherwise use local ref
   const exportButtonRef = externalExportButtonRef || localExportButtonRef;
@@ -620,6 +622,23 @@ export function FramingScreen({
     selectAnnotateRegion: null,
   });
 
+  // Fullscreen toggle handler - uses CSS fixed positioning instead of browser API
+  const handleToggleFullscreen = useCallback(() => {
+    setIsFullscreen(prev => !prev);
+  }, []);
+
+  // Handle Escape key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
   // Handle file selection
   const handleFileSelect = async (file) => {
     try {
@@ -823,6 +842,10 @@ export function FramingScreen({
       isLoading={isLoading}
       error={error}
       handlers={handlers}
+      // Fullscreen
+      fullscreenContainerRef={fullscreenContainerRef}
+      isFullscreen={isFullscreen}
+      onToggleFullscreen={handleToggleFullscreen}
       // File handling
       onFileSelect={handleFileSelect}
       // Playback controls

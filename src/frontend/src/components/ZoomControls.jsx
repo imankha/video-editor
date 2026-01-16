@@ -1,8 +1,8 @@
-import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, Maximize, Minimize } from 'lucide-react';
 import { Button } from './shared/Button';
 
 /**
- * ZoomControls component - UI controls for video zoom
+ * ZoomControls component - UI controls for video zoom and fullscreen
  */
 export default function ZoomControls({
   zoom,
@@ -10,7 +10,9 @@ export default function ZoomControls({
   onZoomOut,
   onResetZoom,
   minZoom,
-  maxZoom
+  maxZoom,
+  isFullscreen,
+  onToggleFullscreen
 }) {
   const zoomPercentage = Math.round(zoom * 100);
   const canZoomIn = zoom < maxZoom;
@@ -63,9 +65,20 @@ export default function ZoomControls({
         />
       )}
 
-      <div className="ml-2 text-xs text-gray-500">
-        Scroll to zoom
-      </div>
+      {/* Fullscreen Button */}
+      {onToggleFullscreen && (
+        <>
+          <div className="w-px h-5 bg-gray-600 mx-1" />
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={isFullscreen ? Minimize : Maximize}
+            iconOnly
+            onClick={onToggleFullscreen}
+            title={isFullscreen ? "Exit fullscreen (Esc)" : "Enter fullscreen"}
+          />
+        </>
+      )}
     </div>
   );
 }
