@@ -61,6 +61,7 @@ export function AnnotateModeView({
   // Export state (exportProgress is read directly from store for reactivity)
   isCreatingAnnotatedVideo,
   isUploadingGameVideo,
+  uploadProgress,
 
   // Export handlers
   onCreateAnnotatedVideo,
@@ -196,6 +197,27 @@ export function AnnotateModeView({
 
             {/* Export buttons */}
             <div className="space-y-2">
+              {/* Upload progress bar (shown during video upload) */}
+              {uploadProgress && (
+                <div className="bg-gray-800 rounded-lg p-3 mb-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-300">Uploading video to server...</span>
+                    <span className="text-xs text-gray-500">
+                      {uploadProgress.percent}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 transition-all duration-300"
+                      style={{ width: `${uploadProgress.percent}%` }}
+                    />
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {(uploadProgress.loaded / (1024 * 1024)).toFixed(1)} MB / {(uploadProgress.total / (1024 * 1024)).toFixed(1)} MB
+                  </div>
+                </div>
+              )}
+
               {/* Progress bar (shown during export) */}
               {exportProgress && (
                 <div className="bg-gray-800 rounded-lg p-3 mb-2">

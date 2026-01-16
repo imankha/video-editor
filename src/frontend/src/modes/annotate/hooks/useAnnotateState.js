@@ -33,6 +33,9 @@ export default function useAnnotateState() {
   const [isImportingToProjects, setIsImportingToProjects] = useState(false);
   const [isUploadingGameVideo, setIsUploadingGameVideo] = useState(false);
 
+  // Upload progress state: { loaded: bytes, total: bytes, percent: 0-100 } or null
+  const [uploadProgress, setUploadProgress] = useState(null);
+
   // Playback settings
   const [annotatePlaybackSpeed, setAnnotatePlaybackSpeed] = useState(DEFAULT_PLAYBACK_SPEED);
   const [annotateFullscreen, setAnnotateFullscreen] = useState(false);
@@ -110,6 +113,7 @@ export default function useAnnotateState() {
     setIsCreatingAnnotatedVideo(false);
     setIsImportingToProjects(false);
     setIsUploadingGameVideo(false);
+    setUploadProgress(null);
     setAnnotatePlaybackSpeed(DEFAULT_PLAYBACK_SPEED);
     setAnnotateFullscreen(false);
     setShowAnnotateOverlay(false);
@@ -172,6 +176,8 @@ export default function useAnnotateState() {
     setIsImportingToProjects,
     isUploadingGameVideo,
     setIsUploadingGameVideo,
+    uploadProgress,
+    setUploadProgress,
     isExportingOrImporting,
 
     // Playback settings

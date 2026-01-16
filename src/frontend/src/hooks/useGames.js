@@ -108,37 +108,63 @@ export function useGames() {
   /**
    * Upload video to an existing game.
    * This is called after createGame to upload the video in the background.
-   * Uses streaming upload for large files.
+   * Uses XMLHttpRequest for upload progress tracking on large files.
+   *
+   * @param {number} gameId - Game ID to upload video to
+   * @param {File} videoFile - Video file to upload
+   * @param {function} onProgress - Optional callback for progress updates: (loaded, total, percent) => void
    */
-  const uploadGameVideo = useCallback(async (gameId, videoFile) => {
-    console.log('[useGames] Starting video upload for game', gameId);
+  const uploadGameVideo = useCallback(async (gameId, videoFile, onProgress) => {
+    console.log('[useGames] Starting video upload for game', gameId, '- size:', (videoFile.size / (1024 * 1024)).toFixed(1), 'MB');
 
-    try {
+    return new Promise((resolve, reject) => {
       const formData = new FormData();
       formData.append('video', videoFile);
 
-      const response = await fetch(`${API_BASE}/api/games/${gameId}/video`, {
-        method: 'PUT',
-        body: formData,
-      });
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', `${API_BASE}/api/games/${gameId}/video`);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to upload video: ${response.status}`);
-      }
+      // Track upload progress
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onProgress) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          onProgress(event.loaded, event.total, percent);
+          console.log('[useGames] Upload progress:', percent + '%');
+        }
+      };
 
-      const data = await response.json();
-      console.log('[useGames] Video uploaded for game', gameId, '- size:', data.size_mb, 'MB');
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            console.log('[useGames] Video uploaded for game', gameId, '- size:', data.size_mb, 'MB');
+            // Refresh games list (in background)
+            fetchGames();
+            resolve(data);
+          } catch (e) {
+            reject(new Error('Failed to parse response'));
+          }
+        } else {
+          let errorMsg = `Failed to upload video: ${xhr.status}`;
+          try {
+            const errorData = JSON.parse(xhr.responseText);
+            errorMsg = errorData.detail || errorMsg;
+          } catch (e) {}
+          console.error('[useGames] Failed to upload video:', errorMsg);
+          setError(errorMsg);
+          reject(new Error(errorMsg));
+        }
+      };
 
-      // Refresh games list (in background)
-      fetchGames();
+      xhr.onerror = () => {
+        const errorMsg = 'Network error during upload';
+        console.error('[useGames] Failed to upload video:', errorMsg);
+        setError(errorMsg);
+        reject(new Error(errorMsg));
+      };
 
-      return data;
-    } catch (err) {
-      console.error('[useGames] Failed to upload video:', err);
-      setError(err.message);
-      throw err;
-    }
+      xhr.send(formData);
+    });
   }, [fetchGames]);
 
   /**

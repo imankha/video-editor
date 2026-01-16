@@ -121,6 +121,7 @@ export function AnnotateScreen() {
     annotateContainerRef,
     isCreatingAnnotatedVideo,
     isUploadingGameVideo,
+    uploadProgress,
     hasAnnotateClips,
     clipRegions,
     annotateRegionsWithLayout,
@@ -354,6 +355,7 @@ export function AnnotateScreen() {
         // Export state (exportProgress is read from store in AnnotateModeView)
         isCreatingAnnotatedVideo={isCreatingAnnotatedVideo}
         isUploadingGameVideo={isUploadingGameVideo}
+        uploadProgress={uploadProgress}
         // Export handlers
         onCreateAnnotatedVideo={handleCreateAnnotatedVideo}
         // Zoom (for video player)

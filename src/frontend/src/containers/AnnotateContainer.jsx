@@ -66,6 +66,8 @@ export function AnnotateContainer({
     setIsImportingToProjects,
     isUploadingGameVideo,
     setIsUploadingGameVideo,
+    uploadProgress,
+    setUploadProgress,
     annotatePlaybackSpeed,
     setAnnotatePlaybackSpeed,
     annotateFullscreen,
@@ -161,17 +163,23 @@ export function AnnotateContainer({
 
       console.log('[AnnotateContainer] Set up with game ID:', game.id);
 
-      // Upload video to server in background
+      // Upload video to server in background with progress tracking
       console.log('[AnnotateContainer] Starting background video upload...');
       setIsUploadingGameVideo(true);
-      uploadGameVideo(game.id, file)
+      setUploadProgress({ loaded: 0, total: file.size, percent: 0 });
+
+      uploadGameVideo(game.id, file, (loaded, total, percent) => {
+        setUploadProgress({ loaded, total, percent });
+      })
         .then(() => {
           console.log('[AnnotateContainer] Background video upload complete for game:', game.id);
           setIsUploadingGameVideo(false);
+          setUploadProgress(null);
         })
         .catch((uploadErr) => {
           console.error('[AnnotateContainer] Background video upload failed:', uploadErr);
           setIsUploadingGameVideo(false);
+          setUploadProgress(null);
         });
 
     } catch (err) {
@@ -766,6 +774,7 @@ export function AnnotateContainer({
     isCreatingAnnotatedVideo,
     isImportingToProjects, // Kept for backwards compatibility, may be removed later
     isUploadingGameVideo,
+    uploadProgress,
     isClipSaving, // Real-time clip save in progress
     hasAnnotateClips,
     exportProgress,
