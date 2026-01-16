@@ -26,6 +26,7 @@ import logging
 
 from ...websocket import export_progress, manager
 from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path, get_uploads_path
+from ...services.ffmpeg_service import get_encoding_command_parts
 from ...highlight_transform import (
     transform_all_regions_to_raw,
     transform_all_regions_to_working,
@@ -252,6 +253,9 @@ async def export_overlay_only(
         video_duration = frame_idx / fps
         logger.info(f"[Overlay Export] Final frame count: {frame_idx}, duration: {video_duration:.6f}s")
 
+        # Use GPU encoding if available
+        encoding_params = get_encoding_command_parts(prefer_quality=True)
+
         ffmpeg_cmd = [
             'ffmpeg', '-y',
             '-framerate', str(fps),
@@ -259,15 +263,15 @@ async def export_overlay_only(
             '-i', input_path,
             '-map', '0:v',
             '-map', '1:a?',
-            '-c:v', 'libx264',
-            '-preset', 'medium',
-            '-crf', '18',
-            '-pix_fmt', 'yuv420p',
+        ]
+        ffmpeg_cmd.extend(encoding_params)
+        ffmpeg_cmd.extend([
             '-c:a', 'aac',
             '-b:a', '192k',
             '-t', str(video_duration),  # Use explicit duration instead of -shortest to preserve all frames
             output_path
-        ]
+        ])
+        logger.info(f"[Overlay Export] Encoding with: {encoding_params[1]}")
 
         result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
         if result.returncode != 0:

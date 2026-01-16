@@ -28,6 +28,7 @@ from ..routers.exports import (
     update_job_complete,
     update_job_error
 )
+from .ffmpeg_service import get_encoding_command_parts
 
 logger = logging.getLogger(__name__)
 
@@ -359,23 +360,28 @@ async def process_overlay_export(job_id: str, project_id: int, config: dict) -> 
 
     await send_progress(job_id, 75, "Encoding with audio...")
 
-    # Re-encode with ffmpeg to add audio and proper encoding
+    # Re-encode with ffmpeg to add audio and proper encoding (GPU accelerated if available)
     import subprocess
+
+    # Get GPU-accelerated encoding parameters
+    encoding_params = get_encoding_command_parts(prefer_quality=True)
+
     ffmpeg_cmd = [
         'ffmpeg', '-y',
         '-i', output_path + '.temp.mp4',
         '-i', video_path,
         '-map', '0:v',
         '-map', '1:a?',
-        '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '18',
+    ]
+    ffmpeg_cmd.extend(encoding_params)
+    ffmpeg_cmd.extend([
         '-c:a', 'aac',
         '-b:a', '256k',
         '-movflags', '+faststart',
         output_path
-    ]
+    ])
 
+    logger.info(f"[ExportWorker] FFmpeg overlay encode: {' '.join(ffmpeg_cmd[:12])}...")
     result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg encoding failed: {result.stderr}")
