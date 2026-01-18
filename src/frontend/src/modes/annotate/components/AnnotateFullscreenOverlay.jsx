@@ -251,8 +251,8 @@ export function AnnotateFullscreenOverlay({
   if (!isVisible) return null;
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-gray-900 rounded-xl p-6 w-full max-w-lg shadow-2xl border border-gray-700 max-h-[90vh] overflow-y-auto">
+    <div className="absolute inset-0 z-50 flex items-center justify-start pl-4 pointer-events-none">
+      <div className="bg-gray-900 rounded-xl p-6 w-full max-w-md shadow-2xl border border-gray-700 max-h-[90vh] overflow-y-auto pointer-events-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">

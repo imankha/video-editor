@@ -319,8 +319,16 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         const clampedTime = clampToVisibleRange ? clampToVisibleRange(currentTime) : currentTime;
         const epsilon = 0.01; // 10ms tolerance for floating point precision
 
+        console.log('[useVideo] Trimmed segment detected:', {
+          currentTime,
+          clampedTime,
+          segment,
+          diff: Math.abs(clampedTime - currentTime)
+        });
+
         if (Math.abs(clampedTime - currentTime) > epsilon) {
           // We're truly in a trimmed area (not at a valid boundary), pause and seek to valid position
+          console.log('[useVideo] Pausing due to trimmed segment, seeking to:', clampedTime);
           pause();
           seek(clampedTime);
         }

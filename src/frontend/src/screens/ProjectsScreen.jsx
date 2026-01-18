@@ -9,7 +9,7 @@ import { useEditorStore } from '../stores/editorStore';
 import { useExportStore } from '../stores/exportStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { AppStateProvider } from '../contexts';
-import { API_BASE } from '../config';
+import exportWebSocketManager from '../services/ExportWebSocketManager';
 
 // Module-level variable to pass File object to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
@@ -51,6 +51,7 @@ export function ProjectsScreen({
   const {
     projects,
     loading: projectsLoading,
+    fetchProjects,
     selectProject,
     createProject,
     deleteProject,
@@ -74,106 +75,29 @@ export function ProjectsScreen({
   // Local UI state
   const [loadingProjectId, setLoadingProjectId] = useState(null);
 
-  // Track in-progress exports discovered on page load
-  const [pendingExports, setPendingExports] = useState({});
+  // Export store for global export state (uses new activeExports system)
+  // Note: useExportRecovery in App.jsx handles syncing with server on startup
+  // This component only reads from the store - single source of truth
+  const activeExports = useExportStore(state => state.activeExports);
+  const getProcessingExports = useExportStore(state => state.getProcessingExports);
 
-  // Export store for global export state
-  const { exportingProject, startExport, setGlobalExportProgress } = useExportStore();
-
-  // Check for in-progress exports on mount
-  // This allows users to return and see exports that were running when they left
+  // Listen for export completion events and refresh project list
   useEffect(() => {
-    const checkPendingExports = async () => {
-      try {
-        // Check each project for pending exports
-        for (const project of projects) {
-          const response = await fetch(`${API_BASE}/api/exports/project/${project.id}`);
-          if (response.ok) {
-            const data = await response.json();
-            const inProgressExport = data.exports?.find(
-              e => e.status === 'processing' || e.status === 'pending'
-            );
-            const completedExport = data.exports?.find(
-              e => e.status === 'complete'
-            );
+    const unsubComplete = exportWebSocketManager.addEventListener('*', 'complete', (data, exportId) => {
+      console.log('[ProjectsScreen] Export completed, refreshing projects:', exportId);
+      fetchProjects();
+    });
 
-            if (inProgressExport) {
-              console.log(`[ProjectsScreen] Found in-progress export for project ${project.id}:`, inProgressExport.job_id);
-              setPendingExports(prev => ({
-                ...prev,
-                [project.id]: {
-                  jobId: inProgressExport.job_id,
-                  type: inProgressExport.type,
-                  status: inProgressExport.status
-                }
-              }));
+    const unsubError = exportWebSocketManager.addEventListener('*', 'error', (data, exportId) => {
+      console.log('[ProjectsScreen] Export failed, refreshing projects:', exportId);
+      fetchProjects();
+    });
 
-              // Start tracking this export globally
-              startExport(project.id, inProgressExport.type, inProgressExport.job_id);
-
-              // Connect WebSocket to get progress updates
-              connectToExportWebSocket(inProgressExport.job_id);
-            } else if (completedExport) {
-              // There's a completed export - refresh the project list to show it
-              console.log(`[ProjectsScreen] Found completed export for project ${project.id}`);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('[ProjectsScreen] Failed to check pending exports:', err);
-      }
+    return () => {
+      unsubComplete();
+      unsubError();
     };
-
-    // Connect to WebSocket for an in-progress export
-    const connectToExportWebSocket = (jobId) => {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${wsProtocol}//${window.location.host}/ws/export/${jobId}`;
-
-      const ws = new WebSocket(wsUrl);
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log(`[ProjectsScreen] Export progress for ${jobId}:`, data);
-
-        setGlobalExportProgress({
-          progress: data.progress,
-          message: data.message
-        });
-
-        if (data.status === 'complete') {
-          console.log(`[ProjectsScreen] Export ${jobId} complete`);
-          ws.close();
-          // Clear from pending exports
-          setPendingExports(prev => {
-            const updated = { ...prev };
-            // Find and remove the project with this job
-            for (const [projectId, info] of Object.entries(updated)) {
-              if (info.jobId === jobId) {
-                delete updated[projectId];
-                break;
-              }
-            }
-            return updated;
-          });
-        } else if (data.status === 'error') {
-          console.error(`[ProjectsScreen] Export ${jobId} failed:`, data.message);
-          ws.close();
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.log('[ProjectsScreen] WebSocket error (export may have completed):', error);
-      };
-
-      ws.onclose = () => {
-        console.log(`[ProjectsScreen] WebSocket closed for ${jobId}`);
-      };
-    };
-
-    if (projects.length > 0) {
-      checkPendingExports();
-    }
-  }, [projects, startExport, setGlobalExportProgress]);
+  }, [fetchProjects]);
 
   // Handle project selection
   const handleSelectProject = useCallback(async (projectId) => {
@@ -261,17 +185,25 @@ export function ProjectsScreen({
     setEditorMode('annotate');
   }, [setEditorMode]);
 
-  // Compute exporting project from either global store or discovered pending exports
-  const activeExportingProject = exportingProject || (() => {
-    // Find first project with pending export
-    for (const [projectId, info] of Object.entries(pendingExports)) {
-      return {
-        projectId: parseInt(projectId),
-        stage: info.type,
-        exportId: info.jobId
-      };
-    }
-    return null;
+  // Compute exporting project from the global activeExports store
+  // Find first actively processing export to display in the UI
+  const activeExportingProject = (() => {
+    const processingExports = Object.values(activeExports).filter(
+      exp => exp.status === 'pending' || exp.status === 'processing'
+    );
+    if (processingExports.length === 0) return null;
+
+    // Return the most recent one
+    const mostRecent = processingExports.sort(
+      (a, b) => new Date(b.startedAt) - new Date(a.startedAt)
+    )[0];
+
+    return {
+      projectId: mostRecent.projectId,
+      stage: mostRecent.type,
+      exportId: mostRecent.exportId,
+      progress: mostRecent.progress
+    };
   })();
 
   // App state for context (for components that need it)

@@ -161,6 +161,7 @@ async def export_with_ai_upscale(
     keyframes_json: str = Form(...),
     target_fps: int = Form(30),
     export_id: str = Form(...),
+    project_id: int = Form(None),  # Optional: for export_jobs tracking
     export_mode: str = Form("quality"),
     segment_data_json: str = Form(None),
     include_audio: str = Form("true"),
@@ -179,6 +180,33 @@ async def export_with_ai_upscale(
     3. Upscales each frame using Real-ESRGAN AI model
     4. Reassembles into final video
     """
+    # Fetch project name for progress messages
+    project_name = None
+    if project_id:
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM projects WHERE id = ?", (project_id,))
+                row = cursor.fetchone()
+                if row:
+                    project_name = row['name']
+        except Exception as e:
+            logger.warning(f"[Framing Export] Failed to fetch project name: {e}")
+
+    # Create export_jobs record for tracking (if project_id provided)
+    if project_id:
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO export_jobs (id, project_id, type, status, input_data)
+                    VALUES (?, ?, 'framing', 'processing', '{}')
+                """, (export_id, project_id))
+                conn.commit()
+            logger.info(f"[Framing Export] Created export_jobs record: {export_id} for project '{project_name}'")
+        except Exception as e:
+            logger.warning(f"[Framing Export] Failed to create export_jobs record: {e}")
+
     # Initialize progress tracking
     export_progress[export_id] = {
         "progress": 10,
@@ -280,7 +308,10 @@ async def export_with_ai_upscale(
                 "status": "processing",
                 "current": current,
                 "total": total,
-                "phase": phase
+                "phase": phase,
+                "projectId": project_id,
+                "projectName": project_name,
+                "type": "framing"
             }
             export_progress[export_id] = progress_data
             logger.info(f"Progress: {overall_percent:.1f}% - {message}")
@@ -294,7 +325,7 @@ async def export_with_ai_upscale(
                 logger.error(f"Failed to send WebSocket update: {e}")
 
         # Update progress
-        init_data = {"progress": 10, "message": "Initializing AI upscaler...", "status": "processing"}
+        init_data = {"progress": 10, "message": "Initializing AI upscaler...", "status": "processing", "projectId": project_id, "projectName": project_name, "type": "framing"}
         export_progress[export_id] = init_data
         await manager.send_progress(export_id, init_data)
 
@@ -313,21 +344,103 @@ async def export_with_ai_upscale(
 
         logger.info(f"AI upscaling complete. Output: {output_path}")
 
-        # Complete
-        complete_data = {"progress": 100, "message": "Export complete!", "status": "complete"}
+        # MVC: Backend saves the working video directly - no frontend involvement needed
+        # This ensures the export is durable even if user navigates away
+        working_video_id = None
+        working_filename = None
+        if project_id:
+            try:
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+
+                    # Generate unique filename and save to working_videos folder
+                    working_filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+                    working_path = get_working_videos_path() / working_filename
+
+                    # Copy the processed video to working_videos
+                    import shutil
+                    shutil.copy(output_path, working_path)
+                    logger.info(f"[Framing Export] Saved working video: {working_filename}")
+
+                    # Get next version number
+                    cursor.execute("""
+                        SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                        FROM working_videos WHERE project_id = ?
+                    """, (project_id,))
+                    next_version = cursor.fetchone()['next_version']
+
+                    # Reset final_video_id (framing changed, need to re-export overlay)
+                    cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
+
+                    # Create working_videos record
+                    cursor.execute("""
+                        INSERT INTO working_videos (project_id, filename, version)
+                        VALUES (?, ?, ?)
+                    """, (project_id, working_filename, next_version))
+                    working_video_id = cursor.lastrowid
+
+                    # Update project with new working_video_id
+                    cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
+
+                    # Update export_jobs record to complete with output reference
+                    cursor.execute("""
+                        UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (working_video_id, working_filename, export_id))
+
+                    # Set exported_at for working clips
+                    cursor.execute(f"""
+                        UPDATE working_clips SET exported_at = datetime('now')
+                        WHERE project_id = ? AND id IN ({latest_working_clips_subquery()})
+                    """, (project_id, project_id))
+
+                    conn.commit()
+                    logger.info(f"[Framing Export] Created working video {working_video_id} for project {project_id}")
+
+            except Exception as e:
+                logger.error(f"[Framing Export] Failed to save working video: {e}", exc_info=True)
+                # Don't fail the whole export - still return the video
+                working_video_id = None
+
+        # Complete - include working_video_id so frontend knows the video was saved
+        complete_data = {
+            "progress": 100,
+            "message": "Export complete!",
+            "status": "complete",
+            "projectId": project_id,
+            "projectName": project_name,
+            "type": "framing",
+            "workingVideoId": working_video_id,
+            "workingFilename": working_filename
+        }
         export_progress[export_id] = complete_data
         await manager.send_progress(export_id, complete_data)
 
-        return FileResponse(
-            output_path,
-            media_type='video/mp4',
-            filename=f"upscaled_{video.filename}",
-            background=None
-        )
+        # Return JSON response instead of blob - frontend doesn't need the video data
+        # The working video is already saved to DB, frontend just needs to know it's done
+        return JSONResponse({
+            'success': True,
+            'working_video_id': working_video_id,
+            'filename': working_filename,
+            'project_id': project_id,
+            'export_id': export_id
+        })
 
     except Exception as e:
         logger.error(f"AI upscaling failed: {str(e)}", exc_info=True)
-        error_data = {"progress": 0, "message": f"Export failed: {str(e)}", "status": "error"}
+        # Update export_jobs record to error
+        if project_id:
+            try:
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (str(e)[:500], export_id))
+                    conn.commit()
+            except Exception:
+                pass
+        error_data = {"progress": 0, "message": f"Export failed: {str(e)}", "status": "error", "projectId": project_id, "projectName": project_name, "type": "framing"}
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
 

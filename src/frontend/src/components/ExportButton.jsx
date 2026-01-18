@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { Download, Loader } from 'lucide-react';
 import axios from 'axios';
 import ThreePositionToggle from './ThreePositionToggle';
 import { Button, Toggle, ExportProgress, toast } from './shared';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores';
+import { useExportManager } from '../hooks/useExportManager';
+import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 
 /**
@@ -139,8 +141,13 @@ const ExportButton = forwardRef(function ExportButton({
     setGlobalExportProgress,
   } = useAppState();
 
-  // Get export store for persistent toast tracking
+  // Get export store for persistent toast tracking and active exports
   const setExportCompleteToastId = useExportStore(state => state.setExportCompleteToastId);
+  const activeExports = useExportStore(state => state.activeExports);
+  // Note: We don't use startExportInStore - the store is only populated via WebSocket
+  // messages from the backend. This ensures the DB is the single source of truth.
+  const completeExportInStore = useExportStore(state => state.completeExport);
+  const failExportInStore = useExportStore(state => state.failExport);
 
   // Use props if provided, otherwise fall back to context values
   const editorMode = editorModeProp ?? contextEditorMode ?? 'framing';
@@ -180,40 +187,41 @@ const ExportButton = forwardRef(function ExportButton({
     }
   };
   const [isExporting, setIsExporting] = useState(false);
-
-  // Combine internal and external exporting state
-  const isCurrentlyExporting = isExporting || isExternallyExporting;
-  const [progress, setProgress] = useState(0);
+  const [localProgress, setLocalProgress] = useState(0);  // Upload progress (0-10%)
   const [progressMessage, setProgressMessage] = useState('');
 
-  // Display the highest progress value between local and global
-  // Local tracks upload (0-10%), global tracks processing (10-100%)
-  // Using Math.max ensures we show the most up-to-date progress regardless of source
-  const displayProgress = Math.max(progress, externalProgress?.progress ?? 0);
-  const displayMessage = (externalProgress?.progress ?? 0) > progress
-    ? (externalProgress?.message ?? '')
-    : progressMessage;
+  // Get progress from the global export store for this project
+  // Find the most recent active export for this project
+  const currentExportFromStore = Object.values(activeExports)
+    .filter(exp => exp.projectId === projectId && (exp.status === 'pending' || exp.status === 'processing'))
+    .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))[0];
+
+  // Combine internal, external, AND store-based exporting state
+  // This ensures we show busy state even after page refresh
+  const isCurrentlyExporting = isExporting || isExternallyExporting || !!currentExportFromStore;
+
+  // Display the highest progress value between local upload and store progress
+  // Local tracks upload (0-10%), store tracks processing (10-100%)
+  const storeProgress = currentExportFromStore?.progress?.percent ?? 0;
+  const displayProgress = Math.max(localProgress, storeProgress, externalProgress?.progress ?? 0);
+  const displayMessage = storeProgress > localProgress
+    ? (currentExportFromStore?.progress?.message ?? '')
+    : (externalProgress?.progress ?? 0) > localProgress
+      ? (externalProgress?.message ?? '')
+      : progressMessage;
   const [error, setError] = useState(null);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
-  const wsRef = useRef(null);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
   const handleExportRef = useRef(null);
-  const wsDisconnectedDuringExportRef = useRef(false);
 
   // Map effect type to toggle position
   const effectTypeToPosition = { 'brightness_boost': 0, 'original': 1, 'dark_overlay': 2 };
   const positionToEffectType = ['brightness_boost', 'original', 'dark_overlay'];
   const highlightEffectPosition = effectTypeToPosition[highlightEffectType] ?? 1;
 
-  // Cleanup WebSocket on unmount
-  useEffect(() => {
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, []);
+  // Note: WebSocket connections are now managed globally by ExportWebSocketManager
+  // so they persist across component unmount/remount (e.g., navigation)
 
   // Auto-disable audio when slow motion is detected (unless user has explicitly set audio)
   useEffect(() => {
@@ -228,100 +236,33 @@ const ExportButton = forwardRef(function ExportButton({
   }, [segmentData, audioExplicitlySet, includeAudio, onIncludeAudioChange]);
 
   /**
-   * Connect to WebSocket for real-time progress updates
-   * Returns a Promise that resolves when the connection is established,
-   * or resolves with completion data when the export finishes
+   * Connect to WebSocket for real-time progress updates using the global manager.
+   * The global manager handles reconnection, keepalive, and persists across navigation.
+   *
+   * NOTE: We do NOT call startExportInStore here. The store should only be populated
+   * from WebSocket messages (which come from the backend DB state).
+   * This ensures the frontend only reflects state, never creates it.
    */
-  const connectWebSocket = (exportId) => {
-    return new Promise((resolve, reject) => {
-      // Close any existing connection
-      if (wsRef.current) {
-        wsRef.current.close();
+  const connectWebSocket = useCallback(async (exportId) => {
+    console.log('[ExportButton] Connecting to WebSocket via global manager for:', exportId);
+
+    // Connect via global manager - it handles all WebSocket lifecycle
+    // The WebSocket progress messages will populate the store via updateExportProgress
+    const connected = await exportWebSocketManager.connect(exportId, {
+      onProgress: (progress, message) => {
+        // Also update local progress message for display
+        setProgressMessage(message || '');
+      },
+      onComplete: (data) => {
+        console.log('[ExportButton] Export completed via WebSocket:', data);
+      },
+      onError: (error) => {
+        console.error('[ExportButton] Export error via WebSocket:', error);
       }
-
-      // Use same host as the page to go through Vite proxy
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${wsProtocol}//${window.location.host}/ws/export/${exportId}`;
-      console.log('[ExportButton] Attempting WebSocket connection to:', wsUrl);
-
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      // Keepalive interval to prevent proxy/browser timeouts
-      let keepaliveInterval = null;
-
-      // Track if we've received the initial connection
-      let connected = false;
-
-      // Set a timeout in case connection takes too long
-      const timeout = setTimeout(() => {
-        console.warn('[ExportButton] WebSocket connection timeout after 3s, readyState:', ws.readyState);
-        if (!connected) resolve({ connected: false }); // Resolve anyway to not block export
-      }, 3000);
-
-      ws.onopen = () => {
-        clearTimeout(timeout);
-        connected = true;
-        console.log('[ExportButton] WebSocket CONNECTED successfully, readyState:', ws.readyState);
-
-        // Start keepalive pings every 30 seconds to prevent timeouts
-        keepaliveInterval = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            try {
-              ws.send('ping');
-              console.log('[ExportButton] Sent keepalive ping');
-            } catch (e) {
-              console.warn('[ExportButton] Failed to send keepalive:', e);
-            }
-          }
-        }, 30000);
-
-        resolve({ connected: true, ws });
-      };
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log('[ExportButton] Progress update:', data);
-
-        // Update progress from WebSocket - but NEVER go backwards
-        // This prevents race conditions where late WebSocket messages
-        // overwrite our manually-set 100% progress
-        const newProgress = Math.round(data.progress);
-        setProgress(prev => Math.max(prev, newProgress));
-        setProgressMessage(data.message || '');
-
-        // Close connection if complete or error
-        if (data.status === 'complete' || data.status === 'error') {
-          if (keepaliveInterval) clearInterval(keepaliveInterval);
-          ws.close();
-        }
-      };
-
-      ws.onerror = (error) => {
-        clearTimeout(timeout);
-        if (keepaliveInterval) clearInterval(keepaliveInterval);
-        // Log at debug level - WebSocket errors are expected when browser is closed
-        console.log('[ExportButton] WebSocket error (export continues on server):', error);
-        if (!connected) {
-          wsDisconnectedDuringExportRef.current = true;
-          resolve({ connected: false }); // Resolve anyway to not block export
-        }
-      };
-
-      ws.onclose = (event) => {
-        if (keepaliveInterval) clearInterval(keepaliveInterval);
-        console.log('[ExportButton] WebSocket CLOSED - code:', event.code, 'reason:', event.reason, 'wasClean:', event.wasClean);
-
-        // Track if WebSocket disconnected during export (not a clean close with completion)
-        // Code 1006 indicates abnormal closure (server died, network issue, etc.)
-        if (event.code === 1006 || (!event.wasClean && connected)) {
-          wsDisconnectedDuringExportRef.current = true;
-        }
-
-        wsRef.current = null;
-      };
     });
-  };
+
+    return { connected };
+  }, []);
 
   /**
    * Wait for export job to complete by polling status
@@ -359,6 +300,11 @@ const ExportButton = forwardRef(function ExportButton({
       return;
     }
 
+    // Debug: Log current store state before starting
+    console.log('[ExportButton] Current activeExports before starting:',
+      Object.keys(activeExports).length,
+      Object.values(activeExports).map(e => `${e.exportId}(${e.status})`).join(', '));
+
     // Mode-specific validation
     if (editorMode === 'framing') {
       // Framing mode requires crop keyframes
@@ -371,11 +317,10 @@ const ExportButton = forwardRef(function ExportButton({
     // Highlights are optional - export works with or without them
 
     setIsExporting(true);
-    setProgress(0);
+    setLocalProgress(0);
     setProgressMessage('Checking server...');
     setError(null);
     uploadCompleteRef.current = false;
-    wsDisconnectedDuringExportRef.current = false;
 
     // Quick health check before starting export
     try {
@@ -409,6 +354,10 @@ const ExportButton = forwardRef(function ExportButton({
       const formData = new FormData();
       formData.append('video', videoFile);
       formData.append('export_id', exportId);
+      // Send project_id so backend can create export_jobs record for tracking
+      if (projectId) {
+        formData.append('project_id', String(projectId));
+      }
 
       let endpoint;
 
@@ -505,6 +454,8 @@ const ExportButton = forwardRef(function ExportButton({
       await connectWebSocket(exportId);
 
       // Send export request
+      // Framing mode returns JSON (backend saves video directly - MVC pattern)
+      // Overlay mode returns blob (for download)
       const response = await axios.post(
         endpoint,
         formData,
@@ -512,7 +463,7 @@ const ExportButton = forwardRef(function ExportButton({
           headers: {
             'Content-Type': 'multipart/form-data'
           },
-          responseType: 'blob',
+          responseType: editorMode === 'framing' ? 'json' : 'blob',
           onUploadProgress: (progressEvent) => {
             // Only update during upload phase, don't override WebSocket updates
             if (!uploadCompleteRef.current) {
@@ -520,7 +471,7 @@ const ExportButton = forwardRef(function ExportButton({
               const uploadPercent = Math.round(
                 (progressEvent.loaded * 10) / progressEvent.total
               );
-              setProgress(uploadPercent);
+              setLocalProgress(uploadPercent);
               setProgressMessage('Uploading video...');
 
               // Mark upload as complete when done
@@ -532,60 +483,30 @@ const ExportButton = forwardRef(function ExportButton({
         }
       );
 
-      // Create blob from response
-      const blob = new Blob([response.data], { type: 'video/mp4' });
+      // WebSocket lifecycle is now managed by the global ExportWebSocketManager
+      // It will automatically close when it receives status: 'complete'
+      // and update the export store accordingly
 
-      // Don't close WebSocket immediately - let it receive the final progress update
-      // The WebSocket will close itself when it receives status: 'complete'
-      // Add a fallback timeout to close it if we don't receive completion
-      const wsCloseTimeout = setTimeout(() => {
-        if (wsRef.current) {
-          console.log('[ExportButton] Closing WebSocket after timeout (no completion message received)');
-          wsRef.current.close();
-          wsRef.current = null;
-        }
-      }, 5000); // 5 second timeout for final message
-
-      // Store timeout ref so we can clear it if WebSocket closes normally
-      const currentWs = wsRef.current;
-      if (currentWs) {
-        const originalOnClose = currentWs.onclose;
-        currentWs.onclose = (event) => {
-          clearTimeout(wsCloseTimeout);
-          if (originalOnClose) originalOnClose.call(currentWs, event);
-        };
-      }
-
-      // In Framing mode, save to database then transition to Overlay mode
-      // (No download - user will download from Overlay mode when final video is ready)
-      if (editorMode === 'framing' && onProceedToOverlay) {
+      // In Framing mode, backend now saves working video directly (MVC pattern)
+      // We just need to navigate to Overlay mode - it will fetch video from server
+      if (editorMode === 'framing') {
         try {
-          // Save working video to database for persistence
-          if (projectId) {
-            setProgress(95);
-            setProgressMessage('Saving working video...');
+          // Backend returns JSON with working_video_id (not a blob anymore)
+          const result = response.data;
+          console.log('[ExportButton] Framing export complete:', result);
 
-            const saveFormData = new FormData();
-            saveFormData.append('project_id', String(projectId));
-            saveFormData.append('video', blob, 'working_video.mp4');
-            saveFormData.append('clips_data', JSON.stringify(clips || []));
-
-            const saveResponse = await axios.post(
-              `${API_BASE}/api/export/framing`,
-              saveFormData,
-              { headers: { 'Content-Type': 'multipart/form-data' } }
-            );
-
-            console.log('[ExportButton] Saved working video to DB:', saveResponse.data);
-
-            // Refresh projects list to show updated progress
-            if (onExportComplete) {
-              onExportComplete();
-            }
+          // Refresh projects list to show updated progress
+          if (onExportComplete) {
+            onExportComplete();
           }
 
-          setProgress(100);
+          setLocalProgress(100);
           setProgressMessage('Loading into Overlay mode...');
+
+          // Mark export as complete in the global store
+          if (exportIdRef.current) {
+            completeExportInStore(exportIdRef.current);
+          }
 
           // Build clip metadata for auto-generating highlight regions
           const clipMetadata = clips && clips.length > 0 ? buildClipMetadata(clips) : null;
@@ -594,22 +515,26 @@ const ExportButton = forwardRef(function ExportButton({
             console.log('[ExportButton] Built clip metadata for overlay:', clipMetadata);
           }
 
-          await onProceedToOverlay(blob, clipMetadata);
+          // MVC: No blob needed - overlay mode will fetch working video from server
+          // Pass null for blob, just the metadata for highlight generation
+          if (onProceedToOverlay) {
+            await onProceedToOverlay(null, clipMetadata);
+          }
+
           setIsExporting(false);
           handleExportEnd();
-          setProgress(0);
+          setLocalProgress(0);
           setProgressMessage('');
         } catch (err) {
           console.error('Failed to transition to overlay mode:', err);
-          // Use the actual error message - it may contain specific details
           setError(err.message || 'Failed to transition to overlay mode');
           setIsExporting(false);
           handleExportEnd();
-          // Don't reset progress to 0 - keep it at 100 to show export succeeded
-          // The error is in the transition, not the export itself
           setProgressMessage('Export complete, but overlay transition failed');
         }
       } else {
+        // Overlay mode - backend returns blob for download
+        const blob = new Blob([response.data], { type: 'video/mp4' });
         // Overlay mode - download the video AND save to database
         // Generate download filename from project name
         const safeName = projectName
@@ -629,7 +554,7 @@ const ExportButton = forwardRef(function ExportButton({
         // Clean up download URL
         window.URL.revokeObjectURL(url);
 
-        setProgress(95);
+        setLocalProgress(95);
         setProgressMessage('Saving to downloads...');
 
         // Save to database if we have a project ID
@@ -661,8 +586,13 @@ const ExportButton = forwardRef(function ExportButton({
           }
         }
 
-        setProgress(100);
+        setLocalProgress(100);
         setProgressMessage('Export complete!');
+
+        // Mark export as complete in the global store
+        if (exportIdRef.current) {
+          completeExportInStore(exportIdRef.current);
+        }
 
         // Show persistent toast notification for overlay export completion
         // Toast stays until user makes changes to the video
@@ -675,7 +605,7 @@ const ExportButton = forwardRef(function ExportButton({
         setTimeout(() => {
           setIsExporting(false);
           handleExportEnd();
-          setProgress(0);
+          setLocalProgress(0);
           setProgressMessage('');
         }, 2000);
       }
@@ -683,10 +613,10 @@ const ExportButton = forwardRef(function ExportButton({
     } catch (err) {
       console.error('Export failed:', err);
 
-      // Close WebSocket on error
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+      // Mark export as failed in store (WebSocket manager will clean up connection)
+      if (exportIdRef.current) {
+        failExportInStore(exportIdRef.current, err.message || 'Export failed');
+        exportWebSocketManager.disconnect(exportIdRef.current);
       }
 
       // Detect network errors (server unreachable)
@@ -694,8 +624,7 @@ const ExportButton = forwardRef(function ExportButton({
         err.code === 'ERR_NETWORK' ||
         err.code === 'ECONNREFUSED' ||
         err.message?.includes('Network Error') ||
-        err.message?.includes('Failed to fetch') ||
-        wsDisconnectedDuringExportRef.current
+        err.message?.includes('Failed to fetch')
       );
 
       if (isNetworkError) {
@@ -725,7 +654,7 @@ const ExportButton = forwardRef(function ExportButton({
 
       setIsExporting(false);
       handleExportEnd();
-      setProgress(0);
+      setLocalProgress(0);
       // Don't clear progressMessage if we set it to 'Server unreachable'
       if (!isNetworkError) {
         setProgressMessage('');
@@ -838,7 +767,7 @@ const ExportButton = forwardRef(function ExportButton({
       )}
 
       {/* Success message */}
-      {progress === 100 && !isCurrentlyExporting && (
+      {displayProgress === 100 && !isCurrentlyExporting && (
         <div className="text-green-400 text-sm bg-green-900/20 border border-green-800 rounded p-2">
           Export complete! Video downloaded.
         </div>

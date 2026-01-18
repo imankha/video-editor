@@ -12,7 +12,7 @@ Key design principles:
 - Only state transitions are persisted (pending -> processing -> complete/error)
 """
 
-from fastapi import APIRouter, HTTPException, Form, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Form, UploadFile, File, BackgroundTasks, Query
 from pydantic import BaseModel
 from typing import Optional, List
 import uuid
@@ -22,7 +22,7 @@ import os
 import tempfile
 import shutil
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from ..database import get_db_connection, get_user_data_path
 
@@ -53,6 +53,7 @@ class ExportJobResponse(BaseModel):
     """Response model for export job status."""
     job_id: str
     project_id: int
+    project_name: Optional[str] = None
     type: str
     status: str  # 'pending' | 'processing' | 'complete' | 'error'
     error: Optional[str] = None
@@ -173,6 +174,90 @@ def delete_export_job(job_id: str) -> bool:
         cursor.execute("DELETE FROM export_jobs WHERE id = ?", (job_id,))
         conn.commit()
         return cursor.rowcount > 0
+
+
+def cleanup_stale_exports(max_age_minutes: int = 60):
+    """Mark exports that have been processing too long as stale/error.
+
+    This prevents orphaned exports from accumulating if:
+    - Server crashed during processing
+    - User navigated away and export errored silently
+    - Network issues prevented completion update
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE export_jobs
+            SET status = 'error',
+                error = 'Export timed out (stale)',
+                completed_at = datetime('now')
+            WHERE status IN ('pending', 'processing')
+              AND created_at < datetime('now', ? || ' minutes')
+        """, (f'-{max_age_minutes}',))
+        if cursor.rowcount > 0:
+            logger.warning(f"[ExportJobs] Cleaned up {cursor.rowcount} stale exports")
+        conn.commit()
+
+
+def get_active_exports() -> List[dict]:
+    """Get all currently active (pending or processing) exports.
+
+    Also cleans up stale exports that have been processing too long.
+    15 minutes is chosen because most exports complete in under 10 minutes.
+    """
+    # Clean up stale exports first
+    cleanup_stale_exports(max_age_minutes=15)
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT e.id, e.project_id, p.name as project_name, e.type, e.status, e.error,
+                   e.output_video_id, e.output_filename,
+                   e.created_at, e.started_at, e.completed_at
+            FROM export_jobs e
+            LEFT JOIN projects p ON e.project_id = p.id
+            WHERE e.status IN ('pending', 'processing')
+            ORDER BY e.created_at DESC
+        """)
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_recent_exports(hours: int = 24) -> List[dict]:
+    """Get exports from the last N hours."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # SQLite datetime comparison
+        cursor.execute("""
+            SELECT id, project_id, type, status, error,
+                   output_video_id, output_filename,
+                   created_at, started_at, completed_at
+            FROM export_jobs
+            WHERE created_at >= datetime('now', ? || ' hours')
+            ORDER BY created_at DESC
+        """, (f'-{hours}',))
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_exports_by_status(statuses: List[str]) -> List[dict]:
+    """Get exports filtered by status list."""
+    if not statuses:
+        return []
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        placeholders = ','.join(['?' for _ in statuses])
+        cursor.execute(f"""
+            SELECT id, project_id, type, status, error,
+                   output_video_id, output_filename,
+                   created_at, started_at, completed_at
+            FROM export_jobs
+            WHERE status IN ({placeholders})
+            ORDER BY created_at DESC
+        """, statuses)
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
 
 
 # ============================================================================
@@ -391,6 +476,74 @@ async def start_overlay_export(
     }
 
 
+# ============================================================================
+# Global Export Discovery Endpoints (for recovery on page load)
+# ============================================================================
+
+@router.get("/active", response_model=ExportJobListResponse)
+async def list_active_exports():
+    """
+    Get all currently active (pending or processing) exports.
+
+    Use this on app startup to:
+    - Discover exports that are still running
+    - Reconnect WebSocket connections for progress tracking
+    - Recover export tracking state after page refresh
+    """
+    exports = get_active_exports()
+
+    return ExportJobListResponse(
+        exports=[
+            ExportJobResponse(
+                job_id=e['id'],
+                project_id=e['project_id'],
+                project_name=e.get('project_name'),
+                type=e['type'],
+                status=e['status'],
+                error=e['error'],
+                output_video_id=e['output_video_id'],
+                output_filename=e['output_filename'],
+                created_at=e['created_at'],
+                started_at=e['started_at'],
+                completed_at=e['completed_at']
+            )
+            for e in exports
+        ]
+    )
+
+
+@router.get("/recent", response_model=ExportJobListResponse)
+async def list_recent_exports(hours: int = Query(default=24, ge=1, le=168)):
+    """
+    Get exports from the last N hours (default: 24, max: 168/1 week).
+
+    Use this to:
+    - Show recent export history
+    - Find completed exports that may have been missed
+    - Display export activity feed
+    """
+    exports = get_recent_exports(hours)
+
+    return ExportJobListResponse(
+        exports=[
+            ExportJobResponse(
+                job_id=e['id'],
+                project_id=e['project_id'],
+                project_name=e.get('project_name'),
+                type=e['type'],
+                status=e['status'],
+                error=e['error'],
+                output_video_id=e['output_video_id'],
+                output_filename=e['output_filename'],
+                created_at=e['created_at'],
+                started_at=e['started_at'],
+                completed_at=e['completed_at']
+            )
+            for e in exports
+        ]
+    )
+
+
 @router.get("/{job_id}", response_model=ExportJobResponse)
 async def get_export_status(job_id: str):
     """
@@ -471,6 +624,7 @@ async def list_project_exports(project_id: int):
             ExportJobResponse(
                 job_id=e['id'],
                 project_id=e['project_id'],
+                project_name=e.get('project_name'),
                 type=e['type'],
                 status=e['status'],
                 error=e['error'],

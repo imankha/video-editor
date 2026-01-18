@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder } from 'lucide-react';
 import { useAppState } from '../contexts';
+import { useExportStore } from '../stores/exportStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { Button } from './shared/Button';
 
@@ -743,8 +744,17 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
 function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Check export store for active exports (survives refresh)
+  const activeExports = useExportStore((state) => state.activeExports);
+  const storeExport = Object.values(activeExports).find(
+    (exp) => exp.projectId === project.id && (exp.status === 'pending' || exp.status === 'processing')
+  );
+
   // Determine if this project is currently exporting
-  const isExporting = exportingProject?.projectId === project.id ? exportingProject.stage : null;
+  // Check both context (current session) and store (recovered from server)
+  const isExporting = exportingProject?.projectId === project.id
+    ? exportingProject.stage
+    : storeExport?.type || null;
 
   const handleDelete = (e) => {
     e.stopPropagation();

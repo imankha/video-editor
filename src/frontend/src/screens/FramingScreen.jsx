@@ -363,6 +363,7 @@ export function FramingScreen({
             if (firstClip.segments_data) {
               try {
                 const savedSegments = JSON.parse(firstClip.segments_data);
+                console.log('[FramingScreen] Restoring segments_data:', JSON.stringify(savedSegments), 'clipDuration:', clipMetadata?.duration);
                 restoreSegmentState(savedSegments, clipMetadata?.duration || 0);
               } catch (e) {
                 console.warn('[FramingScreen] Failed to parse segments_data:', e);
@@ -669,53 +670,65 @@ export function FramingScreen({
       console.warn('[FramingScreen] Failed to save clip state (continuing):', err);
     }
 
-    // Set working video in overlay store so OverlayScreen can access it
-    // This is critical - if this fails, overlay mode won't work
+    // MVC: If blob is null, the backend has already saved the working video
+    // OverlayScreen will fetch it from the server using project.working_video_id
     let workingVideoSet = false;
-    const url = URL.createObjectURL(renderedVideoBlob);
 
-    try {
-      console.log('[FramingScreen] Creating blob URL and extracting metadata...');
-      const meta = await extractVideoMetadata(renderedVideoBlob);
-      console.log('[FramingScreen] Video metadata extracted:', { duration: meta?.duration, width: meta?.width, height: meta?.height });
+    if (renderedVideoBlob) {
+      // Legacy flow: blob provided, set in memory
+      const url = URL.createObjectURL(renderedVideoBlob);
 
-      setWorkingVideo({ file: renderedVideoBlob, url, metadata: meta });
-      workingVideoSet = true;
-    } catch (err) {
-      console.warn('[FramingScreen] Metadata extraction failed, using fallback:', err.message);
+      try {
+        console.log('[FramingScreen] Creating blob URL and extracting metadata...');
+        const meta = await extractVideoMetadata(renderedVideoBlob);
+        console.log('[FramingScreen] Video metadata extracted:', { duration: meta?.duration, width: meta?.width, height: meta?.height });
 
-      // Fallback: construct metadata from clip data and aspect ratio
-      // Calculate total duration from clip metadata
-      const totalDuration = clipMetadata?.source_clips?.length > 0
-        ? clipMetadata.source_clips[clipMetadata.source_clips.length - 1].end_time
-        : clips.reduce((sum, c) => sum + (c.duration || 0), 0);
+        setWorkingVideo({ file: renderedVideoBlob, url, metadata: meta });
+        workingVideoSet = true;
+      } catch (err) {
+        console.warn('[FramingScreen] Metadata extraction failed, using fallback:', err.message);
 
-      // Determine dimensions from aspect ratio (assuming 1080p base)
-      const [ratioW, ratioH] = (globalAspectRatio || '9:16').split(':').map(Number);
-      const isPortrait = ratioH > ratioW;
-      const width = isPortrait ? 1080 : 1920;
-      const height = isPortrait ? 1920 : 1080;
+        // Fallback: construct metadata from clip data and aspect ratio
+        const totalDuration = clipMetadata?.source_clips?.length > 0
+          ? clipMetadata.source_clips[clipMetadata.source_clips.length - 1].end_time
+          : clips.reduce((sum, c) => sum + (c.duration || 0), 0);
 
-      const fallbackMeta = {
-        width,
-        height,
-        duration: totalDuration,
-        aspectRatio: ratioW / ratioH,
-        fileName: 'rendered_video.mp4',
-        size: renderedVideoBlob.size,
-        format: 'mp4',
-      };
+        const [ratioW, ratioH] = (globalAspectRatio || '9:16').split(':').map(Number);
+        const isPortrait = ratioH > ratioW;
+        const width = isPortrait ? 1080 : 1920;
+        const height = isPortrait ? 1920 : 1080;
 
-      console.log('[FramingScreen] Using fallback metadata:', fallbackMeta);
-      setWorkingVideo({ file: renderedVideoBlob, url, metadata: fallbackMeta });
-      workingVideoSet = true;
+        const fallbackMeta = {
+          width,
+          height,
+          duration: totalDuration,
+          aspectRatio: ratioW / ratioH,
+          fileName: 'rendered_video.mp4',
+          size: renderedVideoBlob.size,
+          format: 'mp4',
+        };
+
+        console.log('[FramingScreen] Using fallback metadata:', fallbackMeta);
+        setWorkingVideo({ file: renderedVideoBlob, url, metadata: fallbackMeta });
+        workingVideoSet = true;
+      }
+    } else {
+      // MVC flow: blob is null, working video saved on server
+      // Clear any stale in-memory video so OverlayScreen fetches from server
+      console.log('[FramingScreen] MVC flow: working video on server, clearing in-memory video');
+      setWorkingVideo(null);
+
+      // Refresh project data so OverlayScreen sees the new working_video_id
+      console.log('[FramingScreen] Refreshing project to get new working_video_id');
+      await refreshProject();
+
+      workingVideoSet = true; // Will be fetched by OverlayScreen
     }
 
     if (clipMetadata) {
       setOverlayClipMetadata(clipMetadata);
       console.log('[FramingScreen] Clip metadata set:', clipMetadata?.source_clips?.length, 'clips');
     }
-    console.log('[FramingScreen] Working video set in overlay store');
 
     // Clear the "framing changed" flag since we just exported
     setFramingChangedSinceExport(false);
@@ -729,14 +742,14 @@ export function FramingScreen({
       }
     }
 
-    // Navigate to overlay mode only if working video was set successfully
+    // Navigate to overlay mode
     if (workingVideoSet) {
       console.log('[FramingScreen] Navigating to overlay mode');
       setEditorMode('overlay');
     } else {
       console.error('[FramingScreen] Cannot navigate to overlay - working video not set');
     }
-  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio]);
+  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio, refreshProject]);
 
   // Handle clip selection from sidebar
   const handleSelectClip = useCallback((clipId) => {

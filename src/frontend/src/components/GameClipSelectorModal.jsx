@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Filter, Clock, Film, Settings, Sliders } from 'lucide-react';
+import { X, Filter, Clock, Film, Settings, Sliders, Check, Star, List } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import { ensureUniqueName } from '../utils/uniqueName';
@@ -24,6 +24,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
   const [selectedGameIds, setSelectedGameIds] = useState([]);
   const [minRating, setMinRating] = useState(0); // 0 = All clips
   const [selectedTags, setSelectedTags] = useState([]);
+  const [excludedClipIds, setExcludedClipIds] = useState(new Set()); // Clips excluded from project
 
   // Data state
   const [rawClips, setRawClips] = useState([]);
@@ -40,6 +41,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
     setSelectedGameIds([]);
     setMinRating(0);
     setSelectedTags([]);
+    setExcludedClipIds(new Set());
 
     const fetchClips = async () => {
       setLoading(true);
@@ -82,19 +84,24 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
     });
   }, [rawClips, minRating, selectedGameIds, selectedTags]);
 
-  // Compute preview stats (real-time)
+  // Compute included clips (filtered minus manually excluded)
+  const includedClips = useMemo(() => {
+    return filteredClips.filter(clip => !excludedClipIds.has(clip.id));
+  }, [filteredClips, excludedClipIds]);
+
+  // Compute preview stats (real-time) - based on included clips only
   const preview = useMemo(() => {
-    const totalDuration = filteredClips.reduce((sum, clip) => {
+    const totalDuration = includedClips.reduce((sum, clip) => {
       const start = clip.start_time || 0;
       const end = clip.end_time || 0;
       return sum + Math.max(0, end - start);
     }, 0);
 
     return {
-      clip_count: filteredClips.length,
+      clip_count: includedClips.length,
       total_duration: totalDuration
     };
-  }, [filteredClips]);
+  }, [includedClips]);
 
   // Get all unique tags from filtered clips (updates based on game/rating filters)
   const availableTags = useMemo(() => {
@@ -338,12 +345,38 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
     });
   }, []);
 
+  // Toggle individual clip inclusion
+  const toggleClip = useCallback((clipId) => {
+    setExcludedClipIds(prev => {
+      const next = new Set(prev);
+      if (next.has(clipId)) {
+        next.delete(clipId);
+      } else {
+        next.add(clipId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Select all clips (clear exclusions)
+  const selectAllClips = useCallback(() => {
+    setExcludedClipIds(new Set());
+  }, []);
+
+  // Deselect all clips (exclude all)
+  const deselectAllClips = useCallback(() => {
+    setExcludedClipIds(new Set(filteredClips.map(c => c.id)));
+  }, [filteredClips]);
+
   // Handle create
   const handleCreate = async () => {
-    if (!projectName.trim() || filteredClips.length === 0) return;
+    if (!projectName.trim() || includedClips.length === 0) return;
 
     setCreating(true);
     try {
+      // Pass specific clip IDs to preserve user's selection
+      const clipIds = includedClips.map(c => c.id);
+
       const response = await fetch(`${API_BASE_URL}/projects/from-clips`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -352,7 +385,8 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
           aspect_ratio: aspectRatio,
           game_ids: selectedGameIds,
           min_rating: minRating,
-          tags: selectedTags
+          tags: selectedTags,
+          clip_ids: clipIds
         })
       });
 
@@ -509,6 +543,94 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
                   </div>
                 </div>
               </div>
+
+              {/* ==================== CLIPS LIST SECTION ==================== */}
+              {filteredClips.length > 0 && (
+                <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <List size={16} className="text-blue-400" />
+                      <h3 className="text-sm font-semibold text-white uppercase tracking-wide">
+                        Clips
+                        {excludedClipIds.size > 0 && (
+                          <span className="ml-2 text-xs font-normal text-gray-400">
+                            ({includedClips.length} of {filteredClips.length} selected)
+                          </span>
+                        )}
+                      </h3>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={selectAllClips}
+                        className="text-xs text-blue-400 hover:text-blue-300"
+                      >
+                        Select All
+                      </button>
+                      <span className="text-gray-600">|</span>
+                      <button
+                        type="button"
+                        onClick={deselectAllClips}
+                        className="text-xs text-gray-400 hover:text-gray-300"
+                      >
+                        Deselect All
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {filteredClips.map(clip => {
+                      const isIncluded = !excludedClipIds.has(clip.id);
+                      const clipDuration = Math.max(0, (clip.end_time || 0) - (clip.start_time || 0));
+                      const clipTags = clip.tags || [];
+                      const gameName = games.find(g => g.id === clip.game_id)?.name;
+
+                      return (
+                        <button
+                          key={clip.id}
+                          type="button"
+                          onClick={() => toggleClip(clip.id)}
+                          className={`w-full flex items-center gap-3 p-2 rounded-lg border transition-colors text-left ${
+                            isIncluded
+                              ? 'bg-gray-700/50 border-gray-600 hover:border-blue-500'
+                              : 'bg-gray-800/50 border-gray-700 opacity-50 hover:opacity-75'
+                          }`}
+                        >
+                          {/* Checkbox indicator */}
+                          <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
+                            isIncluded ? 'bg-blue-600' : 'bg-gray-600'
+                          }`}>
+                            {isIncluded && <Check size={14} className="text-white" />}
+                          </div>
+
+                          {/* Clip info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              {/* Rating stars */}
+                              {clip.rating >= 5 && <Star size={12} className="text-yellow-400" fill="currentColor" />}
+                              <span className={`text-sm truncate ${isIncluded ? 'text-white' : 'text-gray-400'}`}>
+                                {clip.name || `Clip ${clip.id}`}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              {gameName && <span>{gameName}</span>}
+                              {gameName && clipTags.length > 0 && <span>•</span>}
+                              {clipTags.length > 0 && (
+                                <span className="truncate">{clipTags.slice(0, 2).join(', ')}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Duration */}
+                          <span className="text-xs text-gray-500 flex-shrink-0">
+                            {formatDuration(clipDuration)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* ==================== SETTINGS SECTION ==================== */}
               <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">

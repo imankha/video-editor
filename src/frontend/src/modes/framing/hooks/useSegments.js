@@ -103,7 +103,7 @@ export function useSegments() {
       return;
     }
 
-    console.log('[useSegments] Restoring state:', savedState);
+    console.log('[useSegments] Restoring state:', JSON.stringify(savedState), 'videoDuration:', videoDuration);
 
     // Set duration first
     if (videoDuration) {
@@ -491,17 +491,30 @@ export function useSegments() {
    * Get the current segment and speed at a given time
    */
   const getSegmentAtTime = useCallback((time) => {
+    // Log segment lookup for debugging (only when trimmed)
+    const logResult = (result) => {
+      if (result && result.isTrimmed) {
+        console.log('[useSegments] getSegmentAtTime returning trimmed segment:', {
+          time,
+          boundaries,
+          trimRange,
+          result
+        });
+      }
+      return result;
+    };
+
     for (let i = 0; i < boundaries.length - 1; i++) {
       if (time >= boundaries[i] && time < boundaries[i + 1]) {
         const start = boundaries[i];
         const end = boundaries[i + 1];
-        return {
+        return logResult({
           index: i,
           start,
           end,
           speed: segmentSpeeds[i] || 1,
           isTrimmed: isSegmentTrimmed(start, end)
-        };
+        });
       }
     }
 
@@ -510,16 +523,16 @@ export function useSegments() {
       const i = boundaries.length - 2;
       const start = boundaries[i];
       const end = boundaries[i + 1];
-      return {
+      return logResult({
         index: i,
         start,
         end,
         speed: segmentSpeeds[i] || 1,
         isTrimmed: isSegmentTrimmed(start, end)
-      };
+      });
     }
     return null;
-  }, [boundaries, segmentSpeeds, isSegmentTrimmed]);
+  }, [boundaries, segmentSpeeds, isSegmentTrimmed, trimRange]);
 
   /**
    * Get export data for segments (only include if speed changes exist)
@@ -596,6 +609,16 @@ export function useSegments() {
 
     // If no trim range, we're done
     if (!trimRange) return clampedTime;
+
+    // Debug log when clamping is actually applied
+    if (clampedTime < trimRange.start || clampedTime > trimRange.end) {
+      console.log('[useSegments] clampToVisibleRange clamping:', {
+        inputTime: time,
+        duration,
+        trimRange,
+        clampedTime: clampedTime < trimRange.start ? trimRange.start : trimRange.end
+      });
+    }
 
     // Clamp to trim range boundaries
     // If time is before visible range, snap to start
