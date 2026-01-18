@@ -164,8 +164,6 @@ export function OverlayModeView({
                 onResetZoom={onResetZoom}
                 minZoom={MIN_ZOOM}
                 maxZoom={MAX_ZOOM}
-                isFullscreen={isFullscreen}
-                onToggleFullscreen={onToggleFullscreen}
               />
             </div>
           </div>
@@ -245,6 +243,8 @@ export function OverlayModeView({
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
                 onRestart={restart}
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={onToggleFullscreen}
               />
             )}
           </div>

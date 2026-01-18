@@ -168,8 +168,6 @@ export function FramingModeView({
                 onResetZoom={onResetZoom}
                 minZoom={MIN_ZOOM}
                 maxZoom={MAX_ZOOM}
-                isFullscreen={isFullscreen}
-                onToggleFullscreen={onToggleFullscreen}
               />
             </div>
           </div>
@@ -236,6 +234,8 @@ export function FramingModeView({
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
                 onRestart={restart}
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={onToggleFullscreen}
               />
             )}
           </div>

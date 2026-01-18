@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, RotateCcw, Maximize, Minimize } from 'lucide-react';
 import { Button } from './shared/Button';
 import { formatTime } from '../utils/timeFormat';
 
@@ -17,6 +17,8 @@ import { formatTime } from '../utils/timeFormat';
  * @param {Function} props.onStepForward - Step forward one frame
  * @param {Function} props.onStepBackward - Step backward one frame
  * @param {Function} props.onRestart - Restart video to beginning
+ * @param {boolean} props.isFullscreen - Whether in fullscreen mode
+ * @param {Function} props.onToggleFullscreen - Toggle fullscreen mode
  */
 export function Controls({
   isPlaying,
@@ -26,6 +28,8 @@ export function Controls({
   onStepForward,
   onStepBackward,
   onRestart,
+  isFullscreen,
+  onToggleFullscreen,
 }) {
   return (
     <div className="controls-container flex items-center justify-between py-2 px-4 bg-gray-800 rounded-b-lg">
@@ -77,6 +81,20 @@ export function Controls({
       <div className="text-white font-mono text-xs">
         {formatTime(currentTime)} / {formatTime(duration)}
       </div>
+
+      {/* Right side controls */}
+      {onToggleFullscreen && (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={isFullscreen ? Minimize : Maximize}
+            iconOnly
+            onClick={onToggleFullscreen}
+            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
+          />
+        </div>
+      )}
     </div>
   );
 }
