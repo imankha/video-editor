@@ -16,6 +16,8 @@ from starlette.background import BackgroundTask
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import re
@@ -23,6 +25,9 @@ import tempfile
 import uuid
 import subprocess
 import logging
+
+# Thread pool for CPU-intensive frame processing (prevents blocking event loop)
+_frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="overlay_")
 
 from ...websocket import export_progress, manager
 from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path, get_uploads_path
@@ -41,10 +46,134 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _process_frames_to_ffmpeg(
+    input_path: str,
+    output_path: str,
+    highlight_regions: list,
+    highlight_effect_type: str,
+    progress_callback
+) -> int:
+    """
+    Process video frames with highlight overlays, piping directly to FFmpeg.
+
+    This avoids writing individual frame files to disk - frames are piped
+    directly to FFmpeg's stdin for encoding, which is much faster.
+
+    Returns the total number of frames processed.
+    """
+    import cv2
+    from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
+
+    cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        raise ValueError("Could not open video file")
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    logger.info(f"[Overlay Export] Video: {width}x{height} @ {fps}fps, {frame_count} frames")
+    logger.info(f"[Overlay Export] Piping frames directly to FFmpeg (no disk I/O)")
+
+    # Get GPU encoding params
+    encoding_params = get_encoding_command_parts(prefer_quality=True)
+
+    # Start FFmpeg process with stdin pipe for raw frames
+    # We'll pipe raw BGR frames and let FFmpeg encode them
+    ffmpeg_cmd = [
+        'ffmpeg', '-y',
+        # Input: raw video frames from pipe
+        '-f', 'rawvideo',
+        '-pix_fmt', 'bgr24',
+        '-s', f'{width}x{height}',
+        '-r', str(fps),
+        '-i', 'pipe:0',
+        # Audio from original file
+        '-i', input_path,
+        '-map', '0:v',
+        '-map', '1:a?',
+    ]
+    ffmpeg_cmd.extend(encoding_params)
+    ffmpeg_cmd.extend([
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-shortest',
+        output_path
+    ])
+
+    logger.info(f"[Overlay Export] FFmpeg command: {' '.join(ffmpeg_cmd[:10])}...")
+
+    # Start FFmpeg process
+    ffmpeg_proc = subprocess.Popen(
+        ffmpeg_cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+
+    # Sort regions by start time for efficient lookup
+    sorted_regions = sorted(highlight_regions, key=lambda r: r['start_time'])
+
+    frame_idx = 0
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            current_time = frame_idx / fps
+
+            # Find active region for this frame
+            active_region = None
+            for region in sorted_regions:
+                if region['start_time'] <= current_time <= region['end_time']:
+                    active_region = region
+                    break
+
+            # Render highlight if in a region
+            if active_region:
+                highlight = KeyframeInterpolator.interpolate_highlight(active_region['keyframes'], current_time)
+                if highlight is not None:
+                    frame = KeyframeInterpolator.render_highlight_on_frame(
+                        frame,
+                        highlight,
+                        (width, height),
+                        crop=None,
+                        effect_type=highlight_effect_type
+                    )
+
+            # Write frame directly to FFmpeg's stdin (no disk I/O!)
+            ffmpeg_proc.stdin.write(frame.tobytes())
+            frame_idx += 1
+
+            # Report progress every 30 frames
+            if frame_idx % 30 == 0:
+                progress = 10 + int((frame_idx / frame_count) * 80)
+                progress_callback(progress, f"Processing frames... {frame_idx}/{frame_count}")
+
+    finally:
+        cap.release()
+        # Close stdin to signal EOF to FFmpeg
+        if ffmpeg_proc.stdin:
+            ffmpeg_proc.stdin.close()
+
+    # Wait for FFmpeg to finish
+    stdout, stderr = ffmpeg_proc.communicate()
+
+    if ffmpeg_proc.returncode != 0:
+        logger.error(f"[Overlay Export] FFmpeg error: {stderr.decode()}")
+        raise RuntimeError(f"FFmpeg encoding failed: {stderr.decode()[:500]}")
+
+    logger.info(f"[Overlay Export] Processed {frame_idx} frames via pipe")
+    return frame_idx
+
+
 @router.post("/overlay")
 async def export_overlay_only(
     video: UploadFile = File(...),
     export_id: str = Form(...),
+    project_id: int = Form(None),  # Optional: for export_jobs tracking
     highlight_regions_json: str = Form(None),
     highlight_keyframes_json: str = Form(None),  # Legacy format (deprecated)
     highlight_effect_type: str = Form("original"),
@@ -74,11 +203,41 @@ async def export_overlay_only(
     import cv2
     from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
 
+    # Fetch project name for progress messages
+    project_name = None
+    if project_id:
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM projects WHERE id = ?", (project_id,))
+                row = cursor.fetchone()
+                if row:
+                    project_name = row['name']
+        except Exception as e:
+            logger.warning(f"[Overlay Export] Failed to fetch project name: {e}")
+
+    # Create export_jobs record for tracking (if project_id provided)
+    if project_id:
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO export_jobs (id, project_id, type, status, input_data)
+                    VALUES (?, ?, 'overlay', 'processing', '{}')
+                """, (export_id, project_id))
+                conn.commit()
+            logger.info(f"[Overlay Export] Created export_jobs record: {export_id} for project '{project_name}'")
+        except Exception as e:
+            logger.warning(f"[Overlay Export] Failed to create export_jobs record: {e}")
+
     # Initialize progress
     export_progress[export_id] = {
         "progress": 5,
         "message": "Starting overlay export...",
-        "status": "processing"
+        "status": "processing",
+        "projectId": project_id,
+        "projectName": project_name,
+        "type": "overlay"
     }
 
     logger.info(f"[Overlay Export] Effect type: {highlight_effect_type}")
@@ -140,12 +299,10 @@ async def export_overlay_only(
         except (json.JSONDecodeError, KeyError) as e:
             raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {str(e)}")
 
-    # Create temp directory
+    # Create temp directory (no frames_dir needed - we pipe directly to FFmpeg)
     temp_dir = tempfile.mkdtemp()
     input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex}{Path(video.filename).suffix}")
     output_path = os.path.join(temp_dir, f"overlay_{uuid.uuid4().hex}.mp4")
-    frames_dir = os.path.join(temp_dir, "frames")
-    os.makedirs(frames_dir, exist_ok=True)
 
     try:
         # Save uploaded file
@@ -154,30 +311,17 @@ async def export_overlay_only(
             f.write(content)
 
         # Update progress
-        progress_data = {"progress": 10, "message": "Processing video...", "status": "processing"}
+        progress_data = {"progress": 10, "message": "Processing video...", "status": "processing", "projectId": project_id, "projectName": project_name, "type": "overlay"}
         export_progress[export_id] = progress_data
         await manager.send_progress(export_id, progress_data)
 
-        # Open video
-        cap = cv2.VideoCapture(input_path)
-        if not cap.isOpened():
-            raise HTTPException(status_code=400, detail="Could not open video file")
-
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        logger.info(f"[Overlay Export] Video: {width}x{height} @ {fps}fps, {frame_count} frames")
-
-        # Fast path: no highlights
+        # Fast path: no highlights - just copy the video
         if not highlight_regions:
-            cap.release()
             logger.info("[Overlay Export] No highlights - copying video directly")
             import shutil
             shutil.copy(input_path, output_path)
 
-            progress_data = {"progress": 100, "message": "Export complete!", "status": "complete"}
+            progress_data = {"progress": 100, "message": "Export complete!", "status": "complete", "projectId": project_id, "projectName": project_name, "type": "overlay"}
             export_progress[export_id] = progress_data
             await manager.send_progress(export_id, progress_data)
 
@@ -188,98 +332,84 @@ async def export_overlay_only(
                 background=None
             )
 
-        # Process all frames with highlights
-        video_duration = frame_count / fps
-        logger.info(f"[Overlay Export] Video duration: {video_duration:.3f}s")
+        # Progress updates from thread
+        progress_queue = asyncio.Queue()
 
-        # Sort regions by start time for efficient lookup
-        sorted_regions = sorted(highlight_regions, key=lambda r: r['start_time'])
+        def on_progress(progress: int, message: str):
+            # Can't await from thread, so just update the dict
+            export_progress[export_id] = {
+                "progress": progress,
+                "message": message,
+                "status": "processing",
+                "projectId": project_id,
+                "projectName": project_name,
+                "type": "overlay"
+            }
+            # Queue progress for async sending
+            try:
+                progress_queue.put_nowait((progress, message))
+            except asyncio.QueueFull:
+                pass  # Skip if queue is full
 
-        # Process all frames
-        logger.info(f"[Overlay Export] Processing {frame_count} frames...")
+        # Run frame processing in thread pool to avoid blocking event loop
+        # Frames are piped directly to FFmpeg - no disk I/O for individual frames!
+        loop = asyncio.get_event_loop()
+        logger.info(f"[Overlay Export] Processing frames with direct FFmpeg pipe...")
 
-        frame_idx = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            current_time = frame_idx / fps
-
-            # Find active region for this frame
-            active_region = None
-            for region in sorted_regions:
-                if region['start_time'] <= current_time <= region['end_time']:
-                    active_region = region
+        # Start a task to send progress updates
+        async def send_progress_updates():
+            while True:
+                try:
+                    progress, message = await asyncio.wait_for(progress_queue.get(), timeout=0.5)
+                    await manager.send_progress(export_id, {
+                        "progress": progress,
+                        "message": message,
+                        "status": "processing",
+                        "projectId": project_id,
+                        "projectName": project_name,
+                        "type": "overlay"
+                    })
+                except asyncio.TimeoutError:
+                    continue
+                except asyncio.CancelledError:
                     break
 
-            # Render highlight if in a region
-            if active_region:
-                highlight = KeyframeInterpolator.interpolate_highlight(active_region['keyframes'], current_time)
-                if highlight is not None:
-                    frame = KeyframeInterpolator.render_highlight_on_frame(
-                        frame,
-                        highlight,
-                        (width, height),
-                        crop=None,
-                        effect_type=highlight_effect_type
-                    )
+        progress_task = asyncio.create_task(send_progress_updates())
 
-            # Write frame
-            frame_path = os.path.join(frames_dir, f"frame_{frame_idx:06d}.png")
-            cv2.imwrite(frame_path, frame)
-            frame_idx += 1
+        try:
+            frame_idx = await loop.run_in_executor(
+                _frame_processor_pool,
+                _process_frames_to_ffmpeg,
+                input_path,
+                output_path,
+                highlight_regions,
+                highlight_effect_type,
+                on_progress
+            )
+        finally:
+            progress_task.cancel()
+            try:
+                await progress_task
+            except asyncio.CancelledError:
+                pass
 
-            # Update progress
-            if frame_idx % 30 == 0:
-                progress = 10 + int((frame_idx / frame_count) * 60)
-                progress_data = {
-                    "progress": progress,
-                    "message": f"Processing frames... {frame_idx}/{frame_count}",
-                    "status": "processing"
-                }
-                export_progress[export_id] = progress_data
-                await manager.send_progress(export_id, progress_data)
+        logger.info(f"[Overlay Export] Completed processing {frame_idx} frames")
 
-        cap.release()
-        logger.info(f"[Overlay Export] Rendered {frame_idx} frames")
-
-        # Encode final video with audio from original
-        progress_data = {"progress": 75, "message": "Encoding video...", "status": "processing"}
-        export_progress[export_id] = progress_data
-        await manager.send_progress(export_id, progress_data)
-
-        # Calculate exact video duration based on frame count to preserve all frames
-        video_duration = frame_idx / fps
-        logger.info(f"[Overlay Export] Final frame count: {frame_idx}, duration: {video_duration:.6f}s")
-
-        # Use GPU encoding if available
-        encoding_params = get_encoding_command_parts(prefer_quality=True)
-
-        ffmpeg_cmd = [
-            'ffmpeg', '-y',
-            '-framerate', str(fps),
-            '-i', os.path.join(frames_dir, 'frame_%06d.png'),
-            '-i', input_path,
-            '-map', '0:v',
-            '-map', '1:a?',
-        ]
-        ffmpeg_cmd.extend(encoding_params)
-        ffmpeg_cmd.extend([
-            '-c:a', 'aac',
-            '-b:a', '192k',
-            '-t', str(video_duration),  # Use explicit duration instead of -shortest to preserve all frames
-            output_path
-        ])
-        logger.info(f"[Overlay Export] Encoding with: {encoding_params[1]}")
-
-        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            logger.error(f"[Overlay Export] Encoding error: {result.stderr}")
-            raise HTTPException(status_code=500, detail=f"FFmpeg encoding failed: {result.stderr}")
+        # Update export_jobs record to complete
+        if project_id:
+            try:
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE export_jobs SET status = 'complete', completed_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (export_id,))
+                    conn.commit()
+            except Exception as e:
+                logger.warning(f"[Overlay Export] Failed to update export_jobs record: {e}")
 
         # Complete
-        progress_data = {"progress": 100, "message": "Export complete!", "status": "complete"}
+        progress_data = {"progress": 100, "message": "Export complete!", "status": "complete", "projectId": project_id, "projectName": project_name, "type": "overlay"}
         export_progress[export_id] = progress_data
         await manager.send_progress(export_id, progress_data)
 
@@ -296,6 +426,18 @@ async def export_overlay_only(
         )
 
     except HTTPException:
+        # Update export_jobs record to error
+        if project_id:
+            try:
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE export_jobs SET status = 'error', completed_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (export_id,))
+                    conn.commit()
+            except Exception:
+                pass
         import shutil
         import time
         time.sleep(0.5)
@@ -307,7 +449,19 @@ async def export_overlay_only(
         raise
     except Exception as e:
         logger.error(f"[Overlay Export] Failed: {str(e)}", exc_info=True)
-        error_data = {"progress": 0, "message": f"Export failed: {str(e)}", "status": "error"}
+        # Update export_jobs record to error
+        if project_id:
+            try:
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (str(e)[:500], export_id))
+                    conn.commit()
+            except Exception:
+                pass
+        error_data = {"progress": 0, "message": f"Export failed: {str(e)}", "status": "error", "projectId": project_id, "projectName": project_name, "type": "overlay"}
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
         import shutil

@@ -90,15 +90,19 @@ export function OverlayScreen({
   // DETERMINE EFFECTIVE VIDEO SOURCE
   // =========================================
 
-  // Get framing video data from clips (for pass-through mode)
+  // Get framing video data from clips (for pass-through mode - only used when no working video)
   const framingVideoUrl = clips[0]?.fileUrl || clips[0]?.url;
   const framingMetadata = clips[0]?.metadata;
   const framingVideoFile = clips[0]?.file;
 
-  // Effective video: working video from store, or fallback to framing video
-  const effectiveOverlayVideoUrl = workingVideo?.url || framingVideoUrl;
-  const effectiveOverlayMetadata = workingVideo?.metadata || framingMetadata;
-  const effectiveOverlayFile = workingVideo?.file || framingVideoFile;
+  // Determine if we should wait for working video (don't use original clip as fallback)
+  // If project has a working_video_id but workingVideo is null, we're loading it
+  const shouldWaitForWorkingVideo = !workingVideo && (project?.working_video_id || isLoadingWorkingVideo);
+
+  // Effective video: working video from store, or fallback to framing video only if no working video exists
+  const effectiveOverlayVideoUrl = workingVideo?.url || (shouldWaitForWorkingVideo ? null : framingVideoUrl);
+  const effectiveOverlayMetadata = workingVideo?.metadata || (shouldWaitForWorkingVideo ? null : framingMetadata);
+  const effectiveOverlayFile = workingVideo?.file || (shouldWaitForWorkingVideo ? null : framingVideoFile);
 
   // =========================================
   // VIDEO HOOK - Without segment awareness for overlay mode
@@ -235,8 +239,13 @@ export function OverlayScreen({
   }, [effectiveOverlayMetadata?.duration, duration, initializeHighlightRegions]);
 
   // Auto-create highlight regions from clip metadata (from framing export)
+  // This runs when transitioning from framing to overlay after a fresh export
+  // It takes priority over loading saved overlay data (which would be stale)
   useEffect(() => {
-    if (overlayClipMetadata && effectiveOverlayMetadata && highlightRegions.length === 0) {
+    if (overlayClipMetadata && effectiveOverlayMetadata) {
+      // Reset any existing regions first - clip metadata means fresh framing export
+      resetHighlightRegions();
+
       const count = initializeHighlightRegionsFromClips(
         overlayClipMetadata,
         effectiveOverlayMetadata.width,
@@ -247,19 +256,35 @@ export function OverlayScreen({
         console.log(`[OverlayScreen] Auto-created ${count} highlight regions from clip metadata`);
       }
 
+      // Mark data as loaded to prevent overlay data fetch from overwriting
+      overlayDataLoadedRef.current = true;
+      setIsDataLoaded(true);
+
       // Clear clip metadata after processing to prevent re-triggering
       setOverlayClipMetadata(null);
     }
-  }, [overlayClipMetadata, effectiveOverlayMetadata, highlightRegions.length, initializeHighlightRegionsFromClips, setOverlayClipMetadata]);
+  }, [overlayClipMetadata, effectiveOverlayMetadata, initializeHighlightRegionsFromClips, setOverlayClipMetadata, resetHighlightRegions, setIsDataLoaded]);
+
+  // Fallback: Create default highlight region if no regions exist after loading
+  // This handles the case where user navigates to overlay mode without clip metadata
+  useEffect(() => {
+    // Only run after data loading is complete and if we have no regions
+    if (isDataLoaded && highlightRegions.length === 0 && !overlayClipMetadata && effectiveOverlayMetadata?.duration > 0) {
+      console.log('[OverlayScreen] No highlight regions - creating default for first 2 seconds');
+      addHighlightRegion(0); // Creates 2-second region starting at 0
+    }
+  }, [isDataLoaded, highlightRegions.length, overlayClipMetadata, effectiveOverlayMetadata?.duration, addHighlightRegion]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
   // =========================================
 
   // Load overlay data from backend
+  // Skip if we have fresh clip metadata (from framing export) - that takes priority
   useEffect(() => {
     const effectiveDuration = effectiveOverlayMetadata?.duration;
-    if (projectId && !overlayDataLoadedRef.current && effectiveDuration) {
+    // Don't load saved overlay data if we have fresh clip metadata from framing export
+    if (projectId && !overlayDataLoadedRef.current && effectiveDuration && !overlayClipMetadata) {
       (async () => {
         try {
           console.log('[OverlayScreen] Loading overlay data for project:', projectId);
@@ -281,7 +306,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [projectId, effectiveOverlayMetadata?.duration, restoreHighlightRegions, setHighlightEffectType, setIsDataLoaded]);
+  }, [projectId, effectiveOverlayMetadata?.duration, restoreHighlightRegions, setHighlightEffectType, setIsDataLoaded, overlayClipMetadata]);
 
   // Save overlay data to backend (debounced)
   const saveOverlayData = useCallback(async () => {

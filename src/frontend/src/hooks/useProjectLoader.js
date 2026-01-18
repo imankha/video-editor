@@ -3,6 +3,9 @@ import { API_BASE } from '../config';
 import { useNavigationStore } from '../stores/navigationStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useClipStore } from '../stores/clipStore';
+import { useFramingStore } from '../stores/framingStore';
+import { useOverlayStore } from '../stores/overlayStore';
+import { useVideoStore } from '../stores/videoStore';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 
 /**
@@ -76,6 +79,9 @@ export function useProjectLoader() {
     reset: resetProjectData,
   } = useProjectDataStore();
   const resetClipStore = useClipStore(state => state.reset);
+  const resetFramingStore = useFramingStore(state => state.reset);
+  const resetOverlayStore = useOverlayStore(state => state.reset);
+  const resetVideoStore = useVideoStore(state => state.reset);
 
   /**
    * Load a project and navigate to appropriate mode
@@ -98,6 +104,9 @@ export function useProjectLoader() {
       // Reset all stores for new project to clear stale data
       resetProjectData();
       resetClipStore();
+      resetFramingStore();
+      resetOverlayStore();
+      resetVideoStore();
       setLoading(true, 'loading');
 
       onProgress({ stage: 'loading', message: 'Loading project...' });
@@ -107,6 +116,7 @@ export function useProjectLoader() {
 
       // Determine target mode
       const targetMode = mode || (project.working_video_id ? 'overlay' : 'framing');
+      console.log(`[useProjectLoader] Mode determination: working_video_id=${project.working_video_id}, mode override=${mode}, targetMode=${targetMode}`);
 
       // Update last_opened_at (non-blocking)
       fetch(`${API_BASE}/api/projects/${projectId}/state?update_last_opened=true`, {
@@ -222,7 +232,7 @@ export function useProjectLoader() {
       setLoading(false);
       throw err;
     }
-  }, [setProjectId, navigate, resetProjectData, resetClipStore, setClips, setWorkingVideo, setAspectRatio, setClipMetadata, setLoading]);
+  }, [setProjectId, navigate, resetProjectData, resetClipStore, resetFramingStore, resetOverlayStore, resetVideoStore, setClips, setWorkingVideo, setAspectRatio, setClipMetadata, setLoading]);
 
   return { loadProject };
 }

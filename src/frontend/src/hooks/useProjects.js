@@ -48,9 +48,11 @@ export function useProjects() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/${projectId}`);
+      // Add cache-busting to ensure fresh data
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}?_t=${Date.now()}`);
       if (!response.ok) throw new Error('Failed to fetch project');
       const data = await response.json();
+      console.log(`[useProjects] fetchProject(${projectId}): working_video_id=${data.working_video_id}, final_video_id=${data.final_video_id}`);
       return data;
     } catch (err) {
       setError(err.message);

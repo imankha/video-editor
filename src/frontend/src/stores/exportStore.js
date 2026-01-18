@@ -4,79 +4,322 @@ import { useToastStore } from '../components/shared/Toast';
 /**
  * Export Store - Manages export progress and status tracking
  *
- * This store consolidates export-related state that was previously
- * managed via useState in App.jsx and passed down through props.
+ * TRUE MVC ARCHITECTURE:
+ * - Backend is the SINGLE SOURCE OF TRUTH for export state
+ * - WebSocket pushes real-time updates to this store
+ * - UI components react to store changes
+ * - NO localStorage - prevents stale data and sync issues
  *
- * State:
- * - exportProgress: Current export progress (SSE updates)
- * - exportingProject: Which project is currently exporting
- * - globalExportProgress: WebSocket-based progress (persists across navigation)
- * - exportCompleteToastId: ID of the "export complete" toast (for dismissing on changes)
+ * Data flow:
+ * 1. Backend creates export_jobs record
+ * 2. WebSocket sends progress updates → store.updateExportProgress()
+ * 3. Store updates → React components re-render
+ * 4. On app load: fetch /api/exports/active → store.setExportsFromServer()
  *
- * @see CODE_SMELLS.md #15 for refactoring context
+ * @see PARALLEL_EXPORT_PLAN.md for architecture details
  */
 export const useExportStore = create((set, get) => ({
-  // Export progress from SSE updates
-  // { current: number, total: number, phase: string, message: string } | null
+  // ===========================================
+  // ACTIVE EXPORTS - Tracks all exports by ID
+  // ===========================================
+  // Object<exportId, ExportState> where ExportState is:
+  // {
+  //   exportId: string,
+  //   projectId: number,
+  //   projectName: string | null,
+  //   type: 'framing' | 'overlay' | 'annotate',
+  //   status: 'pending' | 'processing' | 'complete' | 'error',
+  //   progress: { current: number, total: number, percent: number, message: string },
+  //   startedAt: string (ISO),
+  //   completedAt: string (ISO) | null,
+  //   error: string | null,
+  //   outputVideoId: number | null,
+  //   outputFilename: string | null
+  // }
+  activeExports: {},
+
+  // ===========================================
+  // LEGACY STATE (for backward compatibility)
+  // ===========================================
   exportProgress: null,
-
-  // Which project is currently exporting
-  // { projectId: number, stage: 'framing' | 'overlay', exportId: string } | null
   exportingProject: null,
-
-  // Global export progress from WebSocket (persists across navigation)
-  // { progress: number, message: string } | null
   globalExportProgress: null,
-
-  // Toast ID for "export complete" notification (persists until user makes changes)
   exportCompleteToastId: null,
 
-  // Actions
+  // ===========================================
+  // MVC ACTIONS - Backend is source of truth
+  // ===========================================
 
   /**
-   * Update export progress from SSE
-   * @param {{ current: number, total: number, phase: string, message: string } | null} progress
+   * Replace all exports with server data - called on app load
+   * This is the PRIMARY way to populate the store.
+   *
+   * @param {Array} serverExports - Array of export objects from /api/exports/active
    */
+  setExportsFromServer: (serverExports) => {
+    console.log(`[ExportStore] setExportsFromServer called with ${serverExports.length} exports`);
+    const exports = {};
+    for (const exp of serverExports) {
+      exports[exp.job_id] = {
+        exportId: exp.job_id,
+        projectId: exp.project_id,
+        projectName: exp.project_name || null,
+        type: exp.type,
+        status: exp.status,
+        progress: {
+          current: exp.progress || 0,
+          total: 100,
+          percent: exp.progress || 0,
+          message: exp.status === 'processing' ? 'Processing...' : ''
+        },
+        startedAt: exp.started_at || exp.created_at || new Date().toISOString(),
+        completedAt: exp.completed_at || null,
+        error: exp.error || null,
+        outputVideoId: exp.output_video_id || null,
+        outputFilename: exp.output_filename || null,
+      };
+    }
+    set({ activeExports: exports });
+    console.log(`[ExportStore] Loaded ${serverExports.length} exports from server (total IDs: ${Object.keys(exports).join(', ') || 'none'})`);
+  },
+
+  /**
+   * Start tracking a new export (optimistic update while backend creates record)
+   * WebSocket updates will override this with real progress.
+   */
+  startExport: (exportId, projectId, type) => {
+    set((state) => {
+      // Guard against duplicate adds (e.g., React StrictMode double-render)
+      if (state.activeExports[exportId]) {
+        console.log(`[ExportStore] Export ${exportId} already exists, skipping add`);
+        return state;
+      }
+
+      console.log(`[ExportStore] Adding new export: ${exportId} for project ${projectId}`);
+      return {
+        activeExports: {
+          ...state.activeExports,
+          [exportId]: {
+            exportId,
+            projectId,
+            type,
+            status: 'pending',
+            progress: { current: 0, total: 100, percent: 0, message: 'Starting export...' },
+            startedAt: new Date().toISOString(),
+            completedAt: null,
+            error: null,
+            outputVideoId: null,
+            outputFilename: null,
+          },
+        },
+        // Legacy state for backward compatibility
+        exportingProject: { projectId, stage: type, exportId },
+      };
+    });
+  },
+
+  /**
+   * Update export progress - called by WebSocket handler
+   *
+   * MVC: The store should only reflect backend state. WebSocket messages
+   * from the backend include projectId and type, which we use to create entries.
+   */
+  updateExportProgress: (exportId, progress) => {
+    set((state) => {
+      const existing = state.activeExports[exportId];
+
+      if (!existing) {
+        // Export not in store yet - create from WebSocket data
+        // Backend MUST send projectId for proper tracking
+        if (!progress.projectId) {
+          console.warn(`[ExportStore] Received progress for unknown export ${exportId} without projectId - ignoring`);
+          return state; // Don't create entries without projectId
+        }
+
+        console.log(`[ExportStore] Creating export ${exportId} from WebSocket (project: ${progress.projectId}, name: ${progress.projectName}, type: ${progress.type})`);
+        return {
+          activeExports: {
+            ...state.activeExports,
+            [exportId]: {
+              exportId,
+              projectId: progress.projectId,
+              projectName: progress.projectName || null,
+              type: progress.type || 'unknown',
+              status: 'processing',
+              progress: {
+                current: progress.current || 0,
+                total: progress.total || 100,
+                percent: progress.percent || Math.round((progress.current / progress.total) * 100) || 0,
+                message: progress.message || '',
+              },
+              startedAt: new Date().toISOString(),
+              completedAt: null,
+              error: null,
+              outputVideoId: null,
+              outputFilename: null,
+            },
+          },
+          exportProgress: progress,
+          globalExportProgress: { progress: progress.percent, message: progress.message },
+        };
+      }
+
+      const percent = progress.total > 0
+        ? Math.round((progress.current / progress.total) * 100)
+        : progress.percent || 0;
+
+      // Update existing entry - also update projectId/type/projectName if they were missing
+      return {
+        activeExports: {
+          ...state.activeExports,
+          [exportId]: {
+            ...existing,
+            projectId: existing.projectId || progress.projectId, // Fill in if missing
+            projectName: existing.projectName || progress.projectName || null, // Fill in if missing
+            type: existing.type === 'unknown' ? (progress.type || existing.type) : existing.type,
+            status: 'processing',
+            progress: { ...progress, percent },
+          },
+        },
+        exportProgress: progress,
+        globalExportProgress: { progress: percent, message: progress.message },
+      };
+    });
+  },
+
+  /**
+   * Mark export as complete - called by WebSocket handler
+   */
+  completeExport: (exportId, outputVideoId = null, outputFilename = null) => {
+    set((state) => {
+      const existing = state.activeExports[exportId];
+      if (!existing) return state;
+
+      return {
+        activeExports: {
+          ...state.activeExports,
+          [exportId]: {
+            ...existing,
+            status: 'complete',
+            progress: { current: 100, total: 100, percent: 100, message: 'Export complete!' },
+            completedAt: new Date().toISOString(),
+            outputVideoId,
+            outputFilename,
+          },
+        },
+        exportingProject: state.exportingProject?.exportId === exportId
+          ? null
+          : state.exportingProject,
+        exportProgress: state.exportingProject?.exportId === exportId
+          ? null
+          : state.exportProgress,
+      };
+    });
+  },
+
+  /**
+   * Mark export as failed - called by WebSocket handler
+   */
+  failExport: (exportId, error) => {
+    set((state) => {
+      const existing = state.activeExports[exportId];
+      if (!existing) return state;
+
+      return {
+        activeExports: {
+          ...state.activeExports,
+          [exportId]: {
+            ...existing,
+            status: 'error',
+            error: typeof error === 'string' ? error : error?.message || 'Export failed',
+            completedAt: new Date().toISOString(),
+          },
+        },
+        exportingProject: state.exportingProject?.exportId === exportId
+          ? null
+          : state.exportingProject,
+        exportProgress: state.exportingProject?.exportId === exportId
+          ? null
+          : state.exportProgress,
+      };
+    });
+  },
+
+  /**
+   * Remove an export from tracking (user dismissed it)
+   */
+  removeExport: (exportId) => {
+    set((state) => {
+      const { [exportId]: removed, ...remaining } = state.activeExports;
+      return { activeExports: remaining };
+    });
+  },
+
+  /**
+   * Clear completed/failed exports older than specified hours
+   */
+  cleanupOldExports: (maxAgeHours = 24) => {
+    const cutoff = Date.now() - maxAgeHours * 60 * 60 * 1000;
+    set((state) => {
+      const filtered = {};
+      for (const [id, exp] of Object.entries(state.activeExports)) {
+        const completedTime = exp.completedAt ? new Date(exp.completedAt).getTime() : null;
+        // Keep if not completed, or completed within cutoff
+        if (!completedTime || completedTime > cutoff) {
+          filtered[id] = exp;
+        }
+      }
+      return { activeExports: filtered };
+    });
+  },
+
+  // ===========================================
+  // SELECTORS
+  // ===========================================
+
+  getExport: (exportId) => get().activeExports[exportId],
+
+  getExportsByProject: (projectId) => {
+    return Object.values(get().activeExports)
+      .filter((exp) => exp.projectId === projectId);
+  },
+
+  getProcessingExports: () => {
+    return Object.values(get().activeExports)
+      .filter((exp) => exp.status === 'pending' || exp.status === 'processing');
+  },
+
+  isProjectExporting: (projectId) => {
+    return Object.values(get().activeExports)
+      .some((exp) =>
+        exp.projectId === projectId &&
+        (exp.status === 'pending' || exp.status === 'processing')
+      );
+  },
+
+  getActiveExportCount: () => {
+    return Object.values(get().activeExports)
+      .filter((exp) => exp.status === 'pending' || exp.status === 'processing')
+      .length;
+  },
+
+  // ===========================================
+  // LEGACY ACTIONS (for backward compatibility)
+  // ===========================================
+
   setExportProgress: (progress) => set({ exportProgress: progress }),
 
-  /**
-   * Start tracking an export for a project
-   * @param {number} projectId
-   * @param {'framing' | 'overlay'} stage
-   * @param {string} exportId
-   */
-  startExport: (projectId, stage, exportId) => set({
-    exportingProject: { projectId, stage, exportId }
-  }),
-
-  /**
-   * Clear export tracking (export finished or cancelled)
-   */
   clearExport: () => set({
     exportingProject: null,
-    exportProgress: null
+    exportProgress: null,
   }),
 
-  /**
-   * Update global export progress (from WebSocket)
-   * @param {{ progress: number, message: string } | null} progress
-   */
   setGlobalExportProgress: (progress) => set({ globalExportProgress: progress }),
 
-  /**
-   * Clear global export progress
-   */
   clearGlobalExportProgress: () => set({ globalExportProgress: null }),
 
-  /**
-   * Set the export complete toast ID (for tracking persistent toast)
-   * @param {number|null} toastId
-   */
   setExportCompleteToastId: (toastId) => set({ exportCompleteToastId: toastId }),
 
-  /**
-   * Dismiss the export complete toast (called when user makes changes)
-   */
   dismissExportCompleteToast: () => {
     const { exportCompleteToastId } = get();
     if (exportCompleteToastId) {
@@ -85,25 +328,8 @@ export const useExportStore = create((set, get) => ({
     }
   },
 
-  // Computed values
-
-  /**
-   * Check if any export is in progress
-   */
   isExporting: () => get().exportingProject !== null,
 
-  /**
-   * Check if a specific project is exporting
-   * @param {number} projectId
-   */
-  isProjectExporting: (projectId) => {
-    const { exportingProject } = get();
-    return exportingProject?.projectId === projectId;
-  },
-
-  /**
-   * Get export progress as percentage (0-100)
-   */
   getProgressPercent: () => {
     const { exportProgress } = get();
     if (!exportProgress || exportProgress.total === 0) return 0;

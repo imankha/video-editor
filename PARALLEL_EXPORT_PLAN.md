@@ -541,58 +541,13 @@ export const useExportStore = create(
 
 ### Phase 4: Parallel Export Support
 
-#### Task 4.1: Backend - Concurrent Job Limits
-**File**: `src/backend/app/services/export_worker.py`
+> **Note**: Tasks 4.1 and 4.2 removed - will be handled by pod orchestration layer
 
-```python
-# Global semaphore to limit concurrent exports
-MAX_CONCURRENT_EXPORTS = 3  # Configurable
-export_semaphore = asyncio.Semaphore(MAX_CONCURRENT_EXPORTS)
+~~#### Task 4.1: Backend - Concurrent Job Limits~~ - DEFERRED TO POD ARCHITECTURE
+*Pod orchestrator will handle job scheduling and concurrency limits*
 
-async def process_export_job(job_id: str):
-    async with export_semaphore:
-        # Existing processing logic
-        ...
-```
-
-**Checklist**:
-- [ ] Add semaphore for concurrent job limiting
-- [ ] Make limit configurable via environment
-- [ ] Add queue position to progress updates
-- [ ] Handle job prioritization (optional)
-
----
-
-#### Task 4.2: Backend - GPU Memory Management
-**File**: `src/backend/app/ai_upscaler/model_manager.py`
-
-```python
-class GPUMemoryManager:
-    """Manage GPU memory across concurrent exports."""
-
-    def __init__(self, max_concurrent_gpu_jobs=2):
-        self.semaphore = asyncio.Semaphore(max_concurrent_gpu_jobs)
-        self.active_jobs = {}
-
-    async def acquire(self, job_id: str, estimated_vram_mb: int):
-        """Acquire GPU resources for a job."""
-        await self.semaphore.acquire()
-        self.active_jobs[job_id] = estimated_vram_mb
-
-    def release(self, job_id: str):
-        """Release GPU resources."""
-        if job_id in self.active_jobs:
-            del self.active_jobs[job_id]
-            self.semaphore.release()
-            torch.cuda.empty_cache()
-```
-
-**Checklist**:
-- [ ] Create GPU memory manager
-- [ ] Limit concurrent GPU jobs (default: 2)
-- [ ] Track VRAM usage per job
-- [ ] Clean up GPU memory between jobs
-- [ ] Handle OOM errors gracefully
+~~#### Task 4.2: Backend - GPU Memory Management~~ - DEFERRED TO POD ARCHITECTURE
+*Each pod gets isolated GPU resources; no need for in-app memory management*
 
 ---
 
@@ -611,44 +566,19 @@ if (existingExport) {
     </div>
   );
 }
-
-// Show queue position if waiting
-const queuePosition = getQueuePosition(exportId);
-if (queuePosition > 0) {
-  return (
-    <div>Queued (position {queuePosition})</div>
-  );
-}
 ```
 
 **Checklist**:
 - [ ] Prevent duplicate exports for same project
-- [ ] Show queue position when waiting
 - [ ] Allow cancellation from any screen
-- [ ] Show all active exports in header
+- [ ] Show all active exports in header (done via GlobalExportIndicator)
 
 ---
 
 ### Phase 5: Testing and Monitoring
 
-#### Task 5.1: Add Export Metrics
-**File**: `src/backend/app/services/export_metrics.py` (NEW)
-
-```python
-class ExportMetrics:
-    exports_started = Counter('exports_started_total', 'Total exports started')
-    exports_completed = Counter('exports_completed_total', 'Total exports completed')
-    exports_failed = Counter('exports_failed_total', 'Total exports failed')
-    export_duration = Histogram('export_duration_seconds', 'Export duration')
-    gpu_encoding_used = Counter('gpu_encoding_used_total', 'GPU encoding used')
-```
-
-**Checklist**:
-- [ ] Add export start/complete/fail counters
-- [ ] Add duration histogram
-- [ ] Track encoder usage (GPU vs CPU)
-- [ ] Add memory usage tracking
-- [ ] Create health check endpoint
+~~#### Task 5.1: Add Export Metrics~~ - DEFERRED TO POD ARCHITECTURE
+*Metrics will be collected at pod/infrastructure level (Prometheus, etc.)*
 
 ---
 
@@ -758,12 +688,62 @@ const handleExportError = (exportId, error) => {
 
 ## Priority Order
 
-1. **Phase 1** (Tasks 1.1-1.5) - Fix navigation issues - **HIGH**
+1. ~~**Phase 1** (Tasks 1.1-1.6) - Fix navigation issues~~ - **COMPLETED**
 2. ~~**Phase 2** (Tasks 2.1-2.4) - GPU encoding~~ - **COMPLETED**
-3. **Phase 3** (Tasks 3.1-3.3) - Recovery/persistence - **MEDIUM**
-4. **Phase 1.6** - Global indicator - **MEDIUM**
-5. **Phase 4** (Tasks 4.1-4.3) - Parallel support - **MEDIUM**
-6. **Phase 5** (Tasks 5.1-5.2) - Testing/monitoring - **LOW**
+3. ~~**Phase 3** (Tasks 3.1-3.3) - Recovery/persistence~~ - **COMPLETED**
+4. **Phase 4** (Task 4.3 only) - Frontend multiple export UI - **LOW**
+5. **Phase 5** (Task 5.2 only) - Frontend error handling - **LOW**
+
+### Deferred to Pod Architecture:
+- Task 4.1: Concurrent Job Limits → Pod orchestrator
+- Task 4.2: GPU Memory Management → Pod isolation
+- Task 5.1: Export Metrics → Infrastructure-level monitoring
+
+---
+
+## Completed: Phase 1 - Global Export Manager (2024-01-16)
+
+Frontend navigation issues fixed with global export tracking:
+
+### Files Created:
+- `src/frontend/src/services/ExportWebSocketManager.js` - Singleton WebSocket manager
+- `src/frontend/src/hooks/useExportManager.js` - React hook for export lifecycle
+- `src/frontend/src/components/GlobalExportIndicator.jsx` - Floating progress indicator
+
+### Files Modified:
+- `src/frontend/src/stores/exportStore.js` - Added activeExports Map with persistence
+- `src/frontend/src/components/ExportButton.jsx` - Uses global WebSocket manager
+- `src/frontend/src/screens/ProjectsScreen.jsx` - Uses global export store
+- `src/frontend/src/App.jsx` - Added GlobalExportIndicator
+
+### Key Features:
+- WebSocket connections persist across navigation
+- Export progress stored in localStorage via Zustand persist
+- GlobalExportIndicator shows progress on all screens
+- Toast notifications on export completion/failure
+
+---
+
+## Completed: Phase 3 - Export Recovery (2024-01-16)
+
+Added export recovery and persistence capabilities:
+
+### Files Created:
+- `src/frontend/src/hooks/useExportRecovery.js` - Recovers exports on app startup
+
+### Files Modified:
+- `src/backend/app/routers/exports.py` - Added /active and /recent endpoints
+- `src/frontend/src/App.jsx` - Added useExportRecovery hook
+
+### New API Endpoints:
+- `GET /api/exports/active` - Returns all pending/processing exports
+- `GET /api/exports/recent?hours=24` - Returns exports from last N hours
+
+### Key Features:
+- On app startup, checks server for active exports
+- Reconciles local state with server state
+- Shows toasts for exports that completed while away
+- Reconnects WebSockets for in-progress exports
 
 ---
 

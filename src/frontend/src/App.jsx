@@ -2,7 +2,9 @@ import { useMemo, useRef, useCallback } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
+import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { useProjects } from './hooks/useProjects';
+import { useExportRecovery } from './hooks/useExportRecovery';
 import { Button, ConfirmationDialog, ModeSwitcher, ToastContainer } from './components/shared';
 import DebugInfo from './components/DebugInfo';
 // Screen components (self-contained, own their hooks)
@@ -61,6 +63,9 @@ function App() {
     clearSelection,
     discardUncommittedChanges
   } = useProjects();
+
+  // Export recovery - reconnects to active exports on app startup
+  useExportRecovery();
 
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);
@@ -132,7 +137,8 @@ function App() {
     if (value === null) {
       clearExport();
     } else {
-      startExport(value.projectId, value.stage, value.exportId);
+      // Note: startExport expects (exportId, projectId, type)
+      startExport(value.exportId, value.projectId, value.stage);
     }
   }, [clearExport, startExport]);
 
@@ -160,11 +166,15 @@ function App() {
   // If no project selected and not in annotate mode, show ProjectsScreen
   if (!selectedProject && editorMode !== 'annotate') {
     return (
-      <ProjectsScreen
-          onStateReset={clearSelection}
-          onLoadGame={handleLoadGame}
-          onProjectSelected={selectProject}
-        />
+      <>
+        <ProjectsScreen
+            onStateReset={clearSelection}
+            onLoadGame={handleLoadGame}
+            onProjectSelected={selectProject}
+          />
+        {/* Global Export Indicator - shows progress on ProjectsScreen too */}
+        <GlobalExportIndicator />
+      </>
     );
   }
 
@@ -238,6 +248,9 @@ function App() {
 
       {/* Debug Info */}
       <DebugInfo />
+
+      {/* Global Export Indicator - shows progress across all screens */}
+      <GlobalExportIndicator />
 
       {/* Downloads Panel */}
       <DownloadsPanel

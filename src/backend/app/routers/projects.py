@@ -31,6 +31,7 @@ class ProjectFromClipsCreate(BaseModel):
     game_ids: List[int] = []  # Empty = all games
     min_rating: int = 1
     tags: List[str] = []  # Empty = all tags
+    clip_ids: Optional[List[int]] = None  # If provided, use these specific clips instead of filters
 
 
 class ClipsPreviewRequest(BaseModel):
@@ -306,7 +307,8 @@ async def create_project_from_clips(request: ProjectFromClipsCreate):
     """
     Create a project pre-populated with filtered clips from the library.
 
-    Filters clips by:
+    If clip_ids is provided, use those specific clips (in order).
+    Otherwise, filter clips by:
     - game_ids: List of game IDs to include (empty = all games)
     - min_rating: Minimum rating (1-5)
     - tags: List of tags that clips must have (empty = all tags)
@@ -321,12 +323,26 @@ async def create_project_from_clips(request: ProjectFromClipsCreate):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get filtered clips
-        query, params = _build_clips_filter_query(
-            request.game_ids, request.min_rating, request.tags
-        )
-        cursor.execute(query, params)
-        clips = cursor.fetchall()
+        # Get clips - either by specific IDs or by filters
+        if request.clip_ids is not None and len(request.clip_ids) > 0:
+            # Use specific clip IDs (preserves order)
+            placeholders = ','.join(['?' for _ in request.clip_ids])
+            cursor.execute(f"""
+                SELECT id, filename, rating, tags, name, notes, start_time, end_time, game_id
+                FROM raw_clips
+                WHERE id IN ({placeholders})
+            """, request.clip_ids)
+            rows = cursor.fetchall()
+            # Re-order rows to match the order of clip_ids
+            clips_by_id = {row['id']: row for row in rows}
+            clips = [clips_by_id[cid] for cid in request.clip_ids if cid in clips_by_id]
+        else:
+            # Use filter-based query
+            query, params = _build_clips_filter_query(
+                request.game_ids, request.min_rating, request.tags
+            )
+            cursor.execute(query, params)
+            clips = cursor.fetchall()
 
         if not clips:
             raise HTTPException(
