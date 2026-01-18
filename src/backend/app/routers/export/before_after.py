@@ -82,11 +82,12 @@ def generate_before_clip(source_path: str, start_frame: int, end_frame: int,
     # 1. Scale to fit inside 1080x1920 while maintaining aspect ratio
     # 2. Pad to exactly 1080x1920 (letterbox/pillarbox)
     # 3. Normalize SAR to 1:1 for concat compatibility
-    # 4. Add "Before" text at top center
+    # 4. Force 30fps for QSV encoder compatibility (QSV doesn't support 29.97)
+    # 5. Add "Before" text at top center
     filter_complex = (
         f"scale={OUTPUT_WIDTH}:{OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,"
         f"pad={OUTPUT_WIDTH}:{OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:black,"
-        f"setsar=1,"
+        f"setsar=1,fps=30,"
         f"drawtext=text='Before':fontsize=72:fontcolor=white:"
         f"x=(w-text_w)/2:y=80:borderw=3:bordercolor=black"
     )
@@ -122,11 +123,11 @@ def generate_after_clip(final_video_path: str, output_path: str) -> bool:
     Adds "After" text overlay. Video should already be 9x16.
     """
     # FFmpeg filter to add "After" text at top center
-    # Include setsar=1 to normalize SAR for concat compatibility
+    # Include setsar=1 and fps=30 for concat and QSV compatibility
     filter_complex = (
         f"scale={OUTPUT_WIDTH}:{OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,"
         f"pad={OUTPUT_WIDTH}:{OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:black,"
-        f"setsar=1,"
+        f"setsar=1,fps=30,"
         f"drawtext=text='After':fontsize=72:fontcolor=white:"
         f"x=(w-text_w)/2:y=80:borderw=3:bordercolor=black"
     )
@@ -163,10 +164,12 @@ def concatenate_clips(clip_paths: list, output_path: str) -> bool:
 
         for i, path in enumerate(clip_paths):
             inputs.extend(['-i', path])
-            filter_parts.append(f'[{i}:v]')
+            # Normalize each input to 30fps for QSV compatibility
+            filter_parts.append(f'[{i}:v]fps=30[v{i}];')
 
-        # Concat all video streams
-        filter_complex = f"{''.join(filter_parts)}concat=n={len(clip_paths)}:v=1:a=0[outv]"
+        # Concat all normalized video streams
+        concat_inputs = ''.join([f'[v{i}]' for i in range(len(clip_paths))])
+        filter_complex = f"{''.join(filter_parts)}{concat_inputs}concat=n={len(clip_paths)}:v=1:a=0[outv]"
 
         # Use GPU encoding if available
         encoding_params = get_encoding_command_parts(prefer_quality=False)

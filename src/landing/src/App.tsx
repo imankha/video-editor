@@ -46,7 +46,7 @@ function App() {
                 <div className="bg-black rounded-[1rem] md:rounded-[2.25rem] overflow-hidden w-full aspect-[9/16] md:w-[405px] md:h-[720px] relative group">
                   <video
                     ref={videoRef}
-                    src="/before_after_demo.mp4"
+                    src="https://pub-8fd2fb93bbed4535849c27ec673e7905.r2.dev/before_after.mp4"
                     autoPlay
                     loop
                     muted
