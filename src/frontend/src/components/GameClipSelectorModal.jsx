@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Filter, Clock, Film, Settings, Sliders, Check, Star, List } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { X, Filter, Clock, Film, Settings, Sliders, Check, Star, List, Play } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import { ensureUniqueName } from '../utils/uniqueName';
@@ -30,6 +30,10 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
   const [rawClips, setRawClips] = useState([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  // Preview state
+  const [previewingClip, setPreviewingClip] = useState(null);
+  const previewVideoRef = useRef(null);
 
   // Fetch raw clips on mount and reset form state
   useEffect(() => {
@@ -368,6 +372,41 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
     setExcludedClipIds(new Set(filteredClips.map(c => c.id)));
   }, [filteredClips]);
 
+  // Get video URL for a game
+  const getGameVideoUrl = useCallback((gameId) => {
+    return `${API_BASE}/api/games/${gameId}/video`;
+  }, []);
+
+  // Open clip preview
+  const openPreview = useCallback((clip, e) => {
+    e.stopPropagation(); // Don't toggle clip selection
+    setPreviewingClip(clip);
+  }, []);
+
+  // Close clip preview
+  const closePreview = useCallback(() => {
+    setPreviewingClip(null);
+  }, []);
+
+  // Handle video loaded - seek to start time
+  const handlePreviewVideoLoaded = useCallback(() => {
+    if (previewVideoRef.current && previewingClip) {
+      previewVideoRef.current.currentTime = previewingClip.start_time || 0;
+      previewVideoRef.current.play();
+    }
+  }, [previewingClip]);
+
+  // Handle video time update - stop at end time
+  const handlePreviewTimeUpdate = useCallback(() => {
+    if (previewVideoRef.current && previewingClip) {
+      const endTime = previewingClip.end_time || previewVideoRef.current.duration;
+      if (previewVideoRef.current.currentTime >= endTime) {
+        previewVideoRef.current.pause();
+        previewVideoRef.current.currentTime = previewingClip.start_time || 0;
+      }
+    }
+  }, [previewingClip]);
+
   // Handle create
   const handleCreate = async () => {
     if (!projectName.trim() || includedClips.length === 0) return;
@@ -621,6 +660,16 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
                             </div>
                           </div>
 
+                          {/* Play preview button */}
+                          <button
+                            type="button"
+                            onClick={(e) => openPreview(clip, e)}
+                            className="p-1.5 rounded hover:bg-purple-600/50 transition-colors flex-shrink-0"
+                            title="Preview clip"
+                          >
+                            <Play size={14} className="text-purple-400" />
+                          </button>
+
                           {/* Duration */}
                           <span className="text-xs text-gray-500 flex-shrink-0">
                             {formatDuration(clipDuration)}
@@ -715,6 +764,70 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
           </Button>
         </div>
       </div>
+
+      {/* Video Preview Modal */}
+      {previewingClip && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/80 z-[60]"
+            onClick={closePreview}
+          />
+
+          {/* Modal */}
+          <div className="fixed inset-8 md:inset-16 lg:inset-24 z-[70] flex flex-col bg-gray-900 rounded-xl overflow-hidden shadow-2xl border border-gray-700">
+            {/* Header */}
+            <div className="flex items-center justify-between p-3 border-b border-gray-700 bg-gray-800">
+              <div className="flex items-center gap-3">
+                <Play size={18} className="text-purple-400" />
+                <div>
+                  <h3 className="text-white font-medium">
+                    {previewingClip.name || `Clip ${previewingClip.id}`}
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    {games.find(g => g.id === previewingClip.game_id)?.name}
+                    {' • '}
+                    {formatDuration((previewingClip.end_time || 0) - (previewingClip.start_time || 0))}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Include/Exclude toggle */}
+                <Button
+                  variant={excludedClipIds.has(previewingClip.id) ? 'secondary' : 'success'}
+                  size="sm"
+                  icon={Check}
+                  onClick={() => toggleClip(previewingClip.id)}
+                >
+                  {excludedClipIds.has(previewingClip.id) ? 'Excluded' : 'Included'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={X}
+                  iconOnly
+                  onClick={closePreview}
+                />
+              </div>
+            </div>
+
+            {/* Video Player */}
+            <div className="flex-1 flex items-center justify-center bg-black overflow-hidden">
+              <video
+                ref={previewVideoRef}
+                src={getGameVideoUrl(previewingClip.game_id)}
+                controls
+                onLoadedMetadata={handlePreviewVideoLoaded}
+                onTimeUpdate={handlePreviewTimeUpdate}
+                className="w-full h-full object-contain"
+                style={{ maxHeight: '100%', maxWidth: '100%' }}
+              >
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

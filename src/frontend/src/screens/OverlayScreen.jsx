@@ -583,6 +583,7 @@ export function OverlayScreen({
       effectiveOverlayVideoUrl={effectiveOverlayVideoUrl}
       effectiveOverlayMetadata={effectiveOverlayMetadata}
       effectiveOverlayFile={effectiveOverlayFile}
+      videoTitle={project?.name}
       currentTime={currentTime}
       duration={duration}
       isPlaying={isPlaying}

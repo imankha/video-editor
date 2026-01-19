@@ -25,6 +25,7 @@ export function OverlayModeView({
   effectiveOverlayVideoUrl,
   effectiveOverlayMetadata,
   effectiveOverlayFile,
+  videoTitle,
   currentTime,
   duration,
   isPlaying,
@@ -111,7 +112,7 @@ export function OverlayModeView({
       {effectiveOverlayMetadata && !isFullscreen && (
         <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
           <div className="flex items-center justify-between text-sm text-gray-300">
-            <span className="font-semibold text-white">{effectiveOverlayMetadata.fileName}</span>
+            {videoTitle && <span className="font-semibold text-white">{videoTitle}</span>}
             <div className="flex space-x-6">
               <span>
                 <span className="text-gray-400">Resolution:</span>{' '}
