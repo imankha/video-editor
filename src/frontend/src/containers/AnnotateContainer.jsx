@@ -124,12 +124,19 @@ export function AnnotateContainer({
   /**
    * Handle game video selection for Annotate mode
    * Transitions to annotate mode where user can extract clips from full game footage.
+   *
+   * @param {File} file - Video file to process
+   * @param {Object} gameDetails - Optional game details for display name generation
+   * @param {string} gameDetails.opponentName - Opponent team name
+   * @param {string} gameDetails.gameDate - Game date (ISO format: YYYY-MM-DD)
+   * @param {string} gameDetails.gameType - 'home', 'away', or 'tournament'
+   * @param {string} gameDetails.tournamentName - Tournament name (if gameType is 'tournament')
    */
-  const handleGameVideoSelect = async (file) => {
+  const handleGameVideoSelect = async (file, gameDetails = null) => {
     if (!file) return;
 
     try {
-      console.log('[AnnotateContainer] handleGameVideoSelect: Processing', file.name);
+      console.log('[AnnotateContainer] handleGameVideoSelect: Processing', file.name, 'with details:', gameDetails);
 
       // Extract video metadata (fast, local operation)
       const videoMetadata = await extractVideoMetadata(file);
@@ -144,27 +151,29 @@ export function AnnotateContainer({
       }
 
       // Create game row IMMEDIATELY (just name, no video yet)
-      const gameName = file.name.replace(/\.[^/.]+$/, '');
-      console.log('[AnnotateContainer] Creating game row:', gameName);
-      const game = await createGame(gameName, {
+      // Use file name as fallback if no game details provided
+      const rawGameName = file.name.replace(/\.[^/.]+$/, '');
+      console.log('[AnnotateContainer] Creating game row:', rawGameName, 'with details:', gameDetails);
+      const game = await createGame(rawGameName, {
         duration: videoMetadata.duration,
         width: videoMetadata.width,
         height: videoMetadata.height,
         size: videoMetadata.size,
-      });
-      console.log('[AnnotateContainer] Game created with ID:', game.id);
+      }, gameDetails);
+      console.log('[AnnotateContainer] Game created with ID:', game.id, 'display name:', game.name);
 
       // Set annotate state with LOCAL video URL and game ID
+      // Use the display name from the API response (generated from game details)
       setAnnotateVideoFile(file);
       setAnnotateVideoUrl(localVideoUrl);
       setAnnotateVideoMetadata(videoMetadata);
       setAnnotateGameId(game.id);
-      setAnnotateGameName(gameName);
+      setAnnotateGameName(game.name); // Use display name from API
 
       // Transition to annotate mode IMMEDIATELY
       setEditorMode('annotate');
 
-      console.log('[AnnotateContainer] Set up with game ID:', game.id);
+      console.log('[AnnotateContainer] Set up with game ID:', game.id, 'display name:', game.name);
 
       // Upload video to server in background with progress tracking
       console.log('[AnnotateContainer] Starting background video upload...');

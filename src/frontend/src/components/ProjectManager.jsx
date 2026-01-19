@@ -3,6 +3,7 @@ import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Imag
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores/exportStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
+import { GameDetailsModal } from './GameDetailsModal';
 import { Button } from './shared/Button';
 
 /**
@@ -42,6 +43,7 @@ export function ProjectManager({
   const exportingProject = exportingProjectProp ?? contextExportingProject;
   const [activeTab, setActiveTab] = useState('projects'); // 'games' | 'projects'
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const gameFileInputRef = useRef(null);
 
   // Project filter state
@@ -205,20 +207,27 @@ export function ProjectManager({
     return statuses;
   }, [projects]);
 
-  // Handle file selection for new game
+  // Handle file selection for new game (legacy - keeping for reference)
   const handleGameFileChange = useCallback((event) => {
     const file = event.target.files?.[0];
     if (file && onAnnotateWithFile) {
-      onAnnotateWithFile(file);
+      onAnnotateWithFile({ file });
     }
     // Reset input so same file can be selected again
     event.target.value = '';
   }, [onAnnotateWithFile]);
 
-  // Trigger file picker for new game
+  // Open game details modal
   const handleAddGameClick = useCallback(() => {
-    gameFileInputRef.current?.click();
+    setShowGameDetailsModal(true);
   }, []);
+
+  // Handle game creation with details
+  const handleCreateGame = useCallback(async (gameDetails) => {
+    if (onAnnotateWithFile) {
+      await onAnnotateWithFile(gameDetails);
+    }
+  }, [onAnnotateWithFile]);
 
   // Fetch games when switching to games tab or when opening modal
   useEffect(() => {
@@ -643,6 +652,13 @@ export function ProjectManager({
         onCreate={handleProjectCreated}
         games={games}
         existingProjectNames={projects?.map(p => p.name) || []}
+      />
+
+      {/* Game Details Modal - for creating a new game */}
+      <GameDetailsModal
+        isOpen={showGameDetailsModal}
+        onClose={() => setShowGameDetailsModal(false)}
+        onCreateGame={handleCreateGame}
       />
     </div>
   );

@@ -48,14 +48,19 @@ export function useGames() {
    * Video can be uploaded later via uploadGameVideo.
    * This allows instant game creation for immediate annotation saving.
    *
-   * @param {string} name - Game name
+   * @param {string} name - Game name (fallback if no game details provided)
    * @param {Object} videoMetadata - Optional video metadata for instant loading
    * @param {number} videoMetadata.duration - Video duration in seconds
    * @param {number} videoMetadata.width - Video width in pixels
    * @param {number} videoMetadata.height - Video height in pixels
    * @param {number} videoMetadata.size - Video file size in bytes
+   * @param {Object} gameDetails - Optional game details for display name generation
+   * @param {string} gameDetails.opponentName - Opponent team name
+   * @param {string} gameDetails.gameDate - Game date (ISO format: YYYY-MM-DD)
+   * @param {string} gameDetails.gameType - 'home', 'away', or 'tournament'
+   * @param {string} gameDetails.tournamentName - Tournament name (if gameType is 'tournament')
    */
-  const createGame = useCallback(async (name, videoMetadata = null) => {
+  const createGame = useCallback(async (name, videoMetadata = null, gameDetails = null) => {
     setIsLoading(true);
     setError(null);
 
@@ -76,6 +81,22 @@ export function useGames() {
         }
         if (videoMetadata.size != null) {
           formData.append('video_size', videoMetadata.size);
+        }
+      }
+
+      // Include game details if provided (for display name generation)
+      if (gameDetails) {
+        if (gameDetails.opponentName) {
+          formData.append('opponent_name', gameDetails.opponentName);
+        }
+        if (gameDetails.gameDate) {
+          formData.append('game_date', gameDetails.gameDate);
+        }
+        if (gameDetails.gameType) {
+          formData.append('game_type', gameDetails.gameType);
+        }
+        if (gameDetails.tournamentName) {
+          formData.append('tournament_name', gameDetails.tournamentName);
         }
       }
 

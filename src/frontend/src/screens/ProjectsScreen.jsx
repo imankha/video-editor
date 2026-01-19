@@ -11,16 +11,25 @@ import { useGalleryStore } from '../stores/galleryStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
-// Module-level variable to pass File object to AnnotateScreen
+// Module-level variable to pass File object and game details to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
-let pendingGameFile = null;
+let pendingGameData = null;
 
 export function getPendingGameFile() {
-  return pendingGameFile;
+  return pendingGameData?.file || null;
+}
+
+export function getPendingGameDetails() {
+  return pendingGameData ? {
+    opponentName: pendingGameData.opponentName,
+    gameDate: pendingGameData.gameDate,
+    gameType: pendingGameData.gameType,
+    tournamentName: pendingGameData.tournamentName,
+  } : null;
 }
 
 export function clearPendingGameFile() {
-  pendingGameFile = null;
+  pendingGameData = null;
 }
 
 /**
@@ -177,11 +186,11 @@ export function ProjectsScreen({
     }
   }, [onLoadGameProp]);
 
-  // Handle annotate with file (navigate to annotate mode with a pre-selected file)
-  // The file is stored in module-level variable and picked up by AnnotateScreen
-  const handleAnnotateWithFile = useCallback((file) => {
-    console.log('[ProjectsScreen] Navigating to annotate with file:', file.name);
-    pendingGameFile = file;
+  // Handle annotate with file and game details (navigate to annotate mode with pre-selected data)
+  // The data is stored in module-level variable and picked up by AnnotateScreen
+  const handleAnnotateWithFile = useCallback((gameData) => {
+    console.log('[ProjectsScreen] Navigating to annotate with game data:', gameData.file?.name, gameData);
+    pendingGameData = gameData;
     setEditorMode('annotate');
   }, [setEditorMode]);
 

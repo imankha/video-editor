@@ -58,6 +58,57 @@ def generate_clip_name(rating: int, tags: list) -> str:
     return f"{adjective} {tag_part}"
 
 
+def generate_game_display_name(
+    opponent_name: Optional[str],
+    game_date: Optional[str],
+    game_type: Optional[str],
+    tournament_name: Optional[str],
+    fallback_name: str
+) -> str:
+    """
+    Generate a display name for a game based on its details.
+
+    Format:
+    - Home: "Vs <Opponent> <Date>"
+    - Away: "at <Opponent> <Date>"
+    - Tournament: "<Tournament>: Vs <Opponent> <Date>"
+
+    Falls back to the stored name if opponent_name is not set.
+    """
+    if not opponent_name:
+        return fallback_name
+
+    # Format date as "Mon D" (e.g., "Dec 6")
+    date_str = ""
+    if game_date:
+        try:
+            from datetime import datetime
+            dt = datetime.strptime(game_date, "%Y-%m-%d")
+            date_str = dt.strftime("%b %-d")  # "Dec 6"
+        except (ValueError, Exception):
+            # On Windows, %-d may not work, try %#d
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(game_date, "%Y-%m-%d")
+                date_str = dt.strftime("%b %d").replace(" 0", " ")  # Remove leading zero
+            except:
+                date_str = game_date
+
+    # Build the name based on game type
+    if game_type == 'tournament' and tournament_name:
+        prefix = f"{tournament_name}: Vs"
+    elif game_type == 'away':
+        prefix = "at"
+    else:  # home or default
+        prefix = "Vs"
+
+    parts = [prefix, opponent_name]
+    if date_str:
+        parts.append(date_str)
+
+    return " ".join(parts)
+
+
 @router.get("")
 async def list_games():
     """List all saved games with cached aggregate counts."""
@@ -68,7 +119,8 @@ async def list_games():
         cursor.execute("""
             SELECT id, name, video_filename, created_at,
                    clip_count, brilliant_count, good_count, interesting_count,
-                   mistake_count, blunder_count, aggregate_score
+                   mistake_count, blunder_count, aggregate_score,
+                   opponent_name, game_date, game_type, tournament_name
             FROM games
             ORDER BY created_at DESC
         """)
@@ -76,9 +128,18 @@ async def list_games():
 
         games = []
         for row in rows:
+            # Generate display name from game details
+            display_name = generate_game_display_name(
+                row['opponent_name'],
+                row['game_date'],
+                row['game_type'],
+                row['tournament_name'],
+                row['name']
+            )
             games.append({
                 'id': row['id'],
-                'name': row['name'],
+                'name': display_name,  # Use generated display name
+                'raw_name': row['name'],  # Keep original for reference
                 'video_filename': row['video_filename'],
                 'clip_count': row['clip_count'] or 0,
                 'brilliant_count': row['brilliant_count'] or 0,
@@ -87,7 +148,12 @@ async def list_games():
                 'mistake_count': row['mistake_count'] or 0,
                 'blunder_count': row['blunder_count'] or 0,
                 'aggregate_score': row['aggregate_score'] or 0,
-                'created_at': row['created_at']
+                'created_at': row['created_at'],
+                # Game details
+                'opponent_name': row['opponent_name'],
+                'game_date': row['game_date'],
+                'game_type': row['game_type'],
+                'tournament_name': row['tournament_name'],
             })
 
         return {'games': games}
@@ -101,6 +167,11 @@ async def create_game(
     video_width: Optional[int] = Form(None),
     video_height: Optional[int] = Form(None),
     video_size: Optional[int] = Form(None),
+    # Game details for display name
+    opponent_name: Optional[str] = Form(None),
+    game_date: Optional[str] = Form(None),  # ISO format: YYYY-MM-DD
+    game_type: Optional[str] = Form(None),  # 'home', 'away', 'tournament'
+    tournament_name: Optional[str] = Form(None),
 ):
     """
     Create a new game, optionally with video.
@@ -111,6 +182,9 @@ async def create_game(
 
     Video metadata (duration, width, height, size) can be provided to enable
     instant game loading without re-extracting metadata from the video.
+
+    Game details (opponent_name, game_date, game_type, tournament_name) are used
+    to generate a display name like "Vs Team Name Dec 6" or "at Team Name Nov 1".
     """
     ensure_directories()
 
@@ -136,25 +210,33 @@ async def create_game(
             video_size_mb = total_size / (1024 * 1024)
             logger.info(f"Saved game video: {video_filename} ({video_size_mb:.1f}MB)")
 
-        # Save to database with video metadata
+        # Save to database with video metadata and game details
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO games (name, video_filename,
-                                   video_duration, video_width, video_height, video_size)
-                VALUES (?, ?, ?, ?, ?, ?)
+                                   video_duration, video_width, video_height, video_size,
+                                   opponent_name, game_date, game_type, tournament_name)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (name, video_filename,
-                  video_duration, video_width, video_height, video_size))
+                  video_duration, video_width, video_height, video_size,
+                  opponent_name, game_date, game_type, tournament_name))
             conn.commit()
             game_id = cursor.lastrowid
 
-        logger.info(f"Created game {game_id}: {name} (video: {'yes' if video_filename else 'pending'})")
+        # Generate display name
+        display_name = generate_game_display_name(
+            opponent_name, game_date, game_type, tournament_name, name
+        )
+
+        logger.info(f"Created game {game_id}: {display_name} (video: {'yes' if video_filename else 'pending'})")
 
         return {
             'success': True,
             'game': {
                 'id': game_id,
-                'name': name,
+                'name': display_name,
+                'raw_name': name,
                 'video_filename': video_filename,
                 'clip_count': 0,
                 'has_video': video_filename is not None,
@@ -162,6 +244,10 @@ async def create_game(
                 'video_width': video_width,
                 'video_height': video_height,
                 'video_size': video_size,
+                'opponent_name': opponent_name,
+                'game_date': game_date,
+                'game_type': game_type,
+                'tournament_name': tournament_name,
             }
         }
 
@@ -251,7 +337,8 @@ async def get_game(game_id: int):
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, name, video_filename, created_at,
-                   video_duration, video_width, video_height, video_size
+                   video_duration, video_width, video_height, video_size,
+                   opponent_name, game_date, game_type, tournament_name
             FROM games
             WHERE id = ?
         """, (game_id,))
@@ -263,9 +350,19 @@ async def get_game(game_id: int):
         # Load annotations from database
         annotations = load_annotations_from_db(game_id)
 
+        # Generate display name
+        display_name = generate_game_display_name(
+            row['opponent_name'],
+            row['game_date'],
+            row['game_type'],
+            row['tournament_name'],
+            row['name']
+        )
+
         return {
             'id': row['id'],
-            'name': row['name'],
+            'name': display_name,
+            'raw_name': row['name'],
             'video_filename': row['video_filename'],
             'annotations': annotations,
             'clip_count': len(annotations),
@@ -275,6 +372,11 @@ async def get_game(game_id: int):
             'video_width': row['video_width'],
             'video_height': row['video_height'],
             'video_size': row['video_size'],
+            # Game details
+            'opponent_name': row['opponent_name'],
+            'game_date': row['game_date'],
+            'game_type': row['game_type'],
+            'tournament_name': row['tournament_name'],
         }
 
 

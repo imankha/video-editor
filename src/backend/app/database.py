@@ -329,6 +329,11 @@ def ensure_database():
             "ALTER TABLE final_videos ADD COLUMN name TEXT",
             # Rating counts snapshot for annotated exports (frozen at export time, JSON)
             "ALTER TABLE final_videos ADD COLUMN rating_counts TEXT",
+            # Game details for display name generation
+            "ALTER TABLE games ADD COLUMN opponent_name TEXT",
+            "ALTER TABLE games ADD COLUMN game_date TEXT",
+            "ALTER TABLE games ADD COLUMN game_type TEXT",  # 'home', 'away', 'tournament'
+            "ALTER TABLE games ADD COLUMN tournament_name TEXT",
         ]
 
         for migration in migrations:

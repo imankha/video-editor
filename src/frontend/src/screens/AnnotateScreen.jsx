@@ -10,7 +10,7 @@ import useZoom from '../hooks/useZoom';
 import { useGames } from '../hooks/useGames';
 import { useProjects } from '../hooks/useProjects';
 import { useEditorStore } from '../stores/editorStore';
-import { getPendingGameFile, clearPendingGameFile } from './ProjectsScreen';
+import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from './ProjectsScreen';
 
 /**
  * AnnotateScreen - Self-contained screen for Annotate mode
@@ -174,12 +174,13 @@ export function AnnotateScreen() {
   // Handle pending game file from ProjectsScreen (when "Add Game" was clicked)
   useEffect(() => {
     const pendingFile = getPendingGameFile();
-    console.log('[AnnotateScreen] Pending file effect - file:', pendingFile?.name, 'videoUrl:', annotateVideoUrl, 'isLoading:', isLoadingRef.current);
+    const pendingDetails = getPendingGameDetails();
+    console.log('[AnnotateScreen] Pending file effect - file:', pendingFile?.name, 'details:', pendingDetails, 'videoUrl:', annotateVideoUrl, 'isLoading:', isLoadingRef.current);
     if (pendingFile && !annotateVideoUrl) {
-      console.log('[AnnotateScreen] Loading pending game file:', pendingFile.name);
+      console.log('[AnnotateScreen] Loading pending game file:', pendingFile.name, 'with details:', pendingDetails);
       isLoadingRef.current = true;
       clearPendingGameFile();
-      handleGameVideoSelect(pendingFile);
+      handleGameVideoSelect(pendingFile, pendingDetails);
     }
   }, [handleGameVideoSelect, annotateVideoUrl]);
 
