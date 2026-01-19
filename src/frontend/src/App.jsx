@@ -1,11 +1,11 @@
 import { useMemo, useRef, useCallback } from 'react';
-import { FolderOpen } from 'lucide-react';
+import { Home } from 'lucide-react';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { useProjects } from './hooks/useProjects';
 import { useExportRecovery } from './hooks/useExportRecovery';
-import { Button, ConfirmationDialog, ModeSwitcher, ToastContainer } from './components/shared';
+import { Breadcrumb, Button, ConfirmationDialog, ModeSwitcher, ToastContainer } from './components/shared';
 import DebugInfo from './components/DebugInfo';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
@@ -192,26 +192,22 @@ function App() {
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              {/* Back to Projects button */}
+              {/* Back to Home button */}
               <Button
-                variant="secondary"
-                icon={FolderOpen}
+                variant="ghost"
+                icon={Home}
+                iconOnly
                 onClick={() => {
                   clearSelection();
                   fetchProjects();
                   setEditorMode('project-manager');
                 }}
-              >
-                Projects
-              </Button>
-              <div>
-                <h1 className="text-4xl font-bold text-white mb-2">
-                  Reel Ballers
-                </h1>
-                <p className="text-gray-400">
-                  Showcase your player's brilliance
-                </p>
-              </div>
+                title="Home"
+              />
+              <Breadcrumb
+                type="Projects"
+                itemName={selectedProject?.name}
+              />
             </div>
             <div className="flex items-center gap-4">
               <GalleryButton />

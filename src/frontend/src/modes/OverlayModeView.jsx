@@ -144,18 +144,21 @@ export function OverlayModeView({
             <div className="ml-auto flex items-center gap-3">
               {/* Player detection boxes toggle */}
               {playerDetectionEnabled && (
-                <button
-                  onClick={onTogglePlayerBoxes}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    showPlayerBoxes
-                      ? 'bg-green-600 hover:bg-green-700 text-white'
-                      : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                  }`}
-                  title={showPlayerBoxes ? 'Hide player boxes' : 'Show player boxes'}
-                >
-                  {showPlayerBoxes ? <Eye size={16} /> : <EyeOff size={16} />}
-                  <span>Players</span>
-                </button>
+                <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+                  <span className="text-xs text-gray-400 mr-1">Players:</span>
+                  <button
+                    onClick={onTogglePlayerBoxes}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-medium transition-colors ${
+                      showPlayerBoxes
+                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                    }`}
+                    title={showPlayerBoxes ? 'Hide player boxes' : 'Show player boxes'}
+                  >
+                    {showPlayerBoxes ? <Eye size={14} /> : <EyeOff size={14} />}
+                    <span>{showPlayerBoxes ? 'On' : 'Off'}</span>
+                  </button>
+                </div>
               )}
               <ZoomControls
                 zoom={zoom}
@@ -208,6 +211,7 @@ export function OverlayModeView({
                   onPlayerSelect={onPlayerSelect}
                   zoom={zoom}
                   panOffset={panOffset}
+                  isFullscreen={isFullscreen}
                 />
               ),
             ].filter(Boolean)}

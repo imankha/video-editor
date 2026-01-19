@@ -25,8 +25,9 @@ export default function useAnnotateState() {
   const [annotateVideoUrl, setAnnotateVideoUrl] = useState(null);
   const [annotateVideoMetadata, setAnnotateVideoMetadata] = useState(null);
 
-  // Current game ID for saving annotations
+  // Current game ID and name for saving annotations
   const [annotateGameId, setAnnotateGameId] = useState(null);
+  const [annotateGameName, setAnnotateGameName] = useState(null);
 
   // Export/import loading states
   const [isCreatingAnnotatedVideo, setIsCreatingAnnotatedVideo] = useState(false);
@@ -110,6 +111,7 @@ export default function useAnnotateState() {
     setAnnotateVideoUrl(null);
     setAnnotateVideoMetadata(null);
     setAnnotateGameId(null);
+    setAnnotateGameName(null);
     setIsCreatingAnnotatedVideo(false);
     setIsImportingToProjects(false);
     setIsUploadingGameVideo(false);
@@ -168,6 +170,8 @@ export default function useAnnotateState() {
     setAnnotateVideoUrl,
     setAnnotateVideoMetadata,
     setAnnotateGameId,
+    annotateGameName,
+    setAnnotateGameName,
 
     // Loading states
     isCreatingAnnotatedVideo,

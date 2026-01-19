@@ -1,5 +1,6 @@
 import { Download, Loader } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
+import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import { useExportStore } from '../stores';
 
@@ -71,6 +72,11 @@ export function AnnotateModeView({
   panOffset,
   onZoomChange,
   onPanChange,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
+  MIN_ZOOM,
+  MAX_ZOOM,
 }) {
   // Read exportProgress directly from store for proper reactivity during SSE updates
   const { exportProgress } = useExportStore();
@@ -104,6 +110,22 @@ export function AnnotateModeView({
 
       {/* Main Editor Area */}
       <div className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20'}`}>
+        {/* Controls Bar - hidden in fullscreen */}
+        {annotateVideoUrl && !annotateFullscreen && (
+          <div className="mb-6 flex gap-4 items-center">
+            <div className="ml-auto">
+              <ZoomControls
+                zoom={zoom}
+                onZoomIn={onZoomIn}
+                onZoomOut={onZoomOut}
+                onResetZoom={onResetZoom}
+                minZoom={MIN_ZOOM}
+                maxZoom={MAX_ZOOM}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Fullscreen container - uses fixed positioning for fullscreen */}
         <div
           ref={annotateContainerRef}

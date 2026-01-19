@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder, Clock, ChevronRight } from 'lucide-react';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores/exportStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
@@ -138,6 +138,40 @@ export function ProjectManager({
     filterCounts.showCreationFilter
   );
 
+  // Compute most recent items for "Continue Where You Left Off" section
+  const recentItems = useMemo(() => {
+    // Get most recent project (by last_opened_at, fall back to created_at)
+    const sortedProjects = [...projects].sort((a, b) => {
+      const aTime = a.last_opened_at || a.created_at;
+      const bTime = b.last_opened_at || b.created_at;
+      return new Date(bTime) - new Date(aTime);
+    });
+    const recentProject = sortedProjects[0] || null;
+
+    // Get most recent game (by created_at)
+    const sortedGames = [...games].sort((a, b) => {
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+    const recentGame = sortedGames[0] || null;
+
+    // Determine which is more recent overall
+    let mostRecentType = null;
+    if (recentProject && recentGame) {
+      const projectTime = new Date(recentProject.last_opened_at || recentProject.created_at);
+      const gameTime = new Date(recentGame.created_at);
+      mostRecentType = projectTime > gameTime ? 'project' : 'game';
+    } else if (recentProject) {
+      mostRecentType = 'project';
+    } else if (recentGame) {
+      mostRecentType = 'game';
+    }
+
+    return { recentProject, recentGame, mostRecentType };
+  }, [projects, games]);
+
+  // Only show recent section if there's at least one recent item
+  const showRecentSection = recentItems.recentProject || recentItems.recentGame;
+
   // Compute which progress statuses are present across all projects (for shared legend)
   const progressStatuses = useMemo(() => {
     const statuses = { done: false, exporting: false, editing: false, ready: false, pending: false };
@@ -244,36 +278,120 @@ export function ProjectManager({
         <p className="text-gray-400">Manage your games and projects</p>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex gap-1 mb-6 bg-gray-800 rounded-lg p-1">
+      {/* Continue Where You Left Off - Recent Section */}
+      {showRecentSection && (
+        <div className="w-full max-w-2xl mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock size={14} className="text-gray-500" />
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Continue Where You Left Off
+            </h2>
+          </div>
+          <div className="flex gap-3">
+            {/* Recent Project */}
+            {recentItems.recentProject && (
+              <button
+                onClick={() => onSelectProject(recentItems.recentProject.id)}
+                className={`flex-1 flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${
+                  recentItems.mostRecentType === 'project'
+                    ? 'bg-purple-900/30 border-purple-500/50 hover:bg-purple-900/50'
+                    : 'bg-gray-800/50 border-gray-700 hover:bg-gray-800'
+                }`}
+              >
+                <div className={`p-2 rounded-lg ${
+                  recentItems.mostRecentType === 'project' ? 'bg-purple-600/30' : 'bg-gray-700'
+                }`}>
+                  <FolderOpen size={18} className={
+                    recentItems.mostRecentType === 'project' ? 'text-purple-400' : 'text-gray-400'
+                  } />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-medium truncate">
+                      {recentItems.recentProject.name}
+                    </span>
+                    {recentItems.recentProject.has_final_video && (
+                      <CheckCircle size={14} className="text-green-400 flex-shrink-0" />
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {recentItems.recentProject.clip_count} clip{recentItems.recentProject.clip_count !== 1 ? 's' : ''}
+                    {' · '}
+                    {recentItems.recentProject.has_final_video ? 'Complete' :
+                     recentItems.recentProject.has_working_video ? 'In Overlay' :
+                     recentItems.recentProject.clips_in_progress > 0 ? 'Editing' : 'Not Started'}
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />
+              </button>
+            )}
+
+            {/* Recent Game */}
+            {recentItems.recentGame && (
+              <button
+                onClick={() => onLoadGame(recentItems.recentGame.id)}
+                className={`flex-1 flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${
+                  recentItems.mostRecentType === 'game'
+                    ? 'bg-green-900/30 border-green-500/50 hover:bg-green-900/50'
+                    : 'bg-gray-800/50 border-gray-700 hover:bg-gray-800'
+                }`}
+              >
+                <div className={`p-2 rounded-lg ${
+                  recentItems.mostRecentType === 'game' ? 'bg-green-600/30' : 'bg-gray-700'
+                }`}>
+                  <Gamepad2 size={18} className={
+                    recentItems.mostRecentType === 'game' ? 'text-green-400' : 'text-gray-400'
+                  } />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-white font-medium truncate block">
+                    {recentItems.recentGame.name}
+                  </span>
+                  <div className="text-xs text-gray-500">
+                    {recentItems.recentGame.clip_count} clip{recentItems.recentGame.clip_count !== 1 ? 's' : ''} annotated
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab Navigation - styled to match ModeSwitcher */}
+      <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 mb-6">
         <button
           onClick={() => setActiveTab('games')}
-          className={`flex items-center gap-2 px-6 py-2 rounded-md font-medium transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
             activeTab === 'games'
-              ? 'bg-green-600 text-white'
-              : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              ? 'bg-green-600 text-white shadow-lg'
+              : 'text-gray-400 hover:text-white hover:bg-white/10'
           }`}
         >
-          <Gamepad2 size={18} />
+          <Gamepad2 size={16} />
           Games
           {games.length > 0 && (
-            <span className="ml-1 px-2 py-0.5 text-xs bg-gray-700 rounded-full">
+            <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
+              activeTab === 'games' ? 'bg-green-700' : 'bg-gray-700'
+            }`}>
               {games.length}
             </span>
           )}
         </button>
         <button
           onClick={() => setActiveTab('projects')}
-          className={`flex items-center gap-2 px-6 py-2 rounded-md font-medium transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
             activeTab === 'projects'
-              ? 'bg-purple-600 text-white'
-              : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              ? 'bg-purple-600 text-white shadow-lg'
+              : 'text-gray-400 hover:text-white hover:bg-white/10'
           }`}
         >
-          <FolderOpen size={18} />
+          <FolderOpen size={16} />
           Projects
           {projects.length > 0 && (
-            <span className="ml-1 px-2 py-0.5 text-xs bg-gray-700 rounded-full">
+            <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
+              activeTab === 'projects' ? 'bg-purple-700' : 'bg-gray-700'
+            }`}>
               {projects.length}
             </span>
           )}
