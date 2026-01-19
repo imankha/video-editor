@@ -16,6 +16,113 @@ from app.database import get_db_connection
 from app.queries import latest_working_clips_subquery
 
 logger = logging.getLogger(__name__)
+
+
+def _get_season_for_month(month: int) -> str:
+    """Get season name for a given month (1-12)."""
+    if month in (9, 10, 11, 12):  # Sep-Dec
+        return "Fall"
+    elif month in (1, 2, 3, 4, 5):  # Jan-May
+        return "Spring"
+    else:  # Jun-Aug
+        return "Summer"
+
+
+def _generate_game_display_name(
+    opponent_name: Optional[str],
+    game_date: Optional[str],
+    game_type: Optional[str],
+    tournament_name: Optional[str],
+    fallback_name: str
+) -> str:
+    """
+    Generate a display name for a game based on its details.
+
+    Format:
+    - Home: "Vs <Opponent> <Date>"
+    - Away: "at <Opponent> <Date>"
+    - Tournament: "<Tournament>: Vs <Opponent> <Date>"
+    """
+    if not opponent_name:
+        return fallback_name
+
+    # Format date as "Mon D" (e.g., "Dec 6")
+    date_str = ""
+    if game_date:
+        try:
+            dt = datetime.strptime(game_date, "%Y-%m-%d")
+            date_str = dt.strftime("%b %d").lstrip("0").replace(" 0", " ")  # Remove leading zeros
+        except (ValueError, Exception):
+            date_str = game_date
+
+    # Build the name based on game type
+    if game_type == 'tournament' and tournament_name:
+        prefix = f"{tournament_name}: Vs"
+    elif game_type == 'away':
+        prefix = "at"
+    else:  # home or default
+        prefix = "Vs"
+
+    parts = [prefix, opponent_name]
+    if date_str:
+        parts.append(date_str)
+
+    return " ".join(parts)
+
+
+def _generate_group_key(game_names: List[str], game_dates: List[str]) -> Optional[str]:
+    """
+    Generate a group key for a project based on its games.
+
+    - Single game: Use game's display name
+    - Multiple games from same season/year: Use "Fall 2025" format
+    - Multiple games spanning years: Use "2024-2025" format
+    - No games: Return None
+    """
+    if not game_names:
+        return None
+
+    if len(game_names) == 1:
+        return game_names[0]
+
+    # Parse dates to extract years and seasons
+    years = set()
+    seasons_by_year = {}
+
+    for date_str in game_dates:
+        if not date_str:
+            continue
+        try:
+            # Parse ISO date format (YYYY-MM-DD)
+            parts = date_str.split('-')
+            if len(parts) >= 2:
+                year = int(parts[0])
+                month = int(parts[1])
+                years.add(year)
+                season = _get_season_for_month(month)
+                if year not in seasons_by_year:
+                    seasons_by_year[year] = set()
+                seasons_by_year[year].add(season)
+        except (ValueError, IndexError):
+            continue
+
+    if not years:
+        # No valid dates, fall back to listing game names
+        return " / ".join(game_names[:2]) + ("..." if len(game_names) > 2 else "")
+
+    years_list = sorted(years)
+
+    if len(years_list) == 1:
+        year = years_list[0]
+        seasons = seasons_by_year.get(year, set())
+        if len(seasons) == 1:
+            return f"{list(seasons)[0]} {year}"
+        return str(year)
+    else:
+        # Multiple years
+        return f"{min(years_list)}-{max(years_list)}"
+
+
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
@@ -71,6 +178,11 @@ class ProjectListItem(BaseModel):
     created_at: str
     current_mode: Optional[str] = 'framing'
     last_opened_at: Optional[str] = None
+    # Game grouping info
+    game_ids: List[int] = []  # List of game IDs for clips in this project
+    game_names: List[str] = []  # Display names for those games
+    game_dates: List[str] = []  # Game dates (for season/year grouping)
+    group_key: Optional[str] = None  # Group key for hierarchical display
 
 
 class WorkingClipResponse(BaseModel):
@@ -174,8 +286,65 @@ async def list_projects():
 
         rows = cursor.fetchall()
 
+        # Fetch game info for all projects in one query
+        # This traces: project -> working_clips -> raw_clips -> games
+        # Fetch all game detail columns for proper display name generation
+        cursor.execute("""
+            SELECT DISTINCT
+                wc.project_id,
+                g.id as game_id,
+                g.name as game_name,
+                g.game_date,
+                g.opponent_name,
+                g.game_type,
+                g.tournament_name
+            FROM working_clips wc
+            JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            JOIN games g ON rc.game_id = g.id
+            WHERE rc.game_id IS NOT NULL
+            ORDER BY wc.project_id, g.game_date
+        """)
+        game_rows = cursor.fetchall()
+
+        # Build a map of project_id -> game info
+        project_games = {}
+        for game_row in game_rows:
+            project_id = game_row['project_id']
+            if project_id not in project_games:
+                project_games[project_id] = {
+                    'game_ids': [],
+                    'game_names': [],
+                    'game_dates': []
+                }
+            # Avoid duplicates (can happen with multiple clips from same game)
+            if game_row['game_id'] not in project_games[project_id]['game_ids']:
+                project_games[project_id]['game_ids'].append(game_row['game_id'])
+                # Generate display name from game details (not stored name which may be filename)
+                display_name = _generate_game_display_name(
+                    game_row['opponent_name'],
+                    game_row['game_date'],
+                    game_row['game_type'],
+                    game_row['tournament_name'],
+                    game_row['game_name'] or f"Game {game_row['game_id']}"
+                )
+                project_games[project_id]['game_names'].append(display_name)
+                project_games[project_id]['game_dates'].append(game_row['game_date'] or '')
+
         result = []
         for row in rows:
+            project_id = row['id']
+            game_info = project_games.get(project_id, {
+                'game_ids': [],
+                'game_names': [],
+                'game_dates': []
+            })
+
+            # Generate group key
+            group_key = _generate_group_key(
+                game_info['game_names'],
+                game_info['game_dates']
+            )
+
             result.append(ProjectListItem(
                 id=row['id'],
                 name=row['name'],
@@ -189,7 +358,11 @@ async def list_projects():
                 is_auto_created=bool(row['is_auto_created']),
                 created_at=row['created_at'],
                 current_mode=row['current_mode'] or 'framing',
-                last_opened_at=row['last_opened_at']
+                last_opened_at=row['last_opened_at'],
+                game_ids=game_info['game_ids'],
+                game_names=game_info['game_names'],
+                game_dates=game_info['game_dates'],
+                group_key=group_key
             ))
 
         return result

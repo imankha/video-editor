@@ -5,6 +5,7 @@ import { useExportStore } from '../stores/exportStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
 import { Button } from './shared/Button';
+import { CollapsibleGroup } from './shared/CollapsibleGroup';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -139,6 +140,29 @@ export function ProjectManager({
     filterCounts.showAspectFilter ||
     filterCounts.showCreationFilter
   );
+
+  // Group filtered projects by game group_key for hierarchical display
+  const groupedProjects = useMemo(() => {
+    const groups = {};
+    const ungrouped = [];
+
+    filteredProjects.forEach(project => {
+      const key = project.group_key;
+      if (key) {
+        if (!groups[key]) {
+          groups[key] = [];
+        }
+        groups[key].push(project);
+      } else {
+        ungrouped.push(project);
+      }
+    });
+
+    // Sort group keys alphabetically
+    const sortedKeys = Object.keys(groups).sort();
+
+    return { groups, sortedKeys, ungrouped };
+  }, [filteredProjects]);
 
   // Compute most recent items for "Continue Where You Left Off" section
   const recentItems = useMemo(() => {
@@ -629,16 +653,42 @@ export function ProjectManager({
                   No projects match the current filters
                 </div>
               ) : (
-                filteredProjects.map(project => (
-                  <ProjectCard
-                    key={project.id}
-                    project={project}
-                    onSelect={() => onSelectProject(project.id)}
-                    onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
-                    onDelete={() => onDeleteProject(project.id)}
-                    exportingProject={exportingProject}
-                  />
-                ))
+                <>
+                  {/* Ungrouped projects (no game association) shown first */}
+                  {groupedProjects.ungrouped.map(project => (
+                    <ProjectCard
+                      key={project.id}
+                      project={project}
+                      onSelect={() => onSelectProject(project.id)}
+                      onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                      onDelete={() => onDeleteProject(project.id)}
+                      exportingProject={exportingProject}
+                    />
+                  ))}
+
+                  {/* Grouped projects by game - all collapsed by default */}
+                  {groupedProjects.sortedKeys.map(groupKey => (
+                    <CollapsibleGroup
+                      key={groupKey}
+                      title={groupKey}
+                      count={groupedProjects.groups[groupKey].length}
+                      defaultExpanded={false}
+                    >
+                      <div className="space-y-2">
+                        {groupedProjects.groups[groupKey].map(project => (
+                          <ProjectCard
+                            key={project.id}
+                            project={project}
+                            onSelect={() => onSelectProject(project.id)}
+                            onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                            onDelete={() => onDeleteProject(project.id)}
+                            exportingProject={exportingProject}
+                          />
+                        ))}
+                      </div>
+                    </CollapsibleGroup>
+                  ))}
+                </>
               )}
             </div>
           </div>

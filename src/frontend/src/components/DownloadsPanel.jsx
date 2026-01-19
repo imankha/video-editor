@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, Film, LayoutGrid } from 'lucide-react';
 import { Button } from './shared/Button';
+import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { useDownloads } from '../hooks/useDownloads';
 import { useGalleryStore } from '../stores/galleryStore';
 
@@ -226,91 +227,131 @@ export function DownloadsPanel({
     }
   };
 
+  // Render a single download item card
+  const renderDownloadCard = (download) => (
+    <div
+      key={download.id}
+      className="p-3 bg-gray-700 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors"
+    >
+      <div className="flex items-start gap-3">
+        {/* Video icon */}
+        <div className="w-10 h-10 rounded bg-purple-900/40 flex items-center justify-center flex-shrink-0">
+          <Video size={20} className="text-purple-400" />
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="text-white font-medium truncate">
+            {download.project_name}
+          </div>
+          <div className="text-sm text-gray-400 truncate">
+            {download.filename}
+          </div>
+          <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+            <span>{formatDate(download.created_at)}</span>
+            <span>{formatFileSize(download.file_size)}</span>
+          </div>
+          {/* Rating counts for annotated games */}
+          {download.source_type === 'annotated_game' && download.rating_counts && (
+            <RatingCountsBadges ratingCounts={download.rating_counts} />
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={(e) => handlePlay(e, download)}
+            className="p-2 hover:bg-purple-900/40 rounded transition-colors"
+            title="Play video"
+          >
+            <Play size={16} className="text-purple-400 hover:text-purple-300" />
+          </button>
+          <button
+            onClick={(e) => handleDownload(e, download)}
+            className="p-2 hover:bg-gray-600 rounded transition-colors"
+            title="Download file"
+          >
+            <Download size={16} className="text-gray-400 hover:text-white" />
+          </button>
+          {download.source_type !== 'annotated_game' && (
+            <button
+              onClick={(e) => handleBeforeAfter(e, download)}
+              disabled={exportingBeforeAfter === download.id}
+              className="p-2 hover:bg-blue-900/40 rounded transition-colors disabled:opacity-50"
+              title="Export Before/After comparison"
+            >
+              {exportingBeforeAfter === download.id ? (
+                <Loader size={16} className="text-blue-400 animate-spin" />
+              ) : (
+                <Columns size={16} className="text-blue-400 hover:text-blue-300" />
+              )}
+            </button>
+          )}
+          {canOpenSource(download) && (
+            <button
+              onClick={(e) => handleOpenProject(e, download)}
+              className="p-2 hover:bg-gray-600 rounded transition-colors"
+              title={getOpenSourceTitle(download)}
+            >
+              <FolderOpen size={16} className="text-gray-400 hover:text-white" />
+            </button>
+          )}
+          <button
+            onClick={(e) => handleDelete(e, download)}
+            className="p-2 hover:bg-red-900/40 rounded transition-colors"
+            title="Delete download"
+          >
+            <Trash2 size={16} className="text-gray-400 hover:text-red-400" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Group items by game within a date group
+  const groupByGame = (items) => {
+    const gameGroups = {};
+    const ungrouped = [];
+
+    items.forEach(item => {
+      const key = item.group_key;
+      if (key) {
+        if (!gameGroups[key]) {
+          gameGroups[key] = [];
+        }
+        gameGroups[key].push(item);
+      } else {
+        ungrouped.push(item);
+      }
+    });
+
+    return { gameGroups, ungrouped, sortedKeys: Object.keys(gameGroups).sort() };
+  };
+
   const renderGroup = (title, items) => {
     if (items.length === 0) return null;
+
+    const { gameGroups, ungrouped, sortedKeys } = groupByGame(items);
 
     return (
       <div key={title} className="mb-6">
         <h3 className="text-sm font-medium text-gray-400 mb-2 px-1">{title}</h3>
         <div className="space-y-2">
-          {items.map(download => (
-            <div
-              key={download.id}
-              className="p-3 bg-gray-700 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors"
+          {/* Ungrouped items first */}
+          {ungrouped.map(download => renderDownloadCard(download))}
+
+          {/* Grouped items by game - collapsed by default */}
+          {sortedKeys.map(groupKey => (
+            <CollapsibleGroup
+              key={groupKey}
+              title={groupKey}
+              count={gameGroups[groupKey].length}
+              defaultExpanded={false}
             >
-              <div className="flex items-start gap-3">
-                {/* Video icon */}
-                <div className="w-10 h-10 rounded bg-purple-900/40 flex items-center justify-center flex-shrink-0">
-                  <Video size={20} className="text-purple-400" />
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="text-white font-medium truncate">
-                    {download.project_name}
-                  </div>
-                  <div className="text-sm text-gray-400 truncate">
-                    {download.filename}
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-                    <span>{formatDate(download.created_at)}</span>
-                    <span>{formatFileSize(download.file_size)}</span>
-                  </div>
-                  {/* Rating counts for annotated games */}
-                  {download.source_type === 'annotated_game' && download.rating_counts && (
-                    <RatingCountsBadges ratingCounts={download.rating_counts} />
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <button
-                    onClick={(e) => handlePlay(e, download)}
-                    className="p-2 hover:bg-purple-900/40 rounded transition-colors"
-                    title="Play video"
-                  >
-                    <Play size={16} className="text-purple-400 hover:text-purple-300" />
-                  </button>
-                  <button
-                    onClick={(e) => handleDownload(e, download)}
-                    className="p-2 hover:bg-gray-600 rounded transition-colors"
-                    title="Download file"
-                  >
-                    <Download size={16} className="text-gray-400 hover:text-white" />
-                  </button>
-                  {download.source_type !== 'annotated_game' && (
-                    <button
-                      onClick={(e) => handleBeforeAfter(e, download)}
-                      disabled={exportingBeforeAfter === download.id}
-                      className="p-2 hover:bg-blue-900/40 rounded transition-colors disabled:opacity-50"
-                      title="Export Before/After comparison"
-                    >
-                      {exportingBeforeAfter === download.id ? (
-                        <Loader size={16} className="text-blue-400 animate-spin" />
-                      ) : (
-                        <Columns size={16} className="text-blue-400 hover:text-blue-300" />
-                      )}
-                    </button>
-                  )}
-                  {canOpenSource(download) && (
-                    <button
-                      onClick={(e) => handleOpenProject(e, download)}
-                      className="p-2 hover:bg-gray-600 rounded transition-colors"
-                      title={getOpenSourceTitle(download)}
-                    >
-                      <FolderOpen size={16} className="text-gray-400 hover:text-white" />
-                    </button>
-                  )}
-                  <button
-                    onClick={(e) => handleDelete(e, download)}
-                    className="p-2 hover:bg-red-900/40 rounded transition-colors"
-                    title="Delete download"
-                  >
-                    <Trash2 size={16} className="text-gray-400 hover:text-red-400" />
-                  </button>
-                </div>
+              <div className="space-y-2">
+                {gameGroups[groupKey].map(download => renderDownloadCard(download))}
               </div>
-            </div>
+            </CollapsibleGroup>
           ))}
         </div>
       </div>

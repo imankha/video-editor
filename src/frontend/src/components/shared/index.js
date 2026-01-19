@@ -2,6 +2,7 @@
 // Components in shared/ directory
 export { Breadcrumb } from './Breadcrumb';
 export { Button, IconButton, ButtonGroup, Toggle } from './Button';
+export { CollapsibleGroup } from './CollapsibleGroup';
 export { ConfirmationDialog } from './ConfirmationDialog';
 export { ExportProgress } from './ExportProgress';
 export { ModeSwitcher } from './ModeSwitcher';
