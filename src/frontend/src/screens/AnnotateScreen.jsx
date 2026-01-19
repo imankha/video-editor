@@ -82,6 +82,11 @@ export function AnnotateScreen() {
     panOffset,
     zoomByWheel,
     updatePan,
+    zoomIn,
+    zoomOut,
+    resetZoom,
+    MIN_ZOOM,
+    MAX_ZOOM,
   } = useZoom();
 
   // Handlers
@@ -369,6 +374,11 @@ export function AnnotateScreen() {
         panOffset={panOffset}
         onZoomChange={zoomByWheel}
         onPanChange={updatePan}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onResetZoom={resetZoom}
+        MIN_ZOOM={MIN_ZOOM}
+        MAX_ZOOM={MAX_ZOOM}
           />
         </div>
       </div>
