@@ -208,6 +208,7 @@ export function OverlayModeView({
                   onPlayerSelect={onPlayerSelect}
                   zoom={zoom}
                   panOffset={panOffset}
+                  isFullscreen={isFullscreen}
                 />
               ),
             ].filter(Boolean)}

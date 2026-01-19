@@ -60,6 +60,8 @@ export function AnnotateContainer({
     setAnnotateVideoUrl,
     setAnnotateVideoMetadata,
     setAnnotateGameId,
+    annotateGameName,
+    setAnnotateGameName,
     isCreatingAnnotatedVideo,
     setIsCreatingAnnotatedVideo,
     isImportingToProjects,
@@ -157,6 +159,7 @@ export function AnnotateContainer({
       setAnnotateVideoUrl(localVideoUrl);
       setAnnotateVideoMetadata(videoMetadata);
       setAnnotateGameId(game.id);
+      setAnnotateGameName(gameName);
 
       // Transition to annotate mode IMMEDIATELY
       setEditorMode('annotate');
@@ -229,6 +232,7 @@ export function AnnotateContainer({
       setAnnotateVideoUrl(videoUrl);
       setAnnotateVideoMetadata(videoMetadata);
       setAnnotateGameId(gameId);
+      setAnnotateGameName(gameData.name);
 
       // Import saved annotations if they exist
       // Pass duration directly to avoid race condition with state updates
@@ -754,6 +758,7 @@ export function AnnotateContainer({
     // State
     annotateVideoUrl,
     annotateVideoMetadata,
+    annotateGameName,
     annotateFullscreen,
     showAnnotateOverlay,
     annotateSelectedLayer,

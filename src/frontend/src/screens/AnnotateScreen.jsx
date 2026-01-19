@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FolderOpen } from 'lucide-react';
+import { Home, Scissors } from 'lucide-react';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
 import { GalleryButton } from '../components/GalleryButton';
-import { Button } from '../components/shared';
+import { Breadcrumb, Button } from '../components/shared';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import { useGames } from '../hooks/useGames';
@@ -114,6 +114,7 @@ export function AnnotateScreen() {
   const {
     annotateVideoUrl,
     annotateVideoMetadata,
+    annotateGameName,
     annotateFullscreen,
     showAnnotateOverlay,
     annotateSelectedLayer,
@@ -297,19 +298,24 @@ export function AnnotateScreen() {
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
               <Button
-                variant="secondary"
-                icon={FolderOpen}
+                variant="ghost"
+                icon={Home}
+                iconOnly
                 onClick={handleBackToProjects}
-              >
-                Projects
-              </Button>
-              <div>
-                <h1 className="text-4xl font-bold text-white mb-2">Annotate Game</h1>
-                <p className="text-gray-400">Mark clips to extract from your game footage</p>
-              </div>
+                title="Home"
+              />
+              <Breadcrumb
+                type="Games"
+                itemName={annotateGameName}
+              />
             </div>
             <div className="flex items-center gap-4">
               <GalleryButton />
+              {/* Annotate mode indicator */}
+              <div className="flex items-center gap-2 px-4 py-2 bg-green-600/20 border border-green-600/40 rounded-lg">
+                <Scissors size={16} className="text-green-400" />
+                <span className="text-sm font-medium text-green-400">Annotate</span>
+              </div>
             </div>
           </div>
           <AnnotateModeView
