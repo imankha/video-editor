@@ -19,7 +19,13 @@
  * }
  */
 
-import { findKeyframeIndexAtFrame, findKeyframeAtFrame, hasKeyframeAtFrame } from '../utils/keyframeUtils';
+import {
+  findKeyframeIndexAtFrame,
+  findKeyframeIndexNearFrame,
+  findKeyframeAtFrame,
+  hasKeyframeAtFrame,
+  FRAME_TOLERANCE
+} from '../utils/keyframeUtils';
 
 // State machine states
 export const KeyframeStates = {
@@ -206,25 +212,27 @@ export function keyframeReducer(state, action) {
       const { frame, data, origin: requestedOrigin = 'user' } = action.payload;
       const { keyframes, endFrame, isEndKeyframeExplicit } = state;
 
-      const isEndKeyframe = endFrame !== null && frame === endFrame;
-      const isStartKeyframe = frame === 0;
-      const actualOrigin = determineOrigin(frame, endFrame, requestedOrigin);
+      // Check if a keyframe exists within tolerance range (snap to existing)
+      // This prevents accidentally creating new keyframes when user intends to edit existing ones
+      const nearbyIndex = findKeyframeIndexNearFrame(keyframes, frame, FRAME_TOLERANCE);
+      const targetFrame = nearbyIndex >= 0 ? keyframes[nearbyIndex].frame : frame;
+
+      const isEndKeyframe = endFrame !== null && targetFrame === endFrame;
+      const isStartKeyframe = targetFrame === 0;
+      const actualOrigin = determineOrigin(targetFrame, endFrame, requestedOrigin);
 
       // Track if we're explicitly setting the end keyframe
       const newIsEndExplicit = isEndKeyframe ? true : isEndKeyframeExplicit;
 
-      // Check if keyframe exists at this frame
-      const existingIndex = findKeyframeIndexAtFrame(keyframes, frame);
-
       let updatedKeyframes;
-      if (existingIndex >= 0) {
-        // Update existing keyframe - preserve origin if updating permanent keyframe
-        const preservedOrigin = keyframes[existingIndex].origin === 'permanent' ? 'permanent' : actualOrigin;
+      if (nearbyIndex >= 0) {
+        // Update existing nearby keyframe - preserve origin if updating permanent keyframe
+        const preservedOrigin = keyframes[nearbyIndex].origin === 'permanent' ? 'permanent' : actualOrigin;
         updatedKeyframes = [...keyframes];
-        updatedKeyframes[existingIndex] = { ...data, frame, origin: preservedOrigin };
+        updatedKeyframes[nearbyIndex] = { ...data, frame: targetFrame, origin: preservedOrigin };
       } else {
-        // Add new keyframe and sort
-        updatedKeyframes = sortKeyframes([...keyframes, { ...data, frame, origin: actualOrigin }]);
+        // Add new keyframe and sort (no nearby keyframe to snap to)
+        updatedKeyframes = sortKeyframes([...keyframes, { ...data, frame: targetFrame, origin: actualOrigin }]);
       }
 
       // Mirror start to end if end hasn't been explicitly set

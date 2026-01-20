@@ -45,7 +45,12 @@ export function hasKeyframeAtFrame(keyframes, frame) {
 }
 
 /**
- * Default frame tolerance for keyframe selection
- * 2 frames at 30fps = ~67ms tolerance
+ * Default frame tolerance for keyframe selection and snapping
+ * 5 frames at 30fps = ~167ms tolerance
+ *
+ * Based on analysis of real keyframe data:
+ * - Minimum gap between user keyframes: 6-10 frames
+ * - 5 frames is small enough to avoid false snaps
+ * - Large enough to make keyframe selection easy
  */
-export const FRAME_TOLERANCE = 2;
+export const FRAME_TOLERANCE = 5;

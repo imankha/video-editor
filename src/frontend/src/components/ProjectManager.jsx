@@ -141,6 +141,27 @@ export function ProjectManager({
     filterCounts.showCreationFilter
   );
 
+  // Helper to compute status counts for a list of projects
+  const getProjectStatusCounts = useCallback((projectList) => {
+    let done = 0;
+    let notStarted = 0;
+    let inProgress = 0;
+
+    projectList.forEach(project => {
+      const { has_final_video, clips_exported, clips_in_progress, has_working_video, has_overlay_edits } = project;
+
+      if (has_final_video) {
+        done++;
+      } else if (clips_exported > 0 || clips_in_progress > 0 || has_working_video || has_overlay_edits) {
+        inProgress++;
+      } else {
+        notStarted++;
+      }
+    });
+
+    return { done, notStarted, inProgress, total: projectList.length };
+  }, []);
+
   // Group filtered projects by game group_key for hierarchical display
   const groupedProjects = useMemo(() => {
     const groups = {};
@@ -150,19 +171,34 @@ export function ProjectManager({
       const key = project.group_key;
       if (key) {
         if (!groups[key]) {
-          groups[key] = [];
+          groups[key] = { projects: [], statusCounts: null };
         }
-        groups[key].push(project);
+        groups[key].projects.push(project);
       } else {
         ungrouped.push(project);
       }
     });
 
-    // Sort group keys alphabetically
-    const sortedKeys = Object.keys(groups).sort();
+    // Compute status counts for each group
+    Object.keys(groups).forEach(key => {
+      groups[key].statusCounts = getProjectStatusCounts(groups[key].projects);
+    });
+
+    // Sort group keys: incomplete groups first, then alphabetically within each category
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+      const aComplete = groups[a].statusCounts.done === groups[a].statusCounts.total;
+      const bComplete = groups[b].statusCounts.done === groups[b].statusCounts.total;
+
+      // Incomplete groups come first
+      if (aComplete !== bComplete) {
+        return aComplete ? 1 : -1;
+      }
+      // Within same completion status, sort alphabetically
+      return a.localeCompare(b);
+    });
 
     return { groups, sortedKeys, ungrouped };
-  }, [filteredProjects]);
+  }, [filteredProjects, getProjectStatusCounts]);
 
   // Compute most recent items for "Continue Where You Left Off" section
   const recentItems = useMemo(() => {
@@ -198,38 +234,6 @@ export function ProjectManager({
   // Only show recent section if there's at least one recent item
   const showRecentSection = recentItems.recentProject || recentItems.recentGame;
 
-  // Compute which progress statuses are present across all projects (for shared legend)
-  const progressStatuses = useMemo(() => {
-    const statuses = { done: false, exporting: false, editing: false, ready: false, pending: false };
-
-    projects.forEach(project => {
-      const { clip_count, clips_exported, clips_in_progress, has_working_video, has_overlay_edits, has_final_video } = project;
-
-      // Check clip segments
-      for (let i = 0; i < clip_count; i++) {
-        if (has_final_video || i < clips_exported) {
-          statuses.done = true;
-        } else if (i < clips_exported + clips_in_progress) {
-          statuses.editing = true;
-        } else {
-          statuses.pending = true;
-        }
-      }
-
-      // Check overlay segment
-      if (has_final_video) {
-        statuses.done = true;
-      } else if (has_overlay_edits) {
-        statuses.editing = true;
-      } else if (has_working_video) {
-        statuses.ready = true;
-      } else {
-        statuses.pending = true;
-      }
-    });
-
-    return statuses;
-  }, [projects]);
 
   // Handle file selection for new game (legacy - keeping for reference)
   const handleGameFileChange = useCallback((event) => {
@@ -587,7 +591,7 @@ export function ProjectManager({
                         title="Auto-created from 5-star clips"
                       >
                         <Star size={12} className={creationFilter === 'auto' ? 'text-white' : 'text-yellow-400'} />
-                        Brilliant ({filterCounts.auto})
+                        Auto ({filterCounts.auto})
                       </button>
                       <button
                         onClick={() => setCreationFilter('custom')}
@@ -613,39 +617,6 @@ export function ProjectManager({
                   ? `Your Projects`
                   : `Showing ${filteredProjects.length} of ${projects.length} Projects`}
               </h2>
-              {/* Shared progress legend - only show statuses that exist */}
-              <div className="flex gap-3 text-xs text-gray-500">
-                {progressStatuses.done && (
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-sm bg-green-500"></span>
-                    Done
-                  </span>
-                )}
-                {progressStatuses.exporting && (
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-sm bg-amber-500"></span>
-                    Exporting
-                  </span>
-                )}
-                {progressStatuses.editing && (
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-sm bg-blue-500"></span>
-                    Editing
-                  </span>
-                )}
-                {progressStatuses.ready && (
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-sm bg-blue-300"></span>
-                    Ready
-                  </span>
-                )}
-                {progressStatuses.pending && (
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-sm bg-gray-600"></span>
-                    Not Started
-                  </span>
-                )}
-              </div>
             </div>
             <div className="space-y-2">
               {filteredProjects.length === 0 ? (
@@ -666,16 +637,20 @@ export function ProjectManager({
                     />
                   ))}
 
-                  {/* Grouped projects by game - all collapsed by default */}
-                  {groupedProjects.sortedKeys.map(groupKey => (
+                  {/* Grouped projects by game - expand if has incomplete projects */}
+                  {groupedProjects.sortedKeys.map(groupKey => {
+                    const group = groupedProjects.groups[groupKey];
+                    const hasIncomplete = group.statusCounts.done < group.statusCounts.total;
+                    return (
                     <CollapsibleGroup
                       key={groupKey}
                       title={groupKey}
-                      count={groupedProjects.groups[groupKey].length}
-                      defaultExpanded={false}
+                      count={group.projects.length}
+                      statusCounts={group.statusCounts}
+                      defaultExpanded={hasIncomplete}
                     >
                       <div className="space-y-2">
-                        {groupedProjects.groups[groupKey].map(project => (
+                        {group.projects.map(project => (
                           <ProjectCard
                             key={project.id}
                             project={project}
@@ -687,7 +662,8 @@ export function ProjectManager({
                         ))}
                       </div>
                     </CollapsibleGroup>
-                  ))}
+                    );
+                  })}
                 </>
               )}
             </div>
@@ -974,7 +950,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
         <div className="flex-1">
           <div className="flex items-center gap-2">
             {project.is_auto_created && (
-              <Star size={14} className="text-yellow-400" fill="currentColor" title="Brilliant clip project" />
+              <Star size={14} className="text-yellow-400" fill="currentColor" title="Auto-created project" />
             )}
             <h3 className="text-white font-medium">{project.name}</h3>
             {isComplete && (
