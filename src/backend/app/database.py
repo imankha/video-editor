@@ -15,14 +15,19 @@ the development database. If no header is provided, the default user 'a' is used
 
 import sqlite3
 import logging
+import threading
 from pathlib import Path
 from contextlib import contextmanager
+from typing import Optional, Any
 
 from .user_context import get_current_user_id
 from .storage import (
     R2_ENABLED,
     sync_database_from_r2,
     sync_database_to_r2,
+    sync_database_from_r2_if_newer,
+    sync_database_to_r2_with_version,
+    get_db_version_from_r2,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,6 +37,196 @@ USER_DATA_BASE = Path(__file__).parent.parent.parent.parent / "user_data"
 
 # Track initialized user namespaces (per user_id)
 _initialized_users: set = set()
+
+# Track database versions per user (for R2 sync)
+_user_db_versions: dict = {}  # user_id -> version number
+_db_version_lock = threading.Lock()
+
+# Database size thresholds for Durable Objects migration
+DB_SIZE_WARNING_THRESHOLD = 512 * 1024  # 512KB - start warning
+DB_SIZE_MIGRATION_THRESHOLD = 1024 * 1024  # 1MB - recommend migration
+
+# Thread-local storage for request context (write tracking)
+_request_context = threading.local()
+
+
+class TrackedCursor:
+    """
+    SQLite cursor wrapper that tracks if write operations occurred.
+
+    Wraps a sqlite3.Cursor to detect INSERT, UPDATE, DELETE, etc.
+    and marks the connection as having writes.
+    """
+
+    def __init__(self, cursor: sqlite3.Cursor, connection: 'TrackedConnection'):
+        self._cursor = cursor
+        self._connection = connection
+
+    def execute(self, sql: str, parameters: Any = None) -> 'TrackedCursor':
+        """Execute SQL and track if it's a write operation."""
+        sql_upper = sql.strip().upper()
+        if sql_upper.startswith(('INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'REPLACE')):
+            self._connection._mark_write()
+
+        if parameters is None:
+            self._cursor.execute(sql)
+        else:
+            self._cursor.execute(sql, parameters)
+        return self
+
+    def executemany(self, sql: str, seq_of_parameters) -> 'TrackedCursor':
+        """Execute SQL for multiple parameter sets."""
+        sql_upper = sql.strip().upper()
+        if sql_upper.startswith(('INSERT', 'UPDATE', 'DELETE', 'REPLACE')):
+            self._connection._mark_write()
+
+        self._cursor.executemany(sql, seq_of_parameters)
+        return self
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    def fetchmany(self, size=None):
+        if size is None:
+            return self._cursor.fetchmany()
+        return self._cursor.fetchmany(size)
+
+    @property
+    def lastrowid(self):
+        return self._cursor.lastrowid
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    @property
+    def description(self):
+        return self._cursor.description
+
+    def close(self):
+        self._cursor.close()
+
+    def __iter__(self):
+        return iter(self._cursor)
+
+
+class TrackedConnection:
+    """
+    SQLite connection wrapper that tracks if write operations occurred.
+
+    This enables batched syncing - we only sync to R2 if writes happened
+    during the request, and we sync once at the end, not after every write.
+    """
+
+    def __init__(self, conn: sqlite3.Connection):
+        self._conn = conn
+        self._has_writes = False
+
+    def _mark_write(self):
+        """Mark that a write operation occurred."""
+        self._has_writes = True
+        # Also mark in request context for middleware to detect
+        if hasattr(_request_context, 'has_writes'):
+            _request_context.has_writes = True
+
+    @property
+    def has_writes(self) -> bool:
+        """Check if any write operations occurred."""
+        return self._has_writes
+
+    def cursor(self) -> TrackedCursor:
+        """Return a tracked cursor."""
+        return TrackedCursor(self._conn.cursor(), self)
+
+    def commit(self):
+        """Commit the transaction."""
+        self._conn.commit()
+
+    def rollback(self):
+        """Rollback the transaction."""
+        self._conn.rollback()
+
+    def close(self):
+        """Close the connection."""
+        self._conn.close()
+
+    def execute(self, sql: str, parameters: Any = None) -> TrackedCursor:
+        """Execute SQL directly on connection."""
+        cursor = self.cursor()
+        return cursor.execute(sql, parameters)
+
+    @property
+    def row_factory(self):
+        return self._conn.row_factory
+
+    @row_factory.setter
+    def row_factory(self, value):
+        self._conn.row_factory = value
+
+
+def check_database_size(db_path: Path) -> None:
+    """
+    Log warning if database is approaching migration threshold.
+
+    Call this periodically (e.g., after sync) to monitor database growth.
+    When the database exceeds 1MB, a warning recommends migrating to
+    Durable Objects for archived data.
+    """
+    if not db_path.exists():
+        return
+
+    try:
+        size = db_path.stat().st_size
+
+        if size > DB_SIZE_MIGRATION_THRESHOLD:
+            logger.warning(
+                f"DATABASE MIGRATION RECOMMENDED: Database size ({size / 1024:.1f}KB) exceeds 1MB. "
+                f"Consider migrating archived data to Durable Objects for better performance. "
+                f"Path: {db_path}"
+            )
+        elif size > DB_SIZE_WARNING_THRESHOLD:
+            logger.info(
+                f"Database size notice: {size / 1024:.1f}KB - approaching 1MB migration threshold"
+            )
+    except Exception as e:
+        logger.debug(f"Could not check database size: {e}")
+
+
+def get_local_db_version(user_id: str) -> Optional[int]:
+    """Get the locally cached database version for a user."""
+    with _db_version_lock:
+        return _user_db_versions.get(user_id)
+
+
+def set_local_db_version(user_id: str, version: Optional[int]) -> None:
+    """Set the locally cached database version for a user."""
+    with _db_version_lock:
+        if version is None:
+            _user_db_versions.pop(user_id, None)
+        else:
+            _user_db_versions[user_id] = version
+
+
+def init_request_context() -> None:
+    """Initialize request context for write tracking. Call at start of request."""
+    _request_context.has_writes = False
+    _request_context.user_id = get_current_user_id()
+
+
+def get_request_has_writes() -> bool:
+    """Check if any writes occurred during this request."""
+    return getattr(_request_context, 'has_writes', False)
+
+
+def clear_request_context() -> None:
+    """Clear request context. Call at end of request."""
+    if hasattr(_request_context, 'has_writes'):
+        del _request_context.has_writes
+    if hasattr(_request_context, 'user_id'):
+        del _request_context.user_id
 
 
 def get_user_data_path() -> Path:
@@ -112,26 +307,35 @@ def ensure_database():
     Called automatically before each database access.
     This makes the app resilient to the user_data folder being deleted.
 
-    If R2 is enabled and no local database exists, attempts to sync from R2.
+    If R2 is enabled, uses version-based sync to check if R2 has a newer version.
     """
     global _initialized_users
     user_id = get_current_user_id()
     db_path = get_database_path()
 
-    # Quick path: if already initialized and DB exists, skip
-    if user_id in _initialized_users and db_path.exists():
-        return
+    # Quick path: if already initialized and DB exists, skip table creation
+    # but still check R2 for newer version
+    already_initialized = user_id in _initialized_users and db_path.exists()
 
     # Ensure directories exist
     ensure_directories()
 
-    # If R2 is enabled and no local database, try to sync from R2
-    if R2_ENABLED and not db_path.exists():
-        logger.info(f"R2 enabled, attempting to sync database from R2 for user: {user_id}")
-        if sync_database_from_r2(user_id, db_path):
-            logger.info(f"Database synced from R2 for user: {user_id}")
-        else:
-            logger.info(f"No database in R2 for user: {user_id}, will create new")
+    # If R2 is enabled, check for newer version and sync if needed
+    if R2_ENABLED:
+        local_version = get_local_db_version(user_id)
+        was_synced, new_version = sync_database_from_r2_if_newer(user_id, db_path, local_version)
+        if was_synced:
+            logger.info(f"Database synced from R2 for user: {user_id}, version: {new_version}")
+            set_local_db_version(user_id, new_version)
+            # Force re-initialization since we got a new DB
+            already_initialized = False
+        elif new_version is not None and local_version is None:
+            # First time seeing this version, record it
+            set_local_db_version(user_id, new_version)
+
+    # If already initialized, skip table creation
+    if already_initialized:
+        return
 
     # Create/verify tables
     conn = sqlite3.connect(str(db_path))
@@ -459,10 +663,13 @@ def ensure_database():
 
 
 @contextmanager
-def get_db_connection():
+def get_db_connection() -> TrackedConnection:
     """
     Context manager for database connections.
     Ensures database exists and connections are properly closed after use.
+
+    Returns a TrackedConnection that automatically detects write operations,
+    enabling batched syncing to R2 (sync once per request, not per write).
 
     Auto-creates the database and directories if they don't exist,
     making the app resilient to the user_data folder being deleted.
@@ -470,8 +677,9 @@ def get_db_connection():
     # Ensure database exists before connecting
     ensure_database()
 
-    conn = sqlite3.connect(str(get_database_path()))
-    conn.row_factory = sqlite3.Row  # Return rows as dictionaries
+    raw_conn = sqlite3.connect(str(get_database_path()))
+    raw_conn.row_factory = sqlite3.Row  # Return rows as dictionaries
+    conn = TrackedConnection(raw_conn)
     try:
         yield conn
     finally:
@@ -539,8 +747,15 @@ def reset_initialized_flag():
 
 def sync_db_to_cloud():
     """
-    Sync the current user's database to R2 storage.
+    Sync the current user's database to R2 storage with version tracking.
     Call this after database modifications to persist changes to the cloud.
+
+    Uses version-based sync with optimistic locking:
+    - Checks current version to detect conflicts
+    - Increments version on successful upload
+    - Logs conflicts but uses last-write-wins for MVP
+
+    Also checks database size and logs migration recommendations.
 
     This is a no-op if R2 is not enabled.
     """
@@ -550,8 +765,35 @@ def sync_db_to_cloud():
     user_id = get_current_user_id()
     db_path = get_database_path()
 
-    if db_path.exists():
-        if sync_database_to_r2(user_id, db_path):
-            logger.debug(f"Database synced to R2 for user: {user_id}")
-        else:
-            logger.warning(f"Failed to sync database to R2 for user: {user_id}")
+    if not db_path.exists():
+        return
+
+    # Check database size and log warnings if approaching threshold
+    check_database_size(db_path)
+
+    # Get current local version for conflict detection
+    current_version = get_local_db_version(user_id)
+
+    # Sync with version tracking
+    success, new_version = sync_database_to_r2_with_version(user_id, db_path, current_version)
+
+    if success and new_version is not None:
+        set_local_db_version(user_id, new_version)
+        logger.debug(f"Database synced to R2 for user: {user_id}, version: {new_version}")
+    elif not success:
+        logger.warning(f"Failed to sync database to R2 for user: {user_id}")
+
+
+def sync_db_to_cloud_if_writes():
+    """
+    Sync database to R2 only if writes occurred during this request.
+    Called by middleware at end of request.
+
+    This enables batched syncing - multiple writes in a single request
+    result in only one R2 upload.
+    """
+    if not R2_ENABLED:
+        return
+
+    if get_request_has_writes():
+        sync_db_to_cloud()

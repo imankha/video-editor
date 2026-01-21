@@ -17,8 +17,9 @@ Configuration:
 import os
 import logging
 from pathlib import Path
-from typing import Optional, BinaryIO
+from typing import Optional, BinaryIO, Tuple
 from functools import lru_cache
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -165,10 +166,149 @@ def file_exists_in_r2(user_id: str, relative_path: str) -> bool:
         return False
 
 
+# Thread-local storage for tracking database version and writes per request
+_request_context = threading.local()
+
+
+def get_db_version_from_r2(user_id: str) -> Optional[int]:
+    """
+    Get the version number of the database in R2.
+
+    Version is stored as custom metadata 'x-amz-meta-db-version'.
+    Returns None if R2 is disabled, file doesn't exist, or no version set.
+    """
+    client = get_r2_client()
+    if not client:
+        return None
+
+    key = r2_key(user_id, "database.sqlite")
+    try:
+        response = client.head_object(Bucket=R2_BUCKET, Key=key)
+        metadata = response.get("Metadata", {})
+        version_str = metadata.get("db-version")
+        if version_str:
+            return int(version_str)
+        # No version metadata - treat as version 0 (legacy upload)
+        return 0
+    except client.exceptions.ClientError as e:
+        if e.response['Error']['Code'] == '404':
+            return None  # File doesn't exist
+        logger.error(f"Failed to get DB version from R2: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Failed to get DB version from R2: {e}")
+        return None
+
+
+def sync_database_from_r2_if_newer(
+    user_id: str,
+    local_db_path: Path,
+    local_version: Optional[int]
+) -> Tuple[bool, Optional[int]]:
+    """
+    Download the user's database from R2 only if R2 version is newer.
+
+    Args:
+        user_id: User namespace
+        local_db_path: Local path for the database file
+        local_version: Current local version (None if no local DB)
+
+    Returns:
+        Tuple of (was_downloaded, new_version)
+        - (True, version) if downloaded newer version
+        - (False, local_version) if local is current or newer
+        - (False, None) if R2 disabled or error
+    """
+    if not R2_ENABLED:
+        return False, local_version
+
+    r2_version = get_db_version_from_r2(user_id)
+
+    # If no DB in R2, nothing to sync
+    if r2_version is None:
+        logger.debug(f"No database in R2 for user: {user_id}")
+        return False, local_version
+
+    # If local version is same or newer, no need to download
+    if local_version is not None and local_version >= r2_version:
+        logger.debug(f"Local DB version {local_version} >= R2 version {r2_version}, skipping download")
+        return False, local_version
+
+    # Download the newer version
+    if download_from_r2(user_id, "database.sqlite", local_db_path):
+        logger.info(f"Downloaded DB from R2: version {r2_version} (was {local_version})")
+        return True, r2_version
+
+    return False, local_version
+
+
+def sync_database_to_r2_with_version(
+    user_id: str,
+    local_db_path: Path,
+    current_version: Optional[int]
+) -> Tuple[bool, Optional[int]]:
+    """
+    Upload the user's database to R2 with version metadata.
+
+    Uses optimistic locking - checks that R2 version hasn't changed since we loaded.
+
+    Args:
+        user_id: User namespace
+        local_db_path: Local path of the database file
+        current_version: Version we loaded from (for conflict detection)
+
+    Returns:
+        Tuple of (success, new_version)
+        - (True, new_version) if upload succeeded
+        - (False, None) if conflict or error
+    """
+    if not R2_ENABLED:
+        return False, None
+
+    if not local_db_path.exists():
+        return False, None
+
+    client = get_r2_client()
+    if not client:
+        return False, None
+
+    # Check for conflicts (another request may have written)
+    r2_version = get_db_version_from_r2(user_id)
+
+    # If R2 has a newer version than what we loaded, we have a conflict
+    if r2_version is not None and current_version is not None and r2_version > current_version:
+        logger.warning(
+            f"DB sync conflict for {user_id}: loaded version {current_version}, "
+            f"R2 has version {r2_version}. Using last-write-wins."
+        )
+        # For MVP: last-write-wins, but log the conflict
+
+    # Calculate new version
+    new_version = (max(r2_version or 0, current_version or 0)) + 1
+
+    key = r2_key(user_id, "database.sqlite")
+    try:
+        # Upload with version metadata
+        client.upload_file(
+            str(local_db_path),
+            R2_BUCKET,
+            key,
+            ExtraArgs={
+                "Metadata": {"db-version": str(new_version)}
+            }
+        )
+        logger.debug(f"Uploaded DB to R2: {user_id} version {new_version}")
+        return True, new_version
+    except Exception as e:
+        logger.error(f"Failed to upload DB to R2: {e}")
+        return False, None
+
+
+# Legacy functions for backward compatibility
 def sync_database_from_r2(user_id: str, local_db_path: Path) -> bool:
     """
-    Download the user's database from R2 if it exists and is newer.
-    Called on application startup to sync cloud state.
+    Download the user's database from R2 if it exists.
+    DEPRECATED: Use sync_database_from_r2_if_newer for version-aware sync.
 
     Args:
         user_id: User namespace
@@ -186,7 +326,7 @@ def sync_database_from_r2(user_id: str, local_db_path: Path) -> bool:
 def sync_database_to_r2(user_id: str, local_db_path: Path) -> bool:
     """
     Upload the user's database to R2.
-    Called after database modifications to persist to cloud.
+    DEPRECATED: Use sync_database_to_r2_with_version for version-aware sync.
 
     Args:
         user_id: User namespace

@@ -24,6 +24,10 @@ import sys
 import os
 import subprocess
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables from .env file (if exists)
+load_dotenv()
 
 # Configure logging with timestamps
 logging.basicConfig(
@@ -34,13 +38,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import routers and websocket handler
-from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, downloads_router, auth_router
+from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, downloads_router, auth_router, storage_router
 from app.routers.exports import router as exports_router
 from app.websocket import websocket_export_progress
 from app.database import init_database
 from app.services.export_worker import recover_orphaned_jobs
 from app.user_context import set_current_user_id, get_current_user_id
 from app.constants import DEFAULT_USER_ID
+from app.middleware import DatabaseSyncMiddleware
 
 
 class UserContextMiddleware(BaseHTTPMiddleware):
@@ -92,6 +97,10 @@ app.add_middleware(
 # Add user context middleware (must be after CORS)
 app.add_middleware(UserContextMiddleware)
 
+# Add database sync middleware (syncs to R2 at request boundaries)
+# Must be added after UserContextMiddleware so user ID is available
+app.add_middleware(DatabaseSyncMiddleware)
+
 # Include routers
 app.include_router(health_router)
 app.include_router(export_router)
@@ -102,6 +111,7 @@ app.include_router(clips_router)
 app.include_router(games_router)
 app.include_router(downloads_router)
 app.include_router(auth_router)
+app.include_router(storage_router)
 app.include_router(exports_router, prefix="/api")
 
 
