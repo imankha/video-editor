@@ -1,7 +1,7 @@
 # Task 04: R2 Bucket Setup
 
 ## Overview
-Configure the R2 bucket with proper CORS settings and folder structure for video storage.
+Configure the R2 bucket to store ALL user data, mirroring the local `user_data/` folder structure exactly.
 
 ## Owner
 **User** - Requires Cloudflare dashboard access
@@ -16,18 +16,31 @@ Configure the R2 bucket with proper CORS settings and folder structure for video
 
 ## R2 Bucket Structure
 
+The bucket mirrors the local `user_data/` folder exactly:
+
 ```
-reel-ballers-videos/
-├── input/                    # Videos uploaded for processing
-│   └── {job_id}/
-│       └── video.mp4
-├── output/                   # Processed videos ready for download
-│   └── {job_id}/
-│       └── video.mp4
-└── temp/                     # Temporary files (auto-cleaned)
-    └── {job_id}/
-        └── ...
+reel-ballers-users/
+└── {user_id}/                    # One "folder" per user (e.g., "a")
+    ├── database.sqlite           # User's SQLite database
+    ├── games/                    # Full game videos
+    │   ├── 432b0e2bffba.mp4
+    │   └── 6da56b059497.mp4
+    ├── raw_clips/                # Extracted clips from games
+    │   ├── 01db510ff166.mp4
+    │   └── 02008bb31687.mp4
+    ├── working_videos/           # Processed/cropped clips
+    │   └── working_1_9db4ea07.mp4
+    ├── final_videos/             # Exported final videos
+    │   └── Great_Pass_final.mp4
+    ├── highlights/               # Keyframe images for crop editing
+    │   ├── clip_11_frame_28_kf0.png
+    │   └── clip_11_frame_47_kf1.png
+    ├── clip_cache/               # Temporary cached files
+    ├── downloads/                # Downloaded files
+    └── uploads/                  # User uploads
 ```
+
+**Note**: R2 doesn't have real folders - these are just key prefixes. The structure is created automatically when you upload files with these paths.
 
 ---
 
@@ -35,7 +48,7 @@ reel-ballers-videos/
 
 ### Via Cloudflare Dashboard
 
-1. Go to **R2** → **reel-ballers-videos**
+1. Go to **R2** → **reel-ballers-users**
 2. Click **Settings** tab
 3. Scroll to **CORS Policy**
 4. Click **Add CORS Policy**
@@ -47,7 +60,8 @@ reel-ballers-videos/
     "AllowedOrigins": [
       "http://localhost:5173",
       "http://localhost:3000",
-      "https://your-domain.com"
+      "https://app.reelballers.com",
+      "https://reelballers.com"
     ],
     "AllowedMethods": [
       "GET",
@@ -89,7 +103,7 @@ Create `r2-cors.json`:
 Apply:
 ```bash
 # Note: Wrangler CORS commands may require specific version
-wrangler r2 bucket cors put reel-ballers-videos --config r2-cors.json
+wrangler r2 bucket cors put reel-ballers-users --config r2-cors.json
 ```
 
 ---
@@ -105,17 +119,16 @@ wrangler r2 bucket cors put reel-ballers-videos --config r2-cors.json
 
 ## Lifecycle Rules (Optional)
 
-Auto-delete temporary files after 24 hours:
+Auto-delete temporary/cached files:
 
-1. Go to **R2** → **reel-ballers-videos** → **Settings**
-2. Under **Object Lifecycle Rules**, add:
+1. Go to **R2** → **reel-ballers-users** → **Settings**
+2. Under **Object Lifecycle Rules**, consider:
 
-| Rule Name | Prefix | Action | Days |
-|-----------|--------|--------|------|
-| Clean temp | `temp/` | Delete | 1 |
-| Clean old input | `input/` | Delete | 7 |
+| Rule Name | Prefix Pattern | Action | Days |
+|-----------|----------------|--------|------|
+| Clean clip cache | `*/clip_cache/` | Delete | 1 |
 
-This prevents storage costs from accumulating.
+**Note**: Be careful with lifecycle rules - most user data should be permanent. Only apply to truly temporary files.
 
 ---
 
@@ -124,30 +137,30 @@ This prevents storage costs from accumulating.
 ### Via Workers (after Task 06)
 ```typescript
 // Upload test
-await env.VIDEOS.put('test/hello.txt', 'Hello R2!');
+await env.USER_DATA.put('test/hello.txt', 'Hello R2!');
 
 // Download test
-const obj = await env.VIDEOS.get('test/hello.txt');
+const obj = await env.USER_DATA.get('test/hello.txt');
 const text = await obj?.text();
 console.log(text); // "Hello R2!"
 
 // Delete test
-await env.VIDEOS.delete('test/hello.txt');
+await env.USER_DATA.delete('test/hello.txt');
 ```
 
 ### Via Wrangler CLI
 ```bash
 # List bucket contents
-wrangler r2 object list reel-ballers-videos
+wrangler r2 object list reel-ballers-users
 
 # Upload a test file
-wrangler r2 object put reel-ballers-videos/test/hello.txt --file=./hello.txt
+wrangler r2 object put reel-ballers-users/test/hello.txt --file=./hello.txt
 
 # Download
-wrangler r2 object get reel-ballers-videos/test/hello.txt
+wrangler r2 object get reel-ballers-users/test/hello.txt
 
 # Delete
-wrangler r2 object delete reel-ballers-videos/test/hello.txt
+wrangler r2 object delete reel-ballers-users/test/hello.txt
 ```
 
 ---
@@ -175,14 +188,18 @@ This keeps the bucket private while allowing controlled access.
 
 ## Handoff Notes
 
+**For Task 03 (R2 User Data Structure):**
+- Bucket structure matches local `user_data/` exactly
+- See Task 03 for detailed path conventions
+
 **For Task 06 (Workers API Routes):**
 - Bucket exists with CORS configured
-- Use `env.VIDEOS` binding to access R2
-- Generate presigned URLs for upload/download
+- Use `env.USER_DATA` binding to access R2
+- Generate presigned URLs for large file upload/download
 
 **For Task 08 (GPU Worker):**
-- GPU worker downloads from `input/{job_id}/`
-- GPU worker uploads to `output/{job_id}/`
+- GPU worker downloads from `{user_id}/raw_clips/` or `{user_id}/working_videos/`
+- GPU worker uploads to `{user_id}/final_videos/`
 - Use R2's S3-compatible API with credentials
 
 ---
@@ -194,7 +211,7 @@ RunPod needs S3-compatible credentials to access R2:
 1. Go to **R2** → **Manage R2 API Tokens**
 2. Click **Create API Token**
 3. Permissions: **Object Read & Write**
-4. Specify bucket: `reel-ballers-videos`
+4. Specify bucket: `reel-ballers-users`
 5. Click **Create API Token**
 6. **Save these values:**
 
