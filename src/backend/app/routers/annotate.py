@@ -9,7 +9,7 @@ v3: Removed full_annotated.mp4, added TSV export, streaming downloads
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse, RedirectResponse
 from starlette.background import BackgroundTask
 from pathlib import Path
 from typing import List, Dict, Any, Optional, AsyncGenerator
@@ -26,6 +26,8 @@ import asyncio
 from app.database import get_db_connection, get_raw_clips_path, get_downloads_path, get_games_path, get_final_videos_path, ensure_directories
 from app.services.clip_cache import get_clip_cache
 from app.services.ffmpeg_service import get_encoding_command_parts
+from app.storage import R2_ENABLED, generate_presigned_url
+from app.user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -322,19 +324,10 @@ async def download_file(filename: str):
     """
     logger.info(f"[Download] Request for file: {filename}")
 
-    # Ensure directories exist
-    ensure_directories()
-
     # Security: prevent path traversal
     if '..' in filename or '/' in filename or '\\' in filename:
         logger.error(f"[Download] VALIDATION ERROR - Path traversal attempt detected: {filename}")
         raise HTTPException(status_code=400, detail="Invalid filename")
-
-    file_path = get_downloads_path() / filename
-
-    if not file_path.exists():
-        logger.error(f"[Download] VALIDATION ERROR - File not found: {file_path}")
-        raise HTTPException(status_code=404, detail="File not found")
 
     # Determine media type
     if filename.endswith('.mp4'):
@@ -343,6 +336,27 @@ async def download_file(filename: str):
         media_type = 'text/tab-separated-values'
     else:
         media_type = 'application/octet-stream'
+
+    # When R2 is enabled, redirect to presigned URL
+    if R2_ENABLED:
+        user_id = get_current_user_id()
+        presigned_url = generate_presigned_url(
+            user_id=user_id,
+            relative_path=f"downloads/{filename}",
+            expires_in=3600,
+            content_type=media_type
+        )
+        if presigned_url:
+            return RedirectResponse(url=presigned_url, status_code=302)
+        raise HTTPException(status_code=404, detail="Failed to generate R2 URL for download")
+
+    # Local mode: serve from filesystem
+    ensure_directories()
+    file_path = get_downloads_path() / filename
+
+    if not file_path.exists():
+        logger.error(f"[Download] VALIDATION ERROR - File not found: {file_path}")
+        raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(
         path=str(file_path),

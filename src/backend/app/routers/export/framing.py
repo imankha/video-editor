@@ -12,7 +12,7 @@ and AI upscaling for the Framing mode workflow.
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pathlib import Path
 from typing import Dict, Any
 import json
@@ -28,6 +28,8 @@ from ...websocket import export_progress, manager
 from ...interpolation import generate_crop_filter
 from ...database import get_db_connection, get_working_videos_path
 from ...queries import latest_working_clips_subquery
+from ...storage import R2_ENABLED, generate_presigned_url
+from ...user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -594,6 +596,20 @@ async def get_working_video(project_id: int):
         if not result:
             raise HTTPException(status_code=404, detail="Working video not found")
 
+        # When R2 is enabled, redirect to presigned URL
+        if R2_ENABLED:
+            user_id = get_current_user_id()
+            presigned_url = generate_presigned_url(
+                user_id=user_id,
+                relative_path=f"working_videos/{result['filename']}",
+                expires_in=3600,
+                content_type="video/mp4"
+            )
+            if presigned_url:
+                return RedirectResponse(url=presigned_url, status_code=302)
+            raise HTTPException(status_code=404, detail="Failed to generate R2 URL for working video")
+
+        # Local mode: serve from filesystem
         file_path = get_working_videos_path() / result['filename']
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Video file not found")

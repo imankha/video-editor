@@ -27,8 +27,52 @@ from app.database import (
 )
 from app.queries import latest_working_clips_subquery, derive_clip_name
 from app.services.ffmpeg_service import extract_clip
+from app.user_context import get_current_user_id
+from app.storage import R2_ENABLED, generate_presigned_url
 
 logger = logging.getLogger(__name__)
+
+
+def get_raw_clip_url(filename: str) -> Optional[str]:
+    """
+    Get presigned URL for raw clip if R2 is enabled.
+    """
+    if not R2_ENABLED or not filename:
+        return None
+
+    user_id = get_current_user_id()
+    return generate_presigned_url(
+        user_id=user_id,
+        relative_path=f"raw_clips/{filename}",
+        expires_in=3600,
+        content_type="video/mp4"
+    )
+
+
+def get_working_clip_url(filename: str, source_type: str) -> Optional[str]:
+    """
+    Get presigned URL for working clip if R2 is enabled.
+    Working clips can come from raw_clips or uploads directory.
+    """
+    if not R2_ENABLED or not filename:
+        return None
+
+    user_id = get_current_user_id()
+
+    # Determine directory based on source type
+    if source_type == 'upload':
+        directory = 'uploads'
+    else:
+        directory = 'raw_clips'
+
+    return generate_presigned_url(
+        user_id=user_id,
+        relative_path=f"{directory}/{filename}",
+        expires_in=3600,
+        content_type="video/mp4"
+    )
+
+
 router = APIRouter(prefix="/api/clips", tags=["clips"])
 
 
@@ -48,6 +92,7 @@ def normalize_json_data(value: Optional[str]) -> Optional[str]:
 class RawClipResponse(BaseModel):
     id: int
     filename: str
+    file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
     rating: int
     tags: List[str]
     name: Optional[str] = None
@@ -98,6 +143,7 @@ class WorkingClipResponse(BaseModel):
     raw_clip_id: Optional[int]
     uploaded_filename: Optional[str]
     filename: str
+    file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
     name: Optional[str] = None
     notes: Optional[str] = None
     exported_at: Optional[str] = None  # ISO timestamp when clip was exported (NULL = not exported)
@@ -149,6 +195,7 @@ async def list_raw_clips(game_id: Optional[int] = None, min_rating: Optional[int
             result.append(RawClipResponse(
                 id=clip['id'],
                 filename=clip['filename'],
+                file_url=get_raw_clip_url(clip['filename']),
                 rating=clip['rating'],
                 tags=tags,
                 name=derive_clip_name(clip['name'], clip['rating'], tags),
@@ -181,6 +228,7 @@ async def get_raw_clip(clip_id: int):
         return RawClipResponse(
             id=clip['id'],
             filename=clip['filename'],
+            file_url=get_raw_clip_url(clip['filename']),
             rating=clip['rating'],
             tags=tags,
             name=derive_clip_name(clip['name'], clip['rating'], tags),
@@ -195,7 +243,9 @@ async def get_raw_clip(clip_id: int):
 
 @router.get("/raw/{clip_id}/file")
 async def get_raw_clip_file(clip_id: int):
-    """Stream a raw clip video file."""
+    """Stream a raw clip video file. Redirects to R2 when enabled."""
+    from fastapi.responses import RedirectResponse
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT filename FROM raw_clips WHERE id = ?", (clip_id,))
@@ -204,6 +254,14 @@ async def get_raw_clip_file(clip_id: int):
         if not clip:
             raise HTTPException(status_code=404, detail="Raw clip not found")
 
+        # If R2 enabled, redirect to presigned URL
+        if R2_ENABLED:
+            presigned_url = get_raw_clip_url(clip['filename'])
+            if presigned_url:
+                return RedirectResponse(url=presigned_url, status_code=302)
+            raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+
+        # Local mode: serve from filesystem
         file_path = get_raw_clips_path() / clip['filename']
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Clip file not found")
@@ -600,12 +658,16 @@ async def list_project_clips(project_id: int):
         for clip in clips:
             tags = json.loads(clip['raw_tags']) if clip['raw_tags'] else []
             rating = clip['raw_rating'] or 3
+            filename = clip['raw_filename'] or clip['uploaded_filename'] or 'unknown'
+            # Determine source type for presigned URL
+            source_type = 'upload' if clip['uploaded_filename'] else 'raw'
             result.append(WorkingClipResponse(
                 id=clip['id'],
                 project_id=clip['project_id'],
                 raw_clip_id=clip['raw_clip_id'],
                 uploaded_filename=clip['uploaded_filename'],
-                filename=clip['raw_filename'] or clip['uploaded_filename'] or 'unknown',
+                filename=filename,
+                file_url=get_working_clip_url(filename, source_type),
                 name=derive_clip_name(clip['raw_name'], rating, tags),
                 notes=clip['raw_notes'],
                 exported_at=clip['exported_at'],
@@ -854,7 +916,9 @@ async def reorder_clips(project_id: int, clip_ids: List[int]):
 
 @router.get("/projects/{project_id}/clips/{clip_id}/file")
 async def get_working_clip_file(project_id: int, clip_id: int):
-    """Stream a working clip video file."""
+    """Stream a working clip video file. Redirects to R2 when enabled."""
+    from fastapi.responses import RedirectResponse
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -868,13 +932,26 @@ async def get_working_clip_file(project_id: int, clip_id: int):
         if not clip:
             raise HTTPException(status_code=404, detail="Working clip not found")
 
-        # Determine file path
+        # Determine filename and source type
         if clip['raw_clip_id']:
-            file_path = get_raw_clips_path() / clip['raw_filename']
             filename = clip['raw_filename']
+            source_type = 'raw'
         else:
-            file_path = get_uploads_path() / clip['uploaded_filename']
             filename = clip['uploaded_filename']
+            source_type = 'upload'
+
+        # If R2 enabled, redirect to presigned URL
+        if R2_ENABLED:
+            presigned_url = get_working_clip_url(filename, source_type)
+            if presigned_url:
+                return RedirectResponse(url=presigned_url, status_code=302)
+            raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+
+        # Local mode: serve from filesystem
+        if source_type == 'raw':
+            file_path = get_raw_clips_path() / filename
+        else:
+            file_path = get_uploads_path() / filename
 
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Clip file not found")

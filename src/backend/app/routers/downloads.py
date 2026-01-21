@@ -17,8 +17,26 @@ import logging
 
 from app.database import get_db_connection, get_final_videos_path
 from app.queries import latest_final_videos_subquery
+from app.user_context import get_current_user_id
+from app.storage import R2_ENABLED, generate_presigned_url
 
 logger = logging.getLogger(__name__)
+
+
+def get_download_file_url(filename: str) -> Optional[str]:
+    """
+    Get presigned URL for download/final video if R2 is enabled.
+    """
+    if not R2_ENABLED or not filename:
+        return None
+
+    user_id = get_current_user_id()
+    return generate_presigned_url(
+        user_id=user_id,
+        relative_path=f"downloads/{filename}",
+        expires_in=3600,
+        content_type="video/mp4"
+    )
 
 
 def _get_season_for_month(month: int) -> str:
@@ -142,6 +160,7 @@ class DownloadItem(BaseModel):
     project_id: int
     project_name: str
     filename: str
+    file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
     created_at: str
     file_size: Optional[int]  # Size in bytes
     source_type: Optional[str]  # 'brilliant_clip' | 'custom_project' | 'annotated_game' | None
@@ -336,6 +355,7 @@ async def list_downloads(source_type: Optional[str] = None):
                 project_id=row['project_id'],
                 project_name=row['project_name'],
                 filename=row['filename'],
+                file_url=get_download_file_url(row['filename']),
                 created_at=row['created_at'],
                 file_size=file_size,
                 source_type=row['source_type'],
@@ -377,9 +397,11 @@ def generate_download_filename(project_name: str) -> str:
 @router.get("/{download_id}/file")
 async def download_file(download_id: int):
     """
-    Download/stream a final video file.
+    Download/stream a final video file. Redirects to R2 when enabled.
     Returns the video file for download with project name as filename.
     """
+    from fastapi.responses import RedirectResponse
+
     logger.info(f"[Download] Request for download_id={download_id}")
 
     with get_db_connection() as conn:
@@ -399,6 +421,16 @@ async def download_file(download_id: int):
 
         logger.info(f"[Download] Found: stored_filename={row['filename']}, project_name={row['project_name']}")
 
+        # If R2 enabled, redirect to presigned URL
+        if R2_ENABLED:
+            presigned_url = get_download_file_url(row['filename'])
+            if presigned_url:
+                logger.info(f"[Download] Redirecting to R2 presigned URL")
+                return RedirectResponse(url=presigned_url, status_code=302)
+            logger.error(f"[Download] Failed to generate R2 URL for: {row['filename']}")
+            raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+
+        # Local mode: serve from filesystem
         file_path = get_final_videos_path() / row['filename']
         if not file_path.exists():
             logger.error(f"[Download] File missing: {file_path}")

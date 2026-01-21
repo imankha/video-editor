@@ -14,8 +14,24 @@ import logging
 
 from app.database import get_db_connection
 from app.queries import latest_working_clips_subquery
+from app.user_context import get_current_user_id
+from app.storage import R2_ENABLED, generate_presigned_url
 
 logger = logging.getLogger(__name__)
+
+
+def get_working_video_url(filename: str) -> Optional[str]:
+    """Get presigned URL for working video if R2 is enabled."""
+    if not R2_ENABLED or not filename:
+        return None
+
+    user_id = get_current_user_id()
+    return generate_presigned_url(
+        user_id=user_id,
+        relative_path=f"working_videos/{filename}",
+        expires_in=3600,
+        content_type="video/mp4"
+    )
 
 
 def _get_season_for_month(month: int) -> str:
@@ -751,10 +767,10 @@ async def discard_uncommitted_changes(project_id: int):
 @router.get("/{project_id}/working-video")
 async def get_working_video(project_id: int):
     """
-    Get the working video file for a project.
+    Get the working video file for a project. Redirects to R2 when enabled.
     Returns the video file if it exists, 404 otherwise.
     """
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, RedirectResponse
     from app.database import get_working_videos_path
 
     with get_db_connection() as conn:
@@ -772,6 +788,14 @@ async def get_working_video(project_id: int):
         if not row or not row['filename']:
             raise HTTPException(status_code=404, detail="Working video not found")
 
+        # If R2 enabled, redirect to presigned URL
+        if R2_ENABLED:
+            presigned_url = get_working_video_url(row['filename'])
+            if presigned_url:
+                return RedirectResponse(url=presigned_url, status_code=302)
+            raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+
+        # Local mode: serve from filesystem
         video_path = get_working_videos_path() / row['filename']
         if not video_path.exists():
             raise HTTPException(status_code=404, detail="Working video file not found on disk")

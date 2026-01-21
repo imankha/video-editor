@@ -11,7 +11,7 @@ These endpoints handle highlight regions, effect types, and final output.
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.background import BackgroundTask
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +32,8 @@ _frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ov
 from ...websocket import export_progress, manager
 from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path, get_uploads_path
 from ...services.ffmpeg_service import get_encoding_command_parts
+from ...storage import R2_ENABLED, generate_presigned_url
+from ...user_context import get_current_user_id
 from ...highlight_transform import (
     transform_all_regions_to_raw,
     transform_all_regions_to_working,
@@ -659,6 +661,20 @@ async def get_final_video(project_id: int):
         if not result:
             raise HTTPException(status_code=404, detail="Final video not found")
 
+        # When R2 is enabled, redirect to presigned URL
+        if R2_ENABLED:
+            user_id = get_current_user_id()
+            presigned_url = generate_presigned_url(
+                user_id=user_id,
+                relative_path=f"final_videos/{result['filename']}",
+                expires_in=3600,
+                content_type="video/mp4"
+            )
+            if presigned_url:
+                return RedirectResponse(url=presigned_url, status_code=302)
+            raise HTTPException(status_code=404, detail="Failed to generate R2 URL for final video")
+
+        # Local mode: serve from filesystem
         file_path = get_final_videos_path() / result['filename']
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Video file not found")
@@ -1041,6 +1057,20 @@ async def get_highlight_image(filename: str):
     if '..' in filename or '/' in filename or '\\' in filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
+    # When R2 is enabled, redirect to presigned URL
+    if R2_ENABLED:
+        user_id = get_current_user_id()
+        presigned_url = generate_presigned_url(
+            user_id=user_id,
+            relative_path=f"highlights/{filename}",
+            expires_in=3600,
+            content_type="image/png"
+        )
+        if presigned_url:
+            return RedirectResponse(url=presigned_url, status_code=302)
+        raise HTTPException(status_code=404, detail="Failed to generate R2 URL for highlight image")
+
+    # Local mode: serve from filesystem
     highlights_dir = get_highlights_path()
     file_path = highlights_dir / filename
 

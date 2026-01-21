@@ -22,8 +22,27 @@ import mimetypes
 import json
 
 from app.database import get_db_connection, get_games_path, get_raw_clips_path, ensure_directories
+from app.user_context import get_current_user_id
+from app.storage import R2_ENABLED, generate_presigned_url
 
 logger = logging.getLogger(__name__)
+
+
+def get_game_video_url(video_filename: str) -> Optional[str]:
+    """
+    Get the best URL for accessing a game video.
+    Returns presigned R2 URL if R2 is enabled, otherwise None (use local proxy).
+    """
+    if not R2_ENABLED or not video_filename:
+        return None
+
+    user_id = get_current_user_id()
+    return generate_presigned_url(
+        user_id=user_id,
+        relative_path=f"games/{video_filename}",
+        expires_in=3600,  # 1 hour
+        content_type="video/mp4"
+    )
 
 router = APIRouter(prefix="/api/games", tags=["games"])
 
@@ -141,6 +160,7 @@ async def list_games():
                 'name': display_name,  # Use generated display name
                 'raw_name': row['name'],  # Keep original for reference
                 'video_filename': row['video_filename'],
+                'video_url': get_game_video_url(row['video_filename']),  # Presigned R2 URL or None
                 'clip_count': row['clip_count'] or 0,
                 'brilliant_count': row['brilliant_count'] or 0,
                 'good_count': row['good_count'] or 0,
@@ -238,6 +258,7 @@ async def create_game(
                 'name': display_name,
                 'raw_name': name,
                 'video_filename': video_filename,
+                'video_url': get_game_video_url(video_filename),  # Presigned R2 URL or None
                 'clip_count': 0,
                 'has_video': video_filename is not None,
                 'video_duration': video_duration,
@@ -319,6 +340,7 @@ async def upload_game_video(
             return {
                 'success': True,
                 'video_filename': video_filename,
+                'video_url': get_game_video_url(video_filename),  # Presigned R2 URL or None
                 'size_mb': round(video_size_mb, 1)
             }
 
@@ -364,6 +386,7 @@ async def get_game(game_id: int):
             'name': display_name,
             'raw_name': row['name'],
             'video_filename': row['video_filename'],
+            'video_url': get_game_video_url(row['video_filename']),  # Presigned R2 URL or None
             'annotations': annotations,
             'clip_count': len(annotations),
             'created_at': row['created_at'],
@@ -464,11 +487,14 @@ async def delete_game(game_id: int):
 @router.get("/{game_id}/video")
 async def get_game_video(game_id: int, request: Request):
     """
-    Stream the game video file with Range request support.
+    Stream the game video file. Redirects to R2 when enabled.
 
-    Supports HTTP Range requests (206 Partial Content) for efficient
+    When R2 is enabled, redirects to presigned URL (R2 handles range requests).
+    When local, supports HTTP Range requests (206 Partial Content) for efficient
     video seeking without downloading the entire file.
     """
+    from fastapi.responses import RedirectResponse
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT video_filename FROM games WHERE id = ?", (game_id,))
@@ -481,6 +507,14 @@ async def get_game_video(game_id: int, request: Request):
         if not video_filename:
             raise HTTPException(status_code=404, detail="Video not yet uploaded")
 
+        # If R2 enabled, redirect to presigned URL
+        if R2_ENABLED:
+            presigned_url = get_game_video_url(video_filename)
+            if presigned_url:
+                return RedirectResponse(url=presigned_url, status_code=302)
+            raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+
+        # Local mode: serve from filesystem with range support
         video_path = get_games_path() / video_filename
 
         if not video_path.exists():

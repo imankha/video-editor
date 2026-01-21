@@ -19,6 +19,11 @@ from pathlib import Path
 from contextlib import contextmanager
 
 from .user_context import get_current_user_id
+from .storage import (
+    R2_ENABLED,
+    sync_database_from_r2,
+    sync_database_to_r2,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +111,8 @@ def ensure_database():
     Ensure database exists with all required tables for the current user.
     Called automatically before each database access.
     This makes the app resilient to the user_data folder being deleted.
+
+    If R2 is enabled and no local database exists, attempts to sync from R2.
     """
     global _initialized_users
     user_id = get_current_user_id()
@@ -117,6 +124,14 @@ def ensure_database():
 
     # Ensure directories exist
     ensure_directories()
+
+    # If R2 is enabled and no local database, try to sync from R2
+    if R2_ENABLED and not db_path.exists():
+        logger.info(f"R2 enabled, attempting to sync database from R2 for user: {user_id}")
+        if sync_database_from_r2(user_id, db_path):
+            logger.info(f"Database synced from R2 for user: {user_id}")
+        else:
+            logger.info(f"No database in R2 for user: {user_id}, will create new")
 
     # Create/verify tables
     conn = sqlite3.connect(str(db_path))
@@ -520,3 +535,23 @@ def reset_initialized_flag():
     global _initialized_users
     user_id = get_current_user_id()
     _initialized_users.discard(user_id)
+
+
+def sync_db_to_cloud():
+    """
+    Sync the current user's database to R2 storage.
+    Call this after database modifications to persist changes to the cloud.
+
+    This is a no-op if R2 is not enabled.
+    """
+    if not R2_ENABLED:
+        return
+
+    user_id = get_current_user_id()
+    db_path = get_database_path()
+
+    if db_path.exists():
+        if sync_database_to_r2(user_id, db_path):
+            logger.debug(f"Database synced to R2 for user: {user_id}")
+        else:
+            logger.warning(f"Failed to sync database to R2 for user: {user_id}")
