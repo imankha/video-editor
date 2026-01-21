@@ -285,9 +285,20 @@ def ensure_directories():
     """
     Ensure all required directories exist for the current user.
     Called automatically before database access.
+
+    When R2 is enabled, only create the user_data base directory (for database.sqlite).
+    Video files are stored in R2, not locally.
     """
+    # Always create base user data directory (needed for database.sqlite)
+    get_user_data_path().mkdir(parents=True, exist_ok=True)
+
+    # When R2 is enabled, don't create local video directories - all files go to R2
+    if R2_ENABLED:
+        logger.debug("R2 enabled: skipping local video directory creation")
+        return
+
+    # Local mode only: create all video directories
     directories = [
-        get_user_data_path(),
         get_raw_clips_path(),
         get_uploads_path(),
         get_working_videos_path(),

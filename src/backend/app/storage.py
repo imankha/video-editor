@@ -127,6 +127,34 @@ def upload_to_r2(user_id: str, relative_path: str, local_path: Path) -> bool:
         return False
 
 
+def upload_bytes_to_r2(user_id: str, relative_path: str, data: bytes) -> bool:
+    """
+    Upload bytes directly to R2 without writing to disk.
+
+    Args:
+        user_id: User namespace
+        relative_path: Path relative to user_data/<user_id>/
+        data: Bytes to upload
+
+    Returns:
+        True if upload succeeded, False otherwise
+    """
+    from io import BytesIO
+
+    client = get_r2_client()
+    if not client:
+        return False
+
+    key = r2_key(user_id, relative_path)
+    try:
+        client.upload_fileobj(BytesIO(data), R2_BUCKET, key)
+        logger.debug(f"Uploaded bytes to R2: {key} ({len(data)} bytes)")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to upload bytes to R2: {key} - {e}")
+        return False
+
+
 def delete_from_r2(user_id: str, relative_path: str) -> bool:
     """
     Delete a file from R2.

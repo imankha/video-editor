@@ -26,7 +26,7 @@ import asyncio
 from app.database import get_db_connection, get_raw_clips_path, get_downloads_path, get_games_path, get_final_videos_path, ensure_directories
 from app.services.clip_cache import get_clip_cache
 from app.services.ffmpeg_service import get_encoding_command_parts
-from app.storage import R2_ENABLED, generate_presigned_url
+from app.storage import R2_ENABLED, generate_presigned_url, upload_to_r2
 from app.user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -612,9 +612,10 @@ async def export_clips(
                 used_names.add(unique_name)
 
                 filename = f"{unique_name}.mp4"
-                output_path = str(get_raw_clips_path() / filename)
+                # Extract to temp directory, then upload to R2 (no local raw_clips storage)
+                output_path = os.path.join(temp_dir, f"clip_{uuid.uuid4().hex[:8]}.mp4")
 
-                # Extract clip to raw_clips folder
+                # Extract clip to temp file
                 success = await extract_clip_to_file(
                     source_path=source_path,
                     output_path=output_path,
@@ -625,6 +626,12 @@ async def export_clips(
                 )
 
                 if success:
+                    # Upload to R2
+                    user_id = get_current_user_id()
+                    if not upload_to_r2(user_id, f"raw_clips/{filename}", Path(output_path)):
+                        logger.error(f"Failed to upload raw clip to R2: {filename}")
+                        continue
+
                     # Save to database with full metadata
                     with get_db_connection() as conn:
                         cursor = conn.cursor()
@@ -654,7 +661,7 @@ async def export_clips(
                         'end_time': clip['end_time']
                     })
 
-                    logger.info(f"Saved raw clip {raw_clip_id}: {filename}")
+                    logger.info(f"Uploaded raw clip {raw_clip_id} to R2: {filename}")
 
             # Create projects from the saved clips (based on settings)
             if created_raw_clips:
@@ -794,29 +801,30 @@ async def export_clips(
                                     'blunder': game_row['blunder_count'] or 0
                                 })
 
-                        # Copy compilation to final_videos folder
+                        # Upload compilation directly to R2 (no local final_videos storage)
                         final_filename = f"{uuid.uuid4().hex[:12]}.mp4"
-                        final_path = get_final_videos_path() / final_filename
-                        shutil.copy2(compilation_path, final_path)
+                        user_id = get_current_user_id()
+                        if not upload_to_r2(user_id, f"final_videos/{final_filename}", Path(compilation_path)):
+                            logger.error(f"Failed to upload annotated compilation to R2 - skipping gallery save")
+                        else:
+                            # Calculate next version for this game's exports
+                            cursor.execute("""
+                                SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                                FROM final_videos WHERE game_id = ?
+                            """, (int(game_id) if game_id else None,))
+                            next_version = cursor.fetchone()['next_version']
 
-                        # Calculate next version for this game's exports
-                        cursor.execute("""
-                            SELECT COALESCE(MAX(version), 0) + 1 as next_version
-                            FROM final_videos WHERE game_id = ?
-                        """, (int(game_id) if game_id else None,))
-                        next_version = cursor.fetchone()['next_version']
+                            # Add to final_videos table with name and rating counts snapshot
+                            # Use project_id = 0 as marker for "no project"
+                            annotated_name = f"{game_name} (Annotated)"
+                            cursor.execute("""
+                                INSERT INTO final_videos (project_id, filename, version, source_type, game_id, name, rating_counts)
+                                VALUES (0, ?, ?, 'annotated_game', ?, ?, ?)
+                            """, (final_filename, next_version, int(game_id) if game_id else None, annotated_name, rating_counts_json))
+                            final_video_id = cursor.lastrowid
 
-                        # Add to final_videos table with name and rating counts snapshot
-                        # Use project_id = 0 as marker for "no project"
-                        annotated_name = f"{game_name} (Annotated)"
-                        cursor.execute("""
-                            INSERT INTO final_videos (project_id, filename, version, source_type, game_id, name, rating_counts)
-                            VALUES (0, ?, ?, 'annotated_game', ?, ?, ?)
-                        """, (final_filename, next_version, int(game_id) if game_id else None, annotated_name, rating_counts_json))
-                        final_video_id = cursor.lastrowid
-
-                        conn.commit()
-                        logger.info(f"Added annotated export to gallery: final_video={final_video_id}, name={annotated_name}")
+                            conn.commit()
+                            logger.info(f"Added annotated export to gallery: final_video={final_video_id}, name={annotated_name}")
 
         if should_save_to_db:
             logger.info(f"Export complete: {len(created_raw_clips)} clips saved, {len(created_projects)} projects created")

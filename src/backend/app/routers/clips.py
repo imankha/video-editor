@@ -28,7 +28,7 @@ from app.database import (
 from app.queries import latest_working_clips_subquery, derive_clip_name
 from app.services.ffmpeg_service import extract_clip
 from app.user_context import get_current_user_id
-from app.storage import R2_ENABLED, generate_presigned_url
+from app.storage import R2_ENABLED, generate_presigned_url, upload_to_r2, upload_bytes_to_r2
 
 logger = logging.getLogger(__name__)
 
@@ -749,16 +749,15 @@ async def add_clip_to_project(
             """, (project_id, raw_clip_id, next_order, next_version))
 
         else:
-            # Uploading new file
-            # Generate unique filename
+            # Uploading new file directly to R2 (no local storage, no temp file)
             ext = os.path.splitext(file.filename)[1] or '.mp4'
             uploaded_filename = f"{uuid.uuid4().hex}{ext}"
-            file_path = get_uploads_path() / uploaded_filename
+            user_id = get_current_user_id()
 
-            # Save file
+            # Upload directly from memory to R2
             content = await file.read()
-            with open(file_path, 'wb') as f:
-                f.write(content)
+            if not upload_bytes_to_r2(user_id, f"uploads/{uploaded_filename}", content):
+                raise HTTPException(status_code=500, detail="Failed to upload clip to R2")
 
             # For uploaded files, each upload is version 1 (unique filename)
             # No version history for uploaded clips since filename is unique
@@ -841,16 +840,17 @@ async def upload_clip_with_metadata(
         # Ensure unique name within no-game clips
         unique_name = _ensure_unique_name(cursor, name, None)
 
-        # Save file to raw_clips directory
+        # Upload file directly to R2 (no local storage, no temp file)
         ext = os.path.splitext(file.filename)[1] or '.mp4'
         clip_filename = f"{uuid.uuid4().hex}{ext}"
-        file_path = get_raw_clips_path() / clip_filename
+        user_id = get_current_user_id()
 
+        # Upload directly from memory to R2
         content = await file.read()
-        with open(file_path, 'wb') as f:
-            f.write(content)
+        if not upload_bytes_to_r2(user_id, f"raw_clips/{clip_filename}", content):
+            raise HTTPException(status_code=500, detail="Failed to upload clip to R2")
 
-        logger.info(f"Saved uploaded clip: {clip_filename}")
+        logger.info(f"Uploaded clip to R2: {clip_filename}")
 
         # Create raw_clip entry (game_id=NULL for direct uploads)
         cursor.execute("""

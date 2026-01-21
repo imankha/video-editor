@@ -23,7 +23,8 @@ import json
 
 from app.database import get_db_connection, get_games_path, get_raw_clips_path, ensure_directories
 from app.user_context import get_current_user_id
-from app.storage import R2_ENABLED, generate_presigned_url
+from app.storage import R2_ENABLED, generate_presigned_url, upload_to_r2
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -214,21 +215,29 @@ async def create_game(
     video_path = None
 
     try:
-        # Save video file if provided
+        # Upload video file directly to R2 if provided (no local storage)
         if video and video.filename:
             original_ext = os.path.splitext(video.filename)[1] or ".mp4"
             video_filename = f"{base_name}{original_ext}"
-            video_path = get_games_path() / video_filename
+            user_id = get_current_user_id()
 
-            # Stream to file in chunks to handle large files
-            with open(video_path, 'wb') as f:
-                total_size = 0
-                while chunk := await video.read(1024 * 1024):  # 1MB chunks
-                    f.write(chunk)
-                    total_size += len(chunk)
+            # Stream to temp file, then upload to R2
+            temp_path = Path(tempfile.gettempdir()) / f"upload_{uuid.uuid4().hex}{original_ext}"
+            try:
+                with open(temp_path, 'wb') as f:
+                    total_size = 0
+                    while chunk := await video.read(1024 * 1024):  # 1MB chunks
+                        f.write(chunk)
+                        total_size += len(chunk)
 
-            video_size_mb = total_size / (1024 * 1024)
-            logger.info(f"Saved game video: {video_filename} ({video_size_mb:.1f}MB)")
+                video_size_mb = total_size / (1024 * 1024)
+
+                if not upload_to_r2(user_id, f"games/{video_filename}", temp_path):
+                    raise HTTPException(status_code=500, detail="Failed to upload game video to R2")
+                logger.info(f"Uploaded game video to R2: {video_filename} ({video_size_mb:.1f}MB)")
+            finally:
+                if temp_path.exists():
+                    temp_path.unlink()
 
         # Save to database with video metadata and game details
         with get_db_connection() as conn:
@@ -309,25 +318,26 @@ async def upload_game_video(
             base_name = uuid.uuid4().hex[:12]
         original_ext = os.path.splitext(video.filename or "video.mp4")[1] or ".mp4"
         video_filename = f"{base_name}{original_ext}"
-        video_path = get_games_path() / video_filename
+        user_id = get_current_user_id()
 
+        # Note: Old video in R2 is left as-is (could add delete_from_r2 call here if needed)
+        if old_video_filename and old_video_filename != video_filename:
+            logger.info(f"Replacing old video: {old_video_filename} with {video_filename}")
+
+        # Stream to temp file, then upload to R2
+        temp_path = Path(tempfile.gettempdir()) / f"upload_{uuid.uuid4().hex}{original_ext}"
         try:
-            # Delete old video if exists and different filename
-            if old_video_filename and old_video_filename != video_filename:
-                old_video_path = get_games_path() / old_video_filename
-                if old_video_path.exists():
-                    old_video_path.unlink()
-                    logger.info(f"Deleted old video: {old_video_filename}")
-
-            # Stream new video to file in chunks
-            with open(video_path, 'wb') as f:
+            with open(temp_path, 'wb') as f:
                 total_size = 0
                 while chunk := await video.read(1024 * 1024):  # 1MB chunks
                     f.write(chunk)
                     total_size += len(chunk)
 
             video_size_mb = total_size / (1024 * 1024)
-            logger.info(f"Saved game video: {video_filename} ({video_size_mb:.1f}MB)")
+
+            if not upload_to_r2(user_id, f"games/{video_filename}", temp_path):
+                raise HTTPException(status_code=500, detail="Failed to upload game video to R2")
+            logger.info(f"Uploaded game video to R2: {video_filename} ({video_size_mb:.1f}MB)")
 
             # Update database
             cursor.execute("""
@@ -343,13 +353,14 @@ async def upload_game_video(
                 'video_url': get_game_video_url(video_filename),  # Presigned R2 URL or None
                 'size_mb': round(video_size_mb, 1)
             }
-
+        except HTTPException:
+            raise
         except Exception as e:
-            # Clean up new video if update failed
-            if video_path.exists():
-                video_path.unlink()
             logger.error(f"Failed to upload video for game {game_id}: {e}")
             raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
 
 
 @router.get("/{game_id}")

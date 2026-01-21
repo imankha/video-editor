@@ -91,7 +91,8 @@
       "Bash(wrangler r2 object get:*)",
       "Bash(git restore:*)",
       "Bash(export AWS_ACCESS_KEY_ID=4f5febce8beb63be044414984aa7a3b4)",
-      "Bash(export:*)"
+      "Bash(export:*)",
+      "Bash(. .venv/Scripts/activate)"
     ],
     "deny": [],
     "ask": []

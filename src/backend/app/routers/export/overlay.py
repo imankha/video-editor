@@ -32,7 +32,7 @@ _frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ov
 from ...websocket import export_progress, manager
 from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path, get_uploads_path
 from ...services.ffmpeg_service import get_encoding_command_parts
-from ...storage import R2_ENABLED, generate_presigned_url
+from ...storage import R2_ENABLED, generate_presigned_url, upload_to_r2, upload_bytes_to_r2
 from ...user_context import get_current_user_id
 from ...highlight_transform import (
     transform_all_regions_to_raw,
@@ -528,29 +528,22 @@ async def export_final(
                 detail="Project must have a working video before final export"
             )
 
-        # Generate filename using project name
+        # Generate unique filename using project name + UUID (no local storage)
         project_name = project['name'] or f"project_{project_id}"
         safe_name = re.sub(r'[^\w\s-]', '', project_name).strip()
         safe_name = re.sub(r'[\s]+', '_', safe_name)
         if not safe_name:
             safe_name = f"project_{project_id}"
 
-        # Check for existing file and add version suffix if needed
-        base_filename = f"{safe_name}_final"
-        filename = f"{base_filename}.mp4"
-        file_path = get_final_videos_path() / filename
-        version_suffix = 1
-        while file_path.exists():
-            version_suffix += 1
-            filename = f"{base_filename}_{version_suffix}.mp4"
-            file_path = get_final_videos_path() / filename
+        # Use UUID suffix to ensure uniqueness in R2
+        filename = f"{safe_name}_final_{uuid.uuid4().hex[:8]}.mp4"
+        user_id = get_current_user_id()
 
-        # Save the video file
+        # Upload directly from memory to R2 (no temp file)
         content = await video.read()
-        with open(file_path, 'wb') as f:
-            f.write(content)
-
-        logger.info(f"[Final Export] Saved final video: {filename} ({len(content)} bytes)")
+        if not upload_bytes_to_r2(user_id, f"final_videos/{filename}", content):
+            raise HTTPException(status_code=500, detail="Failed to upload final video to R2")
+        logger.info(f"[Final Export] Uploaded final video to R2: {filename} ({len(content)} bytes)")
 
         # Get next version number for final video
         cursor.execute("""

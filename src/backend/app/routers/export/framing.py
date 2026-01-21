@@ -28,7 +28,7 @@ from ...websocket import export_progress, manager
 from ...interpolation import generate_crop_filter
 from ...database import get_db_connection, get_working_videos_path
 from ...queries import latest_working_clips_subquery
-from ...storage import R2_ENABLED, generate_presigned_url
+from ...storage import R2_ENABLED, generate_presigned_url, upload_to_r2, upload_bytes_to_r2
 from ...user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -355,14 +355,14 @@ async def export_with_ai_upscale(
                 with get_db_connection() as conn:
                     cursor = conn.cursor()
 
-                    # Generate unique filename and save to working_videos folder
+                    # Generate unique filename and upload directly to R2 (no local storage)
                     working_filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
-                    working_path = get_working_videos_path() / working_filename
+                    user_id = get_current_user_id()
 
-                    # Copy the processed video to working_videos
-                    import shutil
-                    shutil.copy(output_path, working_path)
-                    logger.info(f"[Framing Export] Saved working video: {working_filename}")
+                    # Upload directly from temp file to R2
+                    if not upload_to_r2(user_id, f"working_videos/{working_filename}", Path(output_path)):
+                        raise Exception("Failed to upload working video to R2")
+                    logger.info(f"[Framing Export] Uploaded working video to R2: {working_filename}")
 
                     # Get next version number
                     cursor.execute("""
@@ -500,16 +500,15 @@ async def export_framing(
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Generate unique filename
+        # Generate unique filename and upload directly to R2 (no local storage, no temp file)
         filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
-        file_path = get_working_videos_path() / filename
+        user_id = get_current_user_id()
 
-        # Save the video file
+        # Upload directly from memory to R2
         content = await video.read()
-        with open(file_path, 'wb') as f:
-            f.write(content)
-
-        logger.info(f"[Framing Export] Saved working video: {filename} ({len(content)} bytes)")
+        if not upload_bytes_to_r2(user_id, f"working_videos/{filename}", content):
+            raise HTTPException(status_code=500, detail="Failed to upload working video to R2")
+        logger.info(f"[Framing Export] Uploaded working video to R2: {filename} ({len(content)} bytes)")
 
         # Get next version number for working video
         cursor.execute("""
