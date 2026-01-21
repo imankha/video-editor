@@ -425,7 +425,7 @@ def generate_presigned_url(
         user_id: User namespace
         relative_path: Path relative to user_data/<user_id>/
         expires_in: URL expiration time in seconds (default 1 hour)
-        content_type: Optional content type for response headers
+        content_type: Optional content type (ignored - R2 doesn't support ResponseContentType)
 
     Returns:
         Presigned URL string, or None if R2 is disabled or error occurs
@@ -441,9 +441,8 @@ def generate_presigned_url(
             "Key": key,
         }
 
-        # Add response content type if specified (helps browser handle file correctly)
-        if content_type:
-            params["ResponseContentType"] = content_type
+        # Note: R2 doesn't support ResponseContentType parameter in presigned URLs.
+        # The browser will use the Content-Type from the object metadata instead.
 
         url = client.generate_presigned_url(
             "get_object",
