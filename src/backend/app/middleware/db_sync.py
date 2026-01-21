@@ -10,6 +10,7 @@ result in only one R2 upload, reducing latency and API calls.
 """
 
 import logging
+import time
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -18,10 +19,15 @@ from ..database import (
     init_request_context,
     clear_request_context,
     sync_db_to_cloud_if_writes,
+    get_request_has_writes,
 )
 from ..storage import R2_ENABLED
 
 logger = logging.getLogger(__name__)
+
+# Thresholds for slow request warnings (in seconds)
+SLOW_SYNC_THRESHOLD = 0.5  # 500ms - warn if DB sync takes this long
+SLOW_REQUEST_THRESHOLD = 2.0  # 2s - warn if total request takes this long
 
 
 class DatabaseSyncMiddleware(BaseHTTPMiddleware):
@@ -60,6 +66,9 @@ class DatabaseSyncMiddleware(BaseHTTPMiddleware):
         if not R2_ENABLED:
             return await call_next(request)
 
+        request_start = time.perf_counter()
+        sync_duration = 0.0
+
         try:
             # Initialize request context for write tracking
             init_request_context()
@@ -70,14 +79,22 @@ class DatabaseSyncMiddleware(BaseHTTPMiddleware):
             # After successful request, sync if writes occurred
             # Note: We sync even on error responses because the database
             # changes may have been committed before the error
-            sync_db_to_cloud_if_writes()
+            had_writes = get_request_has_writes()
+            if had_writes:
+                sync_start = time.perf_counter()
+                sync_db_to_cloud_if_writes()
+                sync_duration = time.perf_counter() - sync_start
 
             return response
 
         except Exception as e:
             # On exception, still try to sync (changes may have been committed)
             try:
-                sync_db_to_cloud_if_writes()
+                had_writes = get_request_has_writes()
+                if had_writes:
+                    sync_start = time.perf_counter()
+                    sync_db_to_cloud_if_writes()
+                    sync_duration = time.perf_counter() - sync_start
             except Exception as sync_error:
                 logger.error(f"Failed to sync database after error: {sync_error}")
 
@@ -87,3 +104,20 @@ class DatabaseSyncMiddleware(BaseHTTPMiddleware):
         finally:
             # Always clean up request context
             clear_request_context()
+
+            # Log warnings for slow operations
+            total_duration = time.perf_counter() - request_start
+            path = request.url.path
+            method = request.method
+
+            if sync_duration >= SLOW_SYNC_THRESHOLD:
+                logger.warning(
+                    f"[SLOW DB SYNC] {method} {path} - sync took {sync_duration:.2f}s "
+                    f"(threshold: {SLOW_SYNC_THRESHOLD}s). Consider background sync."
+                )
+
+            if total_duration >= SLOW_REQUEST_THRESHOLD:
+                logger.warning(
+                    f"[SLOW REQUEST] {method} {path} - total {total_duration:.2f}s "
+                    f"(sync: {sync_duration:.2f}s, handler: {total_duration - sync_duration:.2f}s)"
+                )
