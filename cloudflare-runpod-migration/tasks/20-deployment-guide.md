@@ -1,118 +1,21 @@
-# Task 11: Testing & Deployment
+# Task 20: Deployment Guide
 
 ## Overview
-End-to-end testing of the complete system and production deployment.
+Complete deployment guide for the Cloudflare + RunPod video processing pipeline. This covers deployment commands, monitoring, rollback procedures, and go-live checklist.
 
 ## Owner
-**Both** - User handles deployment, Claude assists with testing
+**User** - Deployment and monitoring requires account access
 
 ## Prerequisites
-- All previous tasks complete
-- Cloudflare account ready
-- RunPod endpoint configured
-
-## Time Estimate
-2-3 hours
+- All Phase 2 tasks complete (RunPod working)
+- All Phase 3 tasks complete (Workers ready)
+- Frontend and backend integration tested locally
 
 ---
 
-## Testing Phases
+## Deployment Phases
 
-### Phase 1: Local Integration Testing
-
-Test the complete flow locally before deploying.
-
-#### Setup
-```bash
-# Terminal 1: Workers (local)
-cd workers
-npm run dev
-
-# Terminal 2: GPU Worker simulation (no GPU needed for test)
-cd gpu-worker
-python handler.py --test-mode  # Add test mode that skips actual processing
-
-# Terminal 3: Backend (if still using for some routes)
-cd src/backend
-uvicorn app.main:app --reload
-
-# Terminal 4: Frontend
-cd src/frontend
-npm run dev
-```
-
-#### Test Cases
-
-| # | Test | Steps | Expected |
-|---|------|-------|----------|
-| 1 | Health check | `curl http://localhost:8787/health` | `{"status":"ok"}` |
-| 2 | Create job | POST to `/api/jobs` | Returns job_id |
-| 3 | WebSocket connect | Connect to `/api/jobs/{id}/ws` | Receives status |
-| 4 | Progress updates | GPU worker sends progress | WebSocket receives updates |
-| 5 | Job completion | GPU worker completes | WebSocket receives complete |
-| 6 | Download video | GET download URL | Video downloads |
-| 7 | Error handling | Simulate error | Job marked as error, retry works |
-| 8 | Recovery | Refresh page mid-export | Export state recovered |
-
-#### Test Scripts
-
-**test-job-flow.sh**
-```bash
-#!/bin/bash
-WORKERS_URL="http://localhost:8787"
-
-# Create job
-echo "Creating job..."
-JOB_RESPONSE=$(curl -s -X POST "$WORKERS_URL/api/jobs" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "project_id": 1,
-    "type": "overlay",
-    "input_video_key": "test/input.mp4",
-    "params": {}
-  }')
-
-JOB_ID=$(echo $JOB_RESPONSE | jq -r '.job_id')
-echo "Job ID: $JOB_ID"
-
-# Poll status
-for i in {1..30}; do
-  echo "Polling status ($i)..."
-  STATUS=$(curl -s "$WORKERS_URL/api/jobs/$JOB_ID" | jq -r '.status')
-  echo "Status: $STATUS"
-
-  if [ "$STATUS" == "complete" ] || [ "$STATUS" == "error" ]; then
-    echo "Job finished with status: $STATUS"
-    break
-  fi
-
-  sleep 2
-done
-```
-
-**test-websocket.js**
-```javascript
-const WebSocket = require('ws');
-
-const jobId = process.argv[2] || 'test-job';
-const ws = new WebSocket(`ws://localhost:8787/api/jobs/${jobId}/ws`);
-
-ws.on('open', () => {
-  console.log('Connected');
-  ws.send(JSON.stringify({ type: 'subscribe', job_id: jobId }));
-});
-
-ws.on('message', (data) => {
-  console.log('Received:', JSON.parse(data));
-});
-
-ws.on('close', () => console.log('Disconnected'));
-ws.on('error', (err) => console.error('Error:', err));
-```
-
----
-
-### Phase 2: Cloudflare Deployment
+### Phase 1: Cloudflare Workers Deployment
 
 #### Deploy Workers
 
@@ -159,7 +62,7 @@ curl "$PROD_URL/health"
 
 ---
 
-### Phase 3: RunPod Deployment
+### Phase 2: RunPod Deployment
 
 #### Build and Push Docker Image
 
@@ -179,7 +82,7 @@ docker buildx build --platform linux/amd64 -t your-dockerhub/reel-ballers-gpu:la
    R2_ENDPOINT=https://YOUR_ACCOUNT_ID.r2.cloudflarestorage.com
    R2_ACCESS_KEY_ID=your-key
    R2_SECRET_ACCESS_KEY=your-secret
-   R2_BUCKET_NAME=reel-ballers-videos
+   R2_BUCKET_NAME=reel-ballers-users
    ```
 4. Click **Update**
 
@@ -206,7 +109,7 @@ curl -X POST "$RUNPOD_ENDPOINT/run" \
 
 ---
 
-### Phase 4: End-to-End Production Test
+### Phase 3: Frontend Deployment
 
 #### Update Frontend Config
 
@@ -216,7 +119,7 @@ VITE_WORKERS_API_URL=https://reel-ballers-api.your-subdomain.workers.dev
 VITE_USE_CLOUD_EXPORTS=true
 ```
 
-#### Build and Deploy Frontend
+#### Build and Deploy
 
 ```bash
 cd src/frontend
@@ -224,15 +127,6 @@ npm run build
 
 # Deploy to your hosting (Vercel, Netlify, etc.)
 ```
-
-#### Test Full Flow
-
-1. Open production frontend
-2. Load a project with a working video
-3. Start overlay export
-4. Watch progress in real-time
-5. Download completed export
-6. Verify video plays correctly
 
 ---
 
@@ -344,6 +238,66 @@ Establish baseline metrics after deployment:
 
 ---
 
+## Test Scripts
+
+### test-job-flow.sh
+
+```bash
+#!/bin/bash
+WORKERS_URL="http://localhost:8787"  # or production URL
+
+# Create job
+echo "Creating job..."
+JOB_RESPONSE=$(curl -s -X POST "$WORKERS_URL/api/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": 1,
+    "type": "overlay",
+    "input_video_key": "test/input.mp4",
+    "params": {}
+  }')
+
+JOB_ID=$(echo $JOB_RESPONSE | jq -r '.job_id')
+echo "Job ID: $JOB_ID"
+
+# Poll status
+for i in {1..30}; do
+  echo "Polling status ($i)..."
+  STATUS=$(curl -s "$WORKERS_URL/api/jobs/$JOB_ID" | jq -r '.status')
+  echo "Status: $STATUS"
+
+  if [ "$STATUS" == "complete" ] || [ "$STATUS" == "error" ]; then
+    echo "Job finished with status: $STATUS"
+    break
+  fi
+
+  sleep 2
+done
+```
+
+### test-websocket.js
+
+```javascript
+const WebSocket = require('ws');
+
+const jobId = process.argv[2] || 'test-job';
+const ws = new WebSocket(`ws://localhost:8787/api/jobs/${jobId}/ws`);
+
+ws.on('open', () => {
+  console.log('Connected');
+  ws.send(JSON.stringify({ type: 'subscribe', job_id: jobId }));
+});
+
+ws.on('message', (data) => {
+  console.log('Received:', JSON.parse(data));
+});
+
+ws.on('close', () => console.log('Disconnected'));
+ws.on('error', (err) => console.error('Error:', err));
+```
+
+---
+
 ## Post-Launch
 
 ### Week 1
@@ -360,3 +314,12 @@ Establish baseline metrics after deployment:
 - Review monthly costs
 - Update dependencies
 - Add new export types as needed
+
+---
+
+## Handoff Notes
+
+This guide covers the operational aspects of deploying and maintaining the cloud export system. For implementation details, see:
+- Task 11-13: Workers project setup and API routes
+- Task 07: GPU Worker code
+- Task 14-15: Backend and frontend integration

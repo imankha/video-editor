@@ -104,8 +104,8 @@ user_data/                          reel-ballers-users/
 | # | Task | Status | Owner | Notes |
 |---|------|--------|-------|-------|
 | 01 | [Cloudflare Account Setup](tasks/01-cloudflare-account-setup.md) | `DONE` | User | Account created, R2 bucket exists |
-| 02 | [R2 Bucket Setup](tasks/02-r2-bucket-setup.md) | `DONE` | User | CORS configured, credentials created |
-| 03 | [R2 Storage Integration](tasks/03-r2-user-data-structure.md) | `DONE` | Claude | Presigned URLs, file redirects |
+| -- | R2 Bucket Setup | `DONE` | User | CORS configured, credentials created |
+| -- | R2 Storage Integration | `DONE` | Claude | Presigned URLs, file redirects |
 | 04 | [Database Sync](tasks/04-database-sync.md) | `DONE` | Claude | Version tracking, batched writes |
 | 05 | [RunPod Account Setup](tasks/05-runpod-account-setup.md) | `TODO` | User | Create account, add credits |
 | 06 | [RunPod Endpoint Setup](tasks/06-runpod-endpoint-setup.md) | `TODO` | User | Create serverless endpoint |
@@ -115,14 +115,15 @@ user_data/                          reel-ballers-users/
 | 10 | [Testing RunPod Integration](tasks/10-testing-runpod.md) | `TODO` | Both | End-to-end export testing |
 | 11 | [Workers Project Setup](tasks/11-workers-project-setup.md) | `TODO` | Claude | wrangler.toml, directory structure |
 | 12 | [Workers API Routes](tasks/12-workers-api-routes.md) | `TODO` | Claude | Job CRUD, video URLs |
-| 13 | [Workers WebSocket/DO](tasks/13-workers-websocket-do.md) | `TODO` | Claude | Real-time progress updates |
-| 14 | [Backend to Workers Migration](tasks/14-backend-workers-migration.md) | `TODO` | Claude | Switch from FastAPI to Workers |
-| 15 | [Frontend Workers Integration](tasks/15-frontend-workers-integration.md) | `TODO` | Claude | Point to Workers API |
-| 16 | [Wallet & Payments](tasks/16-wallet-payments.md) | `FUTURE` | Both | Stripe integration |
-| 17 | [User Management](tasks/17-user-management.md) | `FUTURE` | Both | Auth, multi-tenancy |
+| 13 | [Durable Objects Job State](tasks/13-durable-objects-job-state.md) | `TODO` | Claude | Real-time progress updates |
+| 14 | [Backend Workers Migration](tasks/14-backend-workers-migration.md) | `TODO` | Claude | Switch from FastAPI to Workers |
+| 15 | [Frontend Workers Updates](tasks/15-frontend-workers-updates.md) | `TODO` | Claude | Point to Workers API |
+| 16 | [Wallet & Payments](tasks/16-wallet-payments.md) | `OPTIONAL` | Both | Stripe integration |
+| 17 | [User Management](tasks/17-user-management.md) | `OPTIONAL` | Both | Auth, multi-tenancy |
 | 18 | [DO+SQLite Migration](tasks/18-do-sqlite-migration.md) | `CONDITIONAL` | Claude | Only if DB > 1MB consistently |
+| 19 | [Future GPU Features](tasks/19-future-gpu-features.md) | `FUTURE` | Claude | Upscaling, tracking, auto-crop |
 
-**Status Key**: `DONE` | `TODO` | `IN_PROGRESS` | `BLOCKED` | `FUTURE` | `CONDITIONAL`
+**Status Key**: `DONE` | `TODO` | `IN_PROGRESS` | `BLOCKED` | `OPTIONAL` | `CONDITIONAL` | `FUTURE`
 
 ---
 
@@ -131,8 +132,8 @@ user_data/                          reel-ballers-users/
 ```
 Phase 1: R2 Storage (COMPLETE)
 ├── 01-cloudflare-account-setup ✓
-├── 02-r2-bucket-setup ✓
-├── 03-r2-user-data-structure ✓
+├── R2 bucket setup ✓
+├── R2 storage integration ✓
 └── 04-database-sync ✓
 
 Phase 2: RunPod GPU Processing (CURRENT FOCUS)
@@ -148,18 +149,21 @@ Phase 2: RunPod GPU Processing (CURRENT FOCUS)
 Phase 3: Cloudflare Workers (After RunPod works)
 ├── 11-workers-project-setup
 ├── 12-workers-api-routes
-├── 13-workers-websocket-do
+├── 13-durable-objects-job-state
 ├── 14-backend-workers-migration
-└── 15-frontend-workers-integration
+└── 15-frontend-workers-updates
     ↓
     APP IS TESTABLE: Workers API + RunPod GPU + R2 storage
 
-Phase 4: Monetization & Users (Optional)
+Phase 4: Monetization & Users (OPTIONAL)
 ├── 16-wallet-payments
 └── 17-user-management
 
-Phase 5: Conditional Optimization
+Phase 5: Conditional Optimization (ONLY IF NEEDED)
 └── 18-do-sqlite-migration (only if DB > 1MB)
+
+Phase 6: Future Features
+└── 19-future-gpu-features (upscaling, tracking, auto-crop)
 ```
 
 ---

@@ -522,7 +522,7 @@ export function DownloadsPanel({
             {/* Video Player */}
             <div className="flex-1 flex items-center justify-center bg-black overflow-hidden">
               <video
-                src={getDownloadUrl(playingVideo.id)}
+                src={getDownloadUrl(playingVideo.id, playingVideo)}
                 controls
                 autoPlay
                 className="w-full h-full object-contain"

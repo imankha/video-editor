@@ -293,14 +293,26 @@ export function useProjectClips(projectId) {
 
   /**
    * Get clip file URL
+   * Uses presigned R2 URL if available (from clip.file_url), otherwise falls back to local proxy
    * @param {number} clipId - Clip ID
    * @param {number} overrideProjectId - Optional project ID to use instead of hook's projectId
+   * @param {Object} clip - Optional clip object that may contain file_url from API
    */
-  const getClipFileUrl = useCallback((clipId, overrideProjectId = null) => {
+  const getClipFileUrl = useCallback((clipId, overrideProjectId = null, clip = null) => {
+    // If clip object has presigned URL, use it (direct R2 access)
+    if (clip?.file_url) {
+      return clip.file_url;
+    }
+    // Find clip in clips array if not provided
+    const foundClip = clip || clips.find(c => c.id === clipId);
+    if (foundClip?.file_url) {
+      return foundClip.file_url;
+    }
+    // Fallback to local proxy endpoint
     const effectiveProjectId = overrideProjectId ?? projectId;
     if (!effectiveProjectId) return null;
     return `${API_BASE_URL}/clips/projects/${effectiveProjectId}/clips/${clipId}/file`;
-  }, [projectId]);
+  }, [projectId, clips]);
 
   return {
     clips,

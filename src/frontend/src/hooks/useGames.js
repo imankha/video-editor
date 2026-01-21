@@ -340,8 +340,16 @@ export function useGames() {
 
   /**
    * Get the video URL for a game
+   * Uses presigned R2 URL if available (from game.video_url), otherwise falls back to local proxy
+   * @param {number|string} gameId - Game ID
+   * @param {Object} game - Optional game object that may contain video_url from API
    */
-  const getGameVideoUrl = useCallback((gameId) => {
+  const getGameVideoUrl = useCallback((gameId, game = null) => {
+    // If game object has presigned URL, use it (direct R2 access)
+    if (game?.video_url) {
+      return game.video_url;
+    }
+    // Fallback to local proxy endpoint
     return `${API_BASE}/api/games/${gameId}/video`;
   }, []);
 

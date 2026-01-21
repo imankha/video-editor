@@ -62,6 +62,7 @@ export function useDownloads(isOpen = false) {
 
       // Guard: Don't update if request was cancelled
       if (!currentController.signal.aborted) {
+        console.log('[useDownloads] Fetched downloads:', data.downloads?.length, 'first download file_url:', data.downloads?.[0]?.file_url);
         setDownloads(data.downloads || []);
         setCount(data.total_count || 0);
         setLoadState('ready');
@@ -124,11 +125,28 @@ export function useDownloads(isOpen = false) {
 
   /**
    * Get download URL for a file
-   * Returns the URL that can be used for download
+   * Uses presigned R2 URL if available (from download.file_url), otherwise falls back to local proxy
+   * @param {number} downloadId - Download ID
+   * @param {Object} download - Optional download object that may contain file_url from API
    */
-  const getDownloadUrl = useCallback((downloadId) => {
-    return `${API_BASE_URL}/downloads/${downloadId}/file`;
-  }, []);
+  const getDownloadUrl = useCallback((downloadId, download = null) => {
+    console.log('[useDownloads] getDownloadUrl called:', { downloadId, download_file_url: download?.file_url });
+    // If download object has presigned URL, use it (direct R2 access)
+    if (download?.file_url) {
+      console.log('[useDownloads] Using presigned R2 URL:', download.file_url);
+      return download.file_url;
+    }
+    // Find download in downloads array if not provided
+    const foundDownload = download || downloads.find(d => d.id === downloadId);
+    if (foundDownload?.file_url) {
+      console.log('[useDownloads] Using found presigned R2 URL:', foundDownload.file_url);
+      return foundDownload.file_url;
+    }
+    // Fallback to local proxy endpoint
+    const fallbackUrl = `${API_BASE_URL}/downloads/${downloadId}/file`;
+    console.log('[useDownloads] Using fallback local proxy URL:', fallbackUrl);
+    return fallbackUrl;
+  }, [downloads]);
 
   /**
    * Trigger file download in browser

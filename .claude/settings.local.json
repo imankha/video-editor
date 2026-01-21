@@ -78,7 +78,20 @@
       "Bash(.venvScriptspython -m pytest tests/test_highlight_transform.py -v --tb=short)",
       "Bash(pushd \"C:\\\\Users\\\\imank\\\\projects\\\\video-editor\\\\src\\\\backend\")",
       "Bash(dir:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\imank\\\\projects\\\\video-editor\\\\user_data\" -Recurse -Depth 3)",
+      "Bash(Select-Object FullName, Mode)",
+      "Bash(Format-Table -AutoSize)",
+      "Bash(du -sh:*)",
+      "Bash(wrangler r2 object put:*)",
+      "Bash(for:*)",
+      "Bash(do echo \"Uploading $f...\")",
+      "Bash(aws:*)",
+      "Bash(wrangler r2 object list:*)",
+      "Bash(wrangler r2 object get:*)",
+      "Bash(git restore:*)",
+      "Bash(export AWS_ACCESS_KEY_ID=4f5febce8beb63be044414984aa7a3b4)",
+      "Bash(export:*)"
     ],
     "deny": [],
     "ask": []

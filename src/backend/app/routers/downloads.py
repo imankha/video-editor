@@ -18,25 +18,45 @@ import logging
 from app.database import get_db_connection, get_final_videos_path
 from app.queries import latest_final_videos_subquery
 from app.user_context import get_current_user_id
-from app.storage import R2_ENABLED, generate_presigned_url
+from app.storage import R2_ENABLED, generate_presigned_url, file_exists_in_r2
 
 logger = logging.getLogger(__name__)
 
 
-def get_download_file_url(filename: str) -> Optional[str]:
+def get_download_file_url(filename: str, verify_exists: bool = False) -> Optional[str]:
     """
     Get presigned URL for download/final video if R2 is enabled.
+
+    Args:
+        filename: The filename of the download
+        verify_exists: If True, verify the file exists in R2 before generating URL
+                      (adds latency but catches missing files early)
+
+    Returns None (fallback to local proxy) if:
+    - R2 is not enabled
+    - No filename provided
+    - verify_exists=True and file doesn't exist in R2
     """
     if not R2_ENABLED or not filename:
         return None
 
     user_id = get_current_user_id()
-    return generate_presigned_url(
+    r2_path = f"final_videos/{filename}"
+
+    # Optionally verify file exists in R2 (helps debug NoSuchKey errors)
+    if verify_exists and not file_exists_in_r2(user_id, r2_path):
+        logger.warning(f"[get_download_file_url] File NOT FOUND in R2: user={user_id}, path={r2_path}")
+        return None  # Return None to trigger error in endpoint
+
+    # Files are stored in final_videos/ directory in R2 (not downloads/)
+    url = generate_presigned_url(
         user_id=user_id,
-        relative_path=f"downloads/{filename}",
+        relative_path=r2_path,
         expires_in=3600,
         content_type="video/mp4"
     )
+    logger.debug(f"[get_download_file_url] Generated URL for: user={user_id}, path={r2_path}")
+    return url
 
 
 def _get_season_for_month(month: int) -> str:
@@ -421,16 +441,18 @@ async def download_file(download_id: int):
 
         logger.info(f"[Download] Found: stored_filename={row['filename']}, project_name={row['project_name']}")
 
-        # If R2 enabled, redirect to presigned URL
+        # If R2 enabled, redirect to presigned URL (no local fallback)
         if R2_ENABLED:
-            presigned_url = get_download_file_url(row['filename'])
+            # verify_exists=True to check file exists and log warning if not
+            presigned_url = get_download_file_url(row['filename'], verify_exists=True)
             if presigned_url:
                 logger.info(f"[Download] Redirecting to R2 presigned URL")
                 return RedirectResponse(url=presigned_url, status_code=302)
-            logger.error(f"[Download] Failed to generate R2 URL for: {row['filename']}")
-            raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+            # R2 enabled but URL generation failed - file missing or R2 error
+            logger.error(f"[Download] R2 enabled but failed to generate presigned URL for: {row['filename']} - file may not exist in R2")
+            raise HTTPException(status_code=404, detail="Video file not found in storage")
 
-        # Local mode: serve from filesystem
+        # Local mode only: serve from filesystem
         file_path = get_final_videos_path() / row['filename']
         if not file_path.exists():
             logger.error(f"[Download] File missing: {file_path}")

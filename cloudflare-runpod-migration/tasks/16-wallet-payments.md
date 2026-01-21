@@ -1,4 +1,4 @@
-# Task 12: Wallet & Payments
+# Task 16: Wallet & Payments (Optional)
 
 ## Overview
 Implement a credit-based wallet system with Stripe for monetization. Users top up credits, then spend them on GPU processing jobs.
@@ -7,11 +7,11 @@ Implement a credit-based wallet system with Stripe for monetization. Users top u
 **Both** - User sets up Stripe account, Claude implements code
 
 ## Prerequisites
-- Task 06 complete (Workers API working)
+- Phase 3 complete (Workers API working)
 - Stripe account created
 
-## Time Estimate
-3-4 hours
+## Status
+`OPTIONAL` - Only implement if monetizing the app
 
 ---
 
@@ -19,36 +19,36 @@ Implement a credit-based wallet system with Stripe for monetization. Users top u
 
 ```
 User clicks "Top Up"
-        │
-        ▼
-┌─────────────────┐
-│  /api/topup     │ → Create Stripe Checkout Session
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Stripe Hosted  │ → User enters payment
-│  Checkout       │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  /api/webhook   │ → Stripe sends checkout.session.completed
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  D1 Database    │ → Credit user's wallet
-└─────────────────┘
+        |
+        v
++------------------+
+|  /api/topup      | --> Create Stripe Checkout Session
++--------+---------+
+         |
+         v
++------------------+
+|  Stripe Hosted   | --> User enters payment
+|  Checkout        |
++--------+---------+
+         |
+         v
++------------------+
+|  /api/webhook    | --> Stripe sends checkout.session.completed
++--------+---------+
+         |
+         v
++------------------+
+|  D1 Database     | --> Credit user's wallet
++------------------+
 ```
 
 ---
 
 ## Database Schema
 
-Add to D1 migrations:
+Add D1 migration:
 
-### 0002_create_wallet.sql
+### migrations/0002_create_wallet.sql
 
 ```sql
 -- Users table (links to Stripe customer)
@@ -79,7 +79,6 @@ CREATE TABLE IF NOT EXISTS ledger (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ledger_uid ON ledger(uid);
-CREATE INDEX IF NOT EXISTS idx_ledger_created ON ledger(created_at);
 ```
 
 ---
@@ -89,34 +88,85 @@ CREATE INDEX IF NOT EXISTS idx_ledger_created ON ledger(created_at);
 ### 1. Create Stripe Account
 1. Go to https://dashboard.stripe.com/register
 2. Complete business verification
-3. Note: Start in Test Mode for development
+3. Start in **Test Mode** for development
 
 ### 2. Get API Keys
-1. Go to **Developers** → **API keys**
+1. **Developers** -> **API keys**
 2. Copy:
-   - **Publishable key**: `pk_test_...` (for frontend)
-   - **Secret key**: `sk_test_...` (for backend)
+   - Publishable key: `pk_test_...` (for frontend)
+   - Secret key: `sk_test_...` (for backend)
 
 ### 3. Create Webhook
-1. Go to **Developers** → **Webhooks**
-2. Click **Add endpoint**
-3. URL: `https://api.reelballers.com/api/webhook`
-4. Select events: `checkout.session.completed`
-5. Copy **Signing secret**: `whsec_...`
+1. **Developers** -> **Webhooks** -> **Add endpoint**
+2. URL: `https://your-worker.workers.dev/api/webhook`
+3. Events: `checkout.session.completed`
+4. Copy signing secret: `whsec_...`
 
-### 4. Create Products (Optional)
-For fixed price top-ups:
-1. Go to **Products**
-2. Create products like:
-   - "10 Credits" - $5.00
-   - "50 Credits" - $20.00
-   - "100 Credits" - $35.00
+---
+
+## Pricing Model
+
+### Cost Per Job Type
+
+| Job Type | Estimated GPU Time | Cost to User |
+|----------|-------------------|--------------|
+| Framing (30s clip) | ~10s | 5 credits ($0.05) |
+| Overlay (30s video) | ~15s | 8 credits ($0.08) |
+| Upscale (30s, 4x) | ~60s | 30 credits ($0.30) |
+
+### Margin Calculation
+
+| Metric | Value |
+|--------|-------|
+| RunPod cost (RTX 4000 Ada) | $0.00031/sec |
+| 15-second job actual cost | $0.0047 |
+| Price to user | $0.08 (8 credits) |
+| **Gross margin** | **~94%** |
+
+---
+
+## Environment Variables
+
+```bash
+# Set as Wrangler secrets
+wrangler secret put STRIPE_SECRET_KEY
+wrangler secret put STRIPE_WEBHOOK_SECRET
+
+# In wrangler.toml vars (safe to expose)
+[vars]
+STRIPE_PUBLISHABLE_KEY = "pk_live_..."
+```
+
+---
+
+## Testing
+
+### Test Mode
+Use Stripe test keys (`sk_test_...`) during development.
+
+### Test Card Numbers
+- Success: `4242 4242 4242 4242`
+- Decline: `4000 0000 0000 0002`
+- Requires auth: `4000 0025 0000 3155`
+
+### Webhook Testing
+```bash
+# Install Stripe CLI
+stripe login
+
+# Forward webhooks to local
+stripe listen --forward-to localhost:8787/api/webhook
+
+# Trigger test event
+stripe trigger checkout.session.completed
+```
 
 ---
 
 ## API Routes
 
 ### POST /api/topup
+
 Create a Stripe checkout session for adding credits.
 
 ```typescript
@@ -179,6 +229,7 @@ export async function handleTopup(request: Request, env: Env): Promise<Response>
 ```
 
 ### POST /api/webhook
+
 Handle Stripe webhook events.
 
 ```typescript
@@ -234,6 +285,7 @@ export async function handleWebhook(request: Request, env: Env): Promise<Respons
 ```
 
 ### GET /api/wallet
+
 Get user's current balance.
 
 ```typescript
@@ -260,6 +312,7 @@ export async function handleGetWallet(request: Request, env: Env): Promise<Respo
 ```
 
 ### POST /api/debit
+
 Debit wallet when starting a job.
 
 ```typescript
@@ -318,28 +371,6 @@ export async function handleDebit(request: Request, env: Env): Promise<Response>
   });
 }
 ```
-
----
-
-## Pricing Model
-
-### Cost Per Job Type
-
-| Job Type | Estimated GPU Time | Cost to User |
-|----------|-------------------|--------------|
-| Framing (30s clip) | ~10s | 5 credits ($0.05) |
-| Overlay (30s video) | ~15s | 8 credits ($0.08) |
-| Upscale (30s, 4x) | ~60s | 30 credits ($0.30) |
-| Track (30s) | ~20s | 10 credits ($0.10) |
-
-### Margin Calculation
-
-| Metric | Value |
-|--------|-------|
-| RunPod cost (RTX 4000 Ada) | $0.00031/sec |
-| 15-second job actual cost | $0.0047 |
-| Price to user | $0.08 (8 credits) |
-| **Gross margin** | **~94%** |
 
 ---
 
@@ -431,48 +462,9 @@ function calculateJobCost(type, params) {
 
 ---
 
-## Environment Variables
-
-```bash
-# Stripe (set as secrets)
-wrangler secret put STRIPE_SECRET
-wrangler secret put STRIPE_WEBHOOK_SECRET
-
-# wrangler.toml vars
-[vars]
-APP_URL = "https://app.reelballers.com"
-STRIPE_PUBLISHABLE_KEY = "pk_live_..."  # Safe to expose
-```
-
----
-
-## Testing
-
-### Test Mode
-Use Stripe test keys (`sk_test_...`) during development.
-
-### Test Card Numbers
-- Success: `4242 4242 4242 4242`
-- Decline: `4000 0000 0000 0002`
-- Requires auth: `4000 0025 0000 3155`
-
-### Webhook Testing
-```bash
-# Install Stripe CLI
-stripe login
-
-# Forward webhooks to local
-stripe listen --forward-to localhost:8787/api/webhook
-
-# Trigger test event
-stripe trigger checkout.session.completed
-```
-
----
-
 ## Handoff Notes
 
-**This task is optional for initial launch** - you can start without payments and add later.
+This task is **optional** for initial launch. You can start without payments and add later.
 
 When implementing:
 1. Start with Stripe test mode

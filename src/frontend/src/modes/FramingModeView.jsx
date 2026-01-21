@@ -25,6 +25,8 @@ export function FramingModeView({
   duration,
   isPlaying,
   isLoading,
+  isProjectLoading = false,
+  loadingStage = null,
   error,
   handlers,
 
@@ -207,6 +209,13 @@ export function FramingModeView({
               onZoomChange={onZoomByWheel}
               onPanChange={onPanChange}
               isFullscreen={isFullscreen}
+              isLoading={isLoading || isProjectLoading}
+              loadingMessage={
+                loadingStage === 'clips' ? 'Loading clips...' :
+                loadingStage === 'video' ? 'Loading video...' :
+                loadingStage === 'working-video' ? 'Loading working video...' :
+                isLoading ? 'Loading video...' : 'Loading...'
+              }
             />
 
             {/* Fullscreen exit button - top right corner */}

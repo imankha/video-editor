@@ -210,8 +210,9 @@ export function AnnotateContainer({
       const gameData = await getGame(gameId);
       console.log('[AnnotateContainer] Loaded game data:', gameData);
 
-      const videoUrl = getGameVideoUrl(gameId);
-      console.log('[AnnotateContainer] Game video URL:', videoUrl);
+      // Use presigned R2 URL if available (from gameData.video_url), otherwise local proxy
+      const videoUrl = getGameVideoUrl(gameId, gameData);
+      console.log('[AnnotateContainer] Game video URL:', videoUrl, gameData.video_url ? '(R2 presigned)' : '(local proxy)');
 
       // Use stored metadata if available
       let videoMetadata = null;

@@ -1,16 +1,17 @@
-# Task 02: Workers Project Setup
+# Task 11: Workers Project Setup
 
 ## Overview
-Create the Cloudflare Workers project structure with wrangler.toml configuration.
+Create the Cloudflare Workers project structure with wrangler.toml configuration for the API backend.
 
 ## Owner
 **Claude** - Code generation task
 
 ## Prerequisites
-- Task 01 complete (Cloudflare account, D1 database ID, R2 bucket name)
+- Phase 2 complete (RunPod exports working)
+- Cloudflare account ready (from Task 01)
 
-## Time Estimate
-15 minutes
+## Testability
+**After this task**: Workers dev server runs locally. Health check endpoint works.
 
 ---
 
@@ -18,9 +19,8 @@ Create the Cloudflare Workers project structure with wrangler.toml configuration
 
 Before starting, Claude needs:
 ```
-D1 Database ID: _______________________
-R2 Bucket Name: _______________________
-Account ID: _______________________  (from Cloudflare dashboard URL)
+D1 Database ID: _______________________ (or create new)
+Account ID: _______________________ (from Cloudflare dashboard URL)
 ```
 
 ---
@@ -33,10 +33,10 @@ video-editor/
     ├── src/
     │   ├── index.ts                 # Main entry point
     │   ├── routes/
-    │   │   ├── jobs.ts              # Job CRUD endpoints
+    │   │   ├── jobs.ts              # Export job endpoints
     │   │   └── videos.ts            # R2 presigned URLs
     │   ├── durable-objects/
-    │   │   └── ExportJobState.ts    # Job state machine
+    │   │   └── ExportJobState.ts    # Job state machine (Task 13)
     │   └── lib/
     │       ├── types.ts             # TypeScript interfaces
     │       └── utils.ts             # Helper functions
@@ -58,31 +58,21 @@ compatibility_date = "2024-01-01"
 # Account ID (get from dashboard URL: dash.cloudflare.com/<account_id>/...)
 account_id = "YOUR_ACCOUNT_ID"
 
-# D1 Database
-[[d1_databases]]
-binding = "DB"
-database_name = "reel-ballers"
-database_id = "YOUR_D1_DATABASE_ID"
-
-# R2 Storage
+# R2 Storage (same bucket from Phase 1)
 [[r2_buckets]]
-binding = "VIDEOS"
-bucket_name = "reel-ballers-videos"
+binding = "USER_DATA"
+bucket_name = "reel-ballers-users"
 
-# Durable Objects
-[durable_objects]
-bindings = [
-  { name = "EXPORT_JOB", class_name = "ExportJobState" }
-]
-
-[[migrations]]
-tag = "v1"
-new_classes = ["ExportJobState"]
+# Durable Objects (added in Task 13)
+# [durable_objects]
+# bindings = [
+#   { name = "EXPORT_JOB", class_name = "ExportJobState" }
+# ]
 
 # Environment variables
 [vars]
 ENVIRONMENT = "development"
-RUNPOD_ENDPOINT = ""  # Set after Task 07
+RUNPOD_ENDPOINT = ""  # Set from Task 06
 
 # Local development settings
 [dev]
@@ -104,14 +94,15 @@ vars = { ENVIRONMENT = "production" }
     "dev": "wrangler dev --local --persist",
     "dev:remote": "wrangler dev",
     "deploy": "wrangler deploy",
-    "db:migrate": "wrangler d1 migrations apply reel-ballers",
-    "db:migrate:local": "wrangler d1 migrations apply reel-ballers --local",
     "tail": "wrangler tail"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240117.0",
     "typescript": "^5.3.3",
     "wrangler": "^3.24.0"
+  },
+  "dependencies": {
+    "sql.js": "^1.10.0"
   }
 }
 ```
@@ -138,56 +129,47 @@ vars = { ENVIRONMENT = "production" }
 
 ### src/index.ts (Skeleton)
 ```typescript
-import { ExportJobState } from './durable-objects/ExportJobState';
-
-export { ExportJobState };
-
 export interface Env {
-  DB: D1Database;
-  VIDEOS: R2Bucket;
-  EXPORT_JOB: DurableObjectNamespace;
+  USER_DATA: R2Bucket;
   ENVIRONMENT: string;
   RUNPOD_ENDPOINT: string;
+  RUNPOD_API_KEY: string;
 }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    // CORS headers
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    };
+
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
+
     // Health check
     if (url.pathname === '/health') {
-      return new Response(JSON.stringify({ status: 'ok', env: env.ENVIRONMENT }), {
-        headers: { 'Content-Type': 'application/json' }
+      return new Response(JSON.stringify({
+        status: 'ok',
+        env: env.ENVIRONMENT
+      }), {
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
     }
 
-    // TODO: Add routes in Task 06
-    // - POST /api/jobs
-    // - GET /api/jobs/:id
-    // - POST /api/videos/upload-url
-    // - WebSocket /api/jobs/:id/ws
+    // TODO: Add routes in Task 12
+    // - POST /api/export/start
+    // - GET /api/export/status/:id
+    // - GET /api/storage/presigned-url
 
-    return new Response('Not Found', { status: 404 });
+    return new Response('Not Found', { status: 404, headers: corsHeaders });
   },
 };
-```
-
-### src/durable-objects/ExportJobState.ts (Skeleton)
-```typescript
-// Full implementation in Task 05
-export class ExportJobState {
-  state: DurableObjectState;
-  env: any;
-
-  constructor(state: DurableObjectState, env: any) {
-    this.state = state;
-    this.env = env;
-  }
-
-  async fetch(request: Request): Promise<Response> {
-    return new Response('ExportJobState - TODO', { status: 501 });
-  }
-}
 ```
 
 ### src/lib/types.ts
@@ -198,8 +180,8 @@ export interface ExportJob {
   type: 'framing' | 'overlay' | 'annotate';
   status: 'pending' | 'processing' | 'complete' | 'error';
   progress: number;
-  input_video_key: string;
-  output_video_key?: string;
+  input_key: string;
+  output_key?: string;
   params: Record<string, any>;
   error?: string;
   created_at: string;
@@ -211,7 +193,7 @@ export interface ExportJob {
 export interface CreateJobRequest {
   project_id: number;
   type: 'framing' | 'overlay' | 'annotate';
-  input_video_key: string;
+  input_key: string;
   params: {
     crop_keyframes?: CropKeyframe[];
     highlight_regions?: HighlightRegion[];
@@ -240,7 +222,7 @@ export interface HighlightRegion {
 }
 
 export interface WebSocketMessage {
-  type: 'subscribe' | 'progress' | 'complete' | 'error' | 'ping' | 'pong';
+  type: 'subscribe' | 'progress' | 'complete' | 'error' | 'status';
   job_id?: string;
   progress?: number;
   message?: string;
@@ -274,29 +256,26 @@ curl http://localhost:8787/health
 
 ---
 
-## Handoff Notes
-
-**For Task 03 (D1 Database Schema):**
-- Workers project exists
-- Need to create `migrations/` folder and SQL files
-
-**For Task 05 (Durable Objects):**
-- ExportJobState.ts skeleton exists
-- Need to implement full state machine
-
-**For Task 06 (API Routes):**
-- index.ts skeleton exists
-- Need to implement route handlers
-
----
-
 ## Common Issues
 
 ### "Cannot find module '@cloudflare/workers-types'"
 Run `npm install` in the workers directory.
 
-### "Durable Object not found"
-Make sure wrangler.toml has the migration tag and class binding.
-
 ### Local dev not persisting data
 Use `--persist` flag: `wrangler dev --local --persist`
+
+### R2 binding not working locally
+Make sure wrangler.toml has the correct bucket name matching your actual R2 bucket.
+
+---
+
+## Handoff Notes
+
+**For Task 12 (Workers API Routes):**
+- Workers project exists with skeleton
+- Need to implement actual route handlers
+- Use same API shape as current FastAPI backend
+
+**For Task 13 (Durable Objects):**
+- Will add DO binding to wrangler.toml
+- ExportJobState manages job lifecycle

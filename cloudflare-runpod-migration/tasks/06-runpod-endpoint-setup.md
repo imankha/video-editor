@@ -79,6 +79,43 @@ RUNPOD_ENDPOINT_URL=https://api.runpod.ai/v2/your_endpoint_id_here
 
 ---
 
+## R2 Credentials for RunPod
+
+The GPU worker needs S3-compatible credentials to access R2 for downloading input videos and uploading outputs.
+
+### Create R2 API Token
+
+1. Go to **R2** → **Manage R2 API Tokens**
+2. Click **Create API Token**
+3. Permissions: **Object Read & Write**
+4. Specify bucket: `reel-ballers-users`
+5. Click **Create API Token**
+6. **Save these values:**
+
+```
+Access Key ID: ________________________________
+Secret Access Key: ________________________________
+Endpoint: https://<account_id>.r2.cloudflarestorage.com
+```
+
+### Add to RunPod Environment
+
+When configuring your RunPod endpoint (or in Task 07 GPU Worker):
+
+```bash
+# R2 credentials (add to RunPod endpoint environment variables)
+R2_ACCESS_KEY_ID=your_access_key_id
+R2_SECRET_ACCESS_KEY=your_secret_access_key
+R2_ENDPOINT_URL=https://<account_id>.r2.cloudflarestorage.com
+R2_BUCKET_NAME=reel-ballers-users
+```
+
+The GPU worker uses these credentials with boto3's S3-compatible client to:
+- Download input videos from `{user_id}/working_videos/`
+- Upload processed videos to `{user_id}/final_videos/`
+
+---
+
 ## GPU Selection Guide
 
 | GPU | $/second | Good For |
