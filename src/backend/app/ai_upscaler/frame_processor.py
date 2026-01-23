@@ -56,6 +56,10 @@ class FrameProcessor:
         self.export_mode = export_mode
         self.enable_source_preupscale = enable_source_preupscale
 
+    def release_video_captures(self):
+        """Placeholder for cleanup - kept for API compatibility."""
+        pass
+
     def extract_frame_with_crop(
         self,
         video_path: str,

@@ -234,11 +234,13 @@ export function FramingContainer({
         trimRange: trimRange
       });
 
-      // Save to backend
+      // Save to backend (convert to export formats)
       if (saveFramingEdits) {
+        const exportKeyframes = getKeyframesForExport();
+        const exportSegments = getSegmentExportData(); // Use export format for backend
         const result = await saveFramingEdits(currentClip.workingClipId, {
-          cropKeyframes: keyframes,
-          segments: segmentState,
+          cropKeyframes: exportKeyframes,
+          segments: exportSegments,
           trimRange: trimRange
         });
 
@@ -253,7 +255,7 @@ export function FramingContainer({
     } catch (e) {
       console.error('[FramingContainer] Failed to save framing state:', e);
     }
-  }, [selectedClipId, selectedProjectId, clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange, updateClipData, saveFramingEdits]);
+  }, [selectedClipId, selectedProjectId, clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange, updateClipData, saveFramingEdits, getKeyframesForExport, getSegmentExportData]);
 
   /**
    * Handle crop changes during drag/resize (live preview)
@@ -591,7 +593,7 @@ export function FramingContainer({
     pendingFramingSaveRef.current = setTimeout(async () => {
       // Use ref to get latest function without it being in deps
       await saveCurrentClipStateRef.current();
-    }, 2000);
+    }, 100); // Near-immediate save (small debounce prevents rapid-fire during drag)
 
     // Cleanup on unmount or when deps change
     return () => {

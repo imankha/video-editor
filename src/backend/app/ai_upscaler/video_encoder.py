@@ -520,6 +520,13 @@ class VideoEncoder:
 
         logger.info(f"Expected output frame count: {expected_output_frames}")
 
+        # Prepare audio trim parameters if frames are pre-trimmed (only if audio exists)
+        # NOTE: Must be defined before pass 1 since it's used there
+        audio_trim_params = None
+        if effective_include_audio and frames_pretrimmed and (trim_start > 0 or trim_end):
+            audio_trim_params = {'start': trim_start, 'end': trim_end}
+            logger.info(f"Audio trim params: start={trim_start:.2f}s, end={trim_end or 'end'}s")
+
         # Set encoding parameters based on export mode (with custom overrides)
         # GPU ENCODING: Use NVENC/QSV/AMF if available for 5-10x speedup
         if self.ffmpeg_codec:
@@ -573,12 +580,6 @@ class VideoEncoder:
             logger.info("=" * 60)
             logger.info("Skipping pass 1 for FAST mode - using single-pass encoding")
             logger.info("=" * 60)
-
-        # Prepare audio trim parameters if frames are pre-trimmed (only if audio exists)
-        audio_trim_params = None
-        if effective_include_audio and frames_pretrimmed and (trim_start > 0 or trim_end):
-            audio_trim_params = {'start': trim_start, 'end': trim_end}
-            logger.info(f"Audio trim params: start={trim_start:.2f}s, end={trim_end or 'end'}s")
 
         # Pass 2 - Encode (or single-pass for fast mode)
         self._run_ffmpeg_pass2(

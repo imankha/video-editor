@@ -28,7 +28,9 @@ from app.database import (
 from app.queries import latest_working_clips_subquery, derive_clip_name
 from app.services.ffmpeg_service import extract_clip
 from app.user_context import get_current_user_id
-from app.storage import R2_ENABLED, generate_presigned_url, upload_to_r2, upload_bytes_to_r2
+from app.storage import R2_ENABLED, generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
+import tempfile
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -410,25 +412,63 @@ async def save_raw_clip(clip_data: RawClipCreate):
         if not game['video_filename']:
             raise HTTPException(status_code=400, detail="Game has no video file")
 
-        game_video_path = get_games_path() / game['video_filename']
-        if not game_video_path.exists():
-            raise HTTPException(status_code=404, detail="Game video file not found")
-
         # Generate unique filename for the clip
         clip_filename = f"{uuid.uuid4().hex[:12]}.mp4"
-        clip_output_path = get_raw_clips_path() / clip_filename
+        user_id = get_current_user_id()
 
-        # Extract the clip using FFmpeg
-        success = extract_clip(
-            input_path=str(game_video_path),
-            output_path=str(clip_output_path),
-            start_time=clip_data.start_time,
-            end_time=clip_data.end_time,
-            copy_codec=True  # Fast extraction without re-encoding
-        )
+        # Handle R2 vs local storage for video source and clip output
+        if R2_ENABLED:
+            # Download game video from R2 to temp file for extraction
+            temp_video_path = Path(tempfile.gettempdir()) / f"game_video_{uuid.uuid4().hex[:8]}.mp4"
+            temp_clip_path = Path(tempfile.gettempdir()) / f"clip_{uuid.uuid4().hex[:8]}.mp4"
 
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to extract clip")
+            try:
+                if not download_from_r2(user_id, f"games/{game['video_filename']}", temp_video_path):
+                    raise HTTPException(status_code=404, detail="Game video file not found in R2")
+
+                # Extract the clip using FFmpeg
+                success = extract_clip(
+                    input_path=str(temp_video_path),
+                    output_path=str(temp_clip_path),
+                    start_time=clip_data.start_time,
+                    end_time=clip_data.end_time,
+                    copy_codec=True  # Fast extraction without re-encoding
+                )
+
+                if not success:
+                    raise HTTPException(status_code=500, detail="Failed to extract clip")
+
+                # Upload extracted clip to R2
+                if not upload_to_r2(user_id, f"raw_clips/{clip_filename}", temp_clip_path):
+                    raise HTTPException(status_code=500, detail="Failed to upload clip to R2")
+
+                logger.info(f"Extracted and uploaded clip to R2: {clip_filename}")
+
+            finally:
+                # Clean up temp files
+                if temp_video_path.exists():
+                    temp_video_path.unlink()
+                if temp_clip_path.exists():
+                    temp_clip_path.unlink()
+        else:
+            # Local storage mode
+            game_video_path = get_games_path() / game['video_filename']
+            if not game_video_path.exists():
+                raise HTTPException(status_code=404, detail="Game video file not found")
+
+            clip_output_path = get_raw_clips_path() / clip_filename
+
+            # Extract the clip using FFmpeg
+            success = extract_clip(
+                input_path=str(game_video_path),
+                output_path=str(clip_output_path),
+                start_time=clip_data.start_time,
+                end_time=clip_data.end_time,
+                copy_codec=True  # Fast extraction without re-encoding
+            )
+
+            if not success:
+                raise HTTPException(status_code=500, detail="Failed to extract clip")
 
         # Save to database
         cursor.execute("""
@@ -517,20 +557,50 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate):
             cursor.execute("SELECT video_filename FROM games WHERE id = ?", (game_id,))
             game = cursor.fetchone()
             if game and game['video_filename']:
-                game_video_path = get_games_path() / game['video_filename']
-                clip_output_path = get_raw_clips_path() / clip['filename']
+                user_id = get_current_user_id()
 
-                if game_video_path.exists():
-                    # Re-extract the clip with new timing
-                    success = extract_clip(
-                        input_path=str(game_video_path),
-                        output_path=str(clip_output_path),
-                        start_time=new_start,
-                        end_time=new_end,
-                        copy_codec=True
-                    )
-                    if not success:
-                        logger.error(f"Failed to re-extract clip {clip_id}")
+                if R2_ENABLED:
+                    # Download game video from R2, re-extract, upload new clip
+                    temp_video_path = Path(tempfile.gettempdir()) / f"game_video_{uuid.uuid4().hex[:8]}.mp4"
+                    temp_clip_path = Path(tempfile.gettempdir()) / f"clip_{uuid.uuid4().hex[:8]}.mp4"
+
+                    try:
+                        if download_from_r2(user_id, f"games/{game['video_filename']}", temp_video_path):
+                            success = extract_clip(
+                                input_path=str(temp_video_path),
+                                output_path=str(temp_clip_path),
+                                start_time=new_start,
+                                end_time=new_end,
+                                copy_codec=True
+                            )
+                            if success:
+                                upload_to_r2(user_id, f"raw_clips/{clip['filename']}", temp_clip_path)
+                                logger.info(f"Re-extracted clip {clip_id} to R2")
+                            else:
+                                logger.error(f"Failed to re-extract clip {clip_id}")
+                        else:
+                            logger.error(f"Failed to download game video for clip {clip_id} re-extraction")
+                    finally:
+                        if temp_video_path.exists():
+                            temp_video_path.unlink()
+                        if temp_clip_path.exists():
+                            temp_clip_path.unlink()
+                else:
+                    # Local storage mode
+                    game_video_path = get_games_path() / game['video_filename']
+                    clip_output_path = get_raw_clips_path() / clip['filename']
+
+                    if game_video_path.exists():
+                        # Re-extract the clip with new timing
+                        success = extract_clip(
+                            input_path=str(game_video_path),
+                            output_path=str(clip_output_path),
+                            start_time=new_start,
+                            end_time=new_end,
+                            copy_codec=True
+                        )
+                        if not success:
+                            logger.error(f"Failed to re-extract clip {clip_id}")
 
         # Build update query
         updates = []

@@ -298,15 +298,22 @@ export function AnnotateContainer({
     // Quick health check before starting export
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout for E2E tests
       const healthResponse = await fetch(`${API_BASE}/api/health`, { signal: controller.signal });
       clearTimeout(timeoutId);
       if (!healthResponse.ok) {
-        throw new Error('Server health check failed');
+        throw new Error(`Server returned ${healthResponse.status}: ${healthResponse.statusText}`);
       }
     } catch (healthErr) {
       console.error('[AnnotateContainer] Server health check failed:', healthErr);
-      throw new Error('Cannot connect to server. Please ensure the backend server is running on port 8000.');
+      // Provide more specific error messages based on error type
+      if (healthErr.name === 'AbortError') {
+        throw new Error('Server connection timed out. The backend may be slow or unresponsive.');
+      } else if (healthErr.message.includes('Failed to fetch') || healthErr.message.includes('NetworkError')) {
+        throw new Error('Cannot connect to server. Please ensure the backend server is running on port 8000.');
+      } else {
+        throw new Error(`Server error: ${healthErr.message}`);
+      }
     }
 
     const exportId = `exp_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
@@ -362,6 +369,7 @@ export function AnnotateContainer({
     }
 
     try {
+      console.log('[AnnotateContainer] Sending export request to /api/annotate/export');
       const response = await fetch(`${API_BASE}/api/annotate/export`, {
         method: 'POST',
         body: formData,
@@ -369,10 +377,27 @@ export function AnnotateContainer({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Export failed: ${response.status}`);
+        const errorMessage = errorData.detail || `Export failed with status ${response.status}: ${response.statusText}`;
+        console.error('[AnnotateContainer] Export request failed:', errorMessage);
+        throw new Error(errorMessage);
       }
 
+      console.log('[AnnotateContainer] Export request succeeded');
       return await response.json();
+    } catch (fetchErr) {
+      // Re-throw if it's already our formatted error
+      if (fetchErr.message.includes('Export failed') || fetchErr.message.includes('status')) {
+        throw fetchErr;
+      }
+      // Network or other fetch errors
+      console.error('[AnnotateContainer] Export fetch error:', fetchErr);
+      if (fetchErr.name === 'AbortError') {
+        throw new Error('Export request timed out. The video processing may be taking too long.');
+      } else if (fetchErr.message.includes('Failed to fetch') || fetchErr.message.includes('NetworkError')) {
+        throw new Error('Lost connection to server during export. Please check your network and try again.');
+      } else {
+        throw new Error(`Export error: ${fetchErr.message}`);
+      }
     } finally {
       eventSource?.close();
       setTimeout(() => setExportProgress(null), 1000);
@@ -725,43 +750,58 @@ export function AnnotateContainer({
   /**
    * Wrapper for importAnnotations that also creates raw_clips for each annotation.
    * Used for TSV imports and any other annotation import that needs raw_clip extraction.
+   *
+   * IMPORTANT: We first import annotations to show clips in UI immediately,
+   * then save raw_clips in the background. This ensures responsive UI while
+   * FFmpeg extractions happen asynchronously.
    */
   const importAnnotationsWithRawClips = useCallback(async (annotations, overrideDuration = null) => {
-    if (!annotations || annotations.length === 0 || !annotateGameId) {
+    if (!annotations || annotations.length === 0) {
       return importAnnotations(annotations, overrideDuration);
     }
 
-    console.log('[AnnotateContainer] Creating raw_clips for', annotations.length, 'imported annotations...');
+    // First, import annotations to show clips in UI immediately
+    const count = importAnnotations(annotations, overrideDuration);
+    console.log('[AnnotateContainer] Imported', count, 'annotations to UI');
 
-    // Create raw_clips for each annotation that doesn't have one
-    for (const annotation of annotations) {
-      // Skip if already has a raw_clip_id
-      if (annotation.raw_clip_id || annotation.rawClipId) {
-        continue;
-      }
+    // Then save raw_clips in background (don't block UI)
+    if (annotateGameId) {
+      console.log('[AnnotateContainer] Starting background raw_clip saves for', annotations.length, 'annotations...');
 
-      try {
-        const result = await saveClip(annotateGameId, {
-          start_time: annotation.startTime ?? annotation.start_time ?? 0,
-          end_time: annotation.endTime ?? annotation.end_time ?? 0,
-          name: annotation.name || '',
-          rating: annotation.rating || 3,
-          tags: annotation.tags || [],
-          notes: annotation.notes || ''
+      // Fire off all saves in parallel (don't await each one sequentially)
+      const savePromises = annotations
+        .filter(annotation => !annotation.raw_clip_id && !annotation.rawClipId)
+        .map(async (annotation) => {
+          try {
+            const result = await saveClip(annotateGameId, {
+              start_time: annotation.startTime ?? annotation.start_time ?? 0,
+              end_time: annotation.endTime ?? annotation.end_time ?? 0,
+              name: annotation.name || '',
+              rating: annotation.rating || 3,
+              tags: annotation.tags || [],
+              notes: annotation.notes || ''
+            });
+
+            if (result) {
+              // Store raw_clip_id for later reference (e.g., when updating clip)
+              annotation.raw_clip_id = result.raw_clip_id;
+              console.log('[AnnotateContainer] Created raw_clip', result.raw_clip_id, 'for annotation');
+            }
+            return result;
+          } catch (err) {
+            console.error('[AnnotateContainer] Failed to create raw_clip for annotation:', err);
+            return null;
+          }
         });
 
-        if (result) {
-          // Add the raw_clip_id to the annotation
-          annotation.raw_clip_id = result.raw_clip_id;
-          console.log('[AnnotateContainer] Created raw_clip', result.raw_clip_id, 'for imported annotation');
-        }
-      } catch (err) {
-        console.error('[AnnotateContainer] Failed to create raw_clip for annotation:', err);
-      }
+      // Wait for all saves to complete (but UI already updated)
+      Promise.all(savePromises).then(results => {
+        const successCount = results.filter(r => r !== null).length;
+        console.log('[AnnotateContainer] Completed', successCount, '/', annotations.length, 'raw_clip saves');
+      });
     }
 
-    // Now import with rawClipIds attached
-    return importAnnotations(annotations, overrideDuration);
+    return count;
   }, [annotateGameId, importAnnotations, saveClip]);
 
   return {

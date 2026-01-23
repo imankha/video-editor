@@ -1,4 +1,4 @@
-# Task 09: Frontend Export Updates
+# Task 08: Frontend Export Updates
 
 ## Overview
 Update the frontend to work with the new async export flow (submit job, poll for status).
@@ -7,7 +7,7 @@ Update the frontend to work with the new async export flow (submit job, poll for
 **Claude** - Code generation task
 
 ## Prerequisites
-- Task 08 complete (Backend RunPod integration)
+- Task 07 complete (Backend Modal integration)
 
 ## Testability
 **After this task**: User clicks export → sees progress indicator → can download when complete.

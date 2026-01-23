@@ -454,12 +454,16 @@ class ModelManager:
     def _setup_primary_backend(self):
         """Setup the primary model backend"""
         # Determine tile size
+        # Always use tiling to prevent CUDA OOM during long exports
+        # Tile size of 256 for maximum memory safety during multi-clip exports
         if self.tile_size > 0:
             tile = self.tile_size
         elif self.device.type == 'cuda':
-            tile = 0 if self.export_mode == 'quality' else 512
+            # Use small tiles to prevent OOM crashes during long exports
+            # This trades some quality for stability on long multi-clip exports
+            tile = 256  # Small tiles for maximum memory safety
         else:
-            tile = 512
+            tile = 256
 
         half_precision = self.device.type == 'cuda'
 
@@ -489,7 +493,7 @@ class ModelManager:
             try:
                 backend.setup(
                     device=gpu_device,
-                    tile_size=self.tile_size if self.tile_size > 0 else (0 if self.export_mode == 'quality' else 512),
+                    tile_size=self.tile_size if self.tile_size > 0 else 256,  # Small tiles for stability
                     half=True
                 )
                 self.backends[gpu_id] = backend

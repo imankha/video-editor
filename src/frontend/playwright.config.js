@@ -5,19 +5,15 @@ import { fileURLToPath } from 'url';
 /**
  * Playwright configuration for E2E tests
  *
- * Simple setup:
- * - Uses dev ports (8000/5173) with reuseExistingServer: true
- * - If your dev servers are running, tests use them (fast, no zombie issues)
- * - If not running, Playwright starts them automatically
+ * IMPORTANT: Start servers manually before running tests:
+ *   Terminal 1: cd src/backend && python -m uvicorn app.main:app --port 8000
+ *   Terminal 2: cd src/frontend && npm run dev
  *
  * Run tests:
  *   npx playwright test           # CLI mode
- *   npx playwright test --ui      # UI mode (uses your running dev servers)
- *
- * Best practice:
- *   1. Start your dev servers: npm run dev (frontend) + uvicorn (backend)
- *   2. Run tests in UI mode: npx playwright test --ui
- *   3. No zombie processes, no port conflicts!
+ *   npx playwright test --ui      # UI mode (recommended)
+ *   npx playwright test --grep @smoke   # Fast smoke tests only
+ *   npx playwright test --grep @full    # Full coverage tests
  */
 
 // ES module equivalent of __dirname
@@ -70,31 +66,12 @@ export default defineConfig({
     },
   ],
 
-  // Web server configuration
-  // reuseExistingServer: true = use running servers if available, start if not
-  // This eliminates zombie process issues!
-  webServer: [
-    {
-      // Backend - use venv Python on Windows, system python elsewhere
-      command: process.platform === 'win32'
-        ? `.venv\\Scripts\\python.exe -m uvicorn app.main:app --port ${API_PORT}`
-        : `python -m uvicorn app.main:app --port ${API_PORT}`,
-      cwd: path.resolve(__dirname, '../backend'),
-      port: API_PORT,
-      reuseExistingServer: true, // Use running server if available
-      timeout: 120000,
-    },
-    {
-      // Frontend dev server
-      // Set VITE_API_PORT so Vite's proxy targets the correct backend port
-      command: process.platform === 'win32'
-        ? `set VITE_API_PORT=${API_PORT}&& npm run dev -- --port ${FRONTEND_PORT}`
-        : `VITE_API_PORT=${API_PORT} npm run dev -- --port ${FRONTEND_PORT}`,
-      port: FRONTEND_PORT,
-      reuseExistingServer: true, // Use running server if available
-      timeout: 60000,
-    },
-  ],
+  // Web server configuration - DISABLED
+  // Playwright will NOT start servers automatically.
+  // You must start them manually before running tests:
+  //   Terminal 1: cd src/backend && python -m uvicorn app.main:app --port 8000
+  //   Terminal 2: cd src/frontend && npm run dev
+  // This prevents zombie processes when tests are cancelled.
 
   // Increase timeout for video processing operations
   timeout: 300000, // 5 minutes per test (video uploads take time)

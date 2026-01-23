@@ -129,6 +129,7 @@ const ExportButton = forwardRef(function ExportButton({
   onExportEnd: onExportEndProp,      // Callback when export ends (optional, context used)
   isExternallyExporting: isExternallyExportingProp, // Optional, derived from context
   externalProgress: externalProgressProp, // Optional, from context
+  saveCurrentClipState = null,  // Function to save current clip state before backend-authoritative export
 }, ref) {
   // Get app state from context (provides defaults for props above)
   const {
@@ -325,15 +326,24 @@ const ExportButton = forwardRef(function ExportButton({
     // Quick health check before starting export
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout for E2E tests
       const healthResponse = await fetch(`${API_BASE}/api/health`, { signal: controller.signal });
       clearTimeout(timeoutId);
       if (!healthResponse.ok) {
-        throw new Error('Server health check failed');
+        throw new Error(`Server returned ${healthResponse.status}: ${healthResponse.statusText}`);
       }
     } catch (healthErr) {
       console.error('[ExportButton] Server health check failed:', healthErr);
-      setError('Cannot connect to server. Please ensure the backend server is running on port 8000.');
+      // Provide more specific error messages based on error type
+      let errorMsg;
+      if (healthErr.name === 'AbortError') {
+        errorMsg = 'Server connection timed out. The backend may be slow or unresponsive.';
+      } else if (healthErr.message.includes('Failed to fetch') || healthErr.message.includes('NetworkError')) {
+        errorMsg = 'Cannot connect to server. Please ensure the backend server is running on port 8000.';
+      } else {
+        errorMsg = `Server error: ${healthErr.message}`;
+      }
+      setError(errorMsg);
       setProgressMessage('Server unreachable');
       setIsExporting(false);
       handleExportEnd();
@@ -415,25 +425,94 @@ const ExportButton = forwardRef(function ExportButton({
           formData.append('include_audio', includeAudio ? 'true' : 'false');
           formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
           formData.append('export_mode', EXPORT_CONFIG.exportMode);
+          // Add project info for saving working video to DB
+          if (projectId) {
+            formData.append('project_id', String(projectId));
+          }
+          if (projectName) {
+            formData.append('project_name', projectName);
+          }
 
         } else {
-          // Single clip export: Use existing AI upscale endpoint
-          endpoint = `${API_BASE}/api/export/upscale`;
+          // Single clip export: Backend-authoritative render
+          // Backend reads crop_data, segments_data, timing_data from working_clips table
+          // No need to send video or keyframes - backend fetches from storage
 
-          formData.append('keyframes_json', JSON.stringify(cropKeyframes));
-          // Audio setting only applies to framing export (overlay preserves whatever audio is in input)
-          formData.append('include_audio', includeAudio ? 'true' : 'false');
-          formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
-          formData.append('export_mode', EXPORT_CONFIG.exportMode);
+          if (projectId && saveCurrentClipState) {
+            // Backend-authoritative mode: Save edits first, then request render
+            console.log('[ExportButton] Using backend-authoritative render');
+            setProgressMessage('Saving edits...');
 
-          // Add segment data if available (speed/trim)
-          if (segmentData) {
-            console.log('=== EXPORT: Sending segment data to backend ===');
-            console.log(JSON.stringify(segmentData, null, 2));
-            console.log('==============================================');
-            formData.append('segment_data_json', JSON.stringify(segmentData));
+            try {
+              await saveCurrentClipState();
+              console.log('[ExportButton] Clip state saved, requesting render');
+            } catch (saveErr) {
+              console.error('[ExportButton] Failed to save clip state:', saveErr);
+              throw new Error('Failed to save clip edits before export. Please try again.');
+            }
+
+            // Use the new backend-authoritative endpoint
+            endpoint = `${API_BASE}/api/export/render`;
+
+            // Connect WebSocket for real-time progress updates
+            setProgressMessage('Connecting...');
+            await connectWebSocket(exportId);
+
+            // Send render request (JSON body, no file upload)
+            setProgressMessage('Starting render...');
+            const renderResponse = await axios.post(endpoint, {
+              project_id: projectId,
+              export_id: exportId,
+              export_mode: EXPORT_CONFIG.exportMode,
+              target_fps: EXPORT_CONFIG.targetFps,
+              include_audio: includeAudio
+            });
+
+            // Backend returns JSON with working_video info
+            console.log('[ExportButton] Backend render complete:', renderResponse.data);
+
+            // Trigger export complete flow
+            handleExportEnd();
+            setLocalProgress(100);
+            setProgressMessage('Export complete!');
+            completeExportInStore(exportId, {
+              status: 'complete',
+              workingVideoId: renderResponse.data.working_video_id,
+              filename: renderResponse.data.filename
+            });
+
+            // Trigger proceed to overlay if callback provided
+            if (onProceedToOverlay) {
+              onProceedToOverlay(null, buildClipMetadata(clips));
+            }
+            if (onExportComplete) {
+              onExportComplete();
+            }
+
+            setIsExporting(false);
+            return;  // Exit early - backend-authoritative path complete
+
           } else {
-            console.log('=== EXPORT: No segment data to send ===');
+            // Fallback: Legacy client-sends-everything mode
+            // Used when saveCurrentClipState not available or no projectId
+            console.log('[ExportButton] Using legacy client-driven export');
+            endpoint = `${API_BASE}/api/export/upscale`;
+
+            formData.append('keyframes_json', JSON.stringify(cropKeyframes));
+            // Audio setting only applies to framing export (overlay preserves whatever audio is in input)
+            formData.append('include_audio', includeAudio ? 'true' : 'false');
+            formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
+            formData.append('export_mode', EXPORT_CONFIG.exportMode);
+
+            // Add segment data if available (speed/trim)
+            if (segmentData) {
+              console.log('=== EXPORT: Sending segment data to backend ===');
+              console.log(JSON.stringify(segmentData, null, 2));
+              console.log('==============================================');
+              formData.append('segment_data_json', JSON.stringify(segmentData));
+            } else {
+              console.log('=== EXPORT: No segment data to send ===');
+            }
           }
         }
         // Note: Highlight keyframes are NOT sent during framing export.

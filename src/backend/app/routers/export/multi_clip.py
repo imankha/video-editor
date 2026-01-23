@@ -10,7 +10,7 @@ Uses the transition strategy pattern for different transition types.
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
@@ -24,6 +24,7 @@ import ffmpeg
 import shutil
 import hashlib
 import base64
+import torch
 
 from ...websocket import export_progress, manager
 from ...services.clip_cache import get_clip_cache
@@ -31,6 +32,9 @@ from ...services.transitions import apply_transition
 from ...services.clip_pipeline import process_clip_with_pipeline
 from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR
 from ...services.ffmpeg_service import get_video_duration
+from ...database import get_db_connection
+from ...storage import upload_to_r2
+from ...user_context import get_current_user_id, set_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -98,13 +102,18 @@ async def process_single_clip(
     export_mode: str,
     include_audio: bool,
     progress_callback,
-    loop: asyncio.AbstractEventLoop
+    loop: asyncio.AbstractEventLoop,
+    upscaler=None
 ) -> str:
     """
     Process a single clip with its crop/trim/speed settings.
     Uses ClipProcessingPipeline to ensure correct ordering of operations.
     Uses caching to avoid re-processing unchanged clips.
     Returns path to processed clip.
+
+    Args:
+        upscaler: Optional AIVideoUpscaler instance to reuse across clips.
+                  If None, a new one will be created (not recommended for multi-clip).
     """
     clip_index = clip_data['clipIndex']
 
@@ -118,12 +127,14 @@ async def process_single_clip(
             detail={"error": "AI upscaling dependencies not installed"}
         )
 
-    # Initialize upscaler
-    upscaler = AIVideoUpscaler(
-        device='cuda',
-        export_mode=export_mode,
-        sr_model_name='realesr_general_x4v3'
-    )
+    # Reuse provided upscaler or create a new one
+    # Creating a new upscaler per clip can cause VRAM exhaustion!
+    if upscaler is None:
+        upscaler = AIVideoUpscaler(
+            device='cuda',
+            export_mode=export_mode,
+            sr_model_name='realesr_general_x4v3'
+        )
 
     if upscaler.upsampler is None:
         raise HTTPException(
@@ -313,6 +324,8 @@ async def export_multi_clip(
     include_audio: str = Form("true"),
     target_fps: int = Form(30),
     export_mode: str = Form("fast"),
+    project_id: int = Form(None),  # Optional: for saving working video to DB
+    project_name: str = Form(None),  # Optional: for metadata
 ):
     """
     Export multiple video clips with transitions.
@@ -373,6 +386,10 @@ async def export_multi_clip(
     temp_dir = tempfile.mkdtemp()
     processed_paths: List[str] = []
 
+    # Capture user context before async operations (context vars may drift in threads)
+    captured_user_id = get_current_user_id()
+    logger.info(f"[Multi-Clip Export] Captured user context: {captured_user_id}")
+
     try:
         # Calculate consistent target resolution for all clips
         target_resolution = calculate_multi_clip_resolution(clips_data, global_aspect_ratio)
@@ -380,6 +397,28 @@ async def export_multi_clip(
 
         # Get event loop for progress callbacks
         loop = asyncio.get_running_loop()
+
+        # Create upscaler ONCE and reuse for all clips
+        # This prevents VRAM exhaustion from loading the model multiple times
+        if AIVideoUpscaler is None:
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "AI upscaling dependencies not installed"}
+            )
+
+        shared_upscaler = AIVideoUpscaler(
+            device='cuda',
+            export_mode=export_mode,
+            sr_model_name='realesr_general_x4v3'
+        )
+
+        if shared_upscaler.upsampler is None:
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "AI SR model failed to load"}
+            )
+
+        logger.info(f"[Multi-Clip Export] Initialized shared AI upscaler")
 
         # Process each clip
         total_clips = len(clips_data)
@@ -431,7 +470,7 @@ async def export_multi_clip(
 
             clip_progress_callback = create_clip_progress_callback(i, total_clips)
 
-            # Process this clip
+            # Process this clip with the shared upscaler
             output_path = await process_single_clip(
                 clip_data=clip_data,
                 video_file=video_file,
@@ -440,11 +479,24 @@ async def export_multi_clip(
                 export_mode=export_mode,
                 include_audio=include_audio_bool,
                 progress_callback=clip_progress_callback,
-                loop=loop
+                loop=loop,
+                upscaler=shared_upscaler
             )
 
             processed_paths.append(output_path)
             logger.info(f"[Multi-Clip Export] Clip {clip_index} processed: {output_path}")
+
+            # Aggressive memory cleanup between clips
+            # This prevents VRAM/RAM accumulation that can cause crashes
+            import gc
+            gc.collect()  # Force Python garbage collection first
+
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()  # Ensure all GPU operations complete
+                torch.cuda.empty_cache()  # Clear cached GPU memory
+                logger.info(f"[Multi-Clip Export] Cleared GPU cache after clip {clip_index}")
+
+            gc.collect()  # Final garbage collection after GPU cleanup
 
         # Concatenate clips with transition
         progress_data = {
@@ -466,30 +518,121 @@ async def export_multi_clip(
 
         logger.info(f"[Multi-Clip Export] Final output: {final_output}")
 
-        # Complete
-        progress_data = {
+        # Restore user context after async operations
+        set_current_user_id(captured_user_id)
+        logger.info(f"[Multi-Clip Export] Restored user context: {captured_user_id}")
+
+        # Save working video to database if project_id provided
+        working_video_id = None
+        working_filename = None
+        if project_id:
+            try:
+                # Generate unique filename
+                working_filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+
+                # Upload to R2 with periodic progress updates (can take 60+ seconds for large files)
+                # Run upload in thread while sending heartbeat progress every 10 seconds
+                upload_result = [None]  # Use list to store result from thread
+                upload_error = [None]
+
+                def do_upload():
+                    try:
+                        result = upload_to_r2(captured_user_id, f"working_videos/{working_filename}", Path(final_output))
+                        upload_result[0] = result
+                    except Exception as e:
+                        upload_error[0] = e
+
+                import threading
+                upload_thread = threading.Thread(target=do_upload)
+                upload_thread.start()
+
+                # Send periodic progress while upload is running
+                progress_value = 90
+                while upload_thread.is_alive():
+                    upload_progress = {
+                        "progress": progress_value,
+                        "message": "Uploading to cloud storage...",
+                        "status": "processing"
+                    }
+                    export_progress[export_id] = upload_progress
+                    await manager.send_progress(export_id, upload_progress)
+                    # Wait up to 10 seconds, checking if thread is done
+                    upload_thread.join(timeout=10)
+                    # Slowly increment progress (90 -> 95 during upload)
+                    if progress_value < 95:
+                        progress_value += 1
+
+                # Check for errors
+                if upload_error[0]:
+                    raise upload_error[0]
+                if not upload_result[0]:
+                    raise Exception("Failed to upload working video to R2")
+
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+
+                    # Get next version number
+                    cursor.execute("""
+                        SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                        FROM working_videos WHERE project_id = ?
+                    """, (project_id,))
+                    next_version = cursor.fetchone()['next_version']
+
+                    # Reset final_video_id (working video changed, need re-export overlay)
+                    cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
+
+                    # Create working_videos record
+                    cursor.execute("""
+                        INSERT INTO working_videos (project_id, filename, version)
+                        VALUES (?, ?, ?)
+                    """, (project_id, working_filename, next_version))
+                    working_video_id = cursor.lastrowid
+
+                    # Update project with new working_video_id
+                    cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
+
+                    conn.commit()
+                    logger.info(f"[Multi-Clip Export] Created working video {working_video_id} for project {project_id}")
+
+            except Exception as e:
+                logger.error(f"[Multi-Clip Export] Failed to save working video: {e}", exc_info=True)
+                # Don't fail the whole export - still return success
+                working_video_id = None
+
+        # Complete - include working_video_id so frontend knows the video was saved
+        complete_data = {
             "progress": 100,
             "message": "Export complete!",
-            "status": "complete"
+            "status": "complete",
+            "projectId": project_id,
+            "projectName": project_name,
+            "type": "framing",
+            "workingVideoId": working_video_id,
+            "workingFilename": working_filename
         }
-        export_progress[export_id] = progress_data
-        await manager.send_progress(export_id, progress_data)
+        export_progress[export_id] = complete_data
+        await manager.send_progress(export_id, complete_data)
 
-        # Return the file with cleanup
-        def cleanup():
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
+        # Clean up
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
 
-        return FileResponse(
-            final_output,
-            media_type='video/mp4',
-            filename=f"multi_clip_{export_id}.mp4",
-            background=BackgroundTask(cleanup)
-        )
+        # Return JSON response (MVC: frontend doesn't need the video data)
+        return JSONResponse({
+            'success': True,
+            'working_video_id': working_video_id,
+            'working_filename': working_filename,
+            'project_id': project_id
+        })
 
     except HTTPException:
         import time
         time.sleep(0.5)
+        # Clean up GPU memory on error
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         try:
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -497,12 +640,20 @@ async def export_multi_clip(
             logger.warning(f"[Multi-Clip Export] Cleanup failed: {cleanup_error}")
         raise
     except Exception as e:
-        logger.error(f"[Multi-Clip Export] Failed: {str(e)}", exc_info=True)
-        error_data = {"progress": 0, "message": f"Export failed: {str(e)}", "status": "error"}
+        import traceback
+        full_traceback = traceback.format_exc()
+        logger.error(f"[Multi-Clip Export] Failed: {str(e)}")
+        logger.error(f"[Multi-Clip Export] Full traceback:\n{full_traceback}")
+        error_msg = f"Export failed: {str(e)}"
+        # Send both 'message' and 'error' for frontend compatibility
+        error_data = {"progress": 0, "message": error_msg, "error": error_msg, "status": "error"}
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
         import time
         time.sleep(0.5)
+        # Clean up GPU memory on error
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         try:
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)

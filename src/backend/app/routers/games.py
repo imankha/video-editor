@@ -20,6 +20,7 @@ import uuid
 import logging
 import mimetypes
 import json
+import shutil
 
 from app.database import get_db_connection, get_games_path, get_raw_clips_path, ensure_directories
 from app.user_context import get_current_user_id
@@ -324,7 +325,7 @@ async def upload_game_video(
         if old_video_filename and old_video_filename != video_filename:
             logger.info(f"Replacing old video: {old_video_filename} with {video_filename}")
 
-        # Stream to temp file, then upload to R2
+        # Stream to temp file, then upload to R2 or local storage
         temp_path = Path(tempfile.gettempdir()) / f"upload_{uuid.uuid4().hex}{original_ext}"
         try:
             with open(temp_path, 'wb') as f:
@@ -335,9 +336,15 @@ async def upload_game_video(
 
             video_size_mb = total_size / (1024 * 1024)
 
-            if not upload_to_r2(user_id, f"games/{video_filename}", temp_path):
-                raise HTTPException(status_code=500, detail="Failed to upload game video to R2")
-            logger.info(f"Uploaded game video to R2: {video_filename} ({video_size_mb:.1f}MB)")
+            if R2_ENABLED:
+                if not upload_to_r2(user_id, f"games/{video_filename}", temp_path):
+                    raise HTTPException(status_code=500, detail="Failed to upload game video to R2")
+                logger.info(f"Uploaded game video to R2: {video_filename} ({video_size_mb:.1f}MB)")
+            else:
+                # Local storage fallback
+                local_path = get_games_path() / video_filename
+                shutil.copy2(temp_path, local_path)
+                logger.info(f"Saved game video locally: {video_filename} ({video_size_mb:.1f}MB)")
 
             # Update database
             cursor.execute("""

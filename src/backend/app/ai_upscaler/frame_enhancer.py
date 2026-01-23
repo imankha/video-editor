@@ -378,8 +378,18 @@ class FrameEnhancer:
 
                 # Default to Real-ESRGAN
                 logger.debug(f"Using Real-ESRGAN model for {capped_scale:.2f}x upscaling")
-                with contextlib.redirect_stderr(open(os.devnull, 'w')):
-                    enhanced, _ = upsampler.enhance(frame, outscale=capped_scale)
+                try:
+                    with contextlib.redirect_stderr(open(os.devnull, 'w')):
+                        enhanced, _ = upsampler.enhance(frame, outscale=capped_scale)
+                except Exception as enhance_error:
+                    logger.error(f"Real-ESRGAN enhance() failed: {enhance_error}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    # Try to recover GPU state
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    raise RuntimeError(f"AI upscaling failed: {enhance_error}") from enhance_error
 
             upscaled_h, upscaled_w = enhanced.shape[:2]
             logger.debug(f"AI model upscaled to {upscaled_w}x{upscaled_h} (scale={desired_scale:.2f})")

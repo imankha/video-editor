@@ -951,6 +951,7 @@ export function FramingScreen({
       onIncludeAudioChange={setIncludeAudio}
       onProceedToOverlay={handleProceedToOverlayInternal}
       onExportComplete={onExportComplete}
+      saveCurrentClipState={framingSaveCurrentClipState}
       // Context
       cropContextValue={cropContextValue}
     />

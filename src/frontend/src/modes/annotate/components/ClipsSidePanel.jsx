@@ -47,7 +47,7 @@ export function ClipsSidePanel({
       if (!result.success) {
         setImportErrors(result.errors);
       } else {
-        const count = onImportAnnotations(result.annotations);
+        const count = await onImportAnnotations(result.annotations, videoDuration);
         setImportSuccess(`Imported ${count} clip${count !== 1 ? 's' : ''}`);
         // Clear success message after 3 seconds
         setTimeout(() => setImportSuccess(null), 3000);

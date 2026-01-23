@@ -1,11 +1,12 @@
-# Cloudflare + RunPod Migration Plan
+# Deployment Migration Plan
 
 ## Overview
 
-Migrate video export processing from local FastAPI to a serverless architecture:
-- **RunPod Serverless**: GPU video processing (pay-per-second, no idle costs)
-- **Cloudflare R2**: ALL user data storage (already implemented)
-- **Cloudflare Workers**: API gateway (future - after RunPod works)
+Migrate from local development to production deployment:
+- **Fly.io**: FastAPI backend (scales to zero, WebSocket support)
+- **Cloudflare Pages**: Frontend hosting (free, global CDN)
+- **Cloudflare R2**: User data storage (already implemented)
+- **Modal**: GPU video processing (Python-native, pay-per-second)
 
 **Key Principle**: The app must remain fully testable after every task. We migrate incrementally, always keeping a working system.
 
@@ -14,88 +15,90 @@ Migrate video export processing from local FastAPI to a serverless architecture:
 | Component | Status | Notes |
 |-----------|--------|-------|
 | R2 Storage | **DONE** | User data stored in R2, presigned URLs working |
-| Database Sync | **DONE** | Version-based sync, batched writes, conflict detection |
+| Database Sync | **DONE** | Version-based sync, batched writes, slow sync warnings |
 | File Endpoints | **DONE** | All endpoints redirect to R2 presigned URLs |
 | Connection Status | **DONE** | Frontend shows banner when backend unavailable |
 
-## Architecture Evolution
+## Architecture
 
-### Phase 1: Current (FastAPI + R2)
+### Local Development
 ```
-Frontend ──► FastAPI Backend ──► R2 Storage
-                    │
-                    └──► Local GPU Processing
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────┐
+│ Frontend        │────►│ FastAPI         │────►│ R2 Storage  │
+│ (localhost:5173)│     │ (localhost:8000)│     │ (Cloudflare)│
+└─────────────────┘     └────────┬────────┘     └─────────────┘
+                                 │
+                                 ▼
+                        ┌─────────────────┐
+                        │ Local FFmpeg    │
+                        └─────────────────┘
 ```
 
-### Phase 2: After RunPod (FastAPI + R2 + RunPod)
+### Production (After Migration)
 ```
-Frontend ──► FastAPI Backend ──► R2 Storage
-                    │                 ▲
-                    └──► RunPod GPU ──┘
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────┐
+│ Frontend        │────►│ FastAPI         │────►│ R2 Storage  │
+│ (CF Pages)      │     │ (Fly.io)        │     │ (Cloudflare)│
+└─────────────────┘     └────────┬────────┘     └─────────────┘
+                                 │
+                                 ▼
+                        ┌─────────────────┐
+                        │ Modal GPU       │
+                        └─────────────────┘
 ```
-**App is testable: FastAPI orchestrates, RunPod processes, R2 stores**
 
-### Phase 3: After Workers (Full Serverless)
-```
-Frontend ──► Cloudflare Workers ──► R2 Storage
-                    │                    ▲
-                    └──► RunPod GPU ─────┘
-```
-**App is testable: Workers orchestrates, RunPod processes, R2 stores**
-
-## Domain Structure (Future)
+## Domain Structure
 
 ```
 reelballers.com       → Cloudflare Pages (landing)
-app.reelballers.com   → Cloudflare Pages (main app)
-api.reelballers.com   → Cloudflare Workers (API)
+app.reelballers.com   → Cloudflare Pages (React app)
+api.reelballers.com   → Fly.io (FastAPI backend)
 ```
 
 ## User Data Structure (Implemented)
 
-The local `user_data/` folder structure is mirrored exactly in R2:
+All user data stored in R2 (no local video storage):
 
 ```
-Local:                              R2 Bucket:
-user_data/                          reel-ballers-users/
-└── {user_id}/                      └── {user_id}/
-    ├── database.sqlite                 ├── database.sqlite    ← Version tracked!
-    ├── games/                          ├── games/
-    ├── raw_clips/                      ├── raw_clips/
-    ├── working_videos/                 ├── working_videos/
-    ├── final_videos/                   ├── final_videos/
-    ├── highlights/                     ├── highlights/
-    └── downloads/                      └── downloads/
+R2 Bucket: reel-ballers-users/
+└── {user_id}/
+    ├── database.sqlite    ← Version tracked, synced per request
+    ├── games/
+    ├── raw_clips/
+    ├── working_videos/
+    ├── final_videos/
+    ├── highlights/
+    └── downloads/
 ```
 
 ## Database Strategy
 
-### Current Implementation (In-Memory SQLite + R2)
+### Current Implementation (SQLite + R2 Sync)
 
 - SQLite database stored in R2 as `{user_id}/database.sqlite`
 - Version-based sync: only download if R2 version is newer
 - Batched writes: multiple writes per request = single R2 upload
-- Size monitoring: logs warnings at 512KB, recommends DO at 1MB
+- Delay-based warnings: logs when sync takes >500ms
 - Conflict resolution: last-write-wins with logging
 
-### Future: Durable Objects (CONDITIONAL)
+### Future Optimization (CONDITIONAL)
 
-**Only migrate to DO when:**
-- Database consistently exceeds 1MB
+**Only consider changes when:**
+- Sync consistently takes >500ms (monitor via logs)
+- Database exceeds 1MB
 - Need real-time collaboration features
-- Concurrent write conflicts become an issue
 
-**The in-memory approach works well for small DBs (<1MB).** Current DB is ~204KB.
+Current DB is ~204KB - no optimization needed yet.
 
 ## Key Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| GPU Provider | RunPod Serverless | No Kubernetes, pay-per-second, auto-scales to zero |
-| Migration Order | RunPod THEN Workers | Keeps app testable - GPU must work before backend goes stateless |
-| Database | SQLite in R2 | Simple, working, migrate to DO only if needed |
-| Job Recovery | Retry from scratch | Jobs are short (10-30s), checkpoint complexity not worth it |
-| Auth | Anonymous → Magic Link | Start frictionless, add email when needed |
+| Backend Hosting | Fly.io | Scales to zero, WebSockets, Python native |
+| Frontend Hosting | Cloudflare Pages | Free, fast CDN, same platform as R2 |
+| GPU Provider | Modal | Python-native, pay-per-second, no Docker needed |
+| Database | SQLite in R2 | Simple, working, no WASM overhead |
+| Local Dev | Same as always | 2 terminals, real R2 connection |
 
 ---
 
@@ -107,23 +110,19 @@ user_data/                          reel-ballers-users/
 | -- | R2 Bucket Setup | `DONE` | User | CORS configured, credentials created |
 | -- | R2 Storage Integration | `DONE` | Claude | Presigned URLs, file redirects |
 | 04 | [Database Sync](tasks/04-database-sync.md) | `DONE` | Claude | Version tracking, batched writes |
-| 05 | [RunPod Account Setup](tasks/05-runpod-account-setup.md) | `TODO` | User | Create account, add credits |
-| 06 | [RunPod Endpoint Setup](tasks/06-runpod-endpoint-setup.md) | `TODO` | User | Create serverless endpoint |
-| 07 | [GPU Worker Code](tasks/07-gpu-worker-code.md) | `TODO` | Claude | Docker container with ffmpeg |
-| 08 | [Backend RunPod Integration](tasks/08-backend-runpod-integration.md) | `TODO` | Claude | FastAPI calls RunPod for exports |
-| 09 | [Frontend Export Updates](tasks/09-frontend-export-updates.md) | `TODO` | Claude | Progress UI for RunPod jobs |
-| 10 | [Testing RunPod Integration](tasks/10-testing-runpod.md) | `TODO` | Both | End-to-end export testing |
-| 11 | [Workers Project Setup](tasks/11-workers-project-setup.md) | `TODO` | Claude | wrangler.toml, directory structure |
-| 12 | [Workers API Routes](tasks/12-workers-api-routes.md) | `TODO` | Claude | Job CRUD, video URLs |
-| 13 | [Durable Objects Job State](tasks/13-durable-objects-job-state.md) | `TODO` | Claude | Real-time progress updates |
-| 14 | [Backend Workers Migration](tasks/14-backend-workers-migration.md) | `TODO` | Claude | Switch from FastAPI to Workers |
-| 15 | [Frontend Workers Updates](tasks/15-frontend-workers-updates.md) | `TODO` | Claude | Point to Workers API |
-| 16 | [Wallet & Payments](tasks/16-wallet-payments.md) | `OPTIONAL` | Both | Stripe integration |
-| 17 | [User Management](tasks/17-user-management.md) | `OPTIONAL` | Both | Auth, multi-tenancy |
-| 18 | [DO+SQLite Migration](tasks/18-do-sqlite-migration.md) | `CONDITIONAL` | Claude | Only if DB > 1MB consistently |
-| 19 | [Future GPU Features](tasks/19-future-gpu-features.md) | `FUTURE` | Claude | Upscaling, tracking, auto-crop |
+| 05 | [Modal Account Setup](tasks/05-modal-account-setup.md) | `TODO` | User | Create account, add credits |
+| 06 | [GPU Functions Code](tasks/06-gpu-functions.md) | `TODO` | Claude | Modal functions with FFmpeg |
+| 07 | [Backend Modal Integration](tasks/07-backend-modal-integration.md) | `TODO` | Claude | FastAPI calls Modal for exports |
+| 08 | [Frontend Export Updates](tasks/08-frontend-export-updates.md) | `TODO` | Claude | Progress UI for Modal jobs |
+| 09 | [Testing Modal Integration](tasks/09-testing-modal.md) | `TODO` | Both | End-to-end export testing |
+| 10 | [Fly.io Backend Deployment](tasks/10-flyio-deployment.md) | `TODO` | Claude | fly.toml, Dockerfile, deploy |
+| 11 | [Cloudflare Pages Frontend](tasks/11-cloudflare-pages.md) | `TODO` | Claude | Build & deploy React app |
+| 12 | [Production DNS & SSL](tasks/12-dns-ssl-setup.md) | `TODO` | User | Configure domains |
+| 13 | [User Management](tasks/13-user-management.md) | `OPTIONAL` | Both | Auth, multi-tenancy |
+| 14 | [Wallet & Payments](tasks/14-wallet-payments.md) | `OPTIONAL` | Both | Stripe integration |
+| 15 | [Future GPU Features](tasks/15-future-gpu-features.md) | `FUTURE` | Claude | AI upscaling, tracking |
 
-**Status Key**: `DONE` | `TODO` | `IN_PROGRESS` | `BLOCKED` | `OPTIONAL` | `CONDITIONAL` | `FUTURE`
+**Status Key**: `DONE` | `TODO` | `IN_PROGRESS` | `BLOCKED` | `OPTIONAL` | `FUTURE`
 
 ---
 
@@ -136,62 +135,54 @@ Phase 1: R2 Storage (COMPLETE)
 ├── R2 storage integration ✓
 └── 04-database-sync ✓
 
-Phase 2: RunPod GPU Processing (CURRENT FOCUS)
-├── 05-runpod-account-setup
-├── 06-runpod-endpoint-setup
-├── 07-gpu-worker-code
-├── 08-backend-runpod-integration
-├── 09-frontend-export-updates
-└── 10-testing-runpod
+Phase 2: Modal GPU Processing (CURRENT FOCUS)
+├── 05-modal-account-setup
+├── 06-gpu-functions
+├── 07-backend-modal-integration
+├── 08-frontend-export-updates
+└── 09-testing-modal
     ↓
-    APP IS TESTABLE: Local backend + RunPod GPU + R2 storage
+    APP IS TESTABLE: Local backend + Modal GPU + R2 storage
 
-Phase 3: Cloudflare Workers (After RunPod works)
-├── 11-workers-project-setup
-├── 12-workers-api-routes
-├── 13-durable-objects-job-state
-├── 14-backend-workers-migration
-└── 15-frontend-workers-updates
+Phase 3: Production Deployment
+├── 10-flyio-deployment
+├── 11-cloudflare-pages
+└── 12-dns-ssl-setup
     ↓
-    APP IS TESTABLE: Workers API + RunPod GPU + R2 storage
+    APP IS LIVE: Fly.io backend + CF Pages frontend + Modal GPU + R2 storage
 
-Phase 4: Monetization & Users (OPTIONAL)
-├── 16-wallet-payments
-└── 17-user-management
+Phase 4: Users & Monetization (OPTIONAL)
+├── 13-user-management
+└── 14-wallet-payments
 
-Phase 5: Conditional Optimization (ONLY IF NEEDED)
-└── 18-do-sqlite-migration (only if DB > 1MB)
-
-Phase 6: Future Features
-└── 19-future-gpu-features (upscaling, tracking, auto-crop)
+Phase 5: Future Features
+└── 15-future-gpu-features (AI upscaling, player tracking)
 ```
 
 ---
 
 ## Testability Checkpoints
 
-After each phase, the app must pass these tests:
+### After Phase 1 (R2 Storage) - COMPLETE ✓
+- [x] Videos load from R2 presigned URLs
+- [x] Database syncs between requests
+- [x] New uploads go to R2
+- [x] Slow sync warnings appear in logs when >500ms
 
-### After Phase 1 (R2 Storage) - COMPLETE
-- [ ] Videos load from R2 presigned URLs
-- [ ] Database syncs between requests
-- [ ] New uploads go to R2
-- [ ] App works offline then syncs
-
-### After Phase 2 (RunPod)
-- [ ] Framing export works via RunPod
-- [ ] Overlay export works via RunPod
-- [ ] Annotate export works via RunPod
+### After Phase 2 (Modal)
+- [ ] Framing export works via Modal
+- [ ] Overlay export works via Modal
+- [ ] Annotate export works via Modal
 - [ ] Progress updates show in UI
 - [ ] Failed jobs retry correctly
-- [ ] App falls back gracefully if RunPod unavailable
+- [ ] Local FFmpeg fallback works when MODAL_ENABLED=false
 
-### After Phase 3 (Workers)
-- [ ] All API calls work via Workers
+### After Phase 3 (Production)
+- [ ] Frontend loads from Cloudflare Pages
+- [ ] API calls work to Fly.io backend
 - [ ] WebSocket progress updates work
-- [ ] Database operations work via Workers
-- [ ] File uploads/downloads work
-- [ ] App works with Workers + RunPod
+- [ ] Cold start is acceptable (<3s)
+- [ ] Scale to zero works (no charges when idle)
 
 ---
 
@@ -199,44 +190,47 @@ After each phase, the app must pass these tests:
 
 | Component | Monthly Cost |
 |-----------|--------------|
-| Cloudflare Workers Paid | $5 |
-| Cloudflare R2 (50GB) | $0.75 |
-| RunPod Serverless | $5-10 |
-| **Total** | **~$11-16/month** |
+| Fly.io (scales to zero) | ~$5-7 |
+| Cloudflare Pages | Free |
+| Cloudflare R2 (50GB) | ~$0.75 |
+| Modal GPU | ~$3-8 |
+| **Total** | **~$11-18/month** |
 
 ---
 
 ## Quick Reference
 
-### Local Development (Current)
+### Local Development (Same as Always)
 ```bash
 # Terminal 1: Frontend
 cd src/frontend && npm run dev
 
-# Terminal 2: Backend (with R2 enabled)
-cd src/backend && R2_ENABLED=true uvicorn app.main:app --reload
-```
-
-### Local Development (After Phase 2)
-```bash
-# Terminal 1: Frontend
-cd src/frontend && npm run dev
-
-# Terminal 2: Backend
+# Terminal 2: Backend (with R2)
 cd src/backend && uvicorn app.main:app --reload
-
-# GPU processing handled by RunPod (cloud)
 ```
 
-### Local Development (After Phase 3)
+Environment variables for local dev:
 ```bash
-# Terminal 1: Frontend
-cd src/frontend && npm run dev
+R2_ENABLED=true
+R2_ACCESS_KEY_ID=xxx
+R2_SECRET_ACCESS_KEY=xxx
+R2_ENDPOINT_URL=https://xxx.r2.cloudflarestorage.com
+R2_BUCKET_NAME=reel-ballers-users
 
-# Terminal 2: Cloudflare Workers (local)
-cd workers && wrangler dev --local --persist
+# Optional: Enable Modal for GPU exports
+MODAL_ENABLED=true
+MODAL_TOKEN_ID=xxx
+MODAL_TOKEN_SECRET=xxx
+```
 
-# GPU processing handled by RunPod (cloud)
+### Production Deployment
+```bash
+# Deploy backend
+cd src/backend && fly deploy
+
+# Deploy frontend
+cd src/frontend && npm run build
+npx wrangler pages deploy dist --project-name=reel-ballers
 ```
 
 ### File Locations
@@ -245,17 +239,264 @@ video-editor/
 ├── cloudflare-runpod-migration/   # This plan
 │   ├── PLAN.md                    # You are here
 │   └── tasks/                     # Detailed task files
-├── gpu-worker/                    # NEW (Phase 2): RunPod container
-│   ├── Dockerfile
-│   ├── handler.py
+├── modal_functions/               # NEW (Phase 2): Modal GPU functions
+│   ├── __init__.py
+│   ├── video_processing.py        # Modal functions with FFmpeg
 │   └── processors/
-├── workers/                       # NEW (Phase 3): Cloudflare Workers
-│   ├── src/
-│   └── wrangler.toml
-└── src/                          # EXISTING
-    ├── backend/                  # FastAPI (modify in Phase 2)
-    └── frontend/                 # React (modify in Phase 2 & 3)
+└── src/
+    ├── backend/                   # FastAPI (add fly.toml)
+    │   ├── fly.toml              # NEW: Fly.io config
+    │   ├── Dockerfile            # NEW: Production container
+    │   └── app/
+    └── frontend/                  # React (deploy to CF Pages)
 ```
+
+---
+
+## Development & Deployment Workflow
+
+### Environment Strategy
+
+**Key insight**: We use ONE R2 bucket (data is isolated by user ID) and ONE Modal deployment (stateless functions). The "environment" is defined by the backend app and frontend deployment.
+
+### When Each Environment is Created
+
+| Environment | Created During | First Usable After |
+|-------------|----------------|-------------------|
+| **Local** | Phase 1 (already done) | Now |
+| **Staging** | Task 10 (Fly.io deployment) | Phase 3 Task 10 |
+| **Production** | Task 12 (DNS setup) | Phase 3 Task 12 |
+
+### Environment Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                           SHARED RESOURCES                          │
+├─────────────────────────────────────────────────────────────────────┤
+│  R2 Bucket: reel-ballers-users     Modal: reel-ballers-video        │
+│  └── {user_id}/...                 └── process_video function       │
+│  (Same bucket, user-isolated)      (Same function, stateless)       │
+└─────────────────────────────────────────────────────────────────────┘
+          │                                      │
+          ▼                                      ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│     LOCAL       │  │    STAGING      │  │   PRODUCTION    │
+├─────────────────┤  ├─────────────────┤  ├─────────────────┤
+│ Backend:        │  │ Backend:        │  │ Backend:        │
+│ localhost:8000  │  │ Fly.io staging  │  │ Fly.io prod     │
+│                 │  │                 │  │                 │
+│ Frontend:       │  │ Frontend:       │  │ Frontend:       │
+│ localhost:5173  │  │ CF Pages preview│  │ CF Pages prod   │
+│                 │  │                 │  │                 │
+│ GPU: local      │  │ GPU: Modal      │  │ GPU: Modal      │
+│ FFmpeg          │  │ (shared)        │  │ (shared)        │
+│                 │  │                 │  │                 │
+│ Stripe: N/A     │  │ Stripe: test    │  │ Stripe: live    │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+```
+
+### Environment Details
+
+| Component | Local | Staging | Production |
+|-----------|-------|---------|------------|
+| **Backend URL** | localhost:8000 | reel-ballers-api-staging.fly.dev | api.reelballers.com |
+| **Frontend URL** | localhost:5173 | *.reel-ballers-app.pages.dev | app.reelballers.com |
+| **R2 Bucket** | reel-ballers-users | reel-ballers-users | reel-ballers-users |
+| **Modal** | MODAL_ENABLED=false | MODAL_ENABLED=true | MODAL_ENABLED=true |
+| **Stripe Keys** | N/A | sk_test_xxx | sk_live_xxx |
+| **User Data** | user: "dev-local" | user: "dev-staging" | Real user IDs |
+
+### Local Development (Phase 1-2)
+
+```bash
+# Terminal 1: Frontend
+cd src/frontend && npm run dev
+
+# Terminal 2: Backend
+cd src/backend && uvicorn app.main:app --reload
+```
+
+**What's real**: R2 storage (same bucket as prod, isolated by user ID)
+**What's local**: FFmpeg processing (unless `MODAL_ENABLED=true`)
+**User ID**: Defaults to "a" (or whatever you set in cookie)
+
+### Code Promotion Flow
+
+```
+Feature Branch
+     │
+     ├── 1. Develop locally (MODAL_ENABLED=false, local FFmpeg)
+     ├── 2. Test with R2 storage
+     ├── 3. Optionally test with Modal (MODAL_ENABLED=true)
+     │
+     ▼
+Merge to main
+     │
+     ├── 4. Deploy to Fly.io staging: fly deploy --app reel-ballers-api-staging
+     ├── 5. CF Pages auto-deploys preview URL
+     ├── 6. Test full flow on staging (Modal + R2)
+     │
+     ▼
+Promote to Production
+     │
+     ├── 7. Deploy to Fly.io prod: fly deploy --app reel-ballers-api
+     └── 8. CF Pages: promote preview to production
+```
+
+### Deployment Commands
+
+```bash
+# === STAGING ===
+# Deploy backend to staging
+cd src/backend && fly deploy --app reel-ballers-api-staging
+
+# Frontend auto-deploys on push to main
+# Preview URL: https://<commit-hash>.reel-ballers-app.pages.dev
+
+# === PRODUCTION ===
+# Deploy backend to production (after staging verified)
+cd src/backend && fly deploy --app reel-ballers-api
+
+# Promote frontend to production
+cd src/frontend
+npm run build
+npx wrangler pages deploy dist --project-name=reel-ballers-app --branch=production
+```
+
+### Environment Variables
+
+**Local (.env file)**:
+```bash
+R2_ENABLED=true
+R2_ACCESS_KEY_ID=xxx
+R2_SECRET_ACCESS_KEY=xxx
+R2_ENDPOINT_URL=https://xxx.r2.cloudflarestorage.com
+R2_BUCKET_NAME=reel-ballers-users
+MODAL_ENABLED=false  # Use local FFmpeg by default
+```
+
+**Staging (Fly.io secrets)**:
+```bash
+fly secrets set --app reel-ballers-api-staging \
+  R2_ENABLED=true \
+  R2_ACCESS_KEY_ID=xxx \
+  R2_SECRET_ACCESS_KEY=xxx \
+  R2_BUCKET_NAME=reel-ballers-users \
+  MODAL_ENABLED=true \
+  MODAL_TOKEN_ID=xxx \
+  MODAL_TOKEN_SECRET=xxx \
+  STRIPE_SECRET_KEY=sk_test_xxx \
+  STRIPE_WEBHOOK_SECRET=whsec_test_xxx
+```
+
+**Production (Fly.io secrets)**:
+```bash
+fly secrets set --app reel-ballers-api \
+  R2_ENABLED=true \
+  R2_ACCESS_KEY_ID=xxx \
+  R2_SECRET_ACCESS_KEY=xxx \
+  R2_BUCKET_NAME=reel-ballers-users \
+  MODAL_ENABLED=true \
+  MODAL_TOKEN_ID=xxx \
+  MODAL_TOKEN_SECRET=xxx \
+  STRIPE_SECRET_KEY=sk_live_xxx \
+  STRIPE_WEBHOOK_SECRET=whsec_live_xxx
+```
+
+### Testing Checklist
+
+**Before merging to main (local testing):**
+- [ ] App works locally with R2 storage
+- [ ] Exports complete with local FFmpeg
+- [ ] No console errors in frontend
+- [ ] Backend tests pass
+
+**Before promoting to production (staging testing):**
+- [ ] Staging deployment works end-to-end
+- [ ] Exports complete via Modal on staging
+- [ ] Progress updates work in UI
+- [ ] No errors in Fly.io staging logs
+
+**After production deploy:**
+- [ ] Production URLs resolve correctly
+- [ ] API health check passes
+- [ ] One test export completes successfully
+
+---
+
+## Why This Architecture?
+
+### Why Fly.io instead of Cloudflare Workers?
+
+| Factor | Fly.io | Workers |
+|--------|--------|---------|
+| Language | Python (native) | JavaScript only |
+| Rewrite needed | None | Complete rewrite |
+| WebSockets | Full support | Limited |
+| SQLite | Native filesystem | Requires WASM |
+| Cold start | ~2-3s | ~50ms |
+| Scale to zero | Yes | Yes |
+
+**Decision**: Keep Python, avoid rewrite, accept slightly slower cold starts.
+
+### Why Cloudflare Pages for Frontend?
+
+- Already using Cloudflare for R2
+- Free tier is generous
+- Fastest global CDN
+- Automatic HTTPS
+- GitHub integration for CI/CD
+
+### Why Modal for GPU Processing?
+
+| Factor | Modal | RunPod | Fly.io GPU | Workers AI |
+|--------|-------|--------|------------|------------|
+| Cost | ~$0.0001-0.0002/sec | ~$0.0002/sec | ~$0.00027/sec | N/A |
+| Scale to zero | True | True | Yes | Yes |
+| Setup complexity | **Low (Python)** | Medium (Docker) | Medium | N/A |
+| FFmpeg support | Yes | Yes | Yes | **No** |
+| Idle costs | None | None | None | None |
+
+**Decision**: Modal is Python-native (no Docker needed), cheaper than RunPod, excellent DX.
+
+```python
+# Modal: Just Python decorators - no Dockerfile needed
+@app.function(gpu="T4", timeout=300)
+def process_video(input_url: str, params: dict):
+    # FFmpeg code runs on GPU instance
+    return output_url
+```
+
+**Note**: Workers AI is NOT suitable for video processing - it only supports AI inference (LLMs, image generation). Cannot run FFmpeg.
+
+### Why Keep SQLite + R2 Sync?
+
+- Already implemented and working
+- No WASM overhead (native SQLite)
+- Simple mental model
+- Delay-based monitoring tells us when to optimize
+
+---
+
+## Monitoring & Alerts
+
+Watch for these log messages:
+
+```
+# Normal operation
+INFO: Database synced to R2 for user: a, version: 123
+
+# Warning - sync getting slow
+WARNING: [SLOW DB SYNC] POST /api/projects/5/state - sync took 0.65s
+
+# Critical - user experience degraded
+WARNING: [SLOW REQUEST] POST /api/export/upscale - total 5.23s (sync: 0.75s)
+```
+
+**Action**: If SLOW DB SYNC warnings appear frequently, consider:
+1. Archiving old data
+2. Adding Fly Volume for local caching
+3. Investigating network issues
 
 ---
 
@@ -267,19 +508,4 @@ video-editor/
 4. **Only proceed to next phase** when current phase is testable
 5. **Update task status** in this file after completing each task
 
-When asking Claude to work on a task:
-> "Let's work on Task 05 - RunPod Account Setup. The app currently has R2 storage working. After this phase, exports should work via RunPod."
-
----
-
-## Database Size Monitoring
-
-The system automatically logs when database approaches migration thresholds:
-
-```
-INFO:  Database size notice: 600KB - approaching 1MB migration threshold
-WARN:  DATABASE MIGRATION RECOMMENDED: Database size (1.2MB) exceeds 1MB.
-       Consider migrating archived data to Durable Objects.
-```
-
-**Action**: When you see the WARNING consistently, schedule Task 18 (DO+SQLite Migration).
+**Next step**: Task 05 - Modal Account Setup (User task)

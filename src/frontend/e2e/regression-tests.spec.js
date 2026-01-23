@@ -40,12 +40,10 @@ const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
 // ============================================================================
 
 async function setupTestUserContext(page) {
-  console.log(`[Test] Setting up route interceptor for user: ${TEST_USER_ID}`);
-  await page.route('**/api/**', async (route) => {
-    const headers = { ...route.request().headers(), 'X-User-ID': TEST_USER_ID };
-    console.log(`[Test] Intercepted ${route.request().method()} ${route.request().url()} -> adding X-User-ID: ${TEST_USER_ID}`);
-    await route.continue({ headers });
-  });
+  console.log(`[Test] Setting up test user context: ${TEST_USER_ID}`);
+  // Use setExtraHTTPHeaders instead of route() - more reliable with Vite proxy
+  // This sets the header for ALL requests from this page, including fetch/XHR
+  await page.setExtraHTTPHeaders({ 'X-User-ID': TEST_USER_ID });
 }
 
 /**
@@ -366,6 +364,13 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     const effectiveProgress = Math.max(currentProgress, lastConsoleProgress);
     const effectiveProgressTime = Math.max(lastProgressTime, lastConsoleProgressTime);
 
+    // Check for server connection error
+    const serverError = page.locator('text=/Cannot connect to server/i');
+    const hasServerError = await serverError.isVisible({ timeout: 300 }).catch(() => false);
+    if (hasServerError) {
+      throw new Error('Backend server connection lost during export. The server may have crashed or become unresponsive.');
+    }
+
     // Check for stall - no progress (UI or console) for 30 seconds
     const timeSinceProgress = Date.now() - effectiveProgressTime;
     if (exportStarted && hasExportActivity && timeSinceProgress > STALL_TIMEOUT && effectiveProgress < 100) {
@@ -401,8 +406,8 @@ async function navigateToProjectManager(page) {
     return; // Already on project manager Projects tab
   }
 
-  // Look for "← Projects" button (exists in both annotate and framing/overlay modes)
-  const backButton = page.locator('button:has-text("← Projects")');
+  // Look for Home button (exists in both annotate and framing/overlay modes)
+  const backButton = page.locator('button[title="Home"]');
   if (await backButton.isVisible({ timeout: 2000 }).catch(() => false)) {
     await backButton.click();
     await page.waitForTimeout(500);
@@ -423,6 +428,12 @@ async function navigateToProjectManager(page) {
 /**
  * Ensure we're in annotate mode with video and TSV loaded.
  * Navigates there if needed and loads test files.
+ *
+ * Flow (updated for Add Game modal):
+ * 1. Click "Add Game" to open modal
+ * 2. Fill form: opponent, date, game type, video
+ * 3. Click "Create Game" to enter annotate mode
+ * 4. Import TSV file
  */
 async function ensureAnnotateModeWithClips(page) {
   // Check if we're already in annotate mode with clips
@@ -436,23 +447,57 @@ async function ensureAnnotateModeWithClips(page) {
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
-  // Click Games tab and Add Game button to enter annotate mode
+  // Click Games tab and Add Game button to open modal
   await page.locator('button:has-text("Games")').click();
   await page.waitForTimeout(500);
   await page.locator('button:has-text("Add Game")').click();
+  await page.waitForTimeout(500);
 
-  // Wait for AnnotateScreen to load (FileUpload component)
-  await expect(page.locator('button:has-text("Annotate")')).toBeVisible({ timeout: 10000 });
+  // Fill in the Add Game modal form
+  console.log('[Test] Filling Add Game modal...');
 
-  // Load short video (1.5 min) for fast test runs
-  const videoInput = page.locator('input[type="file"][accept*="video"]');
+  // Fill opponent team name
+  await page.getByPlaceholder('e.g., Carlsbad SC').fill('Test Opponent');
+
+  // Fill game date (use today's date)
+  const today = new Date().toISOString().split('T')[0];
+  const dateInput = page.locator('input[type="date"]');
+  await dateInput.fill(today);
+
+  // Select game type (click "Home" button)
+  await page.getByRole('button', { name: 'Home' }).click();
+
+  // Upload video file via the modal's file input (inside the form)
+  const videoInput = page.locator('form input[type="file"][accept*="video"]');
   await videoInput.setInputFiles(TEST_VIDEO);
+  await page.waitForTimeout(1000);
+
+  // Click Create Game button
+  const createButton = page.getByRole('button', { name: 'Create Game' });
+  await expect(createButton).toBeEnabled({ timeout: 5000 });
+  await createButton.click();
+
+  // Wait for annotate mode to load with video
   await waitForVideoFirstFrame(page);
 
-  // Import TSV
+  // IMPORTANT: Wait for video upload to complete BEFORE importing TSV
+  // The clips/raw/save endpoint requires the video file to exist for extraction
+  const uploadSuccess = await waitForUploadComplete(page);
+  if (!uploadSuccess) {
+    throw new Error('Video upload failed or timed out - clips cannot be saved to library');
+  }
+  console.log('[Test] Video upload complete');
+
+  // Import TSV - now clips can be saved to raw_clips since video is available
   const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
+  await expect(tsvInput).toBeAttached({ timeout: 10000 });
   await tsvInput.setInputFiles(TEST_TSV);
-  await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 15000 });
+  console.log('[Test] TSV imported, clips visible in UI');
+
+  // Wait for clips to be saved to raw_clips (auto-save happens in background)
+  // Increase wait to ensure all async clip saves complete
+  await page.waitForTimeout(5000);
   console.log('[Test] Loaded video and TSV in annotate mode');
 }
 
@@ -467,19 +512,21 @@ async function waitForUploadComplete(page, maxTimeout = 600000) {
   let lastProgressChangeTime = Date.now();
   const STALL_TIMEOUT = 120000; // 2 minutes without progress = stalled
 
-  const importButton = page.locator('button:has-text("Import Into Projects")');
+  // Check for Create Annotated Video button (replaces Import Into Projects)
+  const createVideoButton = page.locator('button:has-text("Create Annotated Video")');
 
   console.log('[Test] Waiting for video upload to complete...');
 
   while (true) {
     const elapsed = Date.now() - startTime;
 
-    // Check if upload is complete
+    // Check if upload is complete - the button text changes from "Uploading video..." to "Create Annotated Video"
+    // Note: The button may still be disabled if there are no clips, but that's OK - we just need to know upload is done
     const isUploading = await page.locator('button:has-text("Uploading video")').isVisible({ timeout: 500 }).catch(() => false);
-    const isEnabled = await importButton.isEnabled({ timeout: 500 }).catch(() => false);
+    const buttonVisible = await createVideoButton.isVisible({ timeout: 500 }).catch(() => false);
 
-    if (isEnabled && !isUploading) {
-      console.log('[Test] Upload complete - Import button enabled');
+    if (buttonVisible && !isUploading) {
+      console.log('[Test] Upload complete - Create Annotated Video button visible');
       return true;
     }
 
@@ -534,9 +581,14 @@ async function waitForUploadComplete(page, maxTimeout = 600000) {
 }
 
 /**
- * Ensure projects exist with clips. Creates them via API if needed.
+ * Ensure projects exist with clips. Creates them via UI if needed.
+ *
+ * New flow (clips are auto-saved):
+ * 1. Create clips via ensureAnnotateModeWithClips (auto-saved to library)
+ * 2. Navigate to project manager
+ * 3. Use "New Project" modal to create project from clips
  */
-async function ensureProjectsExist(page) {
+async function ensureProjectsExist(page, navigateToFraming = true) {
   // Navigate to app first so relative URLs work in page.evaluate
   const url = page.url();
   if (!url || url === 'about:blank' || !url.includes('localhost')) {
@@ -552,28 +604,95 @@ async function ensureProjectsExist(page) {
 
   if (projects.length > 0) {
     console.log(`[Test] Found ${projects.length} existing projects`);
+
+    // Navigate to Framing mode if requested
+    if (navigateToFraming) {
+      // Go to project manager first
+      await page.goto('/');
+      await page.waitForLoadState('networkidle');
+      await page.locator('button:has-text("Projects")').click();
+      await page.waitForTimeout(500);
+
+      // Click the first clip link that says "click to open" in its title/aria-label
+      // These appear in the expanded project details as "Clip 1: Not Started (click to open)"
+      const clipLink = page.locator('[title*="click to open"], [aria-label*="click to open"]').first();
+      if (await clipLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+        console.log('[Test] Clicking clip link to enter Framing mode');
+        await clipLink.click();
+      } else {
+        // Clips might not be visible - look for "Continue Where You Left Off" section
+        // which shows the most recent project as a clickable card
+        const continueCard = page.locator('button:has-text("clips · Not Started")').first();
+        if (await continueCard.isVisible({ timeout: 2000 }).catch(() => false)) {
+          console.log('[Test] Clicking "Continue Where You Left Off" card');
+          await continueCard.click();
+        } else {
+          // Last resort: click the project card in the Projects list
+          console.log('[Test] Clicking project card in Projects list');
+          const projectCard = page.locator('button:has-text("Vs")').first();
+          await projectCard.click();
+        }
+      }
+
+      // Wait for Framing mode to load
+      await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 15000 });
+      await waitForVideoFirstFrame(page);
+      console.log('[Test] Navigated to Framing mode for existing project');
+    }
+
     return projects;
   }
 
-  // No projects - need to create them via the full import flow
-  console.log('[Test] No projects found, creating via import flow...');
+  // No projects - need to create clips first (they auto-save to library)
+  console.log('[Test] No projects found, creating clips via annotate mode...');
 
   await ensureAnnotateModeWithClips(page);
 
-  // Wait for upload to complete with progress monitoring
-  const uploadSuccess = await waitForUploadComplete(page);
-  if (!uploadSuccess) {
-    throw new Error('Video upload failed or timed out');
+  // Wait for upload to complete (clips are saved automatically)
+  await waitForUploadComplete(page);
+  console.log('[Test] Clips created and auto-saved to library');
+
+  // Navigate to project manager and create project from clips
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  await page.locator('button:has-text("Projects")').click();
+  await page.waitForTimeout(500);
+
+  // Click New Project to open the modal
+  await page.locator('button:has-text("New Project")').click();
+  await page.waitForTimeout(500);
+
+  // Wait for clips to load in the modal (should show clip cards or "No clips" message)
+  // The modal starts with "Loading clips..." and then shows actual clips
+  const clipsList = page.locator('[class*="modal"], [role="dialog"]');
+  await expect(clipsList.locator('text="Loading clips..."')).toBeHidden({ timeout: 10000 });
+  await page.waitForTimeout(1000); // Extra wait for clips to render
+
+  // Check if clips are available - if so, select them
+  const clipCheckboxes = page.locator('input[type="checkbox"]');
+  const clipCount = await clipCheckboxes.count();
+  console.log(`[Test] Found ${clipCount} clip checkboxes in modal`);
+
+  if (clipCount > 0) {
+    // Select all clips
+    for (let i = 0; i < clipCount; i++) {
+      const checkbox = clipCheckboxes.nth(i);
+      if (!(await checkbox.isChecked())) {
+        await checkbox.click();
+      }
+    }
   }
 
-  // Click import
-  const importButton = page.locator('button:has-text("Import Into Projects")');
-  page.once('dialog', async dialog => {
-    console.log(`[Test] Alert: ${dialog.message()}`);
-    await dialog.accept();
-  });
-  await importButton.click();
-  await expect(page.locator('button:has-text("New Project")')).toBeVisible({ timeout: 60000 });
+  // Select all clips and create project
+  const createButton = page.locator('button:has-text("Create with")').first();
+  await expect(createButton).toBeEnabled({ timeout: 10000 });
+  await createButton.click();
+
+  // Creating from clips navigates directly to Framing mode
+  // Verify we're in Framing mode (Framing button visible)
+  await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 10000 });
+  await waitForVideoFirstFrame(page);
+  console.log('[Test] Project created from clips - now in Framing mode');
 
   // Return the created projects
   const newProjects = await page.evaluate(async () => {
@@ -588,27 +707,18 @@ async function ensureProjectsExist(page) {
  * Creates project if needed, navigates to framing mode.
  */
 async function ensureFramingMode(page) {
-  // First ensure projects exist
+  // First ensure projects exist - this now leaves us in Framing mode
   await ensureProjectsExist(page);
 
-  // Navigate to project manager
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
-  await navigateToProjectManager(page);
-
-  // Find and click a project with clips
-  const projectCard = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clip/i') }).first();
-  await expect(projectCard).toBeVisible({ timeout: 10000 });
-  await projectCard.click();
-
-  // Wait for framing mode to fully load - the Export button appears when mode is ready
-  const exportButton = page.locator('button:has-text("Export")').first();
-  await expect(exportButton).toBeVisible({ timeout: 15000 });
-  console.log('[Test] Framing mode loaded - Export button visible');
+  // ensureProjectsExist now navigates directly to Framing mode after creating from clips
+  // Wait for framing mode to fully load - the Frame Video button appears when mode is ready
+  const frameButton = page.locator('button:has-text("Frame Video")');
+  await expect(frameButton).toBeVisible({ timeout: 15000 });
+  console.log('[Test] Framing mode loaded - Frame Video button visible');
 
   // Load video if needed (framing mode may prompt for video)
   // Use short video for faster AI upscaling in tests
-  const videoInput = page.locator('input[type="file"][accept*="video"]');
+  const videoInput = page.locator('input[type="file"][accept*="video"]').first();
   if (await videoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
     await videoInput.setInputFiles(TEST_VIDEO);
     await waitForVideoFirstFrame(page);
@@ -644,7 +754,7 @@ async function ensureWorkingVideoExists(page) {
     const res = await fetch('/api/projects');
     return res.json();
   });
-  const projectWithVideo = projects.find(p => p.working_video_path);
+  const projectWithVideo = projects.find(p => p.has_working_video);
 
   if (projectWithVideo) {
     console.log(`[Test] Found project with working video: ${projectWithVideo.id}`);
@@ -666,7 +776,7 @@ async function ensureWorkingVideoExists(page) {
     const res = await fetch('/api/projects');
     return res.json();
   });
-  return newProjects.find(p => p.working_video_path);
+  return newProjects.find(p => p.has_working_video);
 }
 
 // ============================================================================
@@ -700,14 +810,28 @@ test.describe('Smoke Tests @smoke', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Click Games tab and Add Game to enter annotate mode
+    // Click Games tab and Add Game to open modal
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
     await page.locator('button:has-text("Add Game")').click();
-    await expect(page.locator('button:has-text("Annotate")')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(500);
 
-    const videoInput = page.locator('input[type="file"][accept*="video"]');
+    // Fill in the Add Game modal form
+    await page.getByPlaceholder('e.g., Carlsbad SC').fill('Smoke Test Team');
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = page.locator('input[type="date"]');
+    await dateInput.fill(today);
+    await page.getByRole('button', { name: 'Home' }).click();
+
+    // Upload video via modal (inside the form)
+    const videoInput = page.locator('form input[type="file"][accept*="video"]');
     await videoInput.setInputFiles(TEST_VIDEO);
+    await page.waitForTimeout(1000);
+
+    // Click Create Game
+    const createButton = page.getByRole('button', { name: 'Create Game' });
+    await expect(createButton).toBeEnabled({ timeout: 5000 });
+    await createButton.click();
 
     await waitForVideoFirstFrame(page);
     console.log('[Smoke] Annotate video loaded');
@@ -717,24 +841,44 @@ test.describe('Smoke Tests @smoke', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Click Games tab and Add Game to enter annotate mode
+    // Click Games tab and Add Game to open modal
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
     await page.locator('button:has-text("Add Game")').click();
-    await expect(page.locator('button:has-text("Annotate")')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(500);
 
-    // Load video first
-    const videoInput = page.locator('input[type="file"][accept*="video"]');
+    // Fill in the Add Game modal form
+    await page.getByPlaceholder('e.g., Carlsbad SC').fill('TSV Test Team');
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = page.locator('input[type="date"]');
+    await dateInput.fill(today);
+    await page.getByRole('button', { name: 'Home' }).click();
+
+    // Upload video via modal (inside the form)
+    const videoInput = page.locator('form input[type="file"][accept*="video"]');
     await videoInput.setInputFiles(TEST_VIDEO);
+    await page.waitForTimeout(1000);
+
+    // Click Create Game
+    const createButton = page.getByRole('button', { name: 'Create Game' });
+    await expect(createButton).toBeEnabled({ timeout: 5000 });
+    await createButton.click();
+
+    // Wait for video to load
     await waitForVideoFirstFrame(page);
 
-    // Import TSV
+    // Wait for video upload to complete before importing TSV
+    console.log('[Smoke] Waiting for video upload to complete...');
+    await waitForUploadComplete(page);
+    console.log('[Smoke] Video upload complete');
+
+    // Import TSV - ensure input is attached
     const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
+    await expect(tsvInput).toBeAttached({ timeout: 10000 });
     await tsvInput.setInputFiles(TEST_TSV);
 
-    // Verify clips imported
-    await expect(page.locator('text=/Imported \\d+ clips?/')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 5000 });
+    // Verify clips imported (wait for clips to appear in sidebar)
+    await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 15000 });
     console.log('[Smoke] TSV import successful');
   });
 
@@ -742,19 +886,40 @@ test.describe('Smoke Tests @smoke', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Click Games tab and Add Game to enter annotate mode
+    // Click Games tab and Add Game to open modal
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
     await page.locator('button:has-text("Add Game")').click();
-    await expect(page.locator('button:has-text("Annotate")')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(500);
 
-    // Load video and TSV
-    const videoInput = page.locator('input[type="file"][accept*="video"]');
+    // Fill in the Add Game modal form
+    await page.getByPlaceholder('e.g., Carlsbad SC').fill('Timeline Test Team');
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = page.locator('input[type="date"]');
+    await dateInput.fill(today);
+    await page.getByRole('button', { name: 'Home' }).click();
+
+    // Upload video via modal (inside the form)
+    const videoInput = page.locator('form input[type="file"][accept*="video"]');
     await videoInput.setInputFiles(TEST_VIDEO);
+    await page.waitForTimeout(1000);
+
+    // Click Create Game
+    const createButton = page.getByRole('button', { name: 'Create Game' });
+    await expect(createButton).toBeEnabled({ timeout: 5000 });
+    await createButton.click();
+
+    // Wait for video to load
     await waitForVideoFirstFrame(page);
 
-    const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
-    await tsvInput.setInputFiles(TEST_TSV);
+    // Wait for video upload to complete before importing TSV
+    console.log('[Test] Waiting for video upload to complete...');
+    await waitForUploadComplete(page);
+    console.log('[Test] Video upload complete');
+
+    // Import TSV
+    const tsvInput2 = page.locator('input[type="file"][accept=".tsv,.txt"]');
+    await tsvInput2.setInputFiles(TEST_TSV);
     await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 5000 });
 
     // Get initial time
@@ -781,6 +946,10 @@ test.describe('Smoke Tests @smoke', () => {
   });
 
   test('Framing: video first frame loads @smoke', async ({ page }) => {
+    // First ensure we have clips in the library by creating a game
+    await ensureAnnotateModeWithClips(page);
+
+    // Navigate back to project manager
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
@@ -788,22 +957,24 @@ test.describe('Smoke Tests @smoke', () => {
     await page.locator('button:has-text("Projects")').click();
     await page.waitForTimeout(500);
 
-    // Create project
+    // Create project from clips
     await page.locator('button:has-text("New Project")').click();
-    await page.locator('input[type="text"]').first().fill(`Smoke Test ${Date.now()}`);
-    await page.locator('button:has-text("Create")').or(page.locator('button:has-text("Save")')).click();
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(500);
 
-    // Click on the project card to enter framing mode
-    await page.locator('text=Smoke Test').first().click();
-    await page.waitForTimeout(1000);
+    // The "Create Project from Clips" modal should now show clips
+    // Select all clips and create
+    const createButton = page.locator('button:has-text("Create with")').first();
+    await expect(createButton).toBeEnabled({ timeout: 10000 });
+    await createButton.click();
+    await page.waitForTimeout(2000);
 
-    // Wait for framing mode video input
-    const videoInput = page.locator('input[type="file"][accept*="video"]');
-    await expect(videoInput).toBeAttached({ timeout: 10000 });
-    await videoInput.setInputFiles(TEST_VIDEO);
+    // Creating from clips navigates directly to Framing mode
+    // Wait for the Framing button to be visible (indicates we're in the project)
+    await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 10000 });
 
-    await waitForVideoFirstFrame(page);
+    // Wait for video element to appear (may take time to load from R2)
+    // The video element is rendered after clip files are downloaded
+    await waitForVideoFirstFrame(page, 60000); // 1 minute timeout for R2 downloads
     console.log('[Smoke] Framing video loaded');
   });
 
@@ -829,6 +1000,10 @@ test.describe('Smoke Tests @smoke', () => {
       }
     });
 
+    // First ensure we have clips in the library by creating a game
+    await ensureAnnotateModeWithClips(page);
+
+    // Navigate back to project manager
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
@@ -836,20 +1011,18 @@ test.describe('Smoke Tests @smoke', () => {
     await page.locator('button:has-text("Projects")').click();
     await page.waitForTimeout(500);
 
-    // Create project and enter framing mode
+    // Create project from clips
     await page.locator('button:has-text("New Project")').click();
-    await page.locator('input[type="text"]').first().fill(`Crop Stability Test ${Date.now()}`);
-    await page.locator('button:has-text("Create")').or(page.locator('button:has-text("Save")')).click();
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(500);
 
-    // Click on the project card to enter framing mode
-    await page.locator('text=Crop Stability Test').first().click();
-    await page.waitForTimeout(1000);
+    // The "Create Project from Clips" modal should now show clips
+    const createButton = page.locator('button:has-text("Create with")').first();
+    await expect(createButton).toBeEnabled({ timeout: 10000 });
+    await createButton.click();
+    await page.waitForTimeout(2000);
 
-    // Load video
-    const videoInput = page.locator('input[type="file"][accept*="video"]');
-    await expect(videoInput).toBeAttached({ timeout: 10000 });
-    await videoInput.setInputFiles(TEST_VIDEO);
+    // Creating from clips navigates directly to Framing mode
+    await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 10000 });
 
     await waitForVideoFirstFrame(page);
 
@@ -874,6 +1047,10 @@ test.describe('Smoke Tests @smoke', () => {
    * Verifies that pressing spacebar toggles video play/pause
    */
   test('Framing: spacebar toggles play/pause @smoke', async ({ page }) => {
+    // First ensure we have clips in the library by creating a game
+    await ensureAnnotateModeWithClips(page);
+
+    // Navigate back to project manager
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
@@ -881,20 +1058,18 @@ test.describe('Smoke Tests @smoke', () => {
     await page.locator('button:has-text("Projects")').click();
     await page.waitForTimeout(500);
 
-    // Create project and enter framing mode
+    // Create project from clips
     await page.locator('button:has-text("New Project")').click();
-    await page.locator('input[type="text"]').first().fill(`Spacebar Test ${Date.now()}`);
-    await page.locator('button:has-text("Create")').or(page.locator('button:has-text("Save")')).click();
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(500);
 
-    // Click on the project card to enter framing mode
-    await page.locator('text=Spacebar Test').first().click();
-    await page.waitForTimeout(1000);
+    // The "Create Project from Clips" modal should now show clips
+    const createButton = page.locator('button:has-text("Create with")').first();
+    await expect(createButton).toBeEnabled({ timeout: 10000 });
+    await createButton.click();
+    await page.waitForTimeout(2000);
 
-    // Load video
-    const videoInput = page.locator('input[type="file"][accept*="video"]');
-    await expect(videoInput).toBeAttached({ timeout: 10000 });
-    await videoInput.setInputFiles(TEST_VIDEO);
+    // Creating from clips navigates directly to Framing mode
+    await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 10000 });
 
     await waitForVideoFirstFrame(page);
 
@@ -963,97 +1138,79 @@ test.describe('Full Coverage Tests @full', () => {
     await cleanupTestData(request);
   });
 
-  test('Import Into Projects creates projects @full', async ({ page }) => {
+  test('Create project from library clips @full', async ({ page }) => {
     test.slow();
 
-    // Go to home page and enter annotate mode
+    // STEP 1: Create clips via Add Game modal (clips auto-save to library)
+    console.log('[Full] Step 1: Creating clips via Add Game...');
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Click Games tab and Add Game to enter annotate mode
+    // Click Games tab and Add Game to open modal
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
     await page.locator('button:has-text("Add Game")').click();
-    await expect(page.locator('button:has-text("Annotate")')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(500);
 
-    // Load short video (1.5 min) for fast test runs
-    const videoInput = page.locator('input[type="file"][accept*="video"]');
+    // Fill in the Add Game modal form
+    await page.getByPlaceholder('e.g., Carlsbad SC').fill('Library Test Team');
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = page.locator('input[type="date"]');
+    await dateInput.fill(today);
+    await page.getByRole('button', { name: 'Home' }).click();
+
+    // Upload video via modal (inside the form)
+    const videoInput = page.locator('form input[type="file"][accept*="video"]');
     await videoInput.setInputFiles(TEST_VIDEO);
+    await page.waitForTimeout(1000);
+
+    // Click Create Game
+    const createButton = page.getByRole('button', { name: 'Create Game' });
+    await expect(createButton).toBeEnabled({ timeout: 5000 });
+    await createButton.click();
+
+    // Wait for annotate mode to load with video
     await waitForVideoFirstFrame(page);
 
-    // Import TSV
+    // IMPORTANT: Wait for video upload to complete BEFORE importing TSV
+    // The clips/raw/save endpoint requires the video file to exist for extraction
+    console.log('[Full] Waiting for video upload to complete...');
+    const uploadSuccess = await waitForUploadComplete(page);
+    if (!uploadSuccess) {
+      throw new Error('[Full] Video upload failed - clips cannot be saved to library');
+    }
+    console.log('[Full] Video upload complete');
+
+    // Import TSV (clips auto-save to library) - ensure input is attached
     const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
+    await expect(tsvInput).toBeAttached({ timeout: 10000 });
     await tsvInput.setInputFiles(TEST_TSV);
-    await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 10000 });
+    console.log('[Full] Clips created and auto-saved to library');
 
-    // Wait for backend upload - check for upload indicator or Import button enabled
-    // The upload runs in background after video is loaded in annotate mode
-    const importButton = page.locator('button:has-text("Import Into Projects")');
-    const uploadingSpinner = page.locator('button:has-text("Uploading video")');
+    // STEP 2: Navigate to project manager and create project from clips
+    console.log('[Full] Step 2: Creating project from library clips...');
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await page.locator('button:has-text("Projects")').click();
+    await page.waitForTimeout(500);
 
-    // Wait for upload to start (button shows uploading) or already be done (button enabled)
-    console.log('[Full] Waiting for video upload...');
+    // Click New Project to open the Create Project from Clips modal
+    await page.locator('button:has-text("New Project")').click();
+    await page.waitForTimeout(500);
 
-    // Poll until Import button is enabled (upload complete)
-    for (let i = 0; i < 150; i++) { // 5 min max (150 * 2s)
-      const isUploading = await uploadingSpinner.isVisible({ timeout: 500 }).catch(() => false);
-      const isEnabled = await importButton.isEnabled({ timeout: 500 }).catch(() => false);
+    // Modal should show clips from library
+    const createProjectButton = page.locator('button:has-text("Create with")').first();
+    await expect(createProjectButton).toBeEnabled({ timeout: 10000 });
+    await createProjectButton.click();
 
-      if (isEnabled && !isUploading) {
-        console.log('[Full] Upload complete - Import button enabled');
-        break;
-      }
+    // Creating from clips navigates directly to Framing mode
+    // Verify we're in Framing mode (Framing button should be visible and active)
+    await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 10000 });
+    await waitForVideoFirstFrame(page);
+    console.log('[Full] Project created from library clips - now in Framing mode');
 
-      if (i % 15 === 0) { // Log every 30s
-        console.log(`[Full] Upload in progress... (${i * 2}s)`);
-      }
-      await page.waitForTimeout(2000);
-    }
-
-    await expect(importButton).toBeEnabled({ timeout: 10000 });
-
-    // Wait for ALL video uploads to complete
-    // The frontend creates multiple games and uploads videos in parallel
-    // Import button may enable when first video is done, but export may use a different game
-    console.log('[Full] Waiting for all video uploads to complete...');
-    let allUploadsComplete = false;
-    for (let i = 0; i < 60; i++) { // 60 seconds max for remaining uploads
-      // Check if any "Uploading video" indicator is visible
-      const stillUploading = await page.locator('text=/Uploading video/i').isVisible({ timeout: 500 }).catch(() => false);
-      if (!stillUploading) {
-        allUploadsComplete = true;
-        console.log('[Full] All video uploads complete');
-        break;
-      }
-      if (i % 10 === 0) {
-        console.log(`[Full] Still uploading... (${i}s)`);
-      }
-      await page.waitForTimeout(1000);
-    }
-
-    if (!allUploadsComplete) {
-      console.log('[Full] Warning: Some uploads may still be in progress');
-    }
-
-    // Extra buffer for any async operations
-    await page.waitForTimeout(3000);
-
-    // Click Import - this triggers an alert when done
-
-    // Set up alert handler before clicking
-    page.once('dialog', async dialog => {
-      console.log(`[Full] Alert: ${dialog.message()}`);
-      await dialog.accept();
-    });
-
-    await importButton.click();
-
-    // Wait for navigation to project manager (alert triggers before navigation)
-    await expect(page.locator('button:has-text("New Project")')).toBeVisible({ timeout: 60000 });
-    console.log('[Full] Navigated to project manager');
-
-    // Verify projects created
-    // Use page.evaluate(fetch) with relative URL so it goes through Vite proxy + route interceptor
+    // Verify via API
     const projects = await page.evaluate(async () => {
       const res = await fetch('/api/projects');
       return res.json();
@@ -1077,12 +1234,12 @@ test.describe('Full Coverage Tests @full', () => {
       console.log('[Full] Warning: Overlay button was already enabled - may have working video from previous run');
     }
 
-    // Click export button to trigger FFmpeg export
-    const exportButton = page.locator('button:has-text("Export")').first();
-    await expect(exportButton).toBeVisible({ timeout: 10000 });
-    await expect(exportButton).toBeEnabled({ timeout: 10000 });
-    console.log('[Full] Clicking export button...');
-    await exportButton.click();
+    // Click frame button to trigger FFmpeg export
+    const frameButton = page.locator('button:has-text("Frame Video")');
+    await expect(frameButton).toBeVisible({ timeout: 10000 });
+    await expect(frameButton).toBeEnabled({ timeout: 10000 });
+    console.log('[Full] Clicking Frame Video button...');
+    await frameButton.click();
 
     // Verify export actually started by waiting for button state change
     const exportingButton = page.locator('button:has-text("Exporting")');
@@ -1107,7 +1264,7 @@ test.describe('Full Coverage Tests @full', () => {
     if (!exportStarted) {
       // Try clicking again in case first click didn't register
       console.log('[Full] Warning: Export may not have started, trying again...');
-      await exportButton.click();
+      await frameButton.click();
       await page.waitForTimeout(2000);
     }
 
@@ -1115,28 +1272,28 @@ test.describe('Full Coverage Tests @full', () => {
     // maxTimeout: 5 minutes, SLA check every 30 seconds (default)
     await waitForExportComplete(page); // Progress-based: fails only if no progress for 30s
 
-    // Verify export succeeded by checking if we're now in Overlay mode with a video loaded
-    // The Export button triggers transition to Overlay mode upon completion
-    const overlayMode = page.locator('text=/Overlay Settings/i');
-    const isInOverlayMode = await overlayMode.isVisible({ timeout: 5000 }).catch(() => false);
+    // Give time for database to be updated after export completes
+    await page.waitForTimeout(3000);
 
-    if (isInOverlayMode) {
-      // Verify video is playing in Overlay mode
-      const video = page.locator('video');
-      await expect(video).toBeVisible({ timeout: 10000 });
-      const duration = await video.evaluate(v => v.duration);
-      expect(duration, 'Exported video must have duration').toBeGreaterThan(0);
-      console.log(`[Full] Export created working video (duration: ${duration.toFixed(2)}s)`);
-    } else {
-      // Fallback: check database for working_video_path
+    // Verify export succeeded - check database for has_working_video flag with retries
+    // The backend sets working_video_id after saving the video file
+    let projectWithVideo = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
       const projects = await page.evaluate(async () => {
         const res = await fetch('/api/projects');
         return res.json();
       });
-      const projectWithVideo = projects.find(p => p.working_video_path);
-      expect(projectWithVideo, 'Export must create a working video').toBeTruthy();
-      console.log(`[Full] Working video created: ${projectWithVideo.working_video_path}`);
+      projectWithVideo = projects.find(p => p.has_working_video);
+      if (projectWithVideo) {
+        console.log(`[Full] Working video found for project ${projectWithVideo.id} (attempt ${attempt + 1})`);
+        break;
+      }
+      console.log(`[Full] No working video found yet (attempt ${attempt + 1}/5), waiting...`);
+      await page.waitForTimeout(2000);
     }
+
+    expect(projectWithVideo, 'Export must create a working video (has_working_video flag)').toBeTruthy();
+    console.log(`[Full] Export created working video for project: ${projectWithVideo.id}`);
   });
 
   test('Overlay: video loads after framing export @full', async ({ page }) => {
@@ -1228,7 +1385,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(2000);
 
     // Load video if file picker is shown
-    const videoInput = page.locator('input[type="file"][accept*="video"]');
+    const videoInput = page.locator('input[type="file"][accept*="video"]').first();
     if (await videoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await videoInput.setInputFiles(TEST_VIDEO);
     }
@@ -1306,7 +1463,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(3000);
 
     // Load video if prompted
-    const videoInput = page.locator('input[type="file"][accept*="video"]');
+    const videoInput = page.locator('input[type="file"][accept*="video"]').first();
     if (await videoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await videoInput.setInputFiles(TEST_VIDEO);
     }
@@ -1462,7 +1619,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(2000);
 
     // Load video if file picker is shown
-    const videoInput = page.locator('input[type="file"][accept*="video"]');
+    const videoInput = page.locator('input[type="file"][accept*="video"]').first();
     if (await videoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await videoInput.setInputFiles(TEST_VIDEO);
     }
@@ -1651,5 +1808,248 @@ test.describe('Full Coverage Tests @full', () => {
     }
 
     console.log('[Full] Per-clip framing edits test completed');
+  });
+
+  /**
+   * Full Pipeline Test: Annotate → Framing → Overlay → Final Export
+   *
+   * This test exercises the complete workflow from start to finish:
+   * 1. Create a game via Add Game modal with video upload
+   * 2. Import TSV to create annotations
+   * 3. Create a project from the imported clips
+   * 4. Run framing export (creates working video)
+   * 5. Enter overlay mode
+   * 6. Run overlay/final export (creates final video)
+   * 7. Verify final video appears in Gallery
+   *
+   * Uses a fresh user ID to ensure clean state.
+   */
+  test('Full Pipeline: Annotate → Framing → Overlay → Final Export @full', async ({ page }) => {
+    test.setTimeout(0); // Disable - progress-based stall detection
+
+    console.log('[Full Pipeline] Starting full pipeline test...');
+    console.log(`[Full Pipeline] Test user: ${TEST_USER_ID}`);
+
+    // STEP 1: Create a game via Add Game modal
+    console.log('[Full Pipeline] Step 1: Creating game via Add Game modal...');
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await page.locator('button:has-text("Games")').click();
+    await page.waitForTimeout(500);
+    await page.locator('button:has-text("Add Game")').click();
+    await page.waitForTimeout(500);
+
+    // Fill modal form
+    await page.getByPlaceholder('e.g., Carlsbad SC').fill('Full Pipeline Test');
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = page.locator('input[type="date"]');
+    await dateInput.fill(today);
+    await page.getByRole('button', { name: 'Home' }).click();
+
+    // Upload video (inside the form)
+    const videoInput = page.locator('form input[type="file"][accept*="video"]');
+    await videoInput.setInputFiles(TEST_VIDEO);
+    await page.waitForTimeout(1000);
+
+    // Create game
+    const createGameButton = page.getByRole('button', { name: 'Create Game' });
+    await expect(createGameButton).toBeEnabled({ timeout: 5000 });
+    await createGameButton.click();
+
+    // Wait for annotate mode
+    await waitForVideoFirstFrame(page);
+    console.log('[Full Pipeline] Game created, video loaded');
+
+    // Wait for video upload to backend to complete BEFORE importing TSV
+    // The clips/raw/save endpoint requires the video file to exist for extraction
+    console.log('[Full Pipeline] Waiting for video upload to complete...');
+    const createVideoButton = page.locator('button:has-text("Create Annotated Video")');
+    await expect(createVideoButton).toBeEnabled({ timeout: 120000 });
+    console.log('[Full Pipeline] Video upload complete');
+
+    // STEP 2: Import TSV annotations (clips auto-save to library)
+    console.log('[Full Pipeline] Step 2: Importing TSV...');
+
+    // Ensure TSV input is attached before setting files
+    const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
+    await expect(tsvInput).toBeAttached({ timeout: 10000 });
+    await tsvInput.setInputFiles(TEST_TSV);
+    // Wait for clips to appear (notification may disappear quickly)
+    await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 15000 });
+    console.log('[Full Pipeline] TSV imported, clips auto-saved to library');
+
+    // STEP 3: Create project from library clips via New Project modal
+    console.log('[Full Pipeline] Step 3: Creating project from library clips...');
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await page.locator('button:has-text("Projects")').click();
+    await page.waitForTimeout(500);
+
+    // Click New Project to open the Create Project from Clips modal
+    await page.locator('button:has-text("New Project")').click();
+    await page.waitForTimeout(500);
+
+    // Modal should show clips from library - create project
+    const createProjectButton = page.locator('button:has-text("Create with")').first();
+    await expect(createProjectButton).toBeEnabled({ timeout: 10000 });
+    await createProjectButton.click();
+    await page.waitForTimeout(2000);
+
+    // Verify project was created
+    await expect(page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clip/i') }).first()).toBeVisible({ timeout: 10000 });
+    console.log('[Full Pipeline] Project created from library clips');
+
+    // STEP 4: Open project and run framing export
+    console.log('[Full Pipeline] Step 4: Opening project for framing...');
+    await page.locator('button:has-text("Projects")').click();
+    await page.waitForTimeout(500);
+
+    // Click on the project card
+    const projectCard = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clip/i') }).first();
+    await expect(projectCard).toBeVisible({ timeout: 10000 });
+    await projectCard.click();
+    await page.waitForTimeout(2000);
+
+    // Load video if needed
+    const framingVideoInput = page.locator('input[type="file"][accept*="video"]').first();
+    if (await framingVideoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await framingVideoInput.setInputFiles(TEST_VIDEO);
+    }
+    await waitForVideoFirstFrame(page);
+    console.log('[Full Pipeline] Framing mode loaded');
+
+    // Start framing export
+    console.log('[Full Pipeline] Running framing export...');
+    const exportButton = page.locator('button:has-text("Export")').first();
+    await expect(exportButton).toBeEnabled({ timeout: 10000 });
+    await exportButton.click();
+
+    // Wait for framing export to complete
+    await waitForExportComplete(page);
+    console.log('[Full Pipeline] Framing export complete');
+
+    // STEP 5: Enter overlay mode
+    console.log('[Full Pipeline] Step 5: Entering overlay mode...');
+    const overlayButton = page.locator('button:has-text("Overlay")');
+    await expect(overlayButton).toBeEnabled({ timeout: 10000 });
+    await overlayButton.click();
+
+    // Wait for overlay mode to load
+    await waitForVideoFirstFrame(page, 30000);
+    console.log('[Full Pipeline] Overlay mode loaded');
+
+    // Verify highlight UI is visible
+    const highlightUI = page.locator('text="Highlight Effect"');
+    await expect(highlightUI).toBeVisible({ timeout: 5000 });
+
+    // STEP 6: Run final export (overlay export)
+    console.log('[Full Pipeline] Step 6: Running final export...');
+    const finalExportButton = page.locator('button:has-text("Export Video")').first();
+    await expect(finalExportButton).toBeVisible({ timeout: 10000 });
+    await expect(finalExportButton).toBeEnabled({ timeout: 10000 });
+    await finalExportButton.click();
+
+    // Wait for final export to complete
+    await waitForExportComplete(page);
+    console.log('[Full Pipeline] Final export complete');
+
+    // STEP 7: Verify final video exists
+    console.log('[Full Pipeline] Step 7: Verifying final video...');
+
+    // Check via API
+    const finalVideos = await page.evaluate(async () => {
+      const res = await fetch('/api/downloads');
+      return res.json();
+    });
+
+    console.log(`[Full Pipeline] Final videos in gallery: ${finalVideos.length}`);
+    expect(finalVideos.length, 'Should have at least one final video').toBeGreaterThan(0);
+
+    // Optionally navigate to Gallery to verify UI
+    const galleryButton = page.locator('button:has-text("Gallery")');
+    if (await galleryButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await galleryButton.click();
+      await page.waitForTimeout(2000);
+
+      // Verify video card is visible
+      const videoCard = page.locator('.bg-gray-800').filter({ has: page.locator('video') }).first();
+      const hasVideoCard = await videoCard.isVisible({ timeout: 5000 }).catch(() => false);
+      console.log(`[Full Pipeline] Gallery has video card: ${hasVideoCard}`);
+    }
+
+    console.log('[Full Pipeline] ✅ Full pipeline test completed successfully!');
+  });
+
+  /**
+   * Test: Open and frame a project created from library clips
+   *
+   * This verifies that projects created through the New Project modal
+   * can be opened and edited in framing mode without issues.
+   */
+  test('Framing: open automatically created project @full', async ({ page }) => {
+    test.slow();
+
+    // First, create projects via library clips flow
+    console.log('[Full] Creating projects from library clips...');
+    await ensureProjectsExist(page);
+
+    // Navigate to project manager
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await navigateToProjectManager(page);
+
+    // Get list of projects via API
+    const projects = await page.evaluate(async () => {
+      const res = await fetch('/api/projects');
+      return res.json();
+    });
+
+    console.log(`[Full] Found ${projects.length} automatically created projects`);
+    expect(projects.length, 'Should have at least one project').toBeGreaterThan(0);
+
+    // Click on the first project with clips
+    const projectCard = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clip/i') }).first();
+    await expect(projectCard).toBeVisible({ timeout: 10000 });
+
+    // Get project name for verification
+    const projectName = await projectCard.locator('text=/\\d+ clip/i').textContent().catch(() => 'unknown');
+    console.log(`[Full] Opening project: ${projectName}`);
+
+    await projectCard.click();
+    await page.waitForTimeout(2000);
+
+    // Load video if file picker is shown
+    const videoInput = page.locator('input[type="file"][accept*="video"]').first();
+    if (await videoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await videoInput.setInputFiles(TEST_VIDEO);
+    }
+
+    // Wait for framing mode to fully load
+    await waitForVideoFirstFrame(page, 30000);
+
+    // Verify we're in framing mode
+    const framingButton = page.locator('button:has-text("Framing")');
+    const overlayButton = page.locator('button:has-text("Overlay")');
+    const exportButton = page.locator('button:has-text("Export")').first();
+
+    // Should see mode switcher and export button
+    await expect(framingButton.or(overlayButton)).toBeVisible({ timeout: 5000 });
+    await expect(exportButton).toBeVisible({ timeout: 5000 });
+
+    // Verify video is playing correctly
+    const video = page.locator('video');
+    const videoState = await video.evaluate(v => ({
+      duration: v.duration,
+      readyState: v.readyState,
+      error: v.error?.message || null
+    }));
+
+    expect(videoState.error, 'Video should not have error').toBeNull();
+    expect(videoState.readyState, 'Video should be ready').toBeGreaterThanOrEqual(2);
+    expect(videoState.duration, 'Video should have duration').toBeGreaterThan(0);
+
+    console.log(`[Full] Successfully opened automatically created project`);
+    console.log(`[Full] Video duration: ${videoState.duration.toFixed(2)}s`);
   });
 });

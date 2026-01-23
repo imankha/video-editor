@@ -293,7 +293,7 @@ export default function RegionLayer({
     // Get current frame for exact matching
     const currentFrame = Math.round(currentTime * framerate);
 
-    return keyframes.map((keyframe) => {
+    return keyframes.map((keyframe, index) => {
       // Is this keyframe selected (playhead is at exact frame)?
       const isSelected = keyframe.frame === currentFrame;
 
@@ -315,7 +315,7 @@ export default function RegionLayer({
 
       return (
         <div
-          key={`kf-${keyframe.frame}`}
+          key={`kf-${index}-${keyframe.frame}`}
           className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-50"
           style={{ left: leftCalc }}
         >

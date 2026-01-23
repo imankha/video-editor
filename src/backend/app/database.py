@@ -708,18 +708,22 @@ def init_database():
 
     # Ensure directories exist
     ensure_directories()
-    directories = [
-        get_user_data_path(),
-        get_raw_clips_path(),
-        get_uploads_path(),
-        get_working_videos_path(),
-        get_final_videos_path(),
-        get_downloads_path(),
-        get_games_path(),
-        get_clip_cache_path(),
-    ]
-    for directory in directories:
-        logger.info(f"Ensured directory exists: {directory}")
+    logger.info(f"Ensured directory exists: {get_user_data_path()}")
+    if not R2_ENABLED:
+        # Only log local directories when R2 is disabled (local mode)
+        directories = [
+            get_raw_clips_path(),
+            get_uploads_path(),
+            get_working_videos_path(),
+            get_final_videos_path(),
+            get_downloads_path(),
+            get_games_path(),
+            get_clip_cache_path(),
+        ]
+        for directory in directories:
+            logger.info(f"Ensured directory exists: {directory}")
+    else:
+        logger.info("R2 storage enabled - video files stored in cloud, not locally")
 
     # Ensure database tables exist
     ensure_database()

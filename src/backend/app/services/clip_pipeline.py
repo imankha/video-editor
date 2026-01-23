@@ -346,6 +346,17 @@ class ClipProcessingPipeline:
             include_audio=ctx.include_audio
         )
 
+        # Clean up GPU memory after processing to prevent accumulation between clips
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                logger.info(f"[Pipeline] Clip {ctx.clip_index}: Cleared GPU cache after processing")
+            import gc
+            gc.collect()
+        except Exception as cleanup_error:
+            logger.warning(f"[Pipeline] Clip {ctx.clip_index}: Cleanup warning: {cleanup_error}")
+
         self._advance_to(PipelineStage.PROCESSED)
         return ctx.output_path
 
@@ -415,23 +426,39 @@ async def process_clip_with_pipeline(
     """
     pipeline = ClipProcessingPipeline(clip_data, video_content, temp_dir)
 
-    # Stage 1: Save to temp
-    pipeline.save_to_temp()
+    try:
+        # Stage 1: Save to temp
+        pipeline.save_to_temp()
 
-    # Stage 2: Configure
-    pipeline.configure_processing(target_fps, export_mode, include_audio)
+        # Stage 2: Configure
+        pipeline.configure_processing(target_fps, export_mode, include_audio)
 
-    # Stage 3: Check cache
-    if pipeline.check_cache(cache):
-        # Cache hit - report and return
-        if progress_callback:
-            progress_callback(1, 1, "Using cached result", 'cached')
-        return pipeline.output_path
+        # Stage 3: Check cache
+        if pipeline.check_cache(cache):
+            # Cache hit - report and return
+            if progress_callback:
+                progress_callback(1, 1, "Using cached result", 'cached')
+            return pipeline.output_path
 
-    # Stage 4: Process
-    output = await pipeline.process(upscaler, progress_callback)
+        # Stage 4: Process
+        output = await pipeline.process(upscaler, progress_callback)
 
-    # Stage 5: Store in cache
-    pipeline.store_in_cache(cache)
+        # Stage 5: Store in cache
+        pipeline.store_in_cache(cache)
 
-    return output
+        return output
+
+    except Exception as e:
+        # Log the full exception before re-raising
+        import traceback
+        import sys
+        logger.error(f"[Pipeline] FATAL ERROR during clip processing: {e}")
+        logger.error(f"[Pipeline] Exception type: {type(e).__name__}")
+        logger.error(f"[Pipeline] Full traceback:\n{traceback.format_exc()}")
+
+        # Also print to stderr in case logging isn't working
+        print(f"[Pipeline] FATAL ERROR: {e}", file=sys.stderr)
+        print(f"[Pipeline] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
+        sys.stderr.flush()
+
+        raise

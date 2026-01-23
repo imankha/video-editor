@@ -114,6 +114,7 @@ export function FramingModeView({
   onIncludeAudioChange,
   onProceedToOverlay,
   onExportComplete,
+  saveCurrentClipState,  // For backend-authoritative export
 
   // Context
   cropContextValue,
@@ -318,6 +319,7 @@ export function FramingModeView({
               globalAspectRatio={globalAspectRatio}
               globalTransition={globalTransition}
               onExportComplete={onExportComplete}
+              saveCurrentClipState={saveCurrentClipState}
             />
           </div>
         )}

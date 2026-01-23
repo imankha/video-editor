@@ -35,13 +35,25 @@ from app.services.ffmpeg_service import (
 
 logger = logging.getLogger(__name__)
 
-# Try to import AI upscaler (may not be available)
-AIVideoUpscaler = None
-try:
-    from app.ai_upscaler import AIVideoUpscaler as _AIVideoUpscaler
-    AIVideoUpscaler = _AIVideoUpscaler
-except (ImportError, OSError, AttributeError) as e:
-    logger.warning(f"AI upscaler not available: {e}")
+# AIVideoUpscaler is imported lazily to avoid circular imports
+# (ai_upscaler -> video_encoder -> services -> local_gpu_processor -> ai_upscaler)
+_AIVideoUpscaler = None
+_ai_import_attempted = False
+
+
+def _get_ai_upscaler_class():
+    """Lazily import AIVideoUpscaler to avoid circular imports."""
+    global _AIVideoUpscaler, _ai_import_attempted
+    if not _ai_import_attempted:
+        _ai_import_attempted = True
+        try:
+            from app.ai_upscaler import AIVideoUpscaler
+            _AIVideoUpscaler = AIVideoUpscaler
+            logger.info("AI upscaler module loaded successfully")
+        except (ImportError, OSError, AttributeError) as e:
+            logger.warning(f"AI upscaler not available: {e}")
+            _AIVideoUpscaler = None
+    return _AIVideoUpscaler
 
 
 class LocalGPUProcessor(VideoProcessor):
@@ -57,7 +69,7 @@ class LocalGPUProcessor(VideoProcessor):
     def __init__(self):
         """Initialize the local GPU processor."""
         self._ffmpeg_available = is_ffmpeg_available()
-        self._ai_available = AIVideoUpscaler is not None
+        self._ai_available = None  # Determined lazily
         self._upscaler = None
 
     @property
@@ -72,8 +84,13 @@ class LocalGPUProcessor(VideoProcessor):
 
     def _get_upscaler(self):
         """Get or create the AI upscaler instance (lazy initialization)."""
+        # Lazy check for AI availability
+        if self._ai_available is None:
+            self._ai_available = _get_ai_upscaler_class() is not None
+
         if self._upscaler is None and self._ai_available:
             try:
+                AIVideoUpscaler = _get_ai_upscaler_class()
                 self._upscaler = AIVideoUpscaler()
             except Exception as e:
                 logger.warning(f"Failed to initialize AI upscaler: {e}")
@@ -113,6 +130,10 @@ class LocalGPUProcessor(VideoProcessor):
 
         try:
             # Check if AI upscaling is requested and available
+            # Trigger lazy initialization if not yet done
+            if self._ai_available is None:
+                self._ai_available = _get_ai_upscaler_class() is not None
+
             if config.use_ai_upscale and self._ai_available:
                 return await self._process_with_ai_upscale(config, progress)
             else:

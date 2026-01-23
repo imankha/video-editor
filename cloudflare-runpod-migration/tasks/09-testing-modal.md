@@ -1,16 +1,16 @@
-# Task 10: Testing RunPod Integration
+# Task 09: Testing Modal Integration
 
 ## Overview
-End-to-end testing of the RunPod GPU processing integration. Verify all export types work correctly.
+End-to-end testing of the Modal GPU processing integration. Verify all export types work correctly.
 
 ## Owner
 **Both** - User runs tests, Claude fixes issues
 
 ## Prerequisites
-- Tasks 05-09 complete (Full RunPod integration)
+- Tasks 05-08 complete (Full Modal integration)
 
 ## Testability
-**After this task**: Phase 2 complete. App works with local backend + RunPod GPU + R2 storage.
+**After this task**: Phase 2 complete. App works with local backend + Modal GPU + R2 storage.
 
 ---
 
@@ -47,7 +47,7 @@ End-to-end testing of the RunPod GPU processing integration. Verify all export t
 
 ### 2. Error Handling
 
-- [ ] **RunPod timeout**
+- [ ] **Modal timeout**
   - [ ] Submit long-running job
   - [ ] Verify timeout error shows in UI
   - [ ] Job marked as error in database
@@ -89,11 +89,11 @@ End-to-end testing of the RunPod GPU processing integration. Verify all export t
 ### 5. R2 Integration
 
 - [ ] **Input files**
-  - [ ] Verify GPU worker can download from R2
-  - [ ] Check R2 logs for download activity
+  - [ ] Verify Modal function can download from R2
+  - [ ] Check Modal logs for download activity
 
 - [ ] **Output files**
-  - [ ] Verify GPU worker uploads to R2
+  - [ ] Verify Modal function uploads to R2
   - [ ] Output appears in correct location
   - [ ] Presigned URL works for download
 
@@ -101,15 +101,35 @@ End-to-end testing of the RunPod GPU processing integration. Verify all export t
 
 ## Manual Test Commands
 
-### Check RunPod Job Status
+### Check Modal Function Logs
 
 ```bash
-# Get API key and endpoint from .env
-source .env
+# View recent function invocations
+modal app logs reel-ballers-video
 
-# Check a job status
-curl "https://api.runpod.ai/v2/${RUNPOD_ENDPOINT_ID}/status/{job_id}" \
-  -H "Authorization: Bearer ${RUNPOD_API_KEY}"
+# View specific function logs
+modal app logs reel-ballers-video --function process_video
+```
+
+### Test Modal Function Directly
+
+```bash
+# Run test from command line
+modal run modal_functions/video_processing.py
+
+# Or from Python
+python -c "
+from modal_functions.video_processing import process_video
+result = process_video.remote(
+    job_id='test-cli',
+    user_id='a',
+    job_type='framing',
+    input_key='working_videos/test.mp4',
+    output_key='final_videos/test_cli.mp4',
+    params={'output_width': 1080, 'output_height': 1920}
+)
+print(result)
+"
 ```
 
 ### Check R2 Contents
@@ -150,24 +170,28 @@ for row in conn.execute('SELECT * FROM export_jobs ORDER BY created_at DESC LIMI
 ## Common Issues & Fixes
 
 ### "Job stuck in pending"
-- Check RunPod dashboard for worker availability
-- Verify endpoint has Max Workers > 0
-- Check RunPod logs for startup errors
+- Check Modal dashboard for function status
+- Verify `modal deploy` was run successfully
+- Check Modal logs for startup errors
 
 ### "Download returns 404"
 - Verify output_key matches actual R2 path
-- Check GPU worker logs for upload errors
-- Verify R2 credentials are correct
+- Check Modal function logs for upload errors
+- Verify R2 credentials in Modal secret
 
 ### "Progress never updates"
 - Check polling endpoint returns correct status
-- Verify RunPod job ID stored in database
+- Verify job ID stored in database
 - Check network tab for polling requests
 
 ### "Video corrupt after download"
 - Check ffmpeg encoding parameters
 - Verify file fully uploaded before marking complete
 - Check R2 for partial uploads
+
+### "Modal function not found"
+- Run `modal deploy modal_functions/video_processing.py`
+- Check function is deployed: `modal app list`
 
 ---
 
@@ -190,7 +214,11 @@ After completing Phase 2, the app architecture is:
 ```
 Frontend ──► FastAPI Backend ──► R2 Storage
                     │                 ▲
-                    └──► RunPod GPU ──┘
+                    └──► Modal GPU ───┘
 ```
 
-Phase 3 will migrate the FastAPI backend to Cloudflare Workers, but the core functionality (exports via RunPod, storage in R2) will remain the same.
+Phase 3 will deploy:
+- FastAPI backend to Fly.io
+- React frontend to Cloudflare Pages
+
+The core functionality (exports via Modal, storage in R2) will remain the same.

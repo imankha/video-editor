@@ -92,7 +92,16 @@
       "Bash(git restore:*)",
       "Bash(export AWS_ACCESS_KEY_ID=4f5febce8beb63be044414984aa7a3b4)",
       "Bash(export:*)",
-      "Bash(. .venv/Scripts/activate)"
+      "Bash(. .venv/Scripts/activate)",
+      "Bash(PWDEBUG=console npx playwright test:*)",
+      "Bash(rclone ls:*)",
+      "Bash(rclone lsd:*)",
+      "Read(//c/Users/imank/projects/video-editor/**)",
+      "Bash(while read folder)",
+      "Bash(do echo \"Deleting $folder...\")",
+      "Bash(C:Toolsffmpegbinffmpeg.exe -i \"C:\\\\Users\\\\imank\\\\projects\\\\video-editor\\\\formal annotations\\\\test.short\\\\wcfc-carlsbad-trimmed.mp4\" -t 6 -c:v libx264 -crf 28 -preset fast -c:a aac -b:a 96k -y \"C:\\\\Users\\\\imank\\\\projects\\\\video-editor\\\\formal annotations\\\\test.short\\\\e2e-test-video.mp4\")",
+      "Bash(tee:*)",
+      "Bash(cd:*)"
     ],
     "deny": [],
     "ask": []
