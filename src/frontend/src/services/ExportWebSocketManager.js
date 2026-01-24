@@ -144,8 +144,22 @@ class ExportWebSocketManager {
    * Handle incoming WebSocket message
    */
   _handleMessage(exportId, data, callbacks) {
+    // Skip ping/pong heartbeat messages (they're not JSON)
+    // Handle various formats: exact match, trimmed, or with quotes
+    const trimmedData = typeof data === 'string' ? data.trim() : String(data);
+    if (trimmedData === 'pong' || trimmedData === 'ping' ||
+        trimmedData === '"pong"' || trimmedData === '"ping"' ||
+        trimmedData.toLowerCase() === 'pong' || trimmedData.toLowerCase() === 'ping') {
+      return;
+    }
+
+    // Skip empty messages
+    if (!trimmedData || trimmedData === '""' || trimmedData === "''") {
+      return;
+    }
+
     try {
-      const message = JSON.parse(data);
+      const message = JSON.parse(trimmedData);
       console.debug(`[ExportWSManager] Message for ${exportId}:`, message);
 
       // Extract all fields from the message - backend sends projectId, type, and projectName
@@ -217,7 +231,14 @@ class ExportWebSocketManager {
         this._emitEvent(exportId, 'progress', { progress, message: progressMessage });
       }
     } catch (e) {
-      console.warn(`[ExportWSManager] Failed to parse message for ${exportId}:`, e);
+      // Only warn if it's an unexpected message (not empty/whitespace)
+      if (trimmedData && trimmedData.length > 0) {
+        console.warn(`[ExportWSManager] Failed to parse message for ${exportId}:`, {
+          error: e.message,
+          dataLength: trimmedData.length,
+          dataPreview: trimmedData.substring(0, 100)
+        });
+      }
     }
   }
 

@@ -163,7 +163,7 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
   let lastProgressTime = Date.now();
   let lastConsoleProgress = -1;
   let lastConsoleProgressTime = Date.now();
-  const STALL_TIMEOUT = 30000; // 30 seconds without progress = stalled
+  const STALL_TIMEOUT = 60000; // 60 seconds without progress = stalled (AI upscaling is slow)
 
   // Monitor browser console for WebSocket progress updates
   // This helps detect if backend is sending updates but UI isn't reflecting them
@@ -495,9 +495,34 @@ async function ensureAnnotateModeWithClips(page) {
   await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 15000 });
   console.log('[Test] TSV imported, clips visible in UI');
 
-  // Wait for clips to be saved to raw_clips (auto-save happens in background)
-  // Increase wait to ensure all async clip saves complete
-  await page.waitForTimeout(5000);
+  // Wait for clips to be saved to raw_clips (auto-save happens in background via FFmpeg)
+  // Poll the API until clips appear - don't just wait a fixed time
+  console.log('[Test] Waiting for clips to be saved to library (FFmpeg extraction)...');
+  const startWait = Date.now();
+  const maxWaitTime = 120000; // 2 minutes for FFmpeg extractions
+  let clipsSaved = false;
+
+  while (Date.now() - startWait < maxWaitTime) {
+    const rawClips = await page.evaluate(async () => {
+      const res = await fetch('/api/clips/raw');
+      return res.ok ? await res.json() : [];
+    });
+
+    if (rawClips.length > 0) {
+      console.log(`[Test] ${rawClips.length} clips saved to library after ${Math.round((Date.now() - startWait) / 1000)}s`);
+      clipsSaved = true;
+      break;
+    }
+
+    // Wait 2 seconds before checking again
+    await page.waitForTimeout(2000);
+    console.log(`[Test] Still waiting for clips to save... (${Math.round((Date.now() - startWait) / 1000)}s elapsed)`);
+  }
+
+  if (!clipsSaved) {
+    console.log('[Test] WARNING: No clips saved to library after 2 minutes - test may fail');
+  }
+
   console.log('[Test] Loaded video and TSV in annotate mode');
 }
 
@@ -662,28 +687,36 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   await page.locator('button:has-text("New Project")').click();
   await page.waitForTimeout(500);
 
-  // Wait for clips to load in the modal (should show clip cards or "No clips" message)
+  // Wait for clips to load in the modal (should show clip buttons or "No clips" message)
   // The modal starts with "Loading clips..." and then shows actual clips
-  const clipsList = page.locator('[class*="modal"], [role="dialog"]');
-  await expect(clipsList.locator('text="Loading clips..."')).toBeHidden({ timeout: 10000 });
+  // All clips are selected by default - just need to verify they loaded and click Create
+
+  // Wait for "Loading clips..." to disappear
+  const loadingText = page.locator('text="Loading clips..."');
+  await expect(loadingText).toBeHidden({ timeout: 15000 });
   await page.waitForTimeout(1000); // Extra wait for clips to render
 
-  // Check if clips are available - if so, select them
-  const clipCheckboxes = page.locator('input[type="checkbox"]');
-  const clipCount = await clipCheckboxes.count();
-  console.log(`[Test] Found ${clipCount} clip checkboxes in modal`);
+  // Check if clips are shown - they appear as buttons in a scrollable list
+  // Each clip button has a checkbox indicator (bg-blue-600 for selected)
+  const clipButtons = page.locator('button').filter({
+    has: page.locator('.bg-blue-600, .bg-gray-600').filter({
+      has: page.locator('svg, [class*="Check"]')
+    })
+  });
+  let clipCount = await clipButtons.count();
 
-  if (clipCount > 0) {
-    // Select all clips
-    for (let i = 0; i < clipCount; i++) {
-      const checkbox = clipCheckboxes.nth(i);
-      if (!(await checkbox.isChecked())) {
-        await checkbox.click();
-      }
+  // Fallback: look for "selected" text which shows count
+  if (clipCount === 0) {
+    const selectedText = await page.locator('text=/\\d+ of \\d+ selected/i').textContent().catch(() => '');
+    const match = selectedText?.match(/(\d+) of (\d+)/);
+    if (match) {
+      clipCount = parseInt(match[2], 10);
     }
   }
 
-  // Select all clips and create project
+  console.log(`[Test] Found ${clipCount} clips in modal (all selected by default)`);
+
+  // All clips are included by default, so we just click Create
   const createButton = page.locator('button:has-text("Create with")').first();
   await expect(createButton).toBeEnabled({ timeout: 10000 });
   await createButton.click();
@@ -767,7 +800,7 @@ async function ensureWorkingVideoExists(page) {
   await ensureFramingMode(page);
 
   // Export using the short test video
-  const exportButton = page.locator('button:has-text("Export")').first();
+  const exportButton = page.locator('button:has-text("Frame Video")').first();
   await exportButton.click();
   await waitForExportComplete(page); // Progress-based: fails only if no progress for 30s
 
@@ -966,11 +999,13 @@ test.describe('Smoke Tests @smoke', () => {
     const createButton = page.locator('button:has-text("Create with")').first();
     await expect(createButton).toBeEnabled({ timeout: 10000 });
     await createButton.click();
-    await page.waitForTimeout(2000);
+
+    // Wait for modal to close (indicates project creation started)
+    await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
 
     // Creating from clips navigates directly to Framing mode
     // Wait for the Framing button to be visible (indicates we're in the project)
-    await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 30000 });
 
     // Wait for video element to appear (may take time to load from R2)
     // The video element is rendered after clip files are downloaded
@@ -1204,9 +1239,12 @@ test.describe('Full Coverage Tests @full', () => {
     await expect(createProjectButton).toBeEnabled({ timeout: 10000 });
     await createProjectButton.click();
 
+    // Wait for modal to close (indicates project creation started)
+    await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
+
     // Creating from clips navigates directly to Framing mode
     // Verify we're in Framing mode (Framing button should be visible and active)
-    await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 30000 });
     await waitForVideoFirstFrame(page);
     console.log('[Full] Project created from library clips - now in Framing mode');
 
@@ -1486,10 +1524,16 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Keyframe data should be preserved (restoration should happen, no reinit after restore)
     // Just verify the UI is stable and functional
-    const exportButton = page.locator('button:has-text("Export")').first();
-    await expect(exportButton).toBeVisible({ timeout: 10000 });
+    // After framing export, project may open in Overlay mode (if working video exists) or Framing mode
+    const framingButton = page.locator('button:has-text("Frame Video")').first();
+    const overlayButton = page.locator('button:has-text("Add Overlay")').first();
+    const eitherButtonVisible = await Promise.race([
+      framingButton.waitFor({ state: 'visible', timeout: 10000 }).then(() => 'framing'),
+      overlayButton.waitFor({ state: 'visible', timeout: 10000 }).then(() => 'overlay')
+    ]).catch(() => null);
 
-    console.log('[Full] Keyframe data persists after reload');
+    expect(eitherButtonVisible).not.toBeNull();
+    console.log(`[Full] Keyframe data persists after reload (opened in ${eitherButtonVisible} mode)`);
   });
 
   /**
@@ -1507,7 +1551,7 @@ test.describe('Full Coverage Tests @full', () => {
     await ensureFramingMode(page);
 
     // Start export
-    const exportButton = page.locator('button:has-text("Export")').first();
+    const exportButton = page.locator('button:has-text("Frame Video")').first();
     await expect(exportButton).toBeEnabled({ timeout: 10000 });
     await exportButton.click();
 
@@ -1615,8 +1659,23 @@ test.describe('Full Coverage Tests @full', () => {
 
     await projectCard.click();
 
-    // Wait for framing mode to load
+    // Wait for mode to load
     await page.waitForTimeout(2000);
+
+    // Check if we opened in Overlay mode (has working video from previous export)
+    // If so, we need to switch to Framing mode for this test
+    const addOverlayButton = page.locator('button:has-text("Add Overlay")');
+
+    if (await addOverlayButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      console.log('[Full] Project opened in Overlay mode, switching to Framing mode...');
+
+      // Click the "Framing" button in the mode switcher (in the header)
+      const framingModeButton = page.locator('button:has-text("Framing")').first();
+      await expect(framingModeButton).toBeVisible({ timeout: 5000 });
+      await framingModeButton.click();
+      await page.waitForTimeout(2000);
+      console.log('[Full] Clicked Framing button in mode switcher');
+    }
 
     // Load video if file picker is shown
     const videoInput = page.locator('input[type="file"][accept*="video"]').first();
@@ -1628,8 +1687,8 @@ test.describe('Full Coverage Tests @full', () => {
     await waitForVideoFirstFrame(page, 30000);
     await page.waitForTimeout(2000);
 
-    // Find the clip selector sidebar
-    const clipSidebar = page.locator('[data-testid="clip-selector"]').or(page.locator('text=/Clip \\d+/i').first().locator('..').locator('..'));
+    // Verify we have clip selector sidebar (indicates Framing mode)
+    const clipSidebar = page.locator('[data-testid="clip-selector"]').or(page.locator('text=/Clips/i').first().locator('..'));
 
     // STEP 1: Edit first clip - change segment speed
     console.log('[Full] Step 1: Editing first clip...');
@@ -1861,23 +1920,48 @@ test.describe('Full Coverage Tests @full', () => {
     await waitForVideoFirstFrame(page);
     console.log('[Full Pipeline] Game created, video loaded');
 
-    // Wait for video upload to backend to complete BEFORE importing TSV
-    // The clips/raw/save endpoint requires the video file to exist for extraction
+    // IMPORTANT: Wait for video upload to complete BEFORE importing TSV
+    // The clips/raw/save endpoint requires the video file to exist for FFmpeg extraction
     console.log('[Full Pipeline] Waiting for video upload to complete...');
-    const createVideoButton = page.locator('button:has-text("Create Annotated Video")');
-    await expect(createVideoButton).toBeEnabled({ timeout: 120000 });
+    const uploadSuccess = await waitForUploadComplete(page);
+    if (!uploadSuccess) {
+      throw new Error('Video upload failed or timed out - clips cannot be saved to library');
+    }
     console.log('[Full Pipeline] Video upload complete');
 
     // STEP 2: Import TSV annotations (clips auto-save to library)
     console.log('[Full Pipeline] Step 2: Importing TSV...');
-
-    // Ensure TSV input is attached before setting files
     const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
     await expect(tsvInput).toBeAttached({ timeout: 10000 });
     await tsvInput.setInputFiles(TEST_TSV);
-    // Wait for clips to appear (notification may disappear quickly)
+    // Wait for clips to appear in UI
     await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 15000 });
-    console.log('[Full Pipeline] TSV imported, clips auto-saved to library');
+    console.log('[Full Pipeline] TSV imported, clips visible in UI');
+
+    // Wait for clips to be saved to library (FFmpeg extraction happens in background)
+    console.log('[Full Pipeline] Waiting for clips to be saved to library...');
+    const startWait = Date.now();
+    const maxWaitTime = 120000; // 2 minutes for FFmpeg extractions
+    let clipsSaved = false;
+
+    while (Date.now() - startWait < maxWaitTime) {
+      const rawClips = await page.evaluate(async () => {
+        const res = await fetch('/api/clips/raw');
+        return res.ok ? await res.json() : [];
+      });
+
+      if (rawClips.length > 0) {
+        console.log(`[Full Pipeline] ${rawClips.length} clips saved to library after ${Math.round((Date.now() - startWait) / 1000)}s`);
+        clipsSaved = true;
+        break;
+      }
+
+      await page.waitForTimeout(2000);
+    }
+
+    if (!clipsSaved) {
+      console.log('[Full Pipeline] WARNING: No clips saved to library after 2 minutes');
+    }
 
     // STEP 3: Create project from library clips via New Project modal
     console.log('[Full Pipeline] Step 3: Creating project from library clips...');
@@ -1894,34 +1978,21 @@ test.describe('Full Coverage Tests @full', () => {
     const createProjectButton = page.locator('button:has-text("Create with")').first();
     await expect(createProjectButton).toBeEnabled({ timeout: 10000 });
     await createProjectButton.click();
-    await page.waitForTimeout(2000);
 
-    // Verify project was created
-    await expect(page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clip/i') }).first()).toBeVisible({ timeout: 10000 });
-    console.log('[Full Pipeline] Project created from library clips');
-
-    // STEP 4: Open project and run framing export
-    console.log('[Full Pipeline] Step 4: Opening project for framing...');
-    await page.locator('button:has-text("Projects")').click();
-    await page.waitForTimeout(500);
-
-    // Click on the project card
-    const projectCard = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clip/i') }).first();
-    await expect(projectCard).toBeVisible({ timeout: 10000 });
-    await projectCard.click();
-    await page.waitForTimeout(2000);
-
-    // Load video if needed
-    const framingVideoInput = page.locator('input[type="file"][accept*="video"]').first();
-    if (await framingVideoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await framingVideoInput.setInputFiles(TEST_VIDEO);
-    }
+    // App navigates directly into framing mode after project creation
+    // Wait for framing mode to load (clips sidebar visible)
+    console.log('[Full Pipeline] Waiting for framing mode to load...');
     await waitForVideoFirstFrame(page);
-    console.log('[Full Pipeline] Framing mode loaded');
 
-    // Start framing export
-    console.log('[Full Pipeline] Running framing export...');
-    const exportButton = page.locator('button:has-text("Export")').first();
+    // Verify clips are loaded in sidebar
+    const clipItems = page.locator('[data-testid="clip-item"]');
+    await expect(clipItems.first()).toBeVisible({ timeout: 10000 });
+    const clipCount = await clipItems.count();
+    console.log(`[Full Pipeline] Project created with ${clipCount} clips, framing mode loaded`);
+
+    // STEP 4: Run framing export
+    console.log('[Full Pipeline] Step 4: Running framing export...');
+    const exportButton = page.locator('button:has-text("Frame Video")').first();
     await expect(exportButton).toBeEnabled({ timeout: 10000 });
     await exportButton.click();
 
@@ -1929,23 +2000,32 @@ test.describe('Full Coverage Tests @full', () => {
     await waitForExportComplete(page);
     console.log('[Full Pipeline] Framing export complete');
 
-    // STEP 5: Enter overlay mode
+    // STEP 5: Enter overlay mode (app may auto-switch after framing export)
     console.log('[Full Pipeline] Step 5: Entering overlay mode...');
-    const overlayButton = page.locator('button:has-text("Overlay")');
-    await expect(overlayButton).toBeEnabled({ timeout: 10000 });
-    await overlayButton.click();
 
-    // Wait for overlay mode to load
+    // Check if already in overlay mode (app auto-switches after framing export)
+    const highlightUI = page.locator('text="Highlight Effect"');
+    const alreadyInOverlay = await highlightUI.isVisible({ timeout: 3000 }).catch(() => false);
+
+    if (alreadyInOverlay) {
+      console.log('[Full Pipeline] Already in overlay mode (auto-switched after export)');
+    } else {
+      // Click overlay mode button (use exact match to avoid "Add Overlay" button)
+      const overlayModeButton = page.getByRole('button', { name: 'Overlay', exact: true });
+      await expect(overlayModeButton).toBeEnabled({ timeout: 10000 });
+      await overlayModeButton.click();
+    }
+
+    // Wait for overlay mode to be fully loaded
     await waitForVideoFirstFrame(page, 30000);
     console.log('[Full Pipeline] Overlay mode loaded');
 
     // Verify highlight UI is visible
-    const highlightUI = page.locator('text="Highlight Effect"');
     await expect(highlightUI).toBeVisible({ timeout: 5000 });
 
     // STEP 6: Run final export (overlay export)
     console.log('[Full Pipeline] Step 6: Running final export...');
-    const finalExportButton = page.locator('button:has-text("Export Video")').first();
+    const finalExportButton = page.locator('button:has-text("Add Overlay")');
     await expect(finalExportButton).toBeVisible({ timeout: 10000 });
     await expect(finalExportButton).toBeEnabled({ timeout: 10000 });
     await finalExportButton.click();
@@ -1957,14 +2037,25 @@ test.describe('Full Coverage Tests @full', () => {
     // STEP 7: Verify final video exists
     console.log('[Full Pipeline] Step 7: Verifying final video...');
 
-    // Check via API
+    // Check via API - handle potential errors
     const finalVideos = await page.evaluate(async () => {
-      const res = await fetch('/api/downloads');
-      return res.json();
+      try {
+        const res = await fetch('/api/downloads');
+        if (!res.ok) {
+          console.log(`API error: ${res.status} ${res.statusText}`);
+          return [];
+        }
+        const data = await res.json();
+        // API returns { downloads: [...] } or just an array
+        return Array.isArray(data) ? data : (data.downloads || []);
+      } catch (e) {
+        console.log(`Fetch error: ${e.message}`);
+        return [];
+      }
     });
 
-    console.log(`[Full Pipeline] Final videos in gallery: ${finalVideos.length}`);
-    expect(finalVideos.length, 'Should have at least one final video').toBeGreaterThan(0);
+    console.log(`[Full Pipeline] Final videos in gallery: ${finalVideos?.length ?? 0}`);
+    expect(finalVideos?.length ?? 0, 'Should have at least one final video').toBeGreaterThan(0);
 
     // Optionally navigate to Gallery to verify UI
     const galleryButton = page.locator('button:has-text("Gallery")');
@@ -2028,13 +2119,8 @@ test.describe('Full Coverage Tests @full', () => {
     // Wait for framing mode to fully load
     await waitForVideoFirstFrame(page, 30000);
 
-    // Verify we're in framing mode
-    const framingButton = page.locator('button:has-text("Framing")');
-    const overlayButton = page.locator('button:has-text("Overlay")');
-    const exportButton = page.locator('button:has-text("Export")').first();
-
-    // Should see mode switcher and export button
-    await expect(framingButton.or(overlayButton)).toBeVisible({ timeout: 5000 });
+    // Verify we're in framing mode by checking for the Frame Video export button
+    const exportButton = page.locator('button:has-text("Frame Video")').first();
     await expect(exportButton).toBeVisible({ timeout: 5000 });
 
     // Verify video is playing correctly

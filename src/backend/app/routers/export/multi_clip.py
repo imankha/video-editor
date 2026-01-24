@@ -406,11 +406,43 @@ async def export_multi_clip(
                 detail={"error": "AI upscaling dependencies not installed"}
             )
 
-        shared_upscaler = AIVideoUpscaler(
-            device='cuda',
-            export_mode=export_mode,
-            sr_model_name='realesr_general_x4v3'
-        )
+        # Check CUDA availability before trying to initialize
+        if not torch.cuda.is_available():
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "CUDA not available - GPU required for AI upscaling"}
+            )
+
+        # Clear any stale GPU memory before initializing model
+        try:
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            logger.info(f"[Multi-Clip Export] CUDA memory cleared. Available: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}GB")
+        except Exception as e:
+            logger.warning(f"[Multi-Clip Export] Failed to clear CUDA cache: {e}")
+
+        try:
+            shared_upscaler = AIVideoUpscaler(
+                device='cuda',
+                export_mode=export_mode,
+                sr_model_name='realesr_general_x4v3'
+            )
+        except torch.cuda.OutOfMemoryError as e:
+            logger.error(f"[Multi-Clip Export] CUDA out of memory during model init: {e}")
+            torch.cuda.empty_cache()
+            raise HTTPException(
+                status_code=503,
+                detail={"error": f"GPU out of memory - try closing other GPU applications: {e}"}
+            )
+        except RuntimeError as e:
+            if "CUDA" in str(e) or "cuda" in str(e):
+                logger.error(f"[Multi-Clip Export] CUDA error during model init: {e}")
+                torch.cuda.empty_cache()
+                raise HTTPException(
+                    status_code=503,
+                    detail={"error": f"CUDA error - GPU may be busy or unavailable: {e}"}
+                )
+            raise
 
         if shared_upscaler.upsampler is None:
             raise HTTPException(

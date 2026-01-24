@@ -985,9 +985,15 @@ async def reorder_clips(project_id: int, clip_ids: List[int]):
 
 
 @router.get("/projects/{project_id}/clips/{clip_id}/file")
-async def get_working_clip_file(project_id: int, clip_id: int):
-    """Stream a working clip video file. Redirects to R2 when enabled."""
-    from fastapi.responses import RedirectResponse
+async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = False):
+    """
+    Stream a working clip video file.
+
+    By default, redirects to R2 presigned URL for better performance with video elements.
+    Use ?stream=true to proxy the content through the backend (avoids CORS for fetch API).
+    """
+    from fastapi.responses import RedirectResponse, StreamingResponse
+    import httpx
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1010,12 +1016,38 @@ async def get_working_clip_file(project_id: int, clip_id: int):
             filename = clip['uploaded_filename']
             source_type = 'upload'
 
-        # If R2 enabled, redirect to presigned URL
+        # If R2 enabled
         if R2_ENABLED:
             presigned_url = get_working_clip_url(filename, source_type)
-            if presigned_url:
-                return RedirectResponse(url=presigned_url, status_code=302)
-            raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+            if not presigned_url:
+                raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+
+            # Stream mode: proxy the content through backend (avoids CORS issues)
+            if stream:
+                logger.info(f"Streaming clip {clip_id} through backend proxy")
+
+                async def stream_from_r2():
+                    async with httpx.AsyncClient() as client:
+                        async with client.stream("GET", presigned_url) as response:
+                            if response.status_code != 200:
+                                raise HTTPException(
+                                    status_code=response.status_code,
+                                    detail=f"R2 returned {response.status_code}"
+                                )
+                            async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):  # 1MB chunks
+                                yield chunk
+
+                return StreamingResponse(
+                    stream_from_r2(),
+                    media_type="video/mp4",
+                    headers={
+                        "Content-Disposition": f'attachment; filename="{filename}"',
+                        "Cache-Control": "no-cache"
+                    }
+                )
+
+            # Default: redirect to presigned URL (best for video elements)
+            return RedirectResponse(url=presigned_url, status_code=302)
 
         # Local mode: serve from filesystem
         if source_type == 'raw':

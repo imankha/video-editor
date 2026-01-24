@@ -298,7 +298,7 @@ export function AnnotateContainer({
     // Quick health check before starting export
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout for E2E tests
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout - server may be processing video
       const healthResponse = await fetch(`${API_BASE}/api/health`, { signal: controller.signal });
       clearTimeout(timeoutId);
       if (!healthResponse.ok) {
