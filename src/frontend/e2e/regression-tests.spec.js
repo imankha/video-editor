@@ -2116,12 +2116,19 @@ test.describe('Full Coverage Tests @full', () => {
       await videoInput.setInputFiles(TEST_VIDEO);
     }
 
-    // Wait for framing mode to fully load
+    // Wait for video to load
     await waitForVideoFirstFrame(page, 30000);
 
-    // Verify we're in framing mode by checking for the Frame Video export button
-    const exportButton = page.locator('button:has-text("Frame Video")').first();
-    await expect(exportButton).toBeVisible({ timeout: 5000 });
+    // Verify we're in an editing mode (framing or overlay)
+    // Projects with existing working videos open in overlay mode directly
+    const frameVideoButton = page.locator('button:has-text("Frame Video")').first();
+    const addOverlayButton = page.locator('button:has-text("Add Overlay")').first();
+
+    const isFramingMode = await frameVideoButton.isVisible({ timeout: 2000 }).catch(() => false);
+    const isOverlayMode = await addOverlayButton.isVisible({ timeout: 2000 }).catch(() => false);
+
+    expect(isFramingMode || isOverlayMode, 'Should be in framing or overlay mode').toBe(true);
+    console.log(`[Full] Opened in ${isFramingMode ? 'framing' : 'overlay'} mode`);
 
     // Verify video is playing correctly
     const video = page.locator('video');
