@@ -1,6 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { X, Upload, Gamepad2, Calendar, MapPin, Trophy } from 'lucide-react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { X, Upload, Gamepad2, Calendar, MapPin, Trophy, ChevronDown } from 'lucide-react';
 import { Button } from './shared/Button';
+
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 /**
  * GameDetailsModal - Modal for entering game details before creating a game
@@ -9,7 +11,7 @@ import { Button } from './shared/Button';
  * - Opponent team name (required)
  * - Game date (required)
  * - Game type: home, away, or tournament
- * - Tournament name (if tournament)
+ * - Tournament name (if tournament) - with dropdown of existing tournaments
  * - Video file upload
  */
 export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
@@ -17,9 +19,45 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const [gameDate, setGameDate] = useState('');
   const [gameType, setGameType] = useState('home'); // 'home', 'away', 'tournament'
   const [tournamentName, setTournamentName] = useState('');
+  const [existingTournaments, setExistingTournaments] = useState([]);
+  const [showTournamentDropdown, setShowTournamentDropdown] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef(null);
+  const tournamentInputRef = useRef(null);
+  const dropdownRef = useRef(null);
+
+  // Fetch existing tournaments when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetch(`${API_BASE}/api/games/tournaments`)
+        .then(res => res.json())
+        .then(data => {
+          setExistingTournaments(data.tournaments || []);
+        })
+        .catch(err => {
+          console.error('Failed to fetch tournaments:', err);
+          setExistingTournaments([]);
+        });
+    }
+  }, [isOpen]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target) &&
+          tournamentInputRef.current && !tournamentInputRef.current.contains(event.target)) {
+        setShowTournamentDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter tournaments based on input
+  const filteredTournaments = existingTournaments.filter(t =>
+    t.toLowerCase().includes(tournamentName.toLowerCase())
+  );
 
   const handleFileSelect = useCallback((event) => {
     const file = event.target.files?.[0];
@@ -51,6 +89,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
       setGameDate('');
       setGameType('home');
       setTournamentName('');
+      setShowTournamentDropdown(false);
       setSelectedFile(null);
       onClose();
     } finally {
@@ -64,6 +103,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
       setGameDate('');
       setGameType('home');
       setTournamentName('');
+      setShowTournamentDropdown(false);
       setSelectedFile(null);
       onClose();
     }
@@ -164,19 +204,69 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
 
           {/* Tournament Name (conditional) */}
           {gameType === 'tournament' && (
-            <div>
+            <div className="relative">
               <label className="block text-sm font-medium text-gray-300 mb-1.5">
                 <Trophy size={14} className="inline mr-1.5" />
                 Tournament Name
               </label>
-              <input
-                type="text"
-                value={tournamentName}
-                onChange={(e) => setTournamentName(e.target.value)}
-                placeholder="e.g., West Coast Tournament"
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-                disabled={isSubmitting}
-              />
+              <div className="relative">
+                <input
+                  ref={tournamentInputRef}
+                  type="text"
+                  value={tournamentName}
+                  onChange={(e) => {
+                    setTournamentName(e.target.value);
+                    setShowTournamentDropdown(true);
+                  }}
+                  onFocus={() => setShowTournamentDropdown(true)}
+                  placeholder={existingTournaments.length > 0 ? "Select or type new tournament" : "e.g., West Coast Tournament"}
+                  className="w-full px-3 py-2 pr-8 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                  disabled={isSubmitting}
+                />
+                {existingTournaments.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowTournamentDropdown(!showTournamentDropdown)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                    disabled={isSubmitting}
+                  >
+                    <ChevronDown size={18} className={`transition-transform ${showTournamentDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+                )}
+              </div>
+
+              {/* Tournament dropdown */}
+              {showTournamentDropdown && filteredTournaments.length > 0 && (
+                <div
+                  ref={dropdownRef}
+                  className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto"
+                >
+                  {filteredTournaments.map((tournament) => (
+                    <button
+                      key={tournament}
+                      type="button"
+                      onClick={() => {
+                        setTournamentName(tournament);
+                        setShowTournamentDropdown(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-700 transition-colors ${
+                        tournamentName === tournament ? 'bg-green-600/20 text-green-400' : 'text-gray-200'
+                      }`}
+                    >
+                      {tournament}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Show hint if there are existing tournaments but none match */}
+              {showTournamentDropdown && tournamentName && filteredTournaments.length === 0 && existingTournaments.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-2">
+                  <p className="text-xs text-gray-400">
+                    Press Enter to create new tournament: <span className="text-green-400">{tournamentName}</span>
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

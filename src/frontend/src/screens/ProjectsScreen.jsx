@@ -61,6 +61,7 @@ export function ProjectsScreen({
   const {
     projects,
     loading: projectsLoading,
+    error: projectsError,
     fetchProjects,
     selectProject,
     createProject,
@@ -71,6 +72,7 @@ export function ProjectsScreen({
   const {
     games,
     isLoading: gamesLoading,
+    error: gamesError,
     fetchGames,
     deleteGame,
   } = useGames();
@@ -242,6 +244,7 @@ export function ProjectsScreen({
         <ProjectManager
           projects={projects}
           loading={projectsLoading || loadingProjectId !== null}
+          error={projectsError}
           loadingProjectId={loadingProjectId}
           onSelectProject={handleSelectProject}
           onSelectProjectWithMode={handleSelectProjectWithMode}
@@ -251,6 +254,7 @@ export function ProjectsScreen({
           // Games props
           games={games}
           gamesLoading={gamesLoading}
+          gamesError={gamesError}
           onLoadGame={handleLoadGame}
           onDeleteGame={deleteGame}
           onFetchGames={fetchGames}

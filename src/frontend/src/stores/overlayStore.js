@@ -9,6 +9,24 @@ import { create } from 'zustand';
  * This store allows OverlayScreen to be self-contained while receiving
  * data from FramingScreen's export process.
  */
+
+// localStorage key for persisting effect type preference
+const EFFECT_TYPE_STORAGE_KEY = 'highlightEffectType';
+const DEFAULT_EFFECT_TYPE = 'dark_overlay';
+
+// Load saved effect type from localStorage, or use default
+function getInitialEffectType() {
+  try {
+    const saved = localStorage.getItem(EFFECT_TYPE_STORAGE_KEY);
+    if (saved && ['brightness_boost', 'original', 'dark_overlay'].includes(saved)) {
+      return saved;
+    }
+  } catch (e) {
+    // localStorage not available
+  }
+  return DEFAULT_EFFECT_TYPE;
+}
+
 export const useOverlayStore = create((set, get) => ({
   // Working video (from framing export or loaded from project)
   workingVideo: null, // { file, url, metadata }
@@ -16,8 +34,8 @@ export const useOverlayStore = create((set, get) => ({
   // Clip metadata for auto-generating highlight regions
   clipMetadata: null,
 
-  // Effect settings
-  effectType: 'original',
+  // Effect settings (loaded from localStorage or default to 'dark_overlay')
+  effectType: getInitialEffectType(),
 
   // Loading states
   isLoadingWorkingVideo: false,
@@ -31,7 +49,15 @@ export const useOverlayStore = create((set, get) => ({
 
   setClipMetadata: (metadata) => set({ clipMetadata: metadata }),
 
-  setEffectType: (type) => set({ effectType: type }),
+  setEffectType: (type) => {
+    // Persist to localStorage
+    try {
+      localStorage.setItem(EFFECT_TYPE_STORAGE_KEY, type);
+    } catch (e) {
+      // localStorage not available
+    }
+    set({ effectType: type });
+  },
 
   setIsLoadingWorkingVideo: (loading) => set({ isLoadingWorkingVideo: loading }),
 
@@ -45,7 +71,7 @@ export const useOverlayStore = create((set, get) => ({
   reset: () => set({
     workingVideo: null,
     clipMetadata: null,
-    effectType: 'original',
+    effectType: getInitialEffectType(), // Preserve user's preference on reset
     isLoadingWorkingVideo: false,
     isDataLoaded: false,
   }),

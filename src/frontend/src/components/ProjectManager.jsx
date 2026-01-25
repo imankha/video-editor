@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder, Clock, ChevronRight } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores/exportStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
@@ -19,6 +19,7 @@ import { CollapsibleGroup } from './shared/CollapsibleGroup';
 export function ProjectManager({
   projects,
   loading,
+  error, // Projects fetch error
   onSelectProject,
   onSelectProjectWithMode, // (projectId, options) => void - options: { mode: 'framing'|'overlay', clipIndex?: number }
   onCreateProject,
@@ -27,6 +28,7 @@ export function ProjectManager({
   // Games props
   games = [],
   gamesLoading = false,
+  gamesError, // Games fetch error
   onLoadGame,
   onDeleteGame,
   onFetchGames,
@@ -471,6 +473,26 @@ export function ProjectManager({
         /* Games List */
         gamesLoading ? (
           <div className="text-gray-400">Loading games...</div>
+        ) : gamesError ? (
+          <div className="text-center py-8">
+            <div className="inline-flex items-center gap-2 text-red-400 mb-3">
+              <AlertTriangle size={20} />
+              <span className="font-medium">Failed to load games</span>
+            </div>
+            <p className="text-gray-500 text-sm mb-4">
+              {gamesError.includes('fetch') || gamesError.includes('network')
+                ? 'Cannot connect to server. Is the backend running?'
+                : gamesError}
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={RefreshCw}
+              onClick={onFetchGames}
+            >
+              Retry
+            </Button>
+          </div>
         ) : games.length === 0 ? (
           <div className="text-gray-500 text-center">
             <p className="mb-2">No games yet</p>
@@ -497,6 +519,21 @@ export function ProjectManager({
         /* Projects List */
         loading ? (
           <div className="text-gray-400">Loading projects...</div>
+        ) : error ? (
+          <div className="text-center py-8">
+            <div className="inline-flex items-center gap-2 text-red-400 mb-3">
+              <AlertTriangle size={20} />
+              <span className="font-medium">Failed to load projects</span>
+            </div>
+            <p className="text-gray-500 text-sm mb-4">
+              {error.includes('fetch') || error.includes('network')
+                ? 'Cannot connect to server. Is the backend running?'
+                : error}
+            </p>
+            <p className="text-gray-600 text-xs">
+              Make sure the backend server is running on port 8000
+            </p>
+          </div>
         ) : projects.length === 0 ? (
           <div className="text-gray-500 text-center">
             <p className="mb-2">No projects yet</p>

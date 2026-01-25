@@ -17,7 +17,22 @@ import { extractVideoMetadataFromUrl } from '../../../utils/videoMetadata';
  * state together in one place.
  */
 
-const DEFAULT_EFFECT_TYPE = 'original';
+// localStorage key for persisting effect type preference
+const EFFECT_TYPE_STORAGE_KEY = 'highlightEffectType';
+const DEFAULT_EFFECT_TYPE = 'dark_overlay';
+
+// Load saved effect type from localStorage, or use default
+function getInitialEffectType() {
+  try {
+    const saved = localStorage.getItem(EFFECT_TYPE_STORAGE_KEY);
+    if (saved && ['brightness_boost', 'original', 'dark_overlay'].includes(saved)) {
+      return saved;
+    }
+  } catch (e) {
+    // localStorage not available
+  }
+  return DEFAULT_EFFECT_TYPE;
+}
 
 export default function useOverlayState() {
   // Video state
@@ -39,7 +54,17 @@ export default function useOverlayState() {
 
   // Highlight effect type - controls both client-side preview and export
   // 'brightness_boost' | 'original' | 'dark_overlay'
-  const [highlightEffectType, setHighlightEffectType] = useState(DEFAULT_EFFECT_TYPE);
+  const [highlightEffectType, setHighlightEffectTypeInternal] = useState(getInitialEffectType);
+
+  // Wrapper that persists to localStorage
+  const setHighlightEffectType = useCallback((type) => {
+    try {
+      localStorage.setItem(EFFECT_TYPE_STORAGE_KEY, type);
+    } catch (e) {
+      // localStorage not available
+    }
+    setHighlightEffectTypeInternal(type);
+  }, []);
 
   // Overlay persistence refs
   const pendingOverlaySaveRef = useRef(null);
@@ -108,7 +133,7 @@ export default function useOverlayState() {
     setDragHighlight(null);
     setSelectedHighlightKeyframeTime(null);
     setIsLoadingWorkingVideo(false);
-    setHighlightEffectType(DEFAULT_EFFECT_TYPE);
+    setHighlightEffectTypeInternal(getInitialEffectType()); // Preserve user's preference on reset
 
     // Reset refs
     pendingOverlaySaveRef.current = null;

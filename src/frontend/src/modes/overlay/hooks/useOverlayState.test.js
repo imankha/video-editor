@@ -18,9 +18,21 @@ const mockRevokeObjectURL = vi.fn();
 global.URL.createObjectURL = mockCreateObjectURL;
 global.URL.revokeObjectURL = mockRevokeObjectURL;
 
+// Mock localStorage
+const localStorageMock = {
+  store: {},
+  getItem: vi.fn((key) => localStorageMock.store[key] || null),
+  setItem: vi.fn((key, value) => { localStorageMock.store[key] = value; }),
+  removeItem: vi.fn((key) => { delete localStorageMock.store[key]; }),
+  clear: vi.fn(() => { localStorageMock.store = {}; }),
+};
+Object.defineProperty(global, 'localStorage', { value: localStorageMock });
+
 describe('useOverlayState', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorageMock.clear();
+    localStorageMock.store = {};
   });
 
   afterEach(() => {
@@ -48,10 +60,17 @@ describe('useOverlayState', () => {
       expect(result.current.selectedHighlightKeyframeTime).toBeNull();
     });
 
-    it('starts with default effect type', () => {
+    it('starts with default effect type (dark_overlay)', () => {
       const { result } = renderHook(() => useOverlayState());
 
-      expect(result.current.highlightEffectType).toBe('original');
+      expect(result.current.highlightEffectType).toBe('dark_overlay');
+    });
+
+    it('loads effect type from localStorage if present', () => {
+      localStorageMock.store['highlightEffectType'] = 'brightness_boost';
+      const { result } = renderHook(() => useOverlayState());
+
+      expect(result.current.highlightEffectType).toBe('brightness_boost');
     });
 
     it('starts with loading state false', () => {
@@ -203,7 +222,8 @@ describe('useOverlayState', () => {
       expect(result.current.dragHighlight).toBeNull();
       expect(result.current.selectedHighlightKeyframeTime).toBeNull();
       expect(result.current.isLoadingWorkingVideo).toBe(false);
-      expect(result.current.highlightEffectType).toBe('original');
+      // Effect type is preserved from localStorage (was set to 'brightness_boost' before reset)
+      expect(result.current.highlightEffectType).toBe('brightness_boost');
       expect(result.current.hasOverlayVideo).toBe(false);
     });
 

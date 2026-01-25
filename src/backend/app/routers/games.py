@@ -213,6 +213,27 @@ async def list_games(background_tasks: BackgroundTasks):
         return {'games': games}
 
 
+@router.get("/tournaments")
+async def list_tournaments():
+    """
+    List all unique tournament names that have been used.
+    Returns tournaments sorted alphabetically for dropdown selection.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT tournament_name
+            FROM games
+            WHERE tournament_name IS NOT NULL
+              AND tournament_name != ''
+            ORDER BY tournament_name ASC
+        """)
+        rows = cursor.fetchall()
+        tournaments = [row['tournament_name'] for row in rows]
+
+    return {'tournaments': tournaments}
+
+
 @router.post("")
 async def create_game(
     name: str = Form(...),
