@@ -356,6 +356,7 @@ def ensure_database():
     try:
         # Raw clips - extracted from Annotate mode (all clips saved in real-time)
         # game_id links to source game, auto_project_id tracks 5-star auto-projects
+        # filename is empty string for pending clips (video not yet uploaded)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS raw_clips (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

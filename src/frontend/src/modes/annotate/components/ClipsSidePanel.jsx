@@ -22,6 +22,7 @@ export function ClipsSidePanel({
   clipCount,
   videoDuration,
   isLoading = false,
+  isVideoUploading = false,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
   const fileInputRef = useRef(null);
@@ -100,6 +101,7 @@ export function ClipsSidePanel({
             icon={Upload}
             className="flex-1"
             onClick={handleImportClick}
+            title="Import clips from TSV file"
           >
             Import
           </Button>

@@ -885,6 +885,7 @@ export function AnnotateSidebar({
   clipCount,
   videoDuration,
   isLoading,
+  isVideoUploading,
 }) {
   return (
     <ClipsSidePanel
@@ -898,6 +899,7 @@ export function AnnotateSidebar({
       clipCount={clipCount}
       videoDuration={videoDuration}
       isLoading={isLoading}
+      isVideoUploading={isVideoUploading}
     />
   );
 }

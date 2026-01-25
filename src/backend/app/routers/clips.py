@@ -333,6 +333,198 @@ def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
     return True
 
 
+def extract_pending_clips_for_game(game_id: int, video_filename: str) -> dict:
+    """
+    Extract video files for all pending clips (filename=NULL) for a game.
+
+    Called when a game's video upload completes. Finds all raw_clips that were
+    saved during annotation but couldn't be extracted because video wasn't uploaded.
+
+    Returns dict with counts: {extracted: N, failed: N, projects_created: N}
+    """
+    user_id = get_current_user_id()
+    results = {'extracted': 0, 'failed': 0, 'projects_created': 0}
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Find all pending clips (filename is empty) for this game
+        cursor.execute("""
+            SELECT id, start_time, end_time, rating, name
+            FROM raw_clips
+            WHERE game_id = ? AND (filename IS NULL OR filename = '')
+        """, (game_id,))
+        pending_clips = cursor.fetchall()
+
+        if not pending_clips:
+            logger.info(f"No pending clips to extract for game {game_id}")
+            return results
+
+        logger.info(f"Extracting {len(pending_clips)} pending clips for game {game_id}")
+
+        # Download game video to temp file for extraction
+        if R2_ENABLED:
+            temp_video_path = Path(tempfile.gettempdir()) / f"game_video_{uuid.uuid4().hex[:8]}.mp4"
+            if not download_from_r2(user_id, f"games/{video_filename}", temp_video_path):
+                logger.error(f"Failed to download game video from R2: {video_filename}")
+                return results
+            video_path = temp_video_path
+        else:
+            video_path = get_games_path() / video_filename
+            if not video_path.exists():
+                logger.error(f"Game video not found locally: {video_path}")
+                return results
+            temp_video_path = None
+
+        try:
+            for clip in pending_clips:
+                clip_id = clip['id']
+                try:
+                    # Generate unique filename for the clip
+                    clip_filename = f"{uuid.uuid4().hex[:12]}.mp4"
+
+                    if R2_ENABLED:
+                        temp_clip_path = Path(tempfile.gettempdir()) / f"clip_{uuid.uuid4().hex[:8]}.mp4"
+
+                        # Extract the clip
+                        success = extract_clip(
+                            input_path=str(video_path),
+                            output_path=str(temp_clip_path),
+                            start_time=clip['start_time'],
+                            end_time=clip['end_time'],
+                            copy_codec=True
+                        )
+
+                        if not success:
+                            logger.error(f"Failed to extract clip {clip_id}")
+                            results['failed'] += 1
+                            continue
+
+                        # Upload to R2
+                        if not upload_to_r2(user_id, f"raw_clips/{clip_filename}", temp_clip_path):
+                            logger.error(f"Failed to upload clip {clip_id} to R2")
+                            results['failed'] += 1
+                            if temp_clip_path.exists():
+                                temp_clip_path.unlink()
+                            continue
+
+                        if temp_clip_path.exists():
+                            temp_clip_path.unlink()
+                    else:
+                        # Local storage
+                        clip_output_path = get_raw_clips_path() / clip_filename
+                        success = extract_clip(
+                            input_path=str(video_path),
+                            output_path=str(clip_output_path),
+                            start_time=clip['start_time'],
+                            end_time=clip['end_time'],
+                            copy_codec=True
+                        )
+
+                        if not success:
+                            logger.error(f"Failed to extract clip {clip_id}")
+                            results['failed'] += 1
+                            continue
+
+                    # Update the clip with the filename
+                    cursor.execute("""
+                        UPDATE raw_clips SET filename = ? WHERE id = ?
+                    """, (clip_filename, clip_id))
+
+                    results['extracted'] += 1
+                    logger.info(f"Extracted pending clip {clip_id}: {clip_filename}")
+
+                    # If 5-star clip, create auto-project now
+                    if clip['rating'] == 5:
+                        project_id = _create_auto_project_for_clip(cursor, clip_id, clip['name'])
+                        if project_id:
+                            results['projects_created'] += 1
+                            logger.info(f"Created auto-project {project_id} for pending 5-star clip {clip_id}")
+
+                except Exception as e:
+                    logger.error(f"Error extracting clip {clip_id}: {e}")
+                    results['failed'] += 1
+
+            conn.commit()
+
+        finally:
+            # Clean up temp video file
+            if temp_video_path and temp_video_path.exists():
+                temp_video_path.unlink()
+
+    logger.info(f"Pending clip extraction complete for game {game_id}: {results}")
+    return results
+
+
+def extract_all_pending_clips() -> dict:
+    """
+    Extract pending clips for ALL games that have videos uploaded.
+
+    Called on startup recovery or manually via endpoint.
+    Finds all raw_clips with filename=NULL where the game has a video,
+    and extracts them.
+
+    Returns dict with total counts across all games.
+    """
+    total_results = {'games_processed': 0, 'extracted': 0, 'failed': 0, 'projects_created': 0}
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Find all games that have videos AND have pending clips
+        cursor.execute("""
+            SELECT DISTINCT g.id, g.video_filename
+            FROM games g
+            INNER JOIN raw_clips rc ON rc.game_id = g.id
+            WHERE g.video_filename IS NOT NULL AND g.video_filename != ''
+              AND (rc.filename IS NULL OR rc.filename = '')
+        """)
+        games_with_pending = cursor.fetchall()
+
+        if not games_with_pending:
+            logger.info("No games with pending clips found")
+            return total_results
+
+        logger.info(f"Found {len(games_with_pending)} games with pending clips")
+
+    # Process each game (outside the connection to avoid long locks)
+    for game in games_with_pending:
+        game_id = game['id']
+        video_filename = game['video_filename']
+
+        try:
+            results = extract_pending_clips_for_game(game_id, video_filename)
+            total_results['games_processed'] += 1
+            total_results['extracted'] += results['extracted']
+            total_results['failed'] += results['failed']
+            total_results['projects_created'] += results['projects_created']
+        except Exception as e:
+            logger.error(f"Failed to extract pending clips for game {game_id}: {e}")
+            total_results['failed'] += 1
+
+    logger.info(f"Pending clip extraction complete: {total_results}")
+    return total_results
+
+
+@router.post("/extract-pending")
+async def trigger_pending_extraction():
+    """
+    Manually trigger extraction of all pending clips.
+
+    Use this for crash recovery or to process clips that failed to extract.
+    Finds all raw_clips with filename=NULL where the game has a video uploaded,
+    and extracts them.
+    """
+    results = extract_all_pending_clips()
+    return {
+        'success': True,
+        'games_processed': results['games_processed'],
+        'clips_extracted': results['extracted'],
+        'clips_failed': results['failed'],
+        'projects_created': results['projects_created'],
+    }
+
+
 @router.post("/raw/save", response_model=RawClipSaveResponse)
 async def save_raw_clip(clip_data: RawClipCreate):
     """
@@ -409,8 +601,37 @@ async def save_raw_clip(clip_data: RawClipCreate):
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
 
+        # If video isn't uploaded yet, save metadata only (pending extraction)
         if not game['video_filename']:
-            raise HTTPException(status_code=400, detail="Game has no video file")
+            logger.info(f"Video not yet uploaded for game {clip_data.game_id}, saving clip metadata only (pending extraction)")
+
+            # Save to database with empty filename (indicates pending extraction)
+            # Using empty string instead of NULL for SQLite NOT NULL constraint compatibility
+            cursor.execute("""
+                INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                '',  # empty string = pending extraction (NOT NULL compatible)
+                clip_data.rating,
+                json.dumps(clip_data.tags),
+                clip_data.name,
+                clip_data.notes,
+                clip_data.start_time,
+                clip_data.end_time,
+                clip_data.game_id
+            ))
+            raw_clip_id = cursor.lastrowid
+
+            # Don't create auto-project yet - will be created after extraction
+            conn.commit()
+            logger.info(f"Saved pending raw clip {raw_clip_id} (will extract when video uploads)")
+
+            return RawClipSaveResponse(
+                raw_clip_id=raw_clip_id,
+                filename='',  # empty = pending
+                project_created=False,
+                project_id=None
+            )
 
         # Generate unique filename for the clip
         clip_filename = f"{uuid.uuid4().hex[:12]}.mp4"

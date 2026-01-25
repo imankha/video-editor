@@ -367,13 +367,23 @@ async def list_downloads(source_type: Optional[str] = None):
                 game_names = pg.get('game_names', [])
                 game_dates = pg.get('game_dates', [])
 
-            # Generate group key
+            # Generate group key from game info, or fallback to date-based grouping
             group_key = _generate_group_key(game_names, game_dates)
+            if not group_key:
+                # Fallback: group by month/year from created_at (e.g., "January 2026")
+                try:
+                    created_dt = datetime.fromisoformat(row['created_at'].replace('Z', '+00:00'))
+                    group_key = created_dt.strftime("%B %Y")  # e.g., "January 2026"
+                except (ValueError, AttributeError):
+                    group_key = "Other"
+
+            # Fallback name: use filename without _final.mp4 suffix, cleaned up
+            fallback_name = row['filename'].replace('_final.mp4', '').replace('_', ' ').strip() if row['filename'] else f"Video {row['id']}"
 
             downloads.append(DownloadItem(
                 id=row['id'],
                 project_id=row['project_id'],
-                project_name=row['project_name'],
+                project_name=row['project_name'] or fallback_name,
                 filename=row['filename'],
                 file_url=get_download_file_url(row['filename']),
                 created_at=row['created_at'],

@@ -17,3 +17,4 @@ export { useProjectDataStore, useProjectClipsData, useSelectedClipIndex, useWork
 export { useFramingStore, useFramingVideoFile, useFramingIncludeAudio, useFramingChangedSinceExport } from './framingStore';
 export { useOverlayStore, useOverlayWorkingVideo, useOverlayClipMetadata, useOverlayEffectType, useOverlayIsLoading } from './overlayStore';
 export { useGalleryStore, useGalleryIsOpen, useGalleryCount, useGalleryActions } from './galleryStore';
+export { useGamesStore } from './gamesStore';

@@ -257,7 +257,15 @@ export function ProjectManager({
     }
   }, [onAnnotateWithFile]);
 
-  // Fetch games when switching to games tab or when opening modal
+  // Fetch games on mount and when switching to games tab or when opening modal
+  // We always fetch on mount so the "Continue Where You Left Off" section works
+  useEffect(() => {
+    if (onFetchGames) {
+      onFetchGames();
+    }
+  }, [onFetchGames]);
+
+  // Also refetch when switching to games tab or when opening modal
   useEffect(() => {
     if ((activeTab === 'games' || showNewProjectModal) && onFetchGames) {
       onFetchGames();

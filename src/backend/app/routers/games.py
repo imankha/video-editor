@@ -24,10 +24,35 @@ import shutil
 
 from app.database import get_db_connection, get_games_path, get_raw_clips_path, ensure_directories
 from app.user_context import get_current_user_id
-from app.storage import R2_ENABLED, generate_presigned_url, upload_to_r2
+from app.storage import (
+    R2_ENABLED,
+    generate_presigned_url,
+    generate_presigned_upload_url,
+    upload_to_r2,
+    file_exists_in_r2,
+)
+from app.routers.clips import extract_pending_clips_for_game, extract_all_pending_clips
+from fastapi import BackgroundTasks
 import tempfile
 
+# Track if we've already checked for pending clips this session
+_pending_clips_checked = False
+
 logger = logging.getLogger(__name__)
+
+
+def _extract_pending_clips_background():
+    """
+    Background task to extract any pending clips (crash recovery).
+    Called on first games list request to handle any clips that were
+    saved during upload but never extracted (e.g., due to server crash).
+    """
+    try:
+        results = extract_all_pending_clips()
+        if results['extracted'] > 0:
+            logger.info(f"Background extraction complete: {results['extracted']} clips extracted, {results['projects_created']} projects created")
+    except Exception as e:
+        logger.error(f"Background pending clip extraction failed: {e}")
 
 
 def get_game_video_url(video_filename: str) -> Optional[str]:
@@ -131,9 +156,16 @@ def generate_game_display_name(
 
 
 @router.get("")
-async def list_games():
+async def list_games(background_tasks: BackgroundTasks):
     """List all saved games with cached aggregate counts."""
     ensure_directories()
+
+    # On first games list request, check for any pending clips to extract (crash recovery)
+    global _pending_clips_checked
+    if not _pending_clips_checked:
+        _pending_clips_checked = True
+        background_tasks.add_task(_extract_pending_clips_background)
+        logger.info("Scheduled background check for pending clip extraction")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -354,11 +386,18 @@ async def upload_game_video(
 
             logger.info(f"Updated game {game_id} with video: {video_filename}")
 
+            # Extract any pending clips that were saved while video was uploading
+            extraction_results = extract_pending_clips_for_game(game_id, video_filename)
+            if extraction_results['extracted'] > 0:
+                logger.info(f"Extracted {extraction_results['extracted']} pending clips for game {game_id}")
+
             return {
                 'success': True,
                 'video_filename': video_filename,
                 'video_url': get_game_video_url(video_filename),  # Presigned R2 URL or None
-                'size_mb': round(video_size_mb, 1)
+                'size_mb': round(video_size_mb, 1),
+                'pending_clips_extracted': extraction_results['extracted'],
+                'pending_projects_created': extraction_results['projects_created'],
             }
         except HTTPException:
             raise
@@ -368,6 +407,123 @@ async def upload_game_video(
         finally:
             if temp_path.exists():
                 temp_path.unlink()
+
+
+@router.get("/{game_id}/upload-url")
+async def get_upload_url(game_id: int, filename: str = "video.mp4"):
+    """
+    Get a presigned URL for direct browser-to-R2 video upload.
+
+    This allows the frontend to upload directly to R2, bypassing the backend,
+    which roughly halves upload time for large files.
+
+    Returns:
+        - upload_url: Presigned PUT URL for direct R2 upload
+        - video_filename: The filename to use (for confirmation later)
+        - r2_enabled: Whether R2 is enabled (if false, use traditional upload)
+    """
+    if not R2_ENABLED:
+        return {
+            'r2_enabled': False,
+            'upload_url': None,
+            'video_filename': None,
+            'message': 'R2 not enabled, use traditional upload endpoint'
+        }
+
+    # Verify game exists
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT video_filename FROM games WHERE id = ?", (game_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        # Generate video filename - reuse existing or create new
+        old_video_filename = row['video_filename']
+        if old_video_filename:
+            base_name = os.path.splitext(old_video_filename)[0]
+        else:
+            base_name = uuid.uuid4().hex[:12]
+
+        original_ext = os.path.splitext(filename)[1] or ".mp4"
+        video_filename = f"{base_name}{original_ext}"
+
+    user_id = get_current_user_id()
+
+    # Generate presigned upload URL (valid for 1 hour)
+    upload_url = generate_presigned_upload_url(
+        user_id=user_id,
+        relative_path=f"games/{video_filename}",
+        expires_in=3600,
+        content_type="video/mp4"
+    )
+
+    if not upload_url:
+        raise HTTPException(status_code=500, detail="Failed to generate upload URL")
+
+    logger.info(f"Generated presigned upload URL for game {game_id}: {video_filename}")
+
+    return {
+        'r2_enabled': True,
+        'upload_url': upload_url,
+        'video_filename': video_filename,
+    }
+
+
+@router.post("/{game_id}/confirm-video")
+async def confirm_video_upload(
+    game_id: int,
+    video_filename: str = Form(...),
+    video_size: Optional[int] = Form(None),
+):
+    """
+    Confirm that a direct R2 upload has completed.
+
+    Called by frontend after successfully uploading to the presigned URL.
+    Verifies the file exists in R2 and updates the game record.
+    """
+    if not R2_ENABLED:
+        raise HTTPException(status_code=400, detail="R2 not enabled")
+
+    user_id = get_current_user_id()
+
+    # Verify the file exists in R2
+    if not file_exists_in_r2(user_id, f"games/{video_filename}"):
+        raise HTTPException(
+            status_code=400,
+            detail="Video file not found in R2. Upload may have failed."
+        )
+
+    # Update game record
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        cursor.execute("""
+            UPDATE games SET video_filename = ?, video_size = ?
+            WHERE id = ?
+        """, (video_filename, video_size, game_id))
+        conn.commit()
+
+    video_size_mb = (video_size / (1024 * 1024)) if video_size else 0
+    logger.info(f"Confirmed direct R2 upload for game {game_id}: {video_filename} ({video_size_mb:.1f}MB)")
+
+    # Extract any pending clips that were saved while video was uploading
+    extraction_results = extract_pending_clips_for_game(game_id, video_filename)
+    if extraction_results['extracted'] > 0:
+        logger.info(f"Extracted {extraction_results['extracted']} pending clips for game {game_id}")
+
+    return {
+        'success': True,
+        'video_filename': video_filename,
+        'video_url': get_game_video_url(video_filename),
+        'size_mb': round(video_size_mb, 1) if video_size else None,
+        'pending_clips_extracted': extraction_results['extracted'],
+        'pending_projects_created': extraction_results['projects_created'],
+    }
 
 
 @router.get("/{game_id}")

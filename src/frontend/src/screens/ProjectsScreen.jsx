@@ -8,6 +8,7 @@ import { useNavigationStore } from '../stores/navigationStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useExportStore } from '../stores/exportStore';
 import { useGalleryStore } from '../stores/galleryStore';
+import { useGamesStore } from '../stores/gamesStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
@@ -74,6 +75,9 @@ export function ProjectsScreen({
     deleteGame,
   } = useGames();
 
+  // Watch for games version changes from other components (e.g., AnnotateContainer)
+  const gamesVersion = useGamesStore(state => state.gamesVersion);
+
   // Project loading
   const { loadProject } = useProjectLoader();
 
@@ -107,6 +111,14 @@ export function ProjectsScreen({
       unsubError();
     };
   }, [fetchProjects]);
+
+  // Refetch games when gamesVersion changes (triggered by other components)
+  useEffect(() => {
+    if (gamesVersion > 0) {
+      console.log('[ProjectsScreen] Games version changed, refetching games list');
+      fetchGames();
+    }
+  }, [gamesVersion, fetchGames]);
 
   // Handle project selection
   const handleSelectProject = useCallback(async (projectId) => {
