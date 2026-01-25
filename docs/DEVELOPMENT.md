@@ -2,7 +2,7 @@
 
 Quick guide for running the Video Editor application locally.
 
-## =€ Quick Start (Windows)
+## Quick Start (Windows)
 
 ### Option 1: One-Click Startup (Recommended)
 
@@ -13,10 +13,10 @@ start-dev.bat
 ```
 
 This will automatically:
--  Open two terminal windows (Backend + Frontend)
--  Create virtual environments if needed
--  Install all dependencies
--  Start both servers
+-  Open two terminal windows (Backend + Frontend)
+-  Create virtual environments if needed
+-  Install all dependencies
+-  Start both servers
 
 **That's it!** Once both servers are running, open: **http://localhost:5173**
 
@@ -54,13 +54,13 @@ start.bat
 
 ---
 
-## =à Prerequisites
+## Prerequisites
 
 Make sure you have these installed:
 
 - **Python 3.11+** - [Download](https://www.python.org/downloads/)
 - **Node.js 18+** - [Download](https://nodejs.org/)
-- **FFmpeg** - [Installation Guide](README.md#-install-ffmpeg)
+- **FFmpeg** - [Installation Guide](README.md#install-ffmpeg)
 
 Verify installations:
 
@@ -72,7 +72,7 @@ ffmpeg -version
 
 ---
 
-## =Í What Runs Where
+## What Runs Where
 
 | Service | URL | Description |
 |---------|-----|-------------|
@@ -82,7 +82,7 @@ ffmpeg -version
 
 ---
 
-## =' Troubleshooting
+## Troubleshooting
 
 ### Backend Issues
 
@@ -111,7 +111,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ---
 
-## >ù Clean Start
+## Clean Start
 
 If you encounter issues, try a clean restart:
 
@@ -134,7 +134,7 @@ start.bat
 
 ---
 
-## =æ Manual Dependency Management
+## Manual Dependency Management
 
 ### Update Backend Dependencies
 
@@ -153,7 +153,7 @@ npm update
 
 ---
 
-## <¯ Development Workflow
+## Development Workflow
 
 1. **First Time Setup:**
    - Run `start-dev.bat` from project root
@@ -175,7 +175,7 @@ npm update
 
 ---
 
-## = Common Error Messages
+## Common Error Messages
 
 ### `ModuleNotFoundError: No module named 'fastapi'`
 
@@ -201,7 +201,7 @@ taskkill /PID <PID> /F
 
 ---
 
-## =Ú Additional Resources
+## Additional Resources
 
 - [Main README](README.md) - Project overview
 - [API Documentation](http://localhost:8000/docs) - Interactive API docs (when server is running)
@@ -209,7 +209,7 @@ taskkill /PID <PID> /F
 
 ---
 
-## ( Success Checklist
+## Success Checklist
 
 When everything is working correctly:
 

@@ -124,7 +124,7 @@ cd src/backend/tests
 bash test_api.sh
 ```
 
-**Expected:** All 29 tests pass with green checkmarks
+**Expected:** All 31 tests pass with green checkmarks
 
 ---
 
@@ -132,29 +132,30 @@ bash test_api.sh
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Backend: Health API | ✅ Working | `/api/health` |
-| Backend: Projects CRUD | ✅ Working | Create, Read, Update, Delete |
-| Backend: Clips API | ✅ Working | Upload, list, reorder, delete |
-| Backend: Progress calc | ✅ Working | 0% → 33% → 66% → 100% |
-| Frontend: ProjectManager | ✅ Created | Shows project list |
-| Frontend: NewProjectModal | ✅ Created | Create with name + aspect ratio |
-| Frontend: ProjectHeader | ✅ Created | Dropdown for project switching |
-| Frontend: useProjects hook | ✅ Created | API integration |
-| Frontend: useProjectClips | ✅ Created | Clip management |
-| Frontend: useRawClips | ✅ Created | Library access |
-| App.jsx: Project routing | ✅ Added | Shows ProjectManager when no project |
+| Backend: Health API | Working | `/api/health` |
+| Backend: Projects CRUD | Working | Create, Read, Update, Delete |
+| Backend: Clips API | Working | Upload, list, reorder, delete |
+| Backend: Games API | Working | Game footage, annotations |
+| Backend: Export API | Working | Framing, overlay, multi-clip exports |
+| Backend: Downloads API | Working | Gallery with R2 presigned URLs |
+| Frontend: ProjectManager | Working | Shows project list, create/delete |
+| Frontend: AnnotateScreen | Working | Video annotation, TSV import/export |
+| Frontend: FramingScreen | Working | Crop, trim, segments, AI upscale |
+| Frontend: OverlayScreen | Working | Highlight regions, effects |
+| Frontend: DownloadsPanel | Working | Gallery with download links |
+| App.jsx: Mode routing | Working | Projects → Framing → Overlay flow |
 
 ---
 
-## Known Limitations (Not Yet Implemented)
+## Features Implemented
 
-1. **Project selection → Editor**: Clicking a project should switch to Framing mode with that project's clips loaded. The routing is added but clip loading integration is in Task 09.
+1. **Project selection → Editor**: Clicking a project switches to Framing mode with that project's clips loaded.
 
-2. **Annotate → Raw Clips**: Exporting from Annotate mode should create raw_clips entries. This is Task 07.
+2. **Annotate → Raw Clips**: Exporting from Annotate mode creates raw_clips entries and auto-creates projects for 5-star clips.
 
-3. **Framing Export**: Should create working_videos and update project. This is Task 11.
+3. **Framing Export**: Creates working_videos and updates project, with WebSocket progress reporting.
 
-4. **Overlay Export**: Should create final_videos. This is Task 12.
+4. **Overlay Export**: Creates final_videos shown in the Gallery/Downloads panel.
 
 ---
 

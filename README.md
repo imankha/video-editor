@@ -97,7 +97,8 @@ video-editor/
 │   │       │   │   ├── __init__.py     # Aggregates sub-routers
 │   │       │   │   ├── framing.py      # /crop, /upscale, /framing endpoints
 │   │       │   │   ├── overlay.py      # /overlay, /final endpoints
-│   │       │   │   └── multi_clip.py   # /multi-clip, /chapters endpoints
+│   │       │   │   ├── multi_clip.py   # /multi-clip, /chapters endpoints
+│   │       │   │   └── before_after.py # Before/after comparison videos
 │   │       │   ├── downloads.py    # Gallery/final video management
 │   │       │   ├── storage.py      # R2 presigned URL redirects
 │   │       │   ├── detection.py    # YOLO player/ball detection
@@ -153,8 +154,15 @@ video-editor/
 │           │   ├── useVideo.js
 │           │   ├── useGames.js
 │           │   ├── useProjectLoader.js   # Project loading logic
-│           │   ├── useStorageUrl.js     # R2 presigned URL handling
-│           │   └── useKeyframeController.js
+│           │   ├── useStorageUrl.js      # R2 presigned URL handling
+│           │   ├── useKeyframeController.js
+│           │   ├── useDownloads.js       # Gallery downloads management
+│           │   ├── useRawClips.js        # Raw clips library access
+│           │   ├── useExportManager.js   # Export job management
+│           │   ├── useExportRecovery.js  # Resume interrupted exports
+│           │   ├── useKeyboardShortcuts.js # Keyboard shortcuts
+│           │   ├── useTimeline.js        # Timeline state management
+│           │   └── useTimelineZoom.js    # Timeline zoom controls
 │           ├── screens/            # Self-contained screen components
 │           │   ├── ProjectsScreen.jsx    # Owns project selection
 │           │   ├── AnnotateScreen.jsx    # Owns annotate workflow
@@ -172,7 +180,13 @@ video-editor/
 │           │   ├── editorStore.js
 │           │   ├── exportStore.js
 │           │   ├── videoStore.js
-│           │   ├── navigationStore.js    # App navigation state │           │   ├── framingStore.js       # Framing persistence │           │   ├── overlayStore.js       # Overlay state │           │   └── projectDataStore.js   # Loaded project data │           ├── modes/              # Mode-specific code
+│           │   ├── navigationStore.js    # App navigation state
+│           │   ├── framingStore.js       # Framing persistence
+│           │   ├── overlayStore.js       # Overlay state
+│           │   ├── projectDataStore.js   # Loaded project data
+│           │   ├── galleryStore.js       # Gallery/downloads state
+│           │   └── gamesStore.js         # Games list state
+│           ├── modes/              # Mode-specific code
 │           │   ├── FramingModeView.jsx
 │           │   ├── OverlayModeView.jsx
 │           │   ├── AnnotateModeView.jsx
@@ -201,10 +215,10 @@ video-editor/
 │
 ├── plans/                          # Planning documents
 │   └── tasks.md                    # Remaining tasks and roadmap
-├── test_persistence.py             # Backend persistence tests
-├── MANUAL_TEST.md                  # Manual testing procedures
-├── CODE_SMELLS.md                  # Refactoring opportunities
-└── prompt_preamble                 # Project context for AI assistants
+├── scripts/                        # Utility scripts
+│   ├── verify.sh                   # Verification script
+│   └── test_manual.md              # Manual test procedures
+└── start-dev.bat                   # Windows quick start script
 ```
 
 ---
@@ -220,6 +234,9 @@ video-editor/
 raw_clips (
     id, filename, rating, tags, name, notes,
     start_time, end_time,  -- end_time is IDENTITY KEY for versioning
+    game_id,               -- FK to games (source game)
+    auto_project_id,       -- FK to projects (auto-created for 5-star)
+    default_highlight_regions,  -- JSON: cross-project highlight reuse
     created_at
 )
 
@@ -253,7 +270,22 @@ working_videos (
 
 -- Final videos: Overlay mode output (shown in Gallery)
 final_videos (
-    id, project_id, filename, version, duration, created_at
+    id, project_id, filename, version, duration,
+    source_type,           -- 'brilliant_clip', 'custom_project', 'annotated_game'
+    game_id,               -- FK to games (for annotated exports)
+    name,                  -- Display name (for annotated exports)
+    rating_counts,         -- JSON: rating snapshot at export time
+    created_at
+)
+
+-- Before/After tracks: Links final videos to source footage
+before_after_tracks (
+    id, final_video_id,    -- FK to final_videos
+    raw_clip_id,           -- FK to raw_clips (optional)
+    source_path,           -- Path to source video
+    start_frame, end_frame, -- Frame range in source
+    clip_index,            -- Order in final video
+    created_at
 )
 
 -- Games: Full game footage for Annotate mode
@@ -261,6 +293,7 @@ games (
     id, name, video_filename,
     opponent_name, game_date, game_type,      -- Game details (home/away/tournament)
     tournament_name,
+    video_duration, video_width, video_height, video_size,  -- Video metadata (cached)
     clip_count, brilliant_count, good_count,  -- Aggregate counts (cached)
     interesting_count, mistake_count, blunder_count,
     aggregate_score, created_at
@@ -594,7 +627,7 @@ Tests are organized across multiple spec files:
 - Editor mode state changes on game load
 
 ### Manual Testing
-- See [MANUAL_TEST.md](MANUAL_TEST.md) for manual UI procedures
+- See [docs/MANUAL_TEST.md](docs/MANUAL_TEST.md) for manual UI procedures
 - See `scripts/` folder for API and WebSocket test scripts
 
 ---
