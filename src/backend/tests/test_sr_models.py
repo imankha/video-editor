@@ -100,8 +100,8 @@ def list_models():
 
     print("\n" + "=" * 80)
 
-def test_model(model_name: str, test_size: tuple = (206, 366)):
-    """Test a specific model with a synthetic image."""
+def run_model_test(model_name: str, test_size: tuple = (206, 366)):
+    """Test a specific model with a synthetic image. Called by CLI, not pytest."""
     try:
         import numpy as np
         import torch
@@ -233,7 +233,7 @@ def test_all_models():
 
     results = []
     for model in models_to_test:
-        result = test_model(model)
+        result = run_model_test(model)
         results.append(result)
         print("\n" + "=" * 80)
 
@@ -268,7 +268,7 @@ def main():
     elif args.test_model:
         # Parse input size
         w, h = map(int, args.input_size.split('x'))
-        test_model(args.test_model, (w, h))
+        run_model_test(args.test_model, (w, h))
     elif args.test_all:
         test_all_models()
     else:

@@ -3,6 +3,7 @@ Tests for FFmpeg error handling module.
 """
 
 import pytest
+import shutil
 import subprocess
 from unittest.mock import patch, MagicMock
 
@@ -13,6 +14,9 @@ from app.services.ffmpeg_errors import (
     extract_error_message,
     run_ffmpeg,
 )
+
+# Check if FFmpeg is available
+FFMPEG_AVAILABLE = shutil.which('ffmpeg') is not None
 
 
 class TestFFmpegErrorType:
@@ -327,14 +331,14 @@ class TestRunFFmpeg:
 class TestIntegration:
     """Integration tests with real FFmpeg (if available)."""
 
-    @pytest.mark.skipif(True, reason="Requires FFmpeg installed")
+    @pytest.mark.skipif(not FFMPEG_AVAILABLE, reason="FFmpeg not installed")
     def test_real_ffmpeg_version(self):
         """Test with real FFmpeg."""
         result = run_ffmpeg(['ffmpeg', '-version'])
         assert result.returncode == 0
         assert 'ffmpeg version' in result.stdout.lower() or 'ffmpeg version' in result.stderr.lower()
 
-    @pytest.mark.skipif(True, reason="Requires FFmpeg installed")
+    @pytest.mark.skipif(not FFMPEG_AVAILABLE, reason="FFmpeg not installed")
     def test_real_missing_file(self):
         """Test real error with missing file."""
         with pytest.raises(FFmpegError) as exc_info:

@@ -69,3 +69,4 @@ workers/node_modules/
 
 # Windows artifacts
 nul
+/src/backend/test_outputs

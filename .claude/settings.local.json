@@ -114,7 +114,12 @@
       "Bash(\"/c/Users/imank/projects/video-editor/src/backend/.venv/Scripts/python.exe\" -c:*)",
       "Bash(\"/c/Users/imank/projects/video-editor/src/backend/.venv/Scripts/python.exe\" -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''Total games: {len\\(d.get\\(\"\"games\"\",[]\\)\\)}''\\); [print\\(f''  ID={g[\"\"id\"\"]}: {g[\"\"name\"\"]} \\(video: {g.get\\(\"\"video_filename\"\",\"\"none\"\"\\)}\\)''\\) for g in d.get\\(''games'',[]\\)]\")",
       "Bash(\"/c/Users/imank/projects/video-editor/src/backend/.venv/Scripts/python.exe\":*)",
-      "Bash(npm run lint)"
+      "Bash(npm run lint)",
+      "Bash(c:\\\\Users\\\\imank\\\\projects\\\\video-editor\\\\src\\\\backend\\\\.venv\\\\Scripts\\\\python.exe -m pytest:*)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_sr_models.py tests/test_highlight_persistence_bug.py tests/test_version_filtering.py -v --tb=short)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/ -v --tb=short)",
+      "Bash(venv/Scripts/pip.exe show:*)",
+      "Bash(venv/Scripts/python.exe -m pytest:*)"
     ],
     "deny": [],
     "ask": []
