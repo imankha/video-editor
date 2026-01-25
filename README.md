@@ -692,7 +692,6 @@ See [plans/tasks.md](plans/tasks.md) for:
 - [docs/REFERENCE/](docs/REFERENCE/) - AI upscaling and model testing docs
 - [src/backend/README.md](src/backend/README.md) - Backend setup and API reference
 - [src/backend/MULTI_GPU_GUIDE.md](src/backend/MULTI_GPU_GUIDE.md) - Multi-GPU AI upscaling
-- [prompt_preamble](prompt_preamble) - Detailed context for AI assistants
 
 ---
 

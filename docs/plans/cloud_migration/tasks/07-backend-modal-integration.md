@@ -15,14 +15,40 @@ Update the FastAPI backend to call Modal functions for GPU video processing inst
 
 ---
 
+## IMPORTANT: Existing Infrastructure
+
+**The durable export system already exists!** This task integrates Modal into the existing architecture rather than creating parallel endpoints.
+
+### Already Implemented
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `export_jobs` table | `database.py` | Durable job state tracking |
+| `exports.py` router | `routers/exports.py` | Job CRUD, active/recent queries |
+| `export_worker.py` | `services/export_worker.py` | Background processing, WebSocket progress |
+| `useExportRecovery.js` | `hooks/useExportRecovery.js` | Frontend reconnection on page load |
+
+### What This Task Adds
+- `MODAL_ENABLED` environment variable toggle
+- Modal client in `services/modal_client.py`
+- Integration point in `export_worker.py` to call Modal when enabled
+- WebSocket progress relay from Modal callbacks
+
+---
+
 ## What Changes
 
 | Before | After |
 |--------|-------|
-| Backend processes video locally | Backend calls Modal function |
-| Blocking export (wait for result) | Async job with polling |
-| Progress via local WebSocket | Progress via job status |
+| `export_worker.py` calls local FFmpeg | Calls Modal when `MODAL_ENABLED=true` |
+| WebSocket progress from local callbacks | WebSocket progress from Modal callbacks |
+| Videos processed locally | Videos processed on Modal GPU |
 | Output saved to local filesystem | Output saved to R2 by Modal |
+
+**What stays the same:**
+- All existing API endpoints (`/api/exports/*`)
+- WebSocket real-time progress (not replaced with polling)
+- Job recovery on page load via `/api/exports/active`
+- Database job tracking
 
 ---
 
@@ -54,10 +80,15 @@ result = process_video.remote(
 ```python
 """
 Client for calling Modal GPU functions.
+
+Provides a unified interface that:
+- Calls Modal when MODAL_ENABLED=true
+- Falls back to local FFmpeg when MODAL_ENABLED=false
+- Relays progress via WebSocket callbacks
 """
 import os
 import asyncio
-from typing import Dict, Any
+from typing import Dict, Any, Callable, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -73,9 +104,19 @@ async def process_video_modal(
     input_key: str,
     output_key: str,
     params: Dict[str, Any],
+    progress_callback: Optional[Callable] = None,
 ) -> Dict[str, Any]:
     """
     Call Modal GPU function for video processing.
+
+    Args:
+        job_id: Export job ID for tracking
+        user_id: User ID for R2 path prefix
+        job_type: 'framing' | 'overlay' | 'annotate'
+        input_key: R2 key for input video (without user prefix)
+        output_key: R2 key for output video (without user prefix)
+        params: Job-specific parameters
+        progress_callback: Optional callback for progress updates
 
     Returns:
         {"status": "success", "output_key": "..."} or
@@ -107,32 +148,6 @@ async def process_video_modal(
     return result
 
 
-async def process_video_local(
-    job_id: str,
-    user_id: str,
-    job_type: str,
-    input_key: str,
-    output_key: str,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
-    """
-    Fallback: Process video locally with FFmpeg.
-    Used when MODAL_ENABLED=false.
-    """
-    # Import local processing (existing code)
-    from routers.export.framing import process_framing_local
-    from routers.export.overlay import process_overlay_local
-
-    logger.info(f"[{job_id}] Processing locally: {job_type}")
-
-    if job_type == "framing":
-        return await process_framing_local(job_id, user_id, input_key, output_key, params)
-    elif job_type == "overlay":
-        return await process_overlay_local(job_id, user_id, input_key, output_key, params)
-    else:
-        return {"status": "error", "error": f"Unknown job type: {job_type}"}
-
-
 async def process_video(
     job_id: str,
     user_id: str,
@@ -140,175 +155,104 @@ async def process_video(
     input_key: str,
     output_key: str,
     params: Dict[str, Any],
+    progress_callback: Optional[Callable] = None,
 ) -> Dict[str, Any]:
     """
     Process video - uses Modal if enabled, else falls back to local FFmpeg.
+
+    This is the main entry point called by export_worker.py.
     """
     if MODAL_ENABLED:
         return await process_video_modal(
-            job_id, user_id, job_type, input_key, output_key, params
+            job_id, user_id, job_type, input_key, output_key, params, progress_callback
         )
     else:
-        return await process_video_local(
-            job_id, user_id, job_type, input_key, output_key, params
-        )
+        # Local processing continues to use existing FFmpeg code
+        # No changes needed - export_worker.py handles this path
+        raise RuntimeError("MODAL_ENABLED=false - use existing local processing path")
 ```
 
-### New: Database table for export jobs
+### Modified: services/export_worker.py
 
-Add to database schema:
-
-```sql
-CREATE TABLE IF NOT EXISTS export_jobs (
-    id TEXT PRIMARY KEY,
-    project_id INTEGER,
-    game_id INTEGER,
-    type TEXT NOT NULL,  -- 'framing', 'overlay', 'annotate'
-    status TEXT NOT NULL DEFAULT 'pending',  -- 'pending', 'processing', 'complete', 'error'
-    progress INTEGER DEFAULT 0,
-    input_key TEXT,
-    output_key TEXT,
-    error TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    completed_at TEXT,
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
-);
-```
-
-### Modified: routers/export/overlay.py
+Add Modal integration to the existing worker:
 
 ```python
-import uuid
-import asyncio
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from services.modal_client import process_video
+# At top of file, add import
+from .modal_client import MODAL_ENABLED, process_video_modal
 
-router = APIRouter()
+# In process_export_job(), before local processing:
+async def process_export_job(job_id: str):
+    """Process an export job (either via Modal or locally)."""
+    job = get_export_job(job_id)
+    if not job:
+        logger.error(f"[ExportWorker] Job {job_id} not found")
+        return
 
+    # Mark as started
+    update_job_started(job_id)
+    await send_progress(job_id, 5, "Starting export...", "processing")
 
-@router.post("/overlay/start")
-async def start_overlay_export(
-    request: OverlayExportRequest,
-    background_tasks: BackgroundTasks
-):
-    """
-    Start an overlay export job.
-    Returns job_id immediately - poll /overlay/status/{job_id} for progress.
-    """
-    user_id = get_current_user_id()
-    job_id = str(uuid.uuid4())
-
-    # Get working video path from project
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT filename FROM working_videos
-            WHERE project_id = ? ORDER BY version DESC LIMIT 1
-        """, (request.project_id,))
-        result = cursor.fetchone()
-
-        if not result:
-            raise HTTPException(status_code=400, detail="No working video found")
-
-        input_key = f"working_videos/{result['filename']}"
-        output_key = f"final_videos/overlay_{job_id}.mp4"
-
-        # Create job record
-        cursor.execute("""
-            INSERT INTO export_jobs (id, project_id, type, status, input_key, output_key)
-            VALUES (?, ?, 'overlay', 'pending', ?, ?)
-        """, (job_id, request.project_id, input_key, output_key))
-        conn.commit()
-
-    # Run processing in background
-    background_tasks.add_task(
-        run_export_job,
-        job_id=job_id,
-        user_id=user_id,
-        job_type="overlay",
-        input_key=input_key,
-        output_key=output_key,
-        params={
-            "highlight_regions": [r.dict() for r in request.highlight_regions],
-            "effect_type": request.effect_type,
-        }
-    )
-
-    return {"job_id": job_id, "status": "processing"}
-
-
-async def run_export_job(
-    job_id: str,
-    user_id: str,
-    job_type: str,
-    input_key: str,
-    output_key: str,
-    params: dict,
-):
-    """Background task to run export and update status."""
     try:
-        # Update status to processing
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE export_jobs SET status = 'processing' WHERE id = ?",
-                (job_id,)
+        config = json.loads(job['input_data'])
+        job_type = job['type']
+
+        if MODAL_ENABLED:
+            # Use Modal for GPU processing
+            result = await process_video_modal(
+                job_id=job_id,
+                user_id=get_current_user_id(),
+                job_type=job_type,
+                input_key=config.get('input_key', ''),
+                output_key=config.get('output_key', ''),
+                params=config,
+                progress_callback=lambda p, m: send_progress(job_id, p, m)
             )
-            conn.commit()
 
-        # Call Modal (or local fallback)
-        result = await process_video(
-            job_id=job_id,
-            user_id=user_id,
-            job_type=job_type,
-            input_key=input_key,
-            output_key=output_key,
-            params=params,
-        )
-
-        # Update final status
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            if result["status"] == "success":
-                cursor.execute("""
-                    UPDATE export_jobs
-                    SET status = 'complete', completed_at = datetime('now')
-                    WHERE id = ?
-                """, (job_id,))
+            if result['status'] == 'success':
+                # Update database with output
+                update_job_complete(job_id, output_video_id=None, output_filename=result['output_key'])
+                await send_progress(job_id, 100, "Export complete", "complete")
             else:
-                cursor.execute("""
-                    UPDATE export_jobs SET status = 'error', error = ? WHERE id = ?
-                """, (result.get("error", "Unknown error"), job_id))
-            conn.commit()
+                update_job_error(job_id, result.get('error', 'Unknown error'))
+                await send_progress(job_id, 0, result.get('error'), "error")
+        else:
+            # Continue with existing local FFmpeg processing
+            # ... (existing code unchanged)
 
     except Exception as e:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE export_jobs SET status = 'error', error = ? WHERE id = ?
-            """, (str(e), job_id))
-            conn.commit()
+        logger.exception(f"[ExportWorker] Job {job_id} failed")
+        update_job_error(job_id, str(e))
+        await send_progress(job_id, 0, str(e), "error")
+```
 
+---
 
-@router.get("/overlay/status/{job_id}")
-async def get_overlay_status(job_id: str):
-    """Get status of an overlay export job."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM export_jobs WHERE id = ?", (job_id,))
-        job = cursor.fetchone()
+## WebSocket Progress with Modal
 
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
+Modal functions can send progress updates via a generator pattern:
 
-        return {
-            "job_id": job_id,
-            "status": job["status"],
-            "progress": job["progress"],
-            "output_key": job["output_key"] if job["status"] == "complete" else None,
-            "error": job["error"] if job["status"] == "error" else None,
-        }
+```python
+# In modal_functions/video_processing.py
+@app.function(...)
+def process_video_with_progress(...):
+    """Generator version that yields progress updates."""
+    yield {"progress": 10, "message": "Downloading from R2..."}
+    # ... download
+    yield {"progress": 30, "message": "Processing video..."}
+    # ... process
+    yield {"progress": 90, "message": "Uploading to R2..."}
+    # ... upload
+    yield {"status": "success", "output_key": "..."}
+```
+
+The backend can consume this and relay to WebSocket:
+
+```python
+async for update in process_video_with_progress.remote_gen(...):
+    if 'progress' in update:
+        await send_progress(job_id, update['progress'], update['message'])
+    if 'status' in update:
+        return update
 ```
 
 ---
@@ -319,7 +263,7 @@ Add to `.env`:
 
 ```bash
 # Enable Modal for GPU processing (set to false for local FFmpeg)
-MODAL_ENABLED=true
+MODAL_ENABLED=false  # Default: use local FFmpeg
 
 # Modal credentials (only needed on Fly.io, CLI uses local auth)
 MODAL_TOKEN_ID=xxx
@@ -328,13 +272,18 @@ MODAL_TOKEN_SECRET=xxx
 
 ---
 
-## API Changes
+## NO API Changes
 
-| Old Endpoint | New Endpoint | Notes |
-|--------------|--------------|-------|
-| `POST /api/export/overlay` | `POST /api/export/overlay/start` | Returns immediately |
-| (none) | `GET /api/export/overlay/status/{job_id}` | Poll for progress |
-| (none) | `GET /api/export/jobs` | List all jobs |
+The existing `/api/exports/*` endpoints remain unchanged:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/exports` | Start export job |
+| `GET /api/exports/{job_id}` | Get job status |
+| `GET /api/exports/active` | List active exports (for recovery) |
+| `DELETE /api/exports/{job_id}` | Cancel job |
+
+Frontend continues to use WebSocket for real-time progress.
 
 ---
 
@@ -345,10 +294,12 @@ Local dev can use either:
 1. **Local FFmpeg** (default): `MODAL_ENABLED=false`
    - No Modal account needed
    - Processes on your machine
+   - All existing behavior unchanged
 
 2. **Modal GPU**: `MODAL_ENABLED=true`
    - Uses Modal's cloud GPU
    - Requires `modal token new`
+   - Good for testing Modal integration before deployment
 
 ---
 
@@ -356,12 +307,12 @@ Local dev can use either:
 
 | Item | Description |
 |------|-------------|
-| services/modal_client.py | Modal function caller |
-| export_jobs table | Job tracking schema |
-| Updated export routers | Async job submission |
+| services/modal_client.py | Modal function caller with fallback |
+| Modified export_worker.py | Conditional Modal integration |
 | Environment variable | MODAL_ENABLED toggle |
+| WebSocket progress relay | Modal progress -> WebSocket |
 
 ---
 
 ## Next Step
-Task 08 - Frontend Export Updates (poll for job status, show progress)
+Task 08 - Frontend Export Updates (verify WebSocket progress works with Modal)

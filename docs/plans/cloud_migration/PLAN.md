@@ -118,6 +118,8 @@ Current DB is ~204KB - no optimization needed yet.
 | 10 | [Fly.io Backend Deployment](tasks/10-flyio-deployment.md) | `TODO` | Claude | fly.toml, Dockerfile, deploy |
 | 11 | [Cloudflare Pages Frontend](tasks/11-cloudflare-pages.md) | `TODO` | Claude | Build & deploy React app |
 | 12 | [Production DNS & SSL](tasks/12-dns-ssl-setup.md) | `TODO` | User | Configure domains |
+| 16 | [Performance Profiling](tasks/16-performance-profiling.md) | `TODO` | Claude | Memory/latency profiling, fix slow endpoints |
+| 17 | [Stale Session Detection](tasks/17-stale-session-detection.md) | `TODO` | Claude | Reject conflicting writes, UI for stale sessions |
 | 13 | [User Management](tasks/13-user-management.md) | `OPTIONAL` | Both | Auth, multi-tenancy |
 | 14 | [Wallet & Payments](tasks/14-wallet-payments.md) | `OPTIONAL` | Both | Stripe integration |
 | 15 | [Future GPU Features](tasks/15-future-gpu-features.md) | `FUTURE` | Claude | AI upscaling, tracking |
@@ -147,9 +149,11 @@ Phase 2: Modal GPU Processing (CURRENT FOCUS)
 Phase 3: Production Deployment
 ├── 10-flyio-deployment
 ├── 11-cloudflare-pages
-└── 12-dns-ssl-setup
+├── 12-dns-ssl-setup
+├── 16-performance-profiling
+└── 17-stale-session-detection
     ↓
-    APP IS LIVE: Fly.io backend + CF Pages frontend + Modal GPU + R2 storage
+    APP IS LIVE & ROBUST: Fly.io backend + CF Pages frontend + Modal GPU + R2 storage
 
 Phase 4: Users & Monetization (OPTIONAL)
 ├── 13-user-management
@@ -183,6 +187,20 @@ Phase 5: Future Features
 - [ ] WebSocket progress updates work
 - [ ] Cold start is acceptable (<3s)
 - [ ] Scale to zero works (no charges when idle)
+
+### After Performance Profiling (Task 16)
+- [ ] All endpoints respond in <200ms (excluding exports)
+- [ ] Memory usage stays under 256MB baseline
+- [ ] No N+1 query patterns in hot paths
+- [ ] Database sync <500ms (per existing warning threshold)
+- [ ] Slow endpoints identified and fixed
+
+### After Stale Session Detection (Task 17)
+- [ ] Conflicting writes are rejected (not last-write-wins)
+- [ ] Stale session returns HTTP 409 Conflict
+- [ ] Frontend shows "Session stale" banner with refresh button
+- [ ] User can recover by refreshing (gets latest data)
+- [ ] E2E test simulates conflict scenario
 
 ---
 
