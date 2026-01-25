@@ -1,0 +1,16 @@
+=== STDOUT ===
+✓ Created objects.
+├── 🔨 Created mount 
+│   C:\Users\imank\projects\video-editor\src\backend\app\modal_functions\video_
+│   processing.py
+├── 🔨 Created function render_overlay.
+└── 🔨 Created function process_framing.
+✓ App deployed in 2.223s! 🎉
+
+View Deployment: https://modal.com/apps/imankh/main/deployed/reel-ballers-video
+
+
+=== STDERR ===
+
+
+=== Return code: 0 ===

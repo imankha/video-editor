@@ -24,8 +24,9 @@ logger = logging.getLogger(__name__)
 class ProcessingBackend(Enum):
     """Available processing backends."""
     LOCAL_GPU = "local_gpu"
+    MODAL = "modal"      # Modal.com cloud GPUs
     WEB_GPU = "web_gpu"  # Future
-    RUNPOD = "runpod"    # Future
+    RUNPOD = "runpod"    # Future (deprecated - use Modal)
     CPU_ONLY = "cpu"     # Fallback
 
 

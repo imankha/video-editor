@@ -574,7 +574,68 @@ const ExportButton = forwardRef(function ExportButton({
         // Note: Highlight keyframes are NOT sent during framing export.
         // They are handled separately in Overlay mode after the video is cropped/upscaled.
       } else {
-        // Overlay mode: Use simple overlay endpoint (no crop, no AI, no trim)
+        // Overlay mode: Backend-authoritative render when projectId available
+        // This uses Modal GPU when enabled, with R2 storage
+        if (projectId) {
+          console.log('[ExportButton] Using backend-authoritative overlay render');
+
+          // Connect WebSocket for real-time progress updates
+          setProgressMessage('Connecting...');
+          await connectWebSocket(exportId);
+
+          // Send render request (JSON body, no file upload needed - video is in R2)
+          setProgressMessage('Starting render...');
+          const renderResponse = await axios.post(`${API_BASE}/api/export/render-overlay`, {
+            project_id: projectId,
+            export_id: exportId,
+            effect_type: highlightEffectType
+          });
+
+          console.log('[ExportButton] Overlay render complete:', renderResponse.data);
+
+          // Download the final video from R2
+          setProgressMessage('Preparing download...');
+          const finalVideoUrl = `${API_BASE}/api/export/projects/${projectId}/final-video`;
+          const downloadResponse = await axios.get(finalVideoUrl, { responseType: 'blob' });
+
+          const blob = new Blob([downloadResponse.data], { type: 'video/mp4' });
+          const safeName = projectName
+            ? projectName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'video'
+            : 'video';
+          const downloadFilename = `${safeName}_final.mp4`;
+
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = downloadFilename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+
+          // Refresh projects list if callback provided
+          if (onExportComplete) {
+            onExportComplete();
+          }
+
+          // Mark export as complete
+          handleExportEnd();
+          setLocalProgress(100);
+          setProgressMessage('Export complete!');
+          if (exportIdRef.current) {
+            completeExportInStore(exportIdRef.current, {
+              status: 'complete',
+              finalVideoId: renderResponse.data.final_video_id,
+              filename: renderResponse.data.filename,
+              modalUsed: renderResponse.data.modal_used
+            });
+          }
+          setIsExporting(false);
+          return;  // Exit early - backend-authoritative path complete
+        }
+
+        // Fallback: Legacy client-upload mode (no projectId)
+        console.log('[ExportButton] Using legacy overlay export (no projectId)');
         endpoint = `${API_BASE}/api/export/overlay`;
 
         // Add highlight regions (new multi-region format)
