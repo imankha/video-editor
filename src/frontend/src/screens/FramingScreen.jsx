@@ -14,7 +14,7 @@ import { FileUpload } from '../components/FileUpload';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { API_BASE } from '../config';
-import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useClipStore } from '../stores';
+import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 
 /**
@@ -54,6 +54,8 @@ export function FramingScreen({
   // Loaded project data from ProjectsScreen
   const loadedClips = useProjectDataStore(state => state.clips);
   const projectDataReset = useProjectDataStore(state => state.reset);
+  const isProjectLoading = useProjectDataStore(state => state.isLoading);
+  const loadingStage = useProjectDataStore(state => state.loadingStage);
 
   // Framing persistent state
   const {
@@ -332,7 +334,7 @@ export function FramingScreen({
         const getMetadataFromUrl = async (url) => await extractVideoMetadataFromUrl(url);
         const getClipUrl = (clipId) => getClipFileUrl(clipId, projectId);
 
-        await loadProjectClips(
+        const createdClipIds = await loadProjectClips(
           loadedClips.map(c => ({
             id: c.id,
             filename: c.filename,
@@ -341,24 +343,33 @@ export function FramingScreen({
             duration: c.duration,
             segments_data: c.segments_data,
             crop_data: c.crop_data,
+            file_url: c.file_url,  // Presigned R2 URL (if available)
           })),
           getClipUrl,
           getMetadataFromUrl,
           projectAspectRatio || '9:16'
         );
 
-        // Load first clip video
+        // Set previousClipIdRef immediately to prevent clip switching effect from double-loading
+        // loadProjectClips returns created clip IDs, and the first one will be auto-selected
+        if (createdClipIds.length > 0) {
+          previousClipIdRef.current = createdClipIds[0];
+        }
+
+        // Load first clip video (prefer presigned R2 URL if available)
         const firstClip = loadedClips[0];
-        if (firstClip?.url) {
-          console.log('[FramingScreen] Loading first clip video:', firstClip.url);
-          const file = await loadVideoFromUrl(firstClip.url, firstClip.filename || 'clip.mp4');
+        console.log('[FramingScreen] First clip data:', { id: firstClip?.id, file_url: firstClip?.file_url, url: firstClip?.url });
+        const firstClipUrl = firstClip?.file_url || firstClip?.url;
+        if (firstClipUrl) {
+          console.log('[FramingScreen] Loading first clip video:', firstClipUrl);
+          const file = await loadVideoFromUrl(firstClipUrl, firstClip.filename || 'clip.mp4');
           if (file) {
             setVideoFile(file);
           }
 
           // Restore first clip's framing state
           if (firstClip.segments_data || firstClip.crop_data) {
-            const clipMetadata = await extractVideoMetadataFromUrl(firstClip.url);
+            const clipMetadata = await extractVideoMetadataFromUrl(firstClipUrl);
 
             if (firstClip.segments_data) {
               try {
@@ -383,14 +394,6 @@ export function FramingScreen({
             }
           }
 
-          // Set previousClipIdRef so clip switching effect doesn't try to reload
-          // We need to wait for selectedClipId to be set by useClipManager
-          setTimeout(() => {
-            const currentSelectedId = useClipStore.getState().selectedClipId;
-            if (currentSelectedId) {
-              previousClipIdRef.current = currentSelectedId;
-            }
-          }, 100);
         }
       };
 
@@ -435,6 +438,10 @@ export function FramingScreen({
     }
 
     console.log('[FramingScreen] Switching clips:', previousClipId, '->', selectedClipId);
+
+    // Set ref immediately to prevent race condition with multiple effect runs
+    // (clips array changes can trigger re-runs before async work completes)
+    previousClipIdRef.current = selectedClipId;
 
     const switchClip = async () => {
       // Prevent re-entry during restoration
@@ -502,7 +509,6 @@ export function FramingScreen({
 
       } finally {
         isRestoringClipStateRef.current = false;
-        previousClipIdRef.current = selectedClipId;
       }
     };
 
@@ -811,8 +817,12 @@ export function FramingScreen({
     }
   }, [addClipFromLibrary, fetchProjectClips, getClipFileUrl, projectId, addClipFromProject]);
 
-  // If no clips and no video, show file upload
-  if (!hasClips && !videoUrl) {
+  // Determine if we're in a loading state (project data being fetched)
+  const isLoadingProjectData = isProjectLoading || (loadedClips.length > 0 && !hasClips);
+
+  // Only show FileUpload when truly empty (not loading and no project/clips)
+  // If we have a projectId or loadedClips, show the UI skeleton with loading states instead
+  if (!hasClips && !videoUrl && !isLoadingProjectData && !projectId) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <FileUpload onGameVideoSelect={handleFileSelect} />
@@ -822,8 +832,8 @@ export function FramingScreen({
 
   return (
     <div className="flex h-full">
-      {/* Sidebar - show when clips exist */}
-      {hasClips && clips.length > 0 && (
+      {/* Sidebar - show when clips exist or when loading */}
+      {(hasClips && clips.length > 0) ? (
         <ClipSelectorSidebar
           clips={clips}
           selectedClipId={selectedClipId}
@@ -838,6 +848,16 @@ export function FramingScreen({
           existingRawClipIds={clips.map(c => c.rawClipId).filter(Boolean)}
           games={games}
         />
+      ) : isLoadingProjectData && (
+        <div className="w-64 border-r border-gray-700 bg-gray-800/50 p-4">
+          <div className="animate-pulse space-y-3">
+            <div className="h-4 bg-gray-700 rounded w-20"></div>
+            <div className="space-y-2">
+              <div className="h-16 bg-gray-700 rounded"></div>
+              <div className="h-16 bg-gray-700 rounded"></div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Main content */}
@@ -853,6 +873,8 @@ export function FramingScreen({
       duration={duration}
       isPlaying={isPlaying}
       isLoading={isLoading}
+      isProjectLoading={isLoadingProjectData}
+      loadingStage={loadingStage}
       error={error}
       handlers={handlers}
       // Fullscreen
@@ -929,6 +951,7 @@ export function FramingScreen({
       onIncludeAudioChange={setIncludeAudio}
       onProceedToOverlay={handleProceedToOverlayInternal}
       onExportComplete={onExportComplete}
+      saveCurrentClipState={framingSaveCurrentClipState}
       // Context
       cropContextValue={cropContextValue}
     />

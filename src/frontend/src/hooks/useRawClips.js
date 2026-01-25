@@ -37,10 +37,23 @@ export function useRawClips() {
 
   /**
    * Get URL for a raw clip file
+   * Uses presigned R2 URL if available (from clip.file_url), otherwise falls back to local proxy
+   * @param {number} clipId - Clip ID
+   * @param {Object} clip - Optional clip object that may contain file_url from API
    */
-  const getRawClipFileUrl = useCallback((clipId) => {
+  const getRawClipFileUrl = useCallback((clipId, clip = null) => {
+    // If clip object has presigned URL, use it (direct R2 access)
+    if (clip?.file_url) {
+      return clip.file_url;
+    }
+    // Find clip in rawClips array if not provided
+    const foundClip = clip || rawClips.find(c => c.id === clipId);
+    if (foundClip?.file_url) {
+      return foundClip.file_url;
+    }
+    // Fallback to local proxy endpoint
     return `${API_BASE_URL}/clips/raw/${clipId}/file`;
-  }, []);
+  }, [rawClips]);
 
   // Fetch on mount
   useEffect(() => {

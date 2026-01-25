@@ -22,6 +22,7 @@ export function ClipsSidePanel({
   clipCount,
   videoDuration,
   isLoading = false,
+  isVideoUploading = false,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
   const fileInputRef = useRef(null);
@@ -47,7 +48,7 @@ export function ClipsSidePanel({
       if (!result.success) {
         setImportErrors(result.errors);
       } else {
-        const count = onImportAnnotations(result.annotations);
+        const count = await onImportAnnotations(result.annotations, videoDuration);
         setImportSuccess(`Imported ${count} clip${count !== 1 ? 's' : ''}`);
         // Clear success message after 3 seconds
         setTimeout(() => setImportSuccess(null), 3000);
@@ -100,6 +101,7 @@ export function ClipsSidePanel({
             icon={Upload}
             className="flex-1"
             onClick={handleImportClick}
+            title="Import clips from TSV file"
           >
             Import
           </Button>

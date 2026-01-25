@@ -1,236 +1,145 @@
-# Remaining Tasks
+# Pending Tasks
 
-## Summary
+## Completed Tasks
 
-App.jsx has been reduced from **2181 lines** to **278 lines** (87% reduction). Target was ~150 lines.
+### ~~Task 1: Direct Browser-to-R2 Video Uploads~~ ✅ COMPLETED
 
-The following tasks from `mostly_implemented/AppJSX_REDUCTION/` remain incomplete:
-
----
-
-## Task 1: Finalize AnnotateScreen (TASK-05)
-
+**Priority:** High (Performance)
+**Complexity:** Medium
 **Status:** COMPLETED
-**Actual Impact:** -16 lines from App.jsx (319 → 303)
 
-### Goal
-Make AnnotateScreen fully self-contained like FramingScreen and OverlayScreen.
+#### Implementation Summary
 
-### Current State
-AnnotateScreen still receives props from App.jsx:
-- `initialFile` / `onInitialFileConsumed` - pending file for annotation
-- Navigation callbacks passed as props
+**Backend Changes** ([games.py](../../src/backend/app/routers/games.py)):
+- Added `GET /api/games/{game_id}/upload-url` - Returns presigned PUT URL for direct R2 upload
+- Added `POST /api/games/{game_id}/confirm-video` - Confirms upload completed and updates game record
 
-### Changes Required
-1. AnnotateScreen should use `sessionStorage` to get pending file/game ID (pattern already established)
-2. Use `useNavigationStore` directly instead of receiving navigation callbacks as props
-3. Internalize `useGames` hook (currently props passed from App.jsx)
-4. Handle downloads panel internally
+**Frontend Changes** ([useGames.js](../../src/frontend/src/hooks/useGames.js)):
+- Updated `uploadGameVideo()` to:
+  1. First request presigned URL from backend
+  2. If R2 enabled, upload directly to R2 (bypasses backend)
+  3. Confirm upload with backend
+  4. Fall back to traditional upload if R2 not available
 
-### Files to Modify
-- `src/frontend/src/screens/AnnotateScreen.jsx`
-- `src/frontend/src/App.jsx` (remove annotate-specific props)
+**Benefits:**
+- ~50% faster uploads for large files (no double-transfer through backend)
+- Progress tracking still works (XHR upload progress)
+- Automatic fallback for non-R2 environments
 
 ---
 
-## Task 2: Gallery Store (TASK-06)
+### ~~Task 2: Games List Not Refreshing After Upload~~ ✅ COMPLETED
 
+**Priority:** Medium (UX Bug)
+**Complexity:** Low
 **Status:** COMPLETED
-**Actual Impact:** -26 lines from App.jsx (345 → 319)
 
-### Goal
-Make DownloadsPanel/Gallery self-contained via a Zustand store.
+#### Root Cause
+Each `useGames()` hook call creates an independent state instance. When AnnotateContainer's `uploadGameVideo()` completed and called `fetchGames()`, it only updated its own state - ProjectsScreen had a separate instance that didn't get notified.
 
-### Current State
-- `isDownloadsPanelOpen` state lives in App.jsx
-- `downloadsCount` is fetched in App.jsx and passed down
-- Gallery button handlers are in App.jsx
+#### Implementation Summary
 
-### Changes Required
-1. Create `galleryStore.js` with `isOpen`, `count`, `open()`, `close()` actions
-2. DownloadsPanel manages its own open/close state via store
-3. DownloadsPanel fetches its own data
-4. Create `GalleryButton` component that uses the store directly
-5. Remove gallery state from App.jsx
+**New Store** ([gamesStore.js](../../src/frontend/src/stores/gamesStore.js)):
+- Created minimal Zustand store with `gamesVersion` counter
+- `invalidateGames()` increments version to signal changes
 
-### Files to Create
-- `src/frontend/src/stores/galleryStore.js`
-- `src/frontend/src/components/GalleryButton.jsx`
+**useGames.js Changes**:
+- Now calls `invalidateGames()` after any mutation (create, upload, update, delete)
+- This notifies all components using `useGames()` that data has changed
 
-### Files to Modify
-- `src/frontend/src/components/DownloadsPanel.jsx`
-- `src/frontend/src/stores/index.js`
-- `src/frontend/src/App.jsx`
+**ProjectsScreen Changes**:
+- Watches `gamesVersion` from the store
+- When version changes, refetches games list
+- Games list now updates immediately after upload completes
 
 ---
 
-## Task 3: Final App.jsx Cleanup (TASK-07)
+### ~~Task 3: Durable Export Architecture~~ ✅ COMPLETED
 
+**Priority:** High (Reliability)
+**Complexity:** High
 **Status:** COMPLETED
-**Actual Impact:** -25 lines from App.jsx (303 → 278)
 
-### Goal
-Remove all remaining dead code from App.jsx after Tasks 1-2 complete.
+#### Implementation Summary
 
-### Target Structure
-```jsx
-function App() {
-  const mode = useCurrentMode();
+Created a robust export system that survives browser closes and page refreshes:
 
-  return (
-    <ProjectProvider>
-      {mode === 'project-manager' && <ProjectsScreen />}
-      {mode === 'annotate' && <AnnotateScreen />}
-      {mode === 'framing' && <FramingScreen />}
-      {mode === 'overlay' && <OverlayScreen />}
+**Database** ([database.py](../../src/backend/app/database.py)):
+- Added `export_jobs` table tracking job state (pending/processing/complete/error)
+- Jobs indexed by project_id and status for fast queries
 
-      <DownloadsPanel />
-      <ConfirmationDialog />
-    </ProjectProvider>
-  );
-}
-```
+**Export Jobs Router** ([exports.py](../../src/backend/app/routers/exports.py)):
+- `POST /api/exports` - Start export job, returns job_id immediately
+- `GET /api/exports/{job_id}` - Get job status
+- `GET /api/exports/active` - List all active (pending/processing) exports
+- `GET /api/exports/recent` - List exports from last N hours
+- `DELETE /api/exports/{job_id}` - Cancel pending/processing job
+- Automatic cleanup of stale exports (>15 minutes in processing state)
 
-### Cleanup Checklist
-- [ ] Remove unused imports
-- [ ] Remove dead handler functions
-- [ ] Remove orphaned state
-- [ ] Remove unused effects
-- [ ] Verify no props passed to screen components
+**Export Worker** ([export_worker.py](../../src/backend/app/services/export_worker.py)):
+- Background task processing via FastAPI BackgroundTasks
+- WebSocket progress updates (fire-and-forget, doesn't block if disconnected)
+- Only 2 DB writes per job: started + completed/error
+- Progress is ephemeral (WebSocket only), state is durable (database)
+
+**Frontend Recovery** ([useExportRecovery.js](../../src/frontend/src/hooks/useExportRecovery.js)):
+- On app load, queries `/api/exports/active` to find running exports
+- Reconnects WebSocket for progress tracking
+- Shows GlobalExportIndicator for any active exports
 
 ---
 
-## Task 4: OpenCV to FFmpeg Migration (Backend)
+### ~~Task 4: Unit Test Improvements~~ ✅ COMPLETED
 
-**Status:** Not Started
-**Risk Level:** HIGH
-**Estimated Effort:** Large (affects core video processing pipeline)
+**Priority:** Medium (Quality)
+**Complexity:** Low
+**Status:** COMPLETED
 
-### Why This Matters
+Fixed all unit tests (264 passing, 0 skipped, 0 failures):
 
-OpenCV's video frame extraction has known reliability issues that cause exported videos to be shorter than source videos.
-
-**The Problem:**
-```
-Browser reports (from container metadata): 11.243s, 309 frames
-OpenCV can actually decode:              11.099s, 304 frames
-Result: Exported video is ~0.14s shorter than source
-```
-
-**Root Causes:**
-- `cv2.CAP_PROP_FRAME_COUNT` is unreliable for certain video formats
-- MP4 container metadata can declare frames that aren't fully decodable
-- Variable Frame Rate (VFR) videos (common in screen recordings) cause discrepancies
-- OpenCV's frame seeking can skip frames for certain codecs
-- Incomplete GOPs (Groups of Pictures) in H.264
-
-### Current Workaround
-A binary search finds the actual last readable frame:
-```python
-video_total_frames = min(ffprobe_frame_count, opencv_total_frames)
-# Then binary search to find actual last readable frame
-```
-
-This works but is a band-aid, not a fix.
-
-### Proposed Solution
-Replace OpenCV frame extraction with FFmpeg throughout the pipeline.
-
-**Instead of:**
-```python
-cap = cv2.VideoCapture(path)
-while cap.read():
-    process_frame(frame)
-```
-
-**Use:**
-```bash
-ffmpeg -i input.mp4 -vsync 0 frames/frame_%06d.png
-# Then process frames from disk
-```
-
-### Files That Use OpenCV (cv2)
-
-| File | Usage | Migration Difficulty |
-|------|-------|---------------------|
-| `ai_upscaler/__init__.py` | VideoCapture for frame extraction | Medium |
-| `ai_upscaler/video_encoder.py` | VideoCapture for reading | Medium |
-| `ai_upscaler/frame_processor.py` | VideoCapture for frames | Medium |
-| `ai_upscaler/frame_enhancer.py` | Image processing | Keep (not video I/O) |
-| `ai_upscaler/utils.py` | Image utilities | Keep (not video I/O) |
-| `ai_upscaler/keyframe_interpolator.py` | Frame processing | Keep (image ops) |
-| `routers/detection.py` | Player detection from frames | Medium |
-| `routers/export/overlay.py` | Frame-by-frame overlay | Hard |
-| `services/export_worker.py` | Video processing | Medium |
-| `ai_upscaler/rife/*` | Third-party AI model | Don't touch |
-
-### Pros
-
-| Benefit | Impact |
-|---------|--------|
-| Eliminates frame count mismatch | Fixes "video shorter than preview" bug |
-| Single video dependency | FFmpeg only, no OpenCV for video I/O |
-| Better VFR handling | Screen recordings work correctly |
-| Consistent pipeline | Already use FFmpeg for encoding |
-| More reliable seeking | FFmpeg handles edge cases better |
-
-### Cons
-
-| Drawback | Mitigation |
-|----------|------------|
-| Higher disk I/O | Must extract all frames to disk first |
-| No incremental processing | Can't process frame-by-frame with progress |
-| Larger temp storage | Need space for extracted PNG frames |
-| Migration risk | Many files to change, could introduce bugs |
-| Progress updates harder | Need to count files instead of read loop |
-
-### Risk Assessment
-
-**HIGH RISK because:**
-1. Touches core video processing used by ALL export types
-2. Many files need coordinated changes
-3. AI upscaler is complex and already fragile
-4. Hard to test all edge cases (VFR, various codecs, etc.)
-5. Regression could break exports silently (wrong frame count)
-
-### Recommended Approach
-
-1. **Phase 1: Isolate** - Create `ffmpeg_frame_extractor.py` service
-2. **Phase 2: Parallel** - Add FFmpeg extraction alongside OpenCV (compare results)
-3. **Phase 3: Migrate** - Switch one consumer at a time, starting with simplest
-4. **Phase 4: Remove** - Remove OpenCV video I/O after all consumers migrated
-
-### When to Do This
-
-- After frontend refactoring is complete (Tasks 1-3)
-- When you have time for thorough testing
-- Ideally with a set of test videos that reproduce the frame count bug
+- Fixed `test_version_filtering.py` - Added missing `game_id` and `source_type` columns to test fixture
+- Fixed `test_sr_models.py` - Renamed `test_model` to `run_model_test` (it's a CLI utility, not a test)
+- Fixed `test_ffmpeg_errors.py` - Added dynamic FFmpeg detection instead of hardcoded skip
+- Fixed `test_highlight_image_validation.py` - Dynamic database lookup for test data
+- Fixed `test_api.py` integration tests - Updated endpoints, removed Unicode chars, added server checks
+- Deleted redundant tests from `test_highlight_persistence_bug.py`
 
 ---
 
-## Completed Tasks (Reference)
+### ~~Task 5: Documentation Update~~ ✅ COMPLETED
 
-These have already been implemented:
+**Priority:** Low (Maintenance)
+**Complexity:** Low
+**Status:** COMPLETED
 
-1. **Navigation Store (TASK-01)** - Created `navigationStore.js`, `ProjectContext.jsx`
-2. **ProjectsScreen (TASK-02)** - Created `useProjectLoader`, `projectDataStore`
-3. **FramingScreen (TASK-03)** - Self-contained with own hooks
-4. **OverlayScreen (TASK-04)** - Created `overlayStore.js`, self-contained
-5. **Durable Export Architecture** - Background export jobs, graceful WebSocket
+Updated documentation to match current codebase:
+
+- **README.md**: Added missing stores, hooks, routers, database columns, tables
+- **MANUAL_TEST.md**: Updated test count (31 tests), status table, features list
+- **DEVELOPMENT.md**: Fixed broken Unicode characters in section headers
+- Removed references to non-existent files (prompt_preamble, CODE_SMELLS.md)
+- Fixed incorrect file path references
 
 ---
 
-## Notes
+## Future Tasks
 
-### What Was NOT Relevant
-- `mostly_implemented/refactor-tasks/` - Old approach superseded by AppJSX_REDUCTION
-- `mostly_implemented/formal annotations/` - Test data files, not tasks
+### Resumable Uploads for Very Large Files
+For files >5GB, consider implementing multipart uploads with resume capability.
 
-### Success Metrics
-| Metric | Original | Current | Target |
-|--------|----------|---------|--------|
-| App.jsx lines | 2181 | 278 | ~150 |
-| Props to FramingScreen | 50+ | 2 | 0 |
-| Props to OverlayScreen | 60+ | 1 | 0 |
-| Props to AnnotateScreen | 15+ | 0 | 0 |
-| Props to ProjectsScreen | N/A | 3 | 0 |
+### Upload Progress in Status Bar
+Show global upload progress indicator when video upload is in progress.
+
+### Cloud Deployment (Modal GPU + Fly.io)
+See [cloud_migration/PLAN.md](cloud_migration/PLAN.md) for detailed migration plan:
+- Phase 2: Modal GPU integration (current focus)
+- Phase 3: Fly.io + Cloudflare Pages deployment
+  - Task 16: Performance profiling
+  - Task 17: Stale session detection (reject conflicting writes, UI feedback)
+- Phase 4: User management & payments (optional)
+
+**Note**: The durable export infrastructure (Task 3 above) is already in place. Modal integration should:
+- Add `MODAL_ENABLED` environment variable toggle
+- Modify `export_worker.py` to call Modal functions when enabled
+- Keep WebSocket progress updates (Modal can send progress via callbacks)
+- Fall back to local FFmpeg when `MODAL_ENABLED=false`

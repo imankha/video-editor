@@ -804,12 +804,26 @@ class AIVideoUpscaler:
                                                 f"Upscaling frame {completed_frames}/{total_frames} (Multi-GPU)",
                                                 phase='ai_upscale'
                                             )
+
+                                        # Periodic GPU cleanup every 10 frames
+                                        if completed_frames % 10 == 0 and torch.cuda.is_available():
+                                            torch.cuda.empty_cache()
+
+                                        # Force garbage collection every 50 frames
+                                        if completed_frames % 50 == 0:
+                                            import gc
+                                            gc.collect()
+
+                                    # Clear frame reference
+                                    del enhanced
                                 else:
                                     failed_frames.append(result_idx)
                                     logger.error(f"Frame {result_idx} processing failed")
 
                             except Exception as e:
                                 logger.error(f"Error processing frame {frame_idx}: {e}")
+                                import traceback
+                                logger.error(f"Traceback: {traceback.format_exc()}")
                                 failed_frames.append(frame_idx)
 
                         # Cleanup GPU memory after batch
@@ -817,6 +831,8 @@ class AIVideoUpscaler:
                             for gpu_id in range(self.num_gpus):
                                 with torch.cuda.device(gpu_id):
                                     torch.cuda.empty_cache()
+                        import gc
+                        gc.collect()
 
                 else:
                     # Sequential processing (single GPU or CPU)
@@ -871,12 +887,24 @@ class AIVideoUpscaler:
                             if progress_callback:
                                 progress_callback(completed_frames, total_frames, f"Upscaling frame {completed_frames}/{total_frames}", phase='ai_upscale')
 
-                            # Periodic GPU cleanup
-                            if output_frame_idx % 10 == 0 and torch.cuda.is_available():
+                            # Aggressive memory cleanup to prevent VRAM/RAM exhaustion
+                            # Clear frame references to allow garbage collection
+                            del frame
+                            del enhanced
+
+                            # Periodic GPU cleanup every 5 frames (more frequent for stability)
+                            if output_frame_idx % 5 == 0 and torch.cuda.is_available():
                                 torch.cuda.empty_cache()
+
+                            # Force garbage collection every 30 frames to free numpy arrays
+                            if output_frame_idx % 30 == 0:
+                                import gc
+                                gc.collect()
 
                         except Exception as e:
                             logger.error(f"Failed to process frame {source_frame_idx} (output {output_frame_idx}): {e}")
+                            import traceback
+                            logger.error(f"Traceback: {traceback.format_exc()}")
                             failed_frames.append(output_frame_idx)
 
             # Report any failures

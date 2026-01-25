@@ -227,12 +227,14 @@ export function useClipManager() {
 
     // Fetch all metadata in parallel for faster loading
     const clipPromises = projectClips.map(async (projectClip) => {
-      const fileUrl = getClipFileUrl(projectClip.id);
+      // Prefer presigned R2 URL if available, fall back to local proxy
+      const fileUrl = projectClip.file_url || getClipFileUrl(projectClip.id);
+      console.log('[useClipManager] Loading clip:', projectClip.id, 'file_url:', projectClip.file_url, 'resolved fileUrl:', fileUrl);
       try {
         const metadata = await getVideoMetadata(fileUrl);
         return { projectClip, fileUrl, metadata, success: true };
       } catch (error) {
-        console.error('[useClipManager] Failed to load clip:', projectClip.id, error);
+        console.error('[useClipManager] Failed to load clip:', projectClip.id, 'url:', fileUrl, error);
         return { projectClip, fileUrl, metadata: null, success: false };
       }
     });

@@ -8,7 +8,8 @@ A browser-based video editing application with three-mode workflow: **Annotate**
 |-------|------------|
 | **Frontend** | React 18 + Vite + Zustand (port 5173) |
 | **Backend** | FastAPI + Python (uvicorn, port 8000) |
-| **Database** | SQLite (`user_data/a/database.sqlite`) |
+| **Database** | SQLite (per-user, synced to R2) |
+| **Storage** | Cloudflare R2 (S3-compatible) |
 | **Video Processing** | FFmpeg (required in PATH) |
 | **AI Upscaling** | Real-ESRGAN, RIFE (optional) |
 | **Testing** | Vitest (unit), Playwright (E2E) |
@@ -91,22 +92,31 @@ video-editor/
 │   │       │   ├── clips.py        # Raw clips library + working clips
 │   │       │   ├── games.py        # Game footage storage, annotations
 │   │       │   ├── annotate.py     # Annotate export (creates clips + projects)
-│   │       │   ├── exports.py      # Durable export jobs API (NEW)
+│   │       │   ├── exports.py      # Durable export jobs API
 │   │       │   ├── export/         # Export endpoints (split by mode)
 │   │       │   │   ├── __init__.py     # Aggregates sub-routers
 │   │       │   │   ├── framing.py      # /crop, /upscale, /framing endpoints
 │   │       │   │   ├── overlay.py      # /overlay, /final endpoints
-│   │       │   │   └── multi_clip.py   # /multi-clip, /chapters endpoints
+│   │       │   │   ├── multi_clip.py   # /multi-clip, /chapters endpoints
+│   │       │   │   └── before_after.py # Before/after comparison videos
 │   │       │   ├── downloads.py    # Gallery/final video management
+│   │       │   ├── storage.py      # R2 presigned URL redirects
 │   │       │   ├── detection.py    # YOLO player/ball detection
 │   │       │   ├── health.py       # Health checks
 │   │       │   └── auth.py         # User isolation (for E2E tests)
+│   │       ├── highlight_transform.py  # Smart highlight coordinate mapping
 │   │       └── services/           # Business logic layer
-│   │           ├── export_worker.py    # Background export job processor (NEW)
+│   │           ├── export_worker.py    # Background export job processor
 │   │           ├── clip_cache.py       # Clip caching to avoid re-encoding
+│   │           ├── clip_pipeline.py    # Clip processing pipeline
 │   │           ├── video_processor.py  # Abstract GPU processing interface
 │   │           ├── ffmpeg_service.py   # FFmpeg helper functions
+│   │           ├── ffmpeg_errors.py    # FFmpeg error parsing
 │   │           ├── local_gpu_processor.py  # Local GPU implementation
+│   │           ├── image_extractor.py  # Frame extraction utilities
+│   │           ├── progress_reporter.py # WebSocket progress updates
+│   │           ├── r2_storage.py       # Cloudflare R2 storage integration
+│   │           ├── db_sync.py          # SQLite <-> R2 sync with versioning
 │   │           └── transitions/        # Video transition strategies
 │   │               ├── base.py         # TransitionStrategy interface
 │   │               ├── cut.py          # Simple concatenation
@@ -120,13 +130,22 @@ video-editor/
 │           │   ├── VideoPlayer.jsx
 │           │   ├── ProjectManager.jsx
 │           │   ├── ClipSelectorSidebar.jsx
-│           │   ├── ExportButton.jsx    # Includes WebSocket + health check
+│           │   ├── ExportButton.jsx        # Includes WebSocket + health check
+│           │   ├── GlobalExportIndicator.jsx  # Global export progress toast
+│           │   ├── GameDetailsModal.jsx    # Edit game metadata (opponent, date)
+│           │   ├── GameClipSelectorModal.jsx  # Select clips from games
 │           │   ├── DownloadsPanel.jsx
 │           │   ├── shared/             # Shared components
+│           │   │   ├── Breadcrumb.jsx       # Navigation breadcrumbs
+│           │   │   ├── Button.jsx           # Styled button variants
+│           │   │   ├── CollapsibleGroup.jsx # Collapsible UI sections
 │           │   │   ├── ConfirmationDialog.jsx
 │           │   │   ├── ExportProgress.jsx
 │           │   │   ├── ModeSwitcher.jsx
-│           │   │   └── ServerStatus.jsx  # Server health banner (NEW)
+│           │   │   ├── ServerStatus.jsx     # Server health banner
+│           │   │   ├── StarRating.jsx       # 1-5 star rating input
+│           │   │   ├── TagSelector.jsx      # Tag selection UI
+│           │   │   └── Toast.jsx            # Toast notifications
 │           │   └── timeline/       # Timeline components
 │           ├── hooks/              # State management
 │           │   ├── useProjects.js
@@ -134,8 +153,16 @@ video-editor/
 │           │   ├── useClipManager.js
 │           │   ├── useVideo.js
 │           │   ├── useGames.js
-│           │   ├── useProjectLoader.js   # Project loading logic (NEW)
-│           │   └── useKeyframeController.js
+│           │   ├── useProjectLoader.js   # Project loading logic
+│           │   ├── useStorageUrl.js      # R2 presigned URL handling
+│           │   ├── useKeyframeController.js
+│           │   ├── useDownloads.js       # Gallery downloads management
+│           │   ├── useRawClips.js        # Raw clips library access
+│           │   ├── useExportManager.js   # Export job management
+│           │   ├── useExportRecovery.js  # Resume interrupted exports
+│           │   ├── useKeyboardShortcuts.js # Keyboard shortcuts
+│           │   ├── useTimeline.js        # Timeline state management
+│           │   └── useTimelineZoom.js    # Timeline zoom controls
 │           ├── screens/            # Self-contained screen components
 │           │   ├── ProjectsScreen.jsx    # Owns project selection
 │           │   ├── AnnotateScreen.jsx    # Owns annotate workflow
@@ -147,17 +174,18 @@ video-editor/
 │           │   └── OverlayContainer.jsx
 │           ├── contexts/           # React contexts
 │           │   ├── AppStateContext.jsx
-│           │   ├── ProjectContext.jsx    # Project data provider (NEW)
-│           │   └── index.js
+│           │   ├── ProjectContext.jsx    # Project data provider │           │   └── index.js
 │           ├── stores/             # Zustand state stores
 │           │   ├── clipStore.js
 │           │   ├── editorStore.js
 │           │   ├── exportStore.js
 │           │   ├── videoStore.js
-│           │   ├── navigationStore.js    # App navigation state (NEW)
-│           │   ├── framingStore.js       # Framing persistence (NEW)
-│           │   ├── overlayStore.js       # Overlay state (NEW)
-│           │   └── projectDataStore.js   # Loaded project data (NEW)
+│           │   ├── navigationStore.js    # App navigation state
+│           │   ├── framingStore.js       # Framing persistence
+│           │   ├── overlayStore.js       # Overlay state
+│           │   ├── projectDataStore.js   # Loaded project data
+│           │   ├── galleryStore.js       # Gallery/downloads state
+│           │   └── gamesStore.js         # Games list state
 │           ├── modes/              # Mode-specific code
 │           │   ├── FramingModeView.jsx
 │           │   ├── OverlayModeView.jsx
@@ -172,10 +200,11 @@ video-editor/
 │           └── utils/              # Utilities
 │               ├── timeFormat.js
 │               ├── splineInterpolation.js
-│               └── keyframeUtils.js
+│               ├── keyframeUtils.js
+│               └── storageUrls.js       # R2 URL generation helpers
 │
-├── user_data/a/                    # Runtime data (gitignored)
-│   ├── database.sqlite
+├── user_data/{user_id}/            # Runtime data (gitignored, synced to R2)
+│   ├── database.sqlite             # Per-user SQLite database
 │   ├── raw_clips/                  # Library clips (from Annotate)
 │   ├── uploads/                    # Direct uploads
 │   ├── games/                      # Full game videos
@@ -186,10 +215,10 @@ video-editor/
 │
 ├── plans/                          # Planning documents
 │   └── tasks.md                    # Remaining tasks and roadmap
-├── test_persistence.py             # Backend persistence tests
-├── MANUAL_TEST.md                  # Manual testing procedures
-├── CODE_SMELLS.md                  # Refactoring opportunities
-└── prompt_preamble                 # Project context for AI assistants
+├── scripts/                        # Utility scripts
+│   ├── verify.sh                   # Verification script
+│   └── test_manual.md              # Manual test procedures
+└── start-dev.bat                   # Windows quick start script
 ```
 
 ---
@@ -205,6 +234,9 @@ video-editor/
 raw_clips (
     id, filename, rating, tags, name, notes,
     start_time, end_time,  -- end_time is IDENTITY KEY for versioning
+    game_id,               -- FK to games (source game)
+    auto_project_id,       -- FK to projects (auto-created for 5-star)
+    default_highlight_regions,  -- JSON: cross-project highlight reuse
     created_at
 )
 
@@ -238,12 +270,30 @@ working_videos (
 
 -- Final videos: Overlay mode output (shown in Gallery)
 final_videos (
-    id, project_id, filename, version, duration, created_at
+    id, project_id, filename, version, duration,
+    source_type,           -- 'brilliant_clip', 'custom_project', 'annotated_game'
+    game_id,               -- FK to games (for annotated exports)
+    name,                  -- Display name (for annotated exports)
+    rating_counts,         -- JSON: rating snapshot at export time
+    created_at
+)
+
+-- Before/After tracks: Links final videos to source footage
+before_after_tracks (
+    id, final_video_id,    -- FK to final_videos
+    raw_clip_id,           -- FK to raw_clips (optional)
+    source_path,           -- Path to source video
+    start_frame, end_frame, -- Frame range in source
+    clip_index,            -- Order in final video
+    created_at
 )
 
 -- Games: Full game footage for Annotate mode
 games (
     id, name, video_filename,
+    opponent_name, game_date, game_type,      -- Game details (home/away/tournament)
+    tournament_name,
+    video_duration, video_width, video_height, video_size,  -- Video metadata (cached)
     clip_count, brilliant_count, good_count,  -- Aggregate counts (cached)
     interesting_count, mistake_count, blunder_count,
     aggregate_score, created_at
@@ -257,7 +307,7 @@ annotations (
     created_at, updated_at
 )
 
--- Export jobs: Durable background export tracking (NEW)
+-- Export jobs: Durable background export tracking
 export_jobs (
     id TEXT PRIMARY KEY,       -- UUID like 'export_abc123'
     project_id, type,          -- 'framing' | 'overlay' | 'multi_clip'
@@ -383,11 +433,26 @@ keyframe = {
 - `refresh_required` response pattern: if true, client fetches fresh data
 - Prevents version conflicts with server-side versioning
 
+### Toast Notifications
+Global toast system for user feedback:
+```javascript
+import { useToastStore } from '@/components/shared/Toast';
+
+// Show toast notification
+useToastStore.getState().addToast({
+  type: 'success',  // 'success' | 'error' | 'info'
+  title: 'Export complete',
+  message: 'Video saved to downloads',
+  action: { label: 'View', onClick: () => {} },  // optional
+  duration: 5000,  // auto-dismiss (0 = no auto-dismiss)
+});
+```
+
 ---
 
 ## Services Layer
 
-The backend uses a services layer for GPU-intensive operations, designed for future extensibility to WebGPU or cloud processing (RunPod).
+The backend uses a services layer for GPU-intensive operations, designed for future extensibility to WebGPU or cloud GPU processing.
 
 ### Video Processor Interface
 
@@ -397,7 +462,7 @@ from app.services import VideoProcessor, ProcessingBackend, ProcessorFactory
 # Available backends (enum)
 ProcessingBackend.LOCAL_GPU   # Current: Real-ESRGAN on local GPU
 ProcessingBackend.WEB_GPU     # Future: Browser-based processing
-ProcessingBackend.RUNPOD      # Future: Cloud GPU processing
+ProcessingBackend.CLOUD_GPU   # Future: Cloud GPU processing (Modal, etc.)
 ProcessingBackend.CPU_ONLY    # Fallback: CPU-only processing
 
 # Get a processor
@@ -454,6 +519,48 @@ success = apply_transition(
 
 To add a new transition type, create a class implementing `TransitionStrategy` and register it with `TransitionFactory.register()`.
 
+### Highlight Transformation
+
+The `highlight_transform.py` module handles coordinate space mapping between raw clips and working videos:
+
+```python
+from app.highlight_transform import (
+    transform_highlights_for_save,   # working_video -> raw_clip space
+    transform_highlights_for_load,   # raw_clip -> working_video space
+)
+
+# Coordinate Spaces:
+# - Raw Clip Space: Original video dimensions and timing
+# - Working Video Space: After crop, trim, and speed modifications
+
+# The transformation accounts for:
+# - Crop keyframes (position and size changes)
+# - Trim ranges (start/end cuts)
+# - Segment speeds (slow-mo, fast-forward)
+```
+
+This enables highlights to persist correctly even when clips are re-cropped or re-trimmed.
+
+### R2 Storage Integration
+
+All user data is stored in Cloudflare R2 (S3-compatible):
+
+```python
+from app.services.r2_storage import r2_storage
+
+# Upload file to R2
+await r2_storage.upload_file(local_path, r2_key)
+
+# Get presigned URL for direct download
+url = await r2_storage.get_presigned_url(r2_key, expires_in=3600)
+
+# Files are organized by user_id prefix:
+# reel-ballers-users/{user_id}/games/video.mp4
+# reel-ballers-users/{user_id}/database.sqlite
+```
+
+Database sync uses version tracking to minimize R2 operations - only syncs when version changes.
+
 ---
 
 ## Testing
@@ -469,21 +576,28 @@ To add a new transition type, create a class implementing `TransitionStrategy` a
 ### Running Tests
 
 ```bash
-# Frontend unit tests (348 tests)
+# Frontend unit tests
 cd src/frontend && npm test
 
 # Backend unit tests
 cd src/backend && .venv/Scripts/python -m pytest tests/ -v
 
-# E2E tests (requires backend + frontend running)
-# Terminal 1: cd src/backend && uvicorn app.main:app --port 8000
-# Terminal 2: cd src/frontend && npm run dev
-# Terminal 3:
-cd src/frontend && npm run test:e2e
+# E2E tests - IMPORTANT: Start servers manually first!
+# Terminal 1:
+cd src/backend && python -m uvicorn app.main:app --port 8000
 
-# E2E with visual UI (for debugging)
-npm run test:e2e:ui
+# Terminal 2:
+cd src/frontend && npm run dev
+
+# Terminal 3:
+cd src/frontend
+npx playwright test              # Run all tests
+npx playwright test --grep @smoke  # Fast smoke tests only
+npx playwright test --grep @full   # Full coverage tests
+npx playwright test --ui         # Visual UI mode (recommended)
 ```
+
+**Note**: Playwright will NOT auto-start servers. This prevents zombie processes when tests are cancelled.
 
 ### E2E Test Data
 
@@ -513,7 +627,7 @@ Tests are organized across multiple spec files:
 - Editor mode state changes on game load
 
 ### Manual Testing
-- See [MANUAL_TEST.md](MANUAL_TEST.md) for manual UI procedures
+- See [docs/MANUAL_TEST.md](docs/MANUAL_TEST.md) for manual UI procedures
 - See `scripts/` folder for API and WebSocket test scripts
 
 ---
@@ -578,7 +692,6 @@ See [plans/tasks.md](plans/tasks.md) for:
 - [docs/REFERENCE/](docs/REFERENCE/) - AI upscaling and model testing docs
 - [src/backend/README.md](src/backend/README.md) - Backend setup and API reference
 - [src/backend/MULTI_GPU_GUIDE.md](src/backend/MULTI_GPU_GUIDE.md) - Multi-GPU AI upscaling
-- [prompt_preamble](prompt_preamble) - Detailed context for AI assistants
 
 ---
 

@@ -90,29 +90,36 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * @returns {Promise<File|null>} - The loaded file or null on error
    */
   const loadVideoFromUrl = async (url, filename = 'video.mp4') => {
+    console.log('[useVideo] loadVideoFromUrl called with:', url);
     setError(null);
     setIsLoading(true);
 
     try {
       // Clean up previous video
       if (videoUrl) {
+        console.log('[useVideo] Revoking previous videoUrl:', videoUrl);
         revokeVideoURL(videoUrl);
       }
 
       // Fetch the video from URL
+      console.log('[useVideo] Fetching video from:', url);
       const response = await fetch(url);
+      console.log('[useVideo] Fetch response:', response.status, response.ok, 'final URL:', response.url);
       if (!response.ok) {
         throw new Error(`Failed to fetch video: ${response.status}`);
       }
 
       const blob = await response.blob();
+      console.log('[useVideo] Blob received, size:', blob.size, 'type:', blob.type);
       const file = new File([blob], filename, { type: blob.type || 'video/mp4' });
 
       // Extract metadata
       const videoMetadata = await extractVideoMetadata(file);
+      console.log('[useVideo] Video metadata extracted:', videoMetadata);
 
       // Create blob URL
       const blobUrl = createVideoURL(file);
+      console.log('[useVideo] Created blob URL:', blobUrl);
 
       // Batch update all video state
       setVideoLoaded({
@@ -124,6 +131,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
       return file; // Return the file so caller can use it
     } catch (err) {
+      console.error('[useVideo] loadVideoFromUrl error:', err);
       setError(err.message || 'Failed to load video from URL');
       setIsLoading(false);
       return null;

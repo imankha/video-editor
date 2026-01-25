@@ -17,6 +17,8 @@ import React, { useState, useRef, useCallback } from 'react';
  * @param {Function} props.onPanChange - Callback when pan changes (drag)
  * @param {boolean} props.isFullscreen - Whether the player is in fullscreen mode
  * @param {number|null} props.clipRating - Rating (1-5) of clip at current time, null if not in clip
+ * @param {boolean} props.isLoading - Whether video is currently loading
+ * @param {string} props.loadingMessage - Optional loading message to display
  */
 export function VideoPlayer({
   videoRef,
@@ -29,7 +31,9 @@ export function VideoPlayer({
   onZoomChange,
   onPanChange,
   isFullscreen = false,
-  clipRating = null
+  clipRating = null,
+  isLoading = false,
+  loadingMessage = 'Loading video...'
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
@@ -209,6 +213,13 @@ export function VideoPlayer({
               />
             );
           })()}
+        </div>
+      ) : isLoading ? (
+        <div className="flex items-center justify-center h-[60vh] text-gray-400">
+          <div className="text-center">
+            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-gray-600 border-t-purple-500"></div>
+            <p className="mt-4 text-sm text-gray-300">{loadingMessage}</p>
+          </div>
         </div>
       ) : (
         <div

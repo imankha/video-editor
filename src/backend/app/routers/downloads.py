@@ -17,8 +17,46 @@ import logging
 
 from app.database import get_db_connection, get_final_videos_path
 from app.queries import latest_final_videos_subquery
+from app.user_context import get_current_user_id
+from app.storage import R2_ENABLED, generate_presigned_url, file_exists_in_r2
 
 logger = logging.getLogger(__name__)
+
+
+def get_download_file_url(filename: str, verify_exists: bool = False) -> Optional[str]:
+    """
+    Get presigned URL for download/final video if R2 is enabled.
+
+    Args:
+        filename: The filename of the download
+        verify_exists: If True, verify the file exists in R2 before generating URL
+                      (adds latency but catches missing files early)
+
+    Returns None (fallback to local proxy) if:
+    - R2 is not enabled
+    - No filename provided
+    - verify_exists=True and file doesn't exist in R2
+    """
+    if not R2_ENABLED or not filename:
+        return None
+
+    user_id = get_current_user_id()
+    r2_path = f"final_videos/{filename}"
+
+    # Optionally verify file exists in R2 (helps debug NoSuchKey errors)
+    if verify_exists and not file_exists_in_r2(user_id, r2_path):
+        logger.warning(f"[get_download_file_url] File NOT FOUND in R2: user={user_id}, path={r2_path}")
+        return None  # Return None to trigger error in endpoint
+
+    # Files are stored in final_videos/ directory in R2 (not downloads/)
+    url = generate_presigned_url(
+        user_id=user_id,
+        relative_path=r2_path,
+        expires_in=3600,
+        content_type="video/mp4"
+    )
+    logger.debug(f"[get_download_file_url] Generated URL for: user={user_id}, path={r2_path}")
+    return url
 
 
 def _get_season_for_month(month: int) -> str:
@@ -142,6 +180,7 @@ class DownloadItem(BaseModel):
     project_id: int
     project_name: str
     filename: str
+    file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
     created_at: str
     file_size: Optional[int]  # Size in bytes
     source_type: Optional[str]  # 'brilliant_clip' | 'custom_project' | 'annotated_game' | None
@@ -328,14 +367,25 @@ async def list_downloads(source_type: Optional[str] = None):
                 game_names = pg.get('game_names', [])
                 game_dates = pg.get('game_dates', [])
 
-            # Generate group key
+            # Generate group key from game info, or fallback to date-based grouping
             group_key = _generate_group_key(game_names, game_dates)
+            if not group_key:
+                # Fallback: group by month/year from created_at (e.g., "January 2026")
+                try:
+                    created_dt = datetime.fromisoformat(row['created_at'].replace('Z', '+00:00'))
+                    group_key = created_dt.strftime("%B %Y")  # e.g., "January 2026"
+                except (ValueError, AttributeError):
+                    group_key = "Other"
+
+            # Fallback name: use filename without _final.mp4 suffix, cleaned up
+            fallback_name = row['filename'].replace('_final.mp4', '').replace('_', ' ').strip() if row['filename'] else f"Video {row['id']}"
 
             downloads.append(DownloadItem(
                 id=row['id'],
                 project_id=row['project_id'],
-                project_name=row['project_name'],
+                project_name=row['project_name'] or fallback_name,
                 filename=row['filename'],
+                file_url=get_download_file_url(row['filename']),
                 created_at=row['created_at'],
                 file_size=file_size,
                 source_type=row['source_type'],
@@ -377,9 +427,11 @@ def generate_download_filename(project_name: str) -> str:
 @router.get("/{download_id}/file")
 async def download_file(download_id: int):
     """
-    Download/stream a final video file.
+    Download/stream a final video file. Redirects to R2 when enabled.
     Returns the video file for download with project name as filename.
     """
+    from fastapi.responses import RedirectResponse
+
     logger.info(f"[Download] Request for download_id={download_id}")
 
     with get_db_connection() as conn:
@@ -399,6 +451,18 @@ async def download_file(download_id: int):
 
         logger.info(f"[Download] Found: stored_filename={row['filename']}, project_name={row['project_name']}")
 
+        # If R2 enabled, redirect to presigned URL (no local fallback)
+        if R2_ENABLED:
+            # verify_exists=True to check file exists and log warning if not
+            presigned_url = get_download_file_url(row['filename'], verify_exists=True)
+            if presigned_url:
+                logger.info(f"[Download] Redirecting to R2 presigned URL")
+                return RedirectResponse(url=presigned_url, status_code=302)
+            # R2 enabled but URL generation failed - file missing or R2 error
+            logger.error(f"[Download] R2 enabled but failed to generate presigned URL for: {row['filename']} - file may not exist in R2")
+            raise HTTPException(status_code=404, detail="Video file not found in storage")
+
+        # Local mode only: serve from filesystem
         file_path = get_final_videos_path() / row['filename']
         if not file_path.exists():
             logger.error(f"[Download] File missing: {file_path}")

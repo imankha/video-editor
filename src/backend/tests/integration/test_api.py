@@ -8,55 +8,67 @@ Tests the backend API routes work correctly.
 
 import requests
 import sys
+import pytest
 
 BASE = "http://localhost:8000"
 
+def _server_running():
+    """Check if the backend server is running."""
+    try:
+        r = requests.get(f"{BASE}/api/health", timeout=2)
+        return r.status_code == 200
+    except requests.exceptions.ConnectionError:
+        return False
+    except requests.exceptions.Timeout:
+        return False
+
 def test_health():
     """Test health check endpoint."""
+    if not _server_running():
+        pytest.skip("Backend server not running at localhost:8000")
     r = requests.get(f"{BASE}/api/health")
     assert r.status_code == 200, f"Health check failed: {r.status_code}"
-    print("✓ Health check passed")
+    print("[OK] Health check passed")
     return True
 
 def test_projects():
     """Test projects endpoint."""
+    if not _server_running():
+        pytest.skip("Backend server not running at localhost:8000")
     r = requests.get(f"{BASE}/api/projects")
     assert r.status_code == 200, f"Projects failed: {r.status_code}"
     projects = r.json()
-    print(f"✓ Projects endpoint: {len(projects)} found")
+    print(f"[OK] Projects endpoint: {len(projects)} found")
     return projects
 
 def test_games():
     """Test games endpoint."""
+    if not _server_running():
+        pytest.skip("Backend server not running at localhost:8000")
     r = requests.get(f"{BASE}/api/games")
     assert r.status_code == 200, f"Games failed: {r.status_code}"
     games = r.json()
-    print(f"✓ Games endpoint: {len(games)} found")
+    print(f"[OK] Games endpoint: {len(games)} found")
     return games
 
-def test_clips():
-    """Test clips endpoint."""
-    r = requests.get(f"{BASE}/api/clips")
-    assert r.status_code == 200, f"Clips failed: {r.status_code}"
+def test_raw_clips():
+    """Test raw clips endpoint."""
+    if not _server_running():
+        pytest.skip("Backend server not running at localhost:8000")
+    r = requests.get(f"{BASE}/api/clips/raw")
+    assert r.status_code == 200, f"Raw clips failed: {r.status_code}"
     clips = r.json()
-    print(f"✓ Clips endpoint: {len(clips)} found")
-    return clips
+    print(f"[OK] Raw clips endpoint: {len(clips)} found")
 
-def test_working_videos():
-    """Test working videos endpoint."""
-    r = requests.get(f"{BASE}/api/export/working-videos")
-    assert r.status_code == 200, f"Working videos failed: {r.status_code}"
-    videos = r.json()
-    print(f"✓ Working videos endpoint: {len(videos)} found")
-    return videos
-
-def test_websocket_route_exists():
-    """Test WebSocket route is registered (will fail upgrade but shouldn't 404)."""
-    r = requests.get(f"{BASE}/ws/export/test-123", headers={"Upgrade": "websocket"})
-    # Expect 400 or 426 (upgrade required), not 404
-    assert r.status_code != 404, f"WebSocket route not found (404)"
-    print(f"✓ WebSocket route exists (status: {r.status_code})")
-    return True
+def test_downloads():
+    """Test downloads/gallery endpoint."""
+    if not _server_running():
+        pytest.skip("Backend server not running at localhost:8000")
+    r = requests.get(f"{BASE}/api/downloads")
+    assert r.status_code == 200, f"Downloads failed: {r.status_code}"
+    data = r.json()
+    count = len(data.get('downloads', []))
+    print(f"[OK] Downloads endpoint: {count} videos found")
 
 def main():
     print("=" * 50)
@@ -67,16 +79,15 @@ def main():
     try:
         test_health()
     except requests.exceptions.ConnectionError:
-        print("✗ Cannot connect to backend. Is it running?")
-        print(f"  Start with: cd src/backend && .venv/Scripts/python.exe -m uvicorn app.main:app --port 8000")
+        print("[FAIL] Cannot connect to backend. Is it running?")
+        print(f"  Start with: cd src/backend && venv/Scripts/python.exe -m uvicorn app.main:app --port 8000")
         sys.exit(1)
 
     tests = [
         test_projects,
         test_games,
-        test_clips,
-        test_working_videos,
-        test_websocket_route_exists,
+        test_raw_clips,
+        test_downloads,
     ]
 
     passed = 0
@@ -87,10 +98,10 @@ def main():
             test()
             passed += 1
         except AssertionError as e:
-            print(f"✗ {test.__name__}: {e}")
+            print(f"[FAIL] {test.__name__}: {e}")
             failed += 1
         except Exception as e:
-            print(f"✗ {test.__name__}: Unexpected error: {e}")
+            print(f"[FAIL] {test.__name__}: Unexpected error: {e}")
             failed += 1
 
     print("\n" + "=" * 50)

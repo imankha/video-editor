@@ -588,6 +588,9 @@ export function OverlayScreen({
       duration={duration}
       isPlaying={isPlaying}
       handlers={handlers}
+      // Loading state
+      isLoading={isLoading || isLoadingWorkingVideo || shouldWaitForWorkingVideo}
+      loadingMessage={isLoadingWorkingVideo || shouldWaitForWorkingVideo ? 'Loading working video...' : 'Loading video...'}
       // Playback controls
       togglePlay={togglePlay}
       stepForward={stepForward}

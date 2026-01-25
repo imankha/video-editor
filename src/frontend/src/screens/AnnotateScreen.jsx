@@ -296,6 +296,7 @@ export function AnnotateScreen() {
         clipCount={annotateClipCount}
         videoDuration={annotateVideoMetadata?.duration}
         isLoading={isLoadingAnnotations}
+        isVideoUploading={isUploadingGameVideo}
       />
       {/* Main Content */}
       <div className="flex-1 overflow-auto">

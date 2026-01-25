@@ -63,6 +63,8 @@ def test_db():
             project_id INTEGER NOT NULL,
             filename TEXT NOT NULL,
             version INTEGER NOT NULL DEFAULT 1,
+            game_id INTEGER DEFAULT NULL,
+            source_type TEXT DEFAULT NULL,
             FOREIGN KEY (project_id) REFERENCES projects(id)
         )
     """)

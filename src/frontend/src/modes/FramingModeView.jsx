@@ -25,6 +25,8 @@ export function FramingModeView({
   duration,
   isPlaying,
   isLoading,
+  isProjectLoading = false,
+  loadingStage = null,
   error,
   handlers,
 
@@ -112,6 +114,7 @@ export function FramingModeView({
   onIncludeAudioChange,
   onProceedToOverlay,
   onExportComplete,
+  saveCurrentClipState,  // For backend-authoritative export
 
   // Context
   cropContextValue,
@@ -207,6 +210,13 @@ export function FramingModeView({
               onZoomChange={onZoomByWheel}
               onPanChange={onPanChange}
               isFullscreen={isFullscreen}
+              isLoading={isLoading || isProjectLoading}
+              loadingMessage={
+                loadingStage === 'clips' ? 'Loading clips...' :
+                loadingStage === 'video' ? 'Loading video...' :
+                loadingStage === 'working-video' ? 'Loading working video...' :
+                isLoading ? 'Loading video...' : 'Loading...'
+              }
             />
 
             {/* Fullscreen exit button - top right corner */}
@@ -309,6 +319,7 @@ export function FramingModeView({
               globalAspectRatio={globalAspectRatio}
               globalTransition={globalTransition}
               onExportComplete={onExportComplete}
+              saveCurrentClipState={saveCurrentClipState}
             />
           </div>
         )}

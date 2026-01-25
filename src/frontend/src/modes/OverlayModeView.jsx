@@ -30,6 +30,9 @@ export function OverlayModeView({
   duration,
   isPlaying,
   handlers,
+  // Loading state
+  isLoading = false,
+  loadingMessage = 'Loading video...',
 
   // Playback controls
   togglePlay,
@@ -109,7 +112,7 @@ export function OverlayModeView({
   return (
     <>
       {/* Video Metadata - use overlay metadata, hidden in fullscreen */}
-      {effectiveOverlayMetadata && !isFullscreen && (
+      {!isFullscreen && (effectiveOverlayMetadata ? (
         <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
           <div className="flex items-center justify-between text-sm text-gray-300">
             {videoTitle && <span className="font-semibold text-white">{videoTitle}</span>}
@@ -135,7 +138,18 @@ export function OverlayModeView({
             </div>
           </div>
         </div>
-      )}
+      ) : isLoading && (
+        <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20 animate-pulse">
+          <div className="flex items-center justify-between">
+            <div className="h-4 bg-gray-600 rounded w-32"></div>
+            <div className="flex space-x-6">
+              <div className="h-4 bg-gray-600 rounded w-24"></div>
+              <div className="h-4 bg-gray-600 rounded w-20"></div>
+              <div className="h-4 bg-gray-600 rounded w-16"></div>
+            </div>
+          </div>
+        </div>
+      ))}
 
       {/* Main Editor Area */}
       <div className={`${isFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20'}`}>
@@ -221,6 +235,8 @@ export function OverlayModeView({
             onZoomChange={onZoomByWheel}
             onPanChange={onPanChange}
             isFullscreen={isFullscreen}
+            isLoading={isLoading}
+            loadingMessage={loadingMessage}
           />
 
             {/* Fullscreen exit button - top right corner */}
@@ -256,7 +272,7 @@ export function OverlayModeView({
 
           {/* Overlay Mode Timeline - visible in fullscreen */}
           <div className={`${isFullscreen ? 'bg-gray-900/95 border-t border-gray-700 px-4 py-2' : 'mt-6'}`}>
-            {effectiveOverlayVideoUrl && (
+            {effectiveOverlayVideoUrl ? (
               <OverlayMode
             videoRef={videoRef}
             videoUrl={effectiveOverlayVideoUrl}
@@ -293,7 +309,12 @@ export function OverlayModeView({
             isPlaying={isPlaying}
             isFullscreen={isFullscreen}
               />
-            )}
+            ) : isLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-gray-700 rounded mb-2"></div>
+                <div className="h-24 bg-gray-700 rounded"></div>
+              </div>
+            ) : null}
           </div>
         </div>
 

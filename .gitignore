@@ -61,3 +61,12 @@ src/backend/yolov8x.pt
 /screenshots
 /screenshots
 src/landing/dist/
+.env.r2
+
+# Cloudflare
+.wrangler/
+workers/node_modules/
+
+# Windows artifacts
+nul
+/src/backend/test_outputs

@@ -11,6 +11,7 @@ This package contains FastAPI routers organized by functionality:
 - games.py: Game storage and management endpoints
 - downloads.py: Final video downloads management
 - auth.py: User login for test isolation
+- storage.py: Presigned URL generation for R2 direct access
 """
 
 from .health import router as health_router
@@ -22,5 +23,6 @@ from .clips import router as clips_router
 from .games import router as games_router
 from .downloads import router as downloads_router
 from .auth import router as auth_router
+from .storage import router as storage_router
 
-__all__ = ['health_router', 'export_router', 'detection_router', 'annotate_router', 'projects_router', 'clips_router', 'games_router', 'downloads_router', 'auth_router']
+__all__ = ['health_router', 'export_router', 'detection_router', 'annotate_router', 'projects_router', 'clips_router', 'games_router', 'downloads_router', 'auth_router', 'storage_router']

@@ -1,5 +1,6 @@
 import { useMemo, useRef, useCallback } from 'react';
 import { Home } from 'lucide-react';
+import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
@@ -182,6 +183,8 @@ function App() {
     <ProjectProvider>
     <AppStateProvider value={appStateValue}>
     <div className="h-screen overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
+      {/* Connection status banner - shows when backend is unreachable */}
+      <ConnectionStatus />
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
       {editorMode === 'annotate' && <AnnotateScreen />}
 

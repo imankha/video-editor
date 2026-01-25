@@ -8,6 +8,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { API_BASE } from '../config';
+import { useGamesStore } from '../stores';
 
 export function useGames() {
   const [games, setGames] = useState([]);
@@ -17,6 +18,10 @@ export function useGames() {
 
   // Track pending save to debounce rapid changes
   const saveTimeoutRef = useRef(null);
+
+  // Global games version for cross-component coordination
+  const gamesVersion = useGamesStore((state) => state.gamesVersion);
+  const invalidateGames = useGamesStore((state) => state.invalidateGames);
 
   /**
    * Fetch all games from the server
@@ -113,7 +118,8 @@ export function useGames() {
       const data = await response.json();
       console.log('[useGames] Created game:', data.game);
 
-      // Refresh games list (don't await - do in background)
+      // Notify other components and refresh games list
+      invalidateGames();
       fetchGames();
 
       return data.game;
@@ -124,20 +130,126 @@ export function useGames() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchGames]);
+  }, [fetchGames, invalidateGames]);
 
   /**
    * Upload video to an existing game.
    * This is called after createGame to upload the video in the background.
-   * Uses XMLHttpRequest for upload progress tracking on large files.
+   *
+   * Uses direct R2 upload when available (roughly 2x faster for large files):
+   * 1. Get presigned URL from backend
+   * 2. Upload directly to R2
+   * 3. Confirm upload with backend
+   *
+   * Falls back to traditional upload through backend if R2 is disabled.
    *
    * @param {number} gameId - Game ID to upload video to
    * @param {File} videoFile - Video file to upload
    * @param {function} onProgress - Optional callback for progress updates: (loaded, total, percent) => void
    */
   const uploadGameVideo = useCallback(async (gameId, videoFile, onProgress) => {
-    console.log('[useGames] Starting video upload for game', gameId, '- size:', (videoFile.size / (1024 * 1024)).toFixed(1), 'MB');
+    const fileSizeMB = (videoFile.size / (1024 * 1024)).toFixed(1);
+    console.log('[useGames] Starting video upload for game', gameId, '- size:', fileSizeMB, 'MB');
 
+    // Try to get presigned URL for direct R2 upload
+    let useDirectUpload = false;
+    let uploadUrl = null;
+    let videoFilename = null;
+
+    try {
+      const urlResponse = await fetch(
+        `${API_BASE}/api/games/${gameId}/upload-url?filename=${encodeURIComponent(videoFile.name)}`
+      );
+      if (urlResponse.ok) {
+        const urlData = await urlResponse.json();
+        if (urlData.r2_enabled && urlData.upload_url) {
+          useDirectUpload = true;
+          uploadUrl = urlData.upload_url;
+          videoFilename = urlData.video_filename;
+          console.log('[useGames] Using direct R2 upload for faster transfer');
+        }
+      }
+    } catch (e) {
+      console.log('[useGames] Could not get presigned URL, falling back to traditional upload');
+    }
+
+    if (useDirectUpload) {
+      // Direct R2 upload (faster - bypasses backend)
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('Content-Type', 'video/mp4');
+
+        // Track upload progress
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && onProgress) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            onProgress(event.loaded, event.total, percent);
+            if (percent % 10 === 0) {
+              console.log('[useGames] Direct R2 upload progress:', percent + '%');
+            }
+          }
+        };
+
+        xhr.onload = async () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            console.log('[useGames] Direct R2 upload complete, confirming with backend...');
+
+            // Confirm upload with backend
+            try {
+              const formData = new FormData();
+              formData.append('video_filename', videoFilename);
+              formData.append('video_size', videoFile.size);
+
+              const confirmResponse = await fetch(
+                `${API_BASE}/api/games/${gameId}/confirm-video`,
+                { method: 'POST', body: formData }
+              );
+
+              if (!confirmResponse.ok) {
+                const errorData = await confirmResponse.json().catch(() => ({}));
+                throw new Error(errorData.detail || 'Failed to confirm upload');
+              }
+
+              const data = await confirmResponse.json();
+              console.log('[useGames] Video upload confirmed for game', gameId, '- size:', data.size_mb, 'MB');
+
+              // Log if any pending clips were extracted (clips saved during upload)
+              if (data.pending_clips_extracted > 0) {
+                console.log('[useGames] Extracted', data.pending_clips_extracted, 'pending clips,', data.pending_projects_created, 'projects created');
+              }
+
+              // Notify other components and refresh games list
+              invalidateGames();
+              fetchGames();
+              resolve(data);
+            } catch (e) {
+              console.error('[useGames] Failed to confirm upload:', e);
+              setError(e.message);
+              reject(e);
+            }
+          } else {
+            const errorMsg = `Direct R2 upload failed: ${xhr.status}`;
+            console.error('[useGames]', errorMsg);
+            setError(errorMsg);
+            reject(new Error(errorMsg));
+          }
+        };
+
+        xhr.onerror = () => {
+          const errorMsg = 'Network error during direct R2 upload';
+          console.error('[useGames]', errorMsg);
+          setError(errorMsg);
+          reject(new Error(errorMsg));
+        };
+
+        // Send the raw file directly to R2
+        xhr.send(videoFile);
+      });
+    }
+
+    // Traditional upload through backend (fallback)
+    console.log('[useGames] Using traditional upload through backend');
     return new Promise((resolve, reject) => {
       const formData = new FormData();
       formData.append('video', videoFile);
@@ -159,7 +271,14 @@ export function useGames() {
           try {
             const data = JSON.parse(xhr.responseText);
             console.log('[useGames] Video uploaded for game', gameId, '- size:', data.size_mb, 'MB');
-            // Refresh games list (in background)
+
+            // Log if any pending clips were extracted (clips saved during upload)
+            if (data.pending_clips_extracted > 0) {
+              console.log('[useGames] Extracted', data.pending_clips_extracted, 'pending clips,', data.pending_projects_created, 'projects created');
+            }
+
+            // Notify other components and refresh games list
+            invalidateGames();
             fetchGames();
             resolve(data);
           } catch (e) {
@@ -186,7 +305,7 @@ export function useGames() {
 
       xhr.send(formData);
     });
-  }, [fetchGames]);
+  }, [fetchGames, invalidateGames]);
 
   /**
    * Get full game details including annotations from file
@@ -237,7 +356,8 @@ export function useGames() {
 
       console.log('[useGames] Updated game:', gameId);
 
-      // Refresh games list
+      // Notify other components and refresh games list
+      invalidateGames();
       await fetchGames();
 
       return true;
@@ -248,7 +368,7 @@ export function useGames() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchGames]);
+  }, [fetchGames, invalidateGames]);
 
   /**
    * Save annotations to file (separate from game update)
@@ -325,7 +445,8 @@ export function useGames() {
         setSelectedGame(null);
       }
 
-      // Refresh games list
+      // Notify other components and refresh games list
+      invalidateGames();
       await fetchGames();
 
       return true;
@@ -336,12 +457,20 @@ export function useGames() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchGames, selectedGame]);
+  }, [fetchGames, invalidateGames, selectedGame]);
 
   /**
    * Get the video URL for a game
+   * Uses presigned R2 URL if available (from game.video_url), otherwise falls back to local proxy
+   * @param {number|string} gameId - Game ID
+   * @param {Object} game - Optional game object that may contain video_url from API
    */
-  const getGameVideoUrl = useCallback((gameId) => {
+  const getGameVideoUrl = useCallback((gameId, game = null) => {
+    // If game object has presigned URL, use it (direct R2 access)
+    if (game?.video_url) {
+      return game.video_url;
+    }
+    // Fallback to local proxy endpoint
     return `${API_BASE}/api/games/${gameId}/video`;
   }, []);
 

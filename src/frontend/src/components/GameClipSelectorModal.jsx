@@ -372,10 +372,16 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
     setExcludedClipIds(new Set(filteredClips.map(c => c.id)));
   }, [filteredClips]);
 
-  // Get video URL for a game
+  // Get video URL for a game - uses presigned R2 URL if available
   const getGameVideoUrl = useCallback((gameId) => {
+    // Look up game to check for presigned URL
+    const game = games.find(g => g.id === gameId);
+    if (game?.video_url) {
+      return game.video_url;
+    }
+    // Fallback to local proxy
     return `${API_BASE}/api/games/${gameId}/video`;
-  }, []);
+  }, [games]);
 
   // Open clip preview
   const openPreview = useCallback((clip, e) => {

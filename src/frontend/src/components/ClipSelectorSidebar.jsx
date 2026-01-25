@@ -196,6 +196,7 @@ export function ClipSelectorSidebar({
           return (
             <div
               key={clip.id}
+              data-testid="clip-item"
               draggable
               onDragStart={(e) => handleDragStart(e, index)}
               onDragOver={(e) => handleDragOver(e, index)}

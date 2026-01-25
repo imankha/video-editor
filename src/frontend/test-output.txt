@@ -1,0 +1,747 @@
+
+> video-editor-frontend@0.1.0 test:e2e
+> playwright test
+
+
+=== E2E Test Setup ===
+
+Mode: Dev ports (8000/5173)
+
+ℹ No servers running - Playwright will start them
+  Backend:  port 8000
+  Frontend: port 5173
+  Tip: Start servers first for faster test runs!
+
+
+Running 34 tests using 1 worker
+
+[E2E] Backend health check passed
+[E2E] Test user ID: e2e_1769146926869_qb4o4c
+  ok  1 [chromium] › e2e\full-workflow.spec.js:188:3 › Full Workflow Tests › 1. Project Manager loads correctly (23.4s)
+[Setup] Navigating to annotate mode...
+[Setup] Filling Add Game modal...
+[Setup] Uploading video...
+[Setup] Video loaded
+[Setup] Waiting for video upload to complete...
+[Setup] Upload in progress, waiting for completion...
+[Setup] Video upload complete
+[Setup] Importing TSV...
+[Setup] TSV imported and clips visible
+  ok  2 [chromium] › e2e\full-workflow.spec.js:202:3 › Full Workflow Tests › 2. Annotate Mode - Upload video and import TSV (34.6s)
+[Setup] Navigating to annotate mode...
+[Setup] Filling Add Game modal...
+[Setup] Uploading video...
+[Setup] Video loaded
+[Setup] Waiting for video upload to complete...
+[Setup] Upload in progress, waiting for completion...
+[Setup] Video upload complete
+[Setup] Importing TSV...
+[Setup] TSV imported and clips visible
+  ok  3 [chromium] › e2e\full-workflow.spec.js:211:3 › Full Workflow Tests › 3. Annotate Mode - Export TSV round-trip (26.8s)
+[Setup] Navigating to annotate mode...
+[Setup] Filling Add Game modal...
+[Setup] Uploading video...
+[Setup] Video loaded
+[Setup] Waiting for video upload to complete...
+[Setup] Upload in progress, waiting for completion...
+[Setup] Video upload complete
+[Setup] Importing TSV...
+[Setup] TSV imported and clips visible
+  ok  4 [chromium] › e2e\full-workflow.spec.js:229:3 › Full Workflow Tests › 4. Create Annotated Video button is enabled after upload (22.5s)
+[Setup] Navigating to annotate mode...
+[Setup] Filling Add Game modal...
+[Setup] Uploading video...
+[Test] Health check request detected: http://localhost:5173/api/health
+[Test] Health check request detected: http://localhost:5173/api/health
+[Setup] Video loaded
+[Setup] Waiting for video upload to complete...
+[Setup] Upload in progress, waiting for completion...
+[Setup] Video upload complete
+[Setup] Importing TSV...
+[Setup] TSV imported and clips visible
+[Test] Clicking export button...
+[Test] Health check request detected: http://localhost:5173/api/health
+[Test] Export request detected: http://localhost:5173/api/annotate/export
+[Test] Export request URL: http://localhost:5173/api/annotate/export
+  ok  5 [chromium] › e2e\full-workflow.spec.js:242:3 › Full Workflow Tests › 5. Create Annotated Video API call succeeds (32.8s)
+[Test] Created project via API: [33m1[39m
+[Test] Project visible in UI
+[Test] New Project modal opened
+  ok  6 [chromium] › e2e\full-workflow.spec.js:305:3 › Full Workflow Tests › 6. Create project from clips (3.4s)
+[Setup] Navigating to annotate mode...
+[Setup] Filling Add Game modal...
+[Setup] Uploading video...
+[Setup] Video loaded
+[Setup] Waiting for video upload to complete...
+[Setup] Upload in progress, waiting for completion...
+[Setup] Video upload complete
+[Setup] Importing TSV...
+[Setup] TSV imported and clips visible
+  ok  7 [chromium] › e2e\full-workflow.spec.js:354:3 › Clip Editing Tests › Edit clip rating via UI (16.7s)
+[Setup] Navigating to annotate mode...
+[Setup] Filling Add Game modal...
+[Setup] Uploading video...
+[Setup] Video loaded
+[Setup] Waiting for video upload to complete...
+[Setup] Upload in progress, waiting for completion...
+[Setup] Video upload complete
+[Setup] Importing TSV...
+[Setup] TSV imported and clips visible
+  ok  8 [chromium] › e2e\full-workflow.spec.js:374:3 › Clip Editing Tests › Edit clip name via UI (23.7s)
+[Setup] Navigating to annotate mode...
+[Setup] Filling Add Game modal...
+[Setup] Uploading video...
+[Setup] Video loaded
+[Setup] Waiting for video upload to complete...
+[Setup] Upload in progress, waiting for completion...
+[Setup] Video upload complete
+[Setup] Importing TSV...
+[Setup] TSV imported and clips visible
+  ok  9 [chromium] › e2e\full-workflow.spec.js:397:3 › UI Component Tests › Clip sidebar shows imported clips (24.7s)
+[Setup] Navigating to annotate mode...
+[Setup] Filling Add Game modal...
+[Setup] Uploading video...
+[Setup] Video loaded
+[Setup] Waiting for video upload to complete...
+[Setup] Upload in progress, waiting for completion...
+[Setup] Video upload complete
+[Setup] Importing TSV...
+[Setup] TSV imported and clips visible
+  ok 10 [chromium] › e2e\full-workflow.spec.js:407:3 › UI Component Tests › Star rating is visible for clips (23.1s)
+  ok 11 [chromium] › e2e\full-workflow.spec.js:424:3 › API Integration Tests › Health endpoint responds (7.5s)
+  ok 12 [chromium] › e2e\full-workflow.spec.js:431:3 › API Integration Tests › Projects CRUD works (623ms)
+  ok 13 [chromium] › e2e\full-workflow.spec.js:450:3 › API Integration Tests › Games list endpoint works (75ms)
+  ok 14 [chromium] › e2e\full-workflow.spec.js:458:3 › API Integration Tests › Raw clips endpoint responds (75ms)
+  ok 15 [chromium] › e2e\full-workflow.spec.js:465:3 › API Integration Tests › Games CRUD works (188ms)
+  ok 16 [chromium] › e2e\full-workflow.spec.js:480:3 › API Integration Tests › Clips by project endpoint works (987ms)
+[E2E] Backend health check passed
+[E2E] Test user ID: e2e_gameload_1769147170318_prgmqx
+Step 1: Loaded home page
+Step 2: Switched to Games tab
+Found 0 existing games
+No games found, creating one...
+Filling Add Game modal...
+BROWSER: [AnnotateContainer] handleGameVideoSelect: Processing wcfc-carlsbad-trimmed.mp4 with details: {opponentName: Game Loading Test, gameDate: 2026-01-23, gameType: home, tournamentName: null}
+BROWSER: [AnnotateContainer] Extracted game video metadata: {width: 1920, height: 1080, duration: 89.322567, aspectRatio: 1.7777777777777777, fileName: wcfc-carlsbad-trimmed.mp4}
+BROWSER: [AnnotateContainer] Creating game row: wcfc-carlsbad-trimmed with details: {opponentName: Game Loading Test, gameDate: 2026-01-23, gameType: home, tournamentName: null}
+BROWSER: [AnnotateContainer] Game created with ID: 1 display name: Vs Game Loading Test Jan 23
+BROWSER: [AnnotateContainer] Set up with game ID: 1 display name: Vs Game Loading Test Jan 23
+BROWSER: [AnnotateContainer] Starting background video upload...
+Video loaded in annotate mode
+Waiting for video upload to complete...
+Upload in progress, waiting...
+BROWSER: [AnnotateContainer] Background video upload complete for game: 1
+Video upload complete
+BROWSER: [AnnotateContainer] Imported 3 annotations to UI
+BROWSER: [AnnotateContainer] Starting background raw_clip saves for 3 annotations...
+TSV imported
+Waiting for clips to be saved...
+BROWSER: [AnnotateContainer] Created raw_clip 1 for annotation
+Games count after setup: 0
+  x  17 [chromium] › e2e\game-loading.spec.js:81:3 › Game Loading Debug › Load saved game into annotate mode (22.3s)
+[E2E] Backend health check passed
+[E2E] Test user ID: e2e_gameload_1769147193832_pa23ec
+No games available, skipping test
+  -  18 [chromium] › e2e\game-loading.spec.js:228:3 › Game Loading Debug › Debug: Check editorMode state changes on game load
+[Full] Test user: e2e_1769147197575_rufpxf
+[Test] Setting up route interceptor for user: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Full] Cleared browser storage (once per test suite)
+[Full] Step 1: Creating clips via Add Game...
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted POST http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted PUT http://localhost:5173/api/games/1/video -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Full] Waiting for video upload to complete...
+[Test] Waiting for video upload to complete...
+[Test] Upload progress (0s): in progress
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Upload complete - Create Annotated Video button visible
+[Full] Video upload complete
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Full] Clips created and auto-saved to library
+[Full] Step 2: Creating project from library clips...
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/clips/raw -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted POST http://localhost:5173/api/projects/from-clips -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects/1?_t=1769147226279 -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects/1?_t=1769147226347 -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted PATCH http://localhost:5173/api/projects/1/state?update_last_opened=true -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/1/clips -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects/1 -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects/1 -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/1/clips/1/file -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/1/clips/2/file -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/1/clips/3/file -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Full] Project created from library clips - now in Framing mode
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Full] Created 1 projects
+  ok 19 [chromium] › e2e\regression-tests.spec.js:1143:3 › Full Coverage Tests @full › Create project from library clips @full (33.9s)
+[Test] Setting up route interceptor for user: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Found 1 existing projects
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Clicking clip link to enter Framing mode
+[Test] Intercepted GET http://localhost:5173/api/projects/1?_t=1769147234942 -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects/1?_t=1769147235013 -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted PATCH http://localhost:5173/api/projects/1/state?update_last_opened=true -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/1/clips -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects/1 -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/projects/1 -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/1/clips/1/file -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/1/clips/2/file -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/1/clips/3/file -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Test] Navigated to Framing mode for existing project
+[Test] Framing mode loaded - Frame Video button visible
+[Test] In framing mode with project loaded
+[Full] Clicking Frame Video button...
+[Browser] log: [ExportButton] Current activeExports before starting: 0 
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Browser] log: [ExportButton] Fetching clip 0 from URL: https://e41331ed286b9433ed5b8a9fb5ac8a72.r2.cloudflarestorage.com/reel-ballers-users/e2e_1769147197575_rufpxf/raw_clips/c693a3173297.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=4f5febce8beb63be044414984aa7a3b4%2F20260123%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20260123T054715Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=d7d526fd376696d1d84c939b16647fb04ae6d55ef2615a3876cd0c4919184e46
+[Full] Export started - "Exporting" button visible
+[Full] Waiting for export to start...
+[Full] Export started (Exporting button visible)
+[Browser] log: [ExportButton] Fetching clip 1 from URL: https://e41331ed286b9433ed5b8a9fb5ac8a72.r2.cloudflarestorage.com/reel-ballers-users/e2e_1769147197575_rufpxf/raw_clips/f1ecddf23b8b.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=4f5febce8beb63be044414984aa7a3b4%2F20260123%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20260123T054715Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=424f64a1ef1651ee95992c99a93449d51f8f1e0f8618c8addf2dace75f99aa24
+[Browser] log: [ExportButton] Fetching clip 2 from URL: https://e41331ed286b9433ed5b8a9fb5ac8a72.r2.cloudflarestorage.com/reel-ballers-users/e2e_1769147197575_rufpxf/raw_clips/1e73e7e312e3.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=4f5febce8beb63be044414984aa7a3b4%2F20260123%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20260123T054715Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=8ffd3b7e0904b213eec4cfe5fe690c1f07f8b40fb5f163fdc5efe9c45ed57930
+[Browser] log: [ExportButton] Connecting to WebSocket via global manager for: export_1769147239869_te0hm34
+[Test] Intercepted POST http://localhost:5173/api/export/multi-clip -> adding X-User-ID: e2e_1769147197575_rufpxf
+[Full] UI progress increased to 0%
+[Full] Export check (0s): progress=0% - AI Upscaling... 0%
+[Full] Console progress: 10%
+[Full] Console progress: 11%
+[Full] Console progress: 12%
+[Full] Console progress: 13%
+[Full] Console progress: 14%
+[Full] Console progress: 15%
+[Full] Console progress: 16%
+[Full] Console progress: 17%
+[Full] Console progress: 18%
+[Full] Console progress: 19%
+[Full] Console progress: 20%
+[Full] Console progress: 21%
+[Browser] warning: [ExportWSManager] Failed to parse message for export_1769147239869_te0hm34: SyntaxError: Unexpected token 'p', "pong" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ExportWebSocketManager._handleMessage (http://localhost:5173/src/services/ExportWebSocketManager.js:148:28)
+    at ws.onmessage (http://localhost:5173/src/services/ExportWebSocketManager.js:109:14)
+[Full] UI progress increased to 21%
+[Full] Export check (31s): progress=21% - AI Upscaling... 21%
+[Full] Console progress: 22%
+[Full] Console progress: 23%
+[Full] Console progress: 24%
+[Full] Console progress: 25%
+[Full] Console progress: 26%
+[Full] Console progress: 27%
+[Full] Console progress: 28%
+[Full] Console progress: 29%
+[Full] Console progress: 30%
+[Full] Console progress: 31%
+[Full] Console progress: 32%
+[Full] Console progress: 33%
+[Browser] warning: [ExportWSManager] Failed to parse message for export_1769147239869_te0hm34: SyntaxError: Unexpected token 'p', "pong" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ExportWebSocketManager._handleMessage (http://localhost:5173/src/services/ExportWebSocketManager.js:148:28)
+    at ws.onmessage (http://localhost:5173/src/services/ExportWebSocketManager.js:109:14)
+[Full] UI progress increased to 33%
+[Full] Export check (62s): progress=33% - AI Upscaling... 33%
+[Full] Console progress: 34%
+[Full] Console progress: 35%
+[Browser] warning: [ExportWSManager] Failed to parse message for export_1769147239869_te0hm34: SyntaxError: Unexpected token 'p', "pong" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ExportWebSocketManager._handleMessage (http://localhost:5173/src/services/ExportWebSocketManager.js:148:28)
+    at ws.onmessage (http://localhost:5173/src/services/ExportWebSocketManager.js:109:14)
+[Full] UI progress increased to 35%
+[Full] Export check (92s): progress=35% - AI Upscaling... 35%
+[Full] Console progress: 36%
+[Full] Console progress: 37%
+[Browser] warning: [ExportWSManager] Failed to parse message for export_1769147239869_te0hm34: SyntaxError: Unexpected token 'p', "pong" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ExportWebSocketManager._handleMessage (http://localhost:5173/src/services/ExportWebSocketManager.js:148:28)
+    at ws.onmessage (http://localhost:5173/src/services/ExportWebSocketManager.js:109:14)
+[Full] UI progress increased to 37%
+[Full] Export check (123s): progress=37% - AI Upscaling... 37%
+[Full] Console progress: 38%
+[Full] Console progress: 39%
+[Full] Console progress: 40%
+[Browser] warning: [ExportWSManager] Failed to parse message for export_1769147239869_te0hm34: SyntaxError: Unexpected token 'p', "pong" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ExportWebSocketManager._handleMessage (http://localhost:5173/src/services/ExportWebSocketManager.js:148:28)
+    at ws.onmessage (http://localhost:5173/src/services/ExportWebSocketManager.js:109:14)
+[Full] UI progress increased to 40%
+[Full] Export check (153s): progress=40% - AI Upscaling... 40%
+[Full] Console progress: 41%
+[Full] Console progress: 42%
+[Browser] warning: [ExportWSManager] Failed to parse message for export_1769147239869_te0hm34: SyntaxError: Unexpected token 'p', "pong" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ExportWebSocketManager._handleMessage (http://localhost:5173/src/services/ExportWebSocketManager.js:148:28)
+    at ws.onmessage (http://localhost:5173/src/services/ExportWebSocketManager.js:109:14)
+[Full] UI progress increased to 42%
+[Full] Export check (184s): progress=42% - AI Upscaling... 42%
+[Full] Console progress: 43%
+[Full] Console progress: 44%
+[Full] Console progress: 45%
+[Browser] warning: [ExportWSManager] Failed to parse message for export_1769147239869_te0hm34: SyntaxError: Unexpected token 'p', "pong" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ExportWebSocketManager._handleMessage (http://localhost:5173/src/services/ExportWebSocketManager.js:148:28)
+    at ws.onmessage (http://localhost:5173/src/services/ExportWebSocketManager.js:109:14)
+[Full] UI progress increased to 45%
+[Full] Export check (214s): progress=45% - AI Upscaling... 45%
+[Full] Console progress: 46%
+[Full] Console progress: 47%
+[Browser] warning: [ExportWSManager] Failed to parse message for export_1769147239869_te0hm34: SyntaxError: Unexpected token 'p', "pong" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ExportWebSocketManager._handleMessage (http://localhost:5173/src/services/ExportWebSocketManager.js:148:28)
+    at ws.onmessage (http://localhost:5173/src/services/ExportWebSocketManager.js:109:14)
+[Full] UI progress increased to 47%
+[Full] Export check (245s): progress=47% - AI Upscaling... 47%
+[Full] Console progress: 48%
+[Full] Console progress: 49%
+[Browser] warning: [ExportWSManager] Failed to parse message for export_1769147239869_te0hm34: SyntaxError: Unexpected token 'p', "pong" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ExportWebSocketManager._handleMessage (http://localhost:5173/src/services/ExportWebSocketManager.js:148:28)
+    at ws.onmessage (http://localhost:5173/src/services/ExportWebSocketManager.js:109:14)
+[Full] Console progress: 50%
+[Full] UI progress increased to 50%
+[Full] Export check (276s): progress=50% - AI Upscaling... 50%
+[Full] Console progress: 51%
+[Full] Console progress: 52%
+[Browser] warning: [ExportWSManager] Failed to parse message for export_1769147239869_te0hm34: SyntaxError: Unexpected token 'p', "pong" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at ExportWebSocketManager._handleMessage (http://localhost:5173/src/services/ExportWebSocketManager.js:148:28)
+    at ws.onmessage (http://localhost:5173/src/services/ExportWebSocketManager.js:109:14)
+[Browser] log: [ExportWSManager] WebSocket closed for export_1769147239869_te0hm34, code: 1005
+[Full] WebSocket issue detected: [ExportWSManager] WebSocket closed for export_1769147239869_te0hm34, code: 1005
+[Cleanup] Deleting entire user folder: e2e_1769147197575_rufpxf
+[Cleanup] Deleted all data for user e2e_1769147197575_rufpxf
+  x  20 [chromium] › e2e\regression-tests.spec.js:1224:3 › Full Coverage Tests @full › Framing: export creates working video @full (5.3m)
+  -  21 [chromium] › e2e\regression-tests.spec.js:1301:3 › Full Coverage Tests @full › Overlay: video loads after framing export @full
+  -  22 [chromium] › e2e\regression-tests.spec.js:1327:3 › Full Coverage Tests @full › Overlay: highlight region initializes @full
+  -  23 [chromium] › e2e\regression-tests.spec.js:1361:3 › Full Coverage Tests @full › Framing: video auto-loads when opening existing project @full
+  -  24 [chromium] › e2e\regression-tests.spec.js:1419:3 › Full Coverage Tests @full › Framing: keyframe data persists after reload @full
+  -  25 [chromium] › e2e\regression-tests.spec.js:1505:3 › Full Coverage Tests @full › Framing: export progress advances properly @full
+  -  26 [chromium] › e2e\regression-tests.spec.js:1582:3 › Full Coverage Tests @full › Framing: per-clip edits persist after switching clips and reloading @full
+  -  27 [chromium] › e2e\regression-tests.spec.js:1829:3 › Full Coverage Tests @full › Full Pipeline: Annotate → Framing → Overlay → Final Export @full
+  -  28 [chromium] › e2e\regression-tests.spec.js:1992:3 › Full Coverage Tests @full › Framing: open automatically created project @full
+[Smoke] Test user: e2e_1769147558768_x94avd
+[Test] Setting up route interceptor for user: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted PUT http://localhost:5173/api/games/1/video -> adding X-User-ID: e2e_1769147558768_x94avd
+[Smoke] Annotate video loaded
+  ok 29 [chromium] › e2e\regression-tests.spec.js:811:3 › Smoke Tests @smoke › Annotate: video first frame loads @smoke (7.5s)
+[Test] Setting up route interceptor for user: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted PUT http://localhost:5173/api/games/2/video -> adding X-User-ID: e2e_1769147558768_x94avd
+[Smoke] Waiting for video upload to complete...
+[Test] Waiting for video upload to complete...
+[Test] Upload progress (0s): in progress
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Upload complete - Create Annotated Video button visible
+[Smoke] Video upload complete
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Smoke] TSV import successful
+  ok 30 [chromium] › e2e\regression-tests.spec.js:842:3 › Smoke Tests @smoke › Annotate: TSV import shows clips @smoke (27.5s)
+[Test] Setting up route interceptor for user: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted PUT http://localhost:5173/api/games/3/video -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Waiting for video upload to complete...
+[Test] Waiting for video upload to complete...
+[Test] Upload progress (0s): in progress
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Upload complete - Create Annotated Video button visible
+[Test] Video upload complete
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Smoke] Timeline click: 0.7s → 44.7s
+  ok 31 [chromium] › e2e\regression-tests.spec.js:887:3 › Smoke Tests @smoke › Annotate: timeline click moves playhead @smoke (23.3s)
+[Test] Setting up route interceptor for user: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Filling Add Game modal...
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted PUT http://localhost:5173/api/games/4/video -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Waiting for video upload to complete...
+[Test] Upload progress (0s): in progress
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Upload complete - Create Annotated Video button visible
+[Test] Video upload complete
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] TSV imported, clips visible in UI
+[Test] Intercepted PUT http://localhost:5173/api/games/4/annotations -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Loaded video and TSV in annotate mode
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/raw -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/projects/from-clips -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects/1?_t=1769147650827 -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects/1?_t=1769147650892 -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted PATCH http://localhost:5173/api/projects/1/state?update_last_opened=true -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/1/clips -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects/1 -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects/1 -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/1/clips/7/file -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/1/clips/8/file -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/1/clips/9/file -> adding X-User-ID: e2e_1769147558768_x94avd
+[Smoke] Framing video loaded
+  ok 32 [chromium] › e2e\regression-tests.spec.js:950:3 › Smoke Tests @smoke › Framing: video first frame loads @smoke (39.2s)
+[Test] Setting up route interceptor for user: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Filling Add Game modal...
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted PUT http://localhost:5173/api/games/5/video -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Waiting for video upload to complete...
+[Test] Upload progress (0s): in progress
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Upload complete - Create Annotated Video button visible
+[Test] Video upload complete
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] TSV imported, clips visible in UI
+[Test] Intercepted PUT http://localhost:5173/api/games/5/annotations -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Loaded video and TSV in annotate mode
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/raw -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/projects/from-clips -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects/2?_t=1769147684653 -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects/2?_t=1769147684743 -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted PATCH http://localhost:5173/api/projects/2/state?update_last_opened=true -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/2/clips -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects/2 -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects/2 -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/2/clips/19/file -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/2/clips/20/file -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/2/clips/21/file -> adding X-User-ID: e2e_1769147558768_x94avd
+[Smoke] Crop window is stable - no infinite loops
+  ok 33 [chromium] › e2e\regression-tests.spec.js:988:3 › Smoke Tests @smoke › Framing: crop window is stable (no infinite loop) @smoke (35.1s)
+[Test] Setting up route interceptor for user: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Filling Add Game modal...
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted PUT http://localhost:5173/api/games/6/video -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Waiting for video upload to complete...
+[Test] Upload progress (0s): in progress
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Upload complete - Create Annotated Video button visible
+[Test] Video upload complete
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/clips/raw/save -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] TSV imported, clips visible in UI
+[Test] Intercepted PUT http://localhost:5173/api/games/6/annotations -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Loaded video and TSV in annotate mode
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/exports/active -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/raw -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted POST http://localhost:5173/api/projects/from-clips -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects/3?_t=1769147720744 -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects/3?_t=1769147720815 -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted PATCH http://localhost:5173/api/projects/3/state?update_last_opened=true -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/3/clips -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects/3 -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/health -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/games -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/downloads/count -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/projects/3 -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/3/clips/34/file -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/3/clips/35/file -> adding X-User-ID: e2e_1769147558768_x94avd
+[Test] Intercepted GET http://localhost:5173/api/clips/projects/3/clips/36/file -> adding X-User-ID: e2e_1769147558768_x94avd
+[Smoke] Spacebar play/pause works in framing mode
+[Cleanup] Deleting entire user folder: e2e_1769147558768_x94avd
+[Cleanup] Deleted all data for user e2e_1769147558768_x94avd
+  ok 34 [chromium] › e2e\regression-tests.spec.js:1051:3 › Smoke Tests @smoke › Framing: spacebar toggles play/pause @smoke (32.5s)
+
+[Teardown] Cleaning up old test directories...
+[Teardown] No old test directories to clean
+
+
+  1) [chromium] › e2e\game-loading.spec.js:81:3 › Game Loading Debug › Load saved game into annotate mode 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeGreaterThan[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: > [32m0[39m
+    Received:   [31m0[39m
+
+      185 |     const gamesCount = await page.locator('button:has-text("Load")').count();
+      186 |     console.log(`Games count after setup: ${gamesCount}`);
+    > 187 |     expect(gamesCount).toBeGreaterThan(0);
+          |                        ^
+      188 |
+      189 |     // Step 4: Clear console logs to focus on the click
+      190 |     consoleLogs.length = 0;
+        at C:\Users\imank\projects\video-editor\src\frontend\e2e\game-loading.spec.js:187:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\artifacts\game-loading-Game-Loading--694c1-ved-game-into-annotate-mode-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\artifacts\game-loading-Game-Loading--694c1-ved-game-into-annotate-mode-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\artifacts\game-loading-Game-Loading--694c1-ved-game-into-annotate-mode-chromium\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\artifacts\game-loading-Game-Loading--694c1-ved-game-into-annotate-mode-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\artifacts\game-loading-Game-Loading--694c1-ved-game-into-annotate-mode-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [chromium] › e2e\regression-tests.spec.js:1224:3 › Full Coverage Tests @full › Framing: export creates working video @full 
+
+    Error: Backend server connection lost during export. The server may have crashed or become unresponsive.
+
+      371 |     const hasServerError = await serverError.isVisible({ timeout: 300 }).catch(() => false);
+      372 |     if (hasServerError) {
+    > 373 |       throw new Error('Backend server connection lost during export. The server may have crashed or become unresponsive.');
+          |             ^
+      374 |     }
+      375 |
+      376 |     // Check for stall - no progress (UI or console) for 30 seconds
+        at waitForExportComplete (C:\Users\imank\projects\video-editor\src\frontend\e2e\regression-tests.spec.js:373:13)
+        at C:\Users\imank\projects\video-editor\src\frontend\e2e\regression-tests.spec.js:1275:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\artifacts\regression-tests-Full-Cove-9d594--creates-working-video-full-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\artifacts\regression-tests-Full-Cove-9d594--creates-working-video-full-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\artifacts\regression-tests-Full-Cove-9d594--creates-working-video-full-chromium\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\artifacts\regression-tests-Full-Cove-9d594--creates-working-video-full-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\artifacts\regression-tests-Full-Cove-9d594--creates-working-video-full-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [chromium] › e2e\game-loading.spec.js:81:3 › Game Loading Debug › Load saved game into annotate mode 
+    [chromium] › e2e\regression-tests.spec.js:1224:3 › Full Coverage Tests @full › Framing: export creates working video @full 
+  1 skipped
+  8 did not run
+  23 passed (13.3m)

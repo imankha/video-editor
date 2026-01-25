@@ -1,0 +1,25 @@
+name = "reel-ballers-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Account ID
+account_id = "e41331ed286b9433ed5b8a9fb5ac8a72"
+
+# R2 Storage - all user data
+[[r2_buckets]]
+binding = "USER_DATA"
+bucket_name = "reel-ballers-users"
+
+# Environment variables
+[vars]
+ENVIRONMENT = "development"
+
+# Local development settings
+[dev]
+port = 8787
+local_protocol = "http"
+
+# Production environment overrides
+[env.production]
+vars = { ENVIRONMENT = "production" }

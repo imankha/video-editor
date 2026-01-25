@@ -11,7 +11,7 @@ These endpoints handle highlight regions, effect types, and final output.
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.background import BackgroundTask
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +32,8 @@ _frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ov
 from ...websocket import export_progress, manager
 from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path, get_uploads_path
 from ...services.ffmpeg_service import get_encoding_command_parts
+from ...storage import R2_ENABLED, generate_presigned_url, upload_to_r2, upload_bytes_to_r2
+from ...user_context import get_current_user_id
 from ...highlight_transform import (
     transform_all_regions_to_raw,
     transform_all_regions_to_working,
@@ -526,29 +528,22 @@ async def export_final(
                 detail="Project must have a working video before final export"
             )
 
-        # Generate filename using project name
+        # Generate unique filename using project name + UUID (no local storage)
         project_name = project['name'] or f"project_{project_id}"
         safe_name = re.sub(r'[^\w\s-]', '', project_name).strip()
         safe_name = re.sub(r'[\s]+', '_', safe_name)
         if not safe_name:
             safe_name = f"project_{project_id}"
 
-        # Check for existing file and add version suffix if needed
-        base_filename = f"{safe_name}_final"
-        filename = f"{base_filename}.mp4"
-        file_path = get_final_videos_path() / filename
-        version_suffix = 1
-        while file_path.exists():
-            version_suffix += 1
-            filename = f"{base_filename}_{version_suffix}.mp4"
-            file_path = get_final_videos_path() / filename
+        # Use UUID suffix to ensure uniqueness in R2
+        filename = f"{safe_name}_final_{uuid.uuid4().hex[:8]}.mp4"
+        user_id = get_current_user_id()
 
-        # Save the video file
+        # Upload directly from memory to R2 (no temp file)
         content = await video.read()
-        with open(file_path, 'wb') as f:
-            f.write(content)
-
-        logger.info(f"[Final Export] Saved final video: {filename} ({len(content)} bytes)")
+        if not upload_bytes_to_r2(user_id, f"final_videos/{filename}", content):
+            raise HTTPException(status_code=500, detail="Failed to upload final video to R2")
+        logger.info(f"[Final Export] Uploaded final video to R2: {filename} ({len(content)} bytes)")
 
         # Get next version number for final video
         cursor.execute("""
@@ -659,6 +654,20 @@ async def get_final_video(project_id: int):
         if not result:
             raise HTTPException(status_code=404, detail="Final video not found")
 
+        # When R2 is enabled, redirect to presigned URL
+        if R2_ENABLED:
+            user_id = get_current_user_id()
+            presigned_url = generate_presigned_url(
+                user_id=user_id,
+                relative_path=f"final_videos/{result['filename']}",
+                expires_in=3600,
+                content_type="video/mp4"
+            )
+            if presigned_url:
+                return RedirectResponse(url=presigned_url, status_code=302)
+            raise HTTPException(status_code=404, detail="Failed to generate R2 URL for final video")
+
+        # Local mode: serve from filesystem
         file_path = get_final_videos_path() / result['filename']
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Video file not found")
@@ -1041,6 +1050,20 @@ async def get_highlight_image(filename: str):
     if '..' in filename or '/' in filename or '\\' in filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
+    # When R2 is enabled, redirect to presigned URL
+    if R2_ENABLED:
+        user_id = get_current_user_id()
+        presigned_url = generate_presigned_url(
+            user_id=user_id,
+            relative_path=f"highlights/{filename}",
+            expires_in=3600,
+            content_type="image/png"
+        )
+        if presigned_url:
+            return RedirectResponse(url=presigned_url, status_code=302)
+        raise HTTPException(status_code=404, detail="Failed to generate R2 URL for highlight image")
+
+    # Local mode: serve from filesystem
     highlights_dir = get_highlights_path()
     file_path = highlights_dir / filename
 

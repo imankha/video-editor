@@ -129,6 +129,7 @@ const ExportButton = forwardRef(function ExportButton({
   onExportEnd: onExportEndProp,      // Callback when export ends (optional, context used)
   isExternallyExporting: isExternallyExportingProp, // Optional, derived from context
   externalProgress: externalProgressProp, // Optional, from context
+  saveCurrentClipState = null,  // Function to save current clip state before backend-authoritative export
 }, ref) {
   // Get app state from context (provides defaults for props above)
   const {
@@ -325,15 +326,24 @@ const ExportButton = forwardRef(function ExportButton({
     // Quick health check before starting export
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout for E2E tests
       const healthResponse = await fetch(`${API_BASE}/api/health`, { signal: controller.signal });
       clearTimeout(timeoutId);
       if (!healthResponse.ok) {
-        throw new Error('Server health check failed');
+        throw new Error(`Server returned ${healthResponse.status}: ${healthResponse.statusText}`);
       }
     } catch (healthErr) {
       console.error('[ExportButton] Server health check failed:', healthErr);
-      setError('Cannot connect to server. Please ensure the backend server is running on port 8000.');
+      // Provide more specific error messages based on error type
+      let errorMsg;
+      if (healthErr.name === 'AbortError') {
+        errorMsg = 'Server connection timed out. The backend may be slow or unresponsive.';
+      } else if (healthErr.message.includes('Failed to fetch') || healthErr.message.includes('NetworkError')) {
+        errorMsg = 'Cannot connect to server. Please ensure the backend server is running on port 8000.';
+      } else {
+        errorMsg = `Server error: ${healthErr.message}`;
+      }
+      setError(errorMsg);
       setProgressMessage('Server unreachable');
       setIsExporting(false);
       handleExportEnd();
@@ -375,19 +385,75 @@ const ExportButton = forwardRef(function ExportButton({
             if (clip.file) {
               // Local file - append directly
               formData.append(`video_${index}`, clip.file);
+            } else if (clip.workingClipId && projectId) {
+              // Project clip - use backend streaming proxy to avoid CORS issues
+              // This routes through the backend which fetches from R2 and streams to us
+              const streamUrl = `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.workingClipId}/file?stream=true`;
+              console.log(`[ExportButton] Fetching clip ${index} via backend proxy:`, streamUrl);
+              setProgressMessage(`Downloading clip ${index + 1}/${clips.length}...`);
+
+              try {
+                const response = await fetch(streamUrl);
+                if (!response.ok) {
+                  // Get more details from the response
+                  let responseBody = '';
+                  try {
+                    responseBody = await response.text();
+                  } catch {
+                    responseBody = '(could not read response body)';
+                  }
+
+                  const statusText = response.status === 403 ? 'Access denied' :
+                                    response.status === 404 ? 'Clip not found' :
+                                    response.status === 502 ? 'Storage gateway error' :
+                                    response.status === 503 ? 'Storage unavailable' :
+                                    `HTTP ${response.status} ${response.statusText}`;
+
+                  console.error(`[ExportButton] Clip fetch failed:`, {
+                    clipIndex: index,
+                    clipId: clip.workingClipId,
+                    status: response.status,
+                    statusText: response.statusText,
+                    responseBody: responseBody.substring(0, 500)
+                  });
+
+                  throw new Error(`CLIP_FETCH_ERROR: Failed to download clip ${index + 1}: ${statusText}`);
+                }
+                const blob = await response.blob();
+                console.log(`[ExportButton] Successfully downloaded clip ${index}: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+                const file = new File([blob], clip.fileName || `clip_${index}.mp4`, { type: 'video/mp4' });
+                formData.append(`video_${index}`, file);
+              } catch (fetchErr) {
+                // Re-throw if it's our custom error
+                if (fetchErr.message.startsWith('CLIP_FETCH_ERROR:')) {
+                  throw fetchErr;
+                }
+
+                console.error(`[ExportButton] Clip ${index} fetch error:`, {
+                  errorName: fetchErr.name,
+                  errorMessage: fetchErr.message,
+                  clipId: clip.workingClipId,
+                  stack: fetchErr.stack
+                });
+
+                throw new Error(`CLIP_FETCH_ERROR: Failed to download clip ${index + 1}: ${fetchErr.message || 'Network error'}. Server may be unavailable.`);
+              }
             } else if (clip.fileUrl) {
-              // Project clip - fetch from URL first
-              console.log(`[ExportButton] Fetching clip ${index} from URL:`, clip.fileUrl);
-              setProgressMessage(`Preparing clip ${index + 1}/${clips.length}...`);
+              // Fallback: Direct URL fetch (may have CORS issues with R2)
+              console.warn(`[ExportButton] Clip ${index} missing workingClipId, falling back to direct URL fetch`);
+              const urlForLog = clip.fileUrl.includes('?') ? clip.fileUrl.split('?')[0] + '?...' : clip.fileUrl;
+              console.log(`[ExportButton] Fetching clip ${index} from URL:`, urlForLog);
+              setProgressMessage(`Downloading clip ${index + 1}/${clips.length}...`);
+
               const response = await fetch(clip.fileUrl);
               if (!response.ok) {
-                throw new Error(`Failed to fetch clip ${index}: ${response.status}`);
+                throw new Error(`CLIP_FETCH_ERROR: Failed to download clip ${index + 1}: HTTP ${response.status}`);
               }
               const blob = await response.blob();
               const file = new File([blob], clip.fileName || `clip_${index}.mp4`, { type: 'video/mp4' });
               formData.append(`video_${index}`, file);
             } else {
-              throw new Error(`Clip ${index} has no file or fileUrl`);
+              throw new Error(`CLIP_FETCH_ERROR: Clip ${index + 1} has no file or storage URL - please reload the project`);
             }
           }
 
@@ -415,25 +481,94 @@ const ExportButton = forwardRef(function ExportButton({
           formData.append('include_audio', includeAudio ? 'true' : 'false');
           formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
           formData.append('export_mode', EXPORT_CONFIG.exportMode);
+          // Add project info for saving working video to DB
+          if (projectId) {
+            formData.append('project_id', String(projectId));
+          }
+          if (projectName) {
+            formData.append('project_name', projectName);
+          }
 
         } else {
-          // Single clip export: Use existing AI upscale endpoint
-          endpoint = `${API_BASE}/api/export/upscale`;
+          // Single clip export: Backend-authoritative render
+          // Backend reads crop_data, segments_data, timing_data from working_clips table
+          // No need to send video or keyframes - backend fetches from storage
 
-          formData.append('keyframes_json', JSON.stringify(cropKeyframes));
-          // Audio setting only applies to framing export (overlay preserves whatever audio is in input)
-          formData.append('include_audio', includeAudio ? 'true' : 'false');
-          formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
-          formData.append('export_mode', EXPORT_CONFIG.exportMode);
+          if (projectId && saveCurrentClipState) {
+            // Backend-authoritative mode: Save edits first, then request render
+            console.log('[ExportButton] Using backend-authoritative render');
+            setProgressMessage('Saving edits...');
 
-          // Add segment data if available (speed/trim)
-          if (segmentData) {
-            console.log('=== EXPORT: Sending segment data to backend ===');
-            console.log(JSON.stringify(segmentData, null, 2));
-            console.log('==============================================');
-            formData.append('segment_data_json', JSON.stringify(segmentData));
+            try {
+              await saveCurrentClipState();
+              console.log('[ExportButton] Clip state saved, requesting render');
+            } catch (saveErr) {
+              console.error('[ExportButton] Failed to save clip state:', saveErr);
+              throw new Error('Failed to save clip edits before export. Please try again.');
+            }
+
+            // Use the new backend-authoritative endpoint
+            endpoint = `${API_BASE}/api/export/render`;
+
+            // Connect WebSocket for real-time progress updates
+            setProgressMessage('Connecting...');
+            await connectWebSocket(exportId);
+
+            // Send render request (JSON body, no file upload)
+            setProgressMessage('Starting render...');
+            const renderResponse = await axios.post(endpoint, {
+              project_id: projectId,
+              export_id: exportId,
+              export_mode: EXPORT_CONFIG.exportMode,
+              target_fps: EXPORT_CONFIG.targetFps,
+              include_audio: includeAudio
+            });
+
+            // Backend returns JSON with working_video info
+            console.log('[ExportButton] Backend render complete:', renderResponse.data);
+
+            // Trigger export complete flow
+            handleExportEnd();
+            setLocalProgress(100);
+            setProgressMessage('Export complete!');
+            completeExportInStore(exportId, {
+              status: 'complete',
+              workingVideoId: renderResponse.data.working_video_id,
+              filename: renderResponse.data.filename
+            });
+
+            // Trigger proceed to overlay if callback provided
+            if (onProceedToOverlay) {
+              onProceedToOverlay(null, buildClipMetadata(clips));
+            }
+            if (onExportComplete) {
+              onExportComplete();
+            }
+
+            setIsExporting(false);
+            return;  // Exit early - backend-authoritative path complete
+
           } else {
-            console.log('=== EXPORT: No segment data to send ===');
+            // Fallback: Legacy client-sends-everything mode
+            // Used when saveCurrentClipState not available or no projectId
+            console.log('[ExportButton] Using legacy client-driven export');
+            endpoint = `${API_BASE}/api/export/upscale`;
+
+            formData.append('keyframes_json', JSON.stringify(cropKeyframes));
+            // Audio setting only applies to framing export (overlay preserves whatever audio is in input)
+            formData.append('include_audio', includeAudio ? 'true' : 'false');
+            formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
+            formData.append('export_mode', EXPORT_CONFIG.exportMode);
+
+            // Add segment data if available (speed/trim)
+            if (segmentData) {
+              console.log('=== EXPORT: Sending segment data to backend ===');
+              console.log(JSON.stringify(segmentData, null, 2));
+              console.log('==============================================');
+              formData.append('segment_data_json', JSON.stringify(segmentData));
+            } else {
+              console.log('=== EXPORT: No segment data to send ===');
+            }
           }
         }
         // Note: Highlight keyframes are NOT sent during framing export.
@@ -611,7 +746,7 @@ const ExportButton = forwardRef(function ExportButton({
       }
 
     } catch (err) {
-      console.error('Export failed:', err);
+      console.error('[ExportButton] Export failed:', err);
 
       // Mark export as failed in store (WebSocket manager will clean up connection)
       if (exportIdRef.current) {
@@ -619,46 +754,81 @@ const ExportButton = forwardRef(function ExportButton({
         exportWebSocketManager.disconnect(exportIdRef.current);
       }
 
-      // Detect network errors (server unreachable)
-      const isNetworkError = !err.response && (
-        err.code === 'ERR_NETWORK' ||
-        err.code === 'ECONNREFUSED' ||
-        err.message?.includes('Network Error') ||
-        err.message?.includes('Failed to fetch')
-      );
-
-      if (isNetworkError) {
-        setError('Cannot connect to server. Please ensure the backend server is running on port 8000.');
-        setProgressMessage('Server unreachable');
-      } else if (err.response?.data instanceof Blob) {
-        // If response is a blob (error response), we need to convert it to text/JSON
-        try {
-          const errorText = await err.response.data.text();
-          const errorData = JSON.parse(errorText);
-          console.error('Error details:', errorData);
-
-          // In development, show detailed error
-          if (errorData.traceback) {
-            console.error('Traceback:', errorData.traceback.join('\n'));
-            setError(`${errorData.error}: ${errorData.message}\n\nCheck console for full stack trace.`);
-          } else {
-            setError(errorData.message || errorData.detail || 'Export failed');
-          }
-        } catch (parseError) {
-          console.error('Could not parse error response:', parseError);
-          setError('Export failed. Check console for details.');
-        }
+      // Check for clip fetch errors (cloud storage issues)
+      const isClipFetchError = err.message?.startsWith('CLIP_FETCH_ERROR:');
+      if (isClipFetchError) {
+        // Extract the user-friendly message (remove the prefix)
+        const userMessage = err.message.replace('CLIP_FETCH_ERROR: ', '');
+        setError(userMessage);
+        setProgressMessage('Storage error');
+        console.error('[ExportButton] Clip fetch failed - this is a cloud storage issue, not a server issue');
       } else {
-        setError(err.response?.data?.detail || err.message || 'Export failed. Please try again.');
+        // Detect network errors (server unreachable) - but only for actual server calls
+        const isNetworkError = !err.response && (
+          err.code === 'ERR_NETWORK' ||
+          err.code === 'ECONNREFUSED' ||
+          err.message?.includes('Network Error') ||
+          (err.message?.includes('Failed to fetch') && !err.message?.includes('clip'))
+        );
+
+        if (isNetworkError) {
+          setError('Cannot connect to backend server. Please ensure the server is running on port 8000.');
+          setProgressMessage('Server unreachable');
+        } else if (err.response) {
+          // Server responded with an error status
+          const status = err.response.status;
+          const statusText = err.response.statusText;
+          let errorMessage = '';
+
+          console.error(`[ExportButton] Server error ${status}:`, {
+            status,
+            statusText,
+            data: err.response.data,
+            headers: err.response.headers
+          });
+
+          // Try to extract error details from response
+          if (err.response.data instanceof Blob) {
+            try {
+              const errorText = await err.response.data.text();
+              const errorData = JSON.parse(errorText);
+              console.error('[ExportButton] Server error details:', errorData);
+              if (errorData.traceback) {
+                console.error('[ExportButton] Traceback:', errorData.traceback.join('\n'));
+                errorMessage = `${errorData.error || 'Error'}: ${errorData.message || errorData.detail || 'Unknown error'}\n\nCheck console for stack trace.`;
+              } else {
+                errorMessage = errorData.message || errorData.detail || errorData.error || `Server error (${status})`;
+              }
+            } catch (parseError) {
+              errorMessage = `Server error (${status}). Check backend console for details.`;
+            }
+          } else if (typeof err.response.data === 'object') {
+            // JSON response
+            const data = err.response.data;
+            console.error('[ExportButton] Server error details:', data);
+            if (data.traceback) {
+              console.error('[ExportButton] Traceback:', Array.isArray(data.traceback) ? data.traceback.join('\n') : data.traceback);
+            }
+            errorMessage = data.message || data.detail || data.error || `Server error (${status})`;
+          } else if (typeof err.response.data === 'string') {
+            errorMessage = err.response.data || `Server error (${status})`;
+          } else {
+            errorMessage = `Server error (${status}): ${statusText || 'Unknown error'}`;
+          }
+
+          setError(errorMessage);
+          setProgressMessage('');
+        } else {
+          // Unknown error
+          console.error('[ExportButton] Unknown error:', err);
+          setError(err.message || 'Export failed. Please try again.');
+          setProgressMessage('');
+        }
       }
 
       setIsExporting(false);
       handleExportEnd();
       setLocalProgress(0);
-      // Don't clear progressMessage if we set it to 'Server unreachable'
-      if (!isNetworkError) {
-        setProgressMessage('');
-      }
     }
   };
 
