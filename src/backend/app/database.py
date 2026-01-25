@@ -529,6 +529,7 @@ def ensure_database():
             "ALTER TABLE games ADD COLUMN video_size INTEGER",
             # Downloads & overlay persistence (added for downloads navigation feature)
             "ALTER TABLE final_videos ADD COLUMN duration REAL",
+            "ALTER TABLE working_videos ADD COLUMN duration REAL",
             "ALTER TABLE working_videos ADD COLUMN effect_type TEXT DEFAULT 'original'",
             "ALTER TABLE projects ADD COLUMN last_opened_at TIMESTAMP",
             # Project state persistence (current mode for resume)

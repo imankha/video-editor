@@ -43,7 +43,7 @@ from ...services.image_extractor import (
     extract_player_images_for_region,
     list_highlight_images,
 )
-from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto, PARALLEL_THRESHOLD_SECONDS
+from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto, get_optimal_gpu_config
 
 logger = logging.getLogger(__name__)
 
@@ -1150,8 +1150,7 @@ async def render_overlay(request: OverlayRenderRequest):
         cursor.execute("""
             SELECT p.id, p.name, p.working_video_id,
                    wv.filename as working_filename,
-                   wv.highlights_data, wv.effect_type,
-                   wv.duration
+                   wv.highlights_data, wv.effect_type, wv.duration
             FROM projects p
             JOIN working_videos wv ON p.working_video_id = wv.id
             WHERE p.id = ?
@@ -1163,6 +1162,9 @@ async def render_overlay(request: OverlayRenderRequest):
 
         project_name = project['name']
         working_filename = project['working_filename']
+
+        # Get video duration from working_videos table for cost-optimized GPU selection
+        # If duration is not available, defaults to None (triggers sequential 1 GPU processing)
         video_duration = project['duration'] if project['duration'] else None
 
         # Create export_jobs record
@@ -1188,10 +1190,11 @@ async def render_overlay(request: OverlayRenderRequest):
         effect_type = project['effect_type']
     effect_type = effect_type or "dark_overlay"
 
-    # Determine if parallel processing will be used
-    use_parallel = video_duration is not None and video_duration >= PARALLEL_THRESHOLD_SECONDS
+    # Determine optimal GPU configuration based on video duration
+    num_chunks, gpu_config = get_optimal_gpu_config(video_duration)
+    use_parallel = num_chunks > 1
     logger.info(f"[Overlay Render] Working video: {working_filename}, {len(highlight_regions)} regions, effect: {effect_type}")
-    logger.info(f"[Overlay Render] Duration: {video_duration}s, Parallel: {use_parallel} (threshold: {PARALLEL_THRESHOLD_SECONDS}s)")
+    logger.info(f"[Overlay Render] Duration: {video_duration}s, Config: {gpu_config} ({num_chunks} GPU{'s' if num_chunks > 1 else ''})")
 
     # Update progress
     progress_data = {
@@ -1208,32 +1211,47 @@ async def render_overlay(request: OverlayRenderRequest):
     try:
         # Generate output filename
         output_filename = f"final_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+        parallel_used = False  # Will be set to True if parallel processing is used
 
         if modal_enabled():
             # Use Modal GPU processing
             logger.info(f"[Overlay Render] Using Modal GPU")
 
             # Progress simulation for Modal processing
-            # Based on benchmarks: ~5s startup for single, ~8s for parallel (multiple container startup)
-            # Parallel processing is faster overall but has more startup time
+            # Timing varies based on GPU configuration:
+            # - 1 GPU: ~5s startup, processing at full video rate
+            # - 2 GPUs: ~8s startup (CPU orchestrator + 2 workers), 2x faster processing
+            # - 4 GPUs: ~10s startup, 4x faster processing
+            # - 8 GPUs: ~12s startup, 8x faster processing
             async def update_progress_during_modal():
                 """Update progress while Modal is processing."""
                 import time
                 start_time = time.time()
 
-                # Phase 1: Startup -> 5-30%
-                # Phase 2: Processing -> 30-90%
-                # Parallel has longer startup but faster processing
-                if use_parallel:
-                    STARTUP_DURATION = 8.0  # seconds (multiple containers)
-                    MAX_PROCESSING_TIME = 15.0  # faster due to parallelism
-                    startup_msg = "Starting parallel GPU workers..."
-                    processing_msg = "Processing video chunks in parallel..."
-                else:
-                    STARTUP_DURATION = 5.0  # seconds
-                    MAX_PROCESSING_TIME = 30.0
+                # Configure timing based on GPU count
+                if num_chunks == 1:
+                    STARTUP_DURATION = 5.0
+                    # Estimate: 60 frames/sec processing
+                    estimated_process_time = (video_duration or 30) * 1.0  # 1:1 ratio
                     startup_msg = "Starting cloud GPU..."
                     processing_msg = "Processing video on GPU..."
+                elif num_chunks == 2:
+                    STARTUP_DURATION = 8.0
+                    estimated_process_time = (video_duration or 60) / 2 + 4  # 2x faster + overhead
+                    startup_msg = "Starting 2 GPU workers..."
+                    processing_msg = "Processing video on 2 GPUs..."
+                elif num_chunks == 4:
+                    STARTUP_DURATION = 10.0
+                    estimated_process_time = (video_duration or 120) / 4 + 4
+                    startup_msg = "Starting 4 GPU workers..."
+                    processing_msg = "Processing video on 4 GPUs..."
+                else:  # 8 GPUs
+                    STARTUP_DURATION = 12.0
+                    estimated_process_time = (video_duration or 180) / 8 + 4
+                    startup_msg = "Starting 8 GPU workers..."
+                    processing_msg = "Processing video on 8 GPUs..."
+
+                MAX_PROCESSING_TIME = max(estimated_process_time, 10.0)
 
                 while True:
                     elapsed = time.time() - start_time
@@ -1301,7 +1319,8 @@ async def render_overlay(request: OverlayRenderRequest):
             export_progress[export_id] = progress_data
             await manager.send_progress(export_id, progress_data)
 
-            logger.info(f"[Overlay Render] Modal processing complete")
+            parallel_used = result.get("parallel", False)
+            logger.info(f"[Overlay Render] Modal processing complete (parallel={parallel_used})")
 
         else:
             # Local processing fallback
@@ -1387,7 +1406,7 @@ async def render_overlay(request: OverlayRenderRequest):
         export_progress[export_id] = complete_data
         await manager.send_progress(export_id, complete_data)
 
-        logger.info(f"[Overlay Render] Complete: final_video_id={final_video_id}")
+        logger.info(f"[Overlay Render] Complete: final_video_id={final_video_id}, parallel={parallel_used}")
 
         return JSONResponse({
             'success': True,
@@ -1395,7 +1414,9 @@ async def render_overlay(request: OverlayRenderRequest):
             'filename': output_filename,
             'project_id': project_id,
             'export_id': export_id,
-            'modal_used': modal_enabled()
+            'modal_used': modal_enabled(),
+            'parallel_used': parallel_used,
+            'video_duration': video_duration
         })
 
     except Exception as e:

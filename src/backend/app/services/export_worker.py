@@ -22,6 +22,7 @@ from typing import Optional, Callable
 
 from ..database import get_db_connection, get_working_videos_path
 from ..websocket import manager, export_progress
+from .ffmpeg_service import get_video_duration
 from ..routers.exports import (
     get_export_job,
     update_job_started,
@@ -246,13 +247,17 @@ async def process_framing_export(job_id: str, project_id: int, config: dict) -> 
         include_audio=include_audio,
     )
 
+    # Get video duration for cost-optimized GPU selection in overlay mode
+    video_duration = get_video_duration(output_path)
+    logger.info(f"[ExportWorker] Working video duration: {video_duration:.2f}s")
+
     # Save to database
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO working_videos (project_id, filename, version)
-            VALUES (?, ?, ?)
-        """, (project_id, output_filename, next_version))
+            INSERT INTO working_videos (project_id, filename, version, duration)
+            VALUES (?, ?, ?, ?)
+        """, (project_id, output_filename, next_version, video_duration))
         working_video_id = cursor.lastrowid
 
         # Update project to point to new working video

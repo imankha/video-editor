@@ -31,7 +31,7 @@ app = modal.App("reel-ballers-video")
 # Define the container image with all dependencies
 image = (
     modal.Image.debian_slim(python_version="3.11")
-    .apt_install("ffmpeg")
+    .apt_install("ffmpeg", "libgl1-mesa-glx", "libglib2.0-0")  # Added libs for OpenCV/YOLO
     .pip_install(
         "boto3",
         "opencv-python-headless",  # Headless for server use
@@ -39,10 +39,64 @@ image = (
     )
 )
 
-# Minimum video duration (seconds) to use parallel processing
-# Below this threshold, overhead of splitting isn't worth it
-PARALLEL_THRESHOLD_SECONDS = 8.0
-NUM_PARALLEL_CHUNKS = 4  # Number of parallel workers
+# Separate image for YOLO detection (includes ultralytics)
+yolo_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg", "libgl1-mesa-glx", "libglib2.0-0")
+    .pip_install(
+        "boto3",
+        "opencv-python-headless",
+        "numpy",
+        "ultralytics",  # YOLOv8
+        "torch",
+        "torchvision",
+    )
+)
+
+# Image for Real-ESRGAN AI upscaling
+# Must use torch 2.1.0 + torchvision 0.16.0:
+# - torchvision 0.17+ removed functional_tensor module that basicsr imports
+# - numpy 1.26.4 for compatibility with torch 2.1.0
+upscale_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg", "libgl1-mesa-glx", "libglib2.0-0")
+    .pip_install(
+        "boto3",
+        "opencv-python-headless",
+        "numpy==1.26.4",
+        "torch==2.1.0",
+        "torchvision==0.16.0",
+        "basicsr==1.4.2",
+        "realesrgan==0.3.0",
+    )
+)
+
+# Cost-optimized GPU configuration thresholds
+# Based on analysis: parallel has fixed startup overhead that only pays off for longer videos
+# Time break-even: 1 vs 2 GPUs at ~28s, 1 vs 4 GPUs at ~19s, 1 vs 8 GPUs at ~16s
+# But cost-per-time-saved favors fewer GPUs, so we use higher thresholds
+GPU_CONFIG_THRESHOLDS = {
+    # video_duration -> (num_chunks, description)
+    30: (1, "sequential"),      # 0-30s: 1 GPU (sequential is both faster AND cheaper)
+    90: (2, "2-gpu-parallel"),  # 30-90s: 2 GPUs (best cost/time ratio)
+    180: (4, "4-gpu-parallel"), # 90-180s: 4 GPUs (worth extra cost for time savings)
+    float('inf'): (8, "8-gpu-parallel"),  # 180s+: 8 GPUs (maximum parallelism)
+}
+
+def get_optimal_gpu_config(video_duration: float) -> tuple:
+    """
+    Get the cost-optimal GPU configuration for a given video duration.
+
+    Returns:
+        (num_chunks, description) - 1 means sequential, >1 means parallel
+    """
+    if video_duration is None:
+        return (1, "sequential")  # Default to sequential if unknown
+
+    for threshold, config in sorted(GPU_CONFIG_THRESHOLDS.items()):
+        if video_duration < threshold:
+            return config
+    return (8, "8-gpu-parallel")  # Fallback for very long videos  # Number of parallel workers
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -213,6 +267,7 @@ def process_overlay_chunk(
                 "-r", str(fps),
                 "-i", "pipe:0",
                 "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",  # Required for compatibility
                 "-preset", "fast",
                 "-crf", "23",
                 output_path,
@@ -303,7 +358,7 @@ def process_overlay_chunk(
 
 @app.function(
     image=image,
-    gpu="T4",
+    # NO GPU - orchestrator only does I/O and coordination, saves ~40% cost
     timeout=600,
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
@@ -314,18 +369,24 @@ def render_overlay_parallel(
     output_key: str,
     highlight_regions: list,
     effect_type: str = "dark_overlay",
-    num_chunks: int = NUM_PARALLEL_CHUNKS,
+    num_chunks: int = 4,
 ) -> dict:
     """
-    Process overlay using parallel chunk processing.
+    Process overlay using parallel chunk processing (CPU orchestrator).
 
-    Splits video into chunks, processes each in parallel using Modal .map(),
-    then concatenates results. Provides ~3-4x speedup for longer videos.
+    This function runs on CPU only - it coordinates GPU workers via .map().
+    Splits video into chunks, processes each in parallel on separate GPUs,
+    then concatenates results.
+
+    Cost optimization:
+        - Orchestrator: CPU only (no GPU cost while waiting)
+        - Workers: GPU only for actual processing
+        - Saves ~40% vs GPU orchestrator
 
     Architecture:
-        1. Orchestrator downloads input to get video metadata
-        2. Creates chunk configs with R2 keys (not local paths)
-        3. Chunk workers: each downloads from R2 -> processes -> uploads to R2
+        1. Orchestrator (CPU) downloads input to get video metadata
+        2. Creates chunk configs with R2 keys
+        3. Calls process_overlay_chunk.map() - each runs on separate GPU
         4. Orchestrator downloads chunks from R2 -> concatenates -> uploads final
 
     Args:
@@ -335,10 +396,10 @@ def render_overlay_parallel(
         output_key: R2 key for output video
         highlight_regions: List of regions with keyframes
         effect_type: Effect type for highlights
-        num_chunks: Number of parallel chunks (default 4)
+        num_chunks: Number of parallel GPU workers (2, 4, or 8)
 
     Returns:
-        {"status": "success", "output_key": "...", "parallel": True}
+        {"status": "success", "output_key": "...", "parallel": True, "chunks": N}
     """
     import subprocess
     import cv2
@@ -453,6 +514,7 @@ def render_overlay_parallel(
                 "-c:v", "copy",  # No re-encoding needed
                 "-c:a", "aac",
                 "-b:a", "192k",
+                "-movflags", "+faststart",  # Better streaming/loading
                 "-shortest",
                 output_path,
             ]
@@ -643,6 +705,7 @@ def _do_framing(job_id: str, input_path: str, output_path: str, params: dict):
     cmd.extend([
         "-vf", filter_str,
         "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",  # Required for Windows Media Player compatibility
         "-preset", "fast",
         "-crf", "23",
         "-c:a", "aac",
@@ -696,6 +759,8 @@ def _process_overlay(job_id: str, input_path: str, output_path: str, params: dic
     sorted_regions = sorted(highlight_regions, key=lambda r: r["start_time"])
 
     # Start FFmpeg process
+    # Note: -pix_fmt yuv420p is REQUIRED for broad compatibility (Windows Media Player, etc.)
+    # -movflags +faststart moves moov atom to start for better streaming
     ffmpeg_cmd = [
         "ffmpeg", "-y",
         "-f", "rawvideo",
@@ -707,8 +772,10 @@ def _process_overlay(job_id: str, input_path: str, output_path: str, params: dic
         "-map", "0:v",
         "-map", "1:a?",
         "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",  # Required for Windows Media Player compatibility
         "-preset", "fast",
         "-crf", "23",
+        "-movflags", "+faststart",  # Faster streaming/loading
         "-c:a", "aac",
         "-b:a", "192k",
         "-shortest",
@@ -867,6 +934,416 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     return frame
 
 
+# ============================================================================
+# YOLO Detection Functions
+# ============================================================================
+
+# YOLO class IDs
+PERSON_CLASS_ID = 0
+
+# Cached YOLO model (per-container)
+_yolo_model = None
+
+
+def _get_yolo_model():
+    """Load YOLO model (cached per container)."""
+    global _yolo_model
+    if _yolo_model is None:
+        from ultralytics import YOLO
+        logger.info("Loading YOLOv8x model...")
+        _yolo_model = YOLO("yolov8x.pt")  # Auto-downloads if needed
+        logger.info("YOLO model loaded successfully")
+    return _yolo_model
+
+
+@app.function(
+    image=yolo_image,
+    gpu="T4",
+    timeout=120,
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+def detect_players_modal(
+    user_id: str,
+    input_key: str,
+    frame_number: int,
+    confidence_threshold: float = 0.5,
+) -> dict:
+    """
+    Detect players (persons) in a single video frame on GPU.
+
+    Args:
+        user_id: User folder in R2
+        input_key: R2 key for input video
+        frame_number: Frame number to analyze
+        confidence_threshold: Minimum confidence for detections
+
+    Returns:
+        {
+            "status": "success",
+            "detections": [{"bbox": {...}, "confidence": float, "class_name": "person"}],
+            "video_width": int,
+            "video_height": int
+        }
+    """
+    import cv2
+
+    try:
+        logger.info(f"[Detection] Player detection for frame {frame_number}")
+
+        r2 = get_r2_client()
+        bucket = os.environ["R2_BUCKET_NAME"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Download video from R2
+            input_path = os.path.join(temp_dir, "input.mp4")
+            full_input_key = f"{user_id}/{input_key}"
+            logger.info(f"[Detection] Downloading {full_input_key}")
+            r2.download_file(bucket, full_input_key, input_path)
+
+            # Extract frame
+            cap = cv2.VideoCapture(input_path)
+            if not cap.isOpened():
+                raise ValueError(f"Could not open video: {input_path}")
+
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+            if frame_number < 0 or frame_number >= total_frames:
+                raise ValueError(f"Frame {frame_number} out of range (0-{total_frames-1})")
+
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+            ret, frame = cap.read()
+            cap.release()
+
+            if not ret or frame is None:
+                raise ValueError(f"Failed to read frame {frame_number}")
+
+            # Run YOLO detection
+            model = _get_yolo_model()
+            results = model(frame, verbose=False, conf=confidence_threshold)
+
+            # Process results - filter for person class only
+            detections = []
+            for result in results:
+                boxes = result.boxes
+                if boxes is None:
+                    continue
+
+                for box in boxes:
+                    class_id = int(box.cls[0])
+                    if class_id != PERSON_CLASS_ID:
+                        continue
+
+                    conf = float(box.conf[0])
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    center_x = (x1 + x2) / 2
+                    center_y = (y1 + y2) / 2
+                    box_width = x2 - x1
+                    box_height = y2 - y1
+
+                    detections.append({
+                        "bbox": {
+                            "x": center_x,
+                            "y": center_y,
+                            "width": box_width,
+                            "height": box_height
+                        },
+                        "confidence": conf,
+                        "class_name": "person",
+                        "class_id": class_id
+                    })
+
+            # Sort by confidence (highest first)
+            detections.sort(key=lambda d: d["confidence"], reverse=True)
+
+            logger.info(f"[Detection] Found {len(detections)} players")
+
+            return {
+                "status": "success",
+                "frame_number": frame_number,
+                "detections": detections,
+                "video_width": width,
+                "video_height": height
+            }
+
+    except Exception as e:
+        logger.error(f"[Detection] Player detection failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+# ============================================================================
+# Real-ESRGAN AI Upscaling Functions
+# ============================================================================
+
+# Cached Real-ESRGAN upsampler (per-container)
+_realesrgan_model = None
+
+
+def _get_realesrgan_model():
+    """Load Real-ESRGAN model (cached per container)."""
+    global _realesrgan_model
+    if _realesrgan_model is None:
+        from realesrgan import RealESRGANer
+        from realesrgan.archs.srvgg_arch import SRVGGNetCompact
+        import torch
+
+        logger.info("Loading Real-ESRGAN model (realesr-general-x4v3)...")
+
+        # Model architecture for realesr-general-x4v3
+        # Note: This model uses SRVGGNetCompact, NOT RRDBNet
+        # RRDBNet is used by RealESRGAN_x4plus.pth
+        model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu')
+
+        # Initialize upsampler - model will be auto-downloaded
+        _realesrgan_model = RealESRGANer(
+            scale=4,
+            model_path="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth",
+            dni_weight=None,
+            model=model,
+            tile=0,  # No tiling for GPU with enough VRAM
+            tile_pad=10,
+            pre_pad=0,
+            half=True,  # Use FP16 for faster processing
+            device='cuda' if torch.cuda.is_available() else 'cpu',
+        )
+        logger.info("Real-ESRGAN model loaded successfully")
+    return _realesrgan_model
+
+
+def _interpolate_crop(keyframes: list, time: float) -> dict:
+    """Interpolate crop position at a given time."""
+    if not keyframes:
+        return None
+
+    # Sort keyframes by time
+    sorted_kf = sorted(keyframes, key=lambda k: k['time'])
+
+    # Before first keyframe - use first
+    if time <= sorted_kf[0]['time']:
+        return sorted_kf[0].copy()
+
+    # After last keyframe - use last
+    if time >= sorted_kf[-1]['time']:
+        return sorted_kf[-1].copy()
+
+    # Find surrounding keyframes
+    for i in range(len(sorted_kf) - 1):
+        kf1 = sorted_kf[i]
+        kf2 = sorted_kf[i + 1]
+
+        if kf1['time'] <= time <= kf2['time']:
+            # Linear interpolation
+            t = (time - kf1['time']) / (kf2['time'] - kf1['time'])
+            return {
+                'time': time,
+                'x': kf1['x'] + t * (kf2['x'] - kf1['x']),
+                'y': kf1['y'] + t * (kf2['y'] - kf1['y']),
+                'width': kf1['width'] + t * (kf2['width'] - kf1['width']),
+                'height': kf1['height'] + t * (kf2['height'] - kf1['height']),
+            }
+
+    return sorted_kf[-1].copy()
+
+
+@app.function(
+    image=upscale_image,
+    gpu="T4",
+    timeout=1800,  # 30 minutes for longer videos
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+def process_framing_ai(
+    job_id: str,
+    user_id: str,
+    input_key: str,
+    output_key: str,
+    keyframes: list,
+    output_width: int = 810,
+    output_height: int = 1440,
+    fps: int = 30,
+    segment_data: dict = None,
+) -> dict:
+    """
+    Process video with AI upscaling using Real-ESRGAN on GPU.
+
+    This function:
+    1. Downloads video from R2
+    2. Applies crop keyframe interpolation
+    3. Upscales each frame with Real-ESRGAN
+    4. Encodes to final video
+    5. Uploads to R2
+
+    Args:
+        job_id: Unique export job identifier
+        user_id: User folder in R2
+        input_key: R2 key for source video
+        output_key: R2 key for output video
+        keyframes: Crop keyframes [{time, x, y, width, height}, ...]
+        output_width: Target width (default 810 for 9:16)
+        output_height: Target height (default 1440)
+        fps: Target frame rate
+        segment_data: Optional trim/speed data
+
+    Returns:
+        {"status": "success", "output_key": "..."} or
+        {"status": "error", "error": "..."}
+    """
+    import cv2
+    import subprocess
+    import numpy as np
+
+    try:
+        logger.info(f"[{job_id}] Starting AI upscaling for user {user_id}")
+        logger.info(f"[{job_id}] Input: {input_key}, Output: {output_key}")
+        logger.info(f"[{job_id}] Target: {output_width}x{output_height} @ {fps}fps")
+
+        r2 = get_r2_client()
+        bucket = os.environ["R2_BUCKET_NAME"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Download input from R2
+            input_path = os.path.join(temp_dir, "input.mp4")
+            full_input_key = f"{user_id}/{input_key}"
+            logger.info(f"[{job_id}] Downloading {full_input_key}")
+            r2.download_file(bucket, full_input_key, input_path)
+
+            # Get video properties
+            cap = cv2.VideoCapture(input_path)
+            if not cap.isOpened():
+                raise ValueError("Could not open video file")
+
+            original_fps = cap.get(cv2.CAP_PROP_FPS)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            duration = total_frames / original_fps
+
+            logger.info(f"[{job_id}] Source: {original_width}x{original_height} @ {original_fps:.2f}fps, {total_frames} frames")
+
+            # Calculate trim range
+            start_frame = 0
+            end_frame = total_frames
+            if segment_data:
+                if 'trim_start' in segment_data:
+                    start_frame = int(segment_data['trim_start'] * original_fps)
+                if 'trim_end' in segment_data:
+                    end_frame = min(int(segment_data['trim_end'] * original_fps), total_frames)
+
+            frames_to_process = end_frame - start_frame
+            logger.info(f"[{job_id}] Processing frames {start_frame}-{end_frame} ({frames_to_process} frames)")
+
+            # Sort keyframes
+            sorted_keyframes = sorted(keyframes, key=lambda k: k['time'])
+
+            # Load Real-ESRGAN model
+            upsampler = _get_realesrgan_model()
+
+            # Create frames directory
+            frames_dir = os.path.join(temp_dir, "frames")
+            os.makedirs(frames_dir, exist_ok=True)
+
+            # Process frames
+            output_frame_idx = 0
+            for frame_idx in range(start_frame, end_frame):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    logger.warning(f"[{job_id}] Could not read frame {frame_idx}")
+                    continue
+
+                # Get interpolated crop for this time
+                time = frame_idx / original_fps
+                crop = _interpolate_crop(sorted_keyframes, time)
+
+                if crop:
+                    # Apply crop
+                    x = int(max(0, crop['x']))
+                    y = int(max(0, crop['y']))
+                    w = int(crop['width'])
+                    h = int(crop['height'])
+
+                    # Ensure bounds
+                    x = min(x, original_width - 1)
+                    y = min(y, original_height - 1)
+                    w = min(w, original_width - x)
+                    h = min(h, original_height - y)
+
+                    cropped = frame[y:y+h, x:x+w]
+                else:
+                    cropped = frame
+
+                # AI upscale with Real-ESRGAN
+                try:
+                    upscaled, _ = upsampler.enhance(cropped, outscale=4)
+                except Exception as e:
+                    logger.warning(f"[{job_id}] Upscale failed for frame {frame_idx}: {e}, using resize")
+                    upscaled = cv2.resize(cropped, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
+
+                # Resize to target resolution (Real-ESRGAN outputs 4x, may need adjustment)
+                if upscaled.shape[1] != output_width or upscaled.shape[0] != output_height:
+                    upscaled = cv2.resize(upscaled, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
+
+                # Save frame
+                frame_path = os.path.join(frames_dir, f"frame_{output_frame_idx:06d}.png")
+                cv2.imwrite(frame_path, upscaled)
+
+                output_frame_idx += 1
+
+                # Log progress
+                if output_frame_idx % 30 == 0:
+                    progress = int(output_frame_idx / frames_to_process * 100)
+                    logger.info(f"[{job_id}] Progress: {progress}% ({output_frame_idx}/{frames_to_process})")
+
+            cap.release()
+
+            logger.info(f"[{job_id}] Processed {output_frame_idx} frames, encoding video...")
+
+            # Encode video with FFmpeg
+            output_path = os.path.join(temp_dir, "output.mp4")
+
+            # Build FFmpeg command
+            cmd = [
+                "ffmpeg", "-y",
+                "-framerate", str(fps),
+                "-i", os.path.join(frames_dir, "frame_%06d.png"),
+                "-i", input_path,  # For audio
+                "-map", "0:v",
+                "-map", "1:a?",
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-preset", "fast",
+                "-crf", "23",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-movflags", "+faststart",
+                "-shortest",
+                output_path,
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                logger.error(f"[{job_id}] FFmpeg error: {result.stderr}")
+                raise RuntimeError(f"FFmpeg encoding failed: {result.stderr[:500]}")
+
+            logger.info(f"[{job_id}] Video encoded, uploading to R2...")
+
+            # Upload to R2
+            full_output_key = f"{user_id}/{output_key}"
+            r2.upload_file(output_path, bucket, full_output_key)
+
+            logger.info(f"[{job_id}] AI upscaling complete: {output_key}")
+
+            return {
+                "status": "success",
+                "output_key": output_key,
+                "frames_processed": output_frame_idx,
+            }
+
+    except Exception as e:
+        logger.error(f"[{job_id}] AI upscaling failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
 # Local testing entrypoint
 @app.local_entrypoint()
 def main():
@@ -875,7 +1352,10 @@ def main():
     print()
     print("Available functions:")
     print("  - render_overlay: Apply highlight overlays to video")
-    print("  - process_framing: Crop, trim, and speed adjustments")
+    print("  - render_overlay_parallel: Parallel chunk processing")
+    print("  - process_framing: Crop, trim, and speed adjustments (FFmpeg)")
+    print("  - process_framing_ai: Crop with Real-ESRGAN AI upscaling")
+    print("  - detect_players_modal: YOLO player detection")
     print()
     print("Deploy with: modal deploy video_processing.py")
     print()

@@ -325,6 +325,74 @@ def apply_upscale(...):
 
 ---
 
+## Cost-Optimized Parallel Processing
+
+### The Problem
+
+Parallel processing has overhead that can make it MORE expensive than sequential:
+- Each container has ~5-7s startup cost
+- Orchestrator (if GPU) wastes GPU time while waiting for workers
+- More containers = more startup overhead
+
+### Cost Model
+
+With a **CPU-only orchestrator** (no GPU while coordinating):
+
+| Config | Base Cost | Per-Frame Cost | Time Formula |
+|--------|-----------|----------------|--------------|
+| 1 GPU | 5 GPU-sec | F/60 | 5 + F/60 sec |
+| 2 GPUs | 14 GPU-sec | F/60 | 12 + F/120 sec |
+| 4 GPUs | 28 GPU-sec | F/60 | 12 + F/240 sec |
+| 8 GPUs | 56 GPU-sec | F/60 | 12 + F/480 sec |
+
+### Time Break-Even Points
+
+- 1 GPU vs 2 GPUs: ~28 seconds (below this, 1 GPU is faster)
+- 1 GPU vs 4 GPUs: ~19 seconds
+- 1 GPU vs 8 GPUs: ~16 seconds
+
+### Cost-Optimized Thresholds
+
+```python
+GPU_CONFIG_THRESHOLDS = [
+    (30, 1, "sequential"),       # 0-30s: 1 GPU - sequential is BOTH faster AND cheaper
+    (90, 2, "2-gpu-parallel"),   # 30-90s: 2 GPUs - best cost/time ratio
+    (180, 4, "4-gpu-parallel"),  # 90-180s: 4 GPUs - worth extra cost for time savings
+    (float('inf'), 8, "8-gpu-parallel"),  # 180s+: 8 GPUs - max parallelism
+]
+```
+
+### Key Optimization: CPU-Only Orchestrator
+
+The orchestrator function only does I/O (download, coordinate, concatenate, upload).
+Making it CPU-only saves ~40% on parallel processing costs:
+
+```python
+@app.function(
+    image=image,
+    # NO GPU - orchestrator only does I/O and coordination
+    timeout=600,
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+def render_overlay_parallel(...):
+    # Downloads input, calls .map() on GPU workers, concatenates output
+    pass
+```
+
+### Example Cost Comparison (60s video, 1800 frames)
+
+| Config | Wall Time | GPU Cost | Cost/Time Ratio |
+|--------|-----------|----------|-----------------|
+| 1 GPU | 35s | 35 GPU-sec | 1.0 GPU-sec/sec |
+| 2 GPUs | 27s | 44 GPU-sec | 1.1 GPU-sec/sec saved |
+| 4 GPUs | 19.5s | 58 GPU-sec | 1.5 GPU-sec/sec saved |
+| 8 GPUs | 15.75s | 86 GPU-sec | 2.6 GPU-sec/sec saved |
+
+**Recommendation**: For cost-sensitive workloads, use 2 GPUs (best ratio).
+For time-sensitive workloads, use more GPUs.
+
+---
+
 ## Quick Reference
 
 ### Modal Client Template
@@ -418,3 +486,177 @@ def process_video_with_ffmpeg(input_path, output_path, ...):
     if write_error:
         raise RuntimeError(f"Write failed: {write_error}")
 ```
+
+---
+
+## Video Codec Compatibility
+
+### The Problem
+
+Videos encoded without proper flags may play in browsers (which have broad codec support) but fail in desktop players like Windows Media Player.
+
+### Required FFmpeg Flags
+
+**CRITICAL**: Always include these flags for maximum compatibility:
+
+```python
+ffmpeg_cmd = [
+    "ffmpeg", "-y",
+    "-f", "rawvideo",
+    "-pix_fmt", "bgr24",  # OpenCV outputs BGR
+    "-s", f"{width}x{height}",
+    "-r", str(fps),
+    "-i", "pipe:0",
+    "-c:v", "libx264",
+    "-pix_fmt", "yuv420p",      # REQUIRED: Most compatible pixel format
+    "-preset", "fast",
+    "-crf", "23",
+    "-movflags", "+faststart",  # RECOMMENDED: Moves moov atom to start
+    "-c:a", "aac",
+    "-b:a", "192k",
+    output_path,
+]
+```
+
+| Flag | Purpose | Without It |
+|------|---------|------------|
+| `-pix_fmt yuv420p` | Standard pixel format | WMP and many players show black screen |
+| `-movflags +faststart` | Moov atom at file start | Slow loading, streaming issues |
+
+### Why `-pix_fmt yuv420p` is Critical
+
+1. OpenCV outputs frames in BGR24 format
+2. Without explicit output format, FFmpeg may choose yuv444p or other formats
+3. Many players only support yuv420p for H.264
+4. Browser video elements are more tolerant but desktop players are not
+
+---
+
+## Real-World Cost Analysis
+
+### Observed Costs (January 2025)
+
+From production usage with T4 GPUs:
+
+| Calls | Total Cost | Per Call | Avg Execution | Video Duration |
+|-------|------------|----------|---------------|----------------|
+| 5 | $0.07 | $0.014 | ~10s | 11-12s |
+
+### Cost Breakdown
+
+Modal T4 GPU pricing: ~$0.000463/GPU-second (~$1.67/GPU-hour)
+
+Typical call breakdown:
+- **Startup**: 2-6 seconds (container cold/warm start)
+- **Execution**: 5-15 seconds (depends on video length)
+- **Total**: ~10-15 seconds per call
+
+Cost per 10s video: ~$0.01-0.02 (includes overhead)
+
+### Cost Optimization Tips
+
+1. **Use sequential for short videos (<30s)**: Avoids parallel startup overhead
+2. **Cache container warm**: Frequent calls keep containers warm (2.7s vs 6.5s startup)
+3. **CPU orchestrator**: Don't use GPU for coordination (saves ~40%)
+4. **Right-size GPU config**: 2 GPUs has best cost/time ratio for 30-90s videos
+
+---
+
+## YOLO Detection on Modal
+
+### Why Move Detection to Modal
+
+The FastAPI backend should be CPU-only for scalability. YOLO detection uses GPU, so it must run on Modal.
+
+### Available Detection Functions
+
+```python
+# detect_players_modal - Single frame player detection
+fn = modal.Function.from_name("reel-ballers-video", "detect_players_modal")
+result = fn.remote(
+    user_id="user123",
+    input_key="videos/gameplay.mp4",  # R2 key (relative to user folder)
+    frame_number=100,
+    confidence_threshold=0.5,
+)
+# Returns: {"status": "success", "detections": [...], "video_width": 1920, "video_height": 1080}
+
+# detect_ball_modal - Multi-frame ball detection
+fn = modal.Function.from_name("reel-ballers-video", "detect_ball_modal")
+result = fn.remote(
+    user_id="user123",
+    input_key="videos/gameplay.mp4",
+    start_frame=0,
+    end_frame=300,
+    confidence_threshold=0.3,
+)
+# Returns: {"status": "success", "ball_positions": [...], "video_width": 1920, "video_height": 1080}
+```
+
+### Detection Request Models
+
+For the FastAPI endpoints, include R2 video location:
+
+```python
+# PlayerDetectionRequest
+{
+    "user_id": "a",                    # R2 user folder
+    "input_key": "raw_clips/video.mp4", # R2 key
+    "frame_number": 100,
+    "confidence_threshold": 0.5
+}
+
+# BallDetectionRequest
+{
+    "user_id": "a",
+    "input_key": "raw_clips/video.mp4",
+    "start_frame": 0,
+    "end_frame": 300,
+    "confidence_threshold": 0.3
+}
+```
+
+### Separate Image for YOLO
+
+YOLO detection requires additional dependencies (ultralytics, torch). Use a separate image:
+
+```python
+yolo_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg", "libgl1-mesa-glx", "libglib2.0-0")
+    .pip_install(
+        "boto3",
+        "opencv-python-headless",
+        "numpy",
+        "ultralytics",
+        "torch",
+        "torchvision",
+    )
+)
+
+@app.function(image=yolo_image, gpu="T4", timeout=120)
+def detect_players_modal(...):
+    pass
+```
+
+### Model Caching
+
+YOLO model is cached per-container to avoid re-downloading:
+
+```python
+_yolo_model = None
+
+def _get_yolo_model():
+    global _yolo_model
+    if _yolo_model is None:
+        from ultralytics import YOLO
+        _yolo_model = YOLO("yolov8x.pt")  # Auto-downloads if needed
+    return _yolo_model
+```
+
+### Expected Detection Costs
+
+Player detection (single frame): ~$0.005-0.01 (quick operation)
+Ball detection (100 frames): ~$0.02-0.05 (depends on frame count)
+
+First call has cold start overhead (~5-7s), subsequent calls are faster (~2-3s startup).

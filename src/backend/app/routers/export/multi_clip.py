@@ -550,6 +550,10 @@ async def export_multi_clip(
 
         logger.info(f"[Multi-Clip Export] Final output: {final_output}")
 
+        # Get video duration for cost-optimized GPU selection in overlay mode
+        video_duration = get_video_duration(final_output)
+        logger.info(f"[Multi-Clip Export] Video duration: {video_duration:.2f}s")
+
         # Restore user context after async operations
         set_current_user_id(captured_user_id)
         logger.info(f"[Multi-Clip Export] Restored user context: {captured_user_id}")
@@ -613,11 +617,11 @@ async def export_multi_clip(
                     # Reset final_video_id (working video changed, need re-export overlay)
                     cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
 
-                    # Create working_videos record
+                    # Create working_videos record with duration
                     cursor.execute("""
-                        INSERT INTO working_videos (project_id, filename, version)
-                        VALUES (?, ?, ?)
-                    """, (project_id, working_filename, next_version))
+                        INSERT INTO working_videos (project_id, filename, version, duration)
+                        VALUES (?, ?, ?, ?)
+                    """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None))
                     working_video_id = cursor.lastrowid
 
                     # Update project with new working_video_id

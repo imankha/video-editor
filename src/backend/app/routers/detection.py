@@ -5,6 +5,10 @@ This router handles YOLO-based object detection for:
 - Player detection (person class)
 - Ball detection (sports ball class)
 - Video upload for detection (temp storage)
+
+GPU Strategy:
+- When MODAL_ENABLED=true: Use Modal cloud GPUs for detection
+- When MODAL_ENABLED=false: Use local YOLO model (requires local GPU)
 """
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
@@ -19,11 +23,12 @@ from pathlib import Path
 from ..models import (
     PlayerDetectionRequest,
     PlayerDetectionResponse,
-    BallDetectionRequest,
-    BallDetectionResponse,
     Detection,
     BoundingBox,
-    BallPosition
+)
+from ..services.modal_client import (
+    modal_enabled,
+    call_modal_detect_players,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,7 +39,6 @@ _yolo_model = None
 
 # YOLO class IDs
 PERSON_CLASS_ID = 0
-SPORTS_BALL_CLASS_ID = 32
 
 # Temp video storage for detection
 # Maps video_id -> file path
@@ -218,12 +222,55 @@ async def detect_players(request: PlayerDetectionRequest):
 
     Returns bounding boxes for all detected persons above the confidence threshold.
 
-    Accepts either video_id (from /api/detect/upload) or video_path.
+    Accepts:
+    - video_id (from /api/detect/upload) for local uploaded videos
+    - video_path for direct local file access
+    - user_id + input_key for R2-based videos (uses Modal GPU)
     """
+    # If R2 video provided and Modal is enabled, use Modal GPU
+    if request.user_id and request.input_key and modal_enabled():
+        logger.info(f"[Modal] Player detection for {request.user_id}/{request.input_key} frame {request.frame_number}")
+
+        result = await call_modal_detect_players(
+            user_id=request.user_id,
+            input_key=request.input_key,
+            frame_number=request.frame_number,
+            confidence_threshold=request.confidence_threshold or 0.5,
+        )
+
+        if result.get("status") == "error":
+            raise HTTPException(status_code=500, detail=result.get("error", "Modal detection failed"))
+
+        # Convert Modal result to response model
+        detections = [
+            Detection(
+                bbox=BoundingBox(**d["bbox"]),
+                confidence=d["confidence"],
+                class_name=d["class_name"],
+                class_id=d.get("class_id", PERSON_CLASS_ID)
+            )
+            for d in result.get("detections", [])
+        ]
+
+        return PlayerDetectionResponse(
+            frame_number=result.get("frame_number", request.frame_number),
+            detections=detections,
+            video_width=result.get("video_width", 0),
+            video_height=result.get("video_height", 0)
+        )
+
+    # Fallback to local detection
+    if request.user_id and request.input_key:
+        logger.warning("R2 video provided but Modal is disabled - falling back to local detection is not supported")
+        raise HTTPException(
+            status_code=400,
+            detail="R2 video detection requires Modal to be enabled (set MODAL_ENABLED=true)"
+        )
+
     # Resolve video path from ID or direct path
     video_path = get_video_path(request.video_id, request.video_path)
 
-    logger.info(f"Player detection request: frame {request.frame_number} of {video_path}")
+    logger.info(f"[Local] Player detection request: frame {request.frame_number} of {video_path}")
 
     # Extract frame
     frame, width, height = extract_frame(video_path, request.frame_number)
@@ -270,7 +317,7 @@ async def detect_players(request: PlayerDetectionRequest):
     # Sort by confidence (highest first)
     detections.sort(key=lambda d: d.confidence, reverse=True)
 
-    logger.info(f"Detected {len(detections)} players in frame {request.frame_number}")
+    logger.info(f"[Local] Detected {len(detections)} players in frame {request.frame_number}")
 
     return PlayerDetectionResponse(
         frame_number=request.frame_number,
@@ -280,105 +327,20 @@ async def detect_players(request: PlayerDetectionRequest):
     )
 
 
-@router.post("/ball", response_model=BallDetectionResponse)
-async def detect_ball(request: BallDetectionRequest):
-    """
-    Detect the ball across a range of frames.
-
-    Returns the highest confidence ball detection for each frame.
-    Uses YOLO's sports ball class (class_id=32).
-    """
-    logger.info(f"Ball detection request: frames {request.start_frame}-{request.end_frame} of {request.video_path}")
-
-    if not os.path.exists(request.video_path):
-        raise HTTPException(status_code=404, detail=f"Video file not found: {request.video_path}")
-
-    cap = cv2.VideoCapture(request.video_path)
-    if not cap.isOpened():
-        raise HTTPException(status_code=400, detail=f"Cannot open video: {request.video_path}")
-
-    try:
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        if request.start_frame < 0 or request.end_frame >= total_frames:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Frame range out of bounds (0-{total_frames-1})"
-            )
-
-        model = get_yolo_model()
-        ball_positions = []
-
-        for frame_num in range(request.start_frame, request.end_frame + 1):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
-            ret, frame = cap.read()
-
-            if not ret or frame is None:
-                continue
-
-            # Run detection
-            results = model(frame, verbose=False, conf=request.confidence_threshold)
-
-            # Find highest confidence ball detection
-            best_ball = None
-            best_conf = 0.0
-
-            for result in results:
-                boxes = result.boxes
-                if boxes is None:
-                    continue
-
-                for box in boxes:
-                    class_id = int(box.cls[0])
-
-                    # Only sports ball class
-                    if class_id != SPORTS_BALL_CLASS_ID:
-                        continue
-
-                    conf = float(box.conf[0])
-                    if conf > best_conf:
-                        best_conf = conf
-                        x1, y1, x2, y2 = box.xyxy[0].tolist()
-                        center_x = (x1 + x2) / 2
-                        center_y = (y1 + y2) / 2
-                        # Use average of width/height as radius
-                        radius = ((x2 - x1) + (y2 - y1)) / 4
-
-                        best_ball = BallPosition(
-                            frame=frame_num,
-                            x=center_x,
-                            y=center_y,
-                            radius=radius,
-                            confidence=conf
-                        )
-
-            if best_ball:
-                ball_positions.append(best_ball)
-
-        logger.info(f"Detected ball in {len(ball_positions)} frames")
-
-        return BallDetectionResponse(
-            ball_positions=ball_positions,
-            video_width=width,
-            video_height=height
-        )
-
-    finally:
-        cap.release()
-
-
 @router.get("/status")
 async def detection_status():
-    """Check if YOLO model is loaded and ready."""
+    """Check detection status and available backends."""
     global _yolo_model
 
     return {
-        "model_loaded": _yolo_model is not None,
-        "model_type": "YOLOv8x" if _yolo_model else None,
+        "modal_enabled": modal_enabled(),
+        "local_model_loaded": _yolo_model is not None,
+        "model_type": "YOLOv8x",
         "supported_classes": {
             "person": PERSON_CLASS_ID,
-            "sports_ball": SPORTS_BALL_CLASS_ID
+        },
+        "backends": {
+            "modal": "Available" if modal_enabled() else "Disabled (set MODAL_ENABLED=true)",
+            "local": "Ready" if _yolo_model else "Not loaded (loads on first use)"
         }
     }
