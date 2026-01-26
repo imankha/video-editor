@@ -9,6 +9,11 @@ This router handles YOLO-based object detection for:
 GPU Strategy:
 - When MODAL_ENABLED=true: Use Modal cloud GPUs for detection
 - When MODAL_ENABLED=false: Use local YOLO model (requires local GPU)
+
+Caching:
+- Detection results are cached in R2 per video/frame
+- Cache path: detections/{working_video_filename}/frame_{frame_number}.json
+- Frontend can check cache before requesting detection
 """
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
@@ -18,7 +23,10 @@ import logging
 import tempfile
 import uuid
 import shutil
+import json
 from pathlib import Path
+from typing import Optional
+from io import BytesIO
 
 from ..models import (
     PlayerDetectionRequest,
@@ -29,6 +37,16 @@ from ..models import (
 from ..services.modal_client import (
     modal_enabled,
     call_modal_detect_players,
+)
+from ..database import get_db_connection
+from ..user_context import get_current_user_id
+from ..storage import (
+    file_exists_in_r2,
+    upload_bytes_to_r2,
+    get_r2_client,
+    R2_BUCKET,
+    r2_key,
+    R2_ENABLED,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,6 +61,86 @@ PERSON_CLASS_ID = 0
 # Temp video storage for detection
 # Maps video_id -> file path
 _detection_videos = {}
+
+
+def get_detection_cache_path(video_filename: str, frame_number: int) -> str:
+    """
+    Get the R2 relative path for a cached detection result.
+
+    Cache structure: detections/{video_filename}/frame_{frame_number}.json
+    This allows us to cache per-frame results and check existence quickly.
+    """
+    # Extract just the filename without path
+    video_name = Path(video_filename).name
+    return f"detections/{video_name}/frame_{frame_number}.json"
+
+
+def get_cached_detection(user_id: str, video_filename: str, frame_number: int) -> Optional[dict]:
+    """
+    Check if detection result is cached in R2 and return it.
+
+    Returns:
+        Detection result dict if cached, None otherwise
+    """
+    if not R2_ENABLED:
+        return None
+
+    cache_path = get_detection_cache_path(video_filename, frame_number)
+
+    client = get_r2_client()
+    if not client:
+        return None
+
+    key = r2_key(user_id, cache_path)
+    try:
+        response = client.get_object(Bucket=R2_BUCKET, Key=key)
+        data = response['Body'].read()
+        result = json.loads(data.decode('utf-8'))
+        logger.debug(f"Cache hit for detection: {key}")
+        return result
+    except client.exceptions.NoSuchKey:
+        logger.debug(f"Cache miss for detection: {key}")
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to read detection cache: {key} - {e}")
+        return None
+
+
+def cache_detection_result(user_id: str, video_filename: str, frame_number: int, result: dict) -> bool:
+    """
+    Cache detection result to R2.
+
+    Returns:
+        True if cached successfully, False otherwise
+    """
+    if not R2_ENABLED:
+        return False
+
+    cache_path = get_detection_cache_path(video_filename, frame_number)
+
+    try:
+        data = json.dumps(result).encode('utf-8')
+        success = upload_bytes_to_r2(user_id, cache_path, data)
+        if success:
+            logger.debug(f"Cached detection result: {cache_path}")
+        return success
+    except Exception as e:
+        logger.warning(f"Failed to cache detection result: {cache_path} - {e}")
+        return False
+
+
+def check_detection_cached(user_id: str, video_filename: str, frame_number: int) -> bool:
+    """
+    Check if a detection result is cached (without downloading it).
+
+    This is faster than get_cached_detection when we just need to know
+    if the frame has been detected before.
+    """
+    if not R2_ENABLED:
+        return False
+
+    cache_path = get_detection_cache_path(video_filename, frame_number)
+    return file_exists_in_r2(user_id, cache_path)
 
 
 def get_yolo_model():
@@ -221,12 +319,91 @@ async def detect_players(request: PlayerDetectionRequest):
     Detect players (persons) in a single video frame.
 
     Returns bounding boxes for all detected persons above the confidence threshold.
+    Results are cached in R2 to avoid redundant GPU calls.
 
     Accepts:
     - video_id (from /api/detect/upload) for local uploaded videos
     - video_path for direct local file access
     - user_id + input_key for R2-based videos (uses Modal GPU)
+    - project_id for project-based detection (backend looks up working video R2 path)
     """
+    # If project_id provided, look up working video R2 path and use Modal
+    if request.project_id and modal_enabled():
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT wv.filename
+                FROM projects p
+                JOIN working_videos wv ON p.working_video_id = wv.id
+                WHERE p.id = ?
+            """, (request.project_id,))
+            row = cursor.fetchone()
+
+        if not row or not row['filename']:
+            raise HTTPException(
+                status_code=404,
+                detail="Working video not found for project. Export from framing mode first."
+            )
+
+        user_id = get_current_user_id()
+        video_filename = row['filename']
+        input_key = f"working_videos/{video_filename}"
+
+        # Check R2 cache first
+        cached_result = get_cached_detection(user_id, video_filename, request.frame_number)
+        if cached_result:
+            logger.info(f"[Cache] Player detection cache hit for project {request.project_id} frame {request.frame_number}")
+            # Convert cached result to response model
+            detections = [
+                Detection(
+                    bbox=BoundingBox(**d["bbox"]),
+                    confidence=d["confidence"],
+                    class_name=d["class_name"],
+                    class_id=d.get("class_id", PERSON_CLASS_ID)
+                )
+                for d in cached_result.get("detections", [])
+            ]
+            return PlayerDetectionResponse(
+                frame_number=cached_result.get("frame_number", request.frame_number),
+                detections=detections,
+                video_width=cached_result.get("video_width", 0),
+                video_height=cached_result.get("video_height", 0)
+            )
+
+        # Cache miss - call Modal GPU
+        logger.info(f"[Modal] Player detection for project {request.project_id}: {user_id}/{input_key} frame {request.frame_number}")
+
+        result = await call_modal_detect_players(
+            user_id=user_id,
+            input_key=input_key,
+            frame_number=request.frame_number,
+            confidence_threshold=request.confidence_threshold or 0.5,
+        )
+
+        if result.get("status") == "error":
+            raise HTTPException(status_code=500, detail=result.get("error", "Modal detection failed"))
+
+        # Cache the result for future requests
+        cache_detection_result(user_id, video_filename, request.frame_number, result)
+
+        # Convert Modal result to response model
+        detections = [
+            Detection(
+                bbox=BoundingBox(**d["bbox"]),
+                confidence=d["confidence"],
+                class_name=d["class_name"],
+                class_id=d.get("class_id", PERSON_CLASS_ID)
+            )
+            for d in result.get("detections", [])
+        ]
+
+        return PlayerDetectionResponse(
+            frame_number=result.get("frame_number", request.frame_number),
+            detections=detections,
+            video_width=result.get("video_width", 0),
+            video_height=result.get("video_height", 0)
+        )
+
     # If R2 video provided and Modal is enabled, use Modal GPU
     if request.user_id and request.input_key and modal_enabled():
         logger.info(f"[Modal] Player detection for {request.user_id}/{request.input_key} frame {request.frame_number}")
@@ -265,6 +442,14 @@ async def detect_players(request: PlayerDetectionRequest):
         raise HTTPException(
             status_code=400,
             detail="R2 video detection requires Modal to be enabled (set MODAL_ENABLED=true)"
+        )
+
+    # Project-based detection requires Modal (working videos are in R2)
+    if request.project_id:
+        logger.warning("Project-based detection requires Modal to be enabled")
+        raise HTTPException(
+            status_code=400,
+            detail="Project-based detection requires Modal to be enabled (set MODAL_ENABLED=true)"
         )
 
     # Resolve video path from ID or direct path
@@ -344,3 +529,49 @@ async def detection_status():
             "local": "Ready" if _yolo_model else "Not loaded (loads on first use)"
         }
     }
+
+
+@router.get("/cache/{project_id}/{frame_number}")
+async def check_detection_cache(project_id: int, frame_number: int):
+    """
+    Check if detection result is cached for a specific frame.
+
+    This allows the frontend to show cached results immediately
+    without making a detection request.
+
+    Returns:
+        - cached: bool - whether the frame is cached
+        - detections: list - detection results (if cached)
+    """
+    if not modal_enabled():
+        return {"cached": False, "detections": [], "reason": "Modal not enabled"}
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT wv.filename
+            FROM projects p
+            JOIN working_videos wv ON p.working_video_id = wv.id
+            WHERE p.id = ?
+        """, (project_id,))
+        row = cursor.fetchone()
+
+    if not row or not row['filename']:
+        return {"cached": False, "detections": [], "reason": "Working video not found"}
+
+    user_id = get_current_user_id()
+    video_filename = row['filename']
+
+    # Try to get cached result
+    cached_result = get_cached_detection(user_id, video_filename, frame_number)
+
+    if cached_result:
+        return {
+            "cached": True,
+            "frame_number": cached_result.get("frame_number", frame_number),
+            "detections": cached_result.get("detections", []),
+            "video_width": cached_result.get("video_width", 0),
+            "video_height": cached_result.get("video_height", 0)
+        }
+
+    return {"cached": False, "detections": []}

@@ -68,7 +68,8 @@ export default function useOverlayState() {
 
   // Overlay persistence refs
   const pendingOverlaySaveRef = useRef(null);
-  const overlayDataLoadedRef = useRef(false);
+  // Track which projectId we've loaded data for (null = not loaded)
+  const overlayDataLoadedForProjectRef = useRef(null);
 
   /**
    * Load overlay video from a URL (e.g., from framing export or working video)
@@ -137,7 +138,7 @@ export default function useOverlayState() {
 
     // Reset refs
     pendingOverlaySaveRef.current = null;
-    overlayDataLoadedRef.current = false;
+    overlayDataLoadedForProjectRef.current = null;
   }, [overlayVideoUrl, overlayVideoFile]);
 
   /**
@@ -179,7 +180,7 @@ export default function useOverlayState() {
 
     // Persistence refs
     pendingOverlaySaveRef,
-    overlayDataLoadedRef,
+    overlayDataLoadedForProjectRef,
 
     // Actions
     loadOverlayVideoFromUrl,

@@ -1344,6 +1344,108 @@ def process_framing_ai(
         return {"status": "error", "error": str(e)}
 
 
+@app.function(
+    image=image,
+    # No GPU - clip extraction is just FFmpeg codec copy
+    timeout=300,  # 5 minutes max
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+def extract_clip_modal(
+    user_id: str,
+    input_key: str,
+    output_key: str,
+    start_time: float,
+    end_time: float,
+    copy_codec: bool = True,
+) -> dict:
+    """
+    Extract a clip from a video file on Modal (CPU-only, uses FFmpeg).
+
+    Args:
+        user_id: User folder in R2 (e.g., "a")
+        input_key: R2 key for source video (e.g., "games/abc123.mp4")
+        output_key: R2 key for output clip (e.g., "clips/def456.mp4")
+        start_time: Start time in seconds
+        end_time: End time in seconds
+        copy_codec: If True, copy codecs (faster); if False, re-encode
+
+    Returns:
+        {"status": "success", "output_key": "...", "duration": float} or
+        {"status": "error", "error": "..."}
+    """
+    import subprocess
+
+    try:
+        logger.info(f"[ClipExtract] Starting for user {user_id}")
+        logger.info(f"[ClipExtract] Input: {input_key}, Output: {output_key}")
+        logger.info(f"[ClipExtract] Time range: {start_time:.2f}s - {end_time:.2f}s")
+
+        r2 = get_r2_client()
+        bucket = os.environ["R2_BUCKET_NAME"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Download source video from R2
+            input_path = os.path.join(temp_dir, "input.mp4")
+            full_input_key = f"{user_id}/{input_key}"
+            logger.info(f"[ClipExtract] Downloading {full_input_key}")
+            r2.download_file(bucket, full_input_key, input_path)
+
+            # Extract clip with FFmpeg
+            output_path = os.path.join(temp_dir, "output.mp4")
+            duration = end_time - start_time
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-ss", str(start_time),
+                "-i", input_path,
+                "-t", str(duration),
+            ]
+
+            if copy_codec:
+                cmd.extend(["-c", "copy"])
+            else:
+                # Re-encode with good quality settings
+                cmd.extend([
+                    "-c:v", "libx264",
+                    "-preset", "fast",
+                    "-crf", "23",
+                    "-c:a", "aac",
+                    "-b:a", "192k",
+                ])
+
+            # Add faststart for streaming
+            cmd.extend(["-movflags", "+faststart"])
+            cmd.append(output_path)
+
+            logger.info(f"[ClipExtract] Running FFmpeg: {' '.join(cmd[:10])}...")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+
+            if result.returncode != 0:
+                logger.error(f"[ClipExtract] FFmpeg error: {result.stderr}")
+                raise RuntimeError(f"FFmpeg clip extraction failed: {result.stderr[:500]}")
+
+            # Upload clip to R2
+            full_output_key = f"{user_id}/{output_key}"
+            logger.info(f"[ClipExtract] Uploading to {full_output_key}")
+            r2.upload_file(
+                output_path,
+                bucket,
+                full_output_key,
+                ExtraArgs={"ContentType": "video/mp4"},
+            )
+
+            logger.info(f"[ClipExtract] Complete: {output_key}")
+            return {
+                "status": "success",
+                "output_key": output_key,
+                "duration": duration,
+            }
+
+    except Exception as e:
+        logger.error(f"[ClipExtract] Failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
 # Local testing entrypoint
 @app.local_entrypoint()
 def main():
@@ -1356,6 +1458,7 @@ def main():
     print("  - process_framing: Crop, trim, and speed adjustments (FFmpeg)")
     print("  - process_framing_ai: Crop with Real-ESRGAN AI upscaling")
     print("  - detect_players_modal: YOLO player detection")
+    print("  - extract_clip_modal: Extract clip from video (FFmpeg)")
     print()
     print("Deploy with: modal deploy video_processing.py")
     print()

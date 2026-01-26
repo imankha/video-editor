@@ -33,7 +33,7 @@ _frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ov
 from ...websocket import export_progress, manager
 from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path, get_uploads_path
 from ...services.ffmpeg_service import get_encoding_command_parts
-from ...storage import R2_ENABLED, generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
+from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
 from ...user_context import get_current_user_id
 from ...highlight_transform import (
     transform_all_regions_to_raw,
@@ -656,29 +656,17 @@ async def get_final_video(project_id: int):
         if not result:
             raise HTTPException(status_code=404, detail="Final video not found")
 
-        # When R2 is enabled, redirect to presigned URL
-        if R2_ENABLED:
-            user_id = get_current_user_id()
-            presigned_url = generate_presigned_url(
-                user_id=user_id,
-                relative_path=f"final_videos/{result['filename']}",
-                expires_in=3600,
-                content_type="video/mp4"
-            )
-            if presigned_url:
-                return RedirectResponse(url=presigned_url, status_code=302)
-            raise HTTPException(status_code=404, detail="Failed to generate R2 URL for final video")
-
-        # Local mode: serve from filesystem
-        file_path = get_final_videos_path() / result['filename']
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="Video file not found")
-
-        return FileResponse(
-            path=str(file_path),
-            media_type="video/mp4",
-            filename=result['filename']
+        # Redirect to R2 presigned URL
+        user_id = get_current_user_id()
+        presigned_url = generate_presigned_url(
+            user_id=user_id,
+            relative_path=f"final_videos/{result['filename']}",
+            expires_in=3600,
+            content_type="video/mp4"
         )
+        if presigned_url:
+            return RedirectResponse(url=presigned_url, status_code=302)
+        raise HTTPException(status_code=404, detail="Failed to generate R2 URL for final video")
 
 
 @router.put("/projects/{project_id}/overlay-data")
@@ -884,8 +872,13 @@ async def _load_highlights_from_raw_clips(project_id: int, cursor) -> list:
     Load highlight regions from raw_clips and transform to working video space.
 
     Returns transformed highlight regions ready for the current project's framing.
+
+    DEDUPLICATION: If the same raw_clip is used multiple times in a project
+    (e.g., user adds the same clip twice), we only load its default_highlight_regions
+    once to prevent duplicate/overlapping regions.
     """
     # Get working clips with framing data and raw clip defaults
+    # Note: Same raw_clip_id may appear multiple times if clip is used more than once
     cursor.execute("""
         SELECT wc.id, wc.raw_clip_id, wc.crop_data, wc.segments_data,
                rc.default_highlight_regions
@@ -927,8 +920,18 @@ async def _load_highlights_from_raw_clips(project_id: int, cursor) -> list:
                 cap.release()
 
     all_transformed_regions = []
+    processed_raw_clip_ids = set()  # Track processed raw_clips to prevent duplicates
 
     for clip in working_clips:
+        raw_clip_id = clip['raw_clip_id']
+
+        # Skip if we've already processed this raw_clip (prevents duplicates when
+        # the same clip is used multiple times in a project)
+        if raw_clip_id in processed_raw_clip_ids:
+            logger.info(f"[Overlay Data] Skipping duplicate raw_clip {raw_clip_id}")
+            continue
+        processed_raw_clip_ids.add(raw_clip_id)
+
         # Parse raw clip default highlights
         raw_regions = []
         if clip['default_highlight_regions']:
@@ -1052,31 +1055,17 @@ async def get_highlight_image(filename: str):
     if '..' in filename or '/' in filename or '\\' in filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    # When R2 is enabled, redirect to presigned URL
-    if R2_ENABLED:
-        user_id = get_current_user_id()
-        presigned_url = generate_presigned_url(
-            user_id=user_id,
-            relative_path=f"highlights/{filename}",
-            expires_in=3600,
-            content_type="image/png"
-        )
-        if presigned_url:
-            return RedirectResponse(url=presigned_url, status_code=302)
-        raise HTTPException(status_code=404, detail="Failed to generate R2 URL for highlight image")
-
-    # Local mode: serve from filesystem
-    highlights_dir = get_highlights_path()
-    file_path = highlights_dir / filename
-
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Image not found")
-
-    return FileResponse(
-        path=str(file_path),
-        media_type="image/png",
-        filename=filename
+    # Redirect to R2 presigned URL
+    user_id = get_current_user_id()
+    presigned_url = generate_presigned_url(
+        user_id=user_id,
+        relative_path=f"highlights/{filename}",
+        expires_in=3600,
+        content_type="image/png"
     )
+    if presigned_url:
+        return RedirectResponse(url=presigned_url, status_code=302)
+    raise HTTPException(status_code=404, detail="Failed to generate R2 URL for highlight image")
 
 
 @router.get("/highlights")
@@ -1217,91 +1206,30 @@ async def render_overlay(request: OverlayRenderRequest):
             # Use Modal GPU processing
             logger.info(f"[Overlay Render] Using Modal GPU")
 
-            # Progress simulation for Modal processing
-            # Timing varies based on GPU configuration:
-            # - 1 GPU: ~5s startup, processing at full video rate
-            # - 2 GPUs: ~8s startup (CPU orchestrator + 2 workers), 2x faster processing
-            # - 4 GPUs: ~10s startup, 4x faster processing
-            # - 8 GPUs: ~12s startup, 8x faster processing
-            async def update_progress_during_modal():
-                """Update progress while Modal is processing."""
-                import time
-                start_time = time.time()
+            # Create progress callback for real-time updates
+            async def modal_progress_callback(progress: float, message: str):
+                progress_data = {
+                    "progress": progress,
+                    "message": message,
+                    "status": "processing",
+                    "projectId": project_id,
+                    "projectName": project_name,
+                    "type": "overlay"
+                }
+                export_progress[export_id] = progress_data
+                await manager.send_progress(export_id, progress_data)
 
-                # Configure timing based on GPU count
-                if num_chunks == 1:
-                    STARTUP_DURATION = 5.0
-                    # Estimate: 60 frames/sec processing
-                    estimated_process_time = (video_duration or 30) * 1.0  # 1:1 ratio
-                    startup_msg = "Starting cloud GPU..."
-                    processing_msg = "Processing video on GPU..."
-                elif num_chunks == 2:
-                    STARTUP_DURATION = 8.0
-                    estimated_process_time = (video_duration or 60) / 2 + 4  # 2x faster + overhead
-                    startup_msg = "Starting 2 GPU workers..."
-                    processing_msg = "Processing video on 2 GPUs..."
-                elif num_chunks == 4:
-                    STARTUP_DURATION = 10.0
-                    estimated_process_time = (video_duration or 120) / 4 + 4
-                    startup_msg = "Starting 4 GPU workers..."
-                    processing_msg = "Processing video on 4 GPUs..."
-                else:  # 8 GPUs
-                    STARTUP_DURATION = 12.0
-                    estimated_process_time = (video_duration or 180) / 8 + 4
-                    startup_msg = "Starting 8 GPU workers..."
-                    processing_msg = "Processing video on 8 GPUs..."
-
-                MAX_PROCESSING_TIME = max(estimated_process_time, 10.0)
-
-                while True:
-                    elapsed = time.time() - start_time
-
-                    if elapsed < STARTUP_DURATION:
-                        # Startup phase: 5% -> 30% over startup duration
-                        progress = 5 + int((elapsed / STARTUP_DURATION) * 25)
-                        message = startup_msg
-                    else:
-                        # Processing phase: 30% -> 90% over estimated time
-                        processing_elapsed = elapsed - STARTUP_DURATION
-                        # Slow down progress as we get higher (asymptotic approach to 90%)
-                        progress_fraction = min(processing_elapsed / MAX_PROCESSING_TIME, 0.95)
-                        progress = 30 + int(progress_fraction * 60)
-                        progress = min(progress, 90)  # Cap at 90%
-                        message = processing_msg
-
-                    progress_data = {
-                        "progress": progress,
-                        "message": message,
-                        "status": "processing",
-                        "projectId": project_id,
-                        "projectName": project_name,
-                        "type": "overlay"
-                    }
-                    export_progress[export_id] = progress_data
-                    await manager.send_progress(export_id, progress_data)
-
-                    await asyncio.sleep(0.5)  # Update every 500ms
-
-            # Run Modal call with progress updates
-            progress_task = asyncio.create_task(update_progress_during_modal())
-
-            try:
-                # Use auto-selection: parallel for longer videos, sequential for shorter
-                result = await call_modal_overlay_auto(
-                    job_id=export_id,
-                    user_id=user_id,
-                    input_key=f"working_videos/{working_filename}",
-                    output_key=f"final_videos/{output_filename}",
-                    highlight_regions=highlight_regions,
-                    effect_type=effect_type,
-                    video_duration=video_duration,
-                )
-            finally:
-                progress_task.cancel()
-                try:
-                    await progress_task
-                except asyncio.CancelledError:
-                    pass
+            # Use auto-selection: parallel for longer videos, sequential for shorter
+            result = await call_modal_overlay_auto(
+                job_id=export_id,
+                user_id=user_id,
+                input_key=f"working_videos/{working_filename}",
+                output_key=f"final_videos/{output_filename}",
+                highlight_regions=highlight_regions,
+                effect_type=effect_type,
+                video_duration=video_duration,
+                progress_callback=modal_progress_callback,
+            )
 
             if result.get("status") != "success":
                 error = result.get("error", "Unknown error")

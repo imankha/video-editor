@@ -95,9 +95,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     setIsLoading(true);
 
     try {
-      // Clean up previous video
-      if (videoUrl) {
-        console.log('[useVideo] Revoking previous videoUrl:', videoUrl);
+      // Clean up previous blob URL (only if it's a blob URL we created)
+      if (videoUrl && videoUrl.startsWith('blob:')) {
+        console.log('[useVideo] Revoking previous blob URL:', videoUrl);
         revokeVideoURL(videoUrl);
       }
 
@@ -136,6 +136,34 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       setIsLoading(false);
       return null;
     }
+  };
+
+  /**
+   * Load a video from a streaming URL (no blob download)
+   * Use this for presigned R2 URLs where streaming is preferred.
+   * @param {string} url - Streaming URL (e.g., presigned R2 URL)
+   * @param {Object} preloadedMetadata - Optional pre-extracted metadata
+   */
+  const loadVideoFromStreamingUrl = (url, preloadedMetadata = null) => {
+    console.log('[useVideo] loadVideoFromStreamingUrl called with:', url?.substring(0, 60));
+    setError(null);
+
+    // Clean up previous blob URL (only if it's a blob URL we created)
+    if (videoUrl && videoUrl.startsWith('blob:')) {
+      console.log('[useVideo] Revoking previous blob URL:', videoUrl);
+      revokeVideoURL(videoUrl);
+    }
+
+    // Use URL directly - no blob download!
+    // The browser will stream the video using HTTP Range requests
+    setVideoLoaded({
+      file: null, // No file for streaming URLs
+      url: url,
+      metadata: preloadedMetadata,
+      duration: preloadedMetadata?.duration || 0,
+    });
+
+    console.log('[useVideo] Set streaming URL directly (instant)');
   };
 
   /**
@@ -375,6 +403,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     // Actions
     loadVideo,
     loadVideoFromUrl,
+    loadVideoFromStreamingUrl,
     play,
     pause,
     togglePlay,

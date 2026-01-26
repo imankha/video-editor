@@ -94,7 +94,10 @@ export function useSegments() {
 
   /**
    * Restore segment state from saved data (for clip switching)
-   * @param {Object} savedState - { boundaries, speeds, trimRange }
+   * Supports both internal format and export format:
+   * - Internal: { boundaries, speeds/segmentSpeeds, trimRange }
+   * - Export: { trim_start, trim_end, segments: [{start, end, speed}, ...] }
+   * @param {Object} savedState - Saved segment state in either format
    * @param {number} videoDuration - Video duration for validation
    */
   const restoreState = useCallback((savedState, videoDuration) => {
@@ -110,25 +113,69 @@ export function useSegments() {
       setDuration(videoDuration);
     }
 
-    // Restore user splits from boundaries (filter out 0 and duration)
-    if (savedState.boundaries && Array.isArray(savedState.boundaries)) {
-      const userSplitsFromBoundaries = savedState.boundaries.filter(b =>
+    // Detect format: export format has 'segments' array, internal format has 'boundaries'
+    const isExportFormat = Array.isArray(savedState.segments);
+
+    if (isExportFormat) {
+      // Convert export format to internal format
+      console.log('[useSegments] Detected export format, converting...');
+
+      // Extract boundaries from segments (unique sorted list of start/end values)
+      const boundarySet = new Set();
+      const segmentSpeeds = {};
+
+      savedState.segments.forEach((segment, index) => {
+        boundarySet.add(segment.start);
+        boundarySet.add(segment.end);
+        // Store speed by segment index (only if not 1x)
+        if (segment.speed !== 1) {
+          segmentSpeeds[index] = segment.speed;
+        }
+      });
+
+      const allBoundaries = Array.from(boundarySet).sort((a, b) => a - b);
+
+      // User splits are boundaries excluding 0 and duration
+      const userSplitsFromBoundaries = allBoundaries.filter(b =>
         b > 0.01 && (!videoDuration || Math.abs(b - videoDuration) > 0.01)
       );
       setUserSplits(userSplitsFromBoundaries);
-    }
 
-    // Restore segment speeds (check both 'speeds' and 'segmentSpeeds' for compatibility)
-    const speeds = savedState.speeds || savedState.segmentSpeeds;
-    if (speeds && typeof speeds === 'object') {
-      setSegmentSpeeds(speeds);
-    }
+      // Set segment speeds
+      if (Object.keys(segmentSpeeds).length > 0) {
+        setSegmentSpeeds(segmentSpeeds);
+      } else {
+        setSegmentSpeeds({});
+      }
 
-    // Restore trim range
-    if (savedState.trimRange) {
-      setTrimRange(savedState.trimRange);
+      // Convert trim_start/trim_end to trimRange
+      if (savedState.trim_start !== undefined && savedState.trim_end !== undefined) {
+        setTrimRange({ start: savedState.trim_start, end: savedState.trim_end });
+      } else {
+        setTrimRange(null);
+      }
     } else {
-      setTrimRange(null);
+      // Internal format - restore directly
+      // Restore user splits from boundaries (filter out 0 and duration)
+      if (savedState.boundaries && Array.isArray(savedState.boundaries)) {
+        const userSplitsFromBoundaries = savedState.boundaries.filter(b =>
+          b > 0.01 && (!videoDuration || Math.abs(b - videoDuration) > 0.01)
+        );
+        setUserSplits(userSplitsFromBoundaries);
+      }
+
+      // Restore segment speeds (check both 'speeds' and 'segmentSpeeds' for compatibility)
+      const speeds = savedState.speeds || savedState.segmentSpeeds;
+      if (speeds && typeof speeds === 'object') {
+        setSegmentSpeeds(speeds);
+      }
+
+      // Restore trim range
+      if (savedState.trimRange) {
+        setTrimRange(savedState.trimRange);
+      } else {
+        setTrimRange(null);
+      }
     }
 
     // Clear trim history when restoring (we don't persist history)

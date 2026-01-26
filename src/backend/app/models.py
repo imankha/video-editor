@@ -73,6 +73,8 @@ class PlayerDetectionRequest(BaseModel):
     # R2 video support (for Modal GPU processing)
     user_id: Optional[str] = None     # User folder in R2
     input_key: Optional[str] = None   # R2 key for video (relative to user folder)
+    # Project-based detection (backend looks up R2 path from working_video)
+    project_id: Optional[int] = None  # Project ID to look up working video
     frame_number: int
     confidence_threshold: Optional[float] = 0.5
 

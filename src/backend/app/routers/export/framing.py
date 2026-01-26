@@ -28,7 +28,7 @@ from ...websocket import export_progress, manager
 from ...interpolation import generate_crop_filter
 from ...database import get_db_connection, get_working_videos_path
 from ...queries import latest_working_clips_subquery
-from ...storage import R2_ENABLED, generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
+from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
 from ...services.ffmpeg_service import get_video_duration
 from ...services.modal_client import modal_enabled, call_modal_framing_ai
 from pydantic import BaseModel
@@ -629,29 +629,17 @@ async def get_working_video(project_id: int):
         if not result:
             raise HTTPException(status_code=404, detail="Working video not found")
 
-        # When R2 is enabled, redirect to presigned URL
-        if R2_ENABLED:
-            user_id = get_current_user_id()
-            presigned_url = generate_presigned_url(
-                user_id=user_id,
-                relative_path=f"working_videos/{result['filename']}",
-                expires_in=3600,
-                content_type="video/mp4"
-            )
-            if presigned_url:
-                return RedirectResponse(url=presigned_url, status_code=302)
-            raise HTTPException(status_code=404, detail="Failed to generate R2 URL for working video")
-
-        # Local mode: serve from filesystem
-        file_path = get_working_videos_path() / result['filename']
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="Video file not found")
-
-        return FileResponse(
-            path=str(file_path),
-            media_type="video/mp4",
-            filename=result['filename']
+        # Redirect to R2 presigned URL
+        user_id = get_current_user_id()
+        presigned_url = generate_presigned_url(
+            user_id=user_id,
+            relative_path=f"working_videos/{result['filename']}",
+            expires_in=3600,
+            content_type="video/mp4"
         )
+        if presigned_url:
+            return RedirectResponse(url=presigned_url, status_code=302)
+        raise HTTPException(status_code=404, detail="Failed to generate R2 URL for working video")
 
 
 # =============================================================================
@@ -826,30 +814,25 @@ async def render_project(request: RenderRequest):
         except (json.JSONDecodeError, TypeError):
             logger.warning(f"[Render] Invalid segments_data, ignoring")
 
-    # Validate and convert keyframes to CropKeyframe objects
+    # Validate and convert keyframes to CropKeyframe objects (time-based for FFmpeg)
     logger.info(f"[Render] Converting {len(crop_keyframes)} keyframes to CropKeyframe objects")
 
-    # Check for old format (frame-based instead of time-based)
+    # Convert frame-based keyframes to time-based for FFmpeg
+    # Internal storage uses frame numbers for precision, FFmpeg needs time in seconds
+    FRAMERATE = 30  # TODO: get from video metadata
     if crop_keyframes and 'frame' in crop_keyframes[0] and 'time' not in crop_keyframes[0]:
-        error_msg = (
-            "Crop data uses outdated format (frame-based). "
-            "Please make an edit in Framing mode to trigger a re-save with the new format, "
-            "or clear the browser cache and reload."
-        )
-        logger.error(f"[Render] Old crop data format detected: {crop_keyframes[0].keys()}")
-        error_data = {
-            "progress": 0,
-            "message": error_msg,
-            "status": "error",
-            "error": "outdated_crop_format",
-            "clip_id": clip['id']
-        }
-        export_progress[export_id] = error_data
-        await manager.send_progress(export_id, error_data)
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "outdated_crop_format", "message": error_msg, "clip_id": clip['id']}
-        )
+        logger.info(f"[Render] Converting frame-based keyframes to time-based (framerate={FRAMERATE})")
+        crop_keyframes = [
+            {
+                'time': kf['frame'] / FRAMERATE,
+                'x': kf['x'],
+                'y': kf['y'],
+                'width': kf['width'],
+                'height': kf['height'],
+            }
+            for kf in crop_keyframes
+        ]
+        logger.info(f"[Render] Converted keyframes: {crop_keyframes}")
 
     try:
         keyframes = [CropKeyframe(**kf) for kf in crop_keyframes]
@@ -896,12 +879,37 @@ async def render_project(request: RenderRequest):
         if modal_enabled():
             logger.info(f"[Render] Using Modal cloud GPU for AI upscaling")
 
+            # First, get video duration for progress estimation
+            # Download source briefly to probe duration
+            input_path_temp = os.path.join(temp_dir, f"probe_{uuid.uuid4().hex[:8]}.mp4")
+            source_duration = 10.0  # Default estimate
+            try:
+                if download_from_r2(user_id, input_key, Path(input_path_temp)):
+                    source_duration = get_video_duration(input_path_temp)
+                    logger.info(f"[Render] Source video duration: {source_duration:.2f}s")
+                    os.unlink(input_path_temp)  # Clean up probe file
+            except Exception as e:
+                logger.warning(f"[Render] Could not probe source duration: {e}")
+
             # Update progress
-            init_data = {"progress": 15, "message": "Processing video with cloud AI upscaler...", "status": "processing", "projectId": project_id, "projectName": project_name, "type": "framing"}
+            init_data = {"progress": 15, "message": "Starting cloud AI upscaler...", "status": "processing", "projectId": project_id, "projectName": project_name, "type": "framing"}
             export_progress[export_id] = init_data
             await manager.send_progress(export_id, init_data)
 
-            # Call Modal function - it handles download/upload internally
+            # Create progress callback for real-time updates
+            async def modal_progress_callback(progress: float, message: str):
+                progress_data = {
+                    "progress": progress,
+                    "message": message,
+                    "status": "processing",
+                    "projectId": project_id,
+                    "projectName": project_name,
+                    "type": "framing"
+                }
+                export_progress[export_id] = progress_data
+                await manager.send_progress(export_id, progress_data)
+
+            # Call Modal function with progress callback
             modal_result = await call_modal_framing_ai(
                 job_id=export_id,
                 user_id=user_id,
@@ -912,6 +920,8 @@ async def render_project(request: RenderRequest):
                 output_height=1440,
                 fps=request.target_fps,
                 segment_data=segment_data,
+                video_duration=source_duration,
+                progress_callback=modal_progress_callback,
             )
 
             if modal_result.get("status") != "success":
@@ -921,6 +931,11 @@ async def render_project(request: RenderRequest):
                 )
 
             logger.info(f"[Render] Modal AI upscaling complete: {modal_result}")
+
+            # Update progress
+            dl_data = {"progress": 92, "message": "Downloading result...", "status": "processing", "projectId": project_id, "projectName": project_name, "type": "framing"}
+            export_progress[export_id] = dl_data
+            await manager.send_progress(export_id, dl_data)
 
             # Download output to get duration for DB
             if not download_from_r2(user_id, output_key, Path(output_path)):

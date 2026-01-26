@@ -217,6 +217,7 @@ class ProjectDetailResponse(BaseModel):
     name: str
     aspect_ratio: str
     working_video_id: Optional[int]
+    working_video_url: Optional[str] = None  # Presigned R2 URL for streaming
     final_video_id: Optional[int]
     clips: List[WorkingClipResponse]
     created_at: str
@@ -582,10 +583,13 @@ async def get_project(project_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get project
+        # Get project with working video filename for URL generation
         cursor.execute("""
-            SELECT id, name, aspect_ratio, working_video_id, final_video_id, created_at
-            FROM projects WHERE id = ?
+            SELECT p.id, p.name, p.aspect_ratio, p.working_video_id, p.final_video_id, p.created_at,
+                   wv.filename as working_video_filename
+            FROM projects p
+            LEFT JOIN working_videos wv ON p.working_video_id = wv.id
+            WHERE p.id = ?
         """, (project_id,))
         project = cursor.fetchone()
 
@@ -626,11 +630,17 @@ async def get_project(project_id: int):
                 sort_order=clip['sort_order']
             ))
 
+        # Generate presigned URL for working video if it exists
+        working_video_url = None
+        if project['working_video_filename']:
+            working_video_url = get_working_video_url(project['working_video_filename'])
+
         return ProjectDetailResponse(
             id=project['id'],
             name=project['name'],
             aspect_ratio=project['aspect_ratio'],
             working_video_id=project['working_video_id'],
+            working_video_url=working_video_url,
             final_video_id=project['final_video_id'],
             clips=clips,
             created_at=project['created_at']

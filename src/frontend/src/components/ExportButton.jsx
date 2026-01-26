@@ -296,7 +296,9 @@ const ExportButton = forwardRef(function ExportButton({
   };
 
   const handleExport = async () => {
-    if (!videoFile) {
+    // For overlay mode with projectId, videoFile is not required (backend gets video from R2)
+    const isBackendAuthoritative = editorMode === 'overlay' && projectId;
+    if (!videoFile && !isBackendAuthoritative) {
       setError('No video file loaded');
       return;
     }
@@ -973,7 +975,7 @@ const ExportButton = forwardRef(function ExportButton({
         fullWidth
         icon={isCurrentlyExporting ? Loader : Download}
         onClick={handleExport}
-        disabled={disabled || isCurrentlyExporting || !videoFile}
+        disabled={disabled || isCurrentlyExporting || (!videoFile && (isFramingMode || !projectId))}
         className={isCurrentlyExporting ? '[&>svg]:animate-spin' : ''}
       >
         {isCurrentlyExporting

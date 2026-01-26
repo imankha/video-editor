@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { timeToFrame } from '../../../utils/videoUtils';
 import { interpolateCropSpline } from '../../../utils/splineInterpolation';
 import useKeyframeController from '../../../hooks/useKeyframeController';
+import { normalizeToFrameKeyframes, validateFrameKeyframes } from '../../../types/keyframes';
 
 /**
  * Default crop sizes optimized for HD upscaling.
@@ -306,17 +307,32 @@ export default function useCrop(videoMetadata, trimRange = null) {
   /**
    * Restore crop keyframes from saved state (for clip switching)
    * Sets justRestoredRef to prevent orientation mismatch reinitialization
+   *
+   * IMPORTANT: Internal state uses FRAME-BASED keyframes.
+   * This function handles backwards compatibility with old time-based data.
+   *
+   * @param {import('../../../types/keyframes').FrameKeyframe[]|import('../../../types/keyframes').TimeKeyframe[]} savedKeyframes
+   * @param {number} endFrame
    */
   const restoreState = useCallback((savedKeyframes, endFrame) => {
     if (!savedKeyframes || savedKeyframes.length === 0) {
       console.log('[useCrop] No keyframes to restore');
       return;
     }
-    console.log('[useCrop] Restoring keyframes:', savedKeyframes.length, 'endFrame:', endFrame);
+
+    // Normalize to frame-based format (handles backwards compatibility with time-based data)
+    const frameKeyframes = normalizeToFrameKeyframes(savedKeyframes, framerate);
+
+    if (!validateFrameKeyframes(frameKeyframes)) {
+      console.error('[useCrop] Failed to normalize keyframes to frame-based format:', savedKeyframes);
+      return;
+    }
+
+    console.log('[useCrop] Restoring frame-based keyframes:', frameKeyframes.length, 'endFrame:', endFrame);
     // Set flag to prevent orientation mismatch reinitialization
     justRestoredRef.current = true;
-    restoreKeyframes(savedKeyframes, endFrame);
-  }, [restoreKeyframes]);
+    restoreKeyframes(frameKeyframes, endFrame);
+  }, [restoreKeyframes, framerate]);
 
   return {
     // State

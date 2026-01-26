@@ -329,20 +329,20 @@ describe('useOverlayState', () => {
       expect(result.current.pendingOverlaySaveRef.current).toBeNull();
     });
 
-    it('provides overlayDataLoadedRef', () => {
+    it('provides overlayDataLoadedForProjectRef', () => {
       const { result } = renderHook(() => useOverlayState());
 
-      expect(result.current.overlayDataLoadedRef).toBeDefined();
-      expect(result.current.overlayDataLoadedRef.current).toBe(false);
+      expect(result.current.overlayDataLoadedForProjectRef).toBeDefined();
+      expect(result.current.overlayDataLoadedForProjectRef.current).toBeNull();
     });
 
     it('refs are mutable', () => {
       const { result } = renderHook(() => useOverlayState());
 
-      result.current.overlayDataLoadedRef.current = true;
+      result.current.overlayDataLoadedForProjectRef.current = 123; // projectId
       result.current.pendingOverlaySaveRef.current = { test: 'data' };
 
-      expect(result.current.overlayDataLoadedRef.current).toBe(true);
+      expect(result.current.overlayDataLoadedForProjectRef.current).toBe(123);
       expect(result.current.pendingOverlaySaveRef.current).toEqual({ test: 'data' });
     });
   });

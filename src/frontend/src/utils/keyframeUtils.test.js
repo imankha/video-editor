@@ -112,8 +112,11 @@ describe('keyframeUtils', () => {
   });
 
   describe('FRAME_TOLERANCE', () => {
-    it('should be 2 (for ~67ms tolerance at 30fps)', () => {
-      expect(FRAME_TOLERANCE).toBe(2);
+    it('should be 5 (for ~167ms tolerance at 30fps)', () => {
+      // 5 frames at 30fps = ~167ms tolerance
+      // Based on analysis: minimum gap between user keyframes is 6-10 frames
+      // 5 frames is small enough to avoid false snaps, large enough for easy selection
+      expect(FRAME_TOLERANCE).toBe(5);
     });
   });
 });
