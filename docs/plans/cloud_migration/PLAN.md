@@ -116,7 +116,7 @@ Current DB is ~204KB - no optimization needed yet.
 | 08 | [Frontend Export Updates](tasks/08-frontend-export-updates.md) | `DONE` | Claude | WebSocket progress updates working |
 | 09 | [Testing Modal Integration](tasks/09-testing-modal.md) | `TESTING` | Both | End-to-end testing in progress |
 | -- | [Overlay Video Sync Fix](tasks/overlay-video-sync.md) | `TODO` | Claude | Fix playhead/tracking desync during buffering and scrubbing |
-| -- | [Framing→Annotate Navigation](../../../.claude/plans/hidden-snacking-donut.md) | `TODO` | Claude | Tags display + Edit in Annotate button |
+| -- | [Framing→Annotate Navigation](tasks/framing-annotate-navigation.md) | `TODO` | Claude | Tags display + Edit in Annotate button |
 | -- | [Gallery Download Fix](tasks/gallery-download-fix.md) | `TODO` | Claude | Fix download buttons in Gallery panel |
 | -- | [Multi-Clip Modal Migration](multi_clip_modal_migration.md) | `TODO` | Claude | Next task after testing complete |
 | 10 | [Fly.io Backend Deployment](tasks/10-flyio-deployment.md) | `TODO` | Claude | fly.toml, Dockerfile, deploy |
