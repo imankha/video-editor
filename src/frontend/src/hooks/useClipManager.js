@@ -195,8 +195,11 @@ export function useClipManager() {
       // Clip metadata from raw_clips
       annotateName: projectClip.name || null,
       annotateNotes: projectClip.notes || null,
-      annotateStartTime: null,
-      annotateEndTime: null,
+      annotateStartTime: projectClip.start_time || null,
+      annotateEndTime: projectClip.end_time || null,
+      gameId: projectClip.game_id || null,
+      tags: projectClip.tags || [],
+      rating: projectClip.rating || null,
       // Restored framing edits or defaults
       segments: savedSegments || {
         boundaries: [0, metadata.duration],

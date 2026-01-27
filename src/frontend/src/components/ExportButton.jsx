@@ -296,8 +296,12 @@ const ExportButton = forwardRef(function ExportButton({
   };
 
   const handleExport = async () => {
-    // For overlay mode with projectId, videoFile is not required (backend gets video from R2)
-    const isBackendAuthoritative = editorMode === 'overlay' && projectId;
+    // Backend can handle video when:
+    // 1. Overlay mode with projectId (video from working_video in R2)
+    // 2. Framing mode with project clips (videos from working_clips in R2)
+    const hasProjectClips = clips && clips.length > 0 && clips.some(c => c.workingClipId);
+    const isBackendAuthoritative = (editorMode === 'overlay' && projectId) ||
+                                   (editorMode === 'framing' && hasProjectClips);
     if (!videoFile && !isBackendAuthoritative) {
       setError('No video file loaded');
       return;
@@ -364,7 +368,10 @@ const ExportButton = forwardRef(function ExportButton({
     try {
       // Prepare form data based on mode
       const formData = new FormData();
-      formData.append('video', videoFile);
+      // Only append videoFile if we have it (not for streaming/project clips)
+      if (videoFile) {
+        formData.append('video', videoFile);
+      }
       formData.append('export_id', exportId);
       // Send project_id so backend can create export_jobs record for tracking
       if (projectId) {
@@ -975,7 +982,7 @@ const ExportButton = forwardRef(function ExportButton({
         fullWidth
         icon={isCurrentlyExporting ? Loader : Download}
         onClick={handleExport}
-        disabled={disabled || isCurrentlyExporting || (!videoFile && (isFramingMode || !projectId))}
+        disabled={disabled || isCurrentlyExporting || (!videoFile && !projectId)}
         className={isCurrentlyExporting ? '[&>svg]:animate-spin' : ''}
       >
         {isCurrentlyExporting

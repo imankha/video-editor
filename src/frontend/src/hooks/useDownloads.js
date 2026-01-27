@@ -24,6 +24,7 @@ export function useDownloads(isOpen = false) {
   const [count, setCount] = useState(0);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState(null); // null | 'brilliant_clip' | 'custom_project' | 'annotated_game'
+  const [downloadingId, setDownloadingId] = useState(null); // ID of currently downloading file
 
   // AbortController ref for cancelling requests
   const abortControllerRef = useRef(null);
@@ -125,46 +126,65 @@ export function useDownloads(isOpen = false) {
 
   /**
    * Get download URL for a file
-   * Uses presigned R2 URL if available (from download.file_url), otherwise falls back to local proxy
+   * Always uses backend proxy endpoint to avoid CORS issues with R2 presigned URLs
    * @param {number} downloadId - Download ID
-   * @param {Object} download - Optional download object that may contain file_url from API
+   * @param {Object} download - Optional download object (unused, kept for API compatibility)
    */
   const getDownloadUrl = useCallback((downloadId, download = null) => {
-    console.log('[useDownloads] getDownloadUrl called:', { downloadId, download_file_url: download?.file_url });
-    // If download object has presigned URL, use it (direct R2 access)
-    if (download?.file_url) {
-      console.log('[useDownloads] Using presigned R2 URL:', download.file_url);
-      return download.file_url;
-    }
-    // Find download in downloads array if not provided
-    const foundDownload = download || downloads.find(d => d.id === downloadId);
-    if (foundDownload?.file_url) {
-      console.log('[useDownloads] Using found presigned R2 URL:', foundDownload.file_url);
-      return foundDownload.file_url;
-    }
-    // Fallback to local proxy endpoint
-    const fallbackUrl = `${API_BASE_URL}/downloads/${downloadId}/file`;
-    console.log('[useDownloads] Using fallback local proxy URL:', fallbackUrl);
-    return fallbackUrl;
-  }, [downloads]);
+    // Always use backend proxy - it handles R2 streaming internally
+    // This avoids CORS issues when using fetch() to download files
+    const url = `${API_BASE_URL}/downloads/${downloadId}/file`;
+    return url;
+  }, []);
 
   /**
    * Trigger file download in browser
-   * Note: Filename is controlled by backend's Content-Disposition header (single source of truth)
+   * Uses backend proxy which streams from R2 to avoid CORS issues
+   * @param {number} downloadId - Download ID
    */
-  const downloadFile = useCallback((downloadId) => {
+  const downloadFile = useCallback(async (downloadId) => {
+    const download = downloads.find(d => d.id === downloadId);
     const url = getDownloadUrl(downloadId);
-    console.log('[useDownloads] downloadFile called:', { downloadId, url });
 
-    // Create a temporary link and trigger download
-    // Don't set link.download - let the server's Content-Disposition header control the filename
-    const link = document.createElement('a');
-    link.href = url;
-    document.body.appendChild(link);
-    console.log('[useDownloads] Triggering download click');
-    link.click();
-    document.body.removeChild(link);
-  }, [getDownloadUrl]);
+    setDownloadingId(downloadId);
+
+    try {
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+
+      // Get filename from Content-Disposition header or generate from metadata
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = 'video.mp4';
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="(.+)"/);
+        if (match) filename = match[1];
+      } else if (download?.project_name) {
+        filename = `${download.project_name.replace(/[^a-z0-9]/gi, '_')}_final.mp4`;
+      }
+
+      // Create object URL and trigger download
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Cleanup object URL
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error('[useDownloads] downloadFile error:', err);
+      setError(`Download failed: ${err.message}`);
+    } finally {
+      setDownloadingId(null);
+    }
+  }, [downloads, getDownloadUrl]);
 
   /**
    * Format file size for display
@@ -254,6 +274,7 @@ export function useDownloads(isOpen = false) {
     count,
     error,
     filter,
+    downloadingId,
     hasDownloads: downloads.length > 0,
 
     // Computed

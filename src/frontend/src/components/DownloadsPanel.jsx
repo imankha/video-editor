@@ -110,6 +110,7 @@ export function DownloadsPanel({
     groupedDownloads,
     deleteDownload,
     downloadFile,
+    downloadingId,
     getDownloadUrl,
     formatFileSize,
     formatDate,
@@ -268,10 +269,15 @@ export function DownloadsPanel({
           </button>
           <button
             onClick={(e) => handleDownload(e, download)}
-            className="p-2 hover:bg-gray-600 rounded transition-colors"
+            disabled={downloadingId === download.id}
+            className="p-2 hover:bg-gray-600 rounded transition-colors disabled:opacity-50"
             title="Download file"
           >
-            <Download size={16} className="text-gray-400 hover:text-white" />
+            {downloadingId === download.id ? (
+              <Loader size={16} className="text-gray-400 animate-spin" />
+            ) : (
+              <Download size={16} className="text-gray-400 hover:text-white" />
+            )}
           </button>
           {download.source_type !== 'annotated_game' && (
             <button
@@ -501,13 +507,15 @@ export function DownloadsPanel({
                 <Button
                   variant="primary"
                   size="sm"
-                  icon={Download}
+                  icon={downloadingId === playingVideo.id ? Loader : Download}
+                  disabled={downloadingId === playingVideo.id}
                   onClick={() => {
                     console.log('[DownloadsPanel] Modal download:', { id: playingVideo.id, project_name: playingVideo.project_name });
                     downloadFile(playingVideo.id);
                   }}
+                  className={downloadingId === playingVideo.id ? '[&_svg]:animate-spin' : ''}
                 >
-                  Download
+                  {downloadingId === playingVideo.id ? 'Downloading...' : 'Download'}
                 </Button>
                 <Button
                   variant="ghost"

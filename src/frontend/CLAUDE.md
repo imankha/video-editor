@@ -49,6 +49,29 @@ keyframe = {
 }
 ```
 
+## Common Pitfalls
+
+### All code paths must provide required data
+When a component has multiple conditions (e.g., `videoUrl && cropState && metadata`), ensure ALL code paths that render it satisfy ALL conditions. Example: streaming URLs bypassed metadata extraction, breaking CropOverlay.
+
+### Prop-based data flow over timing flags
+Pass saved state as props and let hooks restore via effects:
+```jsx
+// Good - prop-based
+useCrop(metadata, trimRange, selectedClip?.cropKeyframes)
+
+// Bad - timing-dependent manual calls
+useEffect(() => {
+  if (justSwitchedClip) restoreCropState(clip.keyframes);
+}, [clip]);
+```
+
+### Test all entry points
+The same feature may be reached via different paths (file upload, clip switch, mode navigation). Each path may have different data available. Test them all.
+
+### Video metadata fallback
+For streaming URLs, metadata may not be pre-loaded. `useVideo.handleLoadedMetadata` extracts it from the video element as a fallback.
+
 ## Don't
 - Don't add console.logs in committed code
 - Don't fetch data in View components

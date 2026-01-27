@@ -52,6 +52,8 @@ export function AnnotateScreen() {
 
   // Track if we're loading a game (ref persists across re-renders without causing them)
   const isLoadingRef = useRef(false);
+  // Track pending seek time for navigation from Framing mode
+  const [pendingSeekTime, setPendingSeekTime] = useState(null);
 
   // Check on mount if we're loading a game or file, set loading flag to prevent redirect
   useState(() => {
@@ -159,14 +161,22 @@ export function AnnotateScreen() {
     clearAnnotateState,
   } = annotate;
 
-  // Handle initial game ID from sessionStorage (when loading a saved game)
+  // Handle initial game ID from sessionStorage (when loading a saved game or navigating from Framing)
   useEffect(() => {
     const pendingGameId = sessionStorage.getItem('pendingGameId');
-    console.log('[AnnotateScreen] Game load effect - pendingGameId:', pendingGameId, 'videoUrl:', annotateVideoUrl, 'isLoading:', isLoadingRef.current);
+    const pendingClipSeekTime = sessionStorage.getItem('pendingClipSeekTime');
+    console.log('[AnnotateScreen] Game load effect - pendingGameId:', pendingGameId, 'pendingClipSeekTime:', pendingClipSeekTime, 'videoUrl:', annotateVideoUrl, 'isLoading:', isLoadingRef.current);
     if (pendingGameId && !annotateVideoUrl) {
       console.log('[AnnotateScreen] Loading game from pendingGameId:', pendingGameId);
       isLoadingRef.current = true;
       sessionStorage.removeItem('pendingGameId');
+      sessionStorage.removeItem('pendingClipSeekTime');
+
+      // If there's a pending seek time (from Framing navigation), queue it
+      if (pendingClipSeekTime) {
+        setPendingSeekTime(parseFloat(pendingClipSeekTime));
+      }
+
       handleLoadGame(parseInt(pendingGameId));
     }
   }, [handleLoadGame, annotateVideoUrl]);
@@ -183,6 +193,15 @@ export function AnnotateScreen() {
       handleGameVideoSelect(pendingFile, pendingDetails);
     }
   }, [handleGameVideoSelect, annotateVideoUrl]);
+
+  // Handle pending seek time after video loads (from Framing mode navigation)
+  useEffect(() => {
+    if (pendingSeekTime != null && annotateVideoUrl && videoRef.current) {
+      console.log('[AnnotateScreen] Seeking to pending time:', pendingSeekTime);
+      seek(pendingSeekTime);
+      setPendingSeekTime(null);
+    }
+  }, [pendingSeekTime, annotateVideoUrl, seek]);
 
   // Keyboard shortcuts for annotate mode
   // These are handled here (not in App.jsx) to use the same state instance

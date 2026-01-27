@@ -184,7 +184,8 @@ export function FramingScreen({
     handlers,
   } = useVideo(getSegmentAtTime, clampToVisibleRange);
 
-  // Crop hook
+  // Crop hook - pass selectedClip's keyframes so useCrop restores them via prop-based data flow
+  // This follows "data always ready" pattern: UI updates when data changes, no timing flags needed
   const {
     aspectRatio,
     keyframes,
@@ -204,7 +205,7 @@ export function FramingScreen({
     getKeyframesForExport,
     reset: resetCrop,
     restoreState: restoreCropState,
-  } = useCrop(metadata, trimRange);
+  } = useCrop(metadata, trimRange, selectedClip?.cropKeyframes);
 
   // Zoom hooks
   const {
@@ -364,21 +365,12 @@ export function FramingScreen({
         if (firstClipUrl) {
           console.log('[FramingScreen] Loading first clip video:', firstClipUrl);
 
-          // Use streaming for presigned URLs with preloaded metadata (instant first frame)
-          if (!firstClipUrl.startsWith('blob:') && firstClip.metadata) {
-            console.log('[FramingScreen] Using streaming mode for first clip');
-            loadVideoFromStreamingUrl(firstClipUrl, firstClip.metadata);
-          } else {
-            const file = await loadVideoFromUrl(firstClipUrl, firstClip.filename || 'clip.mp4');
-            if (file) {
-              setVideoFile(file);
-            }
-          }
-
-          // Restore first clip's framing state
-          // Use preloaded metadata if available, otherwise extract it
+          // Get metadata first (before loading video) so we can restore state before useEffect runs
+          // IMPORTANT: Restore crop/segment state BEFORE setting video metadata to avoid
+          // the useCrop useEffect re-initializing keyframes before we restore them
           const clipMetadata = firstClip.metadata || await extractVideoMetadataFromUrl(firstClipUrl);
 
+          // Restore framing state BEFORE loading video (prevents useEffect race condition)
           if (firstClip.segments_data) {
             try {
               const savedSegments = JSON.parse(firstClip.segments_data);
@@ -394,10 +386,23 @@ export function FramingScreen({
               const savedCropKeyframes = JSON.parse(firstClip.crop_data);
               if (savedCropKeyframes.length > 0) {
                 const endFrame = Math.round((clipMetadata?.duration || 0) * (clipMetadata?.framerate || 30));
+                console.log('[FramingScreen] Restoring crop keyframes BEFORE video load:', savedCropKeyframes.length, 'keyframes');
                 restoreCropState(savedCropKeyframes, endFrame);
               }
             } catch (e) {
               console.warn('[FramingScreen] Failed to parse crop_data:', e);
+            }
+          }
+
+          // NOW load video (with metadata that was already extracted)
+          // Use streaming for presigned R2 URLs (non-blob) to avoid CORS issues
+          if (!firstClipUrl.startsWith('blob:')) {
+            console.log('[FramingScreen] Using streaming mode for first clip');
+            loadVideoFromStreamingUrl(firstClipUrl, clipMetadata);
+          } else {
+            const file = await loadVideoFromUrl(firstClipUrl, firstClip.filename || 'clip.mp4');
+            if (file) {
+              setVideoFile(file);
             }
           }
         }
@@ -475,26 +480,11 @@ export function FramingScreen({
           }
         }
 
-        // 2. Load new clip's video
-        if (newClip.fileUrl) {
-          console.log('[FramingScreen] Loading new clip video:', newClip.fileUrl);
-          // Use streaming for presigned URLs with preloaded metadata (instant first frame)
-          if (!newClip.fileUrl.startsWith('blob:') && newClip.metadata) {
-            console.log('[FramingScreen] Using streaming mode for clip switch');
-            loadVideoFromStreamingUrl(newClip.fileUrl, newClip.metadata);
-          } else {
-            const file = await loadVideoFromUrl(newClip.fileUrl, newClip.fileName || 'clip.mp4');
-            if (file) {
-              setVideoFile(file);
-            }
-          }
-        } else if (newClip.file) {
-          console.log('[FramingScreen] Loading new clip from file:', newClip.fileName);
-          await loadVideo(newClip.file);
-          setVideoFile(newClip.file);
-        }
+        // 2. Restore state BEFORE loading video (prevents useEffect race condition)
+        // The useCrop useEffect runs when metadata changes and can re-initialize keyframes
+        // before we have a chance to restore them. So restore FIRST.
 
-        // 3. Restore new clip's segments state
+        // 2a. Restore new clip's segments state
         if (newClip.segments) {
           console.log('[FramingScreen] Restoring segments for clip:', selectedClipId);
           restoreSegmentState(newClip.segments, newClip.duration || 0);
@@ -506,14 +496,34 @@ export function FramingScreen({
           }
         }
 
-        // 4. Restore new clip's crop keyframes
+        // 2b. Restore new clip's crop keyframes BEFORE loading video
         if (newClip.cropKeyframes && newClip.cropKeyframes.length > 0) {
-          console.log('[FramingScreen] Restoring crop keyframes for clip:', selectedClipId, newClip.cropKeyframes.length, 'keyframes');
+          console.log('[FramingScreen] Restoring crop keyframes BEFORE video load:', selectedClipId, newClip.cropKeyframes.length, 'keyframes');
           const endFrame = Math.round((newClip.duration || 0) * (newClip.framerate || 30));
           restoreCropState(newClip.cropKeyframes, endFrame);
         } else {
           // Reset crop to let it initialize with defaults
           resetCrop();
+        }
+
+        // 3. NOW load new clip's video (after state is restored)
+        if (newClip.fileUrl) {
+          console.log('[FramingScreen] Loading new clip video:', newClip.fileUrl);
+          // Use streaming for presigned R2 URLs (non-blob) to avoid CORS issues
+          if (!newClip.fileUrl.startsWith('blob:')) {
+            console.log('[FramingScreen] Using streaming mode for clip switch');
+            // Pass metadata so useCrop's useEffect sees it AND our restored keyframes together
+            loadVideoFromStreamingUrl(newClip.fileUrl, newClip.metadata || null);
+          } else {
+            const file = await loadVideoFromUrl(newClip.fileUrl, newClip.fileName || 'clip.mp4');
+            if (file) {
+              setVideoFile(file);
+            }
+          }
+        } else if (newClip.file) {
+          console.log('[FramingScreen] Loading new clip from file:', newClip.fileName);
+          await loadVideo(newClip.file);
+          setVideoFile(newClip.file);
         }
 
         // Reset edit tracking for new clip
@@ -769,6 +779,20 @@ export function FramingScreen({
     }
   }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio, refreshProject]);
 
+  // Handle navigation to Annotate mode to edit clip source
+  const handleEditInAnnotate = useCallback(() => {
+    if (!selectedClip?.gameId) return;
+
+    // Store navigation intent for AnnotateScreen to pick up
+    sessionStorage.setItem('pendingGameId', selectedClip.gameId.toString());
+    if (selectedClip.annotateStartTime != null) {
+      sessionStorage.setItem('pendingClipSeekTime', selectedClip.annotateStartTime.toString());
+    }
+
+    // Switch to annotate mode
+    setEditorMode('annotate');
+  }, [selectedClip, setEditorMode]);
+
   // Handle clip selection from sidebar
   const handleSelectClip = useCallback((clipId) => {
     if (clipId !== selectedClipId) {
@@ -881,6 +905,9 @@ export function FramingScreen({
       metadata={metadata}
       videoFile={videoFile}
       clipTitle={selectedClip?.annotateName || selectedClip?.fileNameDisplay}
+      clipTags={selectedClip?.tags}
+      canEditInAnnotate={selectedClip?.gameId != null}
+      onEditInAnnotate={handleEditInAnnotate}
       currentTime={currentTime}
       duration={duration}
       isPlaying={isPlaying}

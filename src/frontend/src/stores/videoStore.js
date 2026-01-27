@@ -27,6 +27,7 @@ export const useVideoStore = create((set, get) => ({
   isPlaying: false,
   currentTime: 0,
   isSeeking: false,
+  isBuffering: false,
 
   // Loading/error state
   isLoading: false,
@@ -40,6 +41,7 @@ export const useVideoStore = create((set, get) => ({
   setIsPlaying: (isPlaying) => set({ isPlaying }),
   setCurrentTime: (currentTime) => set({ currentTime }),
   setIsSeeking: (isSeeking) => set({ isSeeking }),
+  setIsBuffering: (isBuffering) => set({ isBuffering }),
   setIsLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
 
@@ -64,6 +66,7 @@ export const useVideoStore = create((set, get) => ({
     isPlaying: false,
     currentTime: 0,
     isSeeking: false,
+    isBuffering: false,
     isLoading: false,
     error: null,
   }),

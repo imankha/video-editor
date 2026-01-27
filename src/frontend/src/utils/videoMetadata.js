@@ -10,7 +10,8 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.preload = 'metadata';
-    video.crossOrigin = 'anonymous';
+    // Note: Don't set crossOrigin for presigned R2 URLs - we only need metadata,
+    // not canvas pixel access, so "opaque" mode (no CORS) is fine
 
     const cleanup = () => {
       video.remove();

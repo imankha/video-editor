@@ -124,7 +124,8 @@
       "Bash(c:/Users/imank/projects/video-editor/.venv/Scripts/python.exe -m modal deploy modal_functions/video_processing.py)",
       "Bash(cmd /c \"cd /d c:\\\\Users\\\\imank\\\\projects\\\\video-editor && set PYTHONIOENCODING=utf-8 && .venv\\\\Scripts\\\\python.exe -m modal deploy modal_functions/video_processing.py\")",
       "Bash(\"C:\\\\Users\\\\imank\\\\AppData\\\\Roaming\\\\Python\\\\Python311\\\\Scripts\\\\modal.exe\" app list:*)",
-      "Bash(\"C:\\\\Users\\\\imank\\\\AppData\\\\Roaming\\\\Python\\\\Python311\\\\Scripts\\\\modal.exe\" app list --json)"
+      "Bash(\"C:\\\\Users\\\\imank\\\\AppData\\\\Roaming\\\\Python\\\\Python311\\\\Scripts\\\\modal.exe\" app list --json)",
+      "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python -m modal deploy:*)"
     ],
     "deny": [],
     "ask": []

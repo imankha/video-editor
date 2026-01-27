@@ -1301,29 +1301,139 @@ def process_framing_ai(
             # Encode video with FFmpeg
             output_path = os.path.join(temp_dir, "output.mp4")
 
+            # Check for segment speed changes
+            segments = segment_data.get('segments', []) if segment_data else []
+            has_speed_changes = any(seg.get('speed', 1.0) != 1.0 for seg in segments)
+
             # Build FFmpeg command
-            cmd = [
-                "ffmpeg", "-y",
-                "-framerate", str(fps),
-                "-i", os.path.join(frames_dir, "frame_%06d.png"),
-                "-i", input_path,  # For audio
-                "-map", "0:v",
-                "-map", "1:a?",
-                "-c:v", "libx264",
-                "-pix_fmt", "yuv420p",
-                "-preset", "fast",
-                "-crf", "23",
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-movflags", "+faststart",
-                "-shortest",
-                output_path,
-            ]
+            if has_speed_changes and segments:
+                # Build complex filtergraph for segment-based speed changes
+                logger.info(f"[{job_id}] Applying segment speed changes: {segments}")
+
+                filter_parts = []
+                audio_filter_parts = []
+                output_labels = []
+                audio_labels = []
+
+                # Calculate the time offset in the output frame sequence
+                # Frames start at 0, but segment times reference source video times
+                trim_offset = segment_data.get('trim_start', 0) if segment_data else 0
+
+                for i, seg in enumerate(segments):
+                    seg_start = seg['start'] - trim_offset
+                    seg_end = seg['end'] - trim_offset
+                    speed = seg.get('speed', 1.0)
+
+                    # Clamp to valid frame range (in output time)
+                    seg_start = max(0, seg_start)
+                    seg_end = min(output_frame_idx / fps, seg_end)
+
+                    if seg_end <= seg_start:
+                        continue
+
+                    logger.info(f"[{job_id}] Segment {i}: {seg_start:.2f}s-{seg_end:.2f}s @ {speed}x")
+
+                    # Video: apply setpts for speed change
+                    if speed != 1.0:
+                        filter_parts.append(
+                            f"[0:v]trim=start={seg_start}:end={seg_end},setpts=(PTS-STARTPTS)/{speed}[v{i}]"
+                        )
+                    else:
+                        filter_parts.append(
+                            f"[0:v]trim=start={seg_start}:end={seg_end},setpts=PTS-STARTPTS[v{i}]"
+                        )
+                    output_labels.append(f"[v{i}]")
+
+                    # Audio: apply atempo for speed change (from source input)
+                    audio_start = seg['start']
+                    audio_end = seg['end']
+                    if speed != 1.0:
+                        # atempo supports 0.5-2.0, chain for extreme values
+                        atempo_val = max(0.5, min(2.0, speed))
+                        audio_filter_parts.append(
+                            f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,atempo={atempo_val}[a{i}]"
+                        )
+                    else:
+                        audio_filter_parts.append(
+                            f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS[a{i}]"
+                        )
+                    audio_labels.append(f"[a{i}]")
+
+                # Concatenate all segments
+                if len(output_labels) > 0:
+                    v_concat = ''.join(output_labels)
+                    a_concat = ''.join(audio_labels)
+                    all_filters = ';'.join(filter_parts + audio_filter_parts)
+                    filter_complex = f"{all_filters};{v_concat}concat=n={len(output_labels)}:v=1:a=0[outv];{a_concat}concat=n={len(audio_labels)}:v=0:a=1[outa]"
+
+                    cmd = [
+                        "ffmpeg", "-y",
+                        "-framerate", str(fps),
+                        "-i", os.path.join(frames_dir, "frame_%06d.png"),
+                        "-i", input_path,  # For audio
+                        "-filter_complex", filter_complex,
+                        "-map", "[outv]",
+                        "-map", "[outa]",
+                        "-c:v", "libx264",
+                        "-pix_fmt", "yuv420p",
+                        "-preset", "fast",
+                        "-crf", "23",
+                        "-c:a", "aac",
+                        "-b:a", "192k",
+                        "-movflags", "+faststart",
+                        output_path,
+                    ]
+                else:
+                    # Fallback to simple encoding
+                    cmd = [
+                        "ffmpeg", "-y",
+                        "-framerate", str(fps),
+                        "-i", os.path.join(frames_dir, "frame_%06d.png"),
+                        "-i", input_path,
+                        "-map", "0:v",
+                        "-map", "1:a?",
+                        "-c:v", "libx264",
+                        "-pix_fmt", "yuv420p",
+                        "-preset", "fast",
+                        "-crf", "23",
+                        "-c:a", "aac",
+                        "-b:a", "192k",
+                        "-movflags", "+faststart",
+                        "-shortest",
+                        output_path,
+                    ]
+            else:
+                # No speed changes - simple encoding
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-framerate", str(fps),
+                    "-i", os.path.join(frames_dir, "frame_%06d.png"),
+                    "-i", input_path,  # For audio
+                    "-map", "0:v",
+                    "-map", "1:a?",
+                    "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p",
+                    "-preset", "fast",
+                    "-crf", "23",
+                    "-c:a", "aac",
+                    "-b:a", "192k",
+                    "-movflags", "+faststart",
+                    "-shortest",
+                    output_path,
+                ]
+
+            # Log the FFmpeg command for debugging
+            logger.info(f"[{job_id}] FFmpeg command: {' '.join(cmd[:10])}... (truncated)")
+            if "-filter_complex" in cmd:
+                fc_idx = cmd.index("-filter_complex")
+                logger.info(f"[{job_id}] Filter complex: {cmd[fc_idx+1][:200]}...")
 
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
                 logger.error(f"[{job_id}] FFmpeg error: {result.stderr}")
                 raise RuntimeError(f"FFmpeg encoding failed: {result.stderr[:500]}")
+            else:
+                logger.info(f"[{job_id}] FFmpeg completed successfully")
 
             logger.info(f"[{job_id}] Video encoded, uploading to R2...")
 

@@ -155,6 +155,12 @@ class WorkingClipResponse(BaseModel):
     crop_data: Optional[str] = None
     timing_data: Optional[str] = None
     segments_data: Optional[str] = None
+    # Fields from raw_clips for Annotate navigation
+    game_id: Optional[int] = None
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    tags: Optional[List[str]] = None
+    rating: Optional[int] = None
 
 
 class WorkingClipUpdate(BaseModel):
@@ -948,7 +954,10 @@ async def list_project_clips(project_id: int):
                 rc.name as raw_name,
                 rc.notes as raw_notes,
                 rc.rating as raw_rating,
-                rc.tags as raw_tags
+                rc.tags as raw_tags,
+                rc.game_id as raw_game_id,
+                rc.start_time as raw_start_time,
+                rc.end_time as raw_end_time
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             WHERE wc.project_id = ?
@@ -977,7 +986,12 @@ async def list_project_clips(project_id: int):
                 sort_order=clip['sort_order'],
                 crop_data=clip['crop_data'],
                 timing_data=clip['timing_data'],
-                segments_data=clip['segments_data']
+                segments_data=clip['segments_data'],
+                game_id=clip['raw_game_id'],
+                start_time=clip['raw_start_time'],
+                end_time=clip['raw_end_time'],
+                tags=tags,
+                rating=rating
             ))
         return result
 
