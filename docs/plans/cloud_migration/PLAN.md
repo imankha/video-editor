@@ -128,6 +128,7 @@ Current DB is ~204KB - no optimization needed yet.
 | 13 | [User Management](tasks/13-user-management.md) | `OPTIONAL` | Both | Auth, multi-tenancy |
 | 14 | [Wallet & Payments](tasks/14-wallet-payments.md) | `OPTIONAL` | Both | Stripe integration |
 | 15 | [Future GPU Features](tasks/15-future-gpu-features.md) | `FUTURE` | Claude | AI upscaling, tracking |
+| -- | [Auto Player Detection](tasks/auto-player-detection.md) | `TODO` | Claude | Auto-detect players after framing, create overlay keyframes |
 | -- | [WebGPU Local Processing](webgpu_local_processing.md) | `FUTURE` | Claude | Client-side GPU for overlays/YOLO when capable |
 
 **Status Key**: `DONE` | `TODO` | `IN_PROGRESS` | `TESTING` | `BLOCKED` | `OPTIONAL` | `FUTURE`
