@@ -22,8 +22,6 @@ export function FramingModeView({
   videoFile,
   clipTitle,
   clipTags = [],
-  canEditInAnnotate = false,
-  onEditInAnnotate,
   currentTime,
   duration,
   isPlaying,
@@ -150,16 +148,8 @@ export function FramingModeView({
               )}
             </div>
 
-            {/* Right: Edit button + Metadata */}
+            {/* Right: Metadata */}
             <div className="flex items-center gap-4">
-              {canEditInAnnotate && onEditInAnnotate && (
-                <button
-                  onClick={onEditInAnnotate}
-                  className="px-3 py-1.5 bg-green-600/20 hover:bg-green-600/40 text-green-300 text-sm rounded border border-green-600/30 transition-colors"
-                >
-                  Edit in Annotate
-                </button>
-              )}
               <div className="flex space-x-6">
                 <span>
                   <span className="text-gray-400">Resolution:</span>{' '}

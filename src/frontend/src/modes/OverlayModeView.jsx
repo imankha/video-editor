@@ -26,6 +26,7 @@ export function OverlayModeView({
   effectiveOverlayMetadata,
   effectiveOverlayFile,
   videoTitle,
+  videoTags = [],
   currentTime,
   duration,
   isPlaying,
@@ -117,7 +118,20 @@ export function OverlayModeView({
       {!isFullscreen && (effectiveOverlayMetadata ? (
         <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
           <div className="flex items-center justify-between text-sm text-gray-300">
-            {videoTitle && <span className="font-semibold text-white">{videoTitle}</span>}
+            {/* Left: Title + Tags */}
+            <div className="flex flex-col gap-1">
+              {videoTitle && <span className="font-semibold text-white">{videoTitle}</span>}
+              {videoTags?.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {videoTags.map(tag => (
+                    <span key={tag} className="px-2 py-0.5 bg-blue-500/30 text-blue-200 text-xs rounded">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Right: Metadata */}
             <div className="flex space-x-6">
               <span>
                 <span className="text-gray-400">Resolution:</span>{' '}

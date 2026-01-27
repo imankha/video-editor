@@ -60,6 +60,13 @@ export function OverlayScreen({
   const clips = useProjectDataStore(state => state.clips);
   const hasClips = clips && clips.length > 0;
 
+  // Get unique tags from all clips for display
+  const clipTags = useMemo(() => {
+    if (!clips || clips.length === 0) return [];
+    const allTags = clips.flatMap(c => c.tags || []);
+    return [...new Set(allTags)]; // Unique tags
+  }, [clips]);
+
   // Framing store - for detecting uncommitted changes
   const hasChangedSinceExport = useFramingStore(state => state.hasChangedSinceExport);
 
@@ -590,6 +597,7 @@ export function OverlayScreen({
       effectiveOverlayMetadata={effectiveOverlayMetadata}
       effectiveOverlayFile={effectiveOverlayFile}
       videoTitle={project?.name}
+      videoTags={clipTags}
       currentTime={currentTime}
       duration={duration}
       isPlaying={isPlaying}

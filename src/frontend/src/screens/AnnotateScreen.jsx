@@ -186,9 +186,7 @@ export function AnnotateScreen({ onClearSelection }) {
   useEffect(() => {
     const pendingFile = getPendingGameFile();
     const pendingDetails = getPendingGameDetails();
-    console.log('[AnnotateScreen] Pending file effect - file:', pendingFile?.name, 'details:', pendingDetails, 'videoUrl:', annotateVideoUrl, 'isLoading:', isLoadingRef.current);
     if (pendingFile && !annotateVideoUrl) {
-      console.log('[AnnotateScreen] Loading pending game file:', pendingFile.name, 'with details:', pendingDetails);
       isLoadingRef.current = true;
       clearPendingGameFile();
       handleGameVideoSelect(pendingFile, pendingDetails);

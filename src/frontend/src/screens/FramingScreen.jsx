@@ -693,8 +693,22 @@ export function FramingScreen({
   };
 
   // Handle proceed to overlay
-  const handleProceedToOverlayInternal = useCallback(async (renderedVideoBlob, clipMetadata) => {
-    console.log('[FramingScreen] Starting overlay transition...');
+  const handleProceedToOverlayInternal = useCallback(async (renderedVideoBlob, clipMetadata, exportedProjectId) => {
+    console.log('[FramingScreen] Starting overlay transition...', { exportedProjectId, currentProjectId: projectId });
+
+    // IMPORTANT: Check if the completed export is for the current project
+    // User may have switched to a different project while export was running
+    if (exportedProjectId && exportedProjectId !== projectId) {
+      console.log('[FramingScreen] Export completed for different project, ignoring navigation', {
+        exportedProjectId,
+        currentProjectId: projectId
+      });
+      // Still refresh projects list so the completed export shows up
+      if (onExportComplete) {
+        onExportComplete();
+      }
+      return;
+    }
 
     // Save pending edits (non-blocking - continue even if this fails)
     try {
@@ -783,21 +797,7 @@ export function FramingScreen({
     } else {
       console.error('[FramingScreen] Cannot navigate to overlay - working video not set');
     }
-  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio, refreshProject]);
-
-  // Handle navigation to Annotate mode to edit clip source
-  const handleEditInAnnotate = useCallback(() => {
-    if (!selectedClip?.gameId) return;
-
-    // Store navigation intent for AnnotateScreen to pick up
-    sessionStorage.setItem('pendingGameId', selectedClip.gameId.toString());
-    if (selectedClip.annotateStartTime != null) {
-      sessionStorage.setItem('pendingClipSeekTime', selectedClip.annotateStartTime.toString());
-    }
-
-    // Switch to annotate mode
-    setEditorMode('annotate');
-  }, [selectedClip, setEditorMode]);
+  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio, refreshProject, projectId, onExportComplete]);
 
   // Handle clip selection from sidebar
   const handleSelectClip = useCallback((clipId) => {
@@ -912,8 +912,6 @@ export function FramingScreen({
       videoFile={videoFile}
       clipTitle={selectedClip?.annotateName || selectedClip?.fileNameDisplay}
       clipTags={selectedClip?.tags}
-      canEditInAnnotate={selectedClip?.gameId != null}
-      onEditInAnnotate={handleEditInAnnotate}
       currentTime={currentTime}
       duration={duration}
       isPlaying={isPlaying}

@@ -547,8 +547,9 @@ const ExportButton = forwardRef(function ExportButton({
             });
 
             // Trigger proceed to overlay if callback provided
+            // Pass projectId so the handler can verify this export matches the current project
             if (onProceedToOverlay) {
-              onProceedToOverlay(null, buildClipMetadata(clips));
+              onProceedToOverlay(null, buildClipMetadata(clips), projectId);
             }
             if (onExportComplete) {
               onExportComplete();
@@ -722,8 +723,9 @@ const ExportButton = forwardRef(function ExportButton({
 
           // MVC: No blob needed - overlay mode will fetch working video from server
           // Pass null for blob, just the metadata for highlight generation
+          // Include projectId so handler can verify this export matches current project
           if (onProceedToOverlay) {
-            await onProceedToOverlay(null, clipMetadata);
+            await onProceedToOverlay(null, clipMetadata, projectId);
           }
 
           setIsExporting(false);

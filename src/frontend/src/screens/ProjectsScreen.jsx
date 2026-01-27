@@ -203,7 +203,6 @@ export function ProjectsScreen({
   // Handle annotate with file and game details (navigate to annotate mode with pre-selected data)
   // The data is stored in module-level variable and picked up by AnnotateScreen
   const handleAnnotateWithFile = useCallback((gameData) => {
-    console.log('[ProjectsScreen] Navigating to annotate with game data:', gameData.file?.name, gameData);
     pendingGameData = gameData;
     setEditorMode('annotate');
   }, [setEditorMode]);
