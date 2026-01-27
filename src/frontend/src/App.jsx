@@ -186,7 +186,7 @@ function App() {
       {/* Connection status banner - shows when backend is unreachable */}
       <ConnectionStatus />
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
-      {editorMode === 'annotate' && <AnnotateScreen />}
+      {editorMode === 'annotate' && <AnnotateScreen onClearSelection={clearSelection} />}
 
       {/* Main Content - For framing/overlay modes */}
       {editorMode !== 'annotate' && (

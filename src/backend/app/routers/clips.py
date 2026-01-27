@@ -559,7 +559,7 @@ async def save_raw_clip(clip_data: RawClipCreate):
 
         # Check if clip already exists (lookup by game_id + end_time as natural key)
         cursor.execute("""
-            SELECT id, filename, rating, auto_project_id FROM raw_clips
+            SELECT id, filename, rating, auto_project_id, start_time FROM raw_clips
             WHERE game_id = ? AND end_time = ?
         """, (clip_data.game_id, clip_data.end_time))
         existing = cursor.fetchone()
@@ -567,6 +567,75 @@ async def save_raw_clip(clip_data: RawClipCreate):
         if existing:
             # Clip already exists - update it with new data and return existing ID
             logger.info(f"Found existing clip {existing['id']} for game {clip_data.game_id} at end_time {clip_data.end_time}")
+
+            old_start_time = existing['start_time']
+            new_start_time = clip_data.start_time
+            start_time_changed = (old_start_time != new_start_time)
+
+            # If start_time changed, we need to re-extract the video
+            if start_time_changed and existing['filename']:
+                logger.info(f"Start time changed for clip {existing['id']}: {old_start_time} -> {new_start_time}, re-extracting")
+
+                # Get game video for re-extraction
+                cursor.execute("SELECT video_filename FROM games WHERE id = ?", (clip_data.game_id,))
+                game = cursor.fetchone()
+
+                if game and game['video_filename']:
+                    user_id = get_current_user_id()
+
+                    if modal_enabled():
+                        # Use Modal for clip extraction
+                        from app.services.modal_client import call_modal_extract_clip
+                        new_filename = f"{uuid.uuid4().hex[:12]}.mp4"
+                        result = await call_modal_extract_clip(
+                            user_id=user_id,
+                            input_key=f"games/{game['video_filename']}",
+                            output_key=f"raw_clips/{new_filename}",
+                            start_time=new_start_time,
+                            end_time=clip_data.end_time,
+                        )
+                        if result and result.get('status') == 'success':
+                            # Update filename to new extracted file
+                            cursor.execute("UPDATE raw_clips SET filename = ? WHERE id = ?",
+                                         (new_filename, existing['id']))
+                            existing = dict(existing)
+                            existing['filename'] = new_filename
+                            logger.info(f"Re-extracted clip {existing['id']} to {new_filename}")
+                    else:
+                        # Local extraction
+                        from app.services.r2_storage import download_from_r2
+                        import tempfile
+                        import uuid
+                        from pathlib import Path
+
+                        with tempfile.TemporaryDirectory() as temp_dir:
+                            temp_dir_path = Path(temp_dir)
+                            game_path = temp_dir_path / game['video_filename']
+
+                            # Download game video
+                            if download_from_r2(user_id, f"games/{game['video_filename']}", game_path):
+                                new_filename = f"{uuid.uuid4().hex[:12]}.mp4"
+                                output_path = temp_dir_path / new_filename
+
+                                # Extract clip
+                                from app.routers.annotate import extract_clip_to_file
+                                success = await extract_clip_to_file(
+                                    source_path=str(game_path),
+                                    output_path=str(output_path),
+                                    start_time=new_start_time,
+                                    end_time=clip_data.end_time,
+                                    clip_name=clip_data.name,
+                                    clip_notes=clip_data.notes or ''
+                                )
+
+                                if success:
+                                    # Upload to R2
+                                    from app.services.r2_storage import upload_to_r2
+                                    if upload_to_r2(user_id, f"raw_clips/{new_filename}", output_path):
+                                        cursor.execute("UPDATE raw_clips SET filename = ? WHERE id = ?",
+                                                     (new_filename, existing['id']))
+                                        existing = dict(existing)
+                                        existing['filename'] = new_filename
 
             # Update the existing clip with any new metadata
             cursor.execute("""
@@ -605,7 +674,7 @@ async def save_raw_clip(clip_data: RawClipCreate):
 
             return RawClipSaveResponse(
                 raw_clip_id=existing['id'],
-                filename=existing['filename'],
+                filename=existing['filename'] if isinstance(existing, dict) else existing['filename'],
                 project_created=project_created,
                 project_id=project_id
             )

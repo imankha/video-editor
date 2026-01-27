@@ -346,6 +346,12 @@ export function FramingScreen({
             segments_data: c.segments_data,
             crop_data: c.crop_data,
             file_url: c.file_url,  // Presigned R2 URL (if available)
+            // Annotate navigation fields
+            game_id: c.game_id,
+            start_time: c.start_time,
+            end_time: c.end_time,
+            tags: c.tags,
+            rating: c.rating,
           })),
           getClipUrl,
           getMetadataFromUrl,

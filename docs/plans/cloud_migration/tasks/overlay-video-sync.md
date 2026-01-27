@@ -4,7 +4,7 @@
 Fix two desync bugs in Overlay mode where tracking squares (highlight ellipses) and playhead become out of sync with the actual video frame being displayed.
 
 ## Status
-**PLANNED** - Ready for implementation
+**DONE** - Implementation complete (already in codebase)
 
 ## Priority
 **HIGH** - Affects core user experience in Overlay mode
@@ -228,13 +228,32 @@ const throttledSeek = useMemo(
 
 ---
 
-## Files to Modify
+## Implementation (Completed)
+
+All tasks have been implemented:
+
+### Task 1: Video State Tracking ✅
+- `isBuffering` state added to `videoStore.js` (line 30, 44)
+
+### Task 2: Buffering Event Handlers ✅
+- `handleWaiting`, `handlePlaying`, `handleCanPlay` in `useVideo.js` (lines 306-318)
+
+### Task 3: RAF Loop Pauses During Buffering ✅
+- RAF loop checks `!isSeeking && !isBuffering` and `readyState >= HAVE_CURRENT_DATA` (lines 326-350)
+
+### Task 4: Seek Waits for Frame ✅
+- `seek()` does NOT update `currentTime` immediately - waits for `seeked` event via `handleSeeked` (lines 224-237, 356-361)
+
+### Task 5: Handlers Attached ✅
+- All handlers exported from `useVideo.js` and attached in `VideoPlayer.jsx` (lines 188-190)
+
+## Files Modified
 
 | File | Changes |
 |------|---------|
-| `src/frontend/src/stores/videoStore.js` | Add `isBuffering` state |
-| `src/frontend/src/hooks/useVideo.js` | Add buffering handlers, fix seek, update RAF |
-| `src/frontend/src/modes/OverlayModeView.jsx` | Optional: buffering indicator |
+| `src/frontend/src/stores/videoStore.js` | `isBuffering` state added |
+| `src/frontend/src/hooks/useVideo.js` | Buffering handlers, seek fix, RAF guard |
+| `src/frontend/src/components/VideoPlayer.jsx` | All handlers attached to video element |
 
 ---
 

@@ -4,7 +4,7 @@
 Add ability to switch from Framing mode to Annotate mode with the current clip's game loaded and clip selected. Also display clip tags in the Framing header.
 
 ## Status
-**TODO** - Ready for implementation
+**DONE** - Implementation complete (already in codebase)
 
 ## Priority
 **MEDIUM** - Quality of life feature for editing workflow

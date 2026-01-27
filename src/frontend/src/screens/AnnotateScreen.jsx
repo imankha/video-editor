@@ -33,7 +33,7 @@ import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from 
  *
  * @see AppJSX_REDUCTION/TASK-05-finalize-annotate-screen.md
  */
-export function AnnotateScreen() {
+export function AnnotateScreen({ onClearSelection }) {
   // Editor mode (for navigation between screens)
   // NOTE: Using editorStore (not navigationStore) because App.jsx renders based on editorStore
   const setEditorMode = useEditorStore(state => state.setEditorMode);
@@ -47,7 +47,7 @@ export function AnnotateScreen() {
     saveAnnotationsDebounced,
   } = useGames();
 
-  // Projects (for import/export)
+  // Projects (for import/export only - clearSelection comes from App.jsx prop)
   const { fetchProjects } = useProjects();
 
   // Track if we're loading a game (ref persists across re-renders without causing them)
@@ -93,8 +93,9 @@ export function AnnotateScreen() {
 
   // Handlers
   const handleBackToProjects = useCallback(() => {
+    onClearSelection?.();  // Clear App.jsx's selected project (from Framing → Annotate navigation)
     setEditorMode('project-manager');
-  }, [setEditorMode]);
+  }, [onClearSelection, setEditorMode]);
 
   // AnnotateContainer - encapsulates all annotate mode state and handlers
   // NOTE: Clips are now saved in real-time during annotation, no batch import needed
@@ -195,13 +196,14 @@ export function AnnotateScreen() {
   }, [handleGameVideoSelect, annotateVideoUrl]);
 
   // Handle pending seek time after video loads (from Framing mode navigation)
+  // Use videoRef.current.currentTime directly to avoid infinite loop from seek() triggering re-renders
   useEffect(() => {
     if (pendingSeekTime != null && annotateVideoUrl && videoRef.current) {
       console.log('[AnnotateScreen] Seeking to pending time:', pendingSeekTime);
-      seek(pendingSeekTime);
+      videoRef.current.currentTime = pendingSeekTime;
       setPendingSeekTime(null);
     }
-  }, [pendingSeekTime, annotateVideoUrl, seek]);
+  }, [pendingSeekTime, annotateVideoUrl]);
 
   // Keyboard shortcuts for annotate mode
   // These are handled here (not in App.jsx) to use the same state instance
