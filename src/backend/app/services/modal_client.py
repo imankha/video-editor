@@ -45,6 +45,7 @@ _process_framing_fn = None
 _process_framing_ai_fn = None
 _detect_players_fn = None
 _extract_clip_fn = None
+_create_annotated_compilation_fn = None
 
 # Cost-optimized GPU configuration thresholds
 # Based on analysis with CPU orchestrator:
@@ -200,6 +201,23 @@ def _get_extract_clip_fn():
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to extract_clip_modal: {e}")
         raise RuntimeError(f"Modal extract_clip_modal not available: {e}")
+
+
+def _get_create_annotated_compilation_fn():
+    """Get a reference to the deployed create_annotated_compilation function."""
+    global _create_annotated_compilation_fn
+
+    if _create_annotated_compilation_fn is not None:
+        return _create_annotated_compilation_fn
+
+    try:
+        import modal
+        _create_annotated_compilation_fn = modal.Function.from_name(MODAL_APP_NAME, "create_annotated_compilation")
+        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/create_annotated_compilation")
+        return _create_annotated_compilation_fn
+    except Exception as e:
+        logger.error(f"[Modal] Failed to connect to create_annotated_compilation: {e}")
+        raise RuntimeError(f"Modal create_annotated_compilation not available: {e}")
 
 
 
@@ -762,6 +780,101 @@ async def call_modal_extract_clip(
         return {"status": "error", "error": str(e)}
 
 
+async def call_modal_annotate_compilation(
+    job_id: str,
+    user_id: str,
+    input_key: str,
+    output_key: str,
+    clips: list,
+    gallery_output_key: str = None,
+    progress_callback = None,
+) -> dict:
+    """
+    Call Modal create_annotated_compilation function.
+
+    Creates a video compilation with burned-in text annotations on Modal cloud.
+    Avoids downloading large game videos locally.
+
+    Args:
+        job_id: Unique job identifier
+        user_id: User folder in R2 (e.g., "a")
+        input_key: R2 key for source game video (e.g., "games/abc123.mp4")
+        output_key: R2 key for output compilation (e.g., "downloads/compilation.mp4")
+        clips: List of clip data with timestamps, names, ratings, tags, notes
+        gallery_output_key: Optional secondary R2 key for gallery
+        progress_callback: Optional async callable(progress: float, message: str)
+
+    Returns:
+        {"status": "success", "output_key": "...", "gallery_filename": "...", "clips_processed": N} or
+        {"status": "error", "error": "..."}
+    """
+    if not _modal_enabled:
+        raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
+
+    create_annotated_compilation = _get_create_annotated_compilation_fn()
+
+    logger.info(f"[Modal] Calling create_annotated_compilation for job {job_id}")
+    logger.info(f"[Modal] User: {user_id}, Input: {input_key} -> Output: {output_key}")
+    logger.info(f"[Modal] Clips: {len(clips)}")
+
+    # Estimate processing time: ~3s per clip (download overhead + encode + upload)
+    estimated_time = len(clips) * 3 + 15  # base overhead
+
+    try:
+        # Start Modal job in executor
+        loop = asyncio.get_running_loop()
+        modal_future = loop.run_in_executor(
+            None,
+            lambda: create_annotated_compilation.remote(
+                job_id=job_id,
+                user_id=user_id,
+                input_key=input_key,
+                output_key=output_key,
+                clips=clips,
+                gallery_output_key=gallery_output_key,
+            )
+        )
+
+        # Simulate progress while waiting
+        if progress_callback:
+            start_time = asyncio.get_event_loop().time()
+            progress_start = 10
+            progress_end = 90
+
+            phases = [
+                (0.05, "Downloading source video..."),
+                (0.15, "Processing clips..."),
+                (0.70, "Merging clips..."),
+                (0.90, "Uploading result..."),
+            ]
+
+            while not modal_future.done():
+                elapsed = asyncio.get_event_loop().time() - start_time
+                raw_progress = min(elapsed / estimated_time, 0.95)
+                progress = progress_start + raw_progress * (progress_end - progress_start)
+
+                phase_msg = "Processing..."
+                for threshold, msg in phases:
+                    if raw_progress >= threshold:
+                        phase_msg = msg
+
+                try:
+                    await progress_callback(progress, phase_msg)
+                except Exception as e:
+                    logger.warning(f"[Modal] Progress callback failed: {e}")
+
+                await asyncio.sleep(1.5)
+
+        result = await modal_future
+
+        logger.info(f"[Modal] Annotated compilation job {job_id} completed: {result}")
+        return result
+
+    except Exception as e:
+        logger.error(f"[Modal] Annotated compilation job {job_id} failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
 # Test function
 if __name__ == "__main__":
     import asyncio
@@ -775,6 +888,7 @@ if __name__ == "__main__":
             print("  - process_framing: Crop, trim, speed adjustments (FFmpeg)")
             print("  - process_framing_ai: Crop with Real-ESRGAN AI upscaling")
             print("  - detect_players_modal: YOLO player detection")
+            print("  - create_annotated_compilation: Annotated video with text overlays")
         else:
             print("Modal is disabled - set MODAL_ENABLED=true to enable")
 

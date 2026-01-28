@@ -45,6 +45,7 @@ export function AnnotateScreen({ onClearSelection }) {
     getGame,
     getGameVideoUrl,
     saveAnnotationsDebounced,
+    finishAnnotation,
   } = useGames();
 
   // Projects (for import/export only - clearSelection comes from App.jsx prop)
@@ -91,11 +92,18 @@ export function AnnotateScreen({ onClearSelection }) {
     MAX_ZOOM,
   } = useZoom();
 
+  // Ref to store gameId for use in handleBackToProjects (avoids circular dependency)
+  const gameIdRef = useRef(null);
+
   // Handlers
   const handleBackToProjects = useCallback(() => {
+    // Trigger extraction of any unextracted clips in projects before leaving
+    if (gameIdRef.current) {
+      finishAnnotation(gameIdRef.current);
+    }
     onClearSelection?.();  // Clear App.jsx's selected project (from Framing → Annotate navigation)
     setEditorMode('project-manager');
-  }, [onClearSelection, setEditorMode]);
+  }, [finishAnnotation, onClearSelection, setEditorMode]);
 
   // AnnotateContainer - encapsulates all annotate mode state and handlers
   // NOTE: Clips are now saved in real-time during annotation, no batch import needed
@@ -123,6 +131,7 @@ export function AnnotateScreen({ onClearSelection }) {
     annotateVideoUrl,
     annotateVideoMetadata,
     annotateGameName,
+    annotateGameId,
     annotateFullscreen,
     showAnnotateOverlay,
     annotateSelectedLayer,
@@ -161,6 +170,11 @@ export function AnnotateScreen({ onClearSelection }) {
     // Cleanup
     clearAnnotateState,
   } = annotate;
+
+  // Keep gameIdRef updated for handleBackToProjects
+  useEffect(() => {
+    gameIdRef.current = annotateGameId;
+  }, [annotateGameId]);
 
   // Handle initial game ID from sessionStorage (when loading a saved game or navigating from Framing)
   useEffect(() => {

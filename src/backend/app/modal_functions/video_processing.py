@@ -117,6 +117,44 @@ def get_r2_client():
     )
 
 
+def _has_audio_stream(video_path: str) -> bool:
+    """
+    Check if a video file has an audio stream using ffprobe.
+
+    Args:
+        video_path: Path to the video file
+
+    Returns:
+        True if video has at least one audio stream, False otherwise
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            [
+                'ffprobe', '-v', 'error',
+                '-select_streams', 'a',
+                '-show_entries', 'stream=codec_type',
+                '-of', 'csv=p=0',
+                video_path
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode != 0:
+            logger.warning(f"ffprobe failed for {video_path}: {result.stderr}")
+            # Assume audio exists to avoid breaking existing behavior
+            return True
+        # If there's any output, there's an audio stream
+        has_audio = bool(result.stdout.strip())
+        logger.info(f"Audio stream check for {video_path}: {has_audio}")
+        return has_audio
+    except Exception as e:
+        logger.warning(f"Failed to check audio stream for {video_path}: {e}")
+        # Assume audio exists to avoid breaking existing behavior
+        return True
+
+
 @app.function(
     image=image,
     gpu="T4",  # NVIDIA T4 - good balance of cost/performance
@@ -1301,6 +1339,9 @@ def process_framing_ai(
             # Encode video with FFmpeg
             output_path = os.path.join(temp_dir, "output.mp4")
 
+            # Check if source video has audio
+            has_audio = _has_audio_stream(input_path)
+
             # Check for segment speed changes
             segments = segment_data.get('segments', []) if segment_data else []
             has_speed_changes = any(seg.get('speed', 1.0) != 1.0 for seg in segments)
@@ -1344,45 +1385,68 @@ def process_framing_ai(
                         )
                     output_labels.append(f"[v{i}]")
 
-                    # Audio: apply atempo for speed change (from source input)
-                    audio_start = seg['start']
-                    audio_end = seg['end']
-                    if speed != 1.0:
-                        # atempo supports 0.5-2.0, chain for extreme values
-                        atempo_val = max(0.5, min(2.0, speed))
-                        audio_filter_parts.append(
-                            f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,atempo={atempo_val}[a{i}]"
-                        )
-                    else:
-                        audio_filter_parts.append(
-                            f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS[a{i}]"
-                        )
-                    audio_labels.append(f"[a{i}]")
+                    # Audio: apply atempo for speed change (from source input) - only if source has audio
+                    if has_audio:
+                        audio_start = seg['start']
+                        audio_end = seg['end']
+                        if speed != 1.0:
+                            # atempo supports 0.5-2.0, chain for extreme values
+                            atempo_val = max(0.5, min(2.0, speed))
+                            audio_filter_parts.append(
+                                f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,atempo={atempo_val}[a{i}]"
+                            )
+                        else:
+                            audio_filter_parts.append(
+                                f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS[a{i}]"
+                            )
+                        audio_labels.append(f"[a{i}]")
 
                 # Concatenate all segments
                 if len(output_labels) > 0:
                     v_concat = ''.join(output_labels)
-                    a_concat = ''.join(audio_labels)
-                    all_filters = ';'.join(filter_parts + audio_filter_parts)
-                    filter_complex = f"{all_filters};{v_concat}concat=n={len(output_labels)}:v=1:a=0[outv];{a_concat}concat=n={len(audio_labels)}:v=0:a=1[outa]"
 
-                    cmd = [
-                        "ffmpeg", "-y",
-                        "-framerate", str(fps),
-                        "-i", os.path.join(frames_dir, "frame_%06d.png"),
-                        "-i", input_path,  # For audio
-                        "-filter_complex", filter_complex,
-                        "-map", "[outv]",
-                        "-map", "[outa]",
-                        "-c:v", "libx264",
-                        "-pix_fmt", "yuv420p",
-                        "-preset", "fast",
-                        "-crf", "23",
-                        "-c:a", "aac",
-                        "-b:a", "192k",
-                        "-movflags", "+faststart",
-                        output_path,
-                    ]
+                    if has_audio and audio_filter_parts:
+                        # With audio: complex filter for both video and audio
+                        a_concat = ''.join(audio_labels)
+                        all_filters = ';'.join(filter_parts + audio_filter_parts)
+                        filter_complex = f"{all_filters};{v_concat}concat=n={len(output_labels)}:v=1:a=0[outv];{a_concat}concat=n={len(audio_labels)}:v=0:a=1[outa]"
+
+                        cmd = [
+                            "ffmpeg", "-y",
+                            "-framerate", str(fps),
+                            "-i", os.path.join(frames_dir, "frame_%06d.png"),
+                            "-i", input_path,  # For audio
+                            "-filter_complex", filter_complex,
+                            "-map", "[outv]",
+                            "-map", "[outa]",
+                            "-c:v", "libx264",
+                            "-pix_fmt", "yuv420p",
+                            "-preset", "fast",
+                            "-crf", "23",
+                            "-c:a", "aac",
+                            "-b:a", "192k",
+                            "-movflags", "+faststart",
+                            output_path,
+                        ]
+                    else:
+                        # No audio: video-only filter
+                        logger.info(f"[{job_id}] Source has no audio - using video-only encoding")
+                        all_filters = ';'.join(filter_parts)
+                        filter_complex = f"{all_filters};{v_concat}concat=n={len(output_labels)}:v=1:a=0[outv]"
+
+                        cmd = [
+                            "ffmpeg", "-y",
+                            "-framerate", str(fps),
+                            "-i", os.path.join(frames_dir, "frame_%06d.png"),
+                            "-filter_complex", filter_complex,
+                            "-map", "[outv]",
+                            "-c:v", "libx264",
+                            "-pix_fmt", "yuv420p",
+                            "-preset", "fast",
+                            "-crf", "23",
+                            "-movflags", "+faststart",
+                            output_path,
+                        ]
                 else:
                     # Fallback to simple encoding
                     cmd = [
@@ -1451,6 +1515,256 @@ def process_framing_ai(
 
     except Exception as e:
         logger.error(f"[{job_id}] AI upscaling failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+# Rating notation mapping (matches frontend constants)
+RATING_NOTATION = {
+    1: "??",   # Blunder
+    2: "?",    # Mistake
+    3: "!?",   # Interesting
+    4: "!",    # Good
+    5: "!!",   # Brilliant
+}
+
+# Rating colors (hex) for overlay borders
+RATING_COLORS_HEX = {
+    1: "0xef4444",  # Red - Blunder
+    2: "0xf59e0b",  # Amber - Mistake
+    3: "0x3b82f6",  # Blue - Interesting
+    4: "0x22c55e",  # Green - Good
+    5: "0x86efac",  # Light green - Brilliant
+}
+
+
+def _escape_drawtext(text: str) -> str:
+    """
+    Escape text for FFmpeg drawtext filter.
+    Order matters: escape backslashes first, then special chars.
+    """
+    # First escape backslashes
+    text = text.replace('\\', '\\\\')
+    # Escape single quotes (close quote, add escaped quote, reopen)
+    text = text.replace("'", "'\\''")
+    # Escape colons (special in FFmpeg filter syntax)
+    text = text.replace(':', '\\:')
+    # Escape other special FFmpeg filter chars
+    text = text.replace('[', '\\[')
+    text = text.replace(']', '\\]')
+    text = text.replace(';', '\\;')
+    return text
+
+
+@app.function(
+    image=image,
+    # No GPU - annotated compilation is just FFmpeg encoding
+    timeout=900,  # 15 minutes for longer compilations
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+def create_annotated_compilation(
+    job_id: str,
+    user_id: str,
+    input_key: str,
+    output_key: str,
+    clips: list,
+    gallery_output_key: str = None,
+) -> dict:
+    """
+    Create a video compilation with burned-in text annotations on Modal.
+
+    This function:
+    1. Downloads game video from R2
+    2. For each clip: extracts segment with burned-in text overlay
+    3. Concatenates all clips into one video
+    4. Uploads result to R2
+
+    Args:
+        job_id: Unique job identifier for logging
+        user_id: User folder in R2 (e.g., "a")
+        input_key: R2 key for source game video (e.g., "games/abc123.mp4")
+        output_key: R2 key for output compilation (e.g., "downloads/compilation.mp4")
+        clips: List of clip data
+        gallery_output_key: Optional secondary R2 key for gallery (e.g., "final_videos/abc.mp4")
+            [
+                {
+                    "start_time": 150.5,
+                    "end_time": 165.5,
+                    "name": "Brilliant Goal",
+                    "notes": "Amazing finish",
+                    "rating": 5,
+                    "tags": ["Goal", "Dribble"]
+                },
+                ...
+            ]
+
+    Returns:
+        {"status": "success", "output_key": "...", "clips_processed": N} or
+        {"status": "error", "error": "..."}
+    """
+    import subprocess
+
+    try:
+        logger.info(f"[{job_id}] Starting annotated compilation for user {user_id}")
+        logger.info(f"[{job_id}] Input: {input_key}, Output: {output_key}")
+        logger.info(f"[{job_id}] Clips: {len(clips)}")
+
+        r2 = get_r2_client()
+        bucket = os.environ["R2_BUCKET_NAME"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Download source video from R2
+            input_path = os.path.join(temp_dir, "source.mp4")
+            full_input_key = f"{user_id}/{input_key}"
+            logger.info(f"[{job_id}] Downloading {full_input_key}")
+            r2.download_file(bucket, full_input_key, input_path)
+
+            # Process each clip with burned-in text
+            clip_paths = []
+            for idx, clip in enumerate(clips):
+                clip_name = clip.get('name', 'clip')
+                rating = clip.get('rating', 3)
+                tags = clip.get('tags', [])
+                notes = clip.get('notes', '')
+                start_time = clip['start_time']
+                end_time = clip['end_time']
+                duration = end_time - start_time
+
+                logger.info(f"[{job_id}] Processing clip {idx+1}/{len(clips)}: {clip_name}")
+
+                # Build display name from rating notation + name or tags
+                rating_notation = RATING_NOTATION.get(rating, "!?")
+                rating_color = RATING_COLORS_HEX.get(rating, "0x22c55e")
+
+                if clip_name:
+                    display_name = clip_name
+                elif tags:
+                    # Generate name from rating + first two tags
+                    rating_words = {5: "Brilliant", 4: "Good", 3: "Interesting", 2: "Mistake", 1: "Blunder"}
+                    rating_word = rating_words.get(rating, "")
+                    if len(tags) >= 2:
+                        display_name = f"{rating_word} {tags[0]} and {tags[1]}"
+                    elif len(tags) == 1:
+                        display_name = f"{rating_word} {tags[0]}"
+                    else:
+                        display_name = rating_word
+                else:
+                    display_name = f"Clip {idx + 1}"
+
+                # Build filter for burned-in overlay (matches frontend style)
+                box_height = 80 if notes else 50
+                border_thickness = 4
+
+                # Escape text for FFmpeg
+                title_text = f"{rating_notation}  {display_name}"
+                escaped_title = _escape_drawtext(title_text)
+
+                filter_parts = []
+                # Draw colored border first (slightly larger box)
+                filter_parts.append(
+                    f"drawbox=x=(iw*0.1-{border_thickness}):y=(10-{border_thickness}):w=(iw*0.8+{border_thickness*2}):h=({box_height}+{border_thickness*2}):color={rating_color}:t=fill"
+                )
+                # Draw white fill on top
+                filter_parts.append(
+                    f"drawbox=x=(iw*0.1):y=10:w=(iw*0.8):h={box_height}:color=white@0.95:t=fill"
+                )
+                # Title text
+                filter_parts.append(
+                    f"drawtext=text='{escaped_title}':fontsize=24:fontcolor=black:x=(w-text_w)/2:y=20"
+                )
+                # Notes if present
+                if notes:
+                    escaped_notes = _escape_drawtext(notes[:100])
+                    filter_parts.append(
+                        f"drawtext=text='{escaped_notes}':fontsize=16:fontcolor=0x333333:x=(w-text_w)/2:y=50"
+                    )
+
+                filter_str = ','.join(filter_parts)
+
+                # Extract and encode clip
+                clip_path = os.path.join(temp_dir, f"clip_{idx:04d}.mp4")
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-ss", str(start_time),
+                    "-i", input_path,
+                    "-t", str(duration),
+                    "-vf", filter_str,
+                    "-c:v", "libx264",
+                    "-preset", "fast",
+                    "-crf", "23",
+                    "-pix_fmt", "yuv420p",
+                    "-c:a", "aac",
+                    "-b:a", "192k",
+                    clip_path,
+                ]
+
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode != 0:
+                    logger.error(f"[{job_id}] FFmpeg error for clip {idx}: {result.stderr[:300]}")
+                    continue  # Skip failed clips
+
+                clip_paths.append(clip_path)
+                logger.info(f"[{job_id}] Clip {idx+1} created successfully")
+
+            if not clip_paths:
+                raise RuntimeError("No clips were successfully processed")
+
+            logger.info(f"[{job_id}] Concatenating {len(clip_paths)} clips...")
+
+            # Create concat file
+            concat_list = os.path.join(temp_dir, "concat.txt")
+            with open(concat_list, "w") as f:
+                for path in clip_paths:
+                    f.write(f"file '{path}'\n")
+
+            # Concatenate clips
+            output_path = os.path.join(temp_dir, "output.mp4")
+            concat_cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_list,
+                "-c", "copy",
+                "-movflags", "+faststart",
+                output_path,
+            ]
+
+            result = subprocess.run(concat_cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                raise RuntimeError(f"Concatenation failed: {result.stderr[:300]}")
+
+            # Upload to R2 (primary download location)
+            full_output_key = f"{user_id}/{output_key}"
+            logger.info(f"[{job_id}] Uploading to {full_output_key}")
+            r2.upload_file(
+                output_path,
+                bucket,
+                full_output_key,
+                ExtraArgs={"ContentType": "video/mp4"},
+            )
+
+            # Also upload to gallery if key provided
+            gallery_filename = None
+            if gallery_output_key:
+                full_gallery_key = f"{user_id}/{gallery_output_key}"
+                logger.info(f"[{job_id}] Uploading to gallery: {full_gallery_key}")
+                r2.upload_file(
+                    output_path,
+                    bucket,
+                    full_gallery_key,
+                    ExtraArgs={"ContentType": "video/mp4"},
+                )
+                gallery_filename = gallery_output_key.split('/')[-1]
+
+            logger.info(f"[{job_id}] Annotated compilation complete: {len(clip_paths)} clips")
+            return {
+                "status": "success",
+                "output_key": output_key,
+                "gallery_filename": gallery_filename,
+                "clips_processed": len(clip_paths),
+            }
+
+    except Exception as e:
+        logger.error(f"[{job_id}] Annotated compilation failed: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
 
 
@@ -1569,6 +1883,7 @@ def main():
     print("  - process_framing_ai: Crop with Real-ESRGAN AI upscaling")
     print("  - detect_players_modal: YOLO player detection")
     print("  - extract_clip_modal: Extract clip from video (FFmpeg)")
+    print("  - create_annotated_compilation: Create video with burned-in text annotations")
     print()
     print("Deploy with: modal deploy video_processing.py")
     print()

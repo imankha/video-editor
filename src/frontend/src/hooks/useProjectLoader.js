@@ -7,6 +7,7 @@ import { useFramingStore } from '../stores/framingStore';
 import { useOverlayStore } from '../stores/overlayStore';
 import { useVideoStore } from '../stores/videoStore';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
+import { getClipDisplayName } from '../utils/clipDisplayName';
 
 /**
  * Helper to calculate effective duration for a clip (accounting for speed changes)
@@ -46,7 +47,7 @@ function buildClipMetadata(clipsData) {
   const sourceClips = clipsData.map(clip => {
     const effectiveDuration = calculateEffectiveDuration(clip);
     const clipMeta = {
-      name: clip.filename || clip.name || 'Clip',
+      name: clip.filename || getClipDisplayName(clip, 'Clip'),
       start_time: currentTime,
       end_time: currentTime + effectiveDuration,
       duration: effectiveDuration,
@@ -149,6 +150,11 @@ export function useProjectLoader() {
               url: clipUrl,
               fileUrl: clip.file_url, // Store presigned URL separately for streaming
               metadata,
+              // Copy key metadata fields to top level for easy access
+              duration: metadata.duration,
+              width: metadata.width,
+              height: metadata.height,
+              framerate: metadata.framerate,
             };
           } catch (err) {
             console.warn(`[useProjectLoader] Failed to load metadata for clip ${clip.id}:`, err);

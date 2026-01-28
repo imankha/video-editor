@@ -26,7 +26,8 @@ import asyncio
 from app.database import get_db_connection, get_raw_clips_path, get_downloads_path, get_games_path, get_final_videos_path, ensure_directories
 from app.services.clip_cache import get_clip_cache
 from app.services.ffmpeg_service import get_encoding_command_parts
-from app.storage import generate_presigned_url, upload_to_r2
+from app.services.modal_client import modal_enabled, call_modal_annotate_compilation
+from app.storage import generate_presigned_url, upload_to_r2, download_from_r2, R2_ENABLED
 from app.user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -513,19 +514,30 @@ async def export_clips(
                 logger.error(f"[Export] VALIDATION ERROR - Game {game_id_int} has no video uploaded")
                 raise HTTPException(status_code=400, detail="Game has no video uploaded")
 
-            source_path = str(get_games_path() / row['video_filename'])
             original_filename = row['name'] + ".mp4"
+            video_filename = row['video_filename']
 
-            if not os.path.exists(source_path):
-                logger.error(f"[Export] VALIDATION ERROR - Game video file not found on disk: {source_path}")
+            # Check if video exists - either locally or in R2
+            local_path = get_games_path() / video_filename
+            if R2_ENABLED:
+                # Download from R2 to temp directory (will be created below)
+                # Set source_path to None for now, will download after temp_dir is created
+                source_path = None
+                source_from_r2 = True
+                logger.info(f"[Export] Will download game {game_id} video from R2: games/{video_filename}")
+            elif os.path.exists(local_path):
+                source_path = str(local_path)
+                source_from_r2 = False
+                logger.info(f"[Export] Using local game {game_id} video: {video_filename}")
+            else:
+                logger.error(f"[Export] VALIDATION ERROR - Game video file not found: {local_path}")
                 raise HTTPException(status_code=404, detail="Game video file not found")
-
-            logger.info(f"[Export] Using game {game_id} video: {row['video_filename']}")
 
     elif video and video.filename:
         # Use uploaded video - need temp dir
         logger.info(f"[Export] Using uploaded video: {video.filename}")
-        pass  # Will be handled below
+        source_from_r2 = False
+        video_filename = None
     else:
         logger.error("[Export] VALIDATION ERROR - Neither video file nor game_id provided")
         raise HTTPException(status_code=400, detail="Either video file or game_id required")
@@ -535,6 +547,22 @@ async def export_clips(
     logger.info(f"Created temp directory: {temp_dir}")
 
     try:
+        # If using game video from R2, download it to temp directory
+        # Skip download if using Modal for compilation-only mode (Modal streams from R2 directly)
+        use_modal_for_compilation = modal_enabled() and game_id and video_filename and not should_save_to_db
+
+        if game_id and source_from_r2 and not use_modal_for_compilation:
+            user_id = get_current_user_id()
+            source_path = os.path.join(temp_dir, f"game_{uuid.uuid4().hex[:8]}.mp4")
+            r2_key = f"games/{video_filename}"
+            logger.info(f"[Export] Downloading game video from R2: {r2_key}")
+            if not download_from_r2(user_id, r2_key, Path(source_path)):
+                logger.error(f"[Export] Failed to download game video from R2: {r2_key}")
+                raise HTTPException(status_code=404, detail="Game video not found in storage")
+            logger.info(f"[Export] Downloaded game video to: {source_path}")
+        elif use_modal_for_compilation:
+            logger.info(f"[Export] Skipping game video download - Modal will stream from R2")
+
         # If video was uploaded (not using game), save it to temp
         if not game_id:
             original_filename = video.filename or "source_video.mp4"
@@ -711,11 +739,18 @@ async def export_clips(
         step += 1
         update_progress(step, total_steps, 'tsv', 'Generating annotations TSV...')
         tsv_filename = f"{video_base}_{download_id}_annotations.tsv"
-        tsv_path = get_downloads_path() / tsv_filename
+        tsv_path = os.path.join(temp_dir, tsv_filename)  # Write to temp dir
         tsv_content = generate_annotations_tsv(all_clips, original_filename)
         with open(tsv_path, 'w', encoding='utf-8') as f:
             f.write(tsv_content)
-        logger.info(f"Generated annotations TSV: {tsv_filename}")
+
+        # Upload TSV to R2
+        user_id = get_current_user_id()
+        if not upload_to_r2(user_id, f"downloads/{tsv_filename}", Path(tsv_path)):
+            logger.error(f"Failed to upload TSV to R2: {tsv_filename}")
+        else:
+            logger.info(f"Uploaded annotations TSV to R2: {tsv_filename}")
+
         download_urls['annotations'] = {
             'filename': tsv_filename,
             'url': f"/api/annotate/download/{tsv_filename}"
@@ -725,47 +760,46 @@ async def export_clips(
         # Only generate compilation video for "Download Clips Review" mode (save_to_db=false)
         # When importing into projects, users don't need the compilation since clips are saved to DB
         if not should_save_to_db:
-            for idx, clip in enumerate(all_clips):
-                clip_name = clip.get('name', 'clip')
-                step += 1
-                update_progress(step, total_steps, 'clips', f'Creating clip {idx + 1}/{len(all_clips)}: {clip_name}')
-                burned_path = os.path.join(temp_dir, f"burned_{uuid.uuid4().hex[:8]}.mp4")
+            compilation_filename = f"{video_base}_{download_id}_clips_review.mp4"
+            user_id = get_current_user_id()
 
-                success = await create_clip_with_burned_text(
-                    source_path=source_path,
-                    output_path=burned_path,
-                    start_time=clip['start_time'],
-                    end_time=clip['end_time'],
-                    clip_name=clip_name,
-                    clip_notes=clip.get('notes', ''),
-                    rating=clip.get('rating', 3),
-                    tags=clip.get('tags', [])
+            # Use Modal for cloud processing if enabled (avoids downloading large game video)
+            if modal_enabled() and game_id and video_filename:
+                logger.info(f"[Export] Using Modal for annotated compilation ({len(all_clips)} clips)")
+                update_progress(step + 1, total_steps, 'modal', 'Sending to cloud for processing...')
+
+                # Progress callback for Modal (maps Modal's 10-90 range to our progress tracker)
+                async def modal_progress(progress: float, message: str):
+                    # progress comes in as 10-90 range from modal_client
+                    update_progress(int(progress), 100, 'modal', message)
+
+                # R2 keys
+                input_r2_key = f"games/{video_filename}"
+                output_r2_key = f"downloads/{compilation_filename}"
+                final_filename = f"{uuid.uuid4().hex[:12]}.mp4"
+                gallery_r2_key = f"final_videos/{final_filename}"
+
+                modal_result = await call_modal_annotate_compilation(
+                    job_id=export_id or f"annotate_{download_id}",
+                    user_id=user_id,
+                    input_key=input_r2_key,
+                    output_key=output_r2_key,
+                    clips=all_clips,
+                    gallery_output_key=gallery_r2_key,
+                    progress_callback=modal_progress,
                 )
 
-                if success:
-                    burned_clip_paths.append(burned_path)
-
-            # Concatenate burned clips into compilation
-            if burned_clip_paths:
-                step += 1
-                update_progress(step, total_steps, 'concatenating', f'Merging {len(burned_clip_paths)} clips into compilation...')
-                compilation_filename = f"{video_base}_{download_id}_clips_review.mp4"
-                compilation_path = str(get_downloads_path() / compilation_filename)
-
-                if await concatenate_videos(burned_clip_paths, compilation_path):
-                    compilation_size = os.path.getsize(compilation_path)
-                    logger.info(f"Generated clips compilation: {compilation_filename} ({compilation_size / (1024*1024):.1f}MB)")
+                if modal_result.get("status") == "success":
+                    logger.info(f"[Export] Modal compilation complete: {modal_result.get('clips_processed')} clips")
                     download_urls['clips_compilation'] = {
                         'filename': compilation_filename,
                         'url': f"/api/annotate/download/{compilation_filename}"
                     }
 
-                    # Add to gallery (final_videos table)
-                    # No project is created - annotated exports are standalone
+                    # Modal already uploaded to both downloads/ and final_videos/
+                    # Now add the gallery entry to the database
                     with get_db_connection() as conn:
                         cursor = conn.cursor()
-
-                        # Get game name and rating counts for the video
                         game_name = video_base
                         rating_counts_json = None
                         if game_id:
@@ -777,7 +811,6 @@ async def export_clips(
                             game_row = cursor.fetchone()
                             if game_row:
                                 game_name = game_row['name']
-                                # Capture rating counts at export time (frozen snapshot)
                                 rating_counts_json = json.dumps({
                                     'brilliant': game_row['brilliant_count'] or 0,
                                     'good': game_row['good_count'] or 0,
@@ -786,30 +819,109 @@ async def export_clips(
                                     'blunder': game_row['blunder_count'] or 0
                                 })
 
-                        # Upload compilation directly to R2 (no local final_videos storage)
-                        final_filename = f"{uuid.uuid4().hex[:12]}.mp4"
-                        user_id = get_current_user_id()
-                        if not upload_to_r2(user_id, f"final_videos/{final_filename}", Path(compilation_path)):
-                            logger.error(f"Failed to upload annotated compilation to R2 - skipping gallery save")
+                        cursor.execute("""
+                            SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                            FROM final_videos WHERE game_id = ?
+                        """, (int(game_id) if game_id else None,))
+                        next_version = cursor.fetchone()['next_version']
+
+                        annotated_name = f"{game_name} (Annotated)"
+                        cursor.execute("""
+                            INSERT INTO final_videos (project_id, filename, version, source_type, game_id, name, rating_counts)
+                            VALUES (0, ?, ?, 'annotated_game', ?, ?, ?)
+                        """, (final_filename, next_version, int(game_id) if game_id else None, annotated_name, rating_counts_json))
+                        conn.commit()
+                        logger.info(f"Added annotated export to gallery: name={annotated_name}")
+                else:
+                    logger.error(f"[Export] Modal compilation failed: {modal_result.get('error')}")
+                    raise HTTPException(status_code=500, detail=f"Cloud processing failed: {modal_result.get('error')}")
+
+            else:
+                # Local processing (fallback or when Modal not available)
+                logger.info(f"[Export] Using local processing for annotated compilation")
+
+                for idx, clip in enumerate(all_clips):
+                    clip_name = clip.get('name', 'clip')
+                    step += 1
+                    update_progress(step, total_steps, 'clips', f'Creating clip {idx + 1}/{len(all_clips)}: {clip_name}')
+                    burned_path = os.path.join(temp_dir, f"burned_{uuid.uuid4().hex[:8]}.mp4")
+
+                    success = await create_clip_with_burned_text(
+                        source_path=source_path,
+                        output_path=burned_path,
+                        start_time=clip['start_time'],
+                        end_time=clip['end_time'],
+                        clip_name=clip_name,
+                        clip_notes=clip.get('notes', ''),
+                        rating=clip.get('rating', 3),
+                        tags=clip.get('tags', [])
+                    )
+
+                    if success:
+                        burned_clip_paths.append(burned_path)
+
+                # Concatenate burned clips into compilation
+                if burned_clip_paths:
+                    step += 1
+                    update_progress(step, total_steps, 'concatenating', f'Merging {len(burned_clip_paths)} clips into compilation...')
+                    compilation_path = os.path.join(temp_dir, compilation_filename)
+
+                    if await concatenate_videos(burned_clip_paths, compilation_path):
+                        compilation_size = os.path.getsize(compilation_path)
+                        logger.info(f"Generated clips compilation: {compilation_filename} ({compilation_size / (1024*1024):.1f}MB)")
+
+                        # Upload to R2 downloads folder for the download endpoint
+                        if not upload_to_r2(user_id, f"downloads/{compilation_filename}", Path(compilation_path)):
+                            logger.error(f"Failed to upload compilation to R2 downloads: {compilation_filename}")
                         else:
-                            # Calculate next version for this game's exports
-                            cursor.execute("""
-                                SELECT COALESCE(MAX(version), 0) + 1 as next_version
-                                FROM final_videos WHERE game_id = ?
-                            """, (int(game_id) if game_id else None,))
-                            next_version = cursor.fetchone()['next_version']
+                            logger.info(f"Uploaded compilation to R2 downloads: {compilation_filename}")
+                            download_urls['clips_compilation'] = {
+                                'filename': compilation_filename,
+                                'url': f"/api/annotate/download/{compilation_filename}"
+                            }
 
-                            # Add to final_videos table with name and rating counts snapshot
-                            # Use project_id = 0 as marker for "no project"
-                            annotated_name = f"{game_name} (Annotated)"
-                            cursor.execute("""
-                                INSERT INTO final_videos (project_id, filename, version, source_type, game_id, name, rating_counts)
-                                VALUES (0, ?, ?, 'annotated_game', ?, ?, ?)
-                            """, (final_filename, next_version, int(game_id) if game_id else None, annotated_name, rating_counts_json))
-                            final_video_id = cursor.lastrowid
+                        # Add to gallery (final_videos table)
+                        with get_db_connection() as conn:
+                            cursor = conn.cursor()
 
-                            conn.commit()
-                            logger.info(f"Added annotated export to gallery: final_video={final_video_id}, name={annotated_name}")
+                            game_name = video_base
+                            rating_counts_json = None
+                            if game_id:
+                                cursor.execute("""
+                                    SELECT name, clip_count, brilliant_count, good_count,
+                                           interesting_count, mistake_count, blunder_count
+                                    FROM games WHERE id = ?
+                                """, (int(game_id),))
+                                game_row = cursor.fetchone()
+                                if game_row:
+                                    game_name = game_row['name']
+                                    rating_counts_json = json.dumps({
+                                        'brilliant': game_row['brilliant_count'] or 0,
+                                        'good': game_row['good_count'] or 0,
+                                        'interesting': game_row['interesting_count'] or 0,
+                                        'mistake': game_row['mistake_count'] or 0,
+                                        'blunder': game_row['blunder_count'] or 0
+                                    })
+
+                            final_filename = f"{uuid.uuid4().hex[:12]}.mp4"
+                            if not upload_to_r2(user_id, f"final_videos/{final_filename}", Path(compilation_path)):
+                                logger.error(f"Failed to upload annotated compilation to R2 final_videos - skipping gallery save")
+                            else:
+                                cursor.execute("""
+                                    SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                                    FROM final_videos WHERE game_id = ?
+                                """, (int(game_id) if game_id else None,))
+                                next_version = cursor.fetchone()['next_version']
+
+                                annotated_name = f"{game_name} (Annotated)"
+                                cursor.execute("""
+                                    INSERT INTO final_videos (project_id, filename, version, source_type, game_id, name, rating_counts)
+                                    VALUES (0, ?, ?, 'annotated_game', ?, ?, ?)
+                                """, (final_filename, next_version, int(game_id) if game_id else None, annotated_name, rating_counts_json))
+                                final_video_id = cursor.lastrowid
+
+                                conn.commit()
+                                logger.info(f"Added annotated export to gallery: final_video={final_video_id}, name={annotated_name}")
 
         if should_save_to_db:
             logger.info(f"Export complete: {len(created_raw_clips)} clips saved, {len(created_projects)} projects created")

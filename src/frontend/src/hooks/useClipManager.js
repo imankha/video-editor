@@ -200,6 +200,10 @@ export function useClipManager() {
       gameId: projectClip.game_id || null,
       tags: projectClip.tags || [],
       rating: projectClip.rating || null,
+      // Extraction status
+      isExtracted: projectClip.is_extracted !== false, // Default to true for backwards compat
+      isExtracting: projectClip.is_extracting || false,
+      extractionStatus: projectClip.extraction_status || null,
       // Restored framing edits or defaults
       segments: savedSegments || {
         boundaries: [0, metadata.duration],
@@ -230,6 +234,12 @@ export function useClipManager() {
 
     // Fetch all metadata in parallel for faster loading
     const clipPromises = projectClips.map(async (projectClip) => {
+      // Skip fetching metadata if clip is not extracted yet
+      if (!projectClip.is_extracted) {
+        console.log('[useClipManager] Clip not extracted yet:', projectClip.id, 'status:', projectClip.extraction_status);
+        return { projectClip, fileUrl: null, metadata: null, success: false, notExtracted: true };
+      }
+
       // Prefer presigned R2 URL if available, fall back to local proxy
       const fileUrl = projectClip.file_url || getClipFileUrl(projectClip.id);
       console.log('[useClipManager] Loading clip:', projectClip.id, 'file_url:', projectClip.file_url, 'resolved fileUrl:', fileUrl);
@@ -245,10 +255,20 @@ export function useClipManager() {
     const results = await Promise.all(clipPromises);
 
     // Add clips in order (preserving sort order)
+    // Include non-extracted clips with placeholder data so they show in sidebar
     const createdIds = [];
     for (const result of results) {
       if (result.success && result.metadata) {
         const clipId = addClipFromProject(result.projectClip, result.fileUrl, result.metadata);
+        createdIds.push(clipId);
+      } else if (result.notExtracted) {
+        // Add placeholder for non-extracted clip
+        const clipId = addClipFromProject(result.projectClip, null, {
+          duration: 0,
+          width: 0,
+          height: 0,
+          framerate: 30
+        });
         createdIds.push(clipId);
       }
     }

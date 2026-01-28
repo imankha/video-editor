@@ -132,25 +132,14 @@ export function OverlayModeView({
               )}
             </div>
             {/* Right: Metadata */}
-            <div className="flex space-x-6">
-              <span>
-                <span className="text-gray-400">Resolution:</span>{' '}
-                {effectiveOverlayMetadata.width}x{effectiveOverlayMetadata.height}
-              </span>
+            <div className="flex items-center gap-3 text-sm text-gray-300">
+              <span>{effectiveOverlayMetadata.width}x{effectiveOverlayMetadata.height}</span>
               {effectiveOverlayMetadata.framerate && (
-                <span>
-                  <span className="text-gray-400">Framerate:</span>{' '}
-                  {effectiveOverlayMetadata.framerate} fps
-                </span>
+                <>
+                  <span className="text-gray-600">•</span>
+                  <span>{effectiveOverlayMetadata.framerate} fps</span>
+                </>
               )}
-              <span>
-                <span className="text-gray-400">Format:</span>{' '}
-                {effectiveOverlayMetadata.format?.toUpperCase() || 'MP4'}
-              </span>
-              <span>
-                <span className="text-gray-400">Size:</span>{' '}
-                {(effectiveOverlayMetadata.size / (1024 * 1024)).toFixed(2)} MB
-              </span>
             </div>
           </div>
         </div>

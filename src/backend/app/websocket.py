@@ -92,6 +92,97 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+class ExtractionConnectionManager:
+    """
+    Manages WebSocket connections for extraction status updates.
+
+    Unlike exports, this is a broadcast channel - all clients receive all events.
+    """
+
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        """Accept a WebSocket connection"""
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info(f"[WS/Extraction] Client connected (now {len(self.active_connections)} clients)")
+
+    def disconnect(self, websocket: WebSocket):
+        """Remove a WebSocket connection"""
+        try:
+            self.active_connections.remove(websocket)
+            logger.info(f"[WS/Extraction] Client disconnected ({len(self.active_connections)} clients remaining)")
+        except ValueError:
+            pass
+
+    async def broadcast(self, data: dict):
+        """Broadcast event to all connected clients"""
+        if not self.active_connections:
+            return
+
+        failed = []
+        for ws in self.active_connections:
+            try:
+                await ws.send_json(data)
+            except Exception as e:
+                logger.debug(f"[WS/Extraction] Client send failed: {e}")
+                failed.append(ws)
+
+        for ws in failed:
+            self.disconnect(ws)
+
+        if self.active_connections:
+            logger.debug(f"[WS/Extraction] Broadcast to {len(self.active_connections)} client(s): {data.get('type')}")
+
+
+# Global instance of the extraction connection manager
+extraction_manager = ExtractionConnectionManager()
+
+
+async def websocket_extractions(websocket: WebSocket):
+    """
+    WebSocket endpoint handler for extraction status updates.
+
+    Clients connect here to receive notifications when extractions complete.
+    """
+    logger.info("[WS/Extraction] WebSocket endpoint hit")
+    await extraction_manager.connect(websocket)
+    try:
+        while True:
+            try:
+                message = await websocket.receive_text()
+                if message == 'ping':
+                    try:
+                        await websocket.send_text('pong')
+                    except Exception:
+                        break
+            except WebSocketDisconnect:
+                logger.info("[WS/Extraction] Client disconnected gracefully")
+                break
+    except Exception as e:
+        logger.error(f"[WS/Extraction] WebSocket error: {e}")
+    finally:
+        extraction_manager.disconnect(websocket)
+
+
+async def broadcast_extraction_event(event_type: str, clip_id: int, project_id: int = None, error: str = None):
+    """
+    Broadcast an extraction event to all listening clients.
+
+    Called from modal_queue when extractions complete or fail.
+    """
+    data = {
+        "type": event_type,  # extraction_complete, extraction_failed
+        "clip_id": clip_id,
+        "project_id": project_id,
+    }
+    if error:
+        data["error"] = error
+
+    await extraction_manager.broadcast(data)
+
+
 async def websocket_export_progress(websocket: WebSocket, export_id: str):
     """
     WebSocket endpoint handler for real-time export progress updates.

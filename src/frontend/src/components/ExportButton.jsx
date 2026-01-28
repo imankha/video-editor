@@ -918,6 +918,12 @@ const ExportButton = forwardRef(function ExportButton({
   // Determine button text based on mode
   const isFramingMode = editorMode === 'framing';
 
+  // Check if any clips are still being extracted
+  const clipsNotExtracted = clips?.filter(c => c.isExtracted === false) || [];
+  const hasUnextractedClips = clipsNotExtracted.length > 0;
+  const extractingCount = clipsNotExtracted.filter(c => c.isExtracting || c.extractionStatus === 'running').length;
+  const pendingCount = clipsNotExtracted.length - extractingCount;
+
   return (
     <div className="space-y-3">
       {/* Export Settings */}
@@ -977,6 +983,19 @@ const ExportButton = forwardRef(function ExportButton({
         </div>
       </div>
 
+      {/* Extraction status message - Framing mode only */}
+      {isFramingMode && hasUnextractedClips && (
+        <div className="text-orange-400 text-sm bg-orange-900/20 border border-orange-800 rounded p-2 flex items-center gap-2">
+          <Loader size={14} className="animate-spin" />
+          <span>
+            {extractingCount > 0
+              ? `Extracting ${extractingCount} clip${extractingCount > 1 ? 's' : ''}...`
+              : `${pendingCount} clip${pendingCount > 1 ? 's' : ''} waiting for extraction`
+            }
+          </span>
+        </div>
+      )}
+
       {/* Single Export button for both modes */}
       <Button
         variant="primary"
@@ -984,8 +1003,9 @@ const ExportButton = forwardRef(function ExportButton({
         fullWidth
         icon={isCurrentlyExporting ? Loader : Download}
         onClick={handleExport}
-        disabled={disabled || isCurrentlyExporting || (!videoFile && !projectId)}
+        disabled={disabled || isCurrentlyExporting || (!videoFile && !projectId) || (isFramingMode && hasUnextractedClips)}
         className={isCurrentlyExporting ? '[&>svg]:animate-spin' : ''}
+        title={isFramingMode && hasUnextractedClips ? 'Wait for all clips to be extracted before framing' : undefined}
       >
         {isCurrentlyExporting
           ? (isExternallyExporting && !isExporting ? 'Export in progress...' : 'Exporting...')

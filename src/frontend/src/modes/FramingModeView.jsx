@@ -149,27 +149,14 @@ export function FramingModeView({
             </div>
 
             {/* Right: Metadata */}
-            <div className="flex items-center gap-4">
-              <div className="flex space-x-6">
-                <span>
-                  <span className="text-gray-400">Resolution:</span>{' '}
-                  {metadata.width}x{metadata.height}
-                </span>
-                {metadata.framerate && (
-                  <span>
-                    <span className="text-gray-400">Framerate:</span>{' '}
-                    {metadata.framerate} fps
-                  </span>
-                )}
-                <span>
-                  <span className="text-gray-400">Format:</span>{' '}
-                  {metadata.format.toUpperCase()}
-                </span>
-                <span>
-                  <span className="text-gray-400">Size:</span>{' '}
-                  {(metadata.size / (1024 * 1024)).toFixed(2)} MB
-                </span>
-              </div>
+            <div className="flex items-center gap-3 text-sm text-gray-300">
+              <span>{metadata.width}x{metadata.height}</span>
+              {metadata.framerate && (
+                <>
+                  <span className="text-gray-600">•</span>
+                  <span>{metadata.framerate} fps</span>
+                </>
+              )}
             </div>
           </div>
         </div>

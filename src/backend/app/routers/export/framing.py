@@ -707,6 +707,24 @@ async def render_project(request: RenderRequest):
 
         project_name = project['name']
 
+        # If project name matches "Clip {id}" pattern, try to derive a better name from clip data
+        # This handles legacy auto-projects created before we added derive_clip_name
+        import re
+        if project_name and re.match(r'^Clip \d+$', project_name):
+            cursor.execute("""
+                SELECT rc.name, rc.rating, rc.tags
+                FROM raw_clips rc
+                WHERE rc.auto_project_id = ?
+                LIMIT 1
+            """, (project_id,))
+            raw_clip = cursor.fetchone()
+            if raw_clip:
+                tags = json.loads(raw_clip['tags']) if raw_clip['tags'] else []
+                from app.queries import derive_clip_name
+                derived_name = derive_clip_name(raw_clip['name'], raw_clip['rating'] or 0, tags)
+                if derived_name:
+                    project_name = derived_name
+
         # Create export_jobs record
         try:
             cursor.execute("""
@@ -1121,8 +1139,37 @@ async def render_project(request: RenderRequest):
             'export_id': export_id
         })
 
-    except HTTPException:
-        raise
+    except HTTPException as e:
+        # Extract error message from HTTPException
+        error_msg = str(e.detail) if hasattr(e, 'detail') else str(e)
+        logger.error(f"[Render] HTTPException: {error_msg}")
+
+        # Update export_jobs record to error
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (error_msg[:500], export_id))
+                conn.commit()
+        except Exception:
+            pass
+
+        # Send error progress via WebSocket
+        error_data = {
+            "progress": 0,
+            "message": f"Export failed: {error_msg}",
+            "status": "error",
+            "projectId": project_id,
+            "projectName": project_name,
+            "type": "framing"
+        }
+        export_progress[export_id] = error_data
+        await manager.send_progress(export_id, error_data)
+
+        raise  # Re-raise the HTTPException
+
     except Exception as e:
         logger.error(f"[Render] Failed: {str(e)}", exc_info=True)
 

@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
-import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library } from 'lucide-react';
+import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, RefreshCw, Clock } from 'lucide-react';
 import { ClipLibraryModal } from './ClipLibraryModal';
 import { UploadClipModal } from './UploadClipModal';
 import { Button } from './shared/Button';
@@ -192,35 +192,42 @@ export function ClipSelectorSidebar({
           const hasRating = clip.rating != null;
           const ratingInfo = hasRating ? getRatingDisplay(clip.rating) : null;
           const isSelected = selectedClipId === clip.id;
+          // Extraction status
+          const isExtracted = clip.isExtracted !== false;
+          const isExtracting = clip.isExtracting || clip.extractionStatus === 'running';
+          const isPendingExtraction = clip.extractionStatus === 'pending';
+          const canSelect = isExtracted;
 
           return (
             <div
               key={clip.id}
               data-testid="clip-item"
-              draggable
-              onDragStart={(e) => handleDragStart(e, index)}
+              draggable={canSelect}
+              onDragStart={(e) => canSelect && handleDragStart(e, index)}
               onDragOver={(e) => handleDragOver(e, index)}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, index)}
               onDragEnd={handleDragEnd}
-              onClick={() => onSelectClip(clip.id)}
+              onClick={() => canSelect && onSelectClip(clip.id)}
               className={`
-                group cursor-pointer border-b border-gray-800 transition-all
-                ${isSelected
+                group border-b border-gray-800 transition-all
+                ${!canSelect ? 'opacity-60' : 'cursor-pointer'}
+                ${isSelected && canSelect
                   ? 'border-l-2'
-                  : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'
+                  : canSelect ? 'hover:bg-gray-800/50 border-l-2 border-l-transparent' : 'border-l-2 border-l-transparent'
                 }
                 ${dragOverIndex === index ? 'border-t-2 border-t-purple-500' : ''}
                 ${draggedIndex === index ? 'opacity-50' : ''}
               `}
               style={{
-                backgroundColor: isSelected
+                backgroundColor: isSelected && canSelect
                   ? (hasRating ? ratingInfo.backgroundColor : 'rgba(147, 51, 234, 0.25)')
-                  : undefined,
-                borderLeftColor: isSelected
+                  : isExtracting ? 'rgba(249, 115, 22, 0.1)' : undefined,
+                borderLeftColor: isSelected && canSelect
                   ? (hasRating ? ratingInfo.badgeColor : 'rgb(147, 51, 234)')
-                  : undefined,
+                  : isExtracting ? 'rgb(249, 115, 22)' : undefined,
               }}
+              title={!canSelect ? (isExtracting ? 'Extracting...' : 'Waiting for extraction') : undefined}
             >
               <div className="flex items-center px-2 py-3">
                 {/* Drag handle */}
@@ -260,22 +267,39 @@ export function ClipSelectorSidebar({
                       </div>
                     );
                   })()}
-                  {/* Duration and source info */}
+                  {/* Duration and source info OR extraction status */}
                   <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                    <span>{formatDuration(clip.duration)}</span>
-                    {/* Show notes indicator if clip has annotate notes */}
-                    {clip.annotateNotes && (
-                      <span
-                        className="inline-flex items-center text-purple-400"
-                        title={clip.annotateNotes}
-                      >
-                        <MessageSquare size={10} className="mr-0.5" />
-                        <span className="truncate max-w-[60px]">
-                          {clip.annotateNotes.length > 15
-                            ? clip.annotateNotes.slice(0, 15) + '...'
-                            : clip.annotateNotes}
+                    {!isExtracted ? (
+                      // Show extraction status
+                      isExtracting ? (
+                        <span className="text-orange-400 flex items-center gap-1">
+                          <RefreshCw size={10} className="animate-spin" />
+                          Extracting...
                         </span>
-                      </span>
+                      ) : (
+                        <span className="text-gray-500 flex items-center gap-1">
+                          <Clock size={10} />
+                          Waiting for extraction
+                        </span>
+                      )
+                    ) : (
+                      <>
+                        <span>{formatDuration(clip.duration)}</span>
+                        {/* Show notes indicator if clip has annotate notes */}
+                        {clip.annotateNotes && (
+                          <span
+                            className="inline-flex items-center text-purple-400"
+                            title={clip.annotateNotes}
+                          >
+                            <MessageSquare size={10} className="mr-0.5" />
+                            <span className="truncate max-w-[60px]">
+                              {clip.annotateNotes.length > 15
+                                ? clip.annotateNotes.slice(0, 15) + '...'
+                                : clip.annotateNotes}
+                            </span>
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

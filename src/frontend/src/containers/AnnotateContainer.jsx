@@ -856,6 +856,9 @@ export function AnnotateContainer({
     // Computed
     effectiveDuration,
 
+    // Game ID (for finish-annotation call when leaving)
+    annotateGameId,
+
     // Cleanup
     clearAnnotateState: useCallback(() => {
       if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {

@@ -14,7 +14,7 @@ import { FileUpload } from '../components/FileUpload';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { API_BASE } from '../config';
-import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore } from '../stores';
+import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useNavigationStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 
 /**
@@ -346,6 +346,8 @@ export function FramingScreen({
             segments_data: c.segments_data,
             crop_data: c.crop_data,
             file_url: c.file_url,  // Presigned R2 URL (if available)
+            is_extracted: c.is_extracted !== false,  // Default true for clips with file_url
+            extraction_status: c.extraction_status,
             // Annotate navigation fields
             game_id: c.game_id,
             start_time: c.start_time,
@@ -694,14 +696,23 @@ export function FramingScreen({
 
   // Handle proceed to overlay
   const handleProceedToOverlayInternal = useCallback(async (renderedVideoBlob, clipMetadata, exportedProjectId) => {
-    console.log('[FramingScreen] Starting overlay transition...', { exportedProjectId, currentProjectId: projectId });
+    // CRITICAL: Get the CURRENT project from navigation store, not the stale closure value
+    // When user switches projects during export, the closure's projectId is stale
+    // but the navigation store always has the currently viewed project
+    const currentlyViewingProjectId = useNavigationStore.getState().projectId;
 
-    // IMPORTANT: Check if the completed export is for the current project
+    console.log('[FramingScreen] Starting overlay transition...', {
+      exportedProjectId,
+      currentProjectId: currentlyViewingProjectId,
+      closureProjectId: projectId
+    });
+
+    // IMPORTANT: Check if the completed export is for the CURRENTLY VIEWED project
     // User may have switched to a different project while export was running
-    if (exportedProjectId && exportedProjectId !== projectId) {
+    if (exportedProjectId && exportedProjectId !== currentlyViewingProjectId) {
       console.log('[FramingScreen] Export completed for different project, ignoring navigation', {
         exportedProjectId,
-        currentProjectId: projectId
+        currentProjectId: currentlyViewingProjectId
       });
       // Still refresh projects list so the completed export shows up
       if (onExportComplete) {

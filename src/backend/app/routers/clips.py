@@ -10,7 +10,7 @@ Files are stored in:
 - uploads/ - Clips uploaded directly to projects
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
@@ -23,16 +23,10 @@ from app.database import (
     get_db_connection,
     get_raw_clips_path,
     get_uploads_path,
-    get_games_path,
 )
 from app.queries import latest_working_clips_subquery, derive_clip_name
-from app.services.ffmpeg_service import extract_clip
-from app.services.modal_client import modal_enabled, call_modal_extract_clip
 from app.user_context import get_current_user_id
-from app.storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
-import tempfile
-import asyncio
-from pathlib import Path
+from app.storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2
 
 logger = logging.getLogger(__name__)
 
@@ -272,8 +266,22 @@ async def get_raw_clip_file(clip_id: int):
 
 def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> int:
     """Create a 9:16 project for a 5-star clip and return the project ID."""
-    # Create the project
-    project_name = clip_name if clip_name else f"Clip {raw_clip_id}"
+    # Fetch tags and rating from the raw clip to generate a name if needed
+    cursor.execute("""
+        SELECT rating, tags FROM raw_clips WHERE id = ?
+    """, (raw_clip_id,))
+    clip_data = cursor.fetchone()
+
+    # Generate project name using the same logic as frontend
+    if clip_name:
+        project_name = clip_name
+    elif clip_data:
+        rating = clip_data['rating'] or 5
+        tags = json.loads(clip_data['tags']) if clip_data['tags'] else []
+        project_name = derive_clip_name(None, rating, tags) or f"Clip {raw_clip_id}"
+    else:
+        project_name = f"Clip {raw_clip_id}"
+
     cursor.execute("""
         INSERT INTO projects (name, aspect_ratio)
         VALUES (?, '9:16')
@@ -328,219 +336,10 @@ def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
     return True
 
 
-def extract_pending_clips_for_game(game_id: int, video_filename: str) -> dict:
-    """
-    Extract video files for all pending clips (filename=NULL) for a game.
-
-    Called when a game's video upload completes. Finds all raw_clips that were
-    saved during annotation but couldn't be extracted because video wasn't uploaded.
-
-    Returns dict with counts: {extracted: N, failed: N, projects_created: N}
-    """
-    user_id = get_current_user_id()
-    results = {'extracted': 0, 'failed': 0, 'projects_created': 0}
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        # Find all pending clips (filename is empty) for this game
-        cursor.execute("""
-            SELECT id, start_time, end_time, rating, name
-            FROM raw_clips
-            WHERE game_id = ? AND (filename IS NULL OR filename = '')
-        """, (game_id,))
-        pending_clips = cursor.fetchall()
-
-        if not pending_clips:
-            logger.info(f"No pending clips to extract for game {game_id}")
-            return results
-
-        logger.info(f"Extracting {len(pending_clips)} pending clips for game {game_id}")
-
-        # Use Modal when enabled (cloud processing, no local downloads)
-        if modal_enabled():
-            logger.info(f"[Modal] Using Modal for clip extraction (R2 -> Modal -> R2)")
-
-            for clip in pending_clips:
-                clip_id = clip['id']
-                try:
-                    # Generate unique filename for the clip
-                    clip_filename = f"{uuid.uuid4().hex[:12]}.mp4"
-
-                    # Call Modal to extract directly from R2
-                    result = asyncio.run(call_modal_extract_clip(
-                        user_id=user_id,
-                        input_key=f"games/{video_filename}",
-                        output_key=f"raw_clips/{clip_filename}",
-                        start_time=clip['start_time'],
-                        end_time=clip['end_time'],
-                        copy_codec=True,
-                    ))
-
-                    if result.get("status") != "success":
-                        logger.error(f"[Modal] Failed to extract clip {clip_id}: {result.get('error')}")
-                        results['failed'] += 1
-                        continue
-
-                    # Update the clip with the filename
-                    cursor.execute("""
-                        UPDATE raw_clips SET filename = ? WHERE id = ?
-                    """, (clip_filename, clip_id))
-
-                    results['extracted'] += 1
-                    logger.info(f"[Modal] Extracted pending clip {clip_id}: {clip_filename}")
-
-                    # If 5-star clip, create auto-project now
-                    if clip['rating'] == 5:
-                        project_id = _create_auto_project_for_clip(cursor, clip_id, clip['name'])
-                        if project_id:
-                            results['projects_created'] += 1
-                            logger.info(f"Created auto-project {project_id} for pending 5-star clip {clip_id}")
-
-                except Exception as e:
-                    logger.error(f"[Modal] Error extracting clip {clip_id}: {e}")
-                    results['failed'] += 1
-
-            conn.commit()
-
-        else:
-            # Local processing with R2 storage: download from R2, process locally, upload back to R2
-            temp_video_path = Path(tempfile.gettempdir()) / f"game_video_{uuid.uuid4().hex[:8]}.mp4"
-            if not download_from_r2(user_id, f"games/{video_filename}", temp_video_path):
-                logger.error(f"Failed to download game video from R2: {video_filename}")
-                return results
-            video_path = temp_video_path
-
-            try:
-                for clip in pending_clips:
-                    clip_id = clip['id']
-                    try:
-                        # Generate unique filename for the clip
-                        clip_filename = f"{uuid.uuid4().hex[:12]}.mp4"
-                        temp_clip_path = Path(tempfile.gettempdir()) / f"clip_{uuid.uuid4().hex[:8]}.mp4"
-
-                        # Extract the clip locally
-                        success = extract_clip(
-                            input_path=str(video_path),
-                            output_path=str(temp_clip_path),
-                            start_time=clip['start_time'],
-                            end_time=clip['end_time'],
-                            copy_codec=True
-                        )
-
-                        if not success:
-                            logger.error(f"Failed to extract clip {clip_id}")
-                            results['failed'] += 1
-                            continue
-
-                        # Upload to R2
-                        if not upload_to_r2(user_id, f"raw_clips/{clip_filename}", temp_clip_path):
-                            logger.error(f"Failed to upload clip {clip_id} to R2")
-                            results['failed'] += 1
-                            if temp_clip_path.exists():
-                                temp_clip_path.unlink()
-                            continue
-
-                        if temp_clip_path.exists():
-                            temp_clip_path.unlink()
-
-                        # Update the clip with the filename
-                        cursor.execute("""
-                            UPDATE raw_clips SET filename = ? WHERE id = ?
-                        """, (clip_filename, clip_id))
-
-                        results['extracted'] += 1
-                        logger.info(f"Extracted pending clip {clip_id}: {clip_filename}")
-
-                        # If 5-star clip, create auto-project now
-                        if clip['rating'] == 5:
-                            project_id = _create_auto_project_for_clip(cursor, clip_id, clip['name'])
-                            if project_id:
-                                results['projects_created'] += 1
-                                logger.info(f"Created auto-project {project_id} for pending 5-star clip {clip_id}")
-
-                    except Exception as e:
-                        logger.error(f"Error extracting clip {clip_id}: {e}")
-                        results['failed'] += 1
-
-                conn.commit()
-
-            finally:
-                # Clean up temp video file
-                if temp_video_path and temp_video_path.exists():
-                    temp_video_path.unlink()
-
-    logger.info(f"Pending clip extraction complete for game {game_id}: {results}")
-    return results
-
-
-def extract_all_pending_clips() -> dict:
-    """
-    Extract pending clips for ALL games that have videos uploaded.
-
-    Called on startup recovery or manually via endpoint.
-    Finds all raw_clips with filename=NULL where the game has a video,
-    and extracts them.
-
-    Returns dict with total counts across all games.
-    """
-    total_results = {'games_processed': 0, 'extracted': 0, 'failed': 0, 'projects_created': 0}
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        # Find all games that have videos AND have pending clips
-        cursor.execute("""
-            SELECT DISTINCT g.id, g.video_filename
-            FROM games g
-            INNER JOIN raw_clips rc ON rc.game_id = g.id
-            WHERE g.video_filename IS NOT NULL AND g.video_filename != ''
-              AND (rc.filename IS NULL OR rc.filename = '')
-        """)
-        games_with_pending = cursor.fetchall()
-
-        if not games_with_pending:
-            logger.info("No games with pending clips found")
-            return total_results
-
-        logger.info(f"Found {len(games_with_pending)} games with pending clips")
-
-    # Process each game (outside the connection to avoid long locks)
-    for game in games_with_pending:
-        game_id = game['id']
-        video_filename = game['video_filename']
-
-        try:
-            results = extract_pending_clips_for_game(game_id, video_filename)
-            total_results['games_processed'] += 1
-            total_results['extracted'] += results['extracted']
-            total_results['failed'] += results['failed']
-            total_results['projects_created'] += results['projects_created']
-        except Exception as e:
-            logger.error(f"Failed to extract pending clips for game {game_id}: {e}")
-            total_results['failed'] += 1
-
-    logger.info(f"Pending clip extraction complete: {total_results}")
-    return total_results
-
-
-@router.post("/extract-pending")
-async def trigger_pending_extraction():
-    """
-    Manually trigger extraction of all pending clips.
-
-    Use this for crash recovery or to process clips that failed to extract.
-    Finds all raw_clips with filename=NULL where the game has a video uploaded,
-    and extracts them.
-    """
-    results = extract_all_pending_clips()
-    return {
-        'success': True,
-        'games_processed': results['games_processed'],
-        'clips_extracted': results['extracted'],
-        'clips_failed': results['failed'],
-        'projects_created': results['projects_created'],
-    }
+# Note: Old extraction functions (extract_pending_clips_for_game, extract_all_pending_clips)
+# have been removed. Extraction now happens via modal_queue.py:
+# 1. enqueue_clip_extraction() - adds task to modal_tasks table (DB only)
+# 2. process_modal_queue() - processes pending tasks (called after enqueue and on startup)
 
 
 @router.post("/raw/save", response_model=RawClipSaveResponse)
@@ -548,103 +347,28 @@ async def save_raw_clip(clip_data: RawClipCreate):
     """
     Save a raw clip during annotation (real-time save).
 
-    Extracts the clip from the game video and saves it to the library.
+    Creates a pending clip record without extracting the video.
+    Extraction happens later via finish-annotation when the user leaves annotation mode.
     If the clip is rated 5 stars, automatically creates a 9:16 project for it.
 
     Idempotent: If a clip with the same game_id + end_time already exists,
-    returns that clip's ID instead of creating a duplicate.
+    updates that clip instead of creating a duplicate.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
         # Check if clip already exists (lookup by game_id + end_time as natural key)
         cursor.execute("""
-            SELECT id, filename, rating, auto_project_id, start_time FROM raw_clips
+            SELECT id, filename, rating, auto_project_id FROM raw_clips
             WHERE game_id = ? AND end_time = ?
         """, (clip_data.game_id, clip_data.end_time))
         existing = cursor.fetchone()
 
         if existing:
-            # Clip already exists - update it with new data and return existing ID
-            logger.info(f"Found existing clip {existing['id']} for game {clip_data.game_id} at end_time {clip_data.end_time}")
-
-            old_start_time = existing['start_time']
-            new_start_time = clip_data.start_time
-            start_time_changed = (old_start_time != new_start_time)
-
-            # If start_time changed, we need to re-extract the video
-            if start_time_changed and existing['filename']:
-                logger.info(f"Start time changed for clip {existing['id']}: {old_start_time} -> {new_start_time}, re-extracting")
-
-                # Get game video for re-extraction
-                cursor.execute("SELECT video_filename FROM games WHERE id = ?", (clip_data.game_id,))
-                game = cursor.fetchone()
-
-                if game and game['video_filename']:
-                    user_id = get_current_user_id()
-
-                    if modal_enabled():
-                        # Use Modal for clip extraction
-                        from app.services.modal_client import call_modal_extract_clip
-                        new_filename = f"{uuid.uuid4().hex[:12]}.mp4"
-                        result = await call_modal_extract_clip(
-                            user_id=user_id,
-                            input_key=f"games/{game['video_filename']}",
-                            output_key=f"raw_clips/{new_filename}",
-                            start_time=new_start_time,
-                            end_time=clip_data.end_time,
-                        )
-                        if result and result.get('status') == 'success':
-                            # Update filename to new extracted file
-                            cursor.execute("UPDATE raw_clips SET filename = ? WHERE id = ?",
-                                         (new_filename, existing['id']))
-                            existing = dict(existing)
-                            existing['filename'] = new_filename
-                            logger.info(f"Re-extracted clip {existing['id']} to {new_filename}")
-                    else:
-                        # Local extraction
-                        from app.services.r2_storage import download_from_r2
-                        import tempfile
-                        import uuid
-                        from pathlib import Path
-
-                        with tempfile.TemporaryDirectory() as temp_dir:
-                            temp_dir_path = Path(temp_dir)
-                            game_path = temp_dir_path / game['video_filename']
-
-                            # Download game video
-                            if download_from_r2(user_id, f"games/{game['video_filename']}", game_path):
-                                new_filename = f"{uuid.uuid4().hex[:12]}.mp4"
-                                output_path = temp_dir_path / new_filename
-
-                                # Extract clip
-                                from app.routers.annotate import extract_clip_to_file
-                                success = await extract_clip_to_file(
-                                    source_path=str(game_path),
-                                    output_path=str(output_path),
-                                    start_time=new_start_time,
-                                    end_time=clip_data.end_time,
-                                    clip_name=clip_data.name,
-                                    clip_notes=clip_data.notes or ''
-                                )
-
-                                if success:
-                                    # Upload to R2
-                                    from app.services.r2_storage import upload_to_r2
-                                    if upload_to_r2(user_id, f"raw_clips/{new_filename}", output_path):
-                                        cursor.execute("UPDATE raw_clips SET filename = ? WHERE id = ?",
-                                                     (new_filename, existing['id']))
-                                        existing = dict(existing)
-                                        existing['filename'] = new_filename
-
-            # Update the existing clip with any new metadata
+            # Update existing clip metadata (don't touch filename - extraction is separate)
+            clip_id = existing['id']
             cursor.execute("""
-                UPDATE raw_clips SET
-                    name = ?,
-                    rating = ?,
-                    tags = ?,
-                    notes = ?,
-                    start_time = ?
+                UPDATE raw_clips SET name = ?, rating = ?, tags = ?, notes = ?, start_time = ?
                 WHERE id = ?
             """, (
                 clip_data.name,
@@ -652,147 +376,41 @@ async def save_raw_clip(clip_data: RawClipCreate):
                 json.dumps(clip_data.tags),
                 clip_data.notes,
                 clip_data.start_time,
-                existing['id']
+                clip_id
             ))
 
-            # Handle 5-star project sync for existing clip
+            # Handle 5-star project sync
             old_rating = existing['rating']
             new_rating = clip_data.rating
             project_created = False
             project_id = existing['auto_project_id']
 
             if new_rating == 5 and old_rating != 5 and not project_id:
-                # Upgraded to 5-star, create auto-project
-                project_id = _create_auto_project_for_clip(cursor, existing['id'], clip_data.name)
+                project_id = _create_auto_project_for_clip(cursor, clip_id, clip_data.name)
                 project_created = True
             elif new_rating != 5 and old_rating == 5 and project_id:
-                # Downgraded from 5-star, delete auto-project
-                _delete_auto_project(cursor, existing['id'], project_id)
+                _delete_auto_project(cursor, project_id, clip_id)
                 project_id = None
 
             conn.commit()
+            logger.info(f"Updated clip {clip_id} for game {clip_data.game_id}")
 
             return RawClipSaveResponse(
-                raw_clip_id=existing['id'],
-                filename=existing['filename'] if isinstance(existing, dict) else existing['filename'],
+                raw_clip_id=clip_id,
+                filename=existing['filename'] or '',
                 project_created=project_created,
                 project_id=project_id
             )
 
-        # Get the game's video file
-        cursor.execute("""
-            SELECT video_filename FROM games WHERE id = ?
-        """, (clip_data.game_id,))
-        game = cursor.fetchone()
-
-        if not game:
-            raise HTTPException(status_code=404, detail="Game not found")
-
-        # If video isn't uploaded yet, save metadata only (pending extraction)
-        if not game['video_filename']:
-            logger.info(f"Video not yet uploaded for game {clip_data.game_id}, saving clip metadata only (pending extraction)")
-
-            # Save to database with empty filename (indicates pending extraction)
-            # Using empty string instead of NULL for SQLite NOT NULL constraint compatibility
-            cursor.execute("""
-                INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                '',  # empty string = pending extraction (NOT NULL compatible)
-                clip_data.rating,
-                json.dumps(clip_data.tags),
-                clip_data.name,
-                clip_data.notes,
-                clip_data.start_time,
-                clip_data.end_time,
-                clip_data.game_id
-            ))
-            raw_clip_id = cursor.lastrowid
-
-            # Don't create auto-project yet - will be created after extraction
-            conn.commit()
-            logger.info(f"Saved pending raw clip {raw_clip_id} (will extract when video uploads)")
-
-            return RawClipSaveResponse(
-                raw_clip_id=raw_clip_id,
-                filename='',  # empty = pending
-                project_created=False,
-                project_id=None
-            )
-
-        # Generate unique filename for the clip
-        clip_filename = f"{uuid.uuid4().hex[:12]}.mp4"
-        user_id = get_current_user_id()
-
-        # Use Modal when enabled (cloud processing, no local downloads)
-        if modal_enabled():
-            logger.info(f"[Modal] Extracting clip via Modal (R2 -> Modal -> R2)")
-
-            result = asyncio.run(call_modal_extract_clip(
-                user_id=user_id,
-                input_key=f"games/{game['video_filename']}",
-                output_key=f"raw_clips/{clip_filename}",
-                start_time=clip_data.start_time,
-                end_time=clip_data.end_time,
-                copy_codec=True,
-            ))
-
-            if result.get("status") != "success":
-                raise HTTPException(status_code=500, detail=f"Modal clip extraction failed: {result.get('error')}")
-
-            logger.info(f"[Modal] Extracted clip: {clip_filename}")
-
-        else:
-            # Local processing with R2 storage: download from R2, process locally, upload back to R2
-            temp_video_path = Path(tempfile.gettempdir()) / f"game_video_{uuid.uuid4().hex[:8]}.mp4"
-            temp_clip_path = Path(tempfile.gettempdir()) / f"clip_{uuid.uuid4().hex[:8]}.mp4"
-
-            try:
-                if not download_from_r2(user_id, f"games/{game['video_filename']}", temp_video_path):
-                    raise HTTPException(status_code=404, detail="Game video file not found in R2")
-
-                # Extract the clip using FFmpeg
-                success = extract_clip(
-                    input_path=str(temp_video_path),
-                    output_path=str(temp_clip_path),
-                    start_time=clip_data.start_time,
-                    end_time=clip_data.end_time,
-                    copy_codec=True  # Fast extraction without re-encoding
-                )
-
-                if not success:
-                    raise HTTPException(status_code=500, detail="Failed to extract clip")
-
-                # Upload extracted clip to R2
-                if not upload_to_r2(user_id, f"raw_clips/{clip_filename}", temp_clip_path):
-                    raise HTTPException(status_code=500, detail="Failed to upload clip to R2")
-
-                logger.info(f"Extracted and uploaded clip to R2: {clip_filename}")
-
-            finally:
-                # Clean up temp files
-                if temp_video_path.exists():
-                    temp_video_path.unlink()
-                if temp_clip_path.exists():
-                    temp_clip_path.unlink()
-
-        # Save to database
+        # New clip - create as pending (no extraction yet)
         cursor.execute("""
             INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            clip_filename,
-            clip_data.rating,
-            json.dumps(clip_data.tags),
-            clip_data.name,
-            clip_data.notes,
-            clip_data.start_time,
-            clip_data.end_time,
-            clip_data.game_id
-        ))
+        """, ('', clip_data.rating, json.dumps(clip_data.tags), clip_data.name,
+              clip_data.notes, clip_data.start_time, clip_data.end_time, clip_data.game_id))
         raw_clip_id = cursor.lastrowid
 
-        # If 5-star clip, create auto-project
+        # Handle 5-star project creation
         project_created = False
         project_id = None
         if clip_data.rating == 5:
@@ -800,11 +418,11 @@ async def save_raw_clip(clip_data: RawClipCreate):
             project_created = True
 
         conn.commit()
-        logger.info(f"Saved raw clip {raw_clip_id} from game {clip_data.game_id}")
+        logger.info(f"Saved pending clip {raw_clip_id} for game {clip_data.game_id}")
 
         return RawClipSaveResponse(
             raw_clip_id=raw_clip_id,
-            filename=clip_filename,
+            filename='',
             project_created=project_created,
             project_id=project_id
         )
@@ -818,15 +436,14 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate):
     Handles 5-star sync:
     - If rating changed TO 5: Create auto-project
     - If rating changed FROM 5: Delete auto-project (if unmodified)
-    - If duration changed and has auto-project: Re-extract clip
+    - If duration changed: Clear filename to mark for re-extraction
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
         # Get current clip data
         cursor.execute("""
-            SELECT id, filename, rating, tags, name, notes, start_time, end_time,
-                   game_id, auto_project_id
+            SELECT id, filename, rating, name, start_time, end_time, auto_project_id
             FROM raw_clips WHERE id = ?
         """, (clip_id,))
         clip = cursor.fetchone()
@@ -841,9 +458,8 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate):
         new_start = update.start_time if update.start_time is not None else old_start
         new_end = update.end_time if update.end_time is not None else old_end
         auto_project_id = clip['auto_project_id']
-        game_id = clip['game_id']
 
-        # Check if duration changed
+        # Check if duration changed - if so, clear filename to mark for re-extraction
         duration_changed = (new_start != old_start or new_end != old_end)
 
         # Handle rating change: 5 -> non-5
@@ -857,58 +473,6 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate):
             clip_name = update.name if update.name is not None else clip['name']
             auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name)
             project_created = True
-
-        # Handle duration change: re-extract clip if needed
-        if duration_changed and game_id:
-            cursor.execute("SELECT video_filename FROM games WHERE id = ?", (game_id,))
-            game = cursor.fetchone()
-            if game and game['video_filename']:
-                user_id = get_current_user_id()
-
-                if modal_enabled():
-                    # Use Modal for re-extraction (R2 -> Modal -> R2)
-                    logger.info(f"[Modal] Re-extracting clip {clip_id} via Modal")
-
-                    result = asyncio.run(call_modal_extract_clip(
-                        user_id=user_id,
-                        input_key=f"games/{game['video_filename']}",
-                        output_key=f"raw_clips/{clip['filename']}",
-                        start_time=new_start,
-                        end_time=new_end,
-                        copy_codec=True,
-                    ))
-
-                    if result.get("status") == "success":
-                        logger.info(f"[Modal] Re-extracted clip {clip_id}")
-                    else:
-                        logger.error(f"[Modal] Failed to re-extract clip {clip_id}: {result.get('error')}")
-
-                else:
-                    # Local processing with R2 storage: download from R2, re-extract, upload back to R2
-                    temp_video_path = Path(tempfile.gettempdir()) / f"game_video_{uuid.uuid4().hex[:8]}.mp4"
-                    temp_clip_path = Path(tempfile.gettempdir()) / f"clip_{uuid.uuid4().hex[:8]}.mp4"
-
-                    try:
-                        if download_from_r2(user_id, f"games/{game['video_filename']}", temp_video_path):
-                            success = extract_clip(
-                                input_path=str(temp_video_path),
-                                output_path=str(temp_clip_path),
-                                start_time=new_start,
-                                end_time=new_end,
-                                copy_codec=True
-                            )
-                            if success:
-                                upload_to_r2(user_id, f"raw_clips/{clip['filename']}", temp_clip_path)
-                                logger.info(f"Re-extracted clip {clip_id} to R2")
-                            else:
-                                logger.error(f"Failed to re-extract clip {clip_id}")
-                        else:
-                            logger.error(f"Failed to download game video for clip {clip_id} re-extraction")
-                    finally:
-                        if temp_video_path.exists():
-                            temp_video_path.unlink()
-                        if temp_clip_path.exists():
-                            temp_clip_path.unlink()
 
         # Build update query
         updates = []
@@ -933,6 +497,12 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate):
             updates.append("end_time = ?")
             params.append(update.end_time)
 
+        # If duration changed, clear filename to mark as needing re-extraction
+        if duration_changed and clip['filename']:
+            updates.append("filename = ?")
+            params.append('')
+            logger.info(f"Duration changed for clip {clip_id}, marked for re-extraction")
+
         if updates:
             params.append(clip_id)
             cursor.execute(f"""
@@ -942,11 +512,11 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate):
         conn.commit()
         logger.info(f"Updated raw clip {clip_id}")
 
-        return {
-            "success": True,
-            "project_created": project_created,
-            "project_id": auto_project_id
-        }
+    return {
+        "success": True,
+        "project_created": project_created,
+        "project_id": auto_project_id
+    }
 
 
 @router.delete("/raw/{clip_id}")
@@ -983,11 +553,26 @@ async def delete_raw_clip(clip_id: int):
 
         conn.commit()
 
-        # Delete the file from disk
-        file_path = get_raw_clips_path() / clip['filename']
-        if file_path.exists():
-            os.remove(file_path)
-            logger.info(f"Deleted clip file: {file_path}")
+        # Delete the file (from R2 or local disk)
+        filename = clip['filename']
+        if filename:  # Skip if empty (pending clip never extracted)
+            user_id = get_current_user_id()
+            r2_key = f"raw_clips/{filename}"
+
+            # Try R2 first (cloud storage)
+            try:
+                from app.storage import delete_from_r2, R2_ENABLED
+                if R2_ENABLED:
+                    delete_from_r2(user_id, r2_key)
+                    logger.info(f"Deleted clip from R2: {r2_key}")
+            except Exception as e:
+                logger.warning(f"Failed to delete from R2: {e}")
+
+            # Also try local disk (fallback/local mode)
+            file_path = get_raw_clips_path() / filename
+            if file_path.exists():
+                os.remove(file_path)
+                logger.info(f"Deleted clip file: {file_path}")
 
         logger.info(f"Deleted raw clip {clip_id}")
         return {"success": True}
@@ -1069,7 +654,8 @@ async def list_project_clips(project_id: int):
 async def add_clip_to_project(
     project_id: int,
     raw_clip_id: Optional[int] = Form(None),
-    file: Optional[UploadFile] = File(None)
+    file: Optional[UploadFile] = File(None),
+    background_tasks: BackgroundTasks = None
 ):
     """
     Add a clip to a project.
@@ -1077,7 +663,14 @@ async def add_clip_to_project(
     Either provide:
     - raw_clip_id: to add a clip from the library
     - file: to upload a new clip directly
+
+    If the raw_clip doesn't have a filename (unextracted), triggers extraction.
     """
+    from fastapi import BackgroundTasks as BT
+    if background_tasks is None:
+        from fastapi import Request
+        background_tasks = BT()
+
     if raw_clip_id is None and file is None:
         raise HTTPException(
             status_code=400,
@@ -1089,6 +682,8 @@ async def add_clip_to_project(
             status_code=400,
             detail="Cannot provide both raw_clip_id and file"
         )
+
+    clip_needs_extraction = None  # Will hold clip info if extraction needed
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1111,16 +706,32 @@ async def add_clip_to_project(
         next_version = 1
 
         if raw_clip_id is not None:
-            # Adding from library
-            cursor.execute("SELECT filename, end_time FROM raw_clips WHERE id = ?", (raw_clip_id,))
+            # Adding from library - check if extraction needed
+            cursor.execute("""
+                SELECT rc.id, rc.filename, rc.end_time, rc.start_time, rc.game_id, g.video_filename
+                FROM raw_clips rc
+                LEFT JOIN games g ON rc.game_id = g.id
+                WHERE rc.id = ?
+            """, (raw_clip_id,))
             raw_clip = cursor.fetchone()
             if not raw_clip:
                 raise HTTPException(status_code=404, detail="Raw clip not found")
+
             raw_filename = raw_clip['filename']
             end_time = raw_clip['end_time']
 
+            # Check if clip needs extraction (has game but no filename)
+            if not raw_filename and raw_clip['game_id'] and raw_clip['video_filename']:
+                clip_needs_extraction = {
+                    'clip_id': raw_clip['id'],
+                    'start_time': raw_clip['start_time'],
+                    'end_time': raw_clip['end_time'],
+                    'game_id': raw_clip['game_id'],
+                    'video_filename': raw_clip['video_filename'],
+                    'project_id': project_id,
+                }
+
             # Get next version for clips with THIS specific end_time
-            # Clips are identified by their end timestamp
             cursor.execute("""
                 SELECT COALESCE(MAX(wc.version), 0) + 1 as next_version
                 FROM working_clips wc
@@ -1145,8 +756,6 @@ async def add_clip_to_project(
             if not upload_bytes_to_r2(user_id, f"uploads/{uploaded_filename}", content):
                 raise HTTPException(status_code=500, detail="Failed to upload clip to R2")
 
-            # For uploaded files, each upload is version 1 (unique filename)
-            # No version history for uploaded clips since filename is unique
             cursor.execute("""
                 INSERT INTO working_clips (project_id, uploaded_filename, sort_order, version)
                 VALUES (?, ?, ?, ?)
@@ -1157,15 +766,47 @@ async def add_clip_to_project(
 
         logger.info(f"Added clip {clip_id} to project {project_id}")
 
-        return WorkingClipResponse(
-            id=clip_id,
-            project_id=project_id,
-            raw_clip_id=raw_clip_id,
-            uploaded_filename=uploaded_filename,
-            filename=raw_filename or uploaded_filename,
-            exported_at=None,
-            sort_order=next_order
-        )
+    # Trigger extraction if needed (outside DB connection)
+    if clip_needs_extraction:
+        await trigger_clip_extraction(clip_needs_extraction, background_tasks)
+
+    return WorkingClipResponse(
+        id=clip_id,
+        project_id=project_id,
+        raw_clip_id=raw_clip_id,
+        uploaded_filename=uploaded_filename,
+        filename=raw_filename or uploaded_filename,
+        exported_at=None,
+        sort_order=next_order
+    )
+
+
+async def trigger_clip_extraction(clip_info: dict, background_tasks):
+    """
+    Trigger extraction for a single clip that's been added to a project.
+
+    Flow:
+    1. Enqueue task to modal_tasks table (DB write)
+    2. Trigger queue processor in background (calls Modal)
+    """
+    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+
+    user_id = get_current_user_id()
+
+    # Phase 1: Enqueue to DB
+    enqueue_clip_extraction(
+        clip_id=clip_info['clip_id'],
+        project_id=clip_info['project_id'],
+        game_id=clip_info['game_id'],
+        video_filename=clip_info['video_filename'],
+        start_time=clip_info['start_time'],
+        end_time=clip_info['end_time'],
+        user_id=user_id,
+    )
+
+    # Phase 2: Process queue in background
+    background_tasks.add_task(run_queue_processor_sync)
+    logger.info(f"[Extraction] Enqueued clip {clip_info['clip_id']} for project {clip_info['project_id']}")
 
 
 def _ensure_unique_name(cursor, name: str, game_id) -> str:

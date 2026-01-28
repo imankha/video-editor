@@ -13,7 +13,7 @@ import json
 import logging
 
 from app.database import get_db_connection
-from app.queries import latest_working_clips_subquery
+from app.queries import latest_working_clips_subquery, derive_clip_name
 from app.user_context import get_current_user_id
 from app.storage import R2_ENABLED, generate_presigned_url
 
@@ -180,6 +180,16 @@ class ProjectResponse(BaseModel):
     created_at: str
 
 
+class ClipSummary(BaseModel):
+    """Summary info for a clip in a project (for project card display)."""
+    id: int
+    name: Optional[str] = None
+    tags: List[str] = []
+    rating: Optional[int] = None
+    is_extracted: bool = True
+    is_extracting: bool = False
+
+
 class ProjectListItem(BaseModel):
     id: int
     name: str
@@ -187,6 +197,9 @@ class ProjectListItem(BaseModel):
     clip_count: int
     clips_exported: int  # Clips with exported_at IS NOT NULL (included in working video)
     clips_in_progress: int  # Clips with edits but not yet exported
+    clips_extracted: int  # Clips with video file ready (filename IS NOT NULL)
+    clips_extracting: int  # Clips currently being extracted (modal_tasks running)
+    clips_pending_extraction: int  # Clips waiting to be extracted (modal_tasks pending)
     has_working_video: bool
     has_overlay_edits: bool
     has_final_video: bool
@@ -199,6 +212,8 @@ class ProjectListItem(BaseModel):
     game_names: List[str] = []  # Display names for those games
     game_dates: List[str] = []  # Game dates (for season/year grouping)
     group_key: Optional[str] = None  # Group key for hierarchical display
+    # Clip details for card display
+    clips: List[ClipSummary] = []  # Info about each clip in the project
 
 
 class WorkingClipResponse(BaseModel):
@@ -208,8 +223,14 @@ class WorkingClipResponse(BaseModel):
     filename: str  # Resolved filename (from raw_clips or uploaded)
     name: Optional[str] = None  # Human-readable name from raw_clips
     notes: Optional[str] = None  # Notes from raw_clips
+    tags: List[str] = []  # Tags from raw_clips (for auto-generated names)
+    rating: Optional[int] = None  # Rating from raw_clips (for auto-generated names)
     exported_at: Optional[str] = None  # ISO timestamp when clip was exported
     sort_order: int
+    # Extraction status
+    is_extracted: bool = True  # True if video file is ready (filename exists)
+    is_extracting: bool = False  # True if extraction is in progress
+    extraction_status: Optional[str] = None  # 'pending', 'running', 'completed', 'failed', or None
 
 
 class ProjectDetailResponse(BaseModel):
@@ -221,6 +242,7 @@ class ProjectDetailResponse(BaseModel):
     final_video_id: Optional[int]
     clips: List[WorkingClipResponse]
     created_at: str
+    is_auto_created: bool = False  # True if auto-created from 5-star clips
 
 
 @router.get("", response_model=List[ProjectListItem])
@@ -347,6 +369,71 @@ async def list_projects():
                 project_games[project_id]['game_names'].append(display_name)
                 project_games[project_id]['game_dates'].append(game_row['game_date'] or '')
 
+        # Fetch extraction status for all projects
+        # Counts clips that are: extracted (have filename), extracting (running task), pending (pending task)
+        cursor.execute("""
+            SELECT
+                COALESCE(rc.auto_project_id, wc.project_id) as project_id,
+                SUM(CASE WHEN rc.filename IS NOT NULL AND rc.filename != '' THEN 1 ELSE 0 END) as extracted,
+                SUM(CASE WHEN mt.status = 'running' THEN 1 ELSE 0 END) as extracting,
+                SUM(CASE WHEN mt.status = 'pending' THEN 1 ELSE 0 END) as pending
+            FROM raw_clips rc
+            LEFT JOIN working_clips wc ON wc.raw_clip_id = rc.id
+            LEFT JOIN modal_tasks mt ON mt.raw_clip_id = rc.id AND mt.task_type = 'clip_extraction' AND mt.status IN ('pending', 'running')
+            WHERE rc.auto_project_id IS NOT NULL OR wc.project_id IS NOT NULL
+            GROUP BY COALESCE(rc.auto_project_id, wc.project_id)
+        """)
+        extraction_rows = cursor.fetchall()
+
+        # Build a map of project_id -> extraction status
+        project_extraction = {}
+        for ext_row in extraction_rows:
+            project_extraction[ext_row['project_id']] = {
+                'extracted': ext_row['extracted'] or 0,
+                'extracting': ext_row['extracting'] or 0,
+                'pending': ext_row['pending'] or 0
+            }
+
+        # Fetch clip details for each project (names, tags, extraction status)
+        cursor.execute("""
+            SELECT
+                COALESCE(rc.auto_project_id, wc.project_id) as project_id,
+                rc.id as clip_id,
+                rc.name,
+                rc.tags,
+                rc.rating,
+                CASE WHEN rc.filename IS NOT NULL AND rc.filename != '' THEN 1 ELSE 0 END as is_extracted,
+                CASE WHEN mt.status = 'running' THEN 1 ELSE 0 END as is_extracting
+            FROM raw_clips rc
+            LEFT JOIN working_clips wc ON wc.raw_clip_id = rc.id
+            LEFT JOIN modal_tasks mt ON mt.raw_clip_id = rc.id AND mt.task_type = 'clip_extraction' AND mt.status IN ('pending', 'running')
+            WHERE rc.auto_project_id IS NOT NULL OR wc.project_id IS NOT NULL
+            ORDER BY COALESCE(rc.auto_project_id, wc.project_id), wc.sort_order, rc.id
+        """)
+        clip_rows = cursor.fetchall()
+
+        # Build a map of project_id -> list of clips
+        project_clips = {}
+        for clip_row in clip_rows:
+            project_id = clip_row['project_id']
+            if project_id not in project_clips:
+                project_clips[project_id] = []
+            # Parse tags JSON if present
+            tags = []
+            if clip_row['tags']:
+                try:
+                    tags = json.loads(clip_row['tags']) if isinstance(clip_row['tags'], str) else clip_row['tags']
+                except:
+                    tags = []
+            project_clips[project_id].append(ClipSummary(
+                id=clip_row['clip_id'],
+                name=clip_row['name'],
+                tags=tags,
+                rating=clip_row['rating'],
+                is_extracted=bool(clip_row['is_extracted']),
+                is_extracting=bool(clip_row['is_extracting'])
+            ))
+
         result = []
         for row in rows:
             project_id = row['id']
@@ -354,6 +441,11 @@ async def list_projects():
                 'game_ids': [],
                 'game_names': [],
                 'game_dates': []
+            })
+            extraction_info = project_extraction.get(project_id, {
+                'extracted': 0,
+                'extracting': 0,
+                'pending': 0
             })
 
             # Generate group key
@@ -369,12 +461,16 @@ async def list_projects():
                 clip_count=row['clip_count'],
                 clips_exported=row['clips_exported'],
                 clips_in_progress=row['clips_in_progress'],
+                clips_extracted=extraction_info['extracted'],
+                clips_extracting=extraction_info['extracting'],
+                clips_pending_extraction=extraction_info['pending'],
                 has_working_video=bool(row['has_working_video']),
                 has_overlay_edits=bool(row['has_overlay_edits']),
                 has_final_video=bool(row['has_final_video']),
                 is_auto_created=bool(row['is_auto_created']),
                 created_at=row['created_at'],
                 current_mode=row['current_mode'] or 'framing',
+                clips=project_clips.get(project_id, []),
                 last_opened_at=row['last_opened_at'],
                 game_ids=game_info['game_ids'],
                 game_names=game_info['game_names'],
@@ -476,9 +572,10 @@ async def preview_clips(request: ClipsPreviewRequest):
             total_duration += duration
 
             tags = json.loads(clip['tags']) if clip['tags'] else []
+            clip_name = derive_clip_name(clip['name'], clip['rating'] or 0, tags) or f"Clip {clip['id']}"
             clips_info.append({
                 'id': clip['id'],
-                'name': clip['name'] or f"Clip {clip['id']}",
+                'name': clip_name,
                 'rating': clip['rating'],
                 'tags': tags,
                 'duration': duration,
@@ -586,6 +683,7 @@ async def get_project(project_id: int):
         # Get project with working video filename for URL generation
         cursor.execute("""
             SELECT p.id, p.name, p.aspect_ratio, p.working_video_id, p.final_video_id, p.created_at,
+                   p.is_auto_created,
                    wv.filename as working_video_filename
             FROM projects p
             LEFT JOIN working_videos wv ON p.working_video_id = wv.id
@@ -596,7 +694,8 @@ async def get_project(project_id: int):
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Get working clips with resolved filenames (latest version of each clip only, grouped by end_time)
+        # Get working clips with resolved filenames and extraction status
+        # (latest version of each clip only, grouped by end_time)
         cursor.execute(f"""
             SELECT
                 wc.id,
@@ -606,9 +705,15 @@ async def get_project(project_id: int):
                 wc.sort_order,
                 rc.filename as raw_filename,
                 rc.name as raw_name,
-                rc.notes as raw_notes
+                rc.notes as raw_notes,
+                rc.tags as raw_tags,
+                rc.rating as raw_rating,
+                mt.status as extraction_status
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            LEFT JOIN modal_tasks mt ON mt.raw_clip_id = rc.id
+                AND mt.task_type = 'clip_extraction'
+                AND mt.status IN ('pending', 'running')
             WHERE wc.project_id = ?
             AND wc.id IN ({latest_working_clips_subquery()})
             ORDER BY wc.sort_order
@@ -618,7 +723,20 @@ async def get_project(project_id: int):
         clips = []
         for clip in clips_rows:
             # Resolve filename
-            filename = clip['raw_filename'] or clip['uploaded_filename'] or 'unknown'
+            raw_filename = clip['raw_filename'] or ''
+            filename = raw_filename or clip['uploaded_filename'] or 'unknown'
+            # Extraction status
+            is_extracted = bool(raw_filename) or bool(clip['uploaded_filename'])
+            extraction_status = clip['extraction_status']
+            is_extracting = extraction_status == 'running'
+            # Parse tags JSON
+            tags = []
+            if clip['raw_tags']:
+                try:
+                    tags = json.loads(clip['raw_tags'])
+                except json.JSONDecodeError:
+                    tags = []
+
             clips.append(WorkingClipResponse(
                 id=clip['id'],
                 raw_clip_id=clip['raw_clip_id'],
@@ -626,8 +744,13 @@ async def get_project(project_id: int):
                 filename=filename,
                 name=clip['raw_name'],
                 notes=clip['raw_notes'],
+                tags=tags,
+                rating=clip['raw_rating'],
                 exported_at=clip['exported_at'],
-                sort_order=clip['sort_order']
+                sort_order=clip['sort_order'],
+                is_extracted=is_extracted,
+                is_extracting=is_extracting,
+                extraction_status=extraction_status
             ))
 
         # Generate presigned URL for working video if it exists
@@ -643,7 +766,8 @@ async def get_project(project_id: int):
             working_video_url=working_video_url,
             final_video_id=project['final_video_id'],
             clips=clips,
-            created_at=project['created_at']
+            created_at=project['created_at'],
+            is_auto_created=bool(project['is_auto_created'])
         )
 
 

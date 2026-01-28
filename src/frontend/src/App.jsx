@@ -8,6 +8,7 @@ import { useProjects } from './hooks/useProjects';
 import { useExportRecovery } from './hooks/useExportRecovery';
 import { Breadcrumb, Button, ConfirmationDialog, ModeSwitcher, ToastContainer } from './components/shared';
 import DebugInfo from './components/DebugInfo';
+import { getProjectDisplayName } from './utils/clipDisplayName';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
@@ -246,7 +247,7 @@ function App() {
               />
               <Breadcrumb
                 type="Projects"
-                itemName={selectedProject?.name}
+                itemName={getProjectDisplayName(selectedProject)}
               />
             </div>
             <div className="flex items-center gap-2">
