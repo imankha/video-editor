@@ -25,6 +25,7 @@ export function ProjectManager({
   onSelectProject,
   onSelectProjectWithMode, // (projectId, options) => void - options: { mode: 'framing'|'overlay', clipIndex?: number }
   onCreateProject,
+  onRefreshProjects,
   onDeleteProject,
   onAnnotateWithFile, // (file: File) => void - Navigate to annotate mode with file
   // Games props
@@ -305,18 +306,17 @@ export function ProjectManager({
 
   // Handle project creation from the new modal
   const handleProjectCreated = useCallback(async (project) => {
+    // Close modal first
+    setShowNewProjectModal(false);
+
     // Refresh projects list to show the new project
     // The modal already created the project via API
-    if (onCreateProject) {
-      // Just refresh the list - project was already created
-      // Call with null to trigger a refresh without creating
+    // Don't navigate into the project - let user click on it from the projects page
+    // This ensures extraction status is checked before entering Framing mode
+    if (onRefreshProjects) {
+      await onRefreshProjects();
     }
-    setShowNewProjectModal(false);
-    // Select the new project to start editing
-    if (project?.id && onSelectProject) {
-      onSelectProject(project.id);
-    }
-  }, [onSelectProject]);
+  }, [onRefreshProjects]);
 
   return (
     <div className="flex-1 flex flex-col items-center p-8 bg-gray-900">

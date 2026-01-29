@@ -293,6 +293,7 @@ export function ProjectsScreen({
           onSelectProject={handleSelectProject}
           onSelectProjectWithMode={handleSelectProjectWithMode}
           onCreateProject={createProject}
+          onRefreshProjects={fetchProjects}
           onDeleteProject={deleteProject}
           onAnnotateWithFile={handleAnnotateWithFile}
           // Games props

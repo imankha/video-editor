@@ -383,18 +383,11 @@ async def upload_game_video(
 
             logger.info(f"Updated game {game_id} with video: {video_filename}")
 
-            # Extract any pending clips that were saved while video was uploading
-            extraction_results = extract_pending_clips_for_game(game_id, video_filename)
-            if extraction_results['extracted'] > 0:
-                logger.info(f"Extracted {extraction_results['extracted']} pending clips for game {game_id}")
-
             return {
                 'success': True,
                 'video_filename': video_filename,
                 'video_url': get_game_video_url(video_filename),  # Presigned R2 URL or None
                 'size_mb': round(video_size_mb, 1),
-                'pending_clips_extracted': extraction_results['extracted'],
-                'pending_projects_created': extraction_results['projects_created'],
             }
         except HTTPException:
             raise
@@ -508,18 +501,11 @@ async def confirm_video_upload(
     video_size_mb = (video_size / (1024 * 1024)) if video_size else 0
     logger.info(f"Confirmed direct R2 upload for game {game_id}: {video_filename} ({video_size_mb:.1f}MB)")
 
-    # Extract any pending clips that were saved while video was uploading
-    extraction_results = extract_pending_clips_for_game(game_id, video_filename)
-    if extraction_results['extracted'] > 0:
-        logger.info(f"Extracted {extraction_results['extracted']} pending clips for game {game_id}")
-
     return {
         'success': True,
         'video_filename': video_filename,
         'video_url': get_game_video_url(video_filename),
         'size_mb': round(video_size_mb, 1) if video_size else None,
-        'pending_clips_extracted': extraction_results['extracted'],
-        'pending_projects_created': extraction_results['projects_created'],
     }
 
 
