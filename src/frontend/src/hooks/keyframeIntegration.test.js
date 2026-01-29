@@ -351,19 +351,20 @@ describe('Keyframe Integration Tests', () => {
         result.current.initializeKeyframes({ x: 100, y: 100, width: 200, height: 300 }, 90);
       });
 
-      // Add keyframes 1 frame apart
+      // Add keyframes 6 frames apart (just outside FRAME_TOLERANCE of 5)
+      // Frame 30 = 1.0s, Frame 36 = 1.2s
       act(() => {
         result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150, width: 200, height: 300 }, 90, 'user');
       });
 
       act(() => {
-        result.current.addOrUpdateKeyframe(1.0 + 1 / 30, { x: 151, y: 151, width: 200, height: 300 }, 90, 'user');
+        result.current.addOrUpdateKeyframe(1.2, { x: 151, y: 151, width: 200, height: 300 }, 90, 'user');
       });
 
       expect(result.current.keyframes.length).toBe(4);
       const frames = result.current.keyframes.map(kf => kf.frame);
       expect(frames).toContain(30);
-      expect(frames).toContain(31);
+      expect(frames).toContain(36);
     });
 
     it('handles empty delete range', () => {

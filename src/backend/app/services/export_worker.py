@@ -22,6 +22,7 @@ from typing import Optional, Callable
 
 from ..database import get_db_connection, get_working_videos_path
 from ..websocket import manager, export_progress
+from .ffmpeg_service import get_video_duration
 from ..routers.exports import (
     get_export_job,
     update_job_started,
@@ -29,6 +30,7 @@ from ..routers.exports import (
     update_job_error
 )
 from .ffmpeg_service import get_encoding_command_parts
+from .modal_client import modal_enabled, call_modal_framing, call_modal_overlay
 
 logger = logging.getLogger(__name__)
 
@@ -245,13 +247,17 @@ async def process_framing_export(job_id: str, project_id: int, config: dict) -> 
         include_audio=include_audio,
     )
 
+    # Get video duration for cost-optimized GPU selection in overlay mode
+    video_duration = get_video_duration(output_path)
+    logger.info(f"[ExportWorker] Working video duration: {video_duration:.2f}s")
+
     # Save to database
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO working_videos (project_id, filename, version)
-            VALUES (?, ?, ?)
-        """, (project_id, output_filename, next_version))
+            INSERT INTO working_videos (project_id, filename, version, duration)
+            VALUES (?, ?, ?, ?)
+        """, (project_id, output_filename, next_version, video_duration))
         working_video_id = cursor.lastrowid
 
         # Update project to point to new working video
@@ -431,6 +437,130 @@ async def process_multi_clip_export(job_id: str, project_id: int, config: dict) 
     """
     # TODO: Implement multi-clip export
     raise NotImplementedError("Multi-clip export not yet implemented in worker")
+
+
+# =============================================================================
+# Modal GPU Processing Functions
+# =============================================================================
+
+
+async def process_overlay_with_modal(
+    job_id: str,
+    project_id: int,
+    user_id: str,
+    input_r2_key: str,
+    output_r2_key: str,
+    highlight_regions: list,
+    effect_type: str = "dark_overlay",
+) -> dict:
+    """
+    Process overlay export using Modal GPU.
+
+    This function calls Modal's remote GPU infrastructure to process the video.
+    The video must already be in R2 storage.
+
+    Args:
+        job_id: Export job ID for tracking
+        project_id: Project ID
+        user_id: User folder in R2 (e.g., "a")
+        input_r2_key: R2 key for input video (relative to user folder)
+        output_r2_key: R2 key for output video (relative to user folder)
+        highlight_regions: Highlight regions with keyframes
+        effect_type: Effect type for highlights
+
+    Returns:
+        {"status": "success", "output_key": "..."} or
+        {"status": "error", "error": "..."}
+    """
+    if not modal_enabled():
+        raise RuntimeError("Modal is not enabled")
+
+    logger.info(f"[ExportWorker] Using Modal GPU for overlay export: {job_id}")
+    await send_progress(job_id, 10, "Sending to GPU cluster...")
+
+    result = await call_modal_overlay(
+        job_id=job_id,
+        user_id=user_id,
+        input_key=input_r2_key,
+        output_key=output_r2_key,
+        highlight_regions=highlight_regions,
+        effect_type=effect_type,
+    )
+
+    if result.get("status") == "success":
+        await send_progress(job_id, 95, "GPU processing complete")
+    else:
+        error = result.get("error", "Unknown error")
+        logger.error(f"[ExportWorker] Modal overlay failed: {error}")
+        raise RuntimeError(f"Modal processing failed: {error}")
+
+    return result
+
+
+async def process_framing_with_modal(
+    job_id: str,
+    project_id: int,
+    user_id: str,
+    input_r2_key: str,
+    output_r2_key: str,
+    keyframes: list,
+    output_width: int = 1080,
+    output_height: int = 1920,
+    fps: int = 30,
+    segment_data: dict = None,
+) -> dict:
+    """
+    Process framing export using Modal GPU.
+
+    Note: This uses FFmpeg-only processing on Modal. For AI upscaling,
+    use the local processing with CUDA.
+
+    Args:
+        job_id: Export job ID for tracking
+        project_id: Project ID
+        user_id: User folder in R2
+        input_r2_key: R2 key for source video
+        output_r2_key: R2 key for output video
+        keyframes: Crop keyframes
+        output_width: Target width
+        output_height: Target height
+        fps: Target frame rate
+        segment_data: Trim/speed data
+
+    Returns:
+        Result dict from Modal
+    """
+    if not modal_enabled():
+        raise RuntimeError("Modal is not enabled")
+
+    logger.info(f"[ExportWorker] Using Modal GPU for framing export: {job_id}")
+    await send_progress(job_id, 10, "Sending to GPU cluster...")
+
+    result = await call_modal_framing(
+        job_id=job_id,
+        user_id=user_id,
+        input_key=input_r2_key,
+        output_key=output_r2_key,
+        keyframes=keyframes,
+        output_width=output_width,
+        output_height=output_height,
+        fps=fps,
+        segment_data=segment_data,
+    )
+
+    if result.get("status") == "success":
+        await send_progress(job_id, 95, "GPU processing complete")
+    else:
+        error = result.get("error", "Unknown error")
+        logger.error(f"[ExportWorker] Modal framing failed: {error}")
+        raise RuntimeError(f"Modal processing failed: {error}")
+
+    return result
+
+
+def is_modal_available() -> bool:
+    """Check if Modal is available and enabled."""
+    return modal_enabled()
 
 
 async def recover_orphaned_jobs():

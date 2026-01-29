@@ -136,7 +136,7 @@ export function AnnotateContainer({
     if (!file) return;
 
     try {
-      console.log('[AnnotateContainer] handleGameVideoSelect: Processing', file.name, 'with details:', gameDetails);
+      console.log('[AnnotateContainer] handleGameVideoSelect: Processing', file.name);
 
       // Extract video metadata (fast, local operation)
       const videoMetadata = await extractVideoMetadata(file);
@@ -855,6 +855,9 @@ export function AnnotateContainer({
 
     // Computed
     effectiveDuration,
+
+    // Game ID (for finish-annotation call when leaving)
+    annotateGameId,
 
     // Cleanup
     clearAnnotateState: useCallback(() => {

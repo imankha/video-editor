@@ -119,7 +119,15 @@
       "Bash(venv/Scripts/python.exe -m pytest tests/test_sr_models.py tests/test_highlight_persistence_bug.py tests/test_version_filtering.py -v --tb=short)",
       "Bash(venv/Scripts/python.exe -m pytest tests/ -v --tb=short)",
       "Bash(venv/Scripts/pip.exe show:*)",
-      "Bash(venv/Scripts/python.exe -m pytest:*)"
+      "Bash(venv/Scripts/python.exe -m pytest:*)",
+      "Bash(modal run:*)",
+      "Bash(c:/Users/imank/projects/video-editor/.venv/Scripts/python.exe -m modal deploy modal_functions/video_processing.py)",
+      "Bash(cmd /c \"cd /d c:\\\\Users\\\\imank\\\\projects\\\\video-editor && set PYTHONIOENCODING=utf-8 && .venv\\\\Scripts\\\\python.exe -m modal deploy modal_functions/video_processing.py\")",
+      "Bash(\"C:\\\\Users\\\\imank\\\\AppData\\\\Roaming\\\\Python\\\\Python311\\\\Scripts\\\\modal.exe\" app list:*)",
+      "Bash(\"C:\\\\Users\\\\imank\\\\AppData\\\\Roaming\\\\Python\\\\Python311\\\\Scripts\\\\modal.exe\" app list --json)",
+      "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python -m modal deploy:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)"
     ],
     "deny": [],
     "ask": []

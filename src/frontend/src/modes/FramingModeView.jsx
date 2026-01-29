@@ -21,6 +21,7 @@ export function FramingModeView({
   metadata,
   videoFile,
   clipTitle,
+  clipTags = [],
   currentTime,
   duration,
   isPlaying,
@@ -133,26 +134,29 @@ export function FramingModeView({
       {metadata && !isFullscreen && (
         <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
           <div className="flex items-center justify-between text-sm text-gray-300">
-            {clipTitle && <span className="font-semibold text-white">{clipTitle}</span>}
-            <div className="flex space-x-6">
-              <span>
-                <span className="text-gray-400">Resolution:</span>{' '}
-                {metadata.width}x{metadata.height}
-              </span>
-              {metadata.framerate && (
-                <span>
-                  <span className="text-gray-400">Framerate:</span>{' '}
-                  {metadata.framerate} fps
-                </span>
+            {/* Left: Title + Tags */}
+            <div className="flex flex-col gap-1">
+              {clipTitle && <span className="font-semibold text-white">{clipTitle}</span>}
+              {clipTags?.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {clipTags.map(tag => (
+                    <span key={tag} className="px-2 py-0.5 bg-blue-500/30 text-blue-200 text-xs rounded">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
               )}
-              <span>
-                <span className="text-gray-400">Format:</span>{' '}
-                {metadata.format.toUpperCase()}
-              </span>
-              <span>
-                <span className="text-gray-400">Size:</span>{' '}
-                {(metadata.size / (1024 * 1024)).toFixed(2)} MB
-              </span>
+            </div>
+
+            {/* Right: Metadata */}
+            <div className="flex items-center gap-3 text-sm text-gray-300">
+              <span>{metadata.width}x{metadata.height}</span>
+              {metadata.framerate && (
+                <>
+                  <span className="text-gray-600">•</span>
+                  <span>{metadata.framerate} fps</span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -311,7 +315,7 @@ export function FramingModeView({
               highlightRegions={[]}
               isHighlightEnabled={false}
               segmentData={getSegmentExportData()}
-              disabled={!videoFile}
+              disabled={!videoUrl}
               includeAudio={includeAudio}
               onIncludeAudioChange={onIncludeAudioChange}
               onProceedToOverlay={onProceedToOverlay}

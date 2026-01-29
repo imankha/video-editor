@@ -147,6 +147,7 @@ export function OverlayMode({
                 onRemoveKeyframe={onRemoveHighlightKeyframe}
                 onRegionAction={handleRegionAction}
                 onSelectedKeyframeChange={onSelectedKeyframeChange}
+                onSeek={onSeek}
                 sourceTimeToVisualTime={sourceTimeToVisualTime}
                 visualTimeToSourceTime={visualTimeToSourceTime}
                 colorScheme={{

@@ -17,8 +17,6 @@ export default function CropLayer({
   currentTime,
   onKeyframeClick,
   onKeyframeDelete,
-  onKeyframeCopy,
-  onKeyframePaste,
   isActive,
   selectedKeyframeIndex = null,
   isLayerSelected = false,
@@ -30,8 +28,8 @@ export default function CropLayer({
   trimRange = null,
   edgePadding = 0
 }) {
-  // Get isEndKeyframeExplicit and copiedCrop from context
-  const { isEndKeyframeExplicit, copiedCrop } = useCropContext();
+  // Get isEndKeyframeExplicit from context
+  const { isEndKeyframeExplicit } = useCropContext();
 
   const trackRef = React.useRef(null);
 
@@ -52,25 +50,12 @@ export default function CropLayer({
   };
 
   /**
-   * Handle click on keyframes track to paste crop at current playhead position
+   * Handle click on keyframes track to select layer
    */
-  const handleTrackClick = (e) => {
-    // Select this layer when clicking on it
+  const handleTrackClick = () => {
     if (onLayerSelect) {
       onLayerSelect();
     }
-
-    // Only paste if we have copied crop and paste handler
-    if (!copiedCrop || !onKeyframePaste) return;
-
-    // Don't paste if clicking on a button or keyframe diamond
-    if (e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.classList.contains('rotate-45')) {
-      return;
-    }
-
-    // Paste at current playhead position (not click position)
-    console.log('[CropLayer] Paste crop at current time:', currentTime);
-    onKeyframePaste(currentTime);
   };
 
   return (
@@ -80,7 +65,7 @@ export default function CropLayer({
       {/* Keyframes track */}
       <div
         ref={trackRef}
-        className={`absolute inset-0 rounded-r-lg ${copiedCrop ? 'cursor-copy' : ''}`}
+        className="absolute inset-0 rounded-r-lg"
         onClick={handleTrackClick}
       >
         {/* Background track */}
@@ -139,13 +124,12 @@ export default function CropLayer({
               isStartKeyframe={isStartKeyframe}
               isEndKeyframe={isEffectiveEndKeyframe}
               onClick={() => onKeyframeClick(keyframeTime, index)}
-              onCopy={onKeyframeCopy ? () => onKeyframeCopy(keyframeTime) : undefined}
               onDelete={keyframes.length > 2 && !isPermanent ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
               tooltip={`Keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
                 isEffectiveEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
               }${isSelected ? ' [SELECTED]' : ''}`}
               edgePadding={edgePadding}
-              showCopyButton={!!onKeyframeCopy}
+              showCopyButton={false}
               showDeleteButton={keyframes.length > 2 && !isPermanent}
             />
           );

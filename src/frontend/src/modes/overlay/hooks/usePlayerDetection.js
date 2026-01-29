@@ -6,18 +6,22 @@ const API_BASE_URL = API_BASE;
 /**
  * usePlayerDetection - Hook to fetch player detections for the current video frame
  *
- * Uploads the video file once, then calls the YOLO detection endpoint
- * when the frame changes (debounced).
+ * NEW BEHAVIOR (manual trigger mode):
+ * - Does NOT auto-detect on frame change (saves GPU costs)
+ * - Auto-checks cache when frame changes
+ * - If frame is cached, shows detections automatically
+ * - If not cached, user must click "Detect Players" button
+ * - User can toggle detection boxes on/off
  *
- * @param {File|Blob} videoFile - Video file to analyze
+ * @param {number} projectId - Project ID (backend looks up working video R2 path)
  * @param {number} currentTime - Current playhead time in seconds
  * @param {number} framerate - Video framerate (default 30)
- * @param {boolean} enabled - Whether detection is enabled
+ * @param {boolean} enabled - Whether detection UI is enabled (in overlay mode + in region)
  * @param {number} confidenceThreshold - Minimum confidence for detections (default 0.5)
- * @returns {Object} { detections, isLoading, isUploading, error, videoWidth, videoHeight }
+ * @returns {Object} { detections, isLoading, isCached, triggerDetection, ... }
  */
 export function usePlayerDetection({
-  videoFile,
+  projectId,
   currentTime,
   framerate = 30,
   enabled = false,
@@ -25,92 +29,46 @@ export function usePlayerDetection({
 }) {
   const [detections, setDetections] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isCached, setIsCached] = useState(false);
   const [error, setError] = useState(null);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
-  const [videoId, setVideoId] = useState(null);
 
-  // Track the last fetched frame to avoid redundant requests
-  const lastFetchedFrameRef = useRef(-1);
+  // Track the last checked/fetched frame to avoid redundant requests
+  const lastCheckedFrameRef = useRef(-1);
   const abortControllerRef = useRef(null);
-  const uploadedFileRef = useRef(null);
 
   // Convert time to frame number
   const currentFrame = Math.round(currentTime * framerate);
 
   /**
-   * Upload video file and get video_id
+   * Check if detection is cached for current frame
+   * Returns cached detections if available
    */
-  const uploadVideo = useCallback(async (file) => {
-    if (!file) return null;
-
-    // Check if already uploaded this file
-    if (uploadedFileRef.current === file && videoId) {
-      return videoId;
-    }
-
-    setIsUploading(true);
-    setError(null);
+  const checkCache = useCallback(async (frameNumber) => {
+    if (!projectId) return null;
 
     try {
-      const formData = new FormData();
-      formData.append('video', file, file.name || 'video.mp4');
-
-      const response = await fetch(`${API_BASE_URL}/api/detect/upload`, {
-        method: 'POST',
-        body: formData
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/detect/cache/${projectId}/${frameNumber}`
+      );
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Upload failed: ${response.status}`);
+        return null;
       }
 
       const data = await response.json();
-
-      uploadedFileRef.current = file;
-      setVideoId(data.video_id);
-
-      console.log('[usePlayerDetection] Video uploaded:', data.video_id);
-
-      return data.video_id;
-
+      return data;
     } catch (err) {
-      console.error('[usePlayerDetection] Upload error:', err);
-      setError(`Upload failed: ${err.message}`);
+      console.warn('[usePlayerDetection] Cache check failed:', err);
       return null;
-    } finally {
-      setIsUploading(false);
     }
-  }, [videoId]);
+  }, [projectId]);
 
   /**
-   * Delete uploaded video
+   * Trigger detection for current frame (called by button click)
    */
-  const deleteVideo = useCallback(async (id) => {
-    if (!id) return;
-
-    try {
-      await fetch(`${API_BASE_URL}/api/detect/upload/${id}`, {
-        method: 'DELETE'
-      });
-      console.log('[usePlayerDetection] Video deleted:', id);
-    } catch (err) {
-      console.warn('[usePlayerDetection] Failed to delete video:', err);
-    }
-  }, []);
-
-  /**
-   * Fetch detections for the current frame
-   */
-  const fetchDetections = useCallback(async (frameNumber, vId) => {
-    if (!vId || !enabled) {
-      setDetections([]);
-      return;
-    }
-
-    // Don't fetch if we already have this frame
-    if (frameNumber === lastFetchedFrameRef.current) {
+  const triggerDetection = useCallback(async () => {
+    if (!enabled || !projectId) {
       return;
     }
 
@@ -125,16 +83,18 @@ export function usePlayerDetection({
     setError(null);
 
     try {
+      const requestBody = {
+        project_id: projectId,
+        frame_number: currentFrame,
+        confidence_threshold: confidenceThreshold
+      };
+
       const response = await fetch(`${API_BASE_URL}/api/detect/players`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          video_id: vId,
-          frame_number: frameNumber,
-          confidence_threshold: confidenceThreshold
-        }),
+        body: JSON.stringify(requestBody),
         signal: abortControllerRef.current.signal
       });
 
@@ -145,102 +105,103 @@ export function usePlayerDetection({
 
       const data = await response.json();
 
-      lastFetchedFrameRef.current = frameNumber;
       setDetections(data.detections || []);
       setVideoDimensions({
         width: data.video_width,
         height: data.video_height
       });
+      setIsCached(true); // Now it's cached for future visits
+      lastCheckedFrameRef.current = currentFrame;
+
+      console.log('[usePlayerDetection] Detection complete:', data.detections?.length, 'players');
 
     } catch (err) {
       if (err.name === 'AbortError') {
-        // Request was cancelled, ignore
         return;
       }
-      console.error('[usePlayerDetection] Error fetching detections:', err);
+      console.error('[usePlayerDetection] Detection error:', err);
       setError(err.message);
       setDetections([]);
     } finally {
       setIsLoading(false);
     }
-  }, [enabled, confidenceThreshold]);
+  }, [enabled, projectId, currentFrame, confidenceThreshold]);
 
-  // Upload video when enabled and file is available
+  /**
+   * Check cache when frame changes (auto-fetch cached results)
+   */
   useEffect(() => {
-    if (!enabled || !videoFile) {
-      return;
-    }
-
-    // Upload if not already uploaded
-    if (uploadedFileRef.current !== videoFile) {
-      uploadVideo(videoFile);
-    }
-  }, [enabled, videoFile, uploadVideo]);
-
-  // Fetch detections when frame changes
-  useEffect(() => {
-    if (!enabled || !videoId) {
+    if (!enabled || !projectId) {
       setDetections([]);
-      lastFetchedFrameRef.current = -1;
+      setIsCached(false);
+      lastCheckedFrameRef.current = -1;
       return;
     }
 
-    // Debounce the fetch by 150ms to avoid too many requests during scrubbing
-    const timeoutId = setTimeout(() => {
-      fetchDetections(currentFrame, videoId);
-    }, 150);
+    // Don't re-check if we already checked this frame
+    if (currentFrame === lastCheckedFrameRef.current) {
+      return;
+    }
 
+    // Check cache for new frame
+    const checkFrameCache = async () => {
+      const cacheResult = await checkCache(currentFrame);
+
+      if (cacheResult?.cached) {
+        // Frame is cached - show detections automatically
+        setDetections(cacheResult.detections || []);
+        setVideoDimensions({
+          width: cacheResult.video_width || 0,
+          height: cacheResult.video_height || 0
+        });
+        setIsCached(true);
+        console.log('[usePlayerDetection] Cache hit for frame', currentFrame);
+      } else {
+        // Frame not cached - clear detections, user must click button
+        setDetections([]);
+        setIsCached(false);
+        console.log('[usePlayerDetection] Cache miss for frame', currentFrame);
+      }
+
+      lastCheckedFrameRef.current = currentFrame;
+    };
+
+    // Debounce cache check to avoid excessive requests during scrubbing
+    const timeoutId = setTimeout(checkFrameCache, 100);
     return () => clearTimeout(timeoutId);
-  }, [currentFrame, enabled, videoId, fetchDetections]);
 
-  // Clean up on unmount or when disabled
+  }, [currentFrame, enabled, projectId, checkCache]);
+
+  // Clean up on unmount
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
-      // Clean up uploaded video when component unmounts
-      if (videoId) {
-        deleteVideo(videoId);
-      }
     };
   }, []);
 
-  // Clean up when detection is disabled
+  // Reset when projectId changes
   useEffect(() => {
-    if (!enabled && videoId) {
-      deleteVideo(videoId);
-      setVideoId(null);
-      uploadedFileRef.current = null;
-      setDetections([]);
-      lastFetchedFrameRef.current = -1;
-    }
-  }, [enabled, videoId, deleteVideo]);
-
-  // Reset when video file changes
-  useEffect(() => {
-    if (videoFile !== uploadedFileRef.current) {
-      // New video file - clean up old one
-      if (videoId) {
-        deleteVideo(videoId);
-        setVideoId(null);
-      }
-      uploadedFileRef.current = null;
-      setDetections([]);
-      lastFetchedFrameRef.current = -1;
-    }
-  }, [videoFile, videoId, deleteVideo]);
+    setDetections([]);
+    setIsCached(false);
+    lastCheckedFrameRef.current = -1;
+    setError(null);
+  }, [projectId]);
 
   return {
     detections,
     isLoading,
-    isUploading,
+    isCached,
     error,
     videoWidth: videoDimensions.width,
     videoHeight: videoDimensions.height,
     currentFrame,
-    videoId,
-    framerate
+    framerate,
+    // Manual trigger function
+    triggerDetection,
+    // For UI to know if detection is available
+    canDetect: enabled && projectId && !isLoading && !isCached
   };
 }
 

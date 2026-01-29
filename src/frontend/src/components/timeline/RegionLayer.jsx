@@ -48,6 +48,7 @@ export default function RegionLayer({
   onRemoveKeyframe,
   onRegionAction,
   onSelectedKeyframeChange,
+  onSeek,
   sourceTimeToVisualTime = (t) => t,
   visualTimeToSourceTime = (t) => t,
   colorScheme = {
@@ -285,7 +286,7 @@ export default function RegionLayer({
 
   /**
    * Render keyframes for highlight mode
-   * Uses CSS calc() for positioning to match playhead exactly
+   * Uses KeyframeMarker component for consistent delete button UI
    */
   const renderKeyframes = () => {
     if (mode !== 'highlight' || keyframes.length === 0) return null;
@@ -303,36 +304,28 @@ export default function RegionLayer({
       const positionPercent = sourceTimeToPixel(displayTime);
       const keyframeTime = frameToTime(keyframe.frame, framerate);
 
-      // Can delete if: user-created (not permanent) AND we have a delete callback
-      const canDelete = keyframe.origin !== 'permanent' && onRemoveKeyframe;
       const isPermanent = keyframe.origin === 'permanent';
 
-      // Click on keyframe: delete it if possible (only for non-permanent keyframes)
-      const handleClick = canDelete ? () => onRemoveKeyframe(keyframeTime) : undefined;
-
-      // Use CSS calc() matching playhead positioning formula exactly
-      const leftCalc = `calc(${edgePadding}px + (100% - ${edgePadding * 2}px) * ${positionPercent / 100})`;
+      // Can delete if: user-created (not permanent) AND we have a delete callback AND more than 2 keyframes
+      const canDelete = !isPermanent && onRemoveKeyframe && keyframes.length > 2;
 
       return (
-        <div
+        <KeyframeMarker
           key={`kf-${index}-${keyframe.frame}`}
-          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-50"
-          style={{ left: leftCalc }}
-        >
-          {/* Diamond keyframe indicator */}
-          <div
-            className={`w-3 h-3 transform rotate-45 transition-all cursor-pointer ${
-              isSelected
-                ? 'bg-orange-300 scale-150 ring-2 ring-orange-200'
-                : 'bg-orange-500 hover:bg-orange-400'
-            }`}
-            onClick={handleClick}
-            title={isPermanent
-              ? `Auto keyframe at ${keyframeTime.toFixed(2)}s`
-              : `Keyframe at ${keyframeTime.toFixed(2)}s (click to delete)`
-            }
-          />
-        </div>
+          position={positionPercent}
+          colorScheme="orange"
+          isSelected={isSelected}
+          isPermanent={isPermanent}
+          onClick={() => onSeek && onSeek(keyframeTime)}
+          onDelete={canDelete ? () => onRemoveKeyframe(keyframeTime) : undefined}
+          tooltip={isPermanent
+            ? `Auto keyframe at ${keyframeTime.toFixed(2)}s`
+            : `Keyframe at ${keyframeTime.toFixed(2)}s`
+          }
+          edgePadding={edgePadding}
+          showCopyButton={false}
+          showDeleteButton={canDelete}
+        />
       );
     });
   };

@@ -71,9 +71,17 @@ export default function useHighlightRegions(videoMetadata) {
 
   /**
    * Get all keyframes from all regions (for compatibility)
+   * Computes 'origin' based on position: first/last in region = permanent, others = user
    */
   const allKeyframes = useMemo(() => {
-    return regions.flatMap(region => region.keyframes || []);
+    return regions.flatMap(region => {
+      const kfs = region.keyframes || [];
+      return kfs.map((kf, idx) => ({
+        ...kf,
+        // First and last keyframes in a region are permanent (boundaries)
+        origin: (idx === 0 || idx === kfs.length - 1) ? 'permanent' : 'user'
+      }));
+    });
   }, [regions]);
 
   /**
@@ -118,6 +126,11 @@ export default function useHighlightRegions(videoMetadata) {
 
   /**
    * Restore regions from saved data (for overlay persistence)
+   *
+   * DEDUPLICATION: Filters out duplicate regions by ID and removes overlapping
+   * regions (keeps the first one in case of overlap) to prevent issues when
+   * the same raw_clip is used multiple times.
+   *
    * @param {Array} savedRegions - Array of saved region objects from backend
    * @param {number} videoDuration - Video duration in seconds
    */
@@ -137,6 +150,9 @@ export default function useHighlightRegions(videoMetadata) {
       const endTime = saved.end_time ?? saved.endTime;
 
       // Convert keyframes from export format (time) to internal format (frame)
+      const startFrame = timeToFrame(startTime, framerate);
+      const endFrame = timeToFrame(endTime, framerate);
+
       const restoredKeyframes = (saved.keyframes || []).map((kf, idx) => {
         // If keyframe has time but no frame, convert time to frame
         let frame = kf.frame;
@@ -145,11 +161,12 @@ export default function useHighlightRegions(videoMetadata) {
             frame = timeToFrame(kf.time, framerate);
           } else {
             // Fallback: use region start/end for first/last keyframe
-            frame = idx === 0 ? timeToFrame(startTime, framerate) : timeToFrame(endTime, framerate);
+            frame = idx === 0 ? startFrame : endFrame;
             console.warn('[useHighlightRegions] Keyframe missing time, using region boundary');
           }
         }
 
+        // Note: origin is computed dynamically in allKeyframes based on position
         return {
           frame,
           x: kf.x,
@@ -157,8 +174,7 @@ export default function useHighlightRegions(videoMetadata) {
           radiusX: kf.radiusX,
           radiusY: kf.radiusY,
           opacity: kf.opacity,
-          color: kf.color,
-          origin: kf.origin || 'permanent'
+          color: kf.color
         };
       });
 
@@ -171,7 +187,36 @@ export default function useHighlightRegions(videoMetadata) {
       };
     });
 
-    setRegions(restoredRegions);
+    // DEDUPLICATION: Remove duplicate regions by ID and filter out overlapping regions
+    const seenIds = new Set();
+    const dedupedRegions = [];
+
+    for (const region of restoredRegions) {
+      // Skip duplicate IDs
+      if (seenIds.has(region.id)) {
+        console.log(`[useHighlightRegions] Skipping duplicate region ID: ${region.id}`);
+        continue;
+      }
+      seenIds.add(region.id);
+
+      // Check for time overlap with already-added regions
+      const hasOverlap = dedupedRegions.some(existing =>
+        region.startTime < existing.endTime && region.endTime > existing.startTime
+      );
+
+      if (hasOverlap) {
+        console.log(`[useHighlightRegions] Skipping overlapping region: ${region.id} (${region.startTime}-${region.endTime})`);
+        continue;
+      }
+
+      dedupedRegions.push(region);
+    }
+
+    if (dedupedRegions.length < restoredRegions.length) {
+      console.log(`[useHighlightRegions] Removed ${restoredRegions.length - dedupedRegions.length} duplicate/overlapping regions`);
+    }
+
+    setRegions(dedupedRegions);
     setSelectedRegionId(null);
   }, [framerate]);
 
@@ -240,13 +285,11 @@ export default function useHighlightRegions(videoMetadata) {
       keyframes: [
         {
           frame: startFrame,
-          ...defaultHighlight,
-          origin: 'permanent'
+          ...defaultHighlight
         },
         {
           frame: endFrame,
-          ...defaultHighlight,
-          origin: 'permanent'
+          ...defaultHighlight
         }
       ]
     };
@@ -301,7 +344,8 @@ export default function useHighlightRegions(videoMetadata) {
       const snappedStart = frameToTime(startFrame, framerate);
 
       const updatedKeyframes = region.keyframes.map((kf, idx) => {
-        if (idx === 0 && kf.origin === 'permanent') {
+        // First keyframe is always the start boundary
+        if (idx === 0) {
           return { ...kf, frame: startFrame };
         }
         return kf;
@@ -339,7 +383,8 @@ export default function useHighlightRegions(videoMetadata) {
       const snappedEnd = frameToTime(endFrame, framerate);
 
       const updatedKeyframes = region.keyframes.map((kf, idx) => {
-        if (idx === region.keyframes.length - 1 && kf.origin === 'permanent') {
+        // Last keyframe is always the end boundary
+        if (idx === region.keyframes.length - 1) {
           return { ...kf, frame: endFrame };
         }
         return kf;
@@ -482,9 +527,10 @@ export default function useHighlightRegions(videoMetadata) {
       }
 
       // No nearby keyframe - add new one and sort
+      // Note: origin is computed dynamically in allKeyframes based on position
       return {
         ...r,
-        keyframes: [...r.keyframes, { frame: targetFrame, ...data, origin: 'user' }]
+        keyframes: [...r.keyframes, { frame: targetFrame, ...data }]
           .sort((a, b) => a.frame - b.frame)
       };
     }));
@@ -504,11 +550,11 @@ export default function useHighlightRegions(videoMetadata) {
     setRegions(prev => prev.map(r => {
       if (r.id !== region.id) return r;
 
-      // Don't remove permanent keyframes
+      // Don't remove first or last keyframes (permanent boundaries)
       return {
         ...r,
-        keyframes: r.keyframes.filter(kf =>
-          kf.frame !== frame || kf.origin === 'permanent'
+        keyframes: r.keyframes.filter((kf, idx) =>
+          kf.frame !== frame || idx === 0 || idx === r.keyframes.length - 1
         )
       };
     }));
@@ -602,6 +648,7 @@ export default function useHighlightRegions(videoMetadata) {
               radiusY: kf.radiusY,
               opacity: kf.opacity,
               color: kf.color
+              // Note: origin is computed dynamically based on position, not stored
             };
           })
           // Filter out keyframes with invalid time
@@ -682,13 +729,11 @@ export default function useHighlightRegions(videoMetadata) {
         keyframes: [
           {
             frame: startFrame,
-            ...defaultHighlight,
-            origin: 'permanent'
+            ...defaultHighlight
           },
           {
             frame: endFrame,
-            ...defaultHighlight,
-            origin: 'permanent'
+            ...defaultHighlight
           }
         ]
       });

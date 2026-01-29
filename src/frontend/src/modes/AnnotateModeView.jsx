@@ -2,6 +2,7 @@ import { Download, Loader } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
+import { generateClipName } from './annotate/constants/soccerTags';
 import { useExportStore } from '../stores';
 
 /**
@@ -141,10 +142,16 @@ export function AnnotateModeView({
                 // NotesOverlay - shows name, rating, notes for region at playhead
                 (() => {
                   const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
-                  return (regionAtPlayhead?.name || regionAtPlayhead?.notes) ? (
+                  if (!regionAtPlayhead) return null;
+
+                  // Derive display name from rating+tags if no explicit name is set
+                  const displayName = regionAtPlayhead.name ||
+                    generateClipName(regionAtPlayhead.rating, regionAtPlayhead.tags);
+
+                  return (displayName || regionAtPlayhead.notes) ? (
                     <NotesOverlay
                       key="annotate-notes"
-                      name={regionAtPlayhead.name}
+                      name={displayName}
                       notes={regionAtPlayhead.notes}
                       rating={regionAtPlayhead.rating}
                       isVisible={true}

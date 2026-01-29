@@ -122,6 +122,51 @@ export function ProjectsScreen({
     }
   }, [gamesVersion, fetchGames]);
 
+  // Listen for extraction completion events via WebSocket
+  useEffect(() => {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/extractions`;
+    let ws = null;
+    let reconnectTimeout = null;
+
+    const connect = () => {
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('[ProjectsScreen] Connected to extraction WebSocket');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[ProjectsScreen] Extraction event:', data);
+          if (data.type === 'extraction_complete' || data.type === 'extraction_failed') {
+            // Refresh projects to get updated extraction status
+            fetchProjects();
+          }
+        } catch (e) {
+          // Ignore non-JSON messages (like pong)
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('[ProjectsScreen] Extraction WebSocket closed, reconnecting in 5s');
+        reconnectTimeout = setTimeout(connect, 5000);
+      };
+
+      ws.onerror = (err) => {
+        console.warn('[ProjectsScreen] Extraction WebSocket error:', err);
+      };
+    };
+
+    connect();
+
+    return () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) ws.close();
+    };
+  }, [fetchProjects]);
+
   // Handle project selection
   const handleSelectProject = useCallback(async (projectId) => {
     console.log('[ProjectsScreen] Selecting project:', projectId);
@@ -203,7 +248,6 @@ export function ProjectsScreen({
   // Handle annotate with file and game details (navigate to annotate mode with pre-selected data)
   // The data is stored in module-level variable and picked up by AnnotateScreen
   const handleAnnotateWithFile = useCallback((gameData) => {
-    console.log('[ProjectsScreen] Navigating to annotate with game data:', gameData.file?.name, gameData);
     pendingGameData = gameData;
     setEditorMode('annotate');
   }, [setEditorMode]);
@@ -249,6 +293,7 @@ export function ProjectsScreen({
           onSelectProject={handleSelectProject}
           onSelectProjectWithMode={handleSelectProjectWithMode}
           onCreateProject={createProject}
+          onRefreshProjects={fetchProjects}
           onDeleteProject={deleteProject}
           onAnnotateWithFile={handleAnnotateWithFile}
           // Games props

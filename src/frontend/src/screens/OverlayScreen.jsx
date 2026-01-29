@@ -50,17 +50,22 @@ export function OverlayScreen({
     clipMetadata: overlayClipMetadata,
     effectType: highlightEffectType,
     isLoadingWorkingVideo,
-    isDataLoaded,
     setWorkingVideo,
     setClipMetadata: setOverlayClipMetadata,
     setEffectType: setHighlightEffectType,
     setIsLoadingWorkingVideo,
-    setIsDataLoaded,
   } = useOverlayStore();
 
   // Project data store - for framing clips (pass-through mode)
   const clips = useProjectDataStore(state => state.clips);
   const hasClips = clips && clips.length > 0;
+
+  // Get unique tags from all clips for display
+  const clipTags = useMemo(() => {
+    if (!clips || clips.length === 0) return [];
+    const allTags = clips.flatMap(c => c.tags || []);
+    return [...new Set(allTags)]; // Unique tags
+  }, [clips]);
 
   // Framing store - for detecting uncommitted changes
   const hasChangedSinceExport = useFramingStore(state => state.hasChangedSinceExport);
@@ -76,7 +81,7 @@ export function OverlayScreen({
     selectedHighlightKeyframeTime,
     setSelectedHighlightKeyframeTime,
     pendingOverlaySaveRef,
-    overlayDataLoadedRef,
+    overlayDataLoadedForProjectRef,
   } = overlayState;
 
   // Local state
@@ -96,8 +101,8 @@ export function OverlayScreen({
   const framingVideoFile = clips[0]?.file;
 
   // Determine if we should wait for working video (don't use original clip as fallback)
-  // If project has a working_video_id but workingVideo is null, we're loading it
-  const shouldWaitForWorkingVideo = !workingVideo && (project?.working_video_id || isLoadingWorkingVideo);
+  // If project has a working_video_url but workingVideo is null, we're loading it
+  const shouldWaitForWorkingVideo = !workingVideo && (project?.working_video_url || isLoadingWorkingVideo);
 
   // Effective video: working video from store, or fallback to framing video only if no working video exists
   const effectiveOverlayVideoUrl = workingVideo?.url || (shouldWaitForWorkingVideo ? null : framingVideoUrl);
@@ -119,6 +124,7 @@ export function OverlayScreen({
     isLoading,
     loadVideo,
     loadVideoFromUrl,
+    loadVideoFromStreamingUrl,
     togglePlay,
     seek,
     stepForward,
@@ -196,29 +202,27 @@ export function OverlayScreen({
   // =========================================
 
   useEffect(() => {
-    // If no working video in store but project has one, load it
-    if (!workingVideo && project?.working_video_id && !isLoadingWorkingVideo) {
+    // If no working video in store but project has presigned URL, use it directly (streaming)
+    if (!workingVideo && project?.working_video_url && !isLoadingWorkingVideo) {
       setIsLoadingWorkingVideo(true);
 
       (async () => {
         try {
-          console.log('[OverlayScreen] Loading working video from project');
-          const response = await fetch(`${API_BASE}/api/projects/${projectId}/working-video`);
-          if (response.ok) {
-            const blob = await response.blob();
-            const file = new File([blob], 'working_video.mp4', { type: 'video/mp4' });
-            const url = URL.createObjectURL(file);
-            const meta = await extractVideoMetadata(file);
-            setWorkingVideo({ file, url, metadata: meta });
-          }
+          console.log('[OverlayScreen] Using presigned URL for working video (streaming)');
+          // Use presigned URL directly - no blob download needed!
+          // Extract metadata using the streaming URL (fast - only reads headers + moov atom)
+          const meta = await extractVideoMetadataFromUrl(project.working_video_url, 'working_video.mp4');
+          console.log('[OverlayScreen] Extracted metadata from streaming URL:', meta);
+          // Store URL directly (no file/blob needed for streaming)
+          setWorkingVideo({ file: null, url: project.working_video_url, metadata: meta });
         } catch (err) {
-          console.error('[OverlayScreen] Failed to load working video:', err);
+          console.error('[OverlayScreen] Failed to extract working video metadata:', err);
         } finally {
           setIsLoadingWorkingVideo(false);
         }
       })();
     }
-  }, [workingVideo, project?.working_video_id, projectId, isLoadingWorkingVideo, setIsLoadingWorkingVideo, setWorkingVideo]);
+  }, [workingVideo, project?.working_video_url, isLoadingWorkingVideo, setIsLoadingWorkingVideo, setWorkingVideo]);
 
   // Load video into useVideo hook when effectiveOverlayVideoUrl is available
   // Uses a ref to track the source URL to prevent infinite loops (blob URLs are always unique)
@@ -226,9 +230,18 @@ export function OverlayScreen({
     if (effectiveOverlayVideoUrl && effectiveOverlayVideoUrl !== videoLoadedFromUrlRef.current) {
       console.log('[OverlayScreen] Loading video from URL:', effectiveOverlayVideoUrl.substring(0, 50));
       videoLoadedFromUrlRef.current = effectiveOverlayVideoUrl;
-      loadVideoFromUrl(effectiveOverlayVideoUrl, 'overlay_video.mp4');
+
+      // Use streaming mode for presigned URLs (not blob URLs)
+      // This avoids downloading the entire video before playback
+      if (!effectiveOverlayVideoUrl.startsWith('blob:') && effectiveOverlayMetadata) {
+        console.log('[OverlayScreen] Using streaming mode (instant first frame)');
+        loadVideoFromStreamingUrl(effectiveOverlayVideoUrl, effectiveOverlayMetadata);
+      } else {
+        // For blob URLs (local exports), use the fetch approach
+        loadVideoFromUrl(effectiveOverlayVideoUrl, 'overlay_video.mp4');
+      }
     }
-  }, [effectiveOverlayVideoUrl, loadVideoFromUrl]);
+  }, [effectiveOverlayVideoUrl, effectiveOverlayMetadata, loadVideoFromUrl, loadVideoFromStreamingUrl]);
 
   // Initialize highlight regions when duration available
   useEffect(() => {
@@ -256,24 +269,13 @@ export function OverlayScreen({
         console.log(`[OverlayScreen] Auto-created ${count} highlight regions from clip metadata`);
       }
 
-      // Mark data as loaded to prevent overlay data fetch from overwriting
-      overlayDataLoadedRef.current = true;
-      setIsDataLoaded(true);
+      // Mark this project as loaded to prevent overlay data fetch from overwriting
+      overlayDataLoadedForProjectRef.current = projectId;
 
       // Clear clip metadata after processing to prevent re-triggering
       setOverlayClipMetadata(null);
     }
-  }, [overlayClipMetadata, effectiveOverlayMetadata, initializeHighlightRegionsFromClips, setOverlayClipMetadata, resetHighlightRegions, setIsDataLoaded]);
-
-  // Fallback: Create default highlight region if no regions exist after loading
-  // This handles the case where user navigates to overlay mode without clip metadata
-  useEffect(() => {
-    // Only run after data loading is complete and if we have no regions
-    if (isDataLoaded && highlightRegions.length === 0 && !overlayClipMetadata && effectiveOverlayMetadata?.duration > 0) {
-      console.log('[OverlayScreen] No highlight regions - creating default for first 2 seconds');
-      addHighlightRegion(0); // Creates 2-second region starting at 0
-    }
-  }, [isDataLoaded, highlightRegions.length, overlayClipMetadata, effectiveOverlayMetadata?.duration, addHighlightRegion]);
+  }, [overlayClipMetadata, effectiveOverlayMetadata, initializeHighlightRegionsFromClips, setOverlayClipMetadata, resetHighlightRegions, projectId]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
@@ -281,10 +283,12 @@ export function OverlayScreen({
 
   // Load overlay data from backend
   // Skip if we have fresh clip metadata (from framing export) - that takes priority
+  // Uses projectId tracking to auto-load when switching projects
   useEffect(() => {
     const effectiveDuration = effectiveOverlayMetadata?.duration;
-    // Don't load saved overlay data if we have fresh clip metadata from framing export
-    if (projectId && !overlayDataLoadedRef.current && effectiveDuration && !overlayClipMetadata) {
+    // Don't load if: no projectId, already loaded for this project, no duration, or have clip metadata
+    const alreadyLoadedForProject = overlayDataLoadedForProjectRef.current === projectId;
+    if (projectId && !alreadyLoadedForProject && effectiveDuration && !overlayClipMetadata) {
       (async () => {
         try {
           console.log('[OverlayScreen] Loading overlay data for project:', projectId);
@@ -294,19 +298,25 @@ export function OverlayScreen({
           if (data.has_data && data.highlights_data?.length > 0) {
             restoreHighlightRegions(data.highlights_data, effectiveDuration);
             console.log('[OverlayScreen] Restored', data.highlights_data.length, 'highlight regions');
+          } else {
+            // No saved regions - create default for first 2 seconds
+            console.log('[OverlayScreen] No saved highlight regions - creating default');
+            addHighlightRegion(0);
           }
           if (data.effect_type) {
             setHighlightEffectType(data.effect_type);
           }
 
-          overlayDataLoadedRef.current = true;
-          setIsDataLoaded(true);
+          overlayDataLoadedForProjectRef.current = projectId;
         } catch (err) {
           console.error('[OverlayScreen] Failed to load overlay data:', err);
+          // On error, still create default region so user isn't stuck
+          addHighlightRegion(0);
+          overlayDataLoadedForProjectRef.current = projectId;
         }
       })();
     }
-  }, [projectId, effectiveOverlayMetadata?.duration, restoreHighlightRegions, setHighlightEffectType, setIsDataLoaded, overlayClipMetadata]);
+  }, [projectId, effectiveOverlayMetadata?.duration, restoreHighlightRegions, setHighlightEffectType, overlayClipMetadata, addHighlightRegion]);
 
   // Save overlay data to backend (debounced)
   const saveOverlayData = useCallback(async () => {
@@ -337,9 +347,9 @@ export function OverlayScreen({
     }, 2000);
   }, [projectId, getRegionsForExport, highlightEffectType]);
 
-  // Auto-save on changes
+  // Auto-save on changes (only after data loaded for this project)
   useEffect(() => {
-    if (overlayDataLoadedRef.current && projectId) {
+    if (overlayDataLoadedForProjectRef.current === projectId && projectId) {
       saveOverlayData();
     }
   }, [highlightRegions, highlightEffectType, projectId, saveOverlayData]);
@@ -347,10 +357,10 @@ export function OverlayScreen({
   // Dismiss "export complete" toast when user makes changes
   // This lets users know they need to re-export after modifying highlights
   useEffect(() => {
-    if (overlayDataLoadedRef.current) {
+    if (overlayDataLoadedForProjectRef.current === projectId) {
       dismissExportCompleteToast();
     }
-  }, [highlightRegions, highlightEffectType, dismissExportCompleteToast]);
+  }, [highlightRegions, highlightEffectType, dismissExportCompleteToast, projectId]);
 
   // Save before unload
   useEffect(() => {
@@ -438,7 +448,7 @@ export function OverlayScreen({
     highlightEffectType,
     setHighlightEffectType,
     pendingOverlaySaveRef,
-    overlayDataLoadedRef,
+    overlayDataLoadedForProjectRef,
     highlightRegions,
     highlightBoundaries,
     highlightRegionKeyframes,
@@ -466,10 +476,13 @@ export function OverlayScreen({
     playerDetectionEnabled,
     playerDetections,
     isDetectionLoading,
-    isDetectionUploading,
+    isDetectionCached,
     detectionError,
+    triggerDetection,
+    canDetect,
     showPlayerBoxes,
     togglePlayerBoxes,
+    enablePlayerBoxes,
     handlePlayerSelect,
     handleHighlightChange,
     handleHighlightComplete,
@@ -584,6 +597,7 @@ export function OverlayScreen({
       effectiveOverlayMetadata={effectiveOverlayMetadata}
       effectiveOverlayFile={effectiveOverlayFile}
       videoTitle={project?.name}
+      videoTags={clipTags}
       currentTime={currentTime}
       duration={duration}
       isPlaying={isPlaying}
@@ -620,10 +634,12 @@ export function OverlayScreen({
       playerDetectionEnabled={playerDetectionEnabled}
       playerDetections={playerDetections}
       isDetectionLoading={isDetectionLoading}
-      isDetectionUploading={isDetectionUploading}
+      canDetect={canDetect}
+      triggerDetection={triggerDetection}
       onPlayerSelect={handlePlayerSelect}
       showPlayerBoxes={showPlayerBoxes}
       onTogglePlayerBoxes={togglePlayerBoxes}
+      onEnablePlayerBoxes={enablePlayerBoxes}
       // Zoom
       zoom={zoom}
       panOffset={panOffset}

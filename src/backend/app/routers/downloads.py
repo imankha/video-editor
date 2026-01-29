@@ -6,7 +6,7 @@ Users can list, download, and delete their final videos.
 """
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -451,16 +451,40 @@ async def download_file(download_id: int):
 
         logger.info(f"[Download] Found: stored_filename={row['filename']}, project_name={row['project_name']}")
 
-        # If R2 enabled, redirect to presigned URL (no local fallback)
+        # If R2 enabled, stream through backend to avoid CORS issues with fetch API
         if R2_ENABLED:
+            import httpx
+
             # verify_exists=True to check file exists and log warning if not
             presigned_url = get_download_file_url(row['filename'], verify_exists=True)
-            if presigned_url:
-                logger.info(f"[Download] Redirecting to R2 presigned URL")
-                return RedirectResponse(url=presigned_url, status_code=302)
-            # R2 enabled but URL generation failed - file missing or R2 error
-            logger.error(f"[Download] R2 enabled but failed to generate presigned URL for: {row['filename']} - file may not exist in R2")
-            raise HTTPException(status_code=404, detail="Video file not found in storage")
+            if not presigned_url:
+                logger.error(f"[Download] R2 enabled but failed to generate presigned URL for: {row['filename']} - file may not exist in R2")
+                raise HTTPException(status_code=404, detail="Video file not found in storage")
+
+            logger.info(f"[Download] Streaming from R2 through backend proxy")
+
+            # Generate download filename from project name
+            download_filename = generate_download_filename(row['project_name'])
+
+            async def stream_from_r2():
+                async with httpx.AsyncClient() as client:
+                    async with client.stream("GET", presigned_url) as response:
+                        if response.status_code != 200:
+                            raise HTTPException(
+                                status_code=response.status_code,
+                                detail=f"R2 returned {response.status_code}"
+                            )
+                        async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):  # 1MB chunks
+                            yield chunk
+
+            return StreamingResponse(
+                stream_from_r2(),
+                media_type="video/mp4",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{download_filename}"',
+                    "Cache-Control": "no-cache"
+                }
+            )
 
         # Local mode only: serve from filesystem
         file_path = get_final_videos_path() / row['filename']

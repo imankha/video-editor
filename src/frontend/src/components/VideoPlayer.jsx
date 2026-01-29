@@ -185,6 +185,9 @@ export function VideoPlayer({
               onSeeking={handlers.onSeeking}
               onSeeked={handlers.onSeeked}
               onLoadedMetadata={handlers.onLoadedMetadata}
+              onWaiting={handlers.onWaiting}
+              onPlaying={handlers.onPlaying}
+              onCanPlay={handlers.onCanPlay}
               preload="auto"
               style={{ pointerEvents: 'none' }}
             />

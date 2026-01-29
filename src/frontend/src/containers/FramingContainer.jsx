@@ -234,12 +234,12 @@ export function FramingContainer({
         trimRange: trimRange
       });
 
-      // Save to backend (convert to export formats)
+      // Save to backend (use frame-based keyframes for storage - FFmpeg conversion happens at export)
       if (saveFramingEdits) {
-        const exportKeyframes = getKeyframesForExport();
-        const exportSegments = getSegmentExportData(); // Use export format for backend
+        // Store raw frame-based keyframes - time conversion happens only at FFmpeg export
+        const exportSegments = getSegmentExportData();
         const result = await saveFramingEdits(currentClip.workingClipId, {
-          cropKeyframes: exportKeyframes,
+          cropKeyframes: keyframes,  // Frame-based - NOT time-based
           segments: exportSegments,
           trimRange: trimRange
         });
@@ -280,6 +280,12 @@ export function FramingContainer({
 
   /**
    * Coordinated segment trim handler
+   *
+   * IMPORTANT: Always ensures permanent keyframes exist at trim boundaries.
+   * When trimming, we:
+   * 1. Find the crop data from the segment being trimmed (prioritize edge closest to boundary)
+   * 2. Delete all keyframes in the trimmed range
+   * 3. Reconstitute a permanent keyframe at the new boundary
    */
   const handleTrimSegment = useCallback((segmentIndex) => {
     if (!duration || segmentIndex < 0 || segmentIndex >= segments.length) return;
@@ -289,7 +295,7 @@ export function FramingContainer({
     const segment = segments[segmentIndex];
     const isCurrentlyTrimmed = segment.isTrimmed;
 
-    console.log(`[FramingContainer] Trim segment ${segmentIndex}`);
+    console.log(`[FramingContainer] Trim segment ${segmentIndex}`, { segment, isCurrentlyTrimmed });
 
     if (!isCurrentlyTrimmed) {
       // We're about to trim this segment
@@ -301,27 +307,54 @@ export function FramingContainer({
         boundaryTime = segment.end;
       }
 
-      // Find crop data to preserve
+      // Tolerance for floating point comparisons (1 frame at 30fps = ~0.033s)
+      const TOLERANCE = 1 / framerate + 0.001;
+
+      // Find crop data to preserve - use tolerance for boundary checks
+      // Prioritize the edge that will become the new boundary
       let cropDataToPreserve = null;
-      for (let i = keyframes.length - 1; i >= 0; i--) {
-        const kfTime = keyframes[i].frame / framerate;
-        if (kfTime >= segment.start && kfTime <= segment.end) {
-          cropDataToPreserve = getCropDataAtTime(kfTime);
-          break;
+
+      // First, try to get data from the boundary time itself (interpolated)
+      // This ensures we get the crop state at the exact new boundary
+      const edgeTime = segment.isLast ? segment.end : segment.start;
+      cropDataToPreserve = getCropDataAtTime(boundaryTime);
+
+      // If that fails, try the opposite edge (for cases where keyframe is at far end)
+      if (!cropDataToPreserve) {
+        cropDataToPreserve = getCropDataAtTime(edgeTime);
+      }
+
+      // Fallback: search for any keyframe within the trimmed range (with tolerance)
+      if (!cropDataToPreserve) {
+        for (let i = keyframes.length - 1; i >= 0; i--) {
+          const kfTime = keyframes[i].frame / framerate;
+          // Use tolerance for boundary checks to handle floating point precision
+          if (kfTime >= segment.start - TOLERANCE && kfTime <= segment.end + TOLERANCE) {
+            cropDataToPreserve = getCropDataAtTime(kfTime);
+            console.log(`[FramingContainer] Found keyframe in trimmed range at time ${kfTime}`);
+            break;
+          }
         }
       }
 
-      if (!cropDataToPreserve) {
-        const edgeTime = segment.isLast ? segment.end : segment.start;
-        cropDataToPreserve = getCropDataAtTime(edgeTime);
-      }
+      console.log(`[FramingContainer] Crop data to preserve:`, cropDataToPreserve, `boundaryTime:`, boundaryTime);
 
       // Delete crop keyframes in trimmed range
       deleteKeyframesInRange(segment.start, segment.end, duration);
 
       // Reconstitute permanent keyframe at boundary
+      // This ensures there's always a keyframe at the new end/start of the visible timeline
       if (cropDataToPreserve && boundaryTime !== undefined) {
+        console.log(`[FramingContainer] Reconstituting permanent keyframe at ${boundaryTime}`);
         addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration, 'permanent');
+      } else if (boundaryTime !== undefined) {
+        // Emergency fallback: if we couldn't preserve any data, get current interpolated crop
+        // This shouldn't happen in normal use, but ensures we always have boundary keyframes
+        console.warn(`[FramingContainer] No crop data found, using current interpolated state`);
+        const fallbackData = getCropDataAtTime(boundaryTime);
+        if (fallbackData) {
+          addOrUpdateKeyframe(boundaryTime, fallbackData, duration, 'permanent');
+        }
       }
 
       // Handle highlight keyframes if available
@@ -343,6 +376,7 @@ export function FramingContainer({
 
   /**
    * Coordinated de-trim handler for start
+   * Restores the start of the timeline and ensures permanent keyframe at frame 0
    */
   const handleDetrimStart = useCallback(() => {
     if (!trimRange || !duration) return;
@@ -351,30 +385,45 @@ export function FramingContainer({
 
     const boundaryTime = trimRange.start;
     const boundaryFrame = Math.round(boundaryTime * framerate);
+    const FRAME_TOLERANCE = 1;
 
     // Handle crop keyframes
     const cropDataAtBoundary = getCropDataAtTime(boundaryTime);
 
     if (boundaryFrame > 0) {
-      const cropKfAtBoundary = keyframes.find(kf => kf.frame === boundaryFrame);
-      if (cropKfAtBoundary && cropKfAtBoundary.origin === 'permanent') {
+      // Find keyframe at boundary using tolerance
+      const cropKfAtBoundary = keyframes.find(kf =>
+        Math.abs(kf.frame - boundaryFrame) <= FRAME_TOLERANCE && kf.origin === 'permanent'
+      );
+      if (cropKfAtBoundary) {
         deleteKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
       }
     }
 
+    // Always ensure permanent keyframe at start (frame 0)
     if (cropDataAtBoundary) {
       addOrUpdateKeyframe(0, cropDataAtBoundary, duration, 'permanent');
+    } else {
+      // Fallback: use interpolated data at frame 0
+      const fallbackData = getCropDataAtTime(0);
+      if (fallbackData) {
+        addOrUpdateKeyframe(0, fallbackData, duration, 'permanent');
+      }
     }
 
     // Handle highlight keyframes if available
     if (highlightHook) {
       const highlightDataAtBoundary = highlightHook.getHighlightDataAtTime?.(boundaryTime);
       if (boundaryFrame > 0) {
-        const highlightKfAtBoundary = highlightHook.keyframes?.find(kf => kf.frame === boundaryFrame);
-        if (highlightKfAtBoundary && highlightKfAtBoundary.origin === 'permanent') {
+        // Use tolerance for highlight keyframe matching too
+        const highlightKfAtBoundary = highlightHook.keyframes?.find(kf =>
+          Math.abs(kf.frame - boundaryFrame) <= FRAME_TOLERANCE && kf.origin === 'permanent'
+        );
+        if (highlightKfAtBoundary) {
           highlightHook.deleteKeyframesInRange?.(boundaryTime - 0.001, boundaryTime + 0.001, duration);
         }
       }
+      // Always ensure permanent keyframe at start
       if (highlightDataAtBoundary) {
         highlightHook.addOrUpdateKeyframe?.(0, highlightDataAtBoundary, duration, 'permanent');
       }
@@ -387,6 +436,7 @@ export function FramingContainer({
 
   /**
    * Coordinated de-trim handler for end
+   * Restores the end of the timeline and ensures permanent keyframe at duration
    */
   const handleDetrimEnd = useCallback(() => {
     if (!trimRange || !duration) return;
@@ -396,18 +446,30 @@ export function FramingContainer({
     const boundaryTime = trimRange.end;
     const boundaryFrame = Math.round(boundaryTime * framerate);
     const endFrame = Math.round(duration * framerate);
+    const FRAME_TOLERANCE = 1;
 
+    // Handle crop keyframes
     const cropDataAtBoundary = getCropDataAtTime(boundaryTime);
 
     if (boundaryFrame < endFrame) {
-      const cropKfAtBoundary = keyframes.find(kf => kf.frame === boundaryFrame);
-      if (cropKfAtBoundary && cropKfAtBoundary.origin === 'permanent') {
+      // Find keyframe at boundary using tolerance
+      const cropKfAtBoundary = keyframes.find(kf =>
+        Math.abs(kf.frame - boundaryFrame) <= FRAME_TOLERANCE && kf.origin === 'permanent'
+      );
+      if (cropKfAtBoundary) {
         deleteKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
       }
     }
 
+    // Always ensure permanent keyframe at end (duration)
     if (cropDataAtBoundary) {
       addOrUpdateKeyframe(duration, cropDataAtBoundary, duration, 'permanent');
+    } else {
+      // Fallback: use interpolated data at duration
+      const fallbackData = getCropDataAtTime(duration);
+      if (fallbackData) {
+        addOrUpdateKeyframe(duration, fallbackData, duration, 'permanent');
+      }
     }
 
     // Handle highlight keyframes if available
@@ -417,12 +479,16 @@ export function FramingContainer({
       const highlightEndFrame = Math.round(highlightDuration * (highlightHook.framerate || 30));
 
       if (boundaryFrame < highlightEndFrame) {
-        const highlightKfAtBoundary = highlightHook.keyframes?.find(kf => kf.frame === boundaryFrame);
-        if (highlightKfAtBoundary && highlightKfAtBoundary.origin === 'permanent') {
+        // Use tolerance for highlight keyframe matching too
+        const highlightKfAtBoundary = highlightHook.keyframes?.find(kf =>
+          Math.abs(kf.frame - boundaryFrame) <= FRAME_TOLERANCE && kf.origin === 'permanent'
+        );
+        if (highlightKfAtBoundary) {
           highlightHook.deleteKeyframesInRange?.(boundaryTime - 0.001, boundaryTime + 0.001, duration);
         }
       }
-      if (highlightDataAtBoundary && boundaryTime < highlightDuration) {
+      // Always ensure permanent keyframe at end
+      if (highlightDataAtBoundary) {
         highlightHook.addOrUpdateKeyframe?.(highlightDuration, highlightDataAtBoundary, duration, 'permanent');
       }
     }

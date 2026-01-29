@@ -88,8 +88,10 @@ describe('useHighlightRegions', () => {
       expect(region.endTime).toBeCloseTo(7, 1); // 2-second duration: 5 + 2 = 7
       expect(region.enabled).toBe(true);
       expect(region.keyframes).toHaveLength(2);
-      expect(region.keyframes[0].origin).toBe('permanent');
-      expect(region.keyframes[1].origin).toBe('permanent');
+      // Origin is computed dynamically in allKeyframes (result.current.keyframes), not stored on raw keyframes
+      // First and last keyframes in a region should be permanent
+      expect(result.current.keyframes[0].origin).toBe('permanent');
+      expect(result.current.keyframes[1].origin).toBe('permanent');
     });
 
     it('caps region at video duration', () => {

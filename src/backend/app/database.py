@@ -349,7 +349,8 @@ def ensure_database():
         return
 
     # Create/verify tables
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), timeout=30)
+    conn.execute("PRAGMA busy_timeout=30000")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -384,6 +385,7 @@ def ensure_database():
                 aspect_ratio TEXT NOT NULL,
                 working_video_id INTEGER,
                 final_video_id INTEGER,
+                is_auto_created INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (working_video_id) REFERENCES working_videos(id),
                 FOREIGN KEY (final_video_id) REFERENCES final_videos(id)
@@ -529,6 +531,7 @@ def ensure_database():
             "ALTER TABLE games ADD COLUMN video_size INTEGER",
             # Downloads & overlay persistence (added for downloads navigation feature)
             "ALTER TABLE final_videos ADD COLUMN duration REAL",
+            "ALTER TABLE working_videos ADD COLUMN duration REAL",
             "ALTER TABLE working_videos ADD COLUMN effect_type TEXT DEFAULT 'original'",
             "ALTER TABLE projects ADD COLUMN last_opened_at TIMESTAMP",
             # Project state persistence (current mode for resume)
@@ -565,6 +568,8 @@ def ensure_database():
             "ALTER TABLE games ADD COLUMN game_date TEXT",
             "ALTER TABLE games ADD COLUMN game_type TEXT",  # 'home', 'away', 'tournament'
             "ALTER TABLE games ADD COLUMN tournament_name TEXT",
+            # Auto-created projects (from 5-star clips)
+            "ALTER TABLE projects ADD COLUMN is_auto_created INTEGER DEFAULT 0",
         ]
 
         for migration in migrations:
@@ -666,6 +671,39 @@ def ensure_database():
             # Index already exists, ignore
             pass
 
+        # Modal tasks table - tracks background GPU tasks for resumability
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS modal_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_type TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                params TEXT NOT NULL,
+                result TEXT,
+                error TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                raw_clip_id INTEGER,
+                project_id INTEGER,
+                game_id INTEGER,
+                FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id) ON DELETE CASCADE,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Index for finding pending/running tasks
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_modal_tasks_status
+            ON modal_tasks(status)
+        """)
+
+        # Index for finding tasks by game (for finish-annotation)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_modal_tasks_game_id
+            ON modal_tasks(game_id)
+        """)
+
         conn.commit()
         _initialized_users.add(user_id)
         logger.debug(f"Database verified/initialized for user: {user_id}")
@@ -689,8 +727,15 @@ def get_db_connection() -> TrackedConnection:
     # Ensure database exists before connecting
     ensure_database()
 
-    raw_conn = sqlite3.connect(str(get_database_path()))
+    # timeout=30 means wait up to 30 seconds for lock at connection level
+    raw_conn = sqlite3.connect(str(get_database_path()), timeout=30)
     raw_conn.row_factory = sqlite3.Row  # Return rows as dictionaries
+
+    # Enable WAL mode for better concurrent access (allows reads while writing)
+    raw_conn.execute("PRAGMA journal_mode=WAL")
+    # Wait up to 30 seconds for lock instead of failing immediately
+    raw_conn.execute("PRAGMA busy_timeout=30000")
+
     conn = TrackedConnection(raw_conn)
     try:
         yield conn
@@ -738,7 +783,7 @@ def is_database_initialized() -> bool:
         return False
 
     try:
-        conn = sqlite3.connect(str(db_path))
+        conn = sqlite3.connect(str(db_path), timeout=30)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")

@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag } from 'lucide-react';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores/exportStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
+import { generateClipName } from '../modes/annotate/constants/soccerTags';
+import { getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -23,6 +25,7 @@ export function ProjectManager({
   onSelectProject,
   onSelectProjectWithMode, // (projectId, options) => void - options: { mode: 'framing'|'overlay', clipIndex?: number }
   onCreateProject,
+  onRefreshProjects,
   onDeleteProject,
   onAnnotateWithFile, // (file: File) => void - Navigate to annotate mode with file
   // Games props
@@ -50,7 +53,7 @@ export function ProjectManager({
   const gameFileInputRef = useRef(null);
 
   // Project filter state
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'complete' | 'overlay' | 'editing' | 'not_started'
+  const [statusFilter, setStatusFilter] = useState('uncompleted'); // 'all' | 'uncompleted' | 'complete' | 'overlay' | 'editing' | 'not_started'
   const [aspectFilter, setAspectFilter] = useState('all'); // 'all' | '9:16' | '16:9' | '1:1' | '4:5'
   const [creationFilter, setCreationFilter] = useState('all'); // 'all' | 'auto' | 'custom'
 
@@ -60,11 +63,13 @@ export function ProjectManager({
       // Status filter - matches counting logic
       if (statusFilter !== 'all') {
         const isComplete = project.has_final_video;
+        const isUncompleted = !isComplete;
         const isInOverlay = !isComplete && project.has_working_video;
         const isEditing = !isComplete && !isInOverlay && project.clips_in_progress > 0;
         const isExported = !isComplete && !isInOverlay && !isEditing && project.clips_exported > 0;
         const isNotStarted = !isComplete && !isInOverlay && !isEditing && !isExported;
 
+        if (statusFilter === 'uncompleted' && !isUncompleted) return false;
         if (statusFilter === 'complete' && !isComplete) return false;
         if (statusFilter === 'overlay' && !isInOverlay) return false;
         if (statusFilter === 'editing' && !isEditing) return false;
@@ -91,6 +96,7 @@ export function ProjectManager({
   const filterCounts = useMemo(() => {
     const counts = {
       all: projects.length,
+      uncompleted: 0,
       complete: 0,
       overlay: 0,
       editing: 0,
@@ -105,14 +111,17 @@ export function ProjectManager({
       // Status counts - matches ProjectCard display logic
       if (project.has_final_video) {
         counts.complete++;
-      } else if (project.has_working_video) {
-        counts.overlay++;
-      } else if (project.clips_in_progress > 0) {
-        counts.editing++;
-      } else if (project.clips_exported > 0) {
-        counts.exported++;
       } else {
-        counts.not_started++;
+        counts.uncompleted++; // All non-complete projects
+        if (project.has_working_video) {
+          counts.overlay++;
+        } else if (project.clips_in_progress > 0) {
+          counts.editing++;
+        } else if (project.clips_exported > 0) {
+          counts.exported++;
+        } else {
+          counts.not_started++;
+        }
       }
 
       // Aspect ratio counts
@@ -181,12 +190,25 @@ export function ProjectManager({
       }
     });
 
-    // Compute status counts for each group
+    // Compute status counts and most recent game date for each group
     Object.keys(groups).forEach(key => {
       groups[key].statusCounts = getProjectStatusCounts(groups[key].projects);
+      // Find the most recent game date in this group
+      let mostRecentDate = null;
+      groups[key].projects.forEach(project => {
+        (project.game_dates || []).forEach(dateStr => {
+          if (dateStr) {
+            const date = new Date(dateStr);
+            if (!isNaN(date) && (!mostRecentDate || date > mostRecentDate)) {
+              mostRecentDate = date;
+            }
+          }
+        });
+      });
+      groups[key].mostRecentDate = mostRecentDate;
     });
 
-    // Sort group keys: incomplete groups first, then alphabetically within each category
+    // Sort group keys: incomplete groups first, then by most recent game date (newest first)
     const sortedKeys = Object.keys(groups).sort((a, b) => {
       const aComplete = groups[a].statusCounts.done === groups[a].statusCounts.total;
       const bComplete = groups[b].statusCounts.done === groups[b].statusCounts.total;
@@ -195,7 +217,15 @@ export function ProjectManager({
       if (aComplete !== bComplete) {
         return aComplete ? 1 : -1;
       }
-      // Within same completion status, sort alphabetically
+      // Within same completion status, sort by most recent game date (newest first)
+      const aDate = groups[a].mostRecentDate;
+      const bDate = groups[b].mostRecentDate;
+      if (aDate && bDate) {
+        return bDate - aDate; // Newest first
+      }
+      if (aDate) return -1; // a has date, b doesn't
+      if (bDate) return 1; // b has date, a doesn't
+      // Neither has date, sort alphabetically
       return a.localeCompare(b);
     });
 
@@ -276,18 +306,17 @@ export function ProjectManager({
 
   // Handle project creation from the new modal
   const handleProjectCreated = useCallback(async (project) => {
+    // Close modal first
+    setShowNewProjectModal(false);
+
     // Refresh projects list to show the new project
     // The modal already created the project via API
-    if (onCreateProject) {
-      // Just refresh the list - project was already created
-      // Call with null to trigger a refresh without creating
+    // Don't navigate into the project - let user click on it from the projects page
+    // This ensures extraction status is checked before entering Framing mode
+    if (onRefreshProjects) {
+      await onRefreshProjects();
     }
-    setShowNewProjectModal(false);
-    // Select the new project to start editing
-    if (project?.id && onSelectProject) {
-      onSelectProject(project.id);
-    }
-  }, [onSelectProject]);
+  }, [onRefreshProjects]);
 
   return (
     <div className="flex-1 flex flex-col items-center p-8 bg-gray-900">
@@ -355,7 +384,7 @@ export function ProjectManager({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-white font-medium truncate">
-                      {recentItems.recentProject.name}
+                      {getProjectDisplayName(recentItems.recentProject)}
                     </span>
                     {recentItems.recentProject.has_final_video && (
                       <CheckCircle size={14} className="text-green-400 flex-shrink-0" />
@@ -551,6 +580,7 @@ export function ProjectManager({
                     <div className="flex flex-wrap gap-1.5">
                       {[
                         { value: 'all', label: 'All' },
+                        { value: 'uncompleted', label: 'Uncompleted', color: 'orange' },
                         { value: 'complete', label: 'Complete', color: 'green' },
                         { value: 'overlay', label: 'In Overlay', color: 'blue' },
                         { value: 'editing', label: 'Editing', color: 'blue' },
@@ -558,7 +588,7 @@ export function ProjectManager({
                         { value: 'not_started', label: 'Not Started', color: 'gray' }
                       ].map(opt => {
                         const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];
-                        if (count === 0 && opt.value !== 'all') return null;
+                        if (count === 0 && opt.value !== 'all' && opt.value !== 'uncompleted') return null;
                         return (
                           <button
                             key={opt.value}
@@ -567,6 +597,7 @@ export function ProjectManager({
                               statusFilter === opt.value
                                 ? opt.color === 'green' ? 'bg-green-600 text-white'
                                   : opt.color === 'blue' ? 'bg-blue-600 text-white'
+                                  : opt.color === 'orange' ? 'bg-orange-600 text-white'
                                   : 'bg-purple-600 text-white'
                                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                             }`}
@@ -809,7 +840,8 @@ function GameCard({ game, onLoad, onDelete }) {
  * - Yellow/Amber: Exporting (actively rendering)
  * - Blue (◐): Editing (has edits, not exported)
  * - Light Blue: Ready (for overlay - working video exists)
- * - Gray (○): Not started
+ * - Orange: Extracting (GPU extraction in progress)
+ * - Gray (○): Not started / pending extraction
  *
  * Click handlers:
  * - onClipClick(clipIndex) - Called when a clip segment is clicked
@@ -819,29 +851,60 @@ function GameCard({ game, onLoad, onDelete }) {
  * @param {string} isExporting - 'framing' | 'overlay' | null - Which stage is currently exporting
  */
 function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExporting = null }) {
-  const { clip_count, clips_exported, clips_in_progress, has_working_video, has_overlay_edits, has_final_video } = project;
+  const {
+    clip_count,
+    clips_exported,
+    clips_in_progress,
+    clips_extracted = clip_count, // Default to all extracted for backwards compat
+    clips_extracting = 0,
+    clips_pending_extraction = 0,
+    clips = [], // Clip details from backend
+    has_working_video,
+    has_overlay_edits,
+    has_final_video
+  } = project;
 
   // Total segments = clips + 1 for overlay stage
   const totalSegments = Math.max(clip_count, 1) + 1;
 
-  // Build segment data
-  // If final video exists, entire bar is green (complete)
-  // Otherwise:
-  // - Green: exported (included in working video)
-  // - Yellow: exporting (actively rendering)
-  // - Blue: editing (has edits but not exported)
-  // - Gray: not started
+  // Calculate how many clips are in each extraction state
+  const clipsNotExtracted = clip_count - clips_extracted;
+  const isAnyExtracting = clips_extracting > 0 || clips_pending_extraction > 0;
+
+  // Build segment data using per-clip extraction status when available
+  // Priority order (highest to lowest):
+  // 1. Final video exists = all green
+  // 2. Exported = green
+  // 3. Exporting (framing) = yellow
+  // 4. Editing (has edits) = blue
+  // 5. Extracting (GPU) = orange (animated) - from clip.is_extracting
+  // 6. Pending extraction = gray with orange border - from !clip.is_extracted && !clip.is_extracting
+  // 7. Not started = gray
   const clipSegments = [];
   for (let i = 0; i < clip_count; i++) {
+    // Get clip info from clips array if available
+    const clipInfo = clips[i];
+    const clipName = getClipDisplayName(clipInfo, `Clip ${i + 1}`);
+    const clipTags = clipInfo?.tags || [];
+    const clipIsExtracted = clipInfo?.is_extracted !== false; // Default to true for backwards compat
+    const clipIsExtracting = clipInfo?.is_extracting || false;
+
     if (has_final_video || i < clips_exported) {
-      clipSegments.push({ status: 'done', label: `Clip ${i + 1}` });
+      clipSegments.push({ status: 'done', label: clipName, tags: clipTags });
     } else if (isExporting === 'framing') {
       // When framing export is running, all non-exported clips show as exporting
-      clipSegments.push({ status: 'exporting', label: `Clip ${i + 1}` });
+      clipSegments.push({ status: 'exporting', label: clipName, tags: clipTags });
     } else if (i < clips_exported + clips_in_progress) {
-      clipSegments.push({ status: 'in_progress', label: `Clip ${i + 1}` });
+      clipSegments.push({ status: 'in_progress', label: clipName, tags: clipTags });
+    } else if (!clipIsExtracted) {
+      // Use per-clip extraction status
+      if (clipIsExtracting) {
+        clipSegments.push({ status: 'extracting', label: clipName, tags: clipTags });
+      } else {
+        clipSegments.push({ status: 'pending_extraction', label: clipName, tags: clipTags });
+      }
     } else {
-      clipSegments.push({ status: 'pending', label: `Clip ${i + 1}` });
+      clipSegments.push({ status: 'pending', label: clipName, tags: clipTags });
     }
   }
 
@@ -875,6 +938,8 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
     exporting: 'bg-amber-500',
     in_progress: 'bg-blue-500',
     ready: 'bg-blue-300',
+    extracting: 'bg-orange-500 animate-pulse',
+    pending_extraction: 'bg-gray-600 border border-orange-500',
     pending: 'bg-gray-600'
   };
 
@@ -886,8 +951,17 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
       {/* Labels row */}
       <div className="flex justify-between text-xs text-gray-500 mb-1">
         <span className="flex items-center gap-2">
-          <span>Framing</span>
-          <span className="text-gray-600">({clips_exported}/{clip_count} exported)</span>
+          {isAnyExtracting ? (
+            <span className="text-orange-400 flex items-center gap-1">
+              <RefreshCw size={10} className="animate-spin" />
+              Extracting ({clips_extracted}/{clip_count})
+            </span>
+          ) : (
+            <>
+              <span>Framing</span>
+              <span className="text-gray-600">({clips_exported}/{clip_count} exported)</span>
+            </>
+          )}
         </span>
         <span>Overlay</span>
       </div>
@@ -922,13 +996,15 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
                 flex: isLast ? '0 0 20%' : '1 1 0',
                 minWidth: `${minWidth}px`
               }}
-              title={`${segment.label}: ${
+              title={`${segment.label}${segment.tags?.length ? ` [${segment.tags.join(', ')}]` : ''}: ${
                 segment.status === 'done' ? 'Complete' :
                 segment.status === 'exporting' ? 'Exporting...' :
                 segment.status === 'in_progress' ? 'Editing' :
                 segment.status === 'ready' ? 'Ready' :
+                segment.status === 'extracting' ? 'Extracting...' :
+                segment.status === 'pending_extraction' ? 'Waiting for extraction' :
                 'Not Started'
-              } (click to open)`}
+              }${segment.status !== 'extracting' && segment.status !== 'pending_extraction' ? ' (click to open)' : ''}`}
             />
           );
         })}
@@ -961,6 +1037,14 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
     ? exportingProject.stage
     : storeExport?.type || null;
 
+  // Extraction status
+  const clipsExtracted = project.clips_extracted ?? project.clip_count;
+  const clipsExtracting = project.clips_extracting ?? 0;
+  const clipsPendingExtraction = project.clips_pending_extraction ?? 0;
+  const isAnyExtracting = clipsExtracting > 0 || clipsPendingExtraction > 0;
+  const hasExtractedClips = clipsExtracted > 0;
+  const canOpen = hasExtractedClips || project.clip_count === 0;
+
   const handleDelete = (e) => {
     e.stopPropagation();
     if (showDeleteConfirm) {
@@ -973,35 +1057,63 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
   };
 
   const handleClipClick = (clipIndex) => {
+    if (!canOpen) return; // Block if no clips extracted
     if (onSelectWithMode) {
       onSelectWithMode({ mode: 'framing', clipIndex });
     }
   };
 
   const handleOverlayClick = () => {
+    if (!canOpen) return; // Block if no clips extracted
     if (onSelectWithMode) {
       onSelectWithMode({ mode: 'overlay' });
     }
+  };
+
+  const handleCardClick = () => {
+    if (!canOpen) return; // Block if no clips extracted
+    onSelect();
   };
 
   const isComplete = project.has_final_video;
 
   return (
     <div
-      onClick={onSelect}
-      className="group relative p-4 bg-gray-800 hover:bg-gray-750 rounded-lg cursor-pointer border border-gray-700 hover:border-purple-500 transition-all"
+      onClick={handleCardClick}
+      className={`group relative p-4 bg-gray-800 rounded-lg border transition-all ${
+        canOpen
+          ? 'hover:bg-gray-750 cursor-pointer border-gray-700 hover:border-purple-500'
+          : 'cursor-not-allowed border-gray-700 opacity-75'
+      }`}
+      title={!canOpen ? 'Waiting for clips to be extracted...' : undefined}
     >
       <div className="flex items-center justify-between">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             {project.is_auto_created && (
-              <Star size={14} className="text-yellow-400" fill="currentColor" title="Auto-created project" />
+              <Star size={14} className="text-yellow-400 flex-shrink-0" fill="currentColor" title="Auto-created project" />
             )}
-            <h3 className="text-white font-medium">{project.name}</h3>
+            <h3 className="text-white font-medium truncate">
+              {getProjectDisplayName(project)}
+            </h3>
             {isComplete && (
-              <CheckCircle size={16} className="text-green-400" />
+              <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
             )}
           </div>
+          {/* Tags row - show first clip's tags for auto-created projects */}
+          {project.is_auto_created && project.clips?.[0]?.tags?.length > 0 && (
+            <div className="flex items-center gap-1 mt-1 flex-wrap">
+              {project.clips[0].tags.map((tag, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs bg-purple-900/50 text-purple-300 rounded"
+                >
+                  <Tag size={10} />
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
             <span>{project.aspect_ratio}</span>
             <span>•</span>
@@ -1011,7 +1123,13 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
               <>
                 <span>•</span>
                 <span>
-                  {isExporting === 'overlay' ? (
+                  {isAnyExtracting ? (
+                    <span className="text-orange-400 flex items-center gap-1">
+                      <RefreshCw size={12} className="animate-spin" />
+                      Extracting ({clipsExtracted}/{project.clip_count})
+                    </span>
+                  ) :
+                  isExporting === 'overlay' ? (
                     <span className="text-amber-400">Exporting...</span>
                   ) :
                   isExporting === 'framing' ? (

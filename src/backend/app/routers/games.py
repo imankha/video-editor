@@ -31,28 +31,11 @@ from app.storage import (
     upload_to_r2,
     file_exists_in_r2,
 )
-from app.routers.clips import extract_pending_clips_for_game, extract_all_pending_clips
+# Note: Old extraction functions removed - extraction now happens via finish-annotation endpoint
 from fastapi import BackgroundTasks
 import tempfile
 
-# Track if we've already checked for pending clips this session
-_pending_clips_checked = False
-
 logger = logging.getLogger(__name__)
-
-
-def _extract_pending_clips_background():
-    """
-    Background task to extract any pending clips (crash recovery).
-    Called on first games list request to handle any clips that were
-    saved during upload but never extracted (e.g., due to server crash).
-    """
-    try:
-        results = extract_all_pending_clips()
-        if results['extracted'] > 0:
-            logger.info(f"Background extraction complete: {results['extracted']} clips extracted, {results['projects_created']} projects created")
-    except Exception as e:
-        logger.error(f"Background pending clip extraction failed: {e}")
 
 
 def get_game_video_url(video_filename: str) -> Optional[str]:
@@ -156,16 +139,9 @@ def generate_game_display_name(
 
 
 @router.get("")
-async def list_games(background_tasks: BackgroundTasks):
+async def list_games():
     """List all saved games with cached aggregate counts."""
     ensure_directories()
-
-    # On first games list request, check for any pending clips to extract (crash recovery)
-    global _pending_clips_checked
-    if not _pending_clips_checked:
-        _pending_clips_checked = True
-        background_tasks.add_task(_extract_pending_clips_background)
-        logger.info("Scheduled background check for pending clip extraction")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -407,18 +383,11 @@ async def upload_game_video(
 
             logger.info(f"Updated game {game_id} with video: {video_filename}")
 
-            # Extract any pending clips that were saved while video was uploading
-            extraction_results = extract_pending_clips_for_game(game_id, video_filename)
-            if extraction_results['extracted'] > 0:
-                logger.info(f"Extracted {extraction_results['extracted']} pending clips for game {game_id}")
-
             return {
                 'success': True,
                 'video_filename': video_filename,
                 'video_url': get_game_video_url(video_filename),  # Presigned R2 URL or None
                 'size_mb': round(video_size_mb, 1),
-                'pending_clips_extracted': extraction_results['extracted'],
-                'pending_projects_created': extraction_results['projects_created'],
             }
         except HTTPException:
             raise
@@ -532,18 +501,11 @@ async def confirm_video_upload(
     video_size_mb = (video_size / (1024 * 1024)) if video_size else 0
     logger.info(f"Confirmed direct R2 upload for game {game_id}: {video_filename} ({video_size_mb:.1f}MB)")
 
-    # Extract any pending clips that were saved while video was uploading
-    extraction_results = extract_pending_clips_for_game(game_id, video_filename)
-    if extraction_results['extracted'] > 0:
-        logger.info(f"Extracted {extraction_results['extracted']} pending clips for game {game_id}")
-
     return {
         'success': True,
         'video_filename': video_filename,
         'video_url': get_game_video_url(video_filename),
         'size_mb': round(video_size_mb, 1) if video_size else None,
-        'pending_clips_extracted': extraction_results['extracted'],
-        'pending_projects_created': extraction_results['projects_created'],
     }
 
 
@@ -941,7 +903,23 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
                     ann.get('notes', ''),
                     existing_clips[end_time]['id']
                 ))
-            # else: New annotation - skip, will be created via real-time save
+            else:
+                # Create new raw_clip with empty filename (pending extraction)
+                # This is a fallback if real-time save failed
+                cursor.execute("""
+                    INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    '',  # empty filename = pending extraction
+                    rating,
+                    tags_json,
+                    name,
+                    ann.get('notes', ''),
+                    ann.get('start_time', 0),
+                    end_time,
+                    game_id
+                ))
+                logger.info(f"Created pending raw_clip for game {game_id} at end_time {end_time}")
 
         # Delete raw_clips that are no longer in annotations
         for end_time, clip_data in existing_clips.items():
@@ -999,3 +977,83 @@ def _delete_auto_project_if_unmodified(cursor, project_id: int) -> bool:
 
     logger.info(f"Deleted unmodified auto-project {project_id}")
     return True
+
+
+@router.post("/{game_id}/finish-annotation")
+async def finish_annotation(game_id: int, background_tasks: BackgroundTasks):
+    """
+    Called when user leaves annotation mode for a game.
+
+    Finds all projects that contain unextracted clips from this game and
+    enqueues them for extraction. This covers both:
+    - Auto-projects (created from 5-star clips)
+    - Manual projects (user added clips from this game)
+
+    Flow:
+    1. Find clips needing extraction (DB read)
+    2. Enqueue each clip to modal_tasks table (DB write)
+    3. Trigger queue processor in background (calls Modal)
+
+    This defers expensive GPU operations until the user is done editing annotations,
+    avoiding wasted extractions while they're still making changes.
+    """
+    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+
+    user_id = get_current_user_id()
+    tasks_created = 0
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Get game video filename
+        cursor.execute("SELECT video_filename FROM games WHERE id = ?", (game_id,))
+        game = cursor.fetchone()
+        if not game or not game['video_filename']:
+            return {"success": True, "tasks_created": 0, "message": "No video uploaded for this game"}
+
+        video_filename = game['video_filename']
+
+        # Find all unextracted raw_clips from this game that are used in ANY project
+        # This includes:
+        # 1. Clips with auto_project_id (5-star auto-projects)
+        # 2. Clips added to projects via working_clips
+        cursor.execute("""
+            SELECT DISTINCT rc.id, rc.start_time, rc.end_time, rc.name,
+                   COALESCE(rc.auto_project_id, wc.project_id) as project_id
+            FROM raw_clips rc
+            LEFT JOIN working_clips wc ON wc.raw_clip_id = rc.id
+            WHERE rc.game_id = ?
+              AND (rc.filename IS NULL OR rc.filename = '')
+              AND (rc.auto_project_id IS NOT NULL OR wc.project_id IS NOT NULL)
+        """, (game_id,))
+        pending_clips = cursor.fetchall()
+
+        if not pending_clips:
+            return {"success": True, "tasks_created": 0, "message": "No clips need extraction"}
+
+        logger.info(f"[FinishAnnotation] Found {len(pending_clips)} clips needing extraction for game {game_id}")
+
+    # Phase 2: Enqueue each clip (separate DB transactions)
+    for clip in pending_clips:
+        enqueue_clip_extraction(
+            clip_id=clip['id'],
+            project_id=clip['project_id'],
+            game_id=game_id,
+            video_filename=video_filename,
+            start_time=clip['start_time'],
+            end_time=clip['end_time'],
+            user_id=user_id,
+        )
+        tasks_created += 1
+
+    # Phase 3: Process queue in background (calls Modal)
+    background_tasks.add_task(run_queue_processor_sync)
+    logger.info(f"[FinishAnnotation] Enqueued {tasks_created} tasks, triggered queue processor")
+
+    return {
+        "success": True,
+        "tasks_created": tasks_created,
+        "message": f"Enqueued {tasks_created} clips for extraction"
+    }
+
+

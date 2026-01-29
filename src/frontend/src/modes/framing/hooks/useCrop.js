@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { timeToFrame } from '../../../utils/videoUtils';
 import { interpolateCropSpline } from '../../../utils/splineInterpolation';
 import useKeyframeController from '../../../hooks/useKeyframeController';
+import { normalizeToFrameKeyframes, validateFrameKeyframes } from '../../../types/keyframes';
 
 /**
  * Default crop sizes optimized for HD upscaling.
@@ -54,8 +55,12 @@ const calculateDefaultPosition = (videoWidth, videoHeight, cropWidth, cropHeight
  * - 'permanent': Start (frame=0) and end (frame=totalFrames) keyframes
  * - 'user': User-created keyframes via drag/edit operations
  * - 'trim': Auto-created keyframes when trimming segments
+ *
+ * @param {Object} videoMetadata - Video metadata (width, height, duration)
+ * @param {Object} trimRange - Optional trim range
+ * @param {Array} savedKeyframes - Optional saved keyframes to restore (from clip data)
  */
-export default function useCrop(videoMetadata, trimRange = null) {
+export default function useCrop(videoMetadata, trimRange = null, savedKeyframes = null) {
   const [aspectRatio, setAspectRatio] = useState('9:16'); // '16:9', '9:16'
   const [framerate] = useState(30); // Default framerate - TODO: extract from video
 
@@ -150,8 +155,33 @@ export default function useCrop(videoMetadata, trimRange = null) {
   const isEndKeyframeExplicitRef = useRef(isEndKeyframeExplicit);
   isEndKeyframeExplicitRef.current = isEndKeyframeExplicit;
 
-  // Track when keyframes were just restored to skip orientation mismatch reinitialization
-  const justRestoredRef = useRef(false);
+  // Track the last savedKeyframes we processed to avoid re-processing
+  const lastSavedKeyframesRef = useRef(null);
+
+  /**
+   * Restore saved keyframes when they change (new clip selected)
+   * This runs BEFORE the auto-init effect because it's declared first
+   */
+  useEffect(() => {
+    if (savedKeyframes && savedKeyframes.length > 0) {
+      // Only restore if these are different keyframes than we already processed
+      const keyframesKey = JSON.stringify(savedKeyframes.map(k => ({ frame: k.frame, x: k.x, y: k.y })));
+
+      if (keyframesKey !== lastSavedKeyframesRef.current) {
+        lastSavedKeyframesRef.current = keyframesKey;
+
+        // Normalize and restore
+        const frameKeyframes = normalizeToFrameKeyframes(savedKeyframes, framerate);
+
+        if (validateFrameKeyframes(frameKeyframes)) {
+          const endFrame = frameKeyframes.length > 0
+            ? Math.max(...frameKeyframes.map(k => k.frame))
+            : 0;
+          restoreKeyframes(frameKeyframes, endFrame);
+        }
+      }
+    }
+  }, [savedKeyframes, framerate, restoreKeyframes]);
 
   /**
    * Auto-initialize keyframes when metadata loads
@@ -167,25 +197,27 @@ export default function useCrop(videoMetadata, trimRange = null) {
       const effectiveDuration = trimRange?.end ?? videoMetadata.duration;
       const totalFrames = timeToFrame(effectiveDuration, framerate);
 
-      // Check if we need to initialize (only on first load, not after trim)
-      // Skip initialization if trimRange is set - trim operations handle their own keyframe management
-      let shouldInitialize = !trimRange && needsInitialization(totalFrames);
+      // Check if we need to initialize:
+      // - Only if NO keyframes exist (empty state)
+      // - Skip if trimRange is set (trim operations handle their own keyframes)
+      // - Skip if savedKeyframes were provided (use those instead)
+      const currentKeyframes = keyframesRef.current;
+      const hasSavedKeyframes = savedKeyframes && savedKeyframes.length > 0;
+      const hasExistingKeyframes = currentKeyframes.length > 0;
+
+      // Only auto-initialize if we have no keyframes at all and no saved ones to restore
+      let shouldInitialize = !trimRange && !hasSavedKeyframes && !hasExistingKeyframes;
 
       // Additional check: if keyframes exist but have wrong orientation (portrait vs landscape),
-      // force re-initialization. This handles aspect ratio changes when switching clips.
-      // We compare orientation (ratio > 1 = landscape, ratio < 1 = portrait) rather than
-      // exact dimensions to avoid breaking manual resize functionality.
-      // Use ref to read keyframes without adding to dependency array (prevents infinite loop)
-      // SKIP this check if keyframes were just restored from saved data
-      const currentKeyframes = keyframesRef.current;
-      if (!shouldInitialize && !trimRange && currentKeyframes.length > 0 && !justRestoredRef.current) {
+      // force re-initialization. This handles aspect ratio changes.
+      // BUT only if there are no savedKeyframes (respect saved data)
+      if (!shouldInitialize && !trimRange && !hasSavedKeyframes && hasExistingKeyframes) {
         const firstKeyframe = currentKeyframes[0];
         if (firstKeyframe?.width && firstKeyframe?.height) {
           const keyframeRatio = firstKeyframe.width / firstKeyframe.height;
           const [ratioW, ratioH] = aspectRatio.split(':').map(Number);
           const expectedRatio = ratioW / ratioH;
 
-          // Check if orientation is fundamentally different (portrait vs landscape)
           const keyframeIsLandscape = keyframeRatio > 1;
           const expectedIsLandscape = expectedRatio > 1;
 
@@ -194,11 +226,6 @@ export default function useCrop(videoMetadata, trimRange = null) {
             shouldInitialize = true;
           }
         }
-      }
-
-      // Clear the justRestored flag after the check
-      if (justRestoredRef.current) {
-        justRestoredRef.current = false;
       }
 
       if (shouldInitialize) {
@@ -305,18 +332,29 @@ export default function useCrop(videoMetadata, trimRange = null) {
 
   /**
    * Restore crop keyframes from saved state (for clip switching)
-   * Sets justRestoredRef to prevent orientation mismatch reinitialization
+   * DEPRECATED: Prefer passing savedKeyframes prop to useCrop instead.
+   * Kept for backward compatibility.
+   *
+   * @param {import('../../../types/keyframes').FrameKeyframe[]|import('../../../types/keyframes').TimeKeyframe[]} savedKeyframes
+   * @param {number} endFrame
    */
   const restoreState = useCallback((savedKeyframes, endFrame) => {
     if (!savedKeyframes || savedKeyframes.length === 0) {
       console.log('[useCrop] No keyframes to restore');
       return;
     }
-    console.log('[useCrop] Restoring keyframes:', savedKeyframes.length, 'endFrame:', endFrame);
-    // Set flag to prevent orientation mismatch reinitialization
-    justRestoredRef.current = true;
-    restoreKeyframes(savedKeyframes, endFrame);
-  }, [restoreKeyframes]);
+
+    // Normalize to frame-based format (handles backwards compatibility with time-based data)
+    const frameKeyframes = normalizeToFrameKeyframes(savedKeyframes, framerate);
+
+    if (!validateFrameKeyframes(frameKeyframes)) {
+      console.error('[useCrop] Failed to normalize keyframes to frame-based format:', savedKeyframes);
+      return;
+    }
+
+    console.log('[useCrop] Restoring frame-based keyframes:', frameKeyframes.length, 'endFrame:', endFrame);
+    restoreKeyframes(frameKeyframes, endFrame);
+  }, [restoreKeyframes, framerate]);
 
   return {
     // State

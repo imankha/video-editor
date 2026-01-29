@@ -8,6 +8,7 @@ describe('exportStore', () => {
       exportProgress: null,
       exportingProject: null,
       globalExportProgress: null,
+      activeExports: {},
     });
   });
 
@@ -40,8 +41,9 @@ describe('exportStore', () => {
   });
 
   describe('exportingProject', () => {
+    // Note: startExport signature is (exportId, projectId, type)
     it('startExport sets exporting project', () => {
-      useExportStore.getState().startExport(123, 'framing', 'export-abc');
+      useExportStore.getState().startExport('export-abc', 123, 'framing');
       expect(useExportStore.getState().exportingProject).toEqual({
         projectId: 123,
         stage: 'framing',
@@ -50,7 +52,7 @@ describe('exportStore', () => {
     });
 
     it('clearExport clears project and progress', () => {
-      useExportStore.getState().startExport(123, 'overlay', 'export-xyz');
+      useExportStore.getState().startExport('export-xyz', 123, 'overlay');
       useExportStore.getState().setExportProgress({ current: 5, total: 10 });
       useExportStore.getState().clearExport();
 
@@ -79,12 +81,12 @@ describe('exportStore', () => {
     });
 
     it('isExporting returns true during export', () => {
-      useExportStore.getState().startExport(1, 'framing', 'id');
+      useExportStore.getState().startExport('id', 1, 'framing');
       expect(useExportStore.getState().isExporting()).toBe(true);
     });
 
     it('isProjectExporting checks specific project', () => {
-      useExportStore.getState().startExport(42, 'overlay', 'id');
+      useExportStore.getState().startExport('id', 42, 'overlay');
       expect(useExportStore.getState().isProjectExporting(42)).toBe(true);
       expect(useExportStore.getState().isProjectExporting(99)).toBe(false);
     });

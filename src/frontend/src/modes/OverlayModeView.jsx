@@ -26,6 +26,7 @@ export function OverlayModeView({
   effectiveOverlayMetadata,
   effectiveOverlayFile,
   videoTitle,
+  videoTags = [],
   currentTime,
   duration,
   isPlaying,
@@ -66,10 +67,12 @@ export function OverlayModeView({
   playerDetectionEnabled,
   playerDetections,
   isDetectionLoading,
-  isDetectionUploading,
+  canDetect,
+  triggerDetection,
   onPlayerSelect,
   showPlayerBoxes,
   onTogglePlayerBoxes,
+  onEnablePlayerBoxes,
 
   // Zoom
   zoom,
@@ -115,26 +118,28 @@ export function OverlayModeView({
       {!isFullscreen && (effectiveOverlayMetadata ? (
         <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
           <div className="flex items-center justify-between text-sm text-gray-300">
-            {videoTitle && <span className="font-semibold text-white">{videoTitle}</span>}
-            <div className="flex space-x-6">
-              <span>
-                <span className="text-gray-400">Resolution:</span>{' '}
-                {effectiveOverlayMetadata.width}x{effectiveOverlayMetadata.height}
-              </span>
-              {effectiveOverlayMetadata.framerate && (
-                <span>
-                  <span className="text-gray-400">Framerate:</span>{' '}
-                  {effectiveOverlayMetadata.framerate} fps
-                </span>
+            {/* Left: Title + Tags */}
+            <div className="flex flex-col gap-1">
+              {videoTitle && <span className="font-semibold text-white">{videoTitle}</span>}
+              {videoTags?.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {videoTags.map(tag => (
+                    <span key={tag} className="px-2 py-0.5 bg-blue-500/30 text-blue-200 text-xs rounded">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
               )}
-              <span>
-                <span className="text-gray-400">Format:</span>{' '}
-                {effectiveOverlayMetadata.format?.toUpperCase() || 'MP4'}
-              </span>
-              <span>
-                <span className="text-gray-400">Size:</span>{' '}
-                {(effectiveOverlayMetadata.size / (1024 * 1024)).toFixed(2)} MB
-              </span>
+            </div>
+            {/* Right: Metadata */}
+            <div className="flex items-center gap-3 text-sm text-gray-300">
+              <span>{effectiveOverlayMetadata.width}x{effectiveOverlayMetadata.height}</span>
+              {effectiveOverlayMetadata.framerate && (
+                <>
+                  <span className="text-gray-600">•</span>
+                  <span>{effectiveOverlayMetadata.framerate} fps</span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -157,22 +162,77 @@ export function OverlayModeView({
         {effectiveOverlayVideoUrl && !isFullscreen && (
           <div className="mb-6 flex gap-4 items-center">
             <div className="ml-auto flex items-center gap-3">
-              {/* Player detection boxes toggle */}
+              {/* Player detection controls */}
               {playerDetectionEnabled && (
-                <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
-                  <span className="text-xs text-gray-400 mr-1">Players:</span>
-                  <button
-                    onClick={onTogglePlayerBoxes}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-medium transition-colors ${
-                      showPlayerBoxes
-                        ? 'bg-green-600 hover:bg-green-700 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                    }`}
-                    title={showPlayerBoxes ? 'Hide player boxes' : 'Show player boxes'}
-                  >
-                    {showPlayerBoxes ? <Eye size={14} /> : <EyeOff size={14} />}
-                    <span>{showPlayerBoxes ? 'On' : 'Off'}</span>
-                  </button>
+                <div className="flex flex-col gap-2">
+                  {/* Detection button */}
+                  {(() => {
+                    const isDetected = !canDetect && !isDetectionLoading;
+                    const buttonClass = isDetectionLoading
+                      ? 'bg-blue-600 cursor-wait'
+                      : isDetected
+                        ? 'bg-green-600 cursor-default'
+                        : 'bg-blue-600 hover:bg-blue-700';
+
+                    const handleDetect = () => {
+                      triggerDetection();
+                      // Auto-enable player boxes when detection is triggered
+                      if (onEnablePlayerBoxes) {
+                        onEnablePlayerBoxes();
+                      }
+                    };
+
+                    return (
+                      <button
+                        onClick={handleDetect}
+                        disabled={isDetectionLoading || isDetected}
+                        className={`px-3 py-1.5 ${buttonClass} disabled:opacity-90 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition-colors`}
+                      >
+                        {isDetectionLoading ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Detecting...
+                          </>
+                        ) : isDetected ? (
+                          <>
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            {playerDetections?.length || 0} player{playerDetections?.length !== 1 ? 's' : ''} detected
+                          </>
+                        ) : (
+                          <>
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Detect Players
+                          </>
+                        )}
+                      </button>
+                    );
+                  })()}
+                  {/* Player boxes toggle - only show when there are detections */}
+                  {playerDetections?.length > 0 && (
+                    <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5">
+                      <span className="text-xs text-gray-400 mr-1">Boxes:</span>
+                      <button
+                        onClick={onTogglePlayerBoxes}
+                        className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-sm font-medium transition-colors ${
+                          showPlayerBoxes
+                            ? 'bg-green-600 hover:bg-green-700 text-white'
+                            : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                        }`}
+                        title={showPlayerBoxes ? 'Hide player boxes' : 'Show player boxes'}
+                      >
+                        {showPlayerBoxes ? <Eye size={14} /> : <EyeOff size={14} />}
+                        <span>{showPlayerBoxes ? 'On' : 'Off'}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               <ZoomControls
@@ -216,13 +276,13 @@ export function OverlayModeView({
                 />
               ),
               // PlayerDetectionOverlay - AI-detected player boxes (toggleable)
-              effectiveOverlayMetadata && playerDetectionEnabled && showPlayerBoxes && (
+              effectiveOverlayMetadata && playerDetectionEnabled && showPlayerBoxes && playerDetections?.length > 0 && (
                 <PlayerDetectionOverlay
                   key="player-detection"
                   videoRef={videoRef}
                   videoMetadata={effectiveOverlayMetadata}
                   detections={playerDetections}
-                  isLoading={isDetectionLoading || isDetectionUploading}
+                  isLoading={isDetectionLoading}
                   onPlayerSelect={onPlayerSelect}
                   zoom={zoom}
                   panOffset={panOffset}
@@ -348,7 +408,7 @@ export function OverlayModeView({
               highlightRegions={getRegionsForExport()}
               isHighlightEnabled={highlightRegions.length > 0}
               segmentData={null}
-              disabled={!effectiveOverlayFile}
+              disabled={!effectiveOverlayFile && !effectiveOverlayVideoUrl}
               includeAudio={includeAudio}
               onIncludeAudioChange={onIncludeAudioChange}
               highlightEffectType={highlightEffectType}

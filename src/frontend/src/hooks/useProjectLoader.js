@@ -7,6 +7,7 @@ import { useFramingStore } from '../stores/framingStore';
 import { useOverlayStore } from '../stores/overlayStore';
 import { useVideoStore } from '../stores/videoStore';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
+import { getClipDisplayName } from '../utils/clipDisplayName';
 
 /**
  * Helper to calculate effective duration for a clip (accounting for speed changes)
@@ -46,7 +47,7 @@ function buildClipMetadata(clipsData) {
   const sourceClips = clipsData.map(clip => {
     const effectiveDuration = calculateEffectiveDuration(clip);
     const clipMeta = {
-      name: clip.filename || clip.name || 'Clip',
+      name: clip.filename || getClipDisplayName(clip, 'Clip'),
       start_time: currentTime,
       end_time: currentTime + effectiveDuration,
       duration: effectiveDuration,
@@ -137,19 +138,27 @@ export function useProjectLoader() {
       console.log('[useProjectLoader] Fetched clips:', clipsData.length, 'first clip file_url:', clipsData[0]?.file_url);
 
       // Load clip metadata (URLs and video metadata)
+      // Use presigned R2 URLs (file_url) when available for streaming, otherwise fall back to proxy
       const clipsWithMetadata = await Promise.all(
         clipsData.map(async (clip) => {
-          const clipUrl = `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/file`;
+          // Prefer presigned R2 URL for streaming, fall back to proxy URL
+          const clipUrl = clip.file_url || `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/file`;
           try {
             const metadata = await extractVideoMetadataFromUrl(clipUrl);
             return {
               ...clip,
               url: clipUrl,
+              fileUrl: clip.file_url, // Store presigned URL separately for streaming
               metadata,
+              // Copy key metadata fields to top level for easy access
+              duration: metadata.duration,
+              width: metadata.width,
+              height: metadata.height,
+              framerate: metadata.framerate,
             };
           } catch (err) {
             console.warn(`[useProjectLoader] Failed to load metadata for clip ${clip.id}:`, err);
-            return { ...clip, url: clipUrl, metadata: null };
+            return { ...clip, url: clipUrl, fileUrl: clip.file_url, metadata: null };
           }
         })
       );
@@ -178,35 +187,28 @@ export function useProjectLoader() {
 
       // Load working video in background if it exists
       let workingVideo = null;
-      if (project.working_video_id) {
+      if (project.working_video_id && project.working_video_url) {
         onProgress({ stage: 'working-video', message: 'Loading working video...' });
         setLoading(true, 'working-video');
 
         try {
-          const response = await fetch(`${API_BASE}/api/projects/${projectId}/working-video`);
-          if (response.ok) {
-            const blob = await response.blob();
-            const file = new File([blob], 'working_video.mp4', { type: 'video/mp4' });
-            const url = URL.createObjectURL(file);
-            const metadata = await extractVideoMetadata(file);
+          // Use streaming URL directly - no blob download!
+          const metadata = await extractVideoMetadataFromUrl(project.working_video_url, 'working_video.mp4');
 
-            workingVideo = { file, url, metadata };
-            setWorkingVideo(workingVideo);
+          workingVideo = { file: null, url: project.working_video_url, metadata };
+          setWorkingVideo(workingVideo);
 
-            // Notify App.jsx about working video (for legacy integration)
-            if (onWorkingVideoLoaded) {
-              await onWorkingVideoLoaded({
-                file,
-                url,
-                metadata,
-                clipMetadata: overlayClipMetadata,
-              });
-            }
-
-            console.log('[useProjectLoader] Loaded working video for overlay mode');
-          } else {
-            console.warn('[useProjectLoader] Failed to load working video:', response.status);
+          // Notify App.jsx about working video (for legacy integration)
+          if (onWorkingVideoLoaded) {
+            await onWorkingVideoLoaded({
+              file: null,
+              url: project.working_video_url,
+              metadata,
+              clipMetadata: overlayClipMetadata,
+            });
           }
+
+          console.log('[useProjectLoader] Loaded working video via streaming URL');
         } catch (err) {
           console.error('[useProjectLoader] Error loading working video:', err);
         }

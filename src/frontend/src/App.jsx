@@ -1,5 +1,5 @@
 import { useMemo, useRef, useCallback } from 'react';
-import { Home } from 'lucide-react';
+import { Home, Scissors } from 'lucide-react';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
@@ -8,10 +8,11 @@ import { useProjects } from './hooks/useProjects';
 import { useExportRecovery } from './hooks/useExportRecovery';
 import { Breadcrumb, Button, ConfirmationDialog, ModeSwitcher, ToastContainer } from './components/shared';
 import DebugInfo from './components/DebugInfo';
+import { getProjectDisplayName } from './utils/clipDisplayName';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore } from './stores';
+import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useClipStore, useProjectDataStore } from './stores';
 
 /**
  * App.jsx - Main application shell
@@ -55,6 +56,23 @@ function App() {
   const workingVideo = useOverlayStore(state => state.workingVideo);
   const isLoadingWorkingVideo = useOverlayStore(state => state.isLoadingWorkingVideo);
 
+  // Clip data for "Edit in Annotate" button - try clipStore first, then projectDataStore
+  // Use proper selectors (not method calls) to ensure Zustand tracks dependencies correctly
+  const clipStoreSelectedId = useClipStore(state => state.selectedClipId);
+  const clipStoreClips = useClipStore(state => state.clips);
+  const projectDataClips = useProjectDataStore(state => state.clips);
+
+  // Derive selected clip - memoized to avoid recalculation
+  const selectedClipForAnnotate = useMemo(() => {
+    // First try clipStore's selected clip
+    if (clipStoreSelectedId && clipStoreClips.length > 0) {
+      const clip = clipStoreClips.find(c => c.id === clipStoreSelectedId);
+      if (clip) return clip;
+    }
+    // Fall back to first clip from projectDataStore
+    return projectDataClips?.[0] ?? null;
+  }, [clipStoreSelectedId, clipStoreClips, projectDataClips]);
+
   // Project management
   const {
     selectedProject,
@@ -87,6 +105,26 @@ function App() {
 
   // Computed state for UI
   const hasOverlayVideo = !!workingVideo?.url;
+
+  // Handler for "Edit in Annotate" button - navigates to Annotate mode with clip's game
+  const handleEditInAnnotate = useCallback(() => {
+    // Check both possible field names (clipStore uses gameId, projectDataStore uses game_id)
+    const gameId = selectedClipForAnnotate?.gameId || selectedClipForAnnotate?.game_id;
+    if (!gameId) return;
+
+    // Store navigation intent for AnnotateScreen to pick up
+    sessionStorage.setItem('pendingGameId', gameId.toString());
+    const startTime = selectedClipForAnnotate?.annotateStartTime ?? selectedClipForAnnotate?.start_time;
+    if (startTime != null) {
+      sessionStorage.setItem('pendingClipSeekTime', startTime.toString());
+    }
+
+    // Switch to annotate mode
+    setEditorMode('annotate');
+  }, [selectedClipForAnnotate, setEditorMode]);
+
+  // Check if we can edit in annotate (clip has game association)
+  const canEditInAnnotate = !!(selectedClipForAnnotate?.gameId || selectedClipForAnnotate?.game_id);
 
   // Handle mode change between Framing and Overlay
   const handleModeChange = useCallback((newMode) => {
@@ -186,7 +224,7 @@ function App() {
       {/* Connection status banner - shows when backend is unreachable */}
       <ConnectionStatus />
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
-      {editorMode === 'annotate' && <AnnotateScreen />}
+      {editorMode === 'annotate' && <AnnotateScreen onClearSelection={clearSelection} />}
 
       {/* Main Content - For framing/overlay modes */}
       {editorMode !== 'annotate' && (
@@ -209,21 +247,36 @@ function App() {
               />
               <Breadcrumb
                 type="Projects"
-                itemName={selectedProject?.name}
+                itemName={getProjectDisplayName(selectedProject)}
               />
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
               <GalleryButton />
-              {/* Mode toggle */}
-              <ModeSwitcher
-                mode={editorMode}
-                onModeChange={handleModeChange}
-                disabled={false}
-                hasOverlayVideo={hasOverlayVideo}
-                framingOutOfSync={framingChangedSinceExport && hasOverlayVideo}
-                hasAnnotateVideo={false}
-                isLoadingWorkingVideo={isLoadingWorkingVideo}
-              />
+              {/* Combined mode switcher with Annotate button */}
+              <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
+                {/* Edit in Annotate button - styled like mode tabs */}
+                {canEditInAnnotate && (
+                  <button
+                    onClick={handleEditInAnnotate}
+                    className="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-gray-400 hover:text-white hover:bg-white/10"
+                    title="Edit source clip in Annotate mode"
+                  >
+                    <Scissors size={16} />
+                    <span className="font-medium text-sm">Annotate</span>
+                  </button>
+                )}
+                {/* Framing/Overlay mode toggle - rendered inline */}
+                <ModeSwitcher
+                  mode={editorMode}
+                  onModeChange={handleModeChange}
+                  disabled={false}
+                  hasOverlayVideo={hasOverlayVideo}
+                  framingOutOfSync={framingChangedSinceExport && hasOverlayVideo}
+                  hasAnnotateVideo={false}
+                  isLoadingWorkingVideo={isLoadingWorkingVideo}
+                  inline={true}
+                />
+              </div>
             </div>
           </div>
 

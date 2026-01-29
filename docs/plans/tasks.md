@@ -124,6 +124,229 @@ Updated documentation to match current codebase:
 
 ## Future Tasks
 
+### Task 6: Unified Notification System
+
+**Priority:** High (UX/Architecture)
+**Complexity:** Medium-High
+**Status:** PLANNED
+
+#### Problem
+
+The app currently has fragmented notification approaches:
+- `ExportWebSocketManager` - dedicated WebSocket per export job
+- `/ws/extractions` - broadcast WebSocket for clip extraction events
+- Polling in some places (legacy)
+- Scattered UI indicators (progress bars in project cards, global export indicator, etc.)
+- No persistent notification history or "inbox"
+
+This leads to:
+- Duplicate WebSocket connection logic
+- Inconsistent user feedback across features
+- No way to see past notifications or missed events
+- Complex debugging when notifications fail
+
+#### Solution: Consolidated Notification Service
+
+##### 1. Backend: Unified WebSocket Hub (`/ws/notifications`)
+
+Single WebSocket connection per client that receives ALL notification types:
+
+```python
+# Notification types
+class NotificationType(str, Enum):
+    # Extraction
+    EXTRACTION_STARTED = "extraction_started"
+    EXTRACTION_PROGRESS = "extraction_progress"
+    EXTRACTION_COMPLETE = "extraction_complete"
+    EXTRACTION_FAILED = "extraction_failed"
+
+    # Export (framing/overlay)
+    EXPORT_STARTED = "export_started"
+    EXPORT_PROGRESS = "export_progress"
+    EXPORT_COMPLETE = "export_complete"
+    EXPORT_FAILED = "export_failed"
+
+    # Upload
+    UPLOAD_STARTED = "upload_started"
+    UPLOAD_PROGRESS = "upload_progress"
+    UPLOAD_COMPLETE = "upload_complete"
+    UPLOAD_FAILED = "upload_failed"
+
+    # General
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+# Message format
+{
+    "id": "uuid",
+    "type": "extraction_complete",
+    "timestamp": "2024-01-15T10:30:00Z",
+    "title": "Clip Extracted",
+    "message": "Brilliant Interception is ready",
+    "data": {
+        "clip_id": 260,
+        "project_id": 45,
+        "filename": "abc123.mp4"
+    },
+    "progress": null,  # or 0-100 for progress events
+    "dismissible": true,
+    "auto_dismiss_ms": 5000,  # null = persistent
+    "actions": [  # optional action buttons
+        {"label": "Open Project", "action": "open_project", "payload": {"id": 45}}
+    ]
+}
+```
+
+##### 2. Backend: Notification Service
+
+```
+src/backend/app/services/notification_service.py
+```
+
+- `NotificationManager` class (singleton)
+- `broadcast(notification)` - send to all connected clients
+- `send_to_user(user_id, notification)` - when multi-user (future)
+- `send_progress(task_id, progress, message)` - helper for progress updates
+- Connection tracking with heartbeat/keepalive
+- Optional: Store notifications in DB for history (last 24h)
+
+##### 3. Frontend: NotificationStore (Zustand)
+
+```
+src/frontend/src/stores/notificationStore.js
+```
+
+```javascript
+const useNotificationStore = create((set, get) => ({
+  // Connection state
+  connected: false,
+  reconnecting: false,
+
+  // Active notifications (shown in UI)
+  notifications: [],  // { id, type, title, message, progress, timestamp, ... }
+
+  // Progress tracking (by task ID)
+  activeProgress: {},  // { taskId: { progress, message, type } }
+
+  // Notification history (persisted in localStorage)
+  history: [],  // last 50 notifications
+
+  // Unread count (for badge)
+  unreadCount: 0,
+
+  // Actions
+  connect: () => { /* WebSocket connection */ },
+  disconnect: () => {},
+  addNotification: (notification) => {},
+  dismissNotification: (id) => {},
+  markAllRead: () => {},
+  clearHistory: () => {},
+}));
+```
+
+##### 4. Frontend: NotificationService
+
+```
+src/frontend/src/services/NotificationService.js
+```
+
+- Singleton WebSocket manager
+- Auto-reconnect with exponential backoff
+- Heartbeat/keepalive
+- Dispatches to `notificationStore`
+- Initializes on app mount, persists across navigation
+
+##### 5. Frontend: UI Components
+
+**NotificationToast** - Individual toast notification
+```jsx
+<NotificationToast
+  notification={notification}
+  onDismiss={handleDismiss}
+  onAction={handleAction}
+/>
+```
+
+**NotificationContainer** - Toast stack (bottom-right)
+```jsx
+<NotificationContainer maxVisible={5} position="bottom-right" />
+```
+
+**NotificationBell** - Header icon with unread badge
+```jsx
+<NotificationBell />  // Shows badge, opens dropdown/panel on click
+```
+
+**NotificationPanel** - Slide-out panel with history
+```jsx
+<NotificationPanel />  // Full notification history, mark as read, clear
+```
+
+**ProgressIndicator** - Reusable progress component
+```jsx
+<ProgressIndicator
+  taskId="export-123"
+  showInline={true}  // or as toast
+/>
+```
+
+##### 6. Migration Path
+
+1. **Phase 1: Create infrastructure**
+   - Add `NotificationService` and `notificationStore`
+   - Add `/ws/notifications` endpoint
+   - Add basic toast UI components
+
+2. **Phase 2: Migrate extraction notifications**
+   - Remove `/ws/extractions` endpoint
+   - Update `modal_queue.py` to use `NotificationService`
+   - Update `ProjectsScreen` to use `notificationStore`
+
+3. **Phase 3: Migrate export notifications**
+   - Keep `ExportWebSocketManager` temporarily for progress
+   - Route completion/error events through unified system
+   - Eventually consolidate all progress into unified WebSocket
+
+4. **Phase 4: Add notification panel**
+   - Add `NotificationBell` to header
+   - Add `NotificationPanel` with history
+   - Add localStorage persistence
+
+##### 7. Benefits
+
+- **Single WebSocket connection** - reduced server load, simpler debugging
+- **Consistent UX** - all notifications look and behave the same
+- **Notification history** - users can see what they missed
+- **Action buttons** - "Open Project", "Retry", etc.
+- **Progress consolidation** - one place to see all active tasks
+- **Extensible** - easy to add new notification types
+
+##### 8. Files to Create/Modify
+
+**New Files:**
+- `src/backend/app/services/notification_service.py`
+- `src/frontend/src/services/NotificationService.js`
+- `src/frontend/src/stores/notificationStore.js`
+- `src/frontend/src/components/notifications/NotificationToast.jsx`
+- `src/frontend/src/components/notifications/NotificationContainer.jsx`
+- `src/frontend/src/components/notifications/NotificationBell.jsx`
+- `src/frontend/src/components/notifications/NotificationPanel.jsx`
+- `src/frontend/src/components/notifications/ProgressIndicator.jsx`
+
+**Modify:**
+- `src/backend/app/main.py` - add `/ws/notifications` endpoint
+- `src/backend/app/services/modal_queue.py` - use notification service
+- `src/backend/app/services/export_worker.py` - use notification service
+- `src/frontend/src/App.jsx` - initialize NotificationService, add NotificationContainer
+- `src/frontend/src/screens/ProjectsScreen.jsx` - remove extraction WebSocket, use store
+
+**Deprecate (eventually):**
+- `src/backend/app/websocket.py` - merge into notification_service
+- `src/frontend/src/services/ExportWebSocketManager.js` - merge into NotificationService
+
+---
+
 ### Resumable Uploads for Very Large Files
 For files >5GB, consider implementing multipart uploads with resume capability.
 

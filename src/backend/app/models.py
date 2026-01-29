@@ -68,8 +68,13 @@ class Detection(BaseModel):
 
 class PlayerDetectionRequest(BaseModel):
     """Request model for player detection on a single frame"""
-    video_path: Optional[str] = None  # Direct file path (for testing)
+    video_path: Optional[str] = None  # Direct file path (for testing/local)
     video_id: Optional[str] = None    # ID from /api/detect/upload (for frontend)
+    # R2 video support (for Modal GPU processing)
+    user_id: Optional[str] = None     # User folder in R2
+    input_key: Optional[str] = None   # R2 key for video (relative to user folder)
+    # Project-based detection (backend looks up R2 path from working_video)
+    project_id: Optional[int] = None  # Project ID to look up working video
     frame_number: int
     confidence_threshold: Optional[float] = 0.5
 
@@ -82,25 +87,3 @@ class PlayerDetectionResponse(BaseModel):
     video_height: int
 
 
-class BallDetectionRequest(BaseModel):
-    """Request model for ball detection across frames"""
-    video_path: str
-    start_frame: int
-    end_frame: int
-    confidence_threshold: Optional[float] = 0.3
-
-
-class BallPosition(BaseModel):
-    """Ball position at a specific frame"""
-    frame: int
-    x: float
-    y: float
-    radius: float
-    confidence: float
-
-
-class BallDetectionResponse(BaseModel):
-    """Response model for ball detection"""
-    ball_positions: List[BallPosition]
-    video_width: int
-    video_height: int

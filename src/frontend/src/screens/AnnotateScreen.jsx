@@ -33,7 +33,7 @@ import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from 
  *
  * @see AppJSX_REDUCTION/TASK-05-finalize-annotate-screen.md
  */
-export function AnnotateScreen() {
+export function AnnotateScreen({ onClearSelection }) {
   // Editor mode (for navigation between screens)
   // NOTE: Using editorStore (not navigationStore) because App.jsx renders based on editorStore
   const setEditorMode = useEditorStore(state => state.setEditorMode);
@@ -45,13 +45,16 @@ export function AnnotateScreen() {
     getGame,
     getGameVideoUrl,
     saveAnnotationsDebounced,
+    finishAnnotation,
   } = useGames();
 
-  // Projects (for import/export)
+  // Projects (for import/export only - clearSelection comes from App.jsx prop)
   const { fetchProjects } = useProjects();
 
   // Track if we're loading a game (ref persists across re-renders without causing them)
   const isLoadingRef = useRef(false);
+  // Track pending seek time for navigation from Framing mode
+  const [pendingSeekTime, setPendingSeekTime] = useState(null);
 
   // Check on mount if we're loading a game or file, set loading flag to prevent redirect
   useState(() => {
@@ -89,10 +92,18 @@ export function AnnotateScreen() {
     MAX_ZOOM,
   } = useZoom();
 
+  // Ref to store gameId for use in handleBackToProjects (avoids circular dependency)
+  const gameIdRef = useRef(null);
+
   // Handlers
   const handleBackToProjects = useCallback(() => {
+    // Trigger extraction of any unextracted clips in projects before leaving
+    if (gameIdRef.current) {
+      finishAnnotation(gameIdRef.current);
+    }
+    onClearSelection?.();  // Clear App.jsx's selected project (from Framing → Annotate navigation)
     setEditorMode('project-manager');
-  }, [setEditorMode]);
+  }, [finishAnnotation, onClearSelection, setEditorMode]);
 
   // AnnotateContainer - encapsulates all annotate mode state and handlers
   // NOTE: Clips are now saved in real-time during annotation, no batch import needed
@@ -120,6 +131,7 @@ export function AnnotateScreen() {
     annotateVideoUrl,
     annotateVideoMetadata,
     annotateGameName,
+    annotateGameId,
     annotateFullscreen,
     showAnnotateOverlay,
     annotateSelectedLayer,
@@ -159,14 +171,27 @@ export function AnnotateScreen() {
     clearAnnotateState,
   } = annotate;
 
-  // Handle initial game ID from sessionStorage (when loading a saved game)
+  // Keep gameIdRef updated for handleBackToProjects
+  useEffect(() => {
+    gameIdRef.current = annotateGameId;
+  }, [annotateGameId]);
+
+  // Handle initial game ID from sessionStorage (when loading a saved game or navigating from Framing)
   useEffect(() => {
     const pendingGameId = sessionStorage.getItem('pendingGameId');
-    console.log('[AnnotateScreen] Game load effect - pendingGameId:', pendingGameId, 'videoUrl:', annotateVideoUrl, 'isLoading:', isLoadingRef.current);
+    const pendingClipSeekTime = sessionStorage.getItem('pendingClipSeekTime');
+    console.log('[AnnotateScreen] Game load effect - pendingGameId:', pendingGameId, 'pendingClipSeekTime:', pendingClipSeekTime, 'videoUrl:', annotateVideoUrl, 'isLoading:', isLoadingRef.current);
     if (pendingGameId && !annotateVideoUrl) {
       console.log('[AnnotateScreen] Loading game from pendingGameId:', pendingGameId);
       isLoadingRef.current = true;
       sessionStorage.removeItem('pendingGameId');
+      sessionStorage.removeItem('pendingClipSeekTime');
+
+      // If there's a pending seek time (from Framing navigation), queue it
+      if (pendingClipSeekTime) {
+        setPendingSeekTime(parseFloat(pendingClipSeekTime));
+      }
+
       handleLoadGame(parseInt(pendingGameId));
     }
   }, [handleLoadGame, annotateVideoUrl]);
@@ -175,14 +200,22 @@ export function AnnotateScreen() {
   useEffect(() => {
     const pendingFile = getPendingGameFile();
     const pendingDetails = getPendingGameDetails();
-    console.log('[AnnotateScreen] Pending file effect - file:', pendingFile?.name, 'details:', pendingDetails, 'videoUrl:', annotateVideoUrl, 'isLoading:', isLoadingRef.current);
     if (pendingFile && !annotateVideoUrl) {
-      console.log('[AnnotateScreen] Loading pending game file:', pendingFile.name, 'with details:', pendingDetails);
       isLoadingRef.current = true;
       clearPendingGameFile();
       handleGameVideoSelect(pendingFile, pendingDetails);
     }
   }, [handleGameVideoSelect, annotateVideoUrl]);
+
+  // Handle pending seek time after video loads (from Framing mode navigation)
+  // Use videoRef.current.currentTime directly to avoid infinite loop from seek() triggering re-renders
+  useEffect(() => {
+    if (pendingSeekTime != null && annotateVideoUrl && videoRef.current) {
+      console.log('[AnnotateScreen] Seeking to pending time:', pendingSeekTime);
+      videoRef.current.currentTime = pendingSeekTime;
+      setPendingSeekTime(null);
+    }
+  }, [pendingSeekTime, annotateVideoUrl]);
 
   // Keyboard shortcuts for annotate mode
   // These are handled here (not in App.jsx) to use the same state instance

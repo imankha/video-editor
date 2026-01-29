@@ -296,7 +296,13 @@ const ExportButton = forwardRef(function ExportButton({
   };
 
   const handleExport = async () => {
-    if (!videoFile) {
+    // Backend can handle video when:
+    // 1. Overlay mode with projectId (video from working_video in R2)
+    // 2. Framing mode with project clips (videos from working_clips in R2)
+    const hasProjectClips = clips && clips.length > 0 && clips.some(c => c.workingClipId);
+    const isBackendAuthoritative = (editorMode === 'overlay' && projectId) ||
+                                   (editorMode === 'framing' && hasProjectClips);
+    if (!videoFile && !isBackendAuthoritative) {
       setError('No video file loaded');
       return;
     }
@@ -362,7 +368,10 @@ const ExportButton = forwardRef(function ExportButton({
     try {
       // Prepare form data based on mode
       const formData = new FormData();
-      formData.append('video', videoFile);
+      // Only append videoFile if we have it (not for streaming/project clips)
+      if (videoFile) {
+        formData.append('video', videoFile);
+      }
       formData.append('export_id', exportId);
       // Send project_id so backend can create export_jobs record for tracking
       if (projectId) {
@@ -538,8 +547,9 @@ const ExportButton = forwardRef(function ExportButton({
             });
 
             // Trigger proceed to overlay if callback provided
+            // Pass projectId so the handler can verify this export matches the current project
             if (onProceedToOverlay) {
-              onProceedToOverlay(null, buildClipMetadata(clips));
+              onProceedToOverlay(null, buildClipMetadata(clips), projectId);
             }
             if (onExportComplete) {
               onExportComplete();
@@ -574,7 +584,68 @@ const ExportButton = forwardRef(function ExportButton({
         // Note: Highlight keyframes are NOT sent during framing export.
         // They are handled separately in Overlay mode after the video is cropped/upscaled.
       } else {
-        // Overlay mode: Use simple overlay endpoint (no crop, no AI, no trim)
+        // Overlay mode: Backend-authoritative render when projectId available
+        // This uses Modal GPU when enabled, with R2 storage
+        if (projectId) {
+          console.log('[ExportButton] Using backend-authoritative overlay render');
+
+          // Connect WebSocket for real-time progress updates
+          setProgressMessage('Connecting...');
+          await connectWebSocket(exportId);
+
+          // Send render request (JSON body, no file upload needed - video is in R2)
+          setProgressMessage('Starting render...');
+          const renderResponse = await axios.post(`${API_BASE}/api/export/render-overlay`, {
+            project_id: projectId,
+            export_id: exportId,
+            effect_type: highlightEffectType
+          });
+
+          console.log('[ExportButton] Overlay render complete:', renderResponse.data);
+
+          // Download the final video from R2
+          setProgressMessage('Preparing download...');
+          const finalVideoUrl = `${API_BASE}/api/export/projects/${projectId}/final-video`;
+          const downloadResponse = await axios.get(finalVideoUrl, { responseType: 'blob' });
+
+          const blob = new Blob([downloadResponse.data], { type: 'video/mp4' });
+          const safeName = projectName
+            ? projectName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'video'
+            : 'video';
+          const downloadFilename = `${safeName}_final.mp4`;
+
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = downloadFilename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+
+          // Refresh projects list if callback provided
+          if (onExportComplete) {
+            onExportComplete();
+          }
+
+          // Mark export as complete
+          handleExportEnd();
+          setLocalProgress(100);
+          setProgressMessage('Export complete!');
+          if (exportIdRef.current) {
+            completeExportInStore(exportIdRef.current, {
+              status: 'complete',
+              finalVideoId: renderResponse.data.final_video_id,
+              filename: renderResponse.data.filename,
+              modalUsed: renderResponse.data.modal_used
+            });
+          }
+          setIsExporting(false);
+          return;  // Exit early - backend-authoritative path complete
+        }
+
+        // Fallback: Legacy client-upload mode (no projectId)
+        console.log('[ExportButton] Using legacy overlay export (no projectId)');
         endpoint = `${API_BASE}/api/export/overlay`;
 
         // Add highlight regions (new multi-region format)
@@ -652,8 +723,9 @@ const ExportButton = forwardRef(function ExportButton({
 
           // MVC: No blob needed - overlay mode will fetch working video from server
           // Pass null for blob, just the metadata for highlight generation
+          // Include projectId so handler can verify this export matches current project
           if (onProceedToOverlay) {
-            await onProceedToOverlay(null, clipMetadata);
+            await onProceedToOverlay(null, clipMetadata, projectId);
           }
 
           setIsExporting(false);
@@ -846,6 +918,12 @@ const ExportButton = forwardRef(function ExportButton({
   // Determine button text based on mode
   const isFramingMode = editorMode === 'framing';
 
+  // Check if any clips are still being extracted
+  const clipsNotExtracted = clips?.filter(c => c.isExtracted === false) || [];
+  const hasUnextractedClips = clipsNotExtracted.length > 0;
+  const extractingCount = clipsNotExtracted.filter(c => c.isExtracting || c.extractionStatus === 'running').length;
+  const pendingCount = clipsNotExtracted.length - extractingCount;
+
   return (
     <div className="space-y-3">
       {/* Export Settings */}
@@ -905,6 +983,19 @@ const ExportButton = forwardRef(function ExportButton({
         </div>
       </div>
 
+      {/* Extraction status message - Framing mode only */}
+      {isFramingMode && hasUnextractedClips && (
+        <div className="text-orange-400 text-sm bg-orange-900/20 border border-orange-800 rounded p-2 flex items-center gap-2">
+          <Loader size={14} className="animate-spin" />
+          <span>
+            {extractingCount > 0
+              ? `Extracting ${extractingCount} clip${extractingCount > 1 ? 's' : ''}...`
+              : `${pendingCount} clip${pendingCount > 1 ? 's' : ''} waiting for extraction`
+            }
+          </span>
+        </div>
+      )}
+
       {/* Single Export button for both modes */}
       <Button
         variant="primary"
@@ -912,8 +1003,9 @@ const ExportButton = forwardRef(function ExportButton({
         fullWidth
         icon={isCurrentlyExporting ? Loader : Download}
         onClick={handleExport}
-        disabled={disabled || isCurrentlyExporting || !videoFile}
+        disabled={disabled || isCurrentlyExporting || (!videoFile && !projectId) || (isFramingMode && hasUnextractedClips)}
         className={isCurrentlyExporting ? '[&>svg]:animate-spin' : ''}
+        title={isFramingMode && hasUnextractedClips ? 'Wait for all clips to be extracted before framing' : undefined}
       >
         {isCurrentlyExporting
           ? (isExternallyExporting && !isExporting ? 'Export in progress...' : 'Exporting...')

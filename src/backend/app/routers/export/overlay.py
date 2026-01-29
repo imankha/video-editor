@@ -12,6 +12,7 @@ These endpoints handle highlight regions, effect types, and final output.
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from pydantic import BaseModel
 from starlette.background import BackgroundTask
 from datetime import datetime
 from pathlib import Path
@@ -32,7 +33,7 @@ _frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ov
 from ...websocket import export_progress, manager
 from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path, get_uploads_path
 from ...services.ffmpeg_service import get_encoding_command_parts
-from ...storage import R2_ENABLED, generate_presigned_url, upload_to_r2, upload_bytes_to_r2
+from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
 from ...user_context import get_current_user_id
 from ...highlight_transform import (
     transform_all_regions_to_raw,
@@ -42,6 +43,7 @@ from ...services.image_extractor import (
     extract_player_images_for_region,
     list_highlight_images,
 )
+from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto, get_optimal_gpu_config
 
 logger = logging.getLogger(__name__)
 
@@ -427,19 +429,29 @@ async def export_overlay_only(
             background=BackgroundTask(cleanup_temp_dir)
         )
 
-    except HTTPException:
+    except HTTPException as e:
+        # Extract error message from HTTPException
+        error_msg = str(e.detail) if hasattr(e, 'detail') else str(e)
+        logger.error(f"[Overlay Export] HTTPException: {error_msg}")
+
         # Update export_jobs record to error
         if project_id:
             try:
                 with get_db_connection() as conn:
                     cursor = conn.cursor()
                     cursor.execute("""
-                        UPDATE export_jobs SET status = 'error', completed_at = CURRENT_TIMESTAMP
+                        UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
                         WHERE id = ?
-                    """, (export_id,))
+                    """, (error_msg[:500], export_id))
                     conn.commit()
             except Exception:
                 pass
+
+        # Send error progress via WebSocket
+        error_data = {"progress": 0, "message": f"Export failed: {error_msg}", "status": "error", "projectId": project_id, "projectName": project_name, "type": "overlay"}
+        export_progress[export_id] = error_data
+        await manager.send_progress(export_id, error_data)
+
         import shutil
         import time
         time.sleep(0.5)
@@ -654,29 +666,17 @@ async def get_final_video(project_id: int):
         if not result:
             raise HTTPException(status_code=404, detail="Final video not found")
 
-        # When R2 is enabled, redirect to presigned URL
-        if R2_ENABLED:
-            user_id = get_current_user_id()
-            presigned_url = generate_presigned_url(
-                user_id=user_id,
-                relative_path=f"final_videos/{result['filename']}",
-                expires_in=3600,
-                content_type="video/mp4"
-            )
-            if presigned_url:
-                return RedirectResponse(url=presigned_url, status_code=302)
-            raise HTTPException(status_code=404, detail="Failed to generate R2 URL for final video")
-
-        # Local mode: serve from filesystem
-        file_path = get_final_videos_path() / result['filename']
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="Video file not found")
-
-        return FileResponse(
-            path=str(file_path),
-            media_type="video/mp4",
-            filename=result['filename']
+        # Redirect to R2 presigned URL
+        user_id = get_current_user_id()
+        presigned_url = generate_presigned_url(
+            user_id=user_id,
+            relative_path=f"final_videos/{result['filename']}",
+            expires_in=3600,
+            content_type="video/mp4"
         )
+        if presigned_url:
+            return RedirectResponse(url=presigned_url, status_code=302)
+        raise HTTPException(status_code=404, detail="Failed to generate R2 URL for final video")
 
 
 @router.put("/projects/{project_id}/overlay-data")
@@ -882,8 +882,13 @@ async def _load_highlights_from_raw_clips(project_id: int, cursor) -> list:
     Load highlight regions from raw_clips and transform to working video space.
 
     Returns transformed highlight regions ready for the current project's framing.
+
+    DEDUPLICATION: If the same raw_clip is used multiple times in a project
+    (e.g., user adds the same clip twice), we only load its default_highlight_regions
+    once to prevent duplicate/overlapping regions.
     """
     # Get working clips with framing data and raw clip defaults
+    # Note: Same raw_clip_id may appear multiple times if clip is used more than once
     cursor.execute("""
         SELECT wc.id, wc.raw_clip_id, wc.crop_data, wc.segments_data,
                rc.default_highlight_regions
@@ -925,8 +930,18 @@ async def _load_highlights_from_raw_clips(project_id: int, cursor) -> list:
                 cap.release()
 
     all_transformed_regions = []
+    processed_raw_clip_ids = set()  # Track processed raw_clips to prevent duplicates
 
     for clip in working_clips:
+        raw_clip_id = clip['raw_clip_id']
+
+        # Skip if we've already processed this raw_clip (prevents duplicates when
+        # the same clip is used multiple times in a project)
+        if raw_clip_id in processed_raw_clip_ids:
+            logger.info(f"[Overlay Data] Skipping duplicate raw_clip {raw_clip_id}")
+            continue
+        processed_raw_clip_ids.add(raw_clip_id)
+
         # Parse raw clip default highlights
         raw_regions = []
         if clip['default_highlight_regions']:
@@ -1050,31 +1065,17 @@ async def get_highlight_image(filename: str):
     if '..' in filename or '/' in filename or '\\' in filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    # When R2 is enabled, redirect to presigned URL
-    if R2_ENABLED:
-        user_id = get_current_user_id()
-        presigned_url = generate_presigned_url(
-            user_id=user_id,
-            relative_path=f"highlights/{filename}",
-            expires_in=3600,
-            content_type="image/png"
-        )
-        if presigned_url:
-            return RedirectResponse(url=presigned_url, status_code=302)
-        raise HTTPException(status_code=404, detail="Failed to generate R2 URL for highlight image")
-
-    # Local mode: serve from filesystem
-    highlights_dir = get_highlights_path()
-    file_path = highlights_dir / filename
-
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Image not found")
-
-    return FileResponse(
-        path=str(file_path),
-        media_type="image/png",
-        filename=filename
+    # Redirect to R2 presigned URL
+    user_id = get_current_user_id()
+    presigned_url = generate_presigned_url(
+        user_id=user_id,
+        relative_path=f"highlights/{filename}",
+        expires_in=3600,
+        content_type="image/png"
     )
+    if presigned_url:
+        return RedirectResponse(url=presigned_url, status_code=302)
+    raise HTTPException(status_code=404, detail="Failed to generate R2 URL for highlight image")
 
 
 @router.get("/highlights")
@@ -1090,3 +1091,314 @@ async def list_highlights(raw_clip_id: int = None):
         'images': images,
         'count': len(images)
     })
+
+
+# =============================================================================
+# Modal GPU Rendering Endpoints
+# =============================================================================
+
+
+class OverlayRenderRequest(BaseModel):
+    """Request body for Modal-based overlay render."""
+    project_id: int
+    export_id: str
+    effect_type: str = "dark_overlay"
+
+
+@router.post("/render-overlay")
+async def render_overlay(request: OverlayRenderRequest):
+    """
+    Render overlay export using Modal GPU (or local fallback).
+
+    This endpoint reads highlight data from the database and renders
+    the overlay on the project's working video.
+
+    When Modal is enabled:
+    - Video stays in R2 (no download to backend)
+    - Modal downloads, processes, uploads result
+    - Much faster for cloud deployments
+
+    When Modal is disabled:
+    - Falls back to local processing
+
+    Steps:
+    1. Validate project has working_video
+    2. Get highlight regions from working_video overlay_data
+    3. Call Modal (or local) to process
+    4. Save final_video and update project
+    """
+    project_id = request.project_id
+    export_id = request.export_id
+    effect_type = request.effect_type
+
+    user_id = get_current_user_id()
+
+    logger.info(f"[Overlay Render] Starting for project {project_id}, user: {user_id}, Modal: {modal_enabled()}")
+
+    # Initialize progress tracking
+    export_progress[export_id] = {
+        "progress": 5,
+        "message": "Validating project...",
+        "status": "processing"
+    }
+
+    # Get project info and working video
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT p.id, p.name, p.working_video_id,
+                   wv.filename as working_filename,
+                   wv.highlights_data, wv.effect_type, wv.duration
+            FROM projects p
+            JOIN working_videos wv ON p.working_video_id = wv.id
+            WHERE p.id = ?
+        """, (project_id,))
+        project = cursor.fetchone()
+
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found or has no working video")
+
+        project_name = project['name']
+
+        # If project name matches "Clip {id}" pattern, try to derive a better name from clip data
+        # This handles legacy auto-projects created before we added derive_clip_name
+        if project_name and re.match(r'^Clip \d+$', project_name):
+            cursor.execute("""
+                SELECT rc.name, rc.rating, rc.tags
+                FROM raw_clips rc
+                WHERE rc.auto_project_id = ?
+                LIMIT 1
+            """, (project_id,))
+            raw_clip = cursor.fetchone()
+            if raw_clip:
+                tags = json.loads(raw_clip['tags']) if raw_clip['tags'] else []
+                from app.queries import derive_clip_name
+                derived_name = derive_clip_name(raw_clip['name'], raw_clip['rating'] or 0, tags)
+                if derived_name:
+                    project_name = derived_name
+
+        working_filename = project['working_filename']
+
+        # Get video duration from working_videos table for cost-optimized GPU selection
+        # If duration is not available, defaults to None (triggers sequential 1 GPU processing)
+        video_duration = project['duration'] if project['duration'] else None
+
+        # Create export_jobs record
+        try:
+            cursor.execute("""
+                INSERT INTO export_jobs (id, project_id, type, status, input_data)
+                VALUES (?, ?, 'overlay', 'processing', '{}')
+            """, (export_id, project_id))
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"[Overlay Render] Failed to create export_jobs record: {e}")
+
+    # Parse highlight regions
+    highlight_regions = []
+    if project['highlights_data']:
+        try:
+            highlight_regions = json.loads(project['highlights_data'])
+        except json.JSONDecodeError:
+            pass
+
+    # Use saved effect_type if not specified
+    if not effect_type and project['effect_type']:
+        effect_type = project['effect_type']
+    effect_type = effect_type or "dark_overlay"
+
+    # Determine optimal GPU configuration based on video duration
+    num_chunks, gpu_config = get_optimal_gpu_config(video_duration)
+    use_parallel = num_chunks > 1
+    logger.info(f"[Overlay Render] Working video: {working_filename}, {len(highlight_regions)} regions, effect: {effect_type}")
+    logger.info(f"[Overlay Render] Duration: {video_duration}s, Config: {gpu_config} ({num_chunks} GPU{'s' if num_chunks > 1 else ''})")
+
+    # Update progress
+    progress_data = {
+        "progress": 5,
+        "message": "Sending to cloud GPU..." if modal_enabled() else "Processing locally...",
+        "status": "processing",
+        "projectId": project_id,
+        "projectName": project_name,
+        "type": "overlay"
+    }
+    export_progress[export_id] = progress_data
+    await manager.send_progress(export_id, progress_data)
+
+    try:
+        # Generate output filename
+        output_filename = f"final_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+        parallel_used = False  # Will be set to True if parallel processing is used
+
+        if modal_enabled():
+            # Use Modal GPU processing
+            logger.info(f"[Overlay Render] Using Modal GPU")
+
+            # Create progress callback for real-time updates
+            async def modal_progress_callback(progress: float, message: str):
+                progress_data = {
+                    "progress": progress,
+                    "message": message,
+                    "status": "processing",
+                    "projectId": project_id,
+                    "projectName": project_name,
+                    "type": "overlay"
+                }
+                export_progress[export_id] = progress_data
+                await manager.send_progress(export_id, progress_data)
+
+            # Use auto-selection: parallel for longer videos, sequential for shorter
+            result = await call_modal_overlay_auto(
+                job_id=export_id,
+                user_id=user_id,
+                input_key=f"working_videos/{working_filename}",
+                output_key=f"final_videos/{output_filename}",
+                highlight_regions=highlight_regions,
+                effect_type=effect_type,
+                video_duration=video_duration,
+                progress_callback=modal_progress_callback,
+            )
+
+            if result.get("status") != "success":
+                error = result.get("error", "Unknown error")
+                raise RuntimeError(f"Modal processing failed: {error}")
+
+            # Update to 95% after Modal completes
+            progress_data = {
+                "progress": 95,
+                "message": "Saving to library...",
+                "status": "processing",
+                "projectId": project_id,
+                "projectName": project_name,
+                "type": "overlay"
+            }
+            export_progress[export_id] = progress_data
+            await manager.send_progress(export_id, progress_data)
+
+            parallel_used = result.get("parallel", False)
+            logger.info(f"[Overlay Render] Modal processing complete (parallel={parallel_used})")
+
+        else:
+            # Local processing fallback
+            logger.info(f"[Overlay Render] Using local processing (Modal disabled)")
+
+            # Download working video from R2
+            temp_dir = tempfile.mkdtemp()
+            input_path = os.path.join(temp_dir, "input.mp4")
+            output_path = os.path.join(temp_dir, "output.mp4")
+
+            try:
+                if not download_from_r2(user_id, f"working_videos/{working_filename}", Path(input_path)):
+                    raise RuntimeError("Failed to download working video from R2")
+
+                # Process locally
+                if not highlight_regions:
+                    # No highlights - just copy
+                    import shutil
+                    shutil.copy(input_path, output_path)
+                else:
+                    # Process with local frame-by-frame rendering
+                    _process_frames_to_ffmpeg(
+                        input_path,
+                        output_path,
+                        highlight_regions,
+                        effect_type,
+                        lambda p, m: None  # No progress callback for now
+                    )
+
+                # Upload result to R2
+                if not upload_to_r2(user_id, f"final_videos/{output_filename}", Path(output_path)):
+                    raise RuntimeError("Failed to upload final video to R2")
+
+            finally:
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+        # Save to database
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get next version number
+            cursor.execute("""
+                SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                FROM final_videos WHERE project_id = ?
+            """, (project_id,))
+            next_version = cursor.fetchone()['next_version']
+
+            # Determine source_type
+            cursor.execute("SELECT id FROM raw_clips WHERE auto_project_id = ?", (project_id,))
+            is_auto_project = cursor.fetchone() is not None
+            source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
+
+            # Create final_videos record
+            cursor.execute("""
+                INSERT INTO final_videos (project_id, filename, version, source_type)
+                VALUES (?, ?, ?, ?)
+            """, (project_id, output_filename, next_version, source_type))
+            final_video_id = cursor.lastrowid
+
+            # Update project
+            cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
+
+            # Update export_jobs
+            cursor.execute("""
+                UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (final_video_id, output_filename, export_id))
+
+            conn.commit()
+
+        # Send complete progress
+        complete_data = {
+            "progress": 100,
+            "message": "Export complete!",
+            "status": "complete",
+            "projectId": project_id,
+            "projectName": project_name,
+            "type": "overlay",
+            "finalVideoId": final_video_id,
+            "finalFilename": output_filename
+        }
+        export_progress[export_id] = complete_data
+        await manager.send_progress(export_id, complete_data)
+
+        logger.info(f"[Overlay Render] Complete: final_video_id={final_video_id}, parallel={parallel_used}")
+
+        return JSONResponse({
+            'success': True,
+            'final_video_id': final_video_id,
+            'filename': output_filename,
+            'project_id': project_id,
+            'export_id': export_id,
+            'modal_used': modal_enabled(),
+            'parallel_used': parallel_used,
+            'video_duration': video_duration
+        })
+
+    except Exception as e:
+        logger.error(f"[Overlay Render] Failed: {e}", exc_info=True)
+
+        # Update export_jobs to error
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (str(e)[:500], export_id))
+                conn.commit()
+        except Exception:
+            pass
+
+        error_data = {
+            "progress": 0,
+            "message": f"Export failed: {e}",
+            "status": "error",
+            "projectId": project_id,
+            "projectName": project_name,
+            "type": "overlay"
+        }
+        export_progress[export_id] = error_data
+        await manager.send_progress(export_id, error_data)
+
+        raise HTTPException(status_code=500, detail=str(e))

@@ -381,12 +381,25 @@ class VideoEncoder:
                         logger.info(f"Segment {i}: source {start_time:.2f}s-{end_time:.2f}s @ {speed}x speed")
                         if frames_pretrimmed:
                             logger.info(f"  → Video trim adjusted: {video_start:.2f}s-{video_end:.2f}s (frames pre-trimmed)")
-                        logger.info(f"  → Frames: {segment_input_frames}")
+
+                        # Calculate output frames accounting for speed change
+                        # For speed > 1: fewer output frames (faster playback)
+                        # For speed < 1: more output frames (slower playback)
+                        output_frames_for_segment = round(segment_input_frames / speed)
+                        logger.info(f"  → Input frames: {segment_input_frames}, Output frames: {output_frames_for_segment}")
 
                         # Trim video using adjusted times
-                        filter_parts.append(
-                            f"[0:v]trim=start={video_start}:end={video_end},setpts=PTS-STARTPTS[v{i}]"
-                        )
+                        # Apply setpts to adjust playback speed:
+                        # - setpts=PTS/speed adjusts timing (e.g., PTS/2 = 2x speed, PTS/0.5 = 0.5x speed)
+                        if speed != 1.0:
+                            logger.info(f"  → Applying setpts=PTS/{speed} to video for {speed}x speed")
+                            filter_parts.append(
+                                f"[0:v]trim=start={video_start}:end={video_end},setpts=(PTS-STARTPTS)/{speed}[v{i}]"
+                            )
+                        else:
+                            filter_parts.append(
+                                f"[0:v]trim=start={video_start}:end={video_end},setpts=PTS-STARTPTS[v{i}]"
+                            )
 
                         # Audio: build atempo filter for speed adjustment using original source times
                         if effective_include_audio:
@@ -404,7 +417,7 @@ class VideoEncoder:
                                 )
                             audio_output_labels.append(f"[a{i}]")
 
-                        expected_output_frames += segment_input_frames
+                        expected_output_frames += output_frames_for_segment
                         output_labels.append(f"[v{i}]")
 
                 # Concatenate all video segments (use output_labels count since some segments may be skipped)

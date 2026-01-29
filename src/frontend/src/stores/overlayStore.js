@@ -39,7 +39,6 @@ export const useOverlayStore = create((set, get) => ({
 
   // Loading states
   isLoadingWorkingVideo: false,
-  isDataLoaded: false,
 
   // Actions
   setWorkingVideo: (video) => set({
@@ -61,8 +60,6 @@ export const useOverlayStore = create((set, get) => ({
 
   setIsLoadingWorkingVideo: (loading) => set({ isLoadingWorkingVideo: loading }),
 
-  setIsDataLoaded: (loaded) => set({ isDataLoaded: loaded }),
-
   // Computed
   hasWorkingVideo: () => get().workingVideo !== null,
 
@@ -73,7 +70,6 @@ export const useOverlayStore = create((set, get) => ({
     clipMetadata: null,
     effectType: getInitialEffectType(), // Preserve user's preference on reset
     isLoadingWorkingVideo: false,
-    isDataLoaded: false,
   }),
 }));
 

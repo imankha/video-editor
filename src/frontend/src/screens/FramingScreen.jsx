@@ -14,7 +14,7 @@ import { FileUpload } from '../components/FileUpload';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { API_BASE } from '../config';
-import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore } from '../stores';
+import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useNavigationStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 
 /**
@@ -175,6 +175,7 @@ export function FramingScreen({
     isLoading,
     loadVideo,
     loadVideoFromUrl,
+    loadVideoFromStreamingUrl,
     togglePlay,
     seek,
     stepForward,
@@ -183,7 +184,8 @@ export function FramingScreen({
     handlers,
   } = useVideo(getSegmentAtTime, clampToVisibleRange);
 
-  // Crop hook
+  // Crop hook - pass selectedClip's keyframes so useCrop restores them via prop-based data flow
+  // This follows "data always ready" pattern: UI updates when data changes, no timing flags needed
   const {
     aspectRatio,
     keyframes,
@@ -203,7 +205,7 @@ export function FramingScreen({
     getKeyframesForExport,
     reset: resetCrop,
     restoreState: restoreCropState,
-  } = useCrop(metadata, trimRange);
+  } = useCrop(metadata, trimRange, selectedClip?.cropKeyframes);
 
   // Zoom hooks
   const {
@@ -344,6 +346,14 @@ export function FramingScreen({
             segments_data: c.segments_data,
             crop_data: c.crop_data,
             file_url: c.file_url,  // Presigned R2 URL (if available)
+            is_extracted: c.is_extracted !== false,  // Default true for clips with file_url
+            extraction_status: c.extraction_status,
+            // Annotate navigation fields
+            game_id: c.game_id,
+            start_time: c.start_time,
+            end_time: c.end_time,
+            tags: c.tags,
+            rating: c.rating,
           })),
           getClipUrl,
           getMetadataFromUrl,
@@ -358,48 +368,57 @@ export function FramingScreen({
 
         // Load first clip video (prefer presigned R2 URL if available)
         const firstClip = loadedClips[0];
-        console.log('[FramingScreen] First clip data:', { id: firstClip?.id, file_url: firstClip?.file_url, url: firstClip?.url });
-        const firstClipUrl = firstClip?.file_url || firstClip?.url;
+        console.log('[FramingScreen] First clip data:', { id: firstClip?.id, file_url: firstClip?.file_url, url: firstClip?.url, hasMetadata: !!firstClip?.metadata });
+        const firstClipUrl = firstClip?.fileUrl || firstClip?.file_url || firstClip?.url;
         if (firstClipUrl) {
           console.log('[FramingScreen] Loading first clip video:', firstClipUrl);
-          const file = await loadVideoFromUrl(firstClipUrl, firstClip.filename || 'clip.mp4');
-          if (file) {
-            setVideoFile(file);
-          }
 
-          // Restore first clip's framing state
-          if (firstClip.segments_data || firstClip.crop_data) {
-            const clipMetadata = await extractVideoMetadataFromUrl(firstClipUrl);
+          // Get metadata first (before loading video) so we can restore state before useEffect runs
+          // IMPORTANT: Restore crop/segment state BEFORE setting video metadata to avoid
+          // the useCrop useEffect re-initializing keyframes before we restore them
+          const clipMetadata = firstClip.metadata || await extractVideoMetadataFromUrl(firstClipUrl);
 
-            if (firstClip.segments_data) {
-              try {
-                const savedSegments = JSON.parse(firstClip.segments_data);
-                console.log('[FramingScreen] Restoring segments_data:', JSON.stringify(savedSegments), 'clipDuration:', clipMetadata?.duration);
-                restoreSegmentState(savedSegments, clipMetadata?.duration || 0);
-              } catch (e) {
-                console.warn('[FramingScreen] Failed to parse segments_data:', e);
-              }
-            }
-
-            if (firstClip.crop_data) {
-              try {
-                const savedCropKeyframes = JSON.parse(firstClip.crop_data);
-                if (savedCropKeyframes.length > 0) {
-                  const endFrame = Math.round((clipMetadata?.duration || 0) * (clipMetadata?.framerate || 30));
-                  restoreCropState(savedCropKeyframes, endFrame);
-                }
-              } catch (e) {
-                console.warn('[FramingScreen] Failed to parse crop_data:', e);
-              }
+          // Restore framing state BEFORE loading video (prevents useEffect race condition)
+          if (firstClip.segments_data) {
+            try {
+              const savedSegments = JSON.parse(firstClip.segments_data);
+              console.log('[FramingScreen] Restoring segments_data:', JSON.stringify(savedSegments), 'clipDuration:', clipMetadata?.duration);
+              restoreSegmentState(savedSegments, clipMetadata?.duration || 0);
+            } catch (e) {
+              console.warn('[FramingScreen] Failed to parse segments_data:', e);
             }
           }
 
+          if (firstClip.crop_data) {
+            try {
+              const savedCropKeyframes = JSON.parse(firstClip.crop_data);
+              if (savedCropKeyframes.length > 0) {
+                const endFrame = Math.round((clipMetadata?.duration || 0) * (clipMetadata?.framerate || 30));
+                console.log('[FramingScreen] Restoring crop keyframes BEFORE video load:', savedCropKeyframes.length, 'keyframes');
+                restoreCropState(savedCropKeyframes, endFrame);
+              }
+            } catch (e) {
+              console.warn('[FramingScreen] Failed to parse crop_data:', e);
+            }
+          }
+
+          // NOW load video (with metadata that was already extracted)
+          // Use streaming for presigned R2 URLs (non-blob) to avoid CORS issues
+          if (!firstClipUrl.startsWith('blob:')) {
+            console.log('[FramingScreen] Using streaming mode for first clip');
+            loadVideoFromStreamingUrl(firstClipUrl, clipMetadata);
+          } else {
+            const file = await loadVideoFromUrl(firstClipUrl, firstClip.filename || 'clip.mp4');
+            if (file) {
+              setVideoFile(file);
+            }
+          }
         }
       };
 
       loadClipsAsync();
     }
-  }, [loadedClips, clips.length, projectId, projectAspectRatio, loadProjectClips, getClipFileUrl, loadVideoFromUrl, restoreSegmentState, restoreCropState]);
+  }, [loadedClips, clips.length, projectId, projectAspectRatio, loadProjectClips, getClipFileUrl, loadVideoFromUrl, loadVideoFromStreamingUrl, restoreSegmentState, restoreCropState]);
 
   // Set aspect ratio from project (only if different to avoid loops)
   useEffect(() => {
@@ -469,20 +488,11 @@ export function FramingScreen({
           }
         }
 
-        // 2. Load new clip's video
-        if (newClip.fileUrl) {
-          console.log('[FramingScreen] Loading new clip video:', newClip.fileUrl);
-          const file = await loadVideoFromUrl(newClip.fileUrl, newClip.fileName || 'clip.mp4');
-          if (file) {
-            setVideoFile(file);
-          }
-        } else if (newClip.file) {
-          console.log('[FramingScreen] Loading new clip from file:', newClip.fileName);
-          await loadVideo(newClip.file);
-          setVideoFile(newClip.file);
-        }
+        // 2. Restore state BEFORE loading video (prevents useEffect race condition)
+        // The useCrop useEffect runs when metadata changes and can re-initialize keyframes
+        // before we have a chance to restore them. So restore FIRST.
 
-        // 3. Restore new clip's segments state
+        // 2a. Restore new clip's segments state
         if (newClip.segments) {
           console.log('[FramingScreen] Restoring segments for clip:', selectedClipId);
           restoreSegmentState(newClip.segments, newClip.duration || 0);
@@ -494,14 +504,34 @@ export function FramingScreen({
           }
         }
 
-        // 4. Restore new clip's crop keyframes
+        // 2b. Restore new clip's crop keyframes BEFORE loading video
         if (newClip.cropKeyframes && newClip.cropKeyframes.length > 0) {
-          console.log('[FramingScreen] Restoring crop keyframes for clip:', selectedClipId, newClip.cropKeyframes.length, 'keyframes');
+          console.log('[FramingScreen] Restoring crop keyframes BEFORE video load:', selectedClipId, newClip.cropKeyframes.length, 'keyframes');
           const endFrame = Math.round((newClip.duration || 0) * (newClip.framerate || 30));
           restoreCropState(newClip.cropKeyframes, endFrame);
         } else {
           // Reset crop to let it initialize with defaults
           resetCrop();
+        }
+
+        // 3. NOW load new clip's video (after state is restored)
+        if (newClip.fileUrl) {
+          console.log('[FramingScreen] Loading new clip video:', newClip.fileUrl);
+          // Use streaming for presigned R2 URLs (non-blob) to avoid CORS issues
+          if (!newClip.fileUrl.startsWith('blob:')) {
+            console.log('[FramingScreen] Using streaming mode for clip switch');
+            // Pass metadata so useCrop's useEffect sees it AND our restored keyframes together
+            loadVideoFromStreamingUrl(newClip.fileUrl, newClip.metadata || null);
+          } else {
+            const file = await loadVideoFromUrl(newClip.fileUrl, newClip.fileName || 'clip.mp4');
+            if (file) {
+              setVideoFile(file);
+            }
+          }
+        } else if (newClip.file) {
+          console.log('[FramingScreen] Loading new clip from file:', newClip.fileName);
+          await loadVideo(newClip.file);
+          setVideoFile(newClip.file);
         }
 
         // Reset edit tracking for new clip
@@ -513,7 +543,7 @@ export function FramingScreen({
     };
 
     switchClip();
-  }, [selectedClipId, clips, updateClipData, loadVideoFromUrl, loadVideo, restoreSegmentState, resetSegments, initializeSegments, restoreCropState, resetCrop]);
+  }, [selectedClipId, clips, updateClipData, loadVideoFromUrl, loadVideoFromStreamingUrl, loadVideo, restoreSegmentState, resetSegments, initializeSegments, restoreCropState, resetCrop]);
 
   // Derived selection state
   const selectedCropKeyframeIndex = useMemo(() => {
@@ -665,8 +695,31 @@ export function FramingScreen({
   };
 
   // Handle proceed to overlay
-  const handleProceedToOverlayInternal = useCallback(async (renderedVideoBlob, clipMetadata) => {
-    console.log('[FramingScreen] Starting overlay transition...');
+  const handleProceedToOverlayInternal = useCallback(async (renderedVideoBlob, clipMetadata, exportedProjectId) => {
+    // CRITICAL: Get the CURRENT project from navigation store, not the stale closure value
+    // When user switches projects during export, the closure's projectId is stale
+    // but the navigation store always has the currently viewed project
+    const currentlyViewingProjectId = useNavigationStore.getState().projectId;
+
+    console.log('[FramingScreen] Starting overlay transition...', {
+      exportedProjectId,
+      currentProjectId: currentlyViewingProjectId,
+      closureProjectId: projectId
+    });
+
+    // IMPORTANT: Check if the completed export is for the CURRENTLY VIEWED project
+    // User may have switched to a different project while export was running
+    if (exportedProjectId && exportedProjectId !== currentlyViewingProjectId) {
+      console.log('[FramingScreen] Export completed for different project, ignoring navigation', {
+        exportedProjectId,
+        currentProjectId: currentlyViewingProjectId
+      });
+      // Still refresh projects list so the completed export shows up
+      if (onExportComplete) {
+        onExportComplete();
+      }
+      return;
+    }
 
     // Save pending edits (non-blocking - continue even if this fails)
     try {
@@ -755,7 +808,7 @@ export function FramingScreen({
     } else {
       console.error('[FramingScreen] Cannot navigate to overlay - working video not set');
     }
-  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio, refreshProject]);
+  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio, refreshProject, projectId, onExportComplete]);
 
   // Handle clip selection from sidebar
   const handleSelectClip = useCallback((clipId) => {
@@ -869,6 +922,7 @@ export function FramingScreen({
       metadata={metadata}
       videoFile={videoFile}
       clipTitle={selectedClip?.annotateName || selectedClip?.fileNameDisplay}
+      clipTags={selectedClip?.tags}
       currentTime={currentTime}
       duration={duration}
       isPlaying={isPlaying}

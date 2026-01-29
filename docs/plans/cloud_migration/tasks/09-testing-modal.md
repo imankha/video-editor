@@ -3,11 +3,38 @@
 ## Overview
 End-to-end testing of the Modal GPU processing integration. Verify all export types work correctly.
 
+## Status
+**TESTING** - Integration complete, testing in progress
+
 ## Owner
 **Both** - User runs tests, Claude fixes issues
 
 ## Prerequisites
-- Tasks 05-08 complete (Full Modal integration)
+- Tasks 05-08 complete (Full Modal integration) ✓
+
+## What's Been Implemented
+
+| Component | Location | Modal Function |
+|-----------|----------|----------------|
+| Framing (AI upscale) | `framing.py /render` | `process_framing_ai` |
+| Framing (FFmpeg) | `framing.py /render` | `process_framing` |
+| Overlay | `overlay.py /render-overlay` | `render_overlay`, `render_overlay_parallel` |
+| Clip Extraction | `clips.py` | `extract_clip_modal` |
+| Player Detection | `detect.py` | `detect_players_modal` |
+
+### Progress Callbacks Implemented
+All Modal client functions in `modal_client.py` have progress simulation:
+- `call_modal_framing_ai()` - Phase-based progress with time estimation
+- `call_modal_overlay()` - Progress with status messages
+- `call_modal_overlay_parallel()` - Chunk-aware progress
+- `call_modal_overlay_auto()` - Auto-selects sequential or parallel
+
+### R2_ENABLED Removed
+R2 is now always enabled. The following files have been cleaned up:
+- `clips.py` - Uses R2 for all clip storage
+- `framing.py` - Uses R2 for working videos
+- `overlay.py` - Uses R2 for final videos
+- `annotate.py` - Uses R2 for downloads
 
 ## Testability
 **After this task**: Phase 2 complete. App works with local backend + Modal GPU + R2 storage.
@@ -108,28 +135,51 @@ End-to-end testing of the Modal GPU processing integration. Verify all export ty
 modal app logs reel-ballers-video
 
 # View specific function logs
-modal app logs reel-ballers-video --function process_video
+modal app logs reel-ballers-video --function render_overlay
+modal app logs reel-ballers-video --function process_framing_ai
 ```
 
-### Test Modal Function Directly
+### Test Modal Functions Directly
 
-```bash
-# Run test from command line
-modal run modal_functions/video_processing.py
-
-# Or from Python
-python -c "
-from modal_functions.video_processing import process_video
-result = process_video.remote(
-    job_id='test-cli',
-    user_id='a',
-    job_type='framing',
-    input_key='working_videos/test.mp4',
-    output_key='final_videos/test_cli.mp4',
-    params={'output_width': 1080, 'output_height': 1920}
+```python
+# Test modal_client.py from Python (in src/backend directory)
+import asyncio
+from app.services.modal_client import (
+    modal_enabled,
+    call_modal_overlay,
+    call_modal_framing_ai,
 )
-print(result)
-"
+
+async def test():
+    print(f"Modal enabled: {modal_enabled()}")
+
+    # Test overlay
+    result = await call_modal_overlay(
+        job_id="test-overlay",
+        user_id="a",
+        input_key="working_videos/test.mp4",
+        output_key="final_videos/test_overlay.mp4",
+        highlight_regions=[],
+        effect_type="dark_overlay",
+    )
+    print(f"Overlay result: {result}")
+
+asyncio.run(test())
+```
+
+### Verify Deployed Functions
+
+```python
+# Check which Modal functions are available
+import modal
+fn = modal.Function.from_name("reel-ballers-video", "render_overlay")
+print(f"render_overlay: {fn}")
+
+fn = modal.Function.from_name("reel-ballers-video", "process_framing_ai")
+print(f"process_framing_ai: {fn}")
+
+fn = modal.Function.from_name("reel-ballers-video", "extract_clip_modal")
+print(f"extract_clip_modal: {fn}")
 ```
 
 ### Check R2 Contents
@@ -207,18 +257,26 @@ Phase 2 is complete when:
 
 ---
 
-## Next Phase
+## Next Tasks
 
-After completing Phase 2, the app architecture is:
+After testing is complete:
+
+1. **Multi-Clip Modal Migration** (`multi_clip_modal_migration.md`)
+   - Port multi-clip export to Modal
+   - Uses Real-ESRGAN AI upscaling
+   - Concatenation with transitions
+
+2. **Phase 3: Production Deployment**
+   - FastAPI backend to Fly.io
+   - React frontend to Cloudflare Pages
+
+### Current App Architecture
 
 ```
-Frontend ──► FastAPI Backend ──► R2 Storage
+Frontend ──► FastAPI Backend ──► R2 Storage (always enabled)
                     │                 ▲
-                    └──► Modal GPU ───┘
+                    ├──► Modal GPU ───┘ (when MODAL_ENABLED=true)
+                    └──► Local FFmpeg   (when MODAL_ENABLED=false)
 ```
 
-Phase 3 will deploy:
-- FastAPI backend to Fly.io
-- React frontend to Cloudflare Pages
-
-The core functionality (exports via Modal, storage in R2) will remain the same.
+The core functionality (exports via Modal, storage in R2) will remain the same in production.

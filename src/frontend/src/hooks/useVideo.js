@@ -28,6 +28,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     currentTime,
     duration,
     isSeeking,
+    isBuffering,
     error,
     isLoading,
     setVideoFile,
@@ -37,6 +38,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     setCurrentTime,
     setDuration,
     setIsSeeking,
+    setIsBuffering,
     setError,
     setIsLoading,
     setVideoLoaded,
@@ -95,9 +97,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     setIsLoading(true);
 
     try {
-      // Clean up previous video
-      if (videoUrl) {
-        console.log('[useVideo] Revoking previous videoUrl:', videoUrl);
+      // Clean up previous blob URL (only if it's a blob URL we created)
+      if (videoUrl && videoUrl.startsWith('blob:')) {
+        console.log('[useVideo] Revoking previous blob URL:', videoUrl);
         revokeVideoURL(videoUrl);
       }
 
@@ -136,6 +138,34 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       setIsLoading(false);
       return null;
     }
+  };
+
+  /**
+   * Load a video from a streaming URL (no blob download)
+   * Use this for presigned R2 URLs where streaming is preferred.
+   * @param {string} url - Streaming URL (e.g., presigned R2 URL)
+   * @param {Object} preloadedMetadata - Optional pre-extracted metadata
+   */
+  const loadVideoFromStreamingUrl = (url, preloadedMetadata = null) => {
+    console.log('[useVideo] loadVideoFromStreamingUrl called with:', url?.substring(0, 60));
+    setError(null);
+
+    // Clean up previous blob URL (only if it's a blob URL we created)
+    if (videoUrl && videoUrl.startsWith('blob:')) {
+      console.log('[useVideo] Revoking previous blob URL:', videoUrl);
+      revokeVideoURL(videoUrl);
+    }
+
+    // Use URL directly - no blob download!
+    // The browser will stream the video using HTTP Range requests
+    setVideoLoaded({
+      file: null, // No file for streaming URLs
+      url: url,
+      metadata: preloadedMetadata,
+      duration: preloadedMetadata?.duration || 0,
+    });
+
+    console.log('[useVideo] Set streaming URL directly (instant)');
   };
 
   /**
@@ -185,6 +215,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * seeking to trimmed frames. This is the single validation point.
    * Note: Check videoRef.current.src to support overlay mode where video
    * is loaded externally.
+   *
+   * SYNC FIX: We do NOT update currentTime immediately. Instead, we wait
+   * for the 'seeked' event (handleSeeked) to update state after the video
+   * frame actually changes. This prevents tracking squares from desyncing
+   * during scrubbing.
    */
   const seek = (time) => {
     if (videoRef.current && videoRef.current.src) {
@@ -194,10 +229,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       const validTime = clampToVisibleRange
         ? clampToVisibleRange(time)
         : Math.max(0, Math.min(time, effectiveDuration));
+
+      setIsSeeking(true);
       videoRef.current.currentTime = validTime;
-      // Immediately update React state to ensure synchronization
-      // This prevents stale state issues when play is called right after seek
-      setCurrentTime(validTime);
+      // DON'T update currentTime here - wait for seeked event (handleSeeked)
+      // to ensure tracking squares sync with the actual displayed frame
     }
   };
 
@@ -266,17 +302,40 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     setIsPlaying(false);
   };
 
+  // Buffering event handlers - pause time updates when video is waiting for data
+  const handleWaiting = () => {
+    setIsBuffering(true);
+  };
+
+  const handlePlaying = () => {
+    setIsBuffering(false);
+  };
+
+  const handleCanPlay = () => {
+    if (isBuffering) {
+      setIsBuffering(false);
+    }
+  };
+
   // Use requestAnimationFrame for smooth time updates during playback
   // The native timeupdate event only fires ~4 times/second which causes
   // visible lag in overlay positioning. RAF gives us ~60fps updates.
+  //
+  // SYNC FIX: Skip updates during buffering or seeking to prevent
+  // playhead/tracking from advancing while video is stalled.
   useEffect(() => {
     if (!isPlaying || !videoRef.current) return;
 
     let rafId;
     const updateTime = () => {
-      if (videoRef.current && !isSeeking) {
-        const newTime = videoRef.current.currentTime;
-        setCurrentTime(newTime);
+      // Skip updates if buffering or seeking
+      if (videoRef.current && !isSeeking && !isBuffering) {
+        // Additional check: video has current frame data available
+        const readyState = videoRef.current.readyState;
+        if (readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          const newTime = videoRef.current.currentTime;
+          setCurrentTime(newTime);
+        }
       }
       rafId = requestAnimationFrame(updateTime);
     };
@@ -288,7 +347,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         cancelAnimationFrame(rafId);
       }
     };
-  }, [isPlaying, isSeeking]);
+  }, [isPlaying, isSeeking, isBuffering]);
 
   const handleSeeking = () => {
     setIsSeeking(true);
@@ -303,7 +362,21 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
-      setDuration(videoRef.current.duration);
+      const video = videoRef.current;
+      setDuration(video.duration);
+
+      // If metadata is not set (streaming URL case), extract from video element
+      if (!metadata) {
+        const extractedMetadata = {
+          width: video.videoWidth,
+          height: video.videoHeight,
+          duration: video.duration,
+          framerate: getFramerate(video) || 30,
+          format: 'mp4', // Assume mp4 for streaming
+          size: 0, // Unknown for streaming
+        };
+        setMetadata(extractedMetadata);
+      }
     }
   };
 
@@ -369,12 +442,14 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     currentTime,
     duration,
     isSeeking,
+    isBuffering,
     error,
     isLoading,
 
     // Actions
     loadVideo,
     loadVideoFromUrl,
+    loadVideoFromStreamingUrl,
     play,
     pause,
     togglePlay,
@@ -391,6 +466,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       onSeeking: handleSeeking,
       onSeeked: handleSeeked,
       onLoadedMetadata: handleLoadedMetadata,
+      onWaiting: handleWaiting,
+      onPlaying: handlePlaying,
+      onCanPlay: handleCanPlay,
     }
   };
 }

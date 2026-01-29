@@ -488,6 +488,33 @@ export function useGames() {
     setSelectedGame(null);
   }, []);
 
+  /**
+   * Finish annotation for a game
+   * Triggers extraction of all unextracted clips that belong to projects
+   * @param {number} gameId - Game ID
+   */
+  const finishAnnotation = useCallback(async (gameId) => {
+    if (!gameId) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/games/${gameId}/finish-annotation`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[useGames] finish-annotation failed:', errorData);
+        return;
+      }
+
+      const result = await response.json();
+      console.log('[useGames] finish-annotation result:', result);
+      return result;
+    } catch (err) {
+      console.error('[useGames] finish-annotation error:', err);
+    }
+  }, []);
+
   return {
     // State
     games,
@@ -508,6 +535,7 @@ export function useGames() {
     getGameVideoUrl,
     selectGame,
     clearSelection,
+    finishAnnotation,
   };
 }
 

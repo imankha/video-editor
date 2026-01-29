@@ -3,6 +3,7 @@ import { X, Filter, Clock, Film, Settings, Sliders, Check, Star, List, Play } fr
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import { ensureUniqueName } from '../utils/uniqueName';
+import { getClipDisplayName } from '../utils/clipDisplayName';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -654,7 +655,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
                               {/* Rating stars */}
                               {clip.rating >= 5 && <Star size={12} className="text-yellow-400" fill="currentColor" />}
                               <span className={`text-sm truncate ${isIncluded ? 'text-white' : 'text-gray-400'}`}>
-                                {clip.name || `Clip ${clip.id}`}
+                                {getClipDisplayName(clip, `Clip ${clip.id}`)}
                               </span>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -788,7 +789,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
                 <Play size={18} className="text-purple-400" />
                 <div>
                   <h3 className="text-white font-medium">
-                    {previewingClip.name || `Clip ${previewingClip.id}`}
+                    {getClipDisplayName(previewingClip, `Clip ${previewingClip.id}`)}
                   </h3>
                   <p className="text-xs text-gray-400">
                     {games.find(g => g.id === previewingClip.game_id)?.name}

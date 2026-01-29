@@ -110,21 +110,28 @@ Current DB is ~204KB - no optimization needed yet.
 | -- | R2 Bucket Setup | `DONE` | User | CORS configured, credentials created |
 | -- | R2 Storage Integration | `DONE` | Claude | Presigned URLs, file redirects |
 | 04 | [Database Sync](tasks/04-database-sync.md) | `DONE` | Claude | Version tracking, batched writes |
-| 05 | [Modal Account Setup](tasks/05-modal-account-setup.md) | `TODO` | User | Create account, add credits |
-| 06 | [GPU Functions Code](tasks/06-gpu-functions.md) | `TODO` | Claude | Modal functions with FFmpeg |
-| 07 | [Backend Modal Integration](tasks/07-backend-modal-integration.md) | `TODO` | Claude | FastAPI calls Modal for exports |
-| 08 | [Frontend Export Updates](tasks/08-frontend-export-updates.md) | `TODO` | Claude | Progress UI for Modal jobs |
-| 09 | [Testing Modal Integration](tasks/09-testing-modal.md) | `TODO` | Both | End-to-end export testing |
+| 05 | [Modal Account Setup](tasks/05-modal-account-setup.md) | `DONE` | User | Account created, CLI authenticated, secrets configured |
+| 06 | [GPU Functions Code](tasks/06-gpu-functions.md) | `DONE` | Claude | Modal functions deployed: framing, overlay, clips, detection |
+| 07 | [Backend Modal Integration](tasks/07-backend-modal-integration.md) | `DONE` | Claude | modal_client.py with progress callbacks, all routers integrated |
+| 08 | [Frontend Export Updates](tasks/08-frontend-export-updates.md) | `DONE` | Claude | WebSocket progress updates working |
+| 09 | [Testing Modal Integration](tasks/09-testing-modal.md) | `TESTING` | Both | End-to-end testing in progress |
+| -- | [Overlay Video Sync Fix](tasks/overlay-video-sync.md) | `DONE` | Claude | Fix playhead/tracking desync during buffering and scrubbing |
+| -- | [Framing→Annotate Navigation](tasks/framing-annotate-navigation.md) | `DONE` | Claude | Tags display + Edit in Annotate button |
+| -- | [Gallery Download Fix](tasks/gallery-download-fix.md) | `DONE` | Claude | Fix download buttons in Gallery panel |
+| -- | [Multi-Clip Modal Migration](multi_clip_modal_migration.md) | `TODO` | Claude | Next task after testing complete |
 | 10 | [Fly.io Backend Deployment](tasks/10-flyio-deployment.md) | `TODO` | Claude | fly.toml, Dockerfile, deploy |
 | 11 | [Cloudflare Pages Frontend](tasks/11-cloudflare-pages.md) | `TODO` | Claude | Build & deploy React app |
 | 12 | [Production DNS & SSL](tasks/12-dns-ssl-setup.md) | `TODO` | User | Configure domains |
 | 16 | [Performance Profiling](tasks/16-performance-profiling.md) | `TODO` | Claude | Memory/latency profiling, fix slow endpoints |
 | 17 | [Stale Session Detection](tasks/17-stale-session-detection.md) | `TODO` | Claude | Reject conflicting writes, UI for stale sessions |
+| 18 | [Modal GPU Cost Optimization](tasks/18-modal-gpu-cost-optimization.md) | `TODO` | Claude | Parallelize framing_ai, tune GPU thresholds |
 | 13 | [User Management](tasks/13-user-management.md) | `OPTIONAL` | Both | Auth, multi-tenancy |
 | 14 | [Wallet & Payments](tasks/14-wallet-payments.md) | `OPTIONAL` | Both | Stripe integration |
 | 15 | [Future GPU Features](tasks/15-future-gpu-features.md) | `FUTURE` | Claude | AI upscaling, tracking |
+| -- | [Auto Player Detection](tasks/auto-player-detection.md) | `TODO` | Claude | Auto-detect players after framing, create overlay keyframes |
+| -- | [WebGPU Local Processing](webgpu_local_processing.md) | `FUTURE` | Claude | Client-side GPU for overlays/YOLO when capable |
 
-**Status Key**: `DONE` | `TODO` | `IN_PROGRESS` | `BLOCKED` | `OPTIONAL` | `FUTURE`
+**Status Key**: `DONE` | `TODO` | `IN_PROGRESS` | `TESTING` | `BLOCKED` | `OPTIONAL` | `FUTURE`
 
 ---
 
@@ -137,12 +144,13 @@ Phase 1: R2 Storage (COMPLETE)
 ├── R2 storage integration ✓
 └── 04-database-sync ✓
 
-Phase 2: Modal GPU Processing (CURRENT FOCUS)
-├── 05-modal-account-setup
-├── 06-gpu-functions
-├── 07-backend-modal-integration
-├── 08-frontend-export-updates
-└── 09-testing-modal
+Phase 2: Modal GPU Processing (TESTING)
+├── 05-modal-account-setup ✓
+├── 06-gpu-functions ✓
+├── 07-backend-modal-integration ✓
+├── 08-frontend-export-updates ✓
+├── 09-testing-modal ← CURRENT (testing)
+└── multi-clip-modal-migration (next after testing)
     ↓
     APP IS TESTABLE: Local backend + Modal GPU + R2 storage
 
@@ -151,7 +159,8 @@ Phase 3: Production Deployment
 ├── 11-cloudflare-pages
 ├── 12-dns-ssl-setup
 ├── 16-performance-profiling
-└── 17-stale-session-detection
+├── 17-stale-session-detection
+└── 18-modal-gpu-cost-optimization (after stable build, data collection)
     ↓
     APP IS LIVE & ROBUST: Fly.io backend + CF Pages frontend + Modal GPU + R2 storage
 
@@ -160,7 +169,8 @@ Phase 4: Users & Monetization (OPTIONAL)
 └── 14-wallet-payments
 
 Phase 5: Future Features
-└── 15-future-gpu-features (AI upscaling, player tracking)
+├── 15-future-gpu-features (AI upscaling, player tracking)
+└── webgpu-local-processing (client-side GPU when capable)
 ```
 
 ---
@@ -229,14 +239,14 @@ cd src/backend && uvicorn app.main:app --reload
 
 Environment variables for local dev:
 ```bash
-R2_ENABLED=true
+# R2 Storage (always enabled - no R2_ENABLED flag needed)
 R2_ACCESS_KEY_ID=xxx
 R2_SECRET_ACCESS_KEY=xxx
 R2_ENDPOINT_URL=https://xxx.r2.cloudflarestorage.com
 R2_BUCKET_NAME=reel-ballers-users
 
-# Optional: Enable Modal for GPU exports
-MODAL_ENABLED=true
+# Modal GPU Processing
+MODAL_ENABLED=true   # Set to false for local FFmpeg processing
 MODAL_TOKEN_ID=xxx
 MODAL_TOKEN_SECRET=xxx
 ```
@@ -385,20 +395,24 @@ npx wrangler pages deploy dist --project-name=reel-ballers-app --branch=producti
 
 **Local (.env file)**:
 ```bash
-R2_ENABLED=true
+# R2 Storage (always enabled)
 R2_ACCESS_KEY_ID=xxx
 R2_SECRET_ACCESS_KEY=xxx
 R2_ENDPOINT_URL=https://xxx.r2.cloudflarestorage.com
 R2_BUCKET_NAME=reel-ballers-users
-MODAL_ENABLED=false  # Use local FFmpeg by default
+
+# Modal GPU Processing
+MODAL_ENABLED=true   # Set to false for local FFmpeg processing
+MODAL_TOKEN_ID=xxx
+MODAL_TOKEN_SECRET=xxx
 ```
 
 **Staging (Fly.io secrets)**:
 ```bash
 fly secrets set --app reel-ballers-api-staging \
-  R2_ENABLED=true \
   R2_ACCESS_KEY_ID=xxx \
   R2_SECRET_ACCESS_KEY=xxx \
+  R2_ENDPOINT_URL=https://xxx.r2.cloudflarestorage.com \
   R2_BUCKET_NAME=reel-ballers-users \
   MODAL_ENABLED=true \
   MODAL_TOKEN_ID=xxx \
@@ -410,9 +424,9 @@ fly secrets set --app reel-ballers-api-staging \
 **Production (Fly.io secrets)**:
 ```bash
 fly secrets set --app reel-ballers-api \
-  R2_ENABLED=true \
   R2_ACCESS_KEY_ID=xxx \
   R2_SECRET_ACCESS_KEY=xxx \
+  R2_ENDPOINT_URL=https://xxx.r2.cloudflarestorage.com \
   R2_BUCKET_NAME=reel-ballers-users \
   MODAL_ENABLED=true \
   MODAL_TOKEN_ID=xxx \
@@ -526,4 +540,5 @@ WARNING: [SLOW REQUEST] POST /api/export/upscale - total 5.23s (sync: 0.75s)
 4. **Only proceed to next phase** when current phase is testable
 5. **Update task status** in this file after completing each task
 
-**Next step**: Task 05 - Modal Account Setup (User task)
+**Current step**: Task 09 - Testing Modal Integration (TESTING)
+**Next step**: Multi-Clip Modal Migration (after testing complete)
