@@ -114,11 +114,25 @@ Current DB is ~204KB - no optimization needed yet.
 | 06 | [GPU Functions Code](tasks/06-gpu-functions.md) | `DONE` | Claude | Modal functions deployed: framing, overlay, clips, detection |
 | 07 | [Backend Modal Integration](tasks/07-backend-modal-integration.md) | `DONE` | Claude | modal_client.py with progress callbacks, all routers integrated |
 | 08 | [Frontend Export Updates](tasks/08-frontend-export-updates.md) | `DONE` | Claude | WebSocket progress updates working |
-| 09 | [Testing Modal Integration](tasks/09-testing-modal.md) | `TESTING` | Both | End-to-end testing in progress |
+| 09 | [Testing Modal Integration](tasks/09-testing-modal.md) | `BLOCKED` | Both | Blocked by incomplete Modal integration (see below) |
 | -- | [Overlay Video Sync Fix](tasks/overlay-video-sync.md) | `DONE` | Claude | Fix playhead/tracking desync during buffering and scrubbing |
 | -- | [Framing→Annotate Navigation](tasks/framing-annotate-navigation.md) | `DONE` | Claude | Tags display + Edit in Annotate button |
 | -- | [Gallery Download Fix](tasks/gallery-download-fix.md) | `DONE` | Claude | Fix download buttons in Gallery panel |
-| -- | [Multi-Clip Modal Migration](multi_clip_modal_migration.md) | `TODO` | Claude | Next task after testing complete |
+
+### ⚠️ BLOCKING: Complete Modal GPU Integration
+
+**These tasks must be completed before Task 09 testing can pass.** When `MODAL_ENABLED=true`, ALL GPU endpoints must use Modal. Currently 3 endpoints bypass Modal entirely.
+
+| # | Task | Status | Owner | Notes |
+|---|------|--------|-------|-------|
+| B1 | [Multi-Clip Modal Migration](multi_clip_modal_migration.md) | `IN_PROGRESS` | Claude | `/export/multi-clip` - Real-ESRGAN upscaling, always uses local CUDA |
+| B2 | [Framing Upscale Modal Migration](tasks/framing-upscale-modal.md) | `TODO` | Claude | `/export/upscale` - Real-ESRGAN upscaling, always uses local CUDA |
+| B3 | [Basic Overlay Modal Migration](tasks/basic-overlay-modal.md) | `TODO` | Claude | `/export/overlay` - Frame processing, replace OpenCV with FFmpeg, add Modal |
+
+### Continued Task List
+
+| # | Task | Status | Owner | Notes |
+|---|------|--------|-------|-------|
 | 10 | [Fly.io Backend Deployment](tasks/10-flyio-deployment.md) | `TODO` | Claude | fly.toml, Dockerfile, deploy |
 | 11 | [Cloudflare Pages Frontend](tasks/11-cloudflare-pages.md) | `TODO` | Claude | Build & deploy React app |
 | 12 | [Production DNS & SSL](tasks/12-dns-ssl-setup.md) | `TODO` | User | Configure domains |
@@ -144,13 +158,22 @@ Phase 1: R2 Storage (COMPLETE)
 ├── R2 storage integration ✓
 └── 04-database-sync ✓
 
-Phase 2: Modal GPU Processing (TESTING)
+Phase 2: Modal GPU Processing (BLOCKED - Incomplete Integration)
 ├── 05-modal-account-setup ✓
 ├── 06-gpu-functions ✓
 ├── 07-backend-modal-integration ✓
 ├── 08-frontend-export-updates ✓
-├── 09-testing-modal ← CURRENT (testing)
-└── multi-clip-modal-migration (next after testing)
+├── 09-testing-modal ← BLOCKED (3 endpoints still use local GPU)
+│
+├── ⚠️ BLOCKING TASKS (must complete before testing can pass):
+│   ├── B1: multi-clip-modal-migration ← IN_PROGRESS
+│   │   └── /export/multi-clip always uses local CUDA
+│   ├── B2: framing-upscale-modal ← TODO
+│   │   └── /export/upscale always uses local CUDA
+│   └── B3: basic-overlay-modal ← TODO
+│       └── /export/overlay - replace OpenCV with FFmpeg, add Modal
+│
+└── After blocking tasks complete → Resume 09-testing-modal
     ↓
     APP IS TESTABLE: Local backend + Modal GPU + R2 storage
 
@@ -540,5 +563,6 @@ WARNING: [SLOW REQUEST] POST /api/export/upscale - total 5.23s (sync: 0.75s)
 4. **Only proceed to next phase** when current phase is testable
 5. **Update task status** in this file after completing each task
 
-**Current step**: Task 09 - Testing Modal Integration (TESTING)
-**Next step**: Multi-Clip Modal Migration (after testing complete)
+**Current step**: BLOCKING TASKS - Complete Modal GPU Integration
+**Blocked**: Task 09 - Testing Modal Integration (cannot pass until all GPU endpoints use Modal when MODAL_ENABLED=true)
+**Next step**: B1 - Multi-Clip Modal Migration (IN_PROGRESS), then B2 - Framing Upscale Modal, then B3 - Basic Overlay Modal

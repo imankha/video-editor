@@ -4,9 +4,74 @@
 
 Migrate the multi-clip export pipeline to use Modal cloud GPUs when `MODAL_ENABLED=true`, while preserving local GPU processing as a fallback when Modal is disabled.
 
-**Priority**: Next task after Modal testing complete (Task 09)
-**Status**: `TODO`
+**Priority**: 🚨 BLOCKING - Must complete before Task 09 testing can pass
+**Status**: `IN_PROGRESS`
 **Complexity**: High (multi-file coordination, multiple video handling, AI upscaling)
+
+---
+
+## Problem Statement
+
+**E2E tests fail when `MODAL_ENABLED=true`** because the `/export/multi-clip` endpoint **always uses local CUDA** regardless of environment configuration.
+
+### Evidence from Backend Logs
+```
+[Multi-Clip Export] Initialized shared AI upscaler
+[Pipeline] Clip 0: Cache MISS, processing needed
+GPU DETECTION: CUDA available: Yes, GPU 0: NVIDIA GeForce RTX 4060 Laptop GPU
+Initializing Real-ESRGAN model: realesr_general_x4v3
+✓ realesr_general_x4v3 loaded successfully!
+```
+
+This should NOT happen when `MODAL_ENABLED=true` - the processing should occur on Modal cloud GPUs.
+
+---
+
+## Root Cause Analysis
+
+### File: `src/backend/app/routers/export/multi_clip.py`
+
+**Lines 410-451**: The endpoint initializes a local `AIVideoUpscaler` without checking `modal_enabled()`:
+
+```python
+# Line 410-414 - PROBLEM: Always requires local CUDA
+if not torch.cuda.is_available():
+    raise HTTPException(
+        status_code=503,
+        detail={"error": "CUDA not available - GPU required for AI upscaling"}
+    )
+
+# Line 420-427 - PROBLEM: Always creates local upscaler
+upscaler = AIVideoUpscaler(
+    device='cuda',
+    model_name=model_name,
+    export_mode=export_mode_upper,
+)
+```
+
+**No `modal_enabled()` check exists anywhere in `multi_clip.py`** (verified via grep - zero matches).
+
+### Key Functions That Need Modal Support
+
+| Function | Line | Current Behavior | Required Change |
+|----------|------|------------------|-----------------|
+| `export_multi_clip()` | 96-576 | Always local CUDA | Add `modal_enabled()` branch |
+| `process_single_clip()` | 580-750 | Uses local `AIVideoUpscaler` | Call Modal function instead |
+| Local `AIVideoUpscaler` init | 420-427 | Always initializes | Skip when Modal enabled |
+
+### Related Files
+
+| File | Purpose | Modal Status |
+|------|---------|--------------|
+| `src/backend/app/routers/export/multi_clip.py` | Multi-clip endpoint | ❌ NO Modal |
+| `src/backend/app/ai_upscaler/__init__.py` | Local Real-ESRGAN | Used locally |
+| `src/backend/app/ai_upscaler/model_manager.py` | GPU detection/model loading | Used locally |
+| `src/backend/app/ai_upscaler/frame_enhancer.py` | Frame super-resolution | Used locally |
+| `src/backend/app/services/clip_pipeline.py` | Clip processing pipeline | Uses local upscaler |
+| `src/backend/app/services/clip_cache.py` | Clip caching | Local only |
+| `src/backend/app/services/transitions.py` | Video transitions | FFmpeg (no GPU) |
+| `src/backend/app/modal_functions/video_processing.py` | Modal GPU functions | Has `process_framing_ai` |
+| `src/backend/app/services/modal_client.py` | Modal client | Has `call_modal_framing_ai()` |
 
 ---
 
