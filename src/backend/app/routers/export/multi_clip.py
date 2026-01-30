@@ -33,8 +33,9 @@ from ...services.clip_pipeline import process_clip_with_pipeline
 from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR
 from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
-from ...storage import upload_to_r2
+from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url
 from ...user_context import get_current_user_id, set_current_user_id
+from ...services.modal_client import modal_enabled, call_modal_multi_clip
 
 logger = logging.getLogger(__name__)
 
@@ -343,10 +344,26 @@ async def export_multi_clip(
     export_progress[export_id] = {
         "progress": 5,
         "message": "Starting multi-clip export...",
-        "status": "processing"
+        "status": "processing",
+        "projectId": project_id,
+        "projectName": project_name,
     }
 
     logger.info(f"[Multi-Clip Export] Starting export {export_id}")
+
+    # Create export_jobs record for tracking and recovery
+    if project_id:
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO export_jobs (id, project_id, type, status, input_data)
+                    VALUES (?, ?, 'framing', 'processing', '{}')
+                """, (export_id, project_id))
+                conn.commit()
+            logger.info(f"[Multi-Clip Export] Created export_jobs record: {export_id} for project {project_id}")
+        except Exception as e:
+            logger.warning(f"[Multi-Clip Export] Failed to create export_jobs record: {e}")
 
     # Parse form data to get video files
     form = await request.form()
@@ -397,6 +414,153 @@ async def export_multi_clip(
 
         # Get event loop for progress callbacks
         loop = asyncio.get_running_loop()
+
+        # ===== MODAL GPU PROCESSING =====
+        if modal_enabled():
+            logger.info(f"[Multi-Clip Export] Using Modal GPU for {len(clips_data)} clips")
+
+            # Upload all source videos to R2 temp folder
+            source_keys = []
+            for clip_data in sorted(clips_data, key=lambda x: x.get('clipIndex', 0)):
+                clip_index = clip_data.get('clipIndex')
+                video_file = video_files.get(clip_index)
+
+                if not video_file:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Missing video file for clip {clip_index}"
+                    )
+
+                # Read video content
+                content = await video_file.read()
+                await video_file.seek(0)  # Reset for potential local fallback
+
+                # Upload to R2 temp folder
+                source_key = f"temp/multi_clip_{export_id}/source_{clip_index}.mp4"
+                upload_bytes_to_r2(captured_user_id, source_key, content)
+                source_keys.append(source_key)
+                logger.info(f"[Multi-Clip Export] Uploaded source clip {clip_index} to R2: {source_key}")
+
+            # Create progress callback
+            async def modal_progress_callback(progress: float, message: str):
+                progress_data = {
+                    "progress": progress,
+                    "message": message,
+                    "status": "processing",
+                    "projectId": project_id,
+                    "projectName": project_name,
+                }
+                export_progress[export_id] = progress_data
+                await manager.send_progress(export_id, progress_data)
+
+            # Output key for the final video
+            output_filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+            output_key = f"working_videos/{output_filename}"
+
+            # Callback to store Modal call_id for job recovery
+            def store_modal_call_id(modal_call_id: str):
+                """Store Modal call_id in export_jobs for recovery after backend crash."""
+                if project_id:
+                    try:
+                        with get_db_connection() as conn:
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                UPDATE export_jobs
+                                SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP
+                                WHERE id = ?
+                            """, (modal_call_id, export_id))
+                            conn.commit()
+                        logger.info(f"[Multi-Clip Export] Stored modal_call_id: {modal_call_id} for recovery")
+                    except Exception as e:
+                        logger.warning(f"[Multi-Clip Export] Failed to store modal_call_id: {e}")
+
+            # Call Modal - single container processes all clips
+            result = await call_modal_multi_clip(
+                job_id=export_id,
+                user_id=captured_user_id,
+                source_keys=source_keys,
+                output_key=output_key,
+                clips_data=clips_data,
+                transition=transition,
+                target_width=target_resolution[0],
+                target_height=target_resolution[1],
+                fps=target_fps,
+                include_audio=include_audio_bool,
+                progress_callback=modal_progress_callback,
+                call_id_callback=store_modal_call_id,
+            )
+
+            if result.get("status") != "success":
+                error = result.get("error", "Unknown error")
+                raise RuntimeError(f"Modal multi-clip processing failed: {error}")
+
+            # Clean up temp source files from R2
+            for source_key in source_keys:
+                try:
+                    await delete_from_r2(captured_user_id, source_key)
+                except Exception as e:
+                    logger.warning(f"[Multi-Clip Export] Failed to delete temp file {source_key}: {e}")
+
+            # Get video duration from result (or estimate)
+            video_duration = None  # Modal doesn't return this yet
+
+            # Save to database if project_id provided
+            working_video_id = None
+            if project_id:
+                try:
+                    # Generate presigned URL for the final video
+                    presigned_url = generate_presigned_url(captured_user_id, output_key)
+
+                    with get_db_connection() as conn:
+                        cursor = conn.cursor()
+                        # Insert working video record
+                        cursor.execute("""
+                            INSERT INTO working_videos (project_id, filename, presigned_url, type, multi_clip)
+                            VALUES (?, ?, ?, 'processed', 1)
+                        """, (project_id, output_filename, presigned_url))
+                        working_video_id = cursor.lastrowid
+
+                        # Update project to point to the new working video
+                        cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
+
+                        # Update export_jobs record to complete
+                        cursor.execute("""
+                            UPDATE export_jobs
+                            SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """, (working_video_id, output_filename, export_id))
+
+                        conn.commit()
+                        logger.info(f"[Multi-Clip Export] Saved to DB: working_video_id={working_video_id}, project updated, export_jobs completed")
+                except Exception as e:
+                    logger.error(f"[Multi-Clip Export] Failed to save to database: {e}")
+
+            # Final progress update
+            progress_data = {
+                "progress": 100,
+                "message": "Multi-clip export complete!",
+                "status": "completed",
+                "projectId": project_id,
+                "projectName": project_name,
+            }
+            export_progress[export_id] = progress_data
+            await manager.send_progress(export_id, progress_data)
+
+            logger.info(f"[Multi-Clip Export] Modal processing complete: {result.get('clips_processed')} clips")
+
+            # Return response with presigned URL
+            return JSONResponse({
+                "status": "success",
+                "export_id": export_id,
+                "presigned_url": generate_presigned_url(captured_user_id, output_key),
+                "filename": output_filename,
+                "working_video_id": working_video_id,
+                "clips_processed": result.get("clips_processed"),
+                "modal_used": True,
+                "video_duration": video_duration,
+            })
+
+        # ===== LOCAL GPU PROCESSING (fallback when Modal not enabled) =====
 
         # Create upscaler ONCE and reuse for all clips
         # This prevents VRAM exhaustion from loading the model multiple times
@@ -685,6 +849,21 @@ async def export_multi_clip(
         error_data = {"progress": 0, "message": error_msg, "error": error_msg, "status": "error"}
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
+
+        # Update export_jobs record to error status
+        if project_id:
+            try:
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE export_jobs
+                        SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (str(e), export_id))
+                    conn.commit()
+                logger.info(f"[Multi-Clip Export] Updated export_jobs to error: {export_id}")
+            except Exception as db_e:
+                logger.warning(f"[Multi-Clip Export] Failed to update export_jobs error: {db_e}")
         import time
         time.sleep(0.5)
         # Clean up GPU memory on error

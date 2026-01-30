@@ -123,11 +123,45 @@ Current DB is ~204KB - no optimization needed yet.
 
 **These tasks must be completed before Task 09 testing can pass.** When `MODAL_ENABLED=true`, ALL GPU endpoints must use Modal. Currently 3 endpoints bypass Modal entirely.
 
-| # | Task | Status | Owner | Notes |
-|---|------|--------|-------|-------|
-| B1 | [Multi-Clip Modal Migration](multi_clip_modal_migration.md) | `IN_PROGRESS` | Claude | `/export/multi-clip` - Real-ESRGAN upscaling, always uses local CUDA |
-| B2 | [Framing Upscale Modal Migration](tasks/framing-upscale-modal.md) | `TODO` | Claude | `/export/upscale` - Real-ESRGAN upscaling, always uses local CUDA |
-| B3 | [Basic Overlay Modal Migration](tasks/basic-overlay-modal.md) | `TODO` | Claude | `/export/overlay` - Frame processing, replace OpenCV with FFmpeg, add Modal |
+#### Approach: Experiment-Driven Optimization
+
+**We must MEASURE before optimizing.** See:
+- [MODAL_EXPERIMENTS.md](MODAL_EXPERIMENTS.md) - Incremental experiments with real data
+- [MODAL_COST_ANALYSIS.md](MODAL_COST_ANALYSIS.md) - Pricing reference
+
+**Key principle**: `Total Cost = Time × Rate`. CPU is only cheaper if cost savings from lower rate exceeds cost of longer time. We need actual measurements.
+
+#### Experiment Status
+
+| # | Experiment | Status | Result | Notes |
+|---|------------|--------|--------|-------|
+| E1 | Baseline Measurements | `DONE` | See EXPERIMENT_FINDINGS.md | All functions measured |
+| E3 | CPU vs GPU Comparison | `DONE` | **CPU overlay NOT viable** | Timed out after 10min |
+| E7 | Parallel Overlay | `DONE` | **Parallel costs MORE** | 3-4x more expensive |
+| E2 | FFmpeg Frame Reading | `DONE` | **No bug detected** | Test framework ready |
+| E5 | NVENC vs libx264 | `TODO` | - | Encoding speed |
+| E6 | L4 vs T4 for AI | `READY` | Setup complete | Run when needed |
+
+**CRITICAL FINDING (2026-01-29)**: Framing ALWAYS uses AI upscaling (`process_framing_ai`). The non-AI `process_framing` function was dead code and has been removed. There is no cheap FFmpeg-only framing path.
+
+#### Integration Tasks
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| B1 | [Multi-Clip Modal Migration](multi_clip_modal_migration.md) | `TESTING` | 8-clip export in progress (22%), isolation test passed |
+| B2 | Framing Modal Integration | `DONE` | Already uses `process_framing_ai` via Modal |
+| B3 | Overlay Modal Integration | `DONE` | Already uses `render_overlay` via Modal |
+
+**Current state**: B1 implementation complete, currently testing 8-clip export on Modal. Isolation test passed (137.5s for 2×3s clips at 1.31 fps).
+
+#### Bugs Fixed During B1 Testing (2026-01-29, 2026-01-30)
+
+| Bug | Root Cause | Fix |
+|-----|------------|-----|
+| Manual projects showed 0 clips extracted | `COALESCE(auto_project_id, wc.project_id)` always picked auto_project_id | Changed to UNION query for both project types |
+| `await upload_bytes_to_r2()` error | Sync function being awaited | Removed erroneous `await` |
+| Modal export completed but Overlay still disabled | `projects.working_video_id` not updated after Modal export | Added UPDATE statement after working_video INSERT |
+| Progress bar lost on navigation | multi_clip.py didn't create export_jobs record | Added export_jobs INSERT/UPDATE for tracking |
 
 ### Continued Task List
 
@@ -145,6 +179,14 @@ Current DB is ~204KB - no optimization needed yet.
 | -- | [Auto Player Detection](tasks/auto-player-detection.md) | `TODO` | Claude | Auto-detect players after framing, create overlay keyframes |
 | -- | [WebGPU Local Processing](webgpu_local_processing.md) | `FUTURE` | Claude | Client-side GPU for overlays/YOLO when capable |
 
+### UX & Polish Tasks
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| U1 | Temp folder multi-user isolation | `TODO` | Move temp uploads to `{user_id}/temp/...` instead of `temp/...` |
+| U2 | Framing export validation UX | `TODO` | Disable export until all clips framed, rollover lists unframed clips, checkmarks on framed clips |
+| U3 | [Modal Job Recovery](tasks/modal-job-recovery.md) | `DONE` (Phase 1) | Multi-clip: spawn() + call_id stored. /modal-status endpoint. Smart stale detection. |
+
 **Status Key**: `DONE` | `TODO` | `IN_PROGRESS` | `TESTING` | `BLOCKED` | `OPTIONAL` | `FUTURE`
 
 ---
@@ -158,22 +200,43 @@ Phase 1: R2 Storage (COMPLETE)
 ├── R2 storage integration ✓
 └── 04-database-sync ✓
 
-Phase 2: Modal GPU Processing (BLOCKED - Incomplete Integration)
+Phase 2: Modal GPU Processing
 ├── 05-modal-account-setup ✓
 ├── 06-gpu-functions ✓
 ├── 07-backend-modal-integration ✓
 ├── 08-frontend-export-updates ✓
-├── 09-testing-modal ← BLOCKED (3 endpoints still use local GPU)
 │
-├── ⚠️ BLOCKING TASKS (must complete before testing can pass):
-│   ├── B1: multi-clip-modal-migration ← IN_PROGRESS
-│   │   └── /export/multi-clip always uses local CUDA
-│   ├── B2: framing-upscale-modal ← TODO
-│   │   └── /export/upscale always uses local CUDA
-│   └── B3: basic-overlay-modal ← TODO
-│       └── /export/overlay - replace OpenCV with FFmpeg, add Modal
+├── EXPERIMENTS COMPLETED:
+│   ├── E1: Baseline measurements ✓
+│   ├── E3: CPU vs GPU comparison ✓ → CPU overlay NOT viable (times out)
+│   └── E7: Parallel overlay ✓ → Costs 3-4x MORE than sequential
 │
-└── After blocking tasks complete → Resume 09-testing-modal
+├── REMAINING EXPERIMENTS (in order):
+│   │
+│   │   Phase 2A: GPU Optimization ← NEXT
+│   │   └── E6: L4 vs T4 for AI upscaling
+│   │       - Test if L4 is faster/cheaper for Real-ESRGAN
+│   │       - Find break-even duration
+│   │
+│   │   Phase 2B: Bug Fix (with test replication)
+│   │   └── E2: FFmpeg frame reading
+│   │       - FIRST: Write test that replicates frame drop bug
+│   │       - THEN: Fix with FFmpeg pipe approach
+│   │       - VERIFY: Test passes
+│   │
+│   │   Phase 2C: Comprehensive Review
+│   │   └── Review all findings, update Modal config
+│   │       - Consolidate E1, E3, E6, E7 results
+│   │       - Document final hardware decisions
+│   │       - Ensure all Modal functions are optimized
+│   │
+│   └── Deploy final optimized Modal functions
+│
+├── INTEGRATION (only after experiments complete):
+│   └── B1: /export/multi-clip → Modal
+│       - Note: B2 (framing) and B3 (overlay) already work via Modal
+│
+└── 09-testing-modal (full E2E testing)
     ↓
     APP IS TESTABLE: Local backend + Modal GPU + R2 storage
 
@@ -182,8 +245,7 @@ Phase 3: Production Deployment
 ├── 11-cloudflare-pages
 ├── 12-dns-ssl-setup
 ├── 16-performance-profiling
-├── 17-stale-session-detection
-└── 18-modal-gpu-cost-optimization (after stable build, data collection)
+└── 17-stale-session-detection
     ↓
     APP IS LIVE & ROBUST: Fly.io backend + CF Pages frontend + Modal GPU + R2 storage
 
@@ -244,8 +306,26 @@ Phase 5: Future Features
 | Fly.io (scales to zero) | ~$5-7 |
 | Cloudflare Pages | Free |
 | Cloudflare R2 (50GB) | ~$0.75 |
-| Modal GPU | ~$3-8 |
-| **Total** | **~$11-18/month** |
+| Modal GPU | ~$18-20 |
+| **Total** | **~$24-28/month** |
+
+### Modal Cost Breakdown (Actual)
+
+**CORRECTED** (2026-01-29): Previous estimates incorrectly assumed non-AI framing. All framing uses AI upscaling.
+
+| Export Type | Count | Per-Export Cost | Monthly |
+|-------------|-------|-----------------|---------|
+| Overlay (GPU) | 400 | $0.0075 | $3.00 |
+| Framing AI (GPU) | 500 | $0.0303 | $15.15 |
+| Compilation (CPU) | 100 | $0.0004 | $0.04 |
+| **Modal Total** | | | **$18.19** |
+
+**Key findings from experiments:**
+- CPU overlay is NOT viable (times out)
+- Parallel overlay costs 3-4x MORE than sequential
+- All framing requires GPU (Real-ESRGAN AI upscaling)
+
+See [EXPERIMENT_FINDINGS.md](EXPERIMENT_FINDINGS.md) for detailed measurements.
 
 ---
 
@@ -563,6 +643,58 @@ WARNING: [SLOW REQUEST] POST /api/export/upscale - total 5.23s (sync: 0.75s)
 4. **Only proceed to next phase** when current phase is testable
 5. **Update task status** in this file after completing each task
 
-**Current step**: BLOCKING TASKS - Complete Modal GPU Integration
-**Blocked**: Task 09 - Testing Modal Integration (cannot pass until all GPU endpoints use Modal when MODAL_ENABLED=true)
-**Next step**: B1 - Multi-Clip Modal Migration (IN_PROGRESS), then B2 - Framing Upscale Modal, then B3 - Basic Overlay Modal
+**Current step**: E6 - L4 vs T4 GPU comparison for AI upscaling
+**Next after E6**: E2 - FFmpeg frame reading (with test replication first)
+**Then**: Comprehensive review of all findings, then B1 integration
+
+### Key Documents
+
+- [MODAL_EXPERIMENTS.md](MODAL_EXPERIMENTS.md) - 9 experiments with test scripts and data tables
+- [MODAL_COST_ANALYSIS.md](MODAL_COST_ANALYSIS.md) - Pricing reference ($0.000164/s T4, $0.0000262/s CPU)
+- [multi_clip_modal_migration.md](multi_clip_modal_migration.md) - Multi-clip implementation plan
+- [tasks/framing-upscale-modal.md](tasks/framing-upscale-modal.md) - Framing endpoint integration
+- [tasks/basic-overlay-modal.md](tasks/basic-overlay-modal.md) - Overlay endpoint integration
+
+### Test Dataset
+
+Uses real videos from `formal annotations/test.short/`:
+- Source: `wcfc-carlsbad-trimmed.mp4` (90s game footage)
+- Clips: 3 annotated clips (6s, 6s, 4.5s) for single and multi-clip scenarios
+
+### Execution Steps (Updated 2026-01-29)
+
+```
+COMPLETED:
+├── E1: Baseline measurements ✓
+├── E3: CPU vs GPU comparison ✓ → CPU overlay NOT viable
+├── E7: Parallel overlay ✓ → NOT cost-effective
+├── Dead code cleanup ✓ → Removed unused process_framing, parallel overlay
+├── E6 setup ✓ → L4 function created (recommend keeping T4)
+├── E2: FFmpeg frame reading ✓ → No bug detected, test framework in place
+│
+├── B1: Multi-clip Modal integration ✓ (code complete)
+│   ├── process_multi_clip_modal added (~200 lines)
+│   ├── call_modal_multi_clip added (~100 lines)
+│   ├── Router branch added (~100 lines)
+│   ├── Deployed successfully
+│   └── Isolation test passed: 137.5s for 2×3s clips (1.31 fps)
+│
+└── Bug fixes during B1 testing ✓
+    ├── Extraction status query (COALESCE bug for manual projects)
+    └── await upload_bytes_to_r2 (sync function being awaited)
+
+IN PROGRESS:
+└── B1: Full integration testing ← CURRENT
+    └── 8-clip export running (~22% progress at last check)
+    └── Expected time: 10-30 minutes depending on clip duration
+    └── Processing rate: ~1.31 fps for AI upscaling
+
+AFTER B1 TESTING:
+1. Verify output quality and chapter markers
+2. U1: Move temp folder to user folder for multi-user isolation
+3. U2: Framing export validation UX (disable until all clips framed)
+4. Task 09: Full E2E testing
+```
+
+**Current step**: B1 - Testing 8-clip export on Modal
+**Next after B1**: U1 (temp folder isolation), U2 (framing UX), then Task 09 (E2E testing)

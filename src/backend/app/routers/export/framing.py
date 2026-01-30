@@ -691,6 +691,19 @@ async def render_project(request: RenderRequest):
         "status": "processing"
     }
 
+    # Create export_jobs record for tracking and recovery
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO export_jobs (id, project_id, type, status, input_data)
+                VALUES (?, ?, 'framing', 'processing', '{}')
+            """, (export_id, project_id))
+            conn.commit()
+        logger.info(f"[Render] Created export_jobs record: {export_id}")
+    except Exception as e:
+        logger.warning(f"[Render] Failed to create export_jobs record: {e}")
+
     # Step 1: Validate project and get working_clips
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -927,6 +940,21 @@ async def render_project(request: RenderRequest):
                 export_progress[export_id] = progress_data
                 await manager.send_progress(export_id, progress_data)
 
+            # Callback to store Modal call_id for job recovery
+            def store_modal_call_id(modal_call_id: str):
+                try:
+                    with get_db_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE export_jobs
+                            SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """, (modal_call_id, export_id))
+                        conn.commit()
+                    logger.info(f"[Render] Stored modal_call_id: {modal_call_id}")
+                except Exception as e:
+                    logger.warning(f"[Render] Failed to store modal_call_id: {e}")
+
             # Call Modal function with progress callback
             modal_result = await call_modal_framing_ai(
                 job_id=export_id,
@@ -940,6 +968,7 @@ async def render_project(request: RenderRequest):
                 segment_data=segment_data,
                 video_duration=source_duration,
                 progress_callback=modal_progress_callback,
+                call_id_callback=store_modal_call_id,
             )
 
             if modal_result.get("status") != "success":

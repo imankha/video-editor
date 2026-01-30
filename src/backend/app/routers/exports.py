@@ -25,6 +25,8 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 from ..database import get_db_connection, get_user_data_path
+from ..storage import generate_presigned_url
+from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +98,7 @@ def get_export_job(job_id: str) -> Optional[dict]:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, project_id, type, status, error, input_data,
-                   output_video_id, output_filename,
+                   output_video_id, output_filename, modal_call_id,
                    created_at, started_at, completed_at
             FROM export_jobs
             WHERE id = ?
@@ -176,6 +178,99 @@ def delete_export_job(job_id: str) -> bool:
         return cursor.rowcount > 0
 
 
+def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> dict:
+    """
+    Finalize a Modal export that completed while the user was away.
+
+    This creates the working_video record, updates the project, and marks
+    the export_jobs as complete. Called by /modal-status when it discovers
+    a completed Modal job that our DB doesn't know about yet.
+
+    Args:
+        job: The export_jobs record
+        modal_result: The result dict from Modal
+        user_id: The user's ID for R2 paths
+
+    Returns:
+        Dict with finalization result
+    """
+    job_id = job['id']
+    project_id = job['project_id']
+    output_key = modal_result.get('output_key', '')
+
+    # Extract filename from output_key (e.g., "working_videos/working_123_abc.mp4" -> "working_123_abc.mp4")
+    output_filename = output_key.split('/')[-1] if output_key else f"recovered_{job_id}.mp4"
+
+    try:
+        # Generate presigned URL for the completed video
+        presigned_url = generate_presigned_url(user_id, output_key)
+
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Create working_video record
+            cursor.execute("""
+                INSERT INTO working_videos (project_id, filename, presigned_url, type, multi_clip)
+                VALUES (?, ?, ?, 'processed', 1)
+            """, (project_id, output_filename, presigned_url))
+            working_video_id = cursor.lastrowid
+
+            # Update project to point to the new working video
+            cursor.execute("""
+                UPDATE projects SET working_video_id = ? WHERE id = ?
+            """, (working_video_id, project_id))
+
+            # Update export_jobs to complete
+            cursor.execute("""
+                UPDATE export_jobs
+                SET status = 'complete',
+                    output_video_id = ?,
+                    output_filename = ?,
+                    completed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (working_video_id, output_filename, job_id))
+
+            conn.commit()
+
+        logger.info(f"[ExportJobs] Finalized recovered export {job_id}: working_video_id={working_video_id}")
+
+        return {
+            "finalized": True,
+            "working_video_id": working_video_id,
+            "output_filename": output_filename,
+            "presigned_url": presigned_url
+        }
+
+    except Exception as e:
+        logger.error(f"[ExportJobs] Failed to finalize export {job_id}: {e}")
+        return {
+            "finalized": False,
+            "error": str(e)
+        }
+
+
+def check_modal_job_running(modal_call_id: str) -> bool:
+    """Check if a Modal job is still running using its call_id.
+
+    Returns True if running, False if complete/error/not found.
+    """
+    try:
+        import modal
+        call = modal.FunctionCall.from_id(modal_call_id)
+        try:
+            # Non-blocking check - TimeoutError means still running
+            call.get(timeout=0)
+            return False  # Got result, not running
+        except TimeoutError:
+            return True  # Still running
+        except Exception:
+            return False  # Error, not running
+    except ImportError:
+        return False  # Modal not available
+    except Exception:
+        return False  # Failed to check, assume not running
+
+
 def cleanup_stale_exports(max_age_minutes: int = 60):
     """Mark exports that have been processing too long as stale/error.
 
@@ -183,30 +278,64 @@ def cleanup_stale_exports(max_age_minutes: int = 60):
     - Server crashed during processing
     - User navigated away and export errored silently
     - Network issues prevented completion update
+
+    IMPORTANT: For jobs with modal_call_id, we check Modal status first.
+    Modal jobs can run for 40+ minutes, so we don't mark them stale
+    if Modal says they're still running.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
+
+        # First, get potentially stale jobs (older than max_age_minutes)
         cursor.execute("""
-            UPDATE export_jobs
-            SET status = 'error',
-                error = 'Export timed out (stale)',
-                completed_at = datetime('now')
+            SELECT id, modal_call_id
+            FROM export_jobs
             WHERE status IN ('pending', 'processing')
               AND created_at < datetime('now', ? || ' minutes')
         """, (f'-{max_age_minutes}',))
-        if cursor.rowcount > 0:
-            logger.warning(f"[ExportJobs] Cleaned up {cursor.rowcount} stale exports")
+        stale_candidates = cursor.fetchall()
+
+        if not stale_candidates:
+            return
+
+        # Check each candidate - only mark stale if Modal job is NOT running
+        stale_count = 0
+        still_running_count = 0
+
+        for job_id, modal_call_id in stale_candidates:
+            if modal_call_id:
+                # Check Modal status before marking stale
+                if check_modal_job_running(modal_call_id):
+                    still_running_count += 1
+                    logger.info(f"[ExportJobs] Job {job_id} still running on Modal, not marking stale")
+                    continue  # Don't mark as stale - Modal says it's running
+
+            # Either no modal_call_id or Modal says not running - mark as stale
+            cursor.execute("""
+                UPDATE export_jobs
+                SET status = 'error',
+                    error = 'Export timed out (stale)',
+                    completed_at = datetime('now')
+                WHERE id = ?
+            """, (job_id,))
+            stale_count += 1
+
         conn.commit()
+
+        if stale_count > 0:
+            logger.warning(f"[ExportJobs] Cleaned up {stale_count} stale exports")
+        if still_running_count > 0:
+            logger.info(f"[ExportJobs] {still_running_count} exports still running on Modal")
 
 
 def get_active_exports() -> List[dict]:
     """Get all currently active (pending or processing) exports.
 
     Also cleans up stale exports that have been processing too long.
-    15 minutes is chosen because most exports complete in under 10 minutes.
+    60 minutes is chosen because Modal jobs can run 40+ minutes for large exports.
     """
-    # Clean up stale exports first
-    cleanup_stale_exports(max_age_minutes=15)
+    # Clean up stale exports first (increased from 15 to 60 minutes for Modal jobs)
+    cleanup_stale_exports(max_age_minutes=60)
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -568,6 +697,116 @@ async def get_export_status(job_id: str):
         started_at=job['started_at'],
         completed_at=job['completed_at']
     )
+
+
+@router.get("/{job_id}/modal-status")
+async def check_modal_status(job_id: str):
+    """
+    Check real Modal job status using stored call_id.
+
+    Use this endpoint to verify if a Modal job is still running, has completed,
+    or has failed. This is the source of truth for long-running Modal jobs
+    when WebSocket connection is lost.
+
+    Returns:
+        - status: "not_modal" | "running" | "complete" | "error"
+        - result: Modal result dict (if complete)
+        - error: Error message (if error)
+    """
+    job = get_export_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Export job not found")
+
+    modal_call_id = job.get('modal_call_id')
+    if not modal_call_id:
+        # Job doesn't have a Modal call_id (old job or non-Modal export)
+        return {
+            "status": "not_modal",
+            "job_status": job['status'],
+            "message": "This job does not have a Modal call ID"
+        }
+
+    try:
+        import modal
+
+        # Retrieve the Modal function call
+        call = modal.FunctionCall.from_id(modal_call_id)
+
+        # Try non-blocking get to check if complete
+        try:
+            result = call.get(timeout=0)
+
+            # Job is complete - finalize if our DB still shows 'processing'
+            if job['status'] == 'processing':
+                logger.info(f"[ExportJobs] Modal job {job_id} completed while user was away, finalizing...")
+
+                if result.get('status') == 'success':
+                    # Finalize the export (create working_video, update project, etc.)
+                    user_id = get_current_user_id()
+                    finalization = finalize_modal_export(job, result, user_id)
+
+                    if finalization.get('finalized'):
+                        return {
+                            "status": "complete",
+                            "result": result,
+                            "message": "Export recovered and finalized successfully",
+                            "working_video_id": finalization.get('working_video_id'),
+                            "output_filename": finalization.get('output_filename'),
+                            "presigned_url": finalization.get('presigned_url')
+                        }
+                    else:
+                        # Finalization failed but Modal succeeded - still return success
+                        logger.warning(f"[ExportJobs] Finalization failed for {job_id}: {finalization.get('error')}")
+                        return {
+                            "status": "complete",
+                            "result": result,
+                            "message": "Modal completed but finalization failed",
+                            "finalization_error": finalization.get('error')
+                        }
+                else:
+                    # Modal job failed - update export_jobs to error
+                    error_msg = result.get('error', 'Unknown Modal error')
+                    update_job_error(job_id, error_msg)
+                    return {
+                        "status": "error",
+                        "error": error_msg,
+                        "result": result
+                    }
+
+            # Job already finalized (status is 'complete' or 'error')
+            return {
+                "status": "complete",
+                "result": result,
+                "job_status": job['status']
+            }
+        except TimeoutError:
+            # Still running
+            return {
+                "status": "running",
+                "message": "Modal job is still processing"
+            }
+        except Exception as modal_err:
+            # Modal job may have failed
+            logger.warning(f"[ExportJobs] Modal call.get failed for {job_id}: {modal_err}")
+            return {
+                "status": "error",
+                "error": str(modal_err),
+                "message": "Failed to get Modal job result"
+            }
+
+    except ImportError:
+        return {
+            "status": "error",
+            "error": "Modal SDK not available",
+            "message": "Modal is not installed on this server"
+        }
+    except Exception as e:
+        logger.error(f"[ExportJobs] Failed to check Modal status for {job_id}: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": "Failed to retrieve Modal job"
+        }
 
 
 @router.delete("/{job_id}")
