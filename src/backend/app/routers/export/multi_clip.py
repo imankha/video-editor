@@ -58,6 +58,11 @@ def calculate_effective_duration(clip_data: Dict[str, Any], raw_duration: float)
     """
     Calculate the effective duration of a clip after applying trim and speed changes.
 
+    Handles multiple data formats from the database:
+    1. Frontend format: {segments: {segmentSpeeds, boundaries}, trimRange: {start, end}}
+    2. DB Export format: {trim_start, trim_end, segments: [{start, end, speed}, ...]}
+    3. DB Trim-only format: {trim_start, trim_end}
+
     Args:
         clip_data: Clip configuration with trimRange and segments
         raw_duration: Original video duration in seconds
@@ -68,28 +73,61 @@ def calculate_effective_duration(clip_data: Dict[str, Any], raw_duration: float)
     segments = clip_data.get('segments')
     trim_range = clip_data.get('trimRange')
 
-    # Get trim boundaries
-    trim_start = trim_range.get('start', 0) if trim_range else 0
-    trim_end = trim_range.get('end', raw_duration) if trim_range else raw_duration
+    # Step 1: Extract trim boundaries from all possible sources
+    trim_start = 0
+    trim_end = raw_duration
 
-    # If no speed changes, just return trimmed duration
-    if not segments or not segments.get('segmentSpeeds'):
-        return trim_end - trim_start
+    # Check clip_data top-level for trim_start/trim_end
+    if 'trim_start' in clip_data:
+        trim_start = clip_data.get('trim_start', 0)
+    if 'trim_end' in clip_data:
+        trim_end = clip_data.get('trim_end', raw_duration)
 
-    # Calculate duration with speed changes
-    boundaries = segments.get('boundaries', [0, raw_duration])
-    speeds = segments.get('segmentSpeeds', {})
+    # Check segments dict for trim_start/trim_end (DB export format)
+    if segments and isinstance(segments, dict):
+        if 'trim_start' in segments:
+            trim_start = segments.get('trim_start', 0)
+        if 'trim_end' in segments:
+            trim_end = segments.get('trim_end', raw_duration)
 
-    total_duration = 0.0
-    for i in range(len(boundaries) - 1):
-        seg_start = max(boundaries[i], trim_start)
-        seg_end = min(boundaries[i + 1], trim_end)
+    # Check trimRange (frontend format)
+    if trim_range:
+        trim_start = trim_range.get('start', trim_start)
+        trim_end = trim_range.get('end', trim_end)
 
-        if seg_end > seg_start:
-            speed = speeds.get(str(i), 1.0)
-            total_duration += (seg_end - seg_start) / speed
+    # Step 2: Check for speed changes and calculate duration accordingly
 
-    return total_duration
+    # DB Export format: segments contains 'segments' array of {start, end, speed}
+    if segments and isinstance(segments, dict) and 'segments' in segments:
+        segment_list = segments.get('segments', [])
+        if isinstance(segment_list, list) and segment_list and isinstance(segment_list[0], dict) and 'speed' in segment_list[0]:
+            total_duration = 0.0
+            for seg in segment_list:
+                seg_start = max(seg.get('start', 0), trim_start)
+                seg_end = min(seg.get('end', raw_duration), trim_end)
+                if seg_end > seg_start:
+                    speed = seg.get('speed', 1.0)
+                    total_duration += (seg_end - seg_start) / speed
+            return total_duration
+
+    # Frontend format: segments has segmentSpeeds and boundaries
+    if segments and isinstance(segments, dict) and segments.get('segmentSpeeds'):
+        boundaries = segments.get('boundaries', [0, raw_duration])
+        speeds = segments.get('segmentSpeeds', {})
+
+        total_duration = 0.0
+        for i in range(len(boundaries) - 1):
+            seg_start = max(boundaries[i], trim_start)
+            seg_end = min(boundaries[i + 1], trim_end)
+
+            if seg_end > seg_start:
+                speed = speeds.get(str(i), 1.0)
+                total_duration += (seg_end - seg_start) / speed
+
+        return total_duration
+
+    # No speed changes - just return trimmed duration
+    return trim_end - trim_start
 
 
 def build_clip_boundaries_from_durations(
@@ -590,6 +628,20 @@ async def export_multi_clip(
             detail=f"Mismatch: {len(video_files)} video files but {len(clips_data)} clip configs"
         )
 
+    # Validate all clips have framing data (crop keyframes)
+    clips_missing_framing = []
+    for i, clip in enumerate(clips_data):
+        crop_keyframes = clip.get('cropKeyframes', [])
+        if not crop_keyframes or len(crop_keyframes) == 0:
+            clip_name = clip.get('clipName') or clip.get('fileName') or f'Clip {i + 1}'
+            clips_missing_framing.append(clip_name)
+
+    if clips_missing_framing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot export: {len(clips_missing_framing)} clip(s) missing framing data: {', '.join(clips_missing_framing)}. Please add crop keyframes to all clips before exporting."
+        )
+
     # Create temp directory
     temp_dir = tempfile.mkdtemp()
     processed_paths: List[str] = []
@@ -680,6 +732,28 @@ async def export_multi_clip(
                 progress_callback=modal_progress_callback,
                 call_id_callback=store_modal_call_id,
             )
+
+            if result.get("status") == "connection_lost":
+                # Connection lost while polling, but job may still be running on Modal
+                # Don't show error - let frontend recover via /modal-status endpoint
+                logger.warning(f"[Multi-Clip Export] Connection lost, job {export_id} may still be running on Modal")
+                progress_data = {
+                    "progress": -1,  # Indeterminate
+                    "message": result.get("message", "Connection lost. Refresh to check status."),
+                    "status": "processing",  # Still processing, not failed
+                    "projectId": project_id,
+                    "projectName": project_name,
+                    "recoverable": True,
+                }
+                export_progress[export_id] = progress_data
+                await manager.send_progress(export_id, progress_data)
+                # Return success-ish response - job is still running, frontend will recover
+                return JSONResponse({
+                    "status": "processing",
+                    "export_id": export_id,
+                    "message": "Connection lost but job may still be running. Refresh to check status.",
+                    "recoverable": True,
+                })
 
             if result.get("status") != "success":
                 error = result.get("error", "Unknown error")

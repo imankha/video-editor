@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
-import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, RefreshCw, Clock } from 'lucide-react';
+import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, RefreshCw, Clock, Check, AlertCircle } from 'lucide-react';
 import { ClipLibraryModal } from './ClipLibraryModal';
 import { UploadClipModal } from './UploadClipModal';
 import { Button } from './shared/Button';
@@ -197,6 +197,8 @@ export function ClipSelectorSidebar({
           const isExtracting = clip.isExtracting || clip.extractionStatus === 'running';
           const isPendingExtraction = clip.extractionStatus === 'pending';
           const canSelect = isExtracted;
+          // A clip is "framed" if it has crop keyframes
+          const isFramed = clip.cropKeyframes && clip.cropKeyframes.length > 0;
 
           return (
             <div
@@ -303,6 +305,20 @@ export function ClipSelectorSidebar({
                     )}
                   </div>
                 </div>
+
+                {/* Framing status indicator */}
+                {isExtracted && (
+                  <div
+                    className={`ml-2 flex-shrink-0 ${isFramed ? 'text-green-400' : 'text-amber-400'}`}
+                    title={isFramed ? 'Framed' : 'Not framed - add crop keyframes'}
+                  >
+                    {isFramed ? (
+                      <Check size={16} className="stroke-[3]" />
+                    ) : (
+                      <AlertCircle size={16} />
+                    )}
+                  </div>
+                )}
 
                 {/* Delete button */}
                 <Button

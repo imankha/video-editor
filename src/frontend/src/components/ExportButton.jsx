@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
-import { Download, Loader } from 'lucide-react';
+import { Download, Loader, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import ThreePositionToggle from './ThreePositionToggle';
 import { Button, Toggle, ExportProgress, toast } from './shared';
@@ -8,6 +8,7 @@ import { useExportStore } from '../stores';
 import { useExportManager } from '../hooks/useExportManager';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
+import { ExportStatus } from '../constants/exportStatus';
 
 /**
  * Generate a unique ID for tracking export progress
@@ -194,27 +195,30 @@ const ExportButton = forwardRef(function ExportButton({
   // Get progress from the global export store for this project
   // Find the most recent active export for this project
   const currentExportFromStore = Object.values(activeExports)
-    .filter(exp => exp.projectId === projectId && (exp.status === 'pending' || exp.status === 'processing'))
+    .filter(exp => exp.projectId === projectId && (exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING))
     .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))[0];
 
   // Combine internal, external, AND store-based exporting state
   // This ensures we show busy state even after page refresh
   const isCurrentlyExporting = isExporting || isExternallyExporting || !!currentExportFromStore;
 
-  // Display the highest progress value between local upload and store progress
-  // Local tracks upload (0-10%), store tracks processing (10-100%)
-  const storeProgress = currentExportFromStore?.progress?.percent ?? 0;
-  const displayProgress = Math.max(localProgress, storeProgress, externalProgress?.progress ?? 0);
-  const displayMessage = storeProgress > localProgress
-    ? (currentExportFromStore?.progress?.message ?? '')
-    : (externalProgress?.progress ?? 0) > localProgress
-      ? (externalProgress?.message ?? '')
-      : progressMessage;
+  // Refs for tracking export state
   const [error, setError] = useState(null);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
   const exportIdRef = useRef(null);
   const uploadCompleteRef = useRef(false);
   const handleExportRef = useRef(null);
+
+  // SINGLE SOURCE OF TRUTH for progress:
+  // - During upload phase (localProgress > 0 and upload not complete): use local state
+  // - After upload / from recovery: use store progress from WebSocket
+  // This prevents wild swings from mixing multiple progress sources
+  const storeProgress = currentExportFromStore?.progress?.percent ?? 0;
+  const storeMessage = currentExportFromStore?.progress?.message ?? '';
+
+  const isInUploadPhase = isExporting && !uploadCompleteRef.current && localProgress > 0;
+  const displayProgress = isInUploadPhase ? localProgress : storeProgress;
+  const displayMessage = isInUploadPhase ? progressMessage : (storeMessage || progressMessage);
 
   // Map effect type to toggle position
   const effectTypeToPosition = { 'brightness_boost': 0, 'original': 1, 'dark_overlay': 2 };
@@ -278,9 +282,9 @@ const ExportButton = forwardRef(function ExportButton({
         const response = await axios.get(`${API_BASE}/api/exports/${jobId}`);
         const job = response.data;
 
-        if (job.status === 'complete') {
+        if (job.status === ExportStatus.COMPLETE) {
           return { success: true, job };
-        } else if (job.status === 'error') {
+        } else if (job.status === ExportStatus.ERROR) {
           return { success: false, error: job.error };
         }
 
@@ -924,6 +928,20 @@ const ExportButton = forwardRef(function ExportButton({
   const extractingCount = clipsNotExtracted.filter(c => c.isExtracting || c.extractionStatus === 'running').length;
   const pendingCount = clipsNotExtracted.length - extractingCount;
 
+  // Check if any clips are missing framing data (crop keyframes)
+  // For multi-clip mode: check clips array
+  // For single-clip mode: check cropKeyframes prop
+  const isMultiClipMode = clips && clips.length > 0;
+  const extractedClips = clips?.filter(c => c.isExtracted !== false) || [];
+  const clipsNotFramed = extractedClips.filter(c => !c.cropKeyframes || c.cropKeyframes.length === 0);
+
+  // Determine if there are unframed clips based on mode
+  const hasUnframedClips = isMultiClipMode
+    ? clipsNotFramed.length > 0
+    : (!cropKeyframes || cropKeyframes.length === 0);
+  const unframedCount = isMultiClipMode ? clipsNotFramed.length : (hasUnframedClips ? 1 : 0);
+  const totalExtractedClips = isMultiClipMode ? extractedClips.length : 1;
+
   return (
     <div className="space-y-3">
       {/* Export Settings */}
@@ -996,6 +1014,21 @@ const ExportButton = forwardRef(function ExportButton({
         </div>
       )}
 
+      {/* Unframed clips warning - Framing mode only */}
+      {isFramingMode && !hasUnextractedClips && hasUnframedClips && (
+        <div className="text-amber-400 text-sm bg-amber-900/20 border border-amber-700 rounded p-2 flex items-center gap-2">
+          <AlertCircle size={14} />
+          <span>
+            {isMultiClipMode
+              ? (unframedCount === totalExtractedClips
+                  ? 'No clips have been framed yet. Add crop keyframes to each clip.'
+                  : `${unframedCount} of ${totalExtractedClips} clip${unframedCount > 1 ? 's' : ''} need${unframedCount === 1 ? 's' : ''} framing. Select and add crop keyframes.`)
+              : 'Add crop keyframes to frame this clip.'
+            }
+          </span>
+        </div>
+      )}
+
       {/* Single Export button for both modes */}
       <Button
         variant="primary"
@@ -1003,9 +1036,15 @@ const ExportButton = forwardRef(function ExportButton({
         fullWidth
         icon={isCurrentlyExporting ? Loader : Download}
         onClick={handleExport}
-        disabled={disabled || isCurrentlyExporting || (!videoFile && !projectId) || (isFramingMode && hasUnextractedClips)}
+        disabled={disabled || isCurrentlyExporting || (!videoFile && !projectId) || (isFramingMode && (hasUnextractedClips || hasUnframedClips))}
         className={isCurrentlyExporting ? '[&>svg]:animate-spin' : ''}
-        title={isFramingMode && hasUnextractedClips ? 'Wait for all clips to be extracted before framing' : undefined}
+        title={
+          isFramingMode && hasUnextractedClips
+            ? 'Wait for all clips to be extracted before framing'
+            : isFramingMode && hasUnframedClips
+              ? 'All clips must be framed before exporting'
+              : undefined
+        }
       >
         {isCurrentlyExporting
           ? (isExternallyExporting && !isExporting ? 'Export in progress...' : 'Exporting...')
