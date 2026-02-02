@@ -347,6 +347,39 @@ src/frontend/src/services/NotificationService.js
 
 ---
 
+### Task 7: Remove Outline from Yellow Highlight Overlay
+
+**Priority:** Medium (Visual Polish)
+**Complexity:** Low
+**Status:** PLANNED
+
+#### Problem
+The yellow highlight overlay that gets baked into exported videos currently has a thick outline/border. This outline is not desired.
+
+#### Solution
+Remove the stroke/outline from the yellow highlight rendering in the overlay baking process. The highlight should be a solid yellow fill without any border.
+
+---
+
+### Task 8: Store Consolidation - Eliminate Duplicate State
+
+**Priority:** High (Architecture/Bug Prevention)
+**Complexity:** Medium
+**Status:** PLANNED
+
+#### Problem
+Multiple Zustand stores contain duplicate state (`workingVideo`, `clipMetadata`) causing sync bugs when one store is written to but another is read from. This has caused multiple bugs where data is written to `projectDataStore` but read from `overlayStore`.
+
+#### Solution
+Establish single source of truth:
+- Project-level data (`workingVideo`, `clipMetadata`, `clips`) → `projectDataStore` only
+- Mode-specific UI state (`effectType`, `highlightRegions`) → `overlayStore`
+- Remove duplicates, update all consumers to read from the owning store
+
+See [cloud_migration/tasks/store-consolidation.md](cloud_migration/tasks/store-consolidation.md) for detailed implementation plan.
+
+---
+
 ### Resumable Uploads for Very Large Files
 For files >5GB, consider implementing multipart uploads with resume capability.
 

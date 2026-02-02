@@ -30,7 +30,7 @@ from ...websocket import export_progress, manager
 from ...services.clip_cache import get_clip_cache
 from ...services.transitions import apply_transition
 from ...services.clip_pipeline import process_clip_with_pipeline
-from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR
+from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR, ExportStatus
 from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
 from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url
@@ -48,6 +48,197 @@ try:
     AIVideoUpscaler = _AIVideoUpscaler
 except (ImportError, OSError, AttributeError) as e:
     logger.warning(f"AI upscaler dependencies not available: {e}")
+
+
+# Default duration for auto-generated highlight regions (seconds)
+DEFAULT_HIGHLIGHT_REGION_DURATION = 2.0
+
+
+def calculate_effective_duration(clip_data: Dict[str, Any], raw_duration: float) -> float:
+    """
+    Calculate the effective duration of a clip after applying trim and speed changes.
+
+    Args:
+        clip_data: Clip configuration with trimRange and segments
+        raw_duration: Original video duration in seconds
+
+    Returns:
+        Effective duration in seconds (accounting for trim and speed)
+    """
+    segments = clip_data.get('segments')
+    trim_range = clip_data.get('trimRange')
+
+    # Get trim boundaries
+    trim_start = trim_range.get('start', 0) if trim_range else 0
+    trim_end = trim_range.get('end', raw_duration) if trim_range else raw_duration
+
+    # If no speed changes, just return trimmed duration
+    if not segments or not segments.get('segmentSpeeds'):
+        return trim_end - trim_start
+
+    # Calculate duration with speed changes
+    boundaries = segments.get('boundaries', [0, raw_duration])
+    speeds = segments.get('segmentSpeeds', {})
+
+    total_duration = 0.0
+    for i in range(len(boundaries) - 1):
+        seg_start = max(boundaries[i], trim_start)
+        seg_end = min(boundaries[i + 1], trim_end)
+
+        if seg_end > seg_start:
+            speed = speeds.get(str(i), 1.0)
+            total_duration += (seg_end - seg_start) / speed
+
+    return total_duration
+
+
+def build_clip_boundaries_from_durations(
+    clips_data: List[Dict[str, Any]],
+    actual_durations: List[float],
+    transition: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Build clip boundary metadata using actual measured durations of processed clips.
+
+    Args:
+        clips_data: List of clip configurations (for names)
+        actual_durations: List of actual durations in seconds for each processed clip
+        transition: Optional transition config to account for overlaps
+
+    Returns:
+        List of dicts with name, start_time, end_time, duration for each clip
+    """
+    sorted_clips = sorted(clips_data, key=lambda x: x.get('clipIndex', 0))
+    transition_type = transition.get('type', 'cut') if transition else 'cut'
+    transition_duration = transition.get('duration', 0.5) if transition else 0.5
+
+    source_clips = []
+    current_time = 0.0
+
+    for i, (clip_data, duration) in enumerate(zip(sorted_clips, actual_durations)):
+        # Account for transition overlap (dissolve transitions cause clips to overlap)
+        if i > 0 and transition_type == 'dissolve':
+            current_time -= transition_duration
+
+        clip_name = clip_data.get('clipName') or clip_data.get('fileName') or f'Clip {i + 1}'
+
+        source_clips.append({
+            'index': i,
+            'name': clip_name,
+            'start_time': current_time,
+            'end_time': current_time + duration,
+            'duration': duration
+        })
+
+        current_time += duration
+
+    logger.info(f"[Clip Boundaries] Built boundaries for {len(source_clips)} clips, total duration: {current_time:.2f}s")
+    return source_clips
+
+
+def build_clip_boundaries_from_input(
+    clips_data: List[Dict[str, Any]],
+    transition: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Build clip boundary metadata by calculating durations from input data.
+    This is a FALLBACK for Modal processing where we don't have access to processed clips.
+
+    NOTE: This may be inaccurate if clip data has unexpected format. Prefer
+    build_clip_boundaries_from_durations when actual processed clips are available.
+
+    Args:
+        clips_data: List of clip configurations with duration, trimRange, segments
+        transition: Optional transition config to account for overlaps
+
+    Returns:
+        List of dicts with name, start_time, end_time, duration for each clip
+    """
+    sorted_clips = sorted(clips_data, key=lambda x: x.get('clipIndex', 0))
+    transition_type = transition.get('type', 'cut') if transition else 'cut'
+    transition_duration = transition.get('duration', 0.5) if transition else 0.5
+
+    source_clips = []
+    current_time = 0.0
+
+    for i, clip_data in enumerate(sorted_clips):
+        raw_duration = clip_data.get('duration', 15.0)
+        effective_duration = calculate_effective_duration(clip_data, raw_duration)
+
+        # Account for transition overlap
+        if i > 0 and transition_type == 'dissolve':
+            current_time -= transition_duration
+
+        clip_name = clip_data.get('clipName') or clip_data.get('fileName') or f'Clip {i + 1}'
+
+        source_clips.append({
+            'index': i,
+            'name': clip_name,
+            'start_time': current_time,
+            'end_time': current_time + effective_duration,
+            'duration': effective_duration
+        })
+
+        logger.debug(f"[Clip Boundaries] Clip {i}: raw={raw_duration:.2f}s, effective={effective_duration:.2f}s, start={current_time:.2f}s")
+        current_time += effective_duration
+
+    logger.info(f"[Clip Boundaries] Built boundaries from input for {len(source_clips)} clips, estimated total: {current_time:.2f}s")
+    return source_clips
+
+
+def generate_default_highlight_regions(source_clips: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Generate default highlight regions at the start of each clip.
+    Creates a 2-second region at the beginning of each clip in the concatenated video.
+
+    Args:
+        source_clips: List of clip boundaries from build_clip_boundaries()
+
+    Returns:
+        List of highlight region objects ready for database storage
+    """
+    regions = []
+
+    for i, clip in enumerate(source_clips):
+        region_start = clip['start_time']
+        region_end = min(clip['start_time'] + DEFAULT_HIGHLIGHT_REGION_DURATION, clip['end_time'])
+
+        # Skip if region would be too short (less than 0.5 seconds)
+        if region_end - region_start < 0.5:
+            continue
+
+        region = {
+            'id': f'region-auto-{i}-{int(region_start * 1000)}',
+            'start_time': region_start,
+            'end_time': region_end,
+            'enabled': True,
+            'label': clip['name'],
+            'autoGenerated': True,
+            'keyframes': [
+                {
+                    'time': region_start,
+                    'x': 404,
+                    'y': 720,
+                    'radiusX': 86,
+                    'radiusY': 173,
+                    'opacity': 0.15,
+                    'color': '#FFFF00'
+                },
+                {
+                    'time': region_end,
+                    'x': 404,
+                    'y': 720,
+                    'radiusX': 86,
+                    'radiusY': 173,
+                    'opacity': 0.15,
+                    'color': '#FFFF00'
+                }
+            ]
+        }
+        regions.append(region)
+
+    logger.info(f"[Highlight Regions] Generated {len(regions)} default regions for {len(source_clips)} clips")
+    return regions
 
 
 def calculate_multi_clip_resolution(
@@ -508,16 +699,21 @@ async def export_multi_clip(
             working_video_id = None
             if project_id:
                 try:
-                    # Generate presigned URL for the final video
-                    presigned_url = generate_presigned_url(captured_user_id, output_key)
-
                     with get_db_connection() as conn:
                         cursor = conn.cursor()
-                        # Insert working video record
+
+                        # Generate default highlight regions at clip boundaries
+                        # NOTE: For Modal, we use input-based calculation as fallback
+                        # since we don't have access to processed clip files
+                        source_clips = build_clip_boundaries_from_input(clips_data, transition)
+                        highlight_regions = generate_default_highlight_regions(source_clips)
+                        highlights_json = json.dumps(highlight_regions)
+
+                        # Insert working video record with highlight regions
                         cursor.execute("""
-                            INSERT INTO working_videos (project_id, filename, presigned_url, type, multi_clip)
-                            VALUES (?, ?, ?, 'processed', 1)
-                        """, (project_id, output_filename, presigned_url))
+                            INSERT INTO working_videos (project_id, filename, highlights_data)
+                            VALUES (?, ?, ?)
+                        """, (project_id, output_filename, highlights_json))
                         working_video_id = cursor.lastrowid
 
                         # Update project to point to the new working video
@@ -539,7 +735,7 @@ async def export_multi_clip(
             progress_data = {
                 "progress": 100,
                 "message": "Multi-clip export complete!",
-                "status": "completed",
+                "status": ExportStatus.COMPLETE,
                 "projectId": project_id,
                 "projectName": project_name,
             }
@@ -781,11 +977,18 @@ async def export_multi_clip(
                     # Reset final_video_id (working video changed, need re-export overlay)
                     cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
 
-                    # Create working_videos record with duration
+                    # Generate default highlight regions at clip boundaries
+                    # Use actual durations from processed clips (not calculated from input data)
+                    actual_durations = [get_video_duration(path) for path in processed_paths]
+                    source_clips = build_clip_boundaries_from_durations(clips_data, actual_durations, transition)
+                    highlight_regions = generate_default_highlight_regions(source_clips)
+                    highlights_json = json.dumps(highlight_regions)
+
+                    # Create working_videos record with duration and highlight regions
                     cursor.execute("""
-                        INSERT INTO working_videos (project_id, filename, version, duration)
-                        VALUES (?, ?, ?, ?)
-                    """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None))
+                        INSERT INTO working_videos (project_id, filename, version, duration, highlights_data)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None, highlights_json))
                     working_video_id = cursor.lastrowid
 
                     # Update project with new working_video_id
@@ -803,7 +1006,7 @@ async def export_multi_clip(
         complete_data = {
             "progress": 100,
             "message": "Export complete!",
-            "status": "complete",
+            "status": ExportStatus.COMPLETE,
             "projectId": project_id,
             "projectName": project_name,
             "type": "framing",

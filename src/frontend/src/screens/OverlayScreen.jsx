@@ -90,6 +90,7 @@ export function OverlayScreen({
   const exportButtonRef = useRef(null);
   const fullscreenContainerRef = useRef(null);
   const videoLoadedFromUrlRef = useRef(null); // Track which URL we've loaded to prevent infinite loops
+  const justRestoredDataRef = useRef(false); // Skip auto-save immediately after restoring from backend
 
   // =========================================
   // DETERMINE EFFECTIVE VIDEO SOURCE
@@ -307,6 +308,8 @@ export function OverlayScreen({
             setHighlightEffectType(data.effect_type);
           }
 
+          // Skip auto-save for this restore (we just loaded from backend, no need to save back)
+          justRestoredDataRef.current = true;
           overlayDataLoadedForProjectRef.current = projectId;
         } catch (err) {
           console.error('[OverlayScreen] Failed to load overlay data:', err);
@@ -350,6 +353,11 @@ export function OverlayScreen({
   // Auto-save on changes (only after data loaded for this project)
   useEffect(() => {
     if (overlayDataLoadedForProjectRef.current === projectId && projectId) {
+      // Skip auto-save if we just restored from backend (no user changes yet)
+      if (justRestoredDataRef.current) {
+        justRestoredDataRef.current = false;
+        return;
+      }
       saveOverlayData();
     }
   }, [highlightRegions, highlightEffectType, projectId, saveOverlayData]);
