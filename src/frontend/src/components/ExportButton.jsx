@@ -245,19 +245,33 @@ const ExportButton = forwardRef(function ExportButton({
   // SINGLE SOURCE OF TRUTH for progress:
   // - During upload phase (localProgress > 0 and upload not complete): use local state
   // - After upload / from recovery: use store progress from WebSocket
-  // - IMPORTANT: Progress should NEVER decrease - use maximum of all sources
-  // This prevents the "progress reset" bug where progress drops from 10% to 0%
-  // when switching from upload tracking to WebSocket tracking
+  // This prevents wild swings from mixing multiple progress sources
   const storeProgress = currentExportFromStore?.progress?.percent ?? 0;
   const storeMessage = currentExportFromStore?.progress?.message ?? '';
 
   const isInUploadPhase = isExporting && !uploadCompleteRef.current && localProgress > 0;
-  // Use the maximum progress to prevent backward jumps
-  // - localProgress tracks upload (0-10%)
-  // - storeProgress tracks processing (0-100% from WebSocket)
-  // After upload, storeProgress might still be 0 until WebSocket sends first update
-  const displayProgress = Math.max(localProgress, storeProgress);
+  const displayProgress = isInUploadPhase ? localProgress : storeProgress;
   const displayMessage = isInUploadPhase ? progressMessage : (storeMessage || progressMessage);
+
+  // === PROGRESS TRACKING LOGGING ===
+  // Log all progress state changes to understand the data flow
+  const exportStartTimeRef = useRef(null);
+  useEffect(() => {
+    if (isExporting && !exportStartTimeRef.current) {
+      exportStartTimeRef.current = Date.now();
+      console.log(`[Progress] Export started at ${new Date().toISOString()}`);
+    }
+    if (!isExporting && exportStartTimeRef.current) {
+      const duration = Date.now() - exportStartTimeRef.current;
+      console.log(`[Progress] Export ended. Total duration: ${(duration/1000).toFixed(1)}s`);
+      exportStartTimeRef.current = null;
+    }
+  }, [isExporting]);
+
+  useEffect(() => {
+    const elapsed = exportStartTimeRef.current ? ((Date.now() - exportStartTimeRef.current)/1000).toFixed(1) : '0';
+    console.log(`[Progress] t=${elapsed}s | local=${localProgress}% store=${storeProgress}% display=${displayProgress}% | uploadComplete=${uploadCompleteRef.current} isInUploadPhase=${isInUploadPhase} | msg="${displayMessage}"`);
+  }, [localProgress, storeProgress, displayProgress, isInUploadPhase, displayMessage]);
 
   // Map effect type to toggle position
   const effectTypeToPosition = { 'brightness_boost': 0, 'original': 1, 'dark_overlay': 2 };

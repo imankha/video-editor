@@ -161,7 +161,8 @@ class ExportWebSocketManager {
 
     try {
       const message = JSON.parse(trimmedData);
-      console.debug(`[ExportWSManager] Message for ${exportId}:`, message);
+      // Log all progress updates to understand the data flow
+      console.log(`[Progress WS] export=${exportId} progress=${message.progress}% status=${message.status} msg="${message.message || ''}".slice(0,50)`);
 
       // Extract all fields from the message - backend sends projectId, type, and projectName
       const { progress, message: progressMessage, status, projectId, type, projectName } = message;

@@ -262,6 +262,9 @@ async def call_modal_framing_ai(
                 (0.95, "Uploading result..."),
             ]
 
+            logger.info(f"[Progress Event] job={job_id} phase=modal_progress_start progress_range={progress_start}-{progress_end}%")
+            update_count = 0
+
             while not result_future.done():
                 elapsed = asyncio.get_event_loop().time() - start_time
                 # Use sigmoid-like curve for smoother progress feel
@@ -276,11 +279,15 @@ async def call_modal_framing_ai(
                         phase_msg = msg
 
                 try:
+                    update_count += 1
+                    logger.info(f"[Progress Event] job={job_id} update={update_count} elapsed={elapsed:.1f}s progress={progress:.1f}% phase={phase_msg}")
                     await progress_callback(progress, phase_msg)
                 except Exception as e:
                     logger.warning(f"[Modal] Progress callback failed: {e}")
 
                 await asyncio.sleep(2)  # Update every 2 seconds
+
+            logger.info(f"[Progress Event] job={job_id} phase=modal_progress_end total_updates={update_count} elapsed={asyncio.get_event_loop().time() - start_time:.1f}s")
 
         result = await result_future
 

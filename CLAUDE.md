@@ -8,6 +8,7 @@ Browser-based video editor with three-mode workflow: **Annotate** (clip extracti
 - **Data always ready**: Frontend assumes data is loaded before rendering
 - **MVC pattern**: Screens own state, containers handle logic, views are presentational
 - **Single source of truth**: All user data persists in SQLite → synced to R2. Never use localStorage.
+- **No band-aid fixes**: Never mask symptoms without understanding root causes. Add logging, gather data, understand the system, then build solutions based on that understanding. Example: `Math.max()` to prevent progress dropping is a band-aid; understanding why progress drops and fixing the data flow is a real fix.
 
 ## Stack
 - **Frontend**: React 18 + Vite + Zustand (port 5173)
