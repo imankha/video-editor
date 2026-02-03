@@ -1,0 +1,137 @@
+{
+  "timestamp": "2026-01-29T10:43:42.105956",
+  "job_prefix": "e3_cpu_gpu_1769711307",
+  "config": {
+    "user_id": "modal_test",
+    "video_key": "test_videos/wcfc-carlsbad-trimmed.mp4",
+    "video_duration": 90,
+    "video_frames": 2700,
+    "clip_start": 3.0,
+    "clip_end": 9.0,
+    "clip_frames": 180,
+    "crop_keyframes": [
+      {
+        "time": 0,
+        "x": 690,
+        "y": 60,
+        "width": 540,
+        "height": 960
+      }
+    ],
+    "highlight_regions": [
+      {
+        "start_time": 0,
+        "end_time": 90,
+        "keyframes": [
+          {
+            "time": 0,
+            "x": 960,
+            "y": 540,
+            "radiusX": 100,
+            "radiusY": 100,
+            "opacity": 0.15
+          },
+          {
+            "time": 90,
+            "x": 960,
+            "y": 540,
+            "radiusX": 100,
+            "radiusY": 100,
+            "opacity": 0.15
+          }
+        ]
+      }
+    ]
+  },
+  "pricing": {
+    "T4_per_second": 0.000164,
+    "CPU_per_second": 2.62e-05
+  },
+  "results": {
+    "overlay_gpu": {
+      "function": "render_overlay",
+      "status": "success",
+      "elapsed_seconds": 278.22512316703796,
+      "frames": 2700,
+      "frames_per_second": 9.70437165869813,
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/e3_cpu_gpu_1769711307_render_overlay.mp4"
+      },
+      "error": null
+    },
+    "overlay_cpu": {
+      "function": "render_overlay_cpu",
+      "status": "error",
+      "elapsed_seconds": 609.1865298748016,
+      "error": "Task's current input in-01KG5GFJSN91B314Z30PH9GVA2:1769711586105-0 hit its timeout of 600s"
+    },
+    "framing_gpu": {
+      "function": "process_framing",
+      "status": "success",
+      "elapsed_seconds": 16.570494413375854,
+      "frames": 180,
+      "frames_per_second": 10.86268131231512,
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/e3_cpu_gpu_1769711307_process_framing.mp4"
+      },
+      "error": null
+    },
+    "framing_cpu": {
+      "function": "process_framing_cpu",
+      "status": "success",
+      "elapsed_seconds": 10.901257038116455,
+      "frames": 180,
+      "frames_per_second": 16.511857244593585,
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/e3_cpu_gpu_1769711307_process_framing_cpu.mp4"
+      },
+      "error": null
+    }
+  },
+  "costs": {
+    "overlay_gpu": {
+      "hardware": "T4 GPU",
+      "time_seconds": 278.22512316703796,
+      "rate_per_second": 0.000164,
+      "cost": 0.04562892019939423,
+      "frames": 2700,
+      "fps_throughput": 9.70437165869813
+    },
+    "overlay_cpu": {
+      "error": "Task's current input in-01KG5GFJSN91B314Z30PH9GVA2:1769711586105-0 hit its timeout of 600s"
+    },
+    "framing_gpu": {
+      "hardware": "T4 GPU",
+      "time_seconds": 16.570494413375854,
+      "rate_per_second": 0.000164,
+      "cost": 0.0027175610837936403,
+      "frames": 180,
+      "fps_throughput": 10.86268131231512
+    },
+    "framing_cpu": {
+      "hardware": "CPU",
+      "time_seconds": 10.901257038116455,
+      "rate_per_second": 2.62e-05,
+      "cost": 0.00028561293439865115,
+      "frames": 180,
+      "fps_throughput": 16.511857244593585
+    }
+  },
+  "comparisons": [
+    {
+      "test": "framing",
+      "gpu_time": 16.570494413375854,
+      "cpu_time": 10.901257038116455,
+      "gpu_fps": 10.86268131231512,
+      "cpu_fps": 16.511857244593585,
+      "gpu_cost": 0.0027175610837936403,
+      "cpu_cost": 0.00028561293439865115,
+      "savings": 0.002431948149394989,
+      "savings_pct": 89.49010066040748,
+      "recommendation": "CPU"
+    }
+  ]
+}

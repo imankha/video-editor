@@ -1,0 +1,144 @@
+{
+  "timestamp": "2026-01-29T10:01:54.140302",
+  "job_prefix": "exp_parallel_1769709714",
+  "config": {
+    "video_key": "test_videos/wcfc-carlsbad-trimmed.mp4",
+    "user_id": "modal_test",
+    "t4_rate": 0.000164,
+    "cpu_rate": 2.62e-05
+  },
+  "tests": {
+    "sequential_gpu": {
+      "status": "success",
+      "elapsed_seconds": 45.562424421310425,
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/exp_parallel_1769709714_seq_gpu.mp4"
+      }
+    },
+    "parallel_2_gpu": {
+      "status": "success",
+      "elapsed_seconds": 45.422815799713135,
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/exp_parallel_1769709714_par2_gpu.mp4",
+        "parallel": true,
+        "chunks": 2,
+        "total_frames": 2677
+      }
+    },
+    "parallel_4_gpu": {
+      "status": "success",
+      "elapsed_seconds": 49.10016632080078,
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/exp_parallel_1769709714_par4_gpu.mp4",
+        "parallel": true,
+        "chunks": 4,
+        "total_frames": 2677
+      }
+    },
+    "cpu": {
+      "status": "error",
+      "error": "[Errno 11001] getaddrinfo failed",
+      "elapsed_seconds": 15.007372379302979
+    },
+    "warm_analysis": [
+      {
+        "status": "success",
+        "elapsed_seconds": 77.24656581878662,
+        "result": {
+          "status": "success",
+          "output_key": "test_outputs/exp_parallel_1769709714_warm_0.mp4"
+        },
+        "run": 1,
+        "container_state": "cold"
+      },
+      {
+        "status": "success",
+        "elapsed_seconds": 58.067448139190674,
+        "result": {
+          "status": "success",
+          "output_key": "test_outputs/exp_parallel_1769709714_warm_1.mp4"
+        },
+        "run": 2,
+        "container_state": "warm"
+      }
+    ]
+  },
+  "analysis": {
+    "sequential_gpu": {
+      "time": 45.562424421310425,
+      "cost": 0.00747223760509491,
+      "rate": 0.000164
+    },
+    "parallel_2_gpu": {
+      "time": 45.422815799713135,
+      "estimated_gpu_seconds": 72.67650527954102,
+      "cost": 0.012156962420635225,
+      "rate": 0.000164
+    },
+    "parallel_4_gpu": {
+      "time": 49.10016632080078,
+      "estimated_gpu_seconds": 157.12053222656252,
+      "cost": 0.02602505215667725,
+      "rate": 0.000164
+    },
+    "cpu": {
+      "time": 15.007372379302979,
+      "cost": 0.000393193156337738,
+      "rate": 2.62e-05
+    },
+    "gpu_cold": {
+      "time": 77.24656581878662,
+      "cost": 0.012668436794281005,
+      "rate": 0.000164
+    },
+    "gpu_warm": {
+      "time": 58.067448139190674,
+      "cost": 0.00952306149482727,
+      "rate": 0.000164
+    }
+  },
+  "comparisons": [
+    {
+      "test": "parallel_2_gpu",
+      "cost": 0.012156962420635225,
+      "vs_baseline": 0.004684724815540315,
+      "vs_baseline_pct": 62.69507292361873,
+      "verdict": "MORE EXPENSIVE by $0.0047 (62.7%)"
+    },
+    {
+      "test": "parallel_4_gpu",
+      "cost": 0.02602505215667725,
+      "vs_baseline": 0.018552814551582343,
+      "vs_baseline_pct": 248.28994381726025,
+      "verdict": "MORE EXPENSIVE by $0.0186 (248.3%)"
+    },
+    {
+      "test": "cpu",
+      "cost": 0.000393193156337738,
+      "vs_baseline": -0.007079044448757172,
+      "vs_baseline_pct": -94.73794628707148,
+      "verdict": "CHEAPER by $0.0071 (94.7%)"
+    },
+    {
+      "test": "gpu_cold",
+      "cost": 0.012668436794281005,
+      "vs_baseline": 0.005196199189186096,
+      "vs_baseline_pct": 69.54006903692533,
+      "verdict": "MORE EXPENSIVE by $0.0052 (69.5%)"
+    },
+    {
+      "test": "gpu_warm",
+      "cost": 0.00952306149482727,
+      "vs_baseline": 0.002050823889732361,
+      "vs_baseline_pct": 27.44591376931077,
+      "verdict": "MORE EXPENSIVE by $0.0021 (27.4%)"
+    }
+  ],
+  "recommendations": [
+    "CHEAPEST: cpu at $0.0004",
+    "PARALLEL: Never cost-effective for overlay"
+  ]
+}

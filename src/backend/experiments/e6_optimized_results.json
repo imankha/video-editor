@@ -1,0 +1,162 @@
+{
+  "timestamp": "2026-01-30T13:54:58.540311",
+  "job_prefix": "e6opt_1769808696",
+  "test_config": {
+    "frames": 180,
+    "crop_keyframes": [
+      {
+        "time": 0,
+        "x": 690,
+        "y": 60,
+        "width": 540,
+        "height": 960
+      }
+    ]
+  },
+  "results": [
+    {
+      "function": "process_framing_ai_t4_baseline",
+      "elapsed_seconds": 143.78445601463318,
+      "status": "success",
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/process_framing_ai_t4_baseline_e6opt_1769808696.mp4",
+        "frames_processed": 180,
+        "gpu": "T4",
+        "optimization": "baseline"
+      },
+      "fps": 1.251873846375168,
+      "error": null,
+      "gpu": "T4",
+      "optimization": "baseline",
+      "rate": 0.000164,
+      "cost": 0.023580650786399843
+    },
+    {
+      "function": "process_framing_ai_t4_cudnn",
+      "elapsed_seconds": 159.3455855846405,
+      "status": "success",
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/process_framing_ai_t4_cudnn_e6opt_1769808696.mp4",
+        "frames_processed": 180,
+        "gpu": "T4",
+        "optimization": "cudnn"
+      },
+      "fps": 1.1296202485909996,
+      "error": null,
+      "gpu": "T4",
+      "optimization": "cudnn.benchmark",
+      "rate": 0.000164,
+      "cost": 0.02613267603588104
+    },
+    {
+      "function": "process_framing_ai_t4_compiled",
+      "elapsed_seconds": 166.7072308063507,
+      "status": "success",
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/process_framing_ai_t4_compiled_e6opt_1769808696.mp4",
+        "frames_processed": 180,
+        "gpu": "T4",
+        "optimization": "compiled"
+      },
+      "fps": 1.0797372083343544,
+      "error": null,
+      "gpu": "T4",
+      "optimization": "torch.compile",
+      "rate": 0.000164,
+      "cost": 0.027339985852241518
+    },
+    {
+      "function": "process_framing_ai_t4_optimized",
+      "elapsed_seconds": 166.9123682975769,
+      "status": "success",
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/process_framing_ai_t4_optimized_e6opt_1769808696.mp4",
+        "frames_processed": 180,
+        "gpu": "T4",
+        "optimization": "fully_optimized"
+      },
+      "fps": 1.0784101971346427,
+      "error": null,
+      "gpu": "T4",
+      "optimization": "all optimizations",
+      "rate": 0.000164,
+      "cost": 0.027373628400802614
+    },
+    {
+      "function": "process_framing_ai_l4_baseline",
+      "elapsed_seconds": 167.09260177612305,
+      "status": "success",
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/process_framing_ai_l4_baseline_e6opt_1769808696.mp4",
+        "frames_processed": 180,
+        "gpu": "L4",
+        "optimization": "baseline"
+      },
+      "fps": 1.0772469761478176,
+      "error": null,
+      "gpu": "L4",
+      "optimization": "baseline",
+      "rate": 0.000222,
+      "cost": 0.03709455759429932
+    },
+    {
+      "function": "process_framing_ai_l4_cudnn",
+      "elapsed_seconds": 173.4343376159668,
+      "status": "success",
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/process_framing_ai_l4_cudnn_e6opt_1769808696.mp4",
+        "frames_processed": 180,
+        "gpu": "L4",
+        "optimization": "cudnn"
+      },
+      "fps": 1.0378567616671819,
+      "error": null,
+      "gpu": "L4",
+      "optimization": "cudnn.benchmark",
+      "rate": 0.000222,
+      "cost": 0.03850242295074463
+    },
+    {
+      "function": "process_framing_ai_l4_compiled",
+      "elapsed_seconds": 231.53317666053772,
+      "status": "success",
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/process_framing_ai_l4_compiled_e6opt_1769808696.mp4",
+        "frames_processed": 180,
+        "gpu": "L4",
+        "optimization": "compiled"
+      },
+      "fps": 0.777426382673041,
+      "error": null,
+      "gpu": "L4",
+      "optimization": "torch.compile",
+      "rate": 0.000222,
+      "cost": 0.051400365218639374
+    },
+    {
+      "function": "process_framing_ai_l4_optimized",
+      "elapsed_seconds": 193.42197346687317,
+      "status": "success",
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/process_framing_ai_l4_optimized_e6opt_1769808696.mp4",
+        "frames_processed": 180,
+        "gpu": "L4",
+        "optimization": "fully_optimized"
+      },
+      "fps": 0.9306078144778525,
+      "error": null,
+      "gpu": "L4",
+      "optimization": "all optimizations",
+      "rate": 0.000222,
+      "cost": 0.04293967810964584
+    }
+  ]
+}

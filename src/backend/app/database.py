@@ -471,12 +471,19 @@ def ensure_database():
                 input_data TEXT NOT NULL,
                 output_video_id INTEGER,
                 output_filename TEXT,
+                modal_call_id TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 started_at TIMESTAMP,
                 completed_at TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             )
         """)
+
+        # Migration: Add modal_call_id column if missing (for existing databases)
+        try:
+            cursor.execute("SELECT modal_call_id FROM export_jobs LIMIT 1")
+        except Exception:
+            cursor.execute("ALTER TABLE export_jobs ADD COLUMN modal_call_id TEXT")
 
         # Indexes for export_jobs
         cursor.execute("""

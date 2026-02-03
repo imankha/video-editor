@@ -6,6 +6,7 @@ import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
+import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { API_BASE } from '../config';
 import { useProject } from '../contexts/ProjectContext';
 import { useNavigationStore } from '../stores/navigationStore';
@@ -90,6 +91,7 @@ export function OverlayScreen({
   const exportButtonRef = useRef(null);
   const fullscreenContainerRef = useRef(null);
   const videoLoadedFromUrlRef = useRef(null); // Track which URL we've loaded to prevent infinite loops
+  const justRestoredDataRef = useRef(false); // Skip auto-save immediately after restoring from backend
 
   // =========================================
   // DETERMINE EFFECTIVE VIDEO SOURCE
@@ -196,6 +198,23 @@ export function OverlayScreen({
     updateScrollPosition: updateTimelineScrollPosition,
     getTimelineScale,
   } = useTimelineZoom();
+
+  // =========================================
+  // DERIVED STATE - Selected keyframe based on playhead position
+  // =========================================
+
+  // Calculate which highlight keyframe is "selected" based on playhead proximity
+  // This makes the keyframe visually enlarge when the playhead is near it
+  // NOTE: We use highlightRegionKeyframes (from useHighlightRegions) not highlightKeyframes (from useHighlight)
+  // because the timeline displays region keyframes, not the single-highlight keyframes
+  const selectedHighlightKeyframeIndex = useMemo(() => {
+    if (!videoUrl || !highlightRegionKeyframes || highlightRegionKeyframes.length === 0) {
+      return null;
+    }
+    const currentFrame = Math.round(currentTime * highlightRegionsFramerate);
+    const index = findKeyframeIndexNearFrame(highlightRegionKeyframes, currentFrame, FRAME_TOLERANCE);
+    return index !== -1 ? index : null;
+  }, [videoUrl, currentTime, highlightRegionsFramerate, highlightRegionKeyframes]);
 
   // =========================================
   // INITIALIZATION - Load working video if needed
@@ -307,6 +326,8 @@ export function OverlayScreen({
             setHighlightEffectType(data.effect_type);
           }
 
+          // Skip auto-save for this restore (we just loaded from backend, no need to save back)
+          justRestoredDataRef.current = true;
           overlayDataLoadedForProjectRef.current = projectId;
         } catch (err) {
           console.error('[OverlayScreen] Failed to load overlay data:', err);
@@ -350,6 +371,11 @@ export function OverlayScreen({
   // Auto-save on changes (only after data loaded for this project)
   useEffect(() => {
     if (overlayDataLoadedForProjectRef.current === projectId && projectId) {
+      // Skip auto-save if we just restored from backend (no user changes yet)
+      if (justRestoredDataRef.current) {
+        justRestoredDataRef.current = false;
+        return;
+      }
       saveOverlayData();
     }
   }, [highlightRegions, highlightEffectType, projectId, saveOverlayData]);
@@ -619,6 +645,7 @@ export function OverlayScreen({
       highlightRegionsFramerate={highlightRegionsFramerate}
       highlightEffectType={highlightEffectType}
       isTimeInEnabledRegion={isTimeInEnabledRegion}
+      selectedHighlightKeyframeIndex={selectedHighlightKeyframeIndex}
       // Highlight handlers
       onHighlightChange={handleHighlightChange}
       onHighlightComplete={handleHighlightComplete}

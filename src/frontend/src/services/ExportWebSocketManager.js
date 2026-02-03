@@ -15,6 +15,7 @@
  */
 
 import { useExportStore } from '../stores';
+import { ExportStatus } from '../constants/exportStatus';
 
 // Reconnection configuration
 const RECONNECT_CONFIG = {
@@ -168,7 +169,7 @@ class ExportWebSocketManager {
       // Update export store
       const store = useExportStore.getState();
 
-      if (status === 'complete') {
+      if (status === ExportStatus.COMPLETE) {
         store.completeExport(
           exportId,
           message.outputVideoId || null,
@@ -189,7 +190,7 @@ class ExportWebSocketManager {
 
         // Close connection - export is done
         this._closeConnection(exportId, true);
-      } else if (status === 'error') {
+      } else if (status === ExportStatus.ERROR) {
         store.failExport(exportId, message.error || 'Export failed');
 
         // Notify callback (wrap in try-catch - callback may reference unmounted component)

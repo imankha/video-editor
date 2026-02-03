@@ -34,6 +34,7 @@ export function OverlayMode({
   highlightBoundaries = [],
   highlightKeyframes = [],
   highlightFramerate = 30,
+  selectedHighlightKeyframeIndex = null,
   onAddHighlightRegion,
   onDeleteHighlightRegion,
   onMoveHighlightRegionStart,
@@ -138,6 +139,7 @@ export function OverlayMode({
                 boundaries={highlightBoundaries}
                 keyframes={highlightKeyframes}
                 framerate={highlightFramerate}
+                selectedKeyframeIndex={selectedHighlightKeyframeIndex}
                 duration={duration}
                 visualDuration={visualDuration || duration}
                 currentTime={currentTime}

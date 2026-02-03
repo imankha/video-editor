@@ -30,11 +30,12 @@ from ...websocket import export_progress, manager
 from ...services.clip_cache import get_clip_cache
 from ...services.transitions import apply_transition
 from ...services.clip_pipeline import process_clip_with_pipeline
-from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR
+from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR, ExportStatus
 from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
-from ...storage import upload_to_r2
+from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url
 from ...user_context import get_current_user_id, set_current_user_id
+from ...services.modal_client import modal_enabled, call_modal_multi_clip
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,308 @@ try:
     AIVideoUpscaler = _AIVideoUpscaler
 except (ImportError, OSError, AttributeError) as e:
     logger.warning(f"AI upscaler dependencies not available: {e}")
+
+
+# Default duration for auto-generated highlight regions (seconds)
+DEFAULT_HIGHLIGHT_REGION_DURATION = 2.0
+
+
+def normalize_clip_data_for_modal(clip_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize clip data format for Modal processing.
+
+    The frontend sends different formats depending on how the clip was edited:
+    - Frontend format: {segments: {boundaries, segmentSpeeds, trimRange}, trimRange, cropKeyframes}
+    - DB export format: {segments: {trim_start, trim_end, segments: [...]}, cropKeyframes}
+
+    Modal expects: {segmentsData: {trimRange: {start, end}, segments: [{start, end, speed}]}, cropKeyframes}
+
+    Args:
+        clip_data: Clip configuration from frontend
+
+    Returns:
+        Normalized clip data for Modal
+    """
+    result = dict(clip_data)  # Copy original
+    segments = clip_data.get('segments', {})
+    trim_range = clip_data.get('trimRange')
+
+    # Build normalized segmentsData for Modal
+    segments_data = {}
+
+    # Handle trimRange - can be at top level or inside segments
+    if trim_range:
+        segments_data['trimRange'] = trim_range
+    elif isinstance(segments, dict):
+        if 'trimRange' in segments:
+            segments_data['trimRange'] = segments['trimRange']
+        elif 'trim_start' in segments or 'trim_end' in segments:
+            # DB export format
+            segments_data['trimRange'] = {
+                'start': segments.get('trim_start', 0),
+                'end': segments.get('trim_end', clip_data.get('duration', 15.0))
+            }
+
+    # Handle segments/speed data
+    if isinstance(segments, dict):
+        if 'segments' in segments and isinstance(segments['segments'], list):
+            # DB export format: {segments: [{start, end, speed}, ...]}
+            segments_data['segments'] = segments['segments']
+        elif 'boundaries' in segments and 'segmentSpeeds' in segments:
+            # Frontend format: convert boundaries/segmentSpeeds to segments array
+            boundaries = segments['boundaries']
+            speeds = segments['segmentSpeeds']
+            converted_segments = []
+            for i in range(len(boundaries) - 1):
+                converted_segments.append({
+                    'start': boundaries[i],
+                    'end': boundaries[i + 1],
+                    'speed': speeds.get(str(i), 1.0)
+                })
+            if converted_segments:
+                segments_data['segments'] = converted_segments
+
+    result['segmentsData'] = segments_data
+
+    clip_index = clip_data.get('clipIndex', '?')
+    logger.info(f"[normalize_clip_data] Clip {clip_index}: input segments={clip_data.get('segments')}, input trimRange={clip_data.get('trimRange')}, output segmentsData={segments_data}")
+    return result
+
+
+def calculate_effective_duration(clip_data: Dict[str, Any], raw_duration: float) -> float:
+    """
+    Calculate the effective duration of a clip after applying trim and speed changes.
+
+    Handles multiple data formats from the database:
+    1. Frontend format: {segments: {segmentSpeeds, boundaries}, trimRange: {start, end}}
+    2. DB Export format: {trim_start, trim_end, segments: [{start, end, speed}, ...]}
+    3. DB Trim-only format: {trim_start, trim_end}
+    4. Normalized format: {segmentsData: {trimRange, segments}}
+
+    Args:
+        clip_data: Clip configuration with trimRange and segments
+        raw_duration: Original video duration in seconds
+
+    Returns:
+        Effective duration in seconds (accounting for trim and speed)
+    """
+    clip_index = clip_data.get('clipIndex', '?')
+
+    # Check for normalized format first (segmentsData wrapper)
+    segments_data = clip_data.get('segmentsData', {})
+    segments = clip_data.get('segments') or segments_data.get('segments')
+    trim_range = clip_data.get('trimRange') or segments_data.get('trimRange')
+
+    logger.debug(f"[calc_effective_duration] Clip {clip_index}: raw_duration={raw_duration}, segments={segments}, trim_range={trim_range}, segmentsData={segments_data}")
+
+    # Step 1: Extract trim boundaries from all possible sources
+    trim_start = 0
+    trim_end = raw_duration
+
+    # Check clip_data top-level for trim_start/trim_end
+    if 'trim_start' in clip_data:
+        trim_start = clip_data.get('trim_start', 0)
+    if 'trim_end' in clip_data:
+        trim_end = clip_data.get('trim_end', raw_duration)
+
+    # Check segments dict for trim_start/trim_end (DB export format)
+    if segments and isinstance(segments, dict):
+        if 'trim_start' in segments:
+            trim_start = segments.get('trim_start', 0)
+        if 'trim_end' in segments:
+            trim_end = segments.get('trim_end', raw_duration)
+
+    # Check trimRange (frontend format)
+    if trim_range:
+        trim_start = trim_range.get('start', trim_start)
+        trim_end = trim_range.get('end', trim_end)
+
+    # Step 2: Check for speed changes and calculate duration accordingly
+
+    # DB Export format: segments contains 'segments' array of {start, end, speed}
+    if segments and isinstance(segments, dict) and 'segments' in segments:
+        segment_list = segments.get('segments', [])
+        if isinstance(segment_list, list) and segment_list and isinstance(segment_list[0], dict) and 'speed' in segment_list[0]:
+            total_duration = 0.0
+            for seg in segment_list:
+                seg_start = max(seg.get('start', 0), trim_start)
+                seg_end = min(seg.get('end', raw_duration), trim_end)
+                if seg_end > seg_start:
+                    speed = seg.get('speed', 1.0)
+                    total_duration += (seg_end - seg_start) / speed
+            return total_duration
+
+    # Frontend format: segments has segmentSpeeds and boundaries
+    if segments and isinstance(segments, dict) and segments.get('segmentSpeeds'):
+        boundaries = segments.get('boundaries', [0, raw_duration])
+        speeds = segments.get('segmentSpeeds', {})
+
+        total_duration = 0.0
+        for i in range(len(boundaries) - 1):
+            seg_start = max(boundaries[i], trim_start)
+            seg_end = min(boundaries[i + 1], trim_end)
+
+            if seg_end > seg_start:
+                speed = speeds.get(str(i), 1.0)
+                total_duration += (seg_end - seg_start) / speed
+
+        return total_duration
+
+    # No speed changes - just return trimmed duration
+    effective = trim_end - trim_start
+    logger.info(f"[calc_effective_duration] Clip {clip_index}: trim_start={trim_start}, trim_end={trim_end}, effective={effective}")
+    return effective
+
+
+def build_clip_boundaries_from_durations(
+    clips_data: List[Dict[str, Any]],
+    actual_durations: List[float],
+    transition: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Build clip boundary metadata using actual measured durations of processed clips.
+
+    Args:
+        clips_data: List of clip configurations (for names)
+        actual_durations: List of actual durations in seconds for each processed clip
+        transition: Optional transition config to account for overlaps
+
+    Returns:
+        List of dicts with name, start_time, end_time, duration for each clip
+    """
+    sorted_clips = sorted(clips_data, key=lambda x: x.get('clipIndex', 0))
+    transition_type = transition.get('type', 'cut') if transition else 'cut'
+    transition_duration = transition.get('duration', 0.5) if transition else 0.5
+
+    source_clips = []
+    current_time = 0.0
+
+    for i, (clip_data, duration) in enumerate(zip(sorted_clips, actual_durations)):
+        # Account for transition overlap (dissolve transitions cause clips to overlap)
+        if i > 0 and transition_type == 'dissolve':
+            current_time -= transition_duration
+
+        clip_name = clip_data.get('clipName') or clip_data.get('fileName') or f'Clip {i + 1}'
+
+        source_clips.append({
+            'index': i,
+            'name': clip_name,
+            'start_time': current_time,
+            'end_time': current_time + duration,
+            'duration': duration
+        })
+
+        current_time += duration
+
+    logger.info(f"[Clip Boundaries] Built boundaries for {len(source_clips)} clips, total duration: {current_time:.2f}s")
+    return source_clips
+
+
+def build_clip_boundaries_from_input(
+    clips_data: List[Dict[str, Any]],
+    transition: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Build clip boundary metadata by calculating durations from input data.
+    This is a FALLBACK for Modal processing where we don't have access to processed clips.
+
+    NOTE: This may be inaccurate if clip data has unexpected format. Prefer
+    build_clip_boundaries_from_durations when actual processed clips are available.
+
+    Args:
+        clips_data: List of clip configurations with duration, trimRange, segments
+        transition: Optional transition config to account for overlaps
+
+    Returns:
+        List of dicts with name, start_time, end_time, duration for each clip
+    """
+    sorted_clips = sorted(clips_data, key=lambda x: x.get('clipIndex', 0))
+    transition_type = transition.get('type', 'cut') if transition else 'cut'
+    transition_duration = transition.get('duration', 0.5) if transition else 0.5
+
+    source_clips = []
+    current_time = 0.0
+
+    for i, clip_data in enumerate(sorted_clips):
+        raw_duration = clip_data.get('duration', 15.0)
+        effective_duration = calculate_effective_duration(clip_data, raw_duration)
+
+        logger.info(f"[build_clip_boundaries] Clip {i}: raw_duration={raw_duration}, effective_duration={effective_duration}")
+
+        # Account for transition overlap
+        if i > 0 and transition_type == 'dissolve':
+            current_time -= transition_duration
+
+        clip_name = clip_data.get('clipName') or clip_data.get('fileName') or f'Clip {i + 1}'
+
+        source_clips.append({
+            'index': i,
+            'name': clip_name,
+            'start_time': current_time,
+            'end_time': current_time + effective_duration,
+            'duration': effective_duration
+        })
+
+        logger.debug(f"[Clip Boundaries] Clip {i}: raw={raw_duration:.2f}s, effective={effective_duration:.2f}s, start={current_time:.2f}s")
+        current_time += effective_duration
+
+    logger.info(f"[Clip Boundaries] Built boundaries from input for {len(source_clips)} clips, estimated total: {current_time:.2f}s")
+    return source_clips
+
+
+def generate_default_highlight_regions(source_clips: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Generate default highlight regions at the start of each clip.
+    Creates a 2-second region at the beginning of each clip in the concatenated video.
+
+    Args:
+        source_clips: List of clip boundaries from build_clip_boundaries()
+
+    Returns:
+        List of highlight region objects ready for database storage
+    """
+    regions = []
+
+    for i, clip in enumerate(source_clips):
+        region_start = clip['start_time']
+        region_end = min(clip['start_time'] + DEFAULT_HIGHLIGHT_REGION_DURATION, clip['end_time'])
+
+        # Skip if region would be too short (less than 0.5 seconds)
+        if region_end - region_start < 0.5:
+            continue
+
+        region = {
+            'id': f'region-auto-{i}-{int(region_start * 1000)}',
+            'start_time': region_start,
+            'end_time': region_end,
+            'enabled': True,
+            'label': clip['name'],
+            'autoGenerated': True,
+            'keyframes': [
+                {
+                    'time': region_start,
+                    'x': 404,
+                    'y': 720,
+                    'radiusX': 86,
+                    'radiusY': 173,
+                    'opacity': 0.15,
+                    'color': '#FFFF00'
+                },
+                {
+                    'time': region_end,
+                    'x': 404,
+                    'y': 720,
+                    'radiusX': 86,
+                    'radiusY': 173,
+                    'opacity': 0.15,
+                    'color': '#FFFF00'
+                }
+            ]
+        }
+        regions.append(region)
+
+    logger.info(f"[Highlight Regions] Generated {len(regions)} default regions for {len(source_clips)} clips")
+    return regions
 
 
 def calculate_multi_clip_resolution(
@@ -343,10 +646,26 @@ async def export_multi_clip(
     export_progress[export_id] = {
         "progress": 5,
         "message": "Starting multi-clip export...",
-        "status": "processing"
+        "status": "processing",
+        "projectId": project_id,
+        "projectName": project_name,
     }
 
     logger.info(f"[Multi-Clip Export] Starting export {export_id}")
+
+    # Create export_jobs record for tracking and recovery
+    if project_id:
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO export_jobs (id, project_id, type, status, input_data)
+                    VALUES (?, ?, 'framing', 'processing', '{}')
+                """, (export_id, project_id))
+                conn.commit()
+            logger.info(f"[Multi-Clip Export] Created export_jobs record: {export_id} for project {project_id}")
+        except Exception as e:
+            logger.warning(f"[Multi-Clip Export] Failed to create export_jobs record: {e}")
 
     # Parse form data to get video files
     form = await request.form()
@@ -382,6 +701,20 @@ async def export_multi_clip(
             detail=f"Mismatch: {len(video_files)} video files but {len(clips_data)} clip configs"
         )
 
+    # Validate all clips have framing data (crop keyframes)
+    clips_missing_framing = []
+    for i, clip in enumerate(clips_data):
+        crop_keyframes = clip.get('cropKeyframes', [])
+        if not crop_keyframes or len(crop_keyframes) == 0:
+            clip_name = clip.get('clipName') or clip.get('fileName') or f'Clip {i + 1}'
+            clips_missing_framing.append(clip_name)
+
+    if clips_missing_framing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot export: {len(clips_missing_framing)} clip(s) missing framing data: {', '.join(clips_missing_framing)}. Please add crop keyframes to all clips before exporting."
+        )
+
     # Create temp directory
     temp_dir = tempfile.mkdtemp()
     processed_paths: List[str] = []
@@ -397,6 +730,193 @@ async def export_multi_clip(
 
         # Get event loop for progress callbacks
         loop = asyncio.get_running_loop()
+
+        # ===== MODAL GPU PROCESSING =====
+        if modal_enabled():
+            logger.info(f"[Multi-Clip Export] Using Modal GPU for {len(clips_data)} clips")
+
+            # Upload all source videos to R2 temp folder
+            source_keys = []
+            for clip_data in sorted(clips_data, key=lambda x: x.get('clipIndex', 0)):
+                clip_index = clip_data.get('clipIndex')
+                video_file = video_files.get(clip_index)
+
+                if not video_file:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Missing video file for clip {clip_index}"
+                    )
+
+                # Read video content
+                content = await video_file.read()
+                await video_file.seek(0)  # Reset for potential local fallback
+
+                # Upload to R2 temp folder
+                source_key = f"temp/multi_clip_{export_id}/source_{clip_index}.mp4"
+                upload_bytes_to_r2(captured_user_id, source_key, content)
+                source_keys.append(source_key)
+                logger.info(f"[Multi-Clip Export] Uploaded source clip {clip_index} to R2: {source_key}")
+
+            # Create progress callback
+            async def modal_progress_callback(progress: float, message: str):
+                progress_data = {
+                    "progress": progress,
+                    "message": message,
+                    "status": "processing",
+                    "projectId": project_id,
+                    "projectName": project_name,
+                }
+                export_progress[export_id] = progress_data
+                await manager.send_progress(export_id, progress_data)
+
+            # Output key for the final video
+            output_filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+            output_key = f"working_videos/{output_filename}"
+
+            # Callback to store Modal call_id for job recovery
+            def store_modal_call_id(modal_call_id: str):
+                """Store Modal call_id in export_jobs for recovery after backend crash."""
+                if project_id:
+                    try:
+                        with get_db_connection() as conn:
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                UPDATE export_jobs
+                                SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP
+                                WHERE id = ?
+                            """, (modal_call_id, export_id))
+                            conn.commit()
+                        logger.info(f"[Multi-Clip Export] Stored modal_call_id: {modal_call_id} for recovery")
+                    except Exception as e:
+                        logger.warning(f"[Multi-Clip Export] Failed to store modal_call_id: {e}")
+
+            # Normalize clip data format for Modal
+            # Frontend sends {segments, trimRange}, Modal expects {segmentsData: {trimRange, segments}}
+            normalized_clips_data = [normalize_clip_data_for_modal(clip) for clip in clips_data]
+            logger.info(f"[Multi-Clip Export] Normalized {len(normalized_clips_data)} clips for Modal")
+
+            # Call Modal - single container processes all clips
+            result = await call_modal_multi_clip(
+                job_id=export_id,
+                user_id=captured_user_id,
+                source_keys=source_keys,
+                output_key=output_key,
+                clips_data=normalized_clips_data,
+                transition=transition,
+                target_width=target_resolution[0],
+                target_height=target_resolution[1],
+                fps=target_fps,
+                include_audio=include_audio_bool,
+                progress_callback=modal_progress_callback,
+                call_id_callback=store_modal_call_id,
+            )
+
+            if result.get("status") == "connection_lost":
+                # Connection lost while polling, but job may still be running on Modal
+                # Don't show error - let frontend recover via /modal-status endpoint
+                logger.warning(f"[Multi-Clip Export] Connection lost, job {export_id} may still be running on Modal")
+                progress_data = {
+                    "progress": -1,  # Indeterminate
+                    "message": result.get("message", "Connection lost. Refresh to check status."),
+                    "status": "processing",  # Still processing, not failed
+                    "projectId": project_id,
+                    "projectName": project_name,
+                    "recoverable": True,
+                }
+                export_progress[export_id] = progress_data
+                await manager.send_progress(export_id, progress_data)
+                # Return success-ish response - job is still running, frontend will recover
+                return JSONResponse({
+                    "status": "processing",
+                    "export_id": export_id,
+                    "message": "Connection lost but job may still be running. Refresh to check status.",
+                    "recoverable": True,
+                })
+
+            if result.get("status") != "success":
+                error = result.get("error", "Unknown error")
+                raise RuntimeError(f"Modal multi-clip processing failed: {error}")
+
+            # Clean up temp source files from R2
+            for source_key in source_keys:
+                try:
+                    await delete_from_r2(captured_user_id, source_key)
+                except Exception as e:
+                    logger.warning(f"[Multi-Clip Export] Failed to delete temp file {source_key}: {e}")
+
+            # Get video duration from result (or estimate)
+            video_duration = None  # Modal doesn't return this yet
+
+            # Save to database if project_id provided
+            working_video_id = None
+            if project_id:
+                try:
+                    with get_db_connection() as conn:
+                        cursor = conn.cursor()
+
+                        # Get next version number for working_videos
+                        cursor.execute("""
+                            SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                            FROM working_videos WHERE project_id = ?
+                        """, (project_id,))
+                        next_version = cursor.fetchone()['next_version']
+
+                        # Generate default highlight regions at clip boundaries
+                        # Use normalized clips_data for accurate duration calculation
+                        source_clips = build_clip_boundaries_from_input(normalized_clips_data, transition)
+                        highlight_regions = generate_default_highlight_regions(source_clips)
+                        highlights_json = json.dumps(highlight_regions)
+
+                        logger.info(f"[Multi-Clip Export] Generated {len(highlight_regions)} highlight regions for {len(source_clips)} clips")
+
+                        # Insert working video record with highlight regions and version
+                        cursor.execute("""
+                            INSERT INTO working_videos (project_id, filename, version, highlights_data)
+                            VALUES (?, ?, ?, ?)
+                        """, (project_id, output_filename, next_version, highlights_json))
+                        working_video_id = cursor.lastrowid
+
+                        # Update project to point to the new working video
+                        cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
+
+                        # Update export_jobs record to complete
+                        cursor.execute("""
+                            UPDATE export_jobs
+                            SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """, (working_video_id, output_filename, export_id))
+
+                        conn.commit()
+                        logger.info(f"[Multi-Clip Export] Saved to DB: working_video_id={working_video_id}, project updated, export_jobs completed")
+                except Exception as e:
+                    logger.error(f"[Multi-Clip Export] Failed to save to database: {e}")
+
+            # Final progress update
+            progress_data = {
+                "progress": 100,
+                "message": "Multi-clip export complete!",
+                "status": ExportStatus.COMPLETE,
+                "projectId": project_id,
+                "projectName": project_name,
+            }
+            export_progress[export_id] = progress_data
+            await manager.send_progress(export_id, progress_data)
+
+            logger.info(f"[Multi-Clip Export] Modal processing complete: {result.get('clips_processed')} clips")
+
+            # Return response with presigned URL
+            return JSONResponse({
+                "status": "success",
+                "export_id": export_id,
+                "presigned_url": generate_presigned_url(captured_user_id, output_key),
+                "filename": output_filename,
+                "working_video_id": working_video_id,
+                "clips_processed": result.get("clips_processed"),
+                "modal_used": True,
+                "video_duration": video_duration,
+            })
+
+        # ===== LOCAL GPU PROCESSING (fallback when Modal not enabled) =====
 
         # Create upscaler ONCE and reuse for all clips
         # This prevents VRAM exhaustion from loading the model multiple times
@@ -617,11 +1137,18 @@ async def export_multi_clip(
                     # Reset final_video_id (working video changed, need re-export overlay)
                     cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
 
-                    # Create working_videos record with duration
+                    # Generate default highlight regions at clip boundaries
+                    # Use actual durations from processed clips (not calculated from input data)
+                    actual_durations = [get_video_duration(path) for path in processed_paths]
+                    source_clips = build_clip_boundaries_from_durations(clips_data, actual_durations, transition)
+                    highlight_regions = generate_default_highlight_regions(source_clips)
+                    highlights_json = json.dumps(highlight_regions)
+
+                    # Create working_videos record with duration and highlight regions
                     cursor.execute("""
-                        INSERT INTO working_videos (project_id, filename, version, duration)
-                        VALUES (?, ?, ?, ?)
-                    """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None))
+                        INSERT INTO working_videos (project_id, filename, version, duration, highlights_data)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None, highlights_json))
                     working_video_id = cursor.lastrowid
 
                     # Update project with new working_video_id
@@ -639,7 +1166,7 @@ async def export_multi_clip(
         complete_data = {
             "progress": 100,
             "message": "Export complete!",
-            "status": "complete",
+            "status": ExportStatus.COMPLETE,
             "projectId": project_id,
             "projectName": project_name,
             "type": "framing",
@@ -685,6 +1212,21 @@ async def export_multi_clip(
         error_data = {"progress": 0, "message": error_msg, "error": error_msg, "status": "error"}
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
+
+        # Update export_jobs record to error status
+        if project_id:
+            try:
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE export_jobs
+                        SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (str(e), export_id))
+                    conn.commit()
+                logger.info(f"[Multi-Clip Export] Updated export_jobs to error: {export_id}")
+            except Exception as db_e:
+                logger.warning(f"[Multi-Clip Export] Failed to update export_jobs error: {db_e}")
         import time
         time.sleep(0.5)
         # Clean up GPU memory on error

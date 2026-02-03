@@ -43,7 +43,8 @@ from ...services.image_extractor import (
     extract_player_images_for_region,
     list_highlight_images,
 )
-from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto, get_optimal_gpu_config
+from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto
+from ...constants import ExportStatus
 
 logger = logging.getLogger(__name__)
 
@@ -325,7 +326,7 @@ async def export_overlay_only(
             import shutil
             shutil.copy(input_path, output_path)
 
-            progress_data = {"progress": 100, "message": "Export complete!", "status": "complete", "projectId": project_id, "projectName": project_name, "type": "overlay"}
+            progress_data = {"progress": 100, "message": "Export complete!", "status": ExportStatus.COMPLETE, "projectId": project_id, "projectName": project_name, "type": "overlay"}
             export_progress[export_id] = progress_data
             await manager.send_progress(export_id, progress_data)
 
@@ -413,7 +414,7 @@ async def export_overlay_only(
                 logger.warning(f"[Overlay Export] Failed to update export_jobs record: {e}")
 
         # Complete
-        progress_data = {"progress": 100, "message": "Export complete!", "status": "complete", "projectId": project_id, "projectName": project_name, "type": "overlay"}
+        progress_data = {"progress": 100, "message": "Export complete!", "status": ExportStatus.COMPLETE, "projectId": project_id, "projectName": project_name, "type": "overlay"}
         export_progress[export_id] = progress_data
         await manager.send_progress(export_id, progress_data)
 
@@ -1207,11 +1208,9 @@ async def render_overlay(request: OverlayRenderRequest):
         effect_type = project['effect_type']
     effect_type = effect_type or "dark_overlay"
 
-    # Determine optimal GPU configuration based on video duration
-    num_chunks, gpu_config = get_optimal_gpu_config(video_duration)
-    use_parallel = num_chunks > 1
+    # Always use sequential processing (parallel costs 3-4x more per E7 experiment)
     logger.info(f"[Overlay Render] Working video: {working_filename}, {len(highlight_regions)} regions, effect: {effect_type}")
-    logger.info(f"[Overlay Render] Duration: {video_duration}s, Config: {gpu_config} ({num_chunks} GPU{'s' if num_chunks > 1 else ''})")
+    logger.info(f"[Overlay Render] Duration: {video_duration}s, Config: sequential (1 GPU)")
 
     # Update progress
     progress_data = {
@@ -1247,6 +1246,21 @@ async def render_overlay(request: OverlayRenderRequest):
                 export_progress[export_id] = progress_data
                 await manager.send_progress(export_id, progress_data)
 
+            # Callback to store Modal call_id for job recovery
+            def store_modal_call_id(modal_call_id: str):
+                try:
+                    with get_db_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE export_jobs
+                            SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """, (modal_call_id, export_id))
+                        conn.commit()
+                    logger.info(f"[Overlay Render] Stored modal_call_id: {modal_call_id}")
+                except Exception as e:
+                    logger.warning(f"[Overlay Render] Failed to store modal_call_id: {e}")
+
             # Use auto-selection: parallel for longer videos, sequential for shorter
             result = await call_modal_overlay_auto(
                 job_id=export_id,
@@ -1257,6 +1271,7 @@ async def render_overlay(request: OverlayRenderRequest):
                 effect_type=effect_type,
                 video_duration=video_duration,
                 progress_callback=modal_progress_callback,
+                call_id_callback=store_modal_call_id,
             )
 
             if result.get("status") != "success":
@@ -1352,7 +1367,7 @@ async def render_overlay(request: OverlayRenderRequest):
         complete_data = {
             "progress": 100,
             "message": "Export complete!",
-            "status": "complete",
+            "status": ExportStatus.COMPLETE,
             "projectId": project_id,
             "projectName": project_name,
             "type": "overlay",

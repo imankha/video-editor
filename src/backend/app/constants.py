@@ -6,7 +6,20 @@ used across the application. All rating notation, colors, and adjectives
 should be imported from here to avoid duplication and inconsistencies.
 """
 
+from enum import Enum
 from typing import Dict
+
+
+# =============================================================================
+# Export Status Constants
+# =============================================================================
+
+class ExportStatus(str, Enum):
+    """Export job status values for WebSocket messages and database."""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETE = "complete"
+    ERROR = "error"
 
 # Rating adjectives for clip name generation (1-5 stars)
 # Used to generate names like "Brilliant Goal and Dribble"

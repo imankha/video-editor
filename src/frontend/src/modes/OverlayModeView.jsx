@@ -50,6 +50,7 @@ export function OverlayModeView({
   highlightRegionsFramerate,
   highlightEffectType,
   isTimeInEnabledRegion,
+  selectedHighlightKeyframeIndex,
 
   // Highlight handlers
   onHighlightChange,
@@ -343,6 +344,7 @@ export function OverlayModeView({
             highlightBoundaries={highlightBoundaries}
             highlightKeyframes={highlightRegionKeyframes}
             highlightFramerate={highlightRegionsFramerate}
+            selectedHighlightKeyframeIndex={selectedHighlightKeyframeIndex}
             onAddHighlightRegion={onAddHighlightRegion}
             onDeleteHighlightRegion={onDeleteHighlightRegion}
             onMoveHighlightRegionStart={onMoveHighlightRegionStart}

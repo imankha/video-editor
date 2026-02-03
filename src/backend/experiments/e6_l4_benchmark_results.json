@@ -1,0 +1,68 @@
+{
+  "timestamp": "2026-01-30T10:22:36.923341",
+  "job_prefix": "e6_benchmark_1769797028",
+  "test_config": {
+    "user_id": "modal_test",
+    "video_key": "test_videos/wcfc-carlsbad-trimmed.mp4",
+    "clip_duration": 6.0,
+    "expected_frames": 180,
+    "crop_keyframes": [
+      {
+        "time": 0,
+        "x": 690,
+        "y": 60,
+        "width": 540,
+        "height": 960
+      }
+    ]
+  },
+  "pricing": {
+    "T4_per_second": 0.000164,
+    "L4_per_second": 0.000222
+  },
+  "results": {
+    "t4": {
+      "elapsed_seconds": 122.66606068611145,
+      "cost": 0.020117233952522278,
+      "fps": 1.4673985533830716,
+      "status": "success"
+    },
+    "l4": {
+      "elapsed_seconds": 205.45737195014954,
+      "cost": 0.045611536572933195,
+      "fps": 0.8760941420182952,
+      "status": "success"
+    }
+  },
+  "analysis": {
+    "speedup": 0.5970389843975719,
+    "cost_ratio": 2.267286679698551,
+    "l4_is_cheaper": false,
+    "recommendation": "T4"
+  },
+  "raw_results": [
+    {
+      "function": "process_framing_ai",
+      "elapsed_seconds": 122.66606068611145,
+      "status": "success",
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/e6_t4_e6_benchmark_1769797028.mp4",
+        "frames_processed": 180
+      },
+      "error": null
+    },
+    {
+      "function": "process_framing_ai_l4",
+      "elapsed_seconds": 205.45737195014954,
+      "status": "success",
+      "result": {
+        "status": "success",
+        "output_key": "test_outputs/e6_l4_e6_benchmark_1769797028.mp4",
+        "frames_processed": 180,
+        "gpu": "L4"
+      },
+      "error": null
+    }
+  ]
+}

@@ -810,6 +810,13 @@ export function FramingScreen({
     }
   }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio, refreshProject, projectId, onExportComplete]);
 
+  // Derive game name for selected clip
+  const selectedClipGameName = useMemo(() => {
+    if (!selectedClip?.gameId || !games?.length) return null;
+    const game = games.find(g => g.id === selectedClip.gameId);
+    return game?.name || null;
+  }, [selectedClip?.gameId, games]);
+
   // Handle clip selection from sidebar
   const handleSelectClip = useCallback((clipId) => {
     if (clipId !== selectedClipId) {
@@ -922,6 +929,7 @@ export function FramingScreen({
       metadata={metadata}
       videoFile={videoFile}
       clipTitle={selectedClip?.annotateName || selectedClip?.fileNameDisplay}
+      clipGameName={selectedClipGameName}
       clipTags={selectedClip?.tags}
       currentTime={currentTime}
       duration={duration}

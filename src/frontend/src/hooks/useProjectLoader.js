@@ -82,6 +82,7 @@ export function useProjectLoader() {
   const resetClipStore = useClipStore(state => state.reset);
   const resetFramingStore = useFramingStore(state => state.reset);
   const resetOverlayStore = useOverlayStore(state => state.reset);
+  const setOverlayWorkingVideo = useOverlayStore(state => state.setWorkingVideo);
   const resetVideoStore = useVideoStore(state => state.reset);
 
   /**
@@ -166,7 +167,11 @@ export function useProjectLoader() {
       // Store clips in project data store
       setClips(clipsWithMetadata);
 
-      // Calculate clip metadata for overlay mode
+      // Calculate clip metadata for overlay mode (used to auto-generate highlight regions)
+      // Note: Only store in projectDataStore here. The overlayStore.clipMetadata should
+      // only be set by FramingScreen when a fresh framing export completes - this triggers
+      // auto-generation of highlight regions. For existing projects, we load saved regions
+      // from the backend instead.
       const overlayClipMetadata = buildClipMetadata(clipsData);
       if (overlayClipMetadata) {
         setClipMetadata(overlayClipMetadata);
@@ -197,6 +202,8 @@ export function useProjectLoader() {
 
           workingVideo = { file: null, url: project.working_video_url, metadata };
           setWorkingVideo(workingVideo);
+          // Also set in overlayStore for OverlayScreen to consume
+          setOverlayWorkingVideo(workingVideo);
 
           // Notify App.jsx about working video (for legacy integration)
           if (onWorkingVideoLoaded) {
@@ -234,7 +241,7 @@ export function useProjectLoader() {
       setLoading(false);
       throw err;
     }
-  }, [setProjectId, navigate, resetProjectData, resetClipStore, resetFramingStore, resetOverlayStore, resetVideoStore, setClips, setWorkingVideo, setAspectRatio, setClipMetadata, setLoading]);
+  }, [setProjectId, navigate, resetProjectData, resetClipStore, resetFramingStore, resetOverlayStore, setOverlayWorkingVideo, resetVideoStore, setClips, setWorkingVideo, setAspectRatio, setClipMetadata, setLoading]);
 
   return { loadProject };
 }

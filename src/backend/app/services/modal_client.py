@@ -40,60 +40,11 @@ MODAL_APP_NAME = "reel-ballers-video"
 
 # Cached function references
 _render_overlay_fn = None
-_render_overlay_parallel_fn = None
-_process_framing_fn = None
 _process_framing_ai_fn = None
+_process_multi_clip_fn = None
 _detect_players_fn = None
 _extract_clip_fn = None
 _create_annotated_compilation_fn = None
-
-# Cost-optimized GPU configuration thresholds
-# Based on analysis with CPU orchestrator:
-# - Sequential is cheaper but slower for long videos
-# - 2 GPUs has best cost/time ratio for medium videos
-# - 4/8 GPUs for when time matters more than cost
-#
-# Cost model (GPU-seconds):
-#   1 GPU:  5 + F/60      (base 5s startup)
-#   2 GPUs: 14 + F/60     (2 workers × 7s startup)
-#   4 GPUs: 28 + F/60     (4 workers × 7s startup)
-#   8 GPUs: 56 + F/60     (8 workers × 7s startup)
-#
-# Time model (wall-clock seconds):
-#   1 GPU:  5 + F/60      (sequential processing)
-#   2 GPUs: 12 + F/120    (orchestrator overhead + parallel)
-#   4 GPUs: 12 + F/240
-#   8 GPUs: 12 + F/480
-#
-# Time break-even: 1 vs 2 at ~28s, 1 vs 4 at ~19s, 1 vs 8 at ~16s
-# Cost-optimized thresholds (higher to favor cheaper sequential):
-
-GPU_CONFIG_THRESHOLDS = [
-    # (max_duration, num_chunks, description)
-    (30, 1, "sequential"),       # 0-30s: 1 GPU - sequential is both faster AND cheaper
-    (90, 2, "2-gpu-parallel"),   # 30-90s: 2 GPUs - best cost/time ratio
-    (180, 4, "4-gpu-parallel"),  # 90-180s: 4 GPUs - worth extra cost for time
-    (float('inf'), 8, "8-gpu-parallel"),  # 180s+: 8 GPUs - max parallelism
-]
-
-
-def get_optimal_gpu_config(video_duration: float) -> tuple:
-    """
-    Get the cost-optimal GPU configuration for a given video duration.
-
-    Returns:
-        (num_chunks, description)
-        - num_chunks=1 means sequential processing
-        - num_chunks>1 means parallel with that many GPU workers
-    """
-    if video_duration is None:
-        return (1, "sequential")  # Default to sequential if unknown
-
-    for max_duration, num_chunks, desc in GPU_CONFIG_THRESHOLDS:
-        if video_duration < max_duration:
-            return (num_chunks, desc)
-
-    return (8, "8-gpu-parallel")  # Fallback
 
 
 def modal_enabled() -> bool:
@@ -116,40 +67,6 @@ def _get_render_overlay_fn():
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to render_overlay: {e}")
         raise RuntimeError(f"Modal render_overlay not available: {e}")
-
-
-def _get_render_overlay_parallel_fn():
-    """Get a reference to the deployed render_overlay_parallel function."""
-    global _render_overlay_parallel_fn
-
-    if _render_overlay_parallel_fn is not None:
-        return _render_overlay_parallel_fn
-
-    try:
-        import modal
-        _render_overlay_parallel_fn = modal.Function.from_name(MODAL_APP_NAME, "render_overlay_parallel")
-        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/render_overlay_parallel")
-        return _render_overlay_parallel_fn
-    except Exception as e:
-        logger.error(f"[Modal] Failed to connect to render_overlay_parallel: {e}")
-        raise RuntimeError(f"Modal render_overlay_parallel not available: {e}")
-
-
-def _get_process_framing_fn():
-    """Get a reference to the deployed process_framing function."""
-    global _process_framing_fn
-
-    if _process_framing_fn is not None:
-        return _process_framing_fn
-
-    try:
-        import modal
-        _process_framing_fn = modal.Function.from_name(MODAL_APP_NAME, "process_framing")
-        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/process_framing")
-        return _process_framing_fn
-    except Exception as e:
-        logger.error(f"[Modal] Failed to connect to process_framing: {e}")
-        raise RuntimeError(f"Modal process_framing not available: {e}")
 
 
 def _get_process_framing_ai_fn():
@@ -220,67 +137,23 @@ def _get_create_annotated_compilation_fn():
         raise RuntimeError(f"Modal create_annotated_compilation not available: {e}")
 
 
+def _get_process_multi_clip_fn():
+    """Get a reference to the deployed process_multi_clip_modal function."""
+    global _process_multi_clip_fn
 
-
-
-
-async def call_modal_framing(
-    job_id: str,
-    user_id: str,
-    input_key: str,
-    output_key: str,
-    keyframes: list,
-    output_width: int = 1080,
-    output_height: int = 1920,
-    fps: int = 30,
-    segment_data: dict = None,
-) -> dict:
-    """
-    Call Modal process_framing function for crop/trim/speed exports.
-
-    Args:
-        job_id: Unique export job identifier
-        user_id: User folder in R2
-        input_key: R2 key for source video
-        output_key: R2 key for output video
-        keyframes: Crop keyframes [{time, x, y, width, height}, ...]
-        output_width: Target width (default 1080)
-        output_height: Target height (default 1920)
-        fps: Target frame rate (default 30)
-        segment_data: Optional trim/speed data
-
-    Returns:
-        {"status": "success", "output_key": "..."} or
-        {"status": "error", "error": "..."}
-    """
-    if not _modal_enabled:
-        raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
-
-    process_framing = _get_process_framing_fn()
-
-    logger.info(f"[Modal] Calling process_framing for job {job_id}")
-    logger.info(f"[Modal] User: {user_id}, Input: {input_key} -> Output: {output_key}")
+    if _process_multi_clip_fn is not None:
+        return _process_multi_clip_fn
 
     try:
-        result = await asyncio.to_thread(
-            process_framing.remote,
-            job_id=job_id,
-            user_id=user_id,
-            input_key=input_key,
-            output_key=output_key,
-            keyframes=keyframes,
-            output_width=output_width,
-            output_height=output_height,
-            fps=fps,
-            segment_data=segment_data,
-        )
-
-        logger.info(f"[Modal] Framing job {job_id} completed: {result}")
-        return result
-
+        import modal
+        _process_multi_clip_fn = modal.Function.from_name(MODAL_APP_NAME, "process_multi_clip_modal")
+        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/process_multi_clip_modal")
+        return _process_multi_clip_fn
     except Exception as e:
-        logger.error(f"[Modal] Framing job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        logger.error(f"[Modal] Failed to connect to process_multi_clip_modal: {e}")
+        raise RuntimeError(f"Modal process_multi_clip_modal not available: {e}")
+
+
 
 
 async def call_modal_framing_ai(
@@ -295,6 +168,7 @@ async def call_modal_framing_ai(
     segment_data: dict = None,
     video_duration: float = None,
     progress_callback = None,
+    call_id_callback = None,
 ) -> dict:
     """
     Call Modal process_framing_ai function for AI-upscaled crop exports.
@@ -314,6 +188,7 @@ async def call_modal_framing_ai(
         segment_data: Optional trim/speed data
         video_duration: Video duration in seconds (for progress estimation)
         progress_callback: async callable(progress: float, message: str) for updates
+        call_id_callback: Optional callable(call_id: str) to receive Modal call ID for recovery
 
     Returns:
         {"status": "success", "output_key": "..."} or
@@ -336,14 +211,9 @@ async def call_modal_framing_ai(
     logger.info(f"[Modal] Estimated {estimated_frames} frames, ~{estimated_time:.0f}s processing time")
 
     try:
-        # Start the Modal job in a background task
-        import concurrent.futures
-
-        # Create a future for the Modal call
-        loop = asyncio.get_running_loop()
-        modal_future = loop.run_in_executor(
-            None,
-            lambda: process_framing_ai.remote(
+        # Use spawn() to get call_id for recovery (instead of remote() which blocks)
+        def spawn_modal_job():
+            call = process_framing_ai.spawn(
                 job_id=job_id,
                 user_id=user_id,
                 input_key=input_key,
@@ -354,7 +224,27 @@ async def call_modal_framing_ai(
                 fps=fps,
                 segment_data=segment_data,
             )
-        )
+            return call
+
+        loop = asyncio.get_running_loop()
+        modal_call = await loop.run_in_executor(None, spawn_modal_job)
+
+        # Get call_id for recovery
+        modal_call_id = modal_call.object_id
+        logger.info(f"[Modal] Framing AI job spawned with call_id: {modal_call_id}")
+
+        # Notify caller of call_id so it can be stored for recovery
+        if call_id_callback:
+            try:
+                call_id_callback(modal_call_id)
+            except Exception as e:
+                logger.warning(f"[Modal] call_id_callback failed: {e}")
+
+        # Create a future to wait for the result
+        async def wait_for_result():
+            return await loop.run_in_executor(None, modal_call.get)
+
+        result_future = asyncio.create_task(wait_for_result())
 
         # Simulate progress while waiting for Modal
         if progress_callback:
@@ -371,9 +261,8 @@ async def call_modal_framing_ai(
                 (0.80, "Finalizing video..."),
                 (0.95, "Uploading result..."),
             ]
-            current_phase_idx = 0
 
-            while not modal_future.done():
+            while not result_future.done():
                 elapsed = asyncio.get_event_loop().time() - start_time
                 # Use sigmoid-like curve for smoother progress feel
                 # Progress slows down as it approaches 90%
@@ -393,14 +282,166 @@ async def call_modal_framing_ai(
 
                 await asyncio.sleep(2)  # Update every 2 seconds
 
-        # Wait for Modal to complete
-        result = await modal_future
+        result = await result_future
 
         logger.info(f"[Modal] AI framing job {job_id} completed: {result}")
         return result
 
     except Exception as e:
         logger.error(f"[Modal] AI framing job {job_id} failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+async def call_modal_multi_clip(
+    job_id: str,
+    user_id: str,
+    source_keys: list,
+    output_key: str,
+    clips_data: list,
+    transition: dict,
+    target_width: int,
+    target_height: int,
+    fps: int = 30,
+    include_audio: bool = True,
+    progress_callback = None,
+    call_id_callback = None,
+) -> dict:
+    """
+    Call Modal process_multi_clip_modal for multi-clip AI upscaling.
+
+    Single container processes all clips sequentially with shared model.
+
+    Args:
+        job_id: Unique export job identifier
+        user_id: User folder in R2
+        source_keys: List of R2 keys for source clips
+        output_key: R2 key for final output
+        clips_data: Per-clip config [{cropKeyframes, segmentsData, clipIndex}, ...]
+        transition: {type: "cut"|"fade"|"dissolve", duration: float}
+        target_width: Target output width
+        target_height: Target output height
+        fps: Target frame rate (default 30)
+        include_audio: Include audio (default True)
+        progress_callback: async callable(progress: float, message: str)
+        call_id_callback: Optional callable(call_id: str) to receive Modal call ID for recovery
+
+    Returns:
+        {"status": "success", "output_key": "...", "clips_processed": N} or
+        {"status": "error", "error": "..."}
+    """
+    if not _modal_enabled:
+        raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
+
+    process_multi_clip = _get_process_multi_clip_fn()
+
+    logger.info(f"[Modal] Calling process_multi_clip_modal for job {job_id}")
+    logger.info(f"[Modal] User: {user_id}, {len(source_keys)} clips -> Output: {output_key}")
+    logger.info(f"[Modal] Target: {target_width}x{target_height} @ {fps}fps")
+
+    # Estimate processing time: ~0.8s per frame on T4 GPU for Real-ESRGAN
+    # Assume ~10s per clip at 30fps = 300 frames per clip
+    estimated_frames_per_clip = 300
+    total_frames = len(clips_data) * estimated_frames_per_clip
+    estimated_time = total_frames * 0.8 + 30  # Add download/upload/concat overhead
+    logger.info(f"[Modal] Estimated ~{estimated_time:.0f}s for {len(clips_data)} clips")
+
+    modal_call_id = None  # Initialize for exception handler
+    try:
+        # Use spawn() to get call_id for recovery (instead of remote() which blocks)
+        def spawn_modal_job():
+            call = process_multi_clip.spawn(
+                job_id=job_id,
+                user_id=user_id,
+                source_keys=source_keys,
+                output_key=output_key,
+                clips_data=clips_data,
+                transition=transition,
+                target_width=target_width,
+                target_height=target_height,
+                fps=fps,
+                include_audio=include_audio,
+            )
+            return call
+
+        # Start the Modal job in a background task
+        loop = asyncio.get_running_loop()
+        modal_call = await loop.run_in_executor(None, spawn_modal_job)
+
+        # Get call_id for recovery
+        modal_call_id = modal_call.object_id
+        logger.info(f"[Modal] Multi-clip job spawned with call_id: {modal_call_id}")
+
+        # Notify caller of call_id so it can be stored for recovery
+        if call_id_callback:
+            try:
+                call_id_callback(modal_call_id)
+            except Exception as e:
+                logger.warning(f"[Modal] call_id_callback failed: {e}")
+
+        # Create a future to wait for the result
+        async def wait_for_result():
+            return await loop.run_in_executor(None, modal_call.get)
+
+        result_future = asyncio.create_task(wait_for_result())
+
+        # Simulate progress while waiting for Modal
+        if progress_callback:
+            start_time = asyncio.get_event_loop().time()
+            progress_start = 10
+            progress_end = 90
+
+            phases = [
+                (0.05, "Downloading source clips..."),
+                (0.10, "Loading AI model..."),
+                (0.15, "Processing clips with AI upscaling..."),
+                (0.60, "Encoding clips..."),
+                (0.80, "Concatenating clips..."),
+                (0.90, "Uploading result..."),
+            ]
+
+            while not result_future.done():
+                elapsed = asyncio.get_event_loop().time() - start_time
+                raw_progress = min(elapsed / estimated_time, 0.95)
+                progress = progress_start + raw_progress * (progress_end - progress_start)
+
+                phase_msg = "Processing..."
+                for threshold, msg in phases:
+                    if raw_progress >= threshold:
+                        phase_msg = msg
+
+                try:
+                    await progress_callback(progress, phase_msg)
+                except Exception as e:
+                    logger.warning(f"[Modal] Progress callback failed: {e}")
+
+                await asyncio.sleep(3)  # Update every 3 seconds
+
+        result = await result_future
+
+        logger.info(f"[Modal] Multi-clip job {job_id} completed: {result}")
+        return result
+
+    except Exception as e:
+        error_str = str(e).lower()
+        error_type = type(e).__name__
+
+        # Check if this is a connection/network error (DNS, socket, Modal connection, etc.)
+        is_connection_error = (
+            'connectionerror' in error_type.lower() or
+            'getaddrinfo' in error_str or
+            'connection' in error_str or
+            'network' in error_str or
+            'timeout' in error_str or
+            'socket' in error_str
+        )
+
+        if modal_call_id and is_connection_error:
+            # Connection error while polling - job may still be running on Modal
+            logger.warning(f"[Modal] Connection lost while polling job {job_id}: {e}")
+            logger.info(f"[Modal] Job {job_id} may still be running, returning recoverable status (call_id: {modal_call_id})")
+            return {"status": "connection_lost", "call_id": modal_call_id, "message": "Connection lost but job may still be running. Refresh to check status."}
+
+        logger.error(f"[Modal] Multi-clip job {job_id} failed: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
 
 
@@ -413,6 +454,7 @@ async def call_modal_overlay(
     effect_type: str = "dark_overlay",
     video_duration: float = None,
     progress_callback = None,
+    call_id_callback = None,
 ) -> dict:
     """
     Call Modal render_overlay function for highlight overlays.
@@ -427,6 +469,7 @@ async def call_modal_overlay(
         effect_type: "dark_overlay" | "brightness_boost" | "original"
         video_duration: Video duration in seconds (for progress estimation)
         progress_callback: async callable(progress: float, message: str) for updates
+        call_id_callback: Optional callable(call_id: str) to receive Modal call ID for recovery
 
     Returns:
         {"status": "success", "output_key": "..."} or
@@ -448,11 +491,9 @@ async def call_modal_overlay(
     logger.info(f"[Modal] Estimated {estimated_frames} frames, ~{estimated_time:.0f}s processing time")
 
     try:
-        # Start the Modal job in a background task
-        loop = asyncio.get_running_loop()
-        modal_future = loop.run_in_executor(
-            None,
-            lambda: render_overlay.remote(
+        # Use spawn() to get call_id for recovery (instead of remote() which blocks)
+        def spawn_modal_job():
+            call = render_overlay.spawn(
                 job_id=job_id,
                 user_id=user_id,
                 input_key=input_key,
@@ -460,7 +501,27 @@ async def call_modal_overlay(
                 highlight_regions=highlight_regions,
                 effect_type=effect_type,
             )
-        )
+            return call
+
+        loop = asyncio.get_running_loop()
+        modal_call = await loop.run_in_executor(None, spawn_modal_job)
+
+        # Get call_id for recovery
+        modal_call_id = modal_call.object_id
+        logger.info(f"[Modal] Overlay job spawned with call_id: {modal_call_id}")
+
+        # Notify caller of call_id so it can be stored for recovery
+        if call_id_callback:
+            try:
+                call_id_callback(modal_call_id)
+            except Exception as e:
+                logger.warning(f"[Modal] call_id_callback failed: {e}")
+
+        # Create a future to wait for the result
+        async def wait_for_result():
+            return await loop.run_in_executor(None, modal_call.get)
+
+        result_future = asyncio.create_task(wait_for_result())
 
         # Simulate progress while waiting for Modal
         if progress_callback:
@@ -476,7 +537,7 @@ async def call_modal_overlay(
                 (0.95, "Uploading result..."),
             ]
 
-            while not modal_future.done():
+            while not result_future.done():
                 elapsed = asyncio.get_event_loop().time() - start_time
                 raw_progress = min(elapsed / estimated_time, 0.95)
                 progress = progress_start + raw_progress * (progress_end - progress_start)
@@ -493,116 +554,13 @@ async def call_modal_overlay(
 
                 await asyncio.sleep(1.5)
 
-        result = await modal_future
+        result = await result_future
 
         logger.info(f"[Modal] Overlay job {job_id} completed: {result}")
         return result
 
     except Exception as e:
         logger.error(f"[Modal] Overlay job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
-
-
-async def call_modal_overlay_parallel(
-    job_id: str,
-    user_id: str,
-    input_key: str,
-    output_key: str,
-    highlight_regions: list,
-    effect_type: str = "dark_overlay",
-    num_chunks: int = 4,
-    video_duration: float = None,
-    progress_callback = None,
-) -> dict:
-    """
-    Call Modal render_overlay_parallel for parallel chunk processing.
-    Simulates progress updates while waiting for Modal to complete.
-
-    Use this for longer videos (>8s) to get ~3-4x speedup by processing
-    chunks on separate GPU containers in parallel.
-
-    Args:
-        job_id: Unique export job identifier
-        user_id: User folder in R2
-        input_key: R2 key for working video
-        output_key: R2 key for output video
-        highlight_regions: Highlight regions with keyframes
-        effect_type: "dark_overlay" | "brightness_boost" | "original"
-        num_chunks: Number of parallel chunks (default 4)
-        video_duration: Video duration in seconds (for progress estimation)
-        progress_callback: async callable(progress: float, message: str) for updates
-
-    Returns:
-        {"status": "success", "output_key": "...", "parallel": True} or
-        {"status": "error", "error": "..."}
-    """
-    if not _modal_enabled:
-        raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
-
-    render_overlay_parallel = _get_render_overlay_parallel_fn()
-
-    logger.info(f"[Modal] Calling render_overlay_parallel for job {job_id}")
-    logger.info(f"[Modal] User: {user_id}, Input: {input_key} -> Output: {output_key}")
-    logger.info(f"[Modal] Regions: {len(highlight_regions)}, Effect: {effect_type}, Chunks: {num_chunks}")
-
-    # Estimate processing time for parallel: (frames/60/num_chunks) + orchestration overhead (~15s)
-    estimated_frames = int((video_duration or 30) * 30)
-    estimated_time = estimated_frames / 60 / num_chunks + 15
-    logger.info(f"[Modal] Parallel: {estimated_frames} frames, {num_chunks} chunks, ~{estimated_time:.0f}s")
-
-    try:
-        loop = asyncio.get_running_loop()
-        modal_future = loop.run_in_executor(
-            None,
-            lambda: render_overlay_parallel.remote(
-                job_id=job_id,
-                user_id=user_id,
-                input_key=input_key,
-                output_key=output_key,
-                highlight_regions=highlight_regions,
-                effect_type=effect_type,
-                num_chunks=num_chunks,
-            )
-        )
-
-        if progress_callback:
-            start_time = asyncio.get_event_loop().time()
-            progress_start = 20
-            progress_end = 90
-
-            phases = [
-                (0.05, "Downloading video..."),
-                (0.15, f"Splitting into {num_chunks} chunks..."),
-                (0.25, "Processing chunks in parallel..."),
-                (0.70, "Combining chunks..."),
-                (0.85, "Encoding final video..."),
-                (0.95, "Uploading result..."),
-            ]
-
-            while not modal_future.done():
-                elapsed = asyncio.get_event_loop().time() - start_time
-                raw_progress = min(elapsed / estimated_time, 0.95)
-                progress = progress_start + raw_progress * (progress_end - progress_start)
-
-                phase_msg = "Processing..."
-                for threshold, msg in phases:
-                    if raw_progress >= threshold:
-                        phase_msg = msg
-
-                try:
-                    await progress_callback(progress, phase_msg)
-                except Exception as e:
-                    logger.warning(f"[Modal] Progress callback failed: {e}")
-
-                await asyncio.sleep(1.5)
-
-        result = await modal_future
-
-        logger.info(f"[Modal] Parallel overlay job {job_id} completed: {result}")
-        return result
-
-    except Exception as e:
-        logger.error(f"[Modal] Parallel overlay job {job_id} failed: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
 
 
@@ -615,16 +573,13 @@ async def call_modal_overlay_auto(
     effect_type: str = "dark_overlay",
     video_duration: float = None,
     progress_callback = None,
+    call_id_callback = None,
 ) -> dict:
     """
-    Automatically choose the cost-optimal GPU configuration for overlay processing.
-    Provides real-time progress updates via callback.
+    Call Modal overlay with sequential processing.
 
-    Selects between:
-    - 1 GPU (sequential): Videos < 30s - cheapest and often fastest
-    - 2 GPUs: Videos 30-90s - best cost/time tradeoff
-    - 4 GPUs: Videos 90-180s - worth the extra cost for time savings
-    - 8 GPUs: Videos > 180s - maximum parallelism for very long videos
+    Note: Parallel processing was tested (E7) but costs 3-4x MORE than sequential.
+    This function now always uses sequential processing.
 
     Args:
         job_id: Unique export job identifier
@@ -633,50 +588,30 @@ async def call_modal_overlay_auto(
         output_key: R2 key for output video
         highlight_regions: Highlight regions with keyframes
         effect_type: "dark_overlay" | "brightness_boost" | "original"
-        video_duration: Video duration in seconds (used for auto-selection)
+        video_duration: Video duration in seconds (for progress estimation)
         progress_callback: async callable(progress: float, message: str) for updates
+        call_id_callback: Optional callable(call_id: str) to receive Modal call ID for recovery
 
     Returns:
-        {"status": "success", "output_key": "...", "parallel": bool, "config": "..."} or
+        {"status": "success", "output_key": "...", "config": "sequential"} or
         {"status": "error", "error": "..."}
     """
-    num_chunks, config_desc = get_optimal_gpu_config(video_duration)
-
-    duration_str = f"{video_duration:.1f}s" if video_duration else "unknown"
-    logger.info(f"[Modal] Video {duration_str} -> {config_desc} ({num_chunks} GPU{'s' if num_chunks > 1 else ''})")
-
-    if num_chunks == 1:
-        # Sequential processing - single GPU
-        result = await call_modal_overlay(
-            job_id=job_id,
-            user_id=user_id,
-            input_key=input_key,
-            output_key=output_key,
-            highlight_regions=highlight_regions,
-            effect_type=effect_type,
-            video_duration=video_duration,
-            progress_callback=progress_callback,
-        )
-        if result.get("status") == "success":
-            result["config"] = config_desc
-            result["parallel"] = False
-        return result
-    else:
-        # Parallel processing with N GPU workers
-        result = await call_modal_overlay_parallel(
-            job_id=job_id,
-            user_id=user_id,
-            input_key=input_key,
-            output_key=output_key,
-            highlight_regions=highlight_regions,
-            effect_type=effect_type,
-            num_chunks=num_chunks,
-            video_duration=video_duration,
-            progress_callback=progress_callback,
-        )
-        if result.get("status") == "success":
-            result["config"] = config_desc
-        return result
+    # Always use sequential - parallel costs 3-4x more (E7 finding)
+    result = await call_modal_overlay(
+        job_id=job_id,
+        user_id=user_id,
+        input_key=input_key,
+        output_key=output_key,
+        highlight_regions=highlight_regions,
+        effect_type=effect_type,
+        video_duration=video_duration,
+        progress_callback=progress_callback,
+        call_id_callback=call_id_callback,
+    )
+    if result.get("status") == "success":
+        result["config"] = "sequential"
+        result["parallel"] = False
+    return result
 
 
 async def call_modal_detect_players(
@@ -883,12 +818,11 @@ if __name__ == "__main__":
         print(f"Modal enabled: {modal_enabled()}")
         if modal_enabled():
             print("Modal is enabled")
-            print("  - render_overlay: Apply highlight overlays")
-            print("  - render_overlay_parallel: Parallel chunk processing")
-            print("  - process_framing: Crop, trim, speed adjustments (FFmpeg)")
-            print("  - process_framing_ai: Crop with Real-ESRGAN AI upscaling")
-            print("  - detect_players_modal: YOLO player detection")
-            print("  - create_annotated_compilation: Annotated video with text overlays")
+            print("  - render_overlay: Apply highlight overlays (T4 GPU)")
+            print("  - process_framing_ai: Crop with Real-ESRGAN AI upscaling (T4 GPU)")
+            print("  - detect_players_modal: YOLO player detection (T4 GPU)")
+            print("  - extract_clip_modal: FFmpeg clip extraction (CPU)")
+            print("  - create_annotated_compilation: Annotated video with text overlays (CPU)")
         else:
             print("Modal is disabled - set MODAL_ENABLED=true to enable")
 

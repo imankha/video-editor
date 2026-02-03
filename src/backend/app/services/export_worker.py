@@ -30,7 +30,7 @@ from ..routers.exports import (
     update_job_error
 )
 from .ffmpeg_service import get_encoding_command_parts
-from .modal_client import modal_enabled, call_modal_framing, call_modal_overlay
+from .modal_client import modal_enabled, call_modal_overlay
 
 logger = logging.getLogger(__name__)
 
@@ -497,67 +497,6 @@ async def process_overlay_with_modal(
     return result
 
 
-async def process_framing_with_modal(
-    job_id: str,
-    project_id: int,
-    user_id: str,
-    input_r2_key: str,
-    output_r2_key: str,
-    keyframes: list,
-    output_width: int = 1080,
-    output_height: int = 1920,
-    fps: int = 30,
-    segment_data: dict = None,
-) -> dict:
-    """
-    Process framing export using Modal GPU.
-
-    Note: This uses FFmpeg-only processing on Modal. For AI upscaling,
-    use the local processing with CUDA.
-
-    Args:
-        job_id: Export job ID for tracking
-        project_id: Project ID
-        user_id: User folder in R2
-        input_r2_key: R2 key for source video
-        output_r2_key: R2 key for output video
-        keyframes: Crop keyframes
-        output_width: Target width
-        output_height: Target height
-        fps: Target frame rate
-        segment_data: Trim/speed data
-
-    Returns:
-        Result dict from Modal
-    """
-    if not modal_enabled():
-        raise RuntimeError("Modal is not enabled")
-
-    logger.info(f"[ExportWorker] Using Modal GPU for framing export: {job_id}")
-    await send_progress(job_id, 10, "Sending to GPU cluster...")
-
-    result = await call_modal_framing(
-        job_id=job_id,
-        user_id=user_id,
-        input_key=input_r2_key,
-        output_key=output_r2_key,
-        keyframes=keyframes,
-        output_width=output_width,
-        output_height=output_height,
-        fps=fps,
-        segment_data=segment_data,
-    )
-
-    if result.get("status") == "success":
-        await send_progress(job_id, 95, "GPU processing complete")
-    else:
-        error = result.get("error", "Unknown error")
-        logger.error(f"[ExportWorker] Modal framing failed: {error}")
-        raise RuntimeError(f"Modal processing failed: {error}")
-
-    return result
-
-
 def is_modal_available() -> bool:
     """Check if Modal is available and enabled."""
     return modal_enabled()
@@ -568,15 +507,38 @@ async def recover_orphaned_jobs():
     Recover jobs that were processing when the server stopped.
 
     Called on server startup to clean up any orphaned jobs.
+    For Modal jobs, we check if they're still running before marking as error.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id FROM export_jobs WHERE status = 'processing'
+            SELECT id, modal_call_id FROM export_jobs WHERE status = 'processing'
         """)
         orphaned = cursor.fetchall()
 
     for row in orphaned:
         job_id = row['id']
+        modal_call_id = row['modal_call_id']
+
+        if modal_call_id:
+            # Check if Modal job is still running before marking as error
+            try:
+                import modal
+                call = modal.FunctionCall.from_id(modal_call_id)
+                # Try non-blocking get - TimeoutError means still running
+                try:
+                    call.get(timeout=0)
+                    # Job completed - let /modal-status handle finalization
+                    logger.info(f"[ExportWorker] Modal job {job_id} completed, will finalize on next status check")
+                    continue
+                except TimeoutError:
+                    # Still running on Modal - don't mark as error
+                    logger.info(f"[ExportWorker] Modal job {job_id} still running, keeping as processing")
+                    continue
+            except Exception as e:
+                # Modal check failed - job may have expired or failed
+                logger.warning(f"[ExportWorker] Modal check failed for {job_id}: {e}")
+
+        # No modal_call_id or Modal job is gone - mark as error
         logger.warning(f"[ExportWorker] Found orphaned job: {job_id}, marking as error")
         update_job_error(job_id, "Server restarted during processing")
