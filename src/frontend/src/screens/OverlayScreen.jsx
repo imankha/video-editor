@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { OverlayModeView } from '../modes';
 import { OverlayContainer } from '../containers';
-import { useHighlight, useHighlightRegions, useOverlayState } from '../modes/overlay';
+import { useHighlightRegions, useOverlayState } from '../modes/overlay';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
@@ -136,22 +136,10 @@ export function OverlayScreen({
   } = useVideo(null, null); // No segment functions in overlay mode
 
   // =========================================
-  // HIGHLIGHT HOOKS - OWNED BY THIS SCREEN
+  // HIGHLIGHT REGIONS HOOK - OWNED BY THIS SCREEN
   // =========================================
 
-  // Highlight hook - for keyframe-based highlighting (not region-based)
-  const {
-    keyframes: highlightKeyframes,
-    framerate: highlightFramerate,
-    isEnabled: isHighlightEnabled,
-    addOrUpdateKeyframe: addOrUpdateHighlightKeyframe,
-    deleteKeyframesInRange: deleteHighlightKeyframesInRange,
-    cleanupTrimKeyframes: cleanupHighlightTrimKeyframes,
-    getHighlightDataAtTime,
-    reset: resetHighlight,
-  } = useHighlight(effectiveOverlayMetadata, null);
-
-  // Highlight regions hook - boundary-based system (like segments)
+  // Highlight regions hook - boundary-based system for multiple highlight regions
   const {
     boundaries: highlightBoundaries,
     regions: highlightRegions,
@@ -205,8 +193,6 @@ export function OverlayScreen({
 
   // Calculate which highlight keyframe is "selected" based on playhead proximity
   // This makes the keyframe visually enlarge when the playhead is near it
-  // NOTE: We use highlightRegionKeyframes (from useHighlightRegions) not highlightKeyframes (from useHighlight)
-  // because the timeline displays region keyframes, not the single-highlight keyframes
   const selectedHighlightKeyframeIndex = useMemo(() => {
     if (!videoUrl || !highlightRegionKeyframes || highlightRegionKeyframes.length === 0) {
       return null;

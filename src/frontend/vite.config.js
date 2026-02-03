@@ -9,6 +9,11 @@ const API_PORT = process.env.VITE_API_PORT || '8000';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Strip console.log in production builds (keep console.error and console.warn for debugging)
+  esbuild: {
+    drop: process.env.NODE_ENV === 'production' ? ['debugger'] : [],
+    pure: process.env.NODE_ENV === 'production' ? ['console.log'] : [],
+  },
   server: {
     port: 5173,
     proxy: {
