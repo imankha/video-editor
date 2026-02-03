@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { FlaskConical, Loader, FolderOpen } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE } from '../config';
+import { ExportStatus } from '../constants/exportStatus';
 
 /**
  * Generate a unique ID for tracking export progress
@@ -73,11 +74,11 @@ export default function CompareModelsButton({ videoFile, cropKeyframes, highligh
         setTotalModels(data.total_permutations);
       }
 
-      if (data.status === 'complete') {
+      if (data.status === ExportStatus.COMPLETE) {
         setResults(data.results);
         setOutputDir(data.output_directory);
         ws.close();
-      } else if (data.status === 'error') {
+      } else if (data.status === ExportStatus.ERROR) {
         ws.close();
       }
     };

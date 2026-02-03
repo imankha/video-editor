@@ -580,20 +580,29 @@ async function triggerExtractionAndWait(page, maxWaitTime = 180000) {
     return;
   }
 
-  // Wait for clips to have actual filenames (extraction complete)
+  // Wait for clips to be extracted
+  // Filter by gameId to only count THIS game's clips (not clips from other tests)
+  // Use progress-based timeout: only timeout if progress STALLS, not on absolute time
   console.log(`[Test] Waiting for ${result.tasks_created} clips to be extracted...`);
+
   const startWait = Date.now();
+  let lastExtractedCount = 0;
+  let lastProgressTime = Date.now();
+  const STALL_TIMEOUT = 120000; // 2 minutes without progress = stalled
 
-  while (Date.now() - startWait < maxWaitTime) {
-    const rawClips = await page.evaluate(async () => {
+  while (true) {
+    // Fetch clips filtered by this game's ID
+    const gameClips = await page.evaluate(async (gid) => {
       const res = await fetch('/api/clips/raw');
-      return res.ok ? await res.json() : [];
-    });
+      const clips = res.ok ? await res.json() : [];
+      return clips.filter(c => c.game_id === gid);
+    }, gameId);
 
-    // Check if all clips have filenames (extraction complete)
-    const extractedClips = rawClips.filter(c => c.filename && c.filename.length > 0);
+    // Check how many of THIS game's clips are extracted
+    const extractedClips = gameClips.filter(c => c.filename && c.filename.length > 0);
 
-    if (extractedClips.length > 0 && extractedClips.length >= rawClips.length) {
+    // Success: all of this game's clips are extracted
+    if (extractedClips.length >= gameClips.length && gameClips.length > 0) {
       console.log(`[Test] All ${extractedClips.length} clips extracted after ${Math.round((Date.now() - startWait) / 1000)}s`);
 
       // The Framing UI has stale data - navigate to home and back to get fresh data
@@ -628,16 +637,34 @@ async function triggerExtractionAndWait(page, maxWaitTime = 180000) {
       return;
     }
 
-    // Log progress
-    const elapsed = Math.round((Date.now() - startWait) / 1000);
-    if (elapsed % 10 === 0) {
-      console.log(`[Test] Extraction progress: ${extractedClips.length}/${rawClips.length} clips (${elapsed}s elapsed)`);
+    // Track progress - reset stall timer if progress was made
+    if (extractedClips.length > lastExtractedCount) {
+      lastExtractedCount = extractedClips.length;
+      lastProgressTime = Date.now();
+    }
+
+    // Check for stall - fail if no progress for STALL_TIMEOUT
+    const timeSinceProgress = Date.now() - lastProgressTime;
+    if (timeSinceProgress > STALL_TIMEOUT) {
+      console.log(`[Test] WARNING: Extraction stalled - no progress for ${STALL_TIMEOUT / 1000}s (stuck at ${extractedClips.length}/${gameClips.length})`);
+      return;
+    }
+
+    // Hard timeout only fails if ALSO stalled (gives grace period for slow but progressing extractions)
+    const elapsed = Date.now() - startWait;
+    if (elapsed > maxWaitTime && timeSinceProgress > 60000) {
+      console.log(`[Test] WARNING: Extraction timeout after ${maxWaitTime / 1000}s (last progress ${Math.round(timeSinceProgress / 1000)}s ago)`);
+      return;
+    }
+
+    // Log progress periodically
+    const elapsedSec = Math.round(elapsed / 1000);
+    if (elapsedSec % 10 === 0) {
+      console.log(`[Test] Extraction progress: ${extractedClips.length}/${gameClips.length} clips (${elapsedSec}s elapsed)`);
     }
 
     await page.waitForTimeout(2000);
   }
-
-  console.log('[Test] WARNING: Extraction did not complete within timeout - test may fail');
 }
 
 /**

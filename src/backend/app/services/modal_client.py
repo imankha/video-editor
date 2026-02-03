@@ -345,6 +345,7 @@ async def call_modal_multi_clip(
     estimated_time = total_frames * 0.8 + 30  # Add download/upload/concat overhead
     logger.info(f"[Modal] Estimated ~{estimated_time:.0f}s for {len(clips_data)} clips")
 
+    modal_call_id = None  # Initialize for exception handler
     try:
         # Use spawn() to get call_id for recovery (instead of remote() which blocks)
         def spawn_modal_job():
@@ -421,6 +422,25 @@ async def call_modal_multi_clip(
         return result
 
     except Exception as e:
+        error_str = str(e).lower()
+        error_type = type(e).__name__
+
+        # Check if this is a connection/network error (DNS, socket, Modal connection, etc.)
+        is_connection_error = (
+            'connectionerror' in error_type.lower() or
+            'getaddrinfo' in error_str or
+            'connection' in error_str or
+            'network' in error_str or
+            'timeout' in error_str or
+            'socket' in error_str
+        )
+
+        if modal_call_id and is_connection_error:
+            # Connection error while polling - job may still be running on Modal
+            logger.warning(f"[Modal] Connection lost while polling job {job_id}: {e}")
+            logger.info(f"[Modal] Job {job_id} may still be running, returning recoverable status (call_id: {modal_call_id})")
+            return {"status": "connection_lost", "call_id": modal_call_id, "message": "Connection lost but job may still be running. Refresh to check status."}
+
         logger.error(f"[Modal] Multi-clip job {job_id} failed: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
 

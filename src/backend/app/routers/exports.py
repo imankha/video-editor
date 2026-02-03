@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 from ..database import get_db_connection, get_user_data_path
 from ..storage import generate_presigned_url
 from ..user_context import get_current_user_id
+from ..constants import ExportStatus
 
 logger = logging.getLogger(__name__)
 
@@ -235,14 +236,11 @@ def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> dict:
                     "error": "Project not found"
                 }
 
-            # Generate presigned URL for the completed video
-            presigned_url = generate_presigned_url(user_id, output_key)
-
-            # Create working_video record
+            # Create working_video record (presigned_url generated on-the-fly, not stored)
             cursor.execute("""
-                INSERT INTO working_videos (project_id, filename, presigned_url, type, multi_clip)
-                VALUES (?, ?, ?, 'processed', 1)
-            """, (project_id, output_filename, presigned_url))
+                INSERT INTO working_videos (project_id, filename)
+                VALUES (?, ?)
+            """, (project_id, output_filename))
             working_video_id = cursor.lastrowid
 
             # Update project to point to the new working video
@@ -777,7 +775,7 @@ async def check_modal_status(job_id: str):
 
                     if finalization.get('finalized'):
                         return {
-                            "status": "complete",
+                            "status": ExportStatus.COMPLETE,
                             "result": result,
                             "message": "Export recovered and finalized successfully",
                             "working_video_id": finalization.get('working_video_id'),
@@ -788,7 +786,7 @@ async def check_modal_status(job_id: str):
                         # Finalization failed but Modal succeeded - still return success
                         logger.warning(f"[ExportJobs] Finalization failed for {job_id}: {finalization.get('error')}")
                         return {
-                            "status": "complete",
+                            "status": ExportStatus.COMPLETE,
                             "result": result,
                             "message": "Modal completed but finalization failed",
                             "finalization_error": finalization.get('error')
@@ -805,12 +803,24 @@ async def check_modal_status(job_id: str):
 
             # Job already finalized (status is 'complete' or 'error')
             return {
-                "status": "complete",
+                "status": ExportStatus.COMPLETE,
                 "result": result,
                 "job_status": job['status']
             }
         except TimeoutError:
-            # Still running
+            # Still running on Modal
+            # If our DB incorrectly shows 'error' (e.g., from a connection hiccup), fix it
+            if job['status'] == 'error':
+                logger.info(f"[ExportJobs] Modal job {job_id} still running but DB shows error - resetting to processing")
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE export_jobs
+                        SET status = 'processing', error = NULL, completed_at = NULL
+                        WHERE id = ?
+                    """, (job_id,))
+                    conn.commit()
+
             return {
                 "status": "running",
                 "message": "Modal job is still processing"
@@ -903,6 +913,154 @@ async def cancel_export(job_id: str):
 
     logger.info(f"[ExportJobs] Job {job_id} cancelled by user (Modal cancelled: {modal_cancelled})")
     return {"message": "Export job cancelled", "modal_cancelled": modal_cancelled}
+
+
+# Track which jobs have active progress loops to avoid duplicates
+_active_progress_loops = set()
+
+
+@router.post("/{job_id}/resume-progress")
+async def resume_progress(job_id: str, background_tasks: BackgroundTasks):
+    """
+    Resume progress simulation for a recovered Modal job.
+
+    When a Modal job is recovered after a connection loss, this endpoint
+    starts a background task that:
+    1. Simulates progress based on elapsed time
+    2. Polls Modal periodically to check completion
+    3. Sends progress updates via WebSocket
+    4. Finalizes the export when Modal completes
+    """
+    from ..websocket import export_progress, manager
+
+    job = get_export_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Export job not found")
+
+    if job['status'] != 'processing':
+        raise HTTPException(status_code=400, detail=f"Job status is '{job['status']}', not 'processing'")
+
+    modal_call_id = job.get('modal_call_id')
+    if not modal_call_id:
+        raise HTTPException(status_code=400, detail="Job does not have a Modal call ID")
+
+    # Avoid starting duplicate progress loops
+    if job_id in _active_progress_loops:
+        return {"message": "Progress loop already active", "job_id": job_id}
+
+    _active_progress_loops.add(job_id)
+
+    async def progress_loop():
+        """Background task that polls Modal and sends progress updates."""
+        import asyncio
+        try:
+            import modal
+        except ImportError:
+            logger.error(f"[ExportJobs] Modal not available for progress loop {job_id}")
+            _active_progress_loops.discard(job_id)
+            return
+
+        try:
+            call = modal.FunctionCall.from_id(modal_call_id)
+
+            # Calculate progress based on elapsed time
+            # Use UTC consistently since DB timestamps are in UTC
+            started_at = job.get('started_at')
+            if started_at:
+                start_time = datetime.fromisoformat(started_at.replace(' ', 'T'))
+            else:
+                start_time = datetime.utcnow()
+
+            # Estimate total time based on job type (multi-clip ~20-40 min)
+            estimated_total_seconds = 30 * 60  # 30 minutes estimate
+
+            project_id = job.get('project_id')
+            project_name = job.get('project_name')
+
+            phases = [
+                (0.05, "Downloading source clips..."),
+                (0.10, "Loading AI model..."),
+                (0.15, "Processing clips with AI upscaling..."),
+                (0.60, "Encoding clips..."),
+                (0.80, "Concatenating clips..."),
+                (0.90, "Uploading result..."),
+            ]
+
+            while True:
+                # Check if job completed
+                try:
+                    result = call.get(timeout=0)
+                    # Job completed - finalize
+                    logger.info(f"[ExportJobs] Modal job {job_id} completed during progress loop")
+
+                    if result.get('status') == 'success':
+                        user_id = get_current_user_id()
+                        finalization = finalize_modal_export(job, result, user_id)
+
+                        progress_data = {
+                            "progress": 100,
+                            "message": "Export complete!",
+                            "status": ExportStatus.COMPLETE,
+                            "projectId": project_id,
+                            "projectName": project_name,
+                            "workingVideoId": finalization.get('working_video_id'),
+                        }
+                    else:
+                        error_msg = result.get('error', 'Unknown error')
+                        update_job_error(job_id, error_msg)
+                        progress_data = {
+                            "progress": 0,
+                            "message": f"Export failed: {error_msg}",
+                            "status": ExportStatus.ERROR,
+                            "error": error_msg,
+                            "projectId": project_id,
+                            "projectName": project_name,
+                        }
+
+                    export_progress[job_id] = progress_data
+                    await manager.send_progress(job_id, progress_data)
+                    break
+
+                except TimeoutError:
+                    # Still running - calculate and send progress
+                    elapsed = (datetime.utcnow() - start_time).total_seconds()
+                    raw_progress = min(elapsed / estimated_total_seconds, 0.95)
+                    progress = 10 + raw_progress * 80  # 10-90%
+
+                    phase_msg = "Processing..."
+                    for threshold, msg in phases:
+                        if raw_progress >= threshold:
+                            phase_msg = msg
+
+                    progress_data = {
+                        "progress": int(progress),
+                        "message": phase_msg,
+                        "status": "processing",
+                        "projectId": project_id,
+                        "projectName": project_name,
+                    }
+                    export_progress[job_id] = progress_data
+                    await manager.send_progress(job_id, progress_data)
+
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if 'not found' in error_str or 'expired' in error_str:
+                        logger.warning(f"[ExportJobs] Modal job {job_id} expired during progress loop")
+                        update_job_error(job_id, "Modal job expired")
+                        break
+                    logger.warning(f"[ExportJobs] Error polling Modal for {job_id}: {e}")
+
+                await asyncio.sleep(5)  # Poll every 5 seconds
+
+        except Exception as e:
+            logger.error(f"[ExportJobs] Progress loop failed for {job_id}: {e}")
+        finally:
+            _active_progress_loops.discard(job_id)
+
+    # Start the progress loop as a background task
+    background_tasks.add_task(progress_loop)
+
+    return {"message": "Progress loop started", "job_id": job_id}
 
 
 # ============================================================================

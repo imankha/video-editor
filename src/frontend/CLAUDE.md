@@ -76,3 +76,4 @@ For streaming URLs, metadata may not be pre-loaded. `useVideo.handleLoadedMetada
 - Don't add console.logs in committed code
 - Don't fetch data in View components
 - Don't render components without data guards
+- Don't use localStorage (see root CLAUDE.md - all persistence via SQLite + R2)

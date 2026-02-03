@@ -31,6 +31,7 @@ from ...queries import latest_working_clips_subquery
 from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
 from ...services.ffmpeg_service import get_video_duration
 from ...services.modal_client import modal_enabled, call_modal_framing_ai
+from ...constants import ExportStatus
 from pydantic import BaseModel
 from typing import Optional
 from ...user_context import get_current_user_id, set_current_user_id
@@ -429,7 +430,7 @@ async def export_with_ai_upscale(
         complete_data = {
             "progress": 100,
             "message": "Export complete!",
-            "status": "complete",
+            "status": ExportStatus.COMPLETE,
             "projectId": project_id,
             "projectName": project_name,
             "type": "framing",
@@ -1150,7 +1151,7 @@ async def render_project(request: RenderRequest):
         complete_data = {
             "progress": 100,
             "message": "Export complete!",
-            "status": "complete",
+            "status": ExportStatus.COMPLETE,
             "projectId": project_id,
             "projectName": project_name,
             "type": "framing",

@@ -1,0 +1,60 @@
+{
+  "timestamp": "2026-01-29T13:51:56.754565",
+  "config": {
+    "user_id": "modal_test",
+    "source_video": "test_videos/wcfc-carlsbad-trimmed.mp4",
+    "clips": [
+      {
+        "clipIndex": 0,
+        "cropKeyframes": [
+          {
+            "time": 0,
+            "x": 690,
+            "y": 60,
+            "width": 540,
+            "height": 960
+          }
+        ],
+        "segmentsData": {
+          "trimRange": {
+            "start": 3.0,
+            "end": 6.0
+          }
+        }
+      },
+      {
+        "clipIndex": 1,
+        "cropKeyframes": [
+          {
+            "time": 0,
+            "x": 600,
+            "y": 100,
+            "width": 540,
+            "height": 960
+          }
+        ],
+        "segmentsData": {
+          "trimRange": {
+            "start": 10.0,
+            "end": 13.0
+          }
+        }
+      }
+    ],
+    "transition": {
+      "type": "cut",
+      "duration": 0
+    },
+    "target_width": 810,
+    "target_height": 1440,
+    "fps": 30
+  },
+  "result": {
+    "job_id": "test_multi_clip_1769723379",
+    "status": "success",
+    "elapsed": 137.47596716880798,
+    "clips_processed": 2,
+    "output_key": "test_outputs/multi_clip_test_multi_clip_1769723379.mp4",
+    "error": null
+  }
+}

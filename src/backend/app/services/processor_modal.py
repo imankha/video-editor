@@ -27,7 +27,7 @@ from .video_processor import (
     ProcessingResult,
     ProgressCallback,
 )
-from .modal_client import modal_enabled, call_modal_overlay, call_modal_framing
+from .modal_client import modal_enabled, call_modal_overlay
 
 logger = logging.getLogger(__name__)
 
@@ -59,71 +59,13 @@ class ModalProcessor(VideoProcessor):
         """
         Process a video clip using Modal GPU.
 
-        Note: For Modal, input_path and output_path should be R2 keys, not local paths.
-        The user_id is extracted from the path (e.g., "a/working_videos/file.mp4" -> user_id="a")
+        Note: Framing always uses AI upscaling via process_framing_ai.
+        This method is not used - framing goes through the framing router directly.
         """
-        if not self.is_available():
-            return ProcessingResult(
-                success=False,
-                error_message="Modal is not available"
-            )
-
-        # Extract user_id and relative path from full R2 key
-        # Format: "{user_id}/{relative_path}"
-        parts = config.input_path.split("/", 1)
-        if len(parts) != 2:
-            return ProcessingResult(
-                success=False,
-                error_message=f"Invalid R2 path format: {config.input_path}"
-            )
-
-        user_id = parts[0]
-        input_key = parts[1]
-
-        output_parts = config.output_path.split("/", 1)
-        output_key = output_parts[1] if len(output_parts) == 2 else config.output_path
-
-        # Generate job ID
-        import uuid
-        job_id = f"framing-{uuid.uuid4().hex[:8]}"
-
-        if progress:
-            progress.report(0, 100, "Sending to Modal GPU...", "upload")
-
-        try:
-            result = await call_modal_framing(
-                job_id=job_id,
-                user_id=user_id,
-                input_key=input_key,
-                output_key=output_key,
-                keyframes=config.crop_keyframes or [],
-                output_width=config.target_width or 1080,
-                output_height=config.target_height or 1920,
-                fps=config.target_fps,
-                segment_data=config.segment_data,
-            )
-
-            if result.get("status") == "success":
-                if progress:
-                    progress.report(100, 100, "Modal processing complete", "complete")
-                return ProcessingResult(
-                    success=True,
-                    output_path=f"{user_id}/{output_key}",
-                    output_width=config.target_width,
-                    output_height=config.target_height,
-                )
-            else:
-                return ProcessingResult(
-                    success=False,
-                    error_message=result.get("error", "Unknown Modal error")
-                )
-
-        except Exception as e:
-            logger.error(f"Modal processing failed: {e}", exc_info=True)
-            return ProcessingResult(
-                success=False,
-                error_message=str(e)
-            )
+        return ProcessingResult(
+            success=False,
+            error_message="Framing via ModalProcessor not implemented - use framing router with AI upscaling"
+        )
 
     async def concatenate_clips(
         self,

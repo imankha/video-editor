@@ -21,6 +21,7 @@ export function FramingModeView({
   metadata,
   videoFile,
   clipTitle,
+  clipGameName,
   clipTags = [],
   currentTime,
   duration,
@@ -134,9 +135,17 @@ export function FramingModeView({
       {metadata && !isFullscreen && (
         <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
           <div className="flex items-center justify-between text-sm text-gray-300">
-            {/* Left: Title + Tags */}
+            {/* Left: Title + Game + Tags */}
             <div className="flex flex-col gap-1">
-              {clipTitle && <span className="font-semibold text-white">{clipTitle}</span>}
+              <div className="flex items-center gap-2">
+                {clipTitle && <span className="font-semibold text-white">{clipTitle}</span>}
+                {clipGameName && (
+                  <>
+                    <span className="text-gray-500">•</span>
+                    <span className="text-gray-400">{clipGameName}</span>
+                  </>
+                )}
+              </div>
               {clipTags?.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {clipTags.map(tag => (

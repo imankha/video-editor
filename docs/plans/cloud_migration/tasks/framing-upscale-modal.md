@@ -1,171 +1,47 @@
 # Framing Upscale Modal Migration (B2)
 
-## Overview
-
-Migrate the `/export/upscale` endpoint to use Modal cloud GPUs when `MODAL_ENABLED=true`, while preserving local GPU processing as a fallback.
-
-**Priority**: BLOCKING - Must complete before Task 09 testing can pass
-**Status**: `TODO`
-**Complexity**: Medium (single endpoint, pattern already established in same file)
+**Status**: `DONE` (2026-01-29)
+**Priority**: Was BLOCKING - Now Complete
 
 ---
 
-## Problem Statement
+## Status Update
 
-**The `/export/upscale` endpoint always uses local CUDA** regardless of `MODAL_ENABLED` setting.
+This task is **COMPLETE**. The `/export/render` endpoint already uses Modal via `call_modal_framing_ai` when `MODAL_ENABLED=true`.
 
-### Root Cause
+### Evidence (from code review 2026-01-29)
 
-**File**: `src/backend/app/routers/export/framing.py`
-
-**Lines 164-479**: The `/upscale` endpoint never checks `modal_enabled()`:
-
+File: `src/backend/app/routers/export/framing.py:931`
 ```python
-# Line 164
-@router.post("/upscale")
-async def upscale_video(...):
+modal_result = await call_modal_framing_ai(
+    job_id=export_id,
+    user_id=user_id,
+    input_key=input_key,
+    output_key=output_key,
+    keyframes=keyframes_dict,
     ...
-    # Line 275-282 - PROBLEM: Always creates local upscaler
-    if AIVideoUpscaler is None:
-        raise HTTPException(...)
-
-    upscaler = AIVideoUpscaler(
-        device='cuda',
-        model_name=model_name,
-        export_mode=export_mode.upper() if export_mode else "FAST",
-    )
+)
 ```
 
-**Compare to `/export/render` (same file, line 897)** which DOES check Modal:
-```python
-# Line 897 - CORRECT: Checks modal_enabled()
-if modal_enabled():
-    result = await call_modal_framing_ai(...)
-else:
-    # Local processing
-    upscaler = AIVideoUpscaler(...)
-```
+### Key Finding
+
+All framing exports go through the `/export/render` endpoint which calls `process_framing_ai` on Modal when `MODAL_ENABLED=true`.
+
+There is no separate "FFmpeg-only" framing path - the `process_framing` function was dead code and has been removed.
 
 ---
 
-## Files to Modify
+## Original Task (For Reference)
 
-| File | Line | Change |
-|------|------|--------|
-| `src/backend/app/routers/export/framing.py` | 164-479 | Add `modal_enabled()` check, call `call_modal_framing_ai()` |
+The original task was to add Modal support to `/export/upscale`. This was already implemented as part of the `/export/render` backend-authoritative approach.
 
 ---
 
-## Implementation Plan
+## What Was Removed (Dead Code Cleanup)
 
-### Step 1: Add Modal Branch to `/upscale` Endpoint
+During the 2026-01-29 investigation:
+- `process_framing` Modal function (never called)
+- `call_modal_framing` client function (never called)
+- `process_framing_with_modal` helper (never called)
 
-Modify the endpoint at line 164 to check `modal_enabled()`:
-
-```python
-@router.post("/upscale")
-async def upscale_video(...):
-    # ... existing validation code ...
-
-    if modal_enabled():
-        # Modal processing path
-        # Upload source video to R2 temp location
-        temp_key = f"temp/upscale_{export_id}/source.mp4"
-        # ... upload video_file to R2 ...
-
-        # Call Modal function (reuse existing call_modal_framing_ai)
-        result = await call_modal_framing_ai(
-            job_id=export_id,
-            user_id=user_id,
-            input_key=temp_key,
-            output_key=output_key,
-            crop_keyframes=keyframes,
-            target_fps=target_fps,
-            target_width=target_width,
-            target_height=target_height,
-            video_duration=video_duration,
-            progress_callback=progress_callback,
-        )
-
-        # Cleanup temp file
-        delete_from_r2(user_id, temp_key)
-
-        if result.get("status") != "success":
-            raise HTTPException(...)
-
-        return JSONResponse({...})
-
-    else:
-        # Existing local processing path (lines 275-479)
-        if AIVideoUpscaler is None:
-            raise HTTPException(...)
-
-        upscaler = AIVideoUpscaler(...)
-        # ... rest of existing code ...
-```
-
-### Step 2: Extract Input Data for Modal
-
-The `/upscale` endpoint receives a multipart form with:
-- `video` - The video file to upscale
-- `keyframes_json` - Crop keyframes
-- `export_mode` - Quality mode (FAST/QUALITY)
-- `target_fps`, `target_width`, `target_height`
-
-For Modal, we need to:
-1. Upload the video to R2 temp location
-2. Pass R2 key to Modal function
-3. Clean up temp file after processing
-
-### Step 3: Reuse Existing Modal Function
-
-The `call_modal_framing_ai()` function in `modal_client.py` already handles Real-ESRGAN upscaling. The `/upscale` endpoint can reuse this function.
-
----
-
-## Key Differences from `/render` Endpoint
-
-| Aspect | `/upscale` | `/render` |
-|--------|------------|-----------|
-| Input source | Multipart form file | R2 key (video already in R2) |
-| Progress updates | WebSocket | WebSocket |
-| Output location | R2 working_videos | R2 working_videos |
-
-The main difference is that `/upscale` receives a file upload, while `/render` works with files already in R2. The Modal path for `/upscale` needs to handle the file upload → R2 → Modal flow.
-
----
-
-## Testing
-
-1. Set `MODAL_ENABLED=true` in `.env`
-2. Navigate to Framing screen
-3. Upload a video and set crop keyframes
-4. Click export
-5. Verify Modal logs show processing (not local GPU)
-6. Verify output video quality matches local processing
-
----
-
-## Rollback
-
-If Modal processing fails:
-- `modal_enabled()` check ensures local fallback is always available
-- No database schema changes
-- Same API response format
-
----
-
-## Dependencies
-
-- `call_modal_framing_ai()` already exists in `modal_client.py`
-- `process_framing_ai` Modal function already deployed
-- R2 upload/download utilities already exist in `storage.py`
-
----
-
-## Estimated Effort
-
-- Add Modal branch: 1-2 hours
-- Handle file upload → R2: 30 min
-- Testing: 1 hour
-- **Total**: ~3-4 hours
+All framing now correctly uses `process_framing_ai` (Real-ESRGAN AI upscaling).

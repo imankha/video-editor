@@ -3,6 +3,7 @@ import { useExportStore } from '../stores/exportStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { toast } from '../components/shared';
 import { API_BASE } from '../config';
+import { ExportStatus } from '../constants/exportStatus';
 
 // Re-poll Modal status after this many ms of WebSocket silence
 const SILENCE_TIMEOUT_MS = 60000; // 60 seconds
@@ -54,7 +55,7 @@ export function useExportRecovery() {
         // For each processing export, check Modal status ONCE
         // This handles the case where Modal finished while user was away
         for (const exp of serverExports) {
-          if (exp.status === 'pending' || exp.status === 'processing') {
+          if (exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING) {
             console.log(`[ExportRecovery] Checking Modal status for ${exp.job_id}`);
 
             // Poll Modal status once to check real state
@@ -150,7 +151,7 @@ export function useExportRecovery() {
         const data = await response.json();
         console.log(`[ExportRecovery] Modal status for ${exp.job_id}:`, data.status);
 
-        if (data.status === 'complete') {
+        if (data.status === ExportStatus.COMPLETE) {
           // Modal finished - backend already finalized
           console.log(`[ExportRecovery] Export ${exp.job_id} completed on Modal`);
           completeExport(exp.job_id, data.working_video_id, data.output_filename);
@@ -160,17 +161,27 @@ export function useExportRecovery() {
           });
           return false;
         } else if (data.status === 'running') {
-          // Still running on Modal - show indeterminate progress
-          console.log(`[ExportRecovery] Export ${exp.job_id} still running on Modal`);
+          // Still running on Modal - resume progress simulation
+          console.log(`[ExportRecovery] Export ${exp.job_id} still running on Modal, resuming progress`);
+
+          // Start progress simulation on backend
+          try {
+            await fetch(`${API_BASE}/api/exports/${exp.job_id}/resume-progress`, { method: 'POST' });
+            console.log(`[ExportRecovery] Started progress loop for ${exp.job_id}`);
+          } catch (err) {
+            console.warn(`[ExportRecovery] Failed to start progress loop for ${exp.job_id}:`, err);
+          }
+
+          // Show initial progress while we wait for WebSocket updates
           updateExportProgress(exp.job_id, {
             projectId: exp.project_id,
             projectName: exp.project_name,
             type: exp.type,
-            percent: -1, // Indeterminate
-            message: 'Processing on cloud GPU...',
+            percent: 10, // Start at 10% (job already running)
+            message: 'Reconnecting to cloud GPU...',
           });
           return true;
-        } else if (data.status === 'error') {
+        } else if (data.status === ExportStatus.ERROR) {
           // Modal job failed
           console.error(`[ExportRecovery] Export ${exp.job_id} failed on Modal:`, data.error);
           failExport(exp.job_id, data.error || 'Export failed on cloud GPU');

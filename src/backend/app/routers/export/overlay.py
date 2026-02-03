@@ -44,6 +44,7 @@ from ...services.image_extractor import (
     list_highlight_images,
 )
 from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto
+from ...constants import ExportStatus
 
 logger = logging.getLogger(__name__)
 
@@ -325,7 +326,7 @@ async def export_overlay_only(
             import shutil
             shutil.copy(input_path, output_path)
 
-            progress_data = {"progress": 100, "message": "Export complete!", "status": "complete", "projectId": project_id, "projectName": project_name, "type": "overlay"}
+            progress_data = {"progress": 100, "message": "Export complete!", "status": ExportStatus.COMPLETE, "projectId": project_id, "projectName": project_name, "type": "overlay"}
             export_progress[export_id] = progress_data
             await manager.send_progress(export_id, progress_data)
 
@@ -413,7 +414,7 @@ async def export_overlay_only(
                 logger.warning(f"[Overlay Export] Failed to update export_jobs record: {e}")
 
         # Complete
-        progress_data = {"progress": 100, "message": "Export complete!", "status": "complete", "projectId": project_id, "projectName": project_name, "type": "overlay"}
+        progress_data = {"progress": 100, "message": "Export complete!", "status": ExportStatus.COMPLETE, "projectId": project_id, "projectName": project_name, "type": "overlay"}
         export_progress[export_id] = progress_data
         await manager.send_progress(export_id, progress_data)
 
@@ -1366,7 +1367,7 @@ async def render_overlay(request: OverlayRenderRequest):
         complete_data = {
             "progress": 100,
             "message": "Export complete!",
-            "status": "complete",
+            "status": ExportStatus.COMPLETE,
             "projectId": project_id,
             "projectName": project_name,
             "type": "overlay",

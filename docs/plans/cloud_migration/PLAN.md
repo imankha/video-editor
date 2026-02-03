@@ -185,7 +185,13 @@ Current DB is ~204KB - no optimization needed yet.
 |---|------|--------|-------|
 | U1 | Temp folder multi-user isolation | `TODO` | Move temp uploads to `{user_id}/temp/...` instead of `temp/...` |
 | U2 | Framing export validation UX | `TODO` | Disable export until all clips framed, rollover lists unframed clips, checkmarks on framed clips |
-| U3 | [Modal Job Recovery](tasks/modal-job-recovery.md) | `DONE` (Phase 1) | Multi-clip: spawn() + call_id stored. /modal-status endpoint. Smart stale detection. |
+| U3 | [Progress Bar Improvements](tasks/progress-bar-improvements.md) | `TODO` | Fix reset bug, improve time estimates, add ETA |
+| U4 | [Project Status Regression](tasks/project-status-regression.md) | `TODO` | Re-framing/re-overlay updates project status correctly |
+| U5 | [Modal Job Recovery](tasks/modal-job-recovery.md) | `DONE` (Phase 1) | Multi-clip: spawn() + call_id stored. /modal-status endpoint. Smart stale detection. |
+| U6 | Project filter persistence | `TODO` | Preserve last filter setting (localStorage) so filters persist across sessions |
+| U7 | [Player detection keyframes](tasks/player-detection-keyframes.md) | `TODO` | Detect on 4 frames (first 2s), create keyframes, click rectangle to set player |
+| U8 | [Auto player detection](tasks/auto-player-detection.md) | `TODO` | After framing completes, auto-create overlay keyframes with player boxes |
+| U9 | [Logging cleanup](tasks/logging-cleanup.md) | `TODO` | Remove debug logs, standardize log levels, ensure useful production logs |
 
 **Status Key**: `DONE` | `TODO` | `IN_PROGRESS` | `TESTING` | `BLOCKED` | `OPTIONAL` | `FUTURE`
 
@@ -691,10 +697,16 @@ IN PROGRESS:
 
 AFTER B1 TESTING:
 1. Verify output quality and chapter markers
-2. U1: Move temp folder to user folder for multi-user isolation
-3. U2: Framing export validation UX (disable until all clips framed)
-4. Task 09: Full E2E testing
+2. U3: Progress bar improvements (fix reset bug, improve estimates)
+3. U4: Project status regression (re-framing shows correct status)
+4. U6: Project filter persistence (preserve last filter setting)
+5. U7: Player detection keyframes (detect 4 frames, click to set player)
+6. U8: Auto player detection (auto-create overlay keyframes after framing)
+7. U1: Move temp folder to user folder for multi-user isolation
+8. U2: Framing export validation UX (disable until all clips framed)
+9. U9: Logging cleanup (clean logs for production readiness)
+10. Task 09: Full E2E testing
 ```
 
 **Current step**: B1 - Testing 8-clip export on Modal
-**Next after B1**: U1 (temp folder isolation), U2 (framing UX), then Task 09 (E2E testing)
+**Next after B1**: U3 (progress bar), U4 (status regression), U6 (filter persistence), U7/U8 (player detection), U1 (temp folder), U2 (framing UX), U9 (logging), then Task 09 (E2E testing)

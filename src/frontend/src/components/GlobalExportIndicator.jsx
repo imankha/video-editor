@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Download, Check, X, ChevronUp, ChevronDown, Loader } from 'lucide-react';
 import { useExportStore } from '../stores/exportStore';
 import { toast } from './shared';
+import { ExportStatus } from '../constants/exportStatus';
 
 /**
  * GlobalExportIndicator - Persistent indicator for active exports
@@ -24,7 +25,7 @@ export function GlobalExportIndicator() {
 
   // Filter to get only processing exports
   const processingExports = Object.values(activeExports).filter(
-    (exp) => exp.status === 'pending' || exp.status === 'processing'
+    (exp) => exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING
   );
 
   // Debug logging when count changes
@@ -35,7 +36,7 @@ export function GlobalExportIndicator() {
 
   // Filter to get recent completed/failed exports (last 10 seconds)
   const recentCompletedExports = Object.values(activeExports).filter((exp) => {
-    if (exp.status !== 'complete' && exp.status !== 'error') return false;
+    if (exp.status !== ExportStatus.COMPLETE && exp.status !== ExportStatus.ERROR) return false;
     const completedTime = new Date(exp.completedAt).getTime();
     const now = Date.now();
     return now - completedTime < 10000; // 10 seconds
@@ -49,12 +50,12 @@ export function GlobalExportIndicator() {
 
     newlyCompleted.forEach((exp) => {
       const projectLabel = exp.projectName || `Project #${exp.projectId}`;
-      if (exp.status === 'complete') {
+      if (exp.status === ExportStatus.COMPLETE) {
         toast.success('Export Complete', {
           message: `${projectLabel} - ${exp.type} export finished successfully`,
           duration: 5000,
         });
-      } else if (exp.status === 'error') {
+      } else if (exp.status === ExportStatus.ERROR) {
         toast.error('Export Failed', {
           message: `${projectLabel} - ${exp.error || 'An error occurred during export'}`,
           duration: 8000,
@@ -144,7 +145,7 @@ export function GlobalExportIndicator() {
               </div>
               {primaryExport && (
                 <div className="text-xs text-gray-400 truncate max-w-[180px]">
-                  {primaryExport.projectName || `Project #${primaryExport.projectId}`} - {primaryExport.progress?.percent ?? 0}%
+                  {primaryExport.projectName || `Project #${primaryExport.projectId}`} - {primaryExport.progress?.percent >= 0 ? `${primaryExport.progress.percent}%` : 'Processing...'}
                 </div>
               )}
             </div>
@@ -158,11 +159,15 @@ export function GlobalExportIndicator() {
 
         {/* Progress bar for primary export */}
         {primaryExport && (
-          <div className="h-1 bg-gray-700">
-            <div
-              className="h-full bg-blue-500 transition-all duration-300"
-              style={{ width: `${primaryExport.progress?.percent ?? 0}%` }}
-            />
+          <div className="h-1 bg-gray-700 overflow-hidden">
+            {primaryExport.progress?.percent >= 0 ? (
+              <div
+                className="h-full bg-blue-500 transition-all duration-300"
+                style={{ width: `${primaryExport.progress.percent}%` }}
+              />
+            ) : (
+              <div className="h-full bg-blue-500 animate-pulse w-full opacity-50" />
+            )}
           </div>
         )}
 
@@ -186,7 +191,7 @@ export function GlobalExportIndicator() {
                       </div>
                     </div>
                   </div>
-                  {(exp.status === 'complete' || exp.status === 'error') && (
+                  {(exp.status === ExportStatus.COMPLETE || exp.status === ExportStatus.ERROR) && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -200,30 +205,34 @@ export function GlobalExportIndicator() {
                 </div>
 
                 {/* Progress bar */}
-                {(exp.status === 'pending' || exp.status === 'processing') && (
+                {(exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING) && (
                   <div className="mt-2">
                     <div className="flex justify-between text-xs text-gray-400 mb-1">
                       <span>{exp.progress?.message || 'Processing...'}</span>
-                      <span>{exp.progress?.percent ?? 0}%</span>
+                      <span>{exp.progress?.percent >= 0 ? `${exp.progress.percent}%` : ''}</span>
                     </div>
                     <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-500 transition-all duration-300"
-                        style={{ width: `${exp.progress?.percent ?? 0}%` }}
-                      />
+                      {exp.progress?.percent >= 0 ? (
+                        <div
+                          className="h-full bg-blue-500 transition-all duration-300"
+                          style={{ width: `${exp.progress.percent}%` }}
+                        />
+                      ) : (
+                        <div className="h-full bg-blue-500 animate-pulse w-full opacity-50" />
+                      )}
                     </div>
                   </div>
                 )}
 
                 {/* Error message */}
-                {exp.status === 'error' && exp.error && (
+                {exp.status === ExportStatus.ERROR && exp.error && (
                   <div className="mt-2 text-xs text-red-400 truncate">
                     {exp.error}
                   </div>
                 )}
 
                 {/* Completion message */}
-                {exp.status === 'complete' && (
+                {exp.status === ExportStatus.COMPLETE && (
                   <div className="mt-2 text-xs text-green-400">
                     Completed {new Date(exp.completedAt).toLocaleTimeString()}
                   </div>
