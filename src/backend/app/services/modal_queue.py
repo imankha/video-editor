@@ -1,15 +1,16 @@
 """
 Modal Queue Service
 
-All Modal GPU operations go through this persistent queue:
+All GPU operations go through this persistent queue:
 1. Enqueue task (DB insert only)
-2. Process queue (reads DB, calls Modal, updates DB)
+2. Process queue (reads DB, calls Modal or local FFmpeg, updates DB)
 3. Same processor runs on startup for recovery
 
 This ensures:
 - Tasks survive server restarts
 - No duplicate processing
 - Clear separation of concerns
+- Works with Modal (cloud) OR local FFmpeg (dev)
 
 Flow:
     enqueue_clip_extraction() -> DB insert (status='pending')
@@ -17,7 +18,7 @@ Flow:
                               v
     process_modal_queue() -> Read pending tasks from DB
                           -> Mark as 'running'
-                          -> Call Modal
+                          -> Call Modal OR local FFmpeg
                           -> Mark as 'completed' or 'failed'
 """
 
@@ -25,9 +26,14 @@ import json
 import logging
 import asyncio
 import uuid
+import os
+import tempfile
 from typing import Optional
-from app.database import get_db_connection
+from pathlib import Path
+from app.database import get_db_connection, get_raw_clips_path, get_games_path
 from app.services.modal_client import modal_enabled, call_modal_extract_clip
+from app.services.ffmpeg_service import extract_clip as ffmpeg_extract_clip
+from app.storage import R2_ENABLED, download_from_r2, upload_to_r2
 from app.websocket import broadcast_extraction_event
 
 logger = logging.getLogger(__name__)
@@ -83,11 +89,15 @@ async def process_modal_queue() -> dict:
     - After enqueueing new tasks (in background)
     - On app startup (for recovery)
 
+    Uses Modal when MODAL_ENABLED=true, otherwise falls back to local FFmpeg.
+
     Returns summary of processed tasks.
     """
-    if not modal_enabled():
-        logger.info("[ModalQueue] Modal not enabled, skipping queue processing")
-        return {"processed": 0, "succeeded": 0, "failed": 0, "skipped": True}
+    use_modal = modal_enabled()
+    if use_modal:
+        logger.info("[ModalQueue] Processing queue with Modal (cloud GPU)")
+    else:
+        logger.info("[ModalQueue] Processing queue with local FFmpeg")
 
     # Phase 1: Find and claim pending tasks
     tasks_to_process = []
@@ -167,22 +177,35 @@ async def _process_single_task(task_info: dict) -> dict:
 
 
 async def _process_clip_extraction(task_info: dict) -> dict:
-    """Process a clip extraction task."""
+    """Process a clip extraction task using Modal or local FFmpeg."""
     task_id = task_info["task_id"]
     params = task_info["params"]
     clip_id = task_info["raw_clip_id"]
     clip_filename = params.get("clip_filename")
+    user_id = params["user_id"]
 
     logger.info(f"[ModalQueue] Processing clip extraction: task={task_id}, clip={clip_id}")
 
-    result = await call_modal_extract_clip(
-        user_id=params["user_id"],
-        input_key=params["input_key"],
-        output_key=params["output_key"],
-        start_time=params["start_time"],
-        end_time=params["end_time"],
-        copy_codec=params.get("copy_codec", True),
-    )
+    if modal_enabled():
+        # Use Modal (cloud GPU)
+        result = await call_modal_extract_clip(
+            user_id=user_id,
+            input_key=params["input_key"],
+            output_key=params["output_key"],
+            start_time=params["start_time"],
+            end_time=params["end_time"],
+            copy_codec=params.get("copy_codec", True),
+        )
+    else:
+        # Use local FFmpeg
+        result = await _extract_clip_local(
+            user_id=user_id,
+            input_key=params["input_key"],
+            output_key=params["output_key"],
+            start_time=params["start_time"],
+            end_time=params["end_time"],
+            copy_codec=params.get("copy_codec", True),
+        )
 
     if result.get("status") == "success":
         # Update clip with filename and mark task complete
@@ -220,6 +243,90 @@ async def _process_clip_extraction(task_info: dict) -> dict:
         )
 
         return {"success": False, "task_id": task_id, "clip_id": clip_id, "error": error}
+
+
+async def _extract_clip_local(
+    user_id: str,
+    input_key: str,
+    output_key: str,
+    start_time: float,
+    end_time: float,
+    copy_codec: bool = True,
+) -> dict:
+    """
+    Extract a clip using local FFmpeg.
+
+    Handles both local files and R2 storage:
+    - Downloads from R2 if R2_ENABLED
+    - Extracts clip using FFmpeg
+    - Uploads to R2 if R2_ENABLED
+
+    Returns dict with 'status' key ('success' or 'error').
+    """
+    try:
+        # Determine input path
+        if R2_ENABLED:
+            # Download source video from R2 to temp file
+            with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_input:
+                input_path = tmp_input.name
+
+            logger.info(f"[LocalExtract] Downloading {input_key} from R2")
+            success = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: download_from_r2(user_id, input_key, Path(input_path))
+            )
+            if not success:
+                return {"status": "error", "error": f"Failed to download {input_key} from R2"}
+        else:
+            # Use local file path
+            # input_key is like "games/filename.mp4"
+            input_path = str(get_games_path() / input_key.replace("games/", ""))
+            if not os.path.exists(input_path):
+                return {"status": "error", "error": f"Input file not found: {input_path}"}
+
+        # Determine output path
+        output_filename = output_key.replace("raw_clips/", "")
+        local_output_path = str(get_raw_clips_path() / output_filename)
+
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(local_output_path), exist_ok=True)
+
+        # Extract clip using FFmpeg
+        logger.info(f"[LocalExtract] Extracting clip: {start_time}s - {end_time}s")
+        success = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: ffmpeg_extract_clip(
+                input_path=input_path,
+                output_path=local_output_path,
+                start_time=start_time,
+                end_time=end_time,
+                copy_codec=copy_codec,
+            )
+        )
+
+        if not success:
+            return {"status": "error", "error": "FFmpeg extraction failed"}
+
+        # Upload to R2 if enabled
+        if R2_ENABLED:
+            logger.info(f"[LocalExtract] Uploading {output_key} to R2")
+            upload_success = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: upload_to_r2(user_id, output_key, Path(local_output_path))
+            )
+            if not upload_success:
+                return {"status": "error", "error": f"Failed to upload {output_key} to R2"}
+
+            # Clean up temp input file if we downloaded it
+            if R2_ENABLED and os.path.exists(input_path) and input_path.startswith(tempfile.gettempdir()):
+                os.unlink(input_path)
+
+        logger.info(f"[LocalExtract] Successfully extracted clip to {output_key}")
+        return {"status": "success", "output_key": output_key}
+
+    except Exception as e:
+        logger.error(f"[LocalExtract] Error: {e}")
+        return {"status": "error", "error": str(e)}
 
 
 def _mark_task_failed(task_id: int, error: str):
