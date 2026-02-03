@@ -205,12 +205,16 @@ export function OverlayScreen({
 
   // Calculate which highlight keyframe is "selected" based on playhead proximity
   // This makes the keyframe visually enlarge when the playhead is near it
+  // NOTE: We use highlightRegionKeyframes (from useHighlightRegions) not highlightKeyframes (from useHighlight)
+  // because the timeline displays region keyframes, not the single-highlight keyframes
   const selectedHighlightKeyframeIndex = useMemo(() => {
-    if (!videoUrl || !highlightKeyframes || highlightKeyframes.length === 0) return null;
-    const currentFrame = Math.round(currentTime * highlightFramerate);
-    const index = findKeyframeIndexNearFrame(highlightKeyframes, currentFrame, FRAME_TOLERANCE);
+    if (!videoUrl || !highlightRegionKeyframes || highlightRegionKeyframes.length === 0) {
+      return null;
+    }
+    const currentFrame = Math.round(currentTime * highlightRegionsFramerate);
+    const index = findKeyframeIndexNearFrame(highlightRegionKeyframes, currentFrame, FRAME_TOLERANCE);
     return index !== -1 ? index : null;
-  }, [videoUrl, currentTime, highlightFramerate, highlightKeyframes]);
+  }, [videoUrl, currentTime, highlightRegionsFramerate, highlightRegionKeyframes]);
 
   // =========================================
   // INITIALIZATION - Load working video if needed
