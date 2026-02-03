@@ -6,6 +6,7 @@ import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
+import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { API_BASE } from '../config';
 import { useProject } from '../contexts/ProjectContext';
 import { useNavigationStore } from '../stores/navigationStore';
@@ -197,6 +198,19 @@ export function OverlayScreen({
     updateScrollPosition: updateTimelineScrollPosition,
     getTimelineScale,
   } = useTimelineZoom();
+
+  // =========================================
+  // DERIVED STATE - Selected keyframe based on playhead position
+  // =========================================
+
+  // Calculate which highlight keyframe is "selected" based on playhead proximity
+  // This makes the keyframe visually enlarge when the playhead is near it
+  const selectedHighlightKeyframeIndex = useMemo(() => {
+    if (!videoUrl || !highlightKeyframes || highlightKeyframes.length === 0) return null;
+    const currentFrame = Math.round(currentTime * highlightFramerate);
+    const index = findKeyframeIndexNearFrame(highlightKeyframes, currentFrame, FRAME_TOLERANCE);
+    return index !== -1 ? index : null;
+  }, [videoUrl, currentTime, highlightFramerate, highlightKeyframes]);
 
   // =========================================
   // INITIALIZATION - Load working video if needed
@@ -627,6 +641,7 @@ export function OverlayScreen({
       highlightRegionsFramerate={highlightRegionsFramerate}
       highlightEffectType={highlightEffectType}
       isTimeInEnabledRegion={isTimeInEnabledRegion}
+      selectedHighlightKeyframeIndex={selectedHighlightKeyframeIndex}
       // Highlight handlers
       onHighlightChange={handleHighlightChange}
       onHighlightComplete={handleHighlightComplete}

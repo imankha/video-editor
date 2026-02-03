@@ -37,6 +37,7 @@ export default function RegionLayer({
   boundaries = [],
   keyframes = [],
   framerate = 30,
+  selectedKeyframeIndex = null,
   duration,
   visualDuration,
   currentTime,
@@ -258,21 +259,15 @@ export default function RegionLayer({
   };
 
   /**
-   * Determine which keyframe is "selected" based on exact frame match
-   * Returns the keyframe time only if playhead is at the exact frame
+   * Determine which keyframe is "selected" based on selectedKeyframeIndex
+   * Returns the keyframe time if a keyframe is selected (within tolerance)
    */
   const getSelectedKeyframeTime = () => {
     if (mode !== 'highlight' || keyframes.length === 0) return null;
+    if (selectedKeyframeIndex === null || selectedKeyframeIndex < 0 || selectedKeyframeIndex >= keyframes.length) return null;
 
-    // Convert currentTime to frame for exact match
-    const currentFrame = Math.round(currentTime * framerate);
-
-    for (const keyframe of keyframes) {
-      if (keyframe.frame === currentFrame) {
-        return frameToTime(keyframe.frame, framerate);
-      }
-    }
-    return null;
+    const keyframe = keyframes[selectedKeyframeIndex];
+    return frameToTime(keyframe.frame, framerate);
   };
 
   const selectedKeyframeTime = getSelectedKeyframeTime();
@@ -291,12 +286,9 @@ export default function RegionLayer({
   const renderKeyframes = () => {
     if (mode !== 'highlight' || keyframes.length === 0) return null;
 
-    // Get current frame for exact matching
-    const currentFrame = Math.round(currentTime * framerate);
-
     return keyframes.map((keyframe, index) => {
-      // Is this keyframe selected (playhead is at exact frame)?
-      const isSelected = keyframe.frame === currentFrame;
+      // Is this keyframe selected? Use the passed selectedKeyframeIndex which accounts for tolerance
+      const isSelected = selectedKeyframeIndex === index;
 
       // When selected, use currentTime for position so keyframe aligns with playhead
       // Otherwise use the keyframe's frame time
