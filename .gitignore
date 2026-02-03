@@ -73,3 +73,12 @@ nul
 
 # User annotation exports
 formal annotations/
+
+# Local Claude settings
+.claude/settings.local.json
+
+# SQLite databases
+*.db
+
+# Deploy output
+deploy_output.txt
