@@ -54,6 +54,68 @@ except (ImportError, OSError, AttributeError) as e:
 DEFAULT_HIGHLIGHT_REGION_DURATION = 2.0
 
 
+def normalize_clip_data_for_modal(clip_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize clip data format for Modal processing.
+
+    The frontend sends different formats depending on how the clip was edited:
+    - Frontend format: {segments: {boundaries, segmentSpeeds, trimRange}, trimRange, cropKeyframes}
+    - DB export format: {segments: {trim_start, trim_end, segments: [...]}, cropKeyframes}
+
+    Modal expects: {segmentsData: {trimRange: {start, end}, segments: [{start, end, speed}]}, cropKeyframes}
+
+    Args:
+        clip_data: Clip configuration from frontend
+
+    Returns:
+        Normalized clip data for Modal
+    """
+    result = dict(clip_data)  # Copy original
+    segments = clip_data.get('segments', {})
+    trim_range = clip_data.get('trimRange')
+
+    # Build normalized segmentsData for Modal
+    segments_data = {}
+
+    # Handle trimRange - can be at top level or inside segments
+    if trim_range:
+        segments_data['trimRange'] = trim_range
+    elif isinstance(segments, dict):
+        if 'trimRange' in segments:
+            segments_data['trimRange'] = segments['trimRange']
+        elif 'trim_start' in segments or 'trim_end' in segments:
+            # DB export format
+            segments_data['trimRange'] = {
+                'start': segments.get('trim_start', 0),
+                'end': segments.get('trim_end', clip_data.get('duration', 15.0))
+            }
+
+    # Handle segments/speed data
+    if isinstance(segments, dict):
+        if 'segments' in segments and isinstance(segments['segments'], list):
+            # DB export format: {segments: [{start, end, speed}, ...]}
+            segments_data['segments'] = segments['segments']
+        elif 'boundaries' in segments and 'segmentSpeeds' in segments:
+            # Frontend format: convert boundaries/segmentSpeeds to segments array
+            boundaries = segments['boundaries']
+            speeds = segments['segmentSpeeds']
+            converted_segments = []
+            for i in range(len(boundaries) - 1):
+                converted_segments.append({
+                    'start': boundaries[i],
+                    'end': boundaries[i + 1],
+                    'speed': speeds.get(str(i), 1.0)
+                })
+            if converted_segments:
+                segments_data['segments'] = converted_segments
+
+    result['segmentsData'] = segments_data
+
+    clip_index = clip_data.get('clipIndex', '?')
+    logger.info(f"[normalize_clip_data] Clip {clip_index}: input segments={clip_data.get('segments')}, input trimRange={clip_data.get('trimRange')}, output segmentsData={segments_data}")
+    return result
+
+
 def calculate_effective_duration(clip_data: Dict[str, Any], raw_duration: float) -> float:
     """
     Calculate the effective duration of a clip after applying trim and speed changes.
@@ -62,6 +124,7 @@ def calculate_effective_duration(clip_data: Dict[str, Any], raw_duration: float)
     1. Frontend format: {segments: {segmentSpeeds, boundaries}, trimRange: {start, end}}
     2. DB Export format: {trim_start, trim_end, segments: [{start, end, speed}, ...]}
     3. DB Trim-only format: {trim_start, trim_end}
+    4. Normalized format: {segmentsData: {trimRange, segments}}
 
     Args:
         clip_data: Clip configuration with trimRange and segments
@@ -70,8 +133,14 @@ def calculate_effective_duration(clip_data: Dict[str, Any], raw_duration: float)
     Returns:
         Effective duration in seconds (accounting for trim and speed)
     """
-    segments = clip_data.get('segments')
-    trim_range = clip_data.get('trimRange')
+    clip_index = clip_data.get('clipIndex', '?')
+
+    # Check for normalized format first (segmentsData wrapper)
+    segments_data = clip_data.get('segmentsData', {})
+    segments = clip_data.get('segments') or segments_data.get('segments')
+    trim_range = clip_data.get('trimRange') or segments_data.get('trimRange')
+
+    logger.debug(f"[calc_effective_duration] Clip {clip_index}: raw_duration={raw_duration}, segments={segments}, trim_range={trim_range}, segmentsData={segments_data}")
 
     # Step 1: Extract trim boundaries from all possible sources
     trim_start = 0
@@ -127,7 +196,9 @@ def calculate_effective_duration(clip_data: Dict[str, Any], raw_duration: float)
         return total_duration
 
     # No speed changes - just return trimmed duration
-    return trim_end - trim_start
+    effective = trim_end - trim_start
+    logger.info(f"[calc_effective_duration] Clip {clip_index}: trim_start={trim_start}, trim_end={trim_end}, effective={effective}")
+    return effective
 
 
 def build_clip_boundaries_from_durations(
@@ -202,6 +273,8 @@ def build_clip_boundaries_from_input(
     for i, clip_data in enumerate(sorted_clips):
         raw_duration = clip_data.get('duration', 15.0)
         effective_duration = calculate_effective_duration(clip_data, raw_duration)
+
+        logger.info(f"[build_clip_boundaries] Clip {i}: raw_duration={raw_duration}, effective_duration={effective_duration}")
 
         # Account for transition overlap
         if i > 0 and transition_type == 'dissolve':
@@ -717,13 +790,18 @@ async def export_multi_clip(
                     except Exception as e:
                         logger.warning(f"[Multi-Clip Export] Failed to store modal_call_id: {e}")
 
+            # Normalize clip data format for Modal
+            # Frontend sends {segments, trimRange}, Modal expects {segmentsData: {trimRange, segments}}
+            normalized_clips_data = [normalize_clip_data_for_modal(clip) for clip in clips_data]
+            logger.info(f"[Multi-Clip Export] Normalized {len(normalized_clips_data)} clips for Modal")
+
             # Call Modal - single container processes all clips
             result = await call_modal_multi_clip(
                 job_id=export_id,
                 user_id=captured_user_id,
                 source_keys=source_keys,
                 output_key=output_key,
-                clips_data=clips_data,
+                clips_data=normalized_clips_data,
                 transition=transition,
                 target_width=target_resolution[0],
                 target_height=target_resolution[1],
@@ -776,18 +854,26 @@ async def export_multi_clip(
                     with get_db_connection() as conn:
                         cursor = conn.cursor()
 
+                        # Get next version number for working_videos
+                        cursor.execute("""
+                            SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                            FROM working_videos WHERE project_id = ?
+                        """, (project_id,))
+                        next_version = cursor.fetchone()['next_version']
+
                         # Generate default highlight regions at clip boundaries
-                        # NOTE: For Modal, we use input-based calculation as fallback
-                        # since we don't have access to processed clip files
-                        source_clips = build_clip_boundaries_from_input(clips_data, transition)
+                        # Use normalized clips_data for accurate duration calculation
+                        source_clips = build_clip_boundaries_from_input(normalized_clips_data, transition)
                         highlight_regions = generate_default_highlight_regions(source_clips)
                         highlights_json = json.dumps(highlight_regions)
 
-                        # Insert working video record with highlight regions
+                        logger.info(f"[Multi-Clip Export] Generated {len(highlight_regions)} highlight regions for {len(source_clips)} clips")
+
+                        # Insert working video record with highlight regions and version
                         cursor.execute("""
-                            INSERT INTO working_videos (project_id, filename, highlights_data)
-                            VALUES (?, ?, ?)
-                        """, (project_id, output_filename, highlights_json))
+                            INSERT INTO working_videos (project_id, filename, version, highlights_data)
+                            VALUES (?, ?, ?, ?)
+                        """, (project_id, output_filename, next_version, highlights_json))
                         working_video_id = cursor.lastrowid
 
                         # Update project to point to the new working video

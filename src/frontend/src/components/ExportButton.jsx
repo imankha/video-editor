@@ -28,32 +28,65 @@ const EXPORT_CONFIG = {
  * Calculate effective clip duration after trim and speed adjustments
  * @param {Object} clip - Clip object with duration, segments, trimRange
  * @returns {number} Effective duration in seconds
+ *
+ * Handles multiple data formats:
+ * 1. Frontend format: {segments: {segmentSpeeds, boundaries, trimRange}, trimRange}
+ * 2. DB saved format: {segments: {trim_start, trim_end, segments: [{start, end, speed}]}}
  */
 function calculateEffectiveDuration(clip) {
   const segments = clip.segments || {};
-  const trimRange = segments.trimRange || clip.trimRange;
-  const segmentSpeeds = segments.segmentSpeeds || {};
-  const boundaries = segments.boundaries || [0, clip.duration];
+
+  // Handle trimRange - can be in segments.trimRange, clip.trimRange, or as segments.trim_start/trim_end
+  let trimRange = segments.trimRange || clip.trimRange;
+  if (!trimRange && (segments.trim_start !== undefined || segments.trim_end !== undefined)) {
+    // DB saved format uses trim_start/trim_end
+    trimRange = {
+      start: segments.trim_start ?? 0,
+      end: segments.trim_end ?? clip.duration
+    };
+  }
 
   // Start with full duration or trimmed range
   const start = trimRange?.start ?? 0;
   const end = trimRange?.end ?? clip.duration;
 
+  // Handle speed data - can be segmentSpeeds object or segments array
+  const segmentSpeeds = segments.segmentSpeeds || {};
+  const boundaries = segments.boundaries || [0, clip.duration];
+  const speedSegmentsArray = segments.segments; // DB format: [{start, end, speed}]
+
+  // Check if we have speed changes
+  const hasSpeedChanges = Object.keys(segmentSpeeds).length > 0 ||
+    (Array.isArray(speedSegmentsArray) && speedSegmentsArray.some(s => s.speed !== 1.0));
+
   // If no speed changes, simple calculation
-  if (Object.keys(segmentSpeeds).length === 0) {
+  if (!hasSpeedChanges) {
     return end - start;
   }
 
-  // Calculate duration accounting for speed changes per segment
+  // Calculate duration accounting for speed changes
   let totalDuration = 0;
 
-  for (let i = 0; i < boundaries.length - 1; i++) {
-    const segStart = Math.max(boundaries[i], start);
-    const segEnd = Math.min(boundaries[i + 1], end);
+  if (Array.isArray(speedSegmentsArray) && speedSegmentsArray.length > 0) {
+    // DB format: use segments array directly
+    for (const seg of speedSegmentsArray) {
+      const segStart = Math.max(seg.start, start);
+      const segEnd = Math.min(seg.end, end);
+      if (segEnd > segStart) {
+        const speed = seg.speed || 1.0;
+        totalDuration += (segEnd - segStart) / speed;
+      }
+    }
+  } else {
+    // Frontend format: use boundaries and segmentSpeeds
+    for (let i = 0; i < boundaries.length - 1; i++) {
+      const segStart = Math.max(boundaries[i], start);
+      const segEnd = Math.min(boundaries[i + 1], end);
 
-    if (segEnd > segStart) {
-      const speed = segmentSpeeds[String(i)] || 1.0;
-      totalDuration += (segEnd - segStart) / speed;
+      if (segEnd > segStart) {
+        const speed = segmentSpeeds[String(i)] || 1.0;
+        totalDuration += (segEnd - segStart) / speed;
+      }
     }
   }
 
@@ -487,7 +520,11 @@ const ExportButton = forwardRef(function ExportButton({
           };
 
           console.log('=== MULTI-CLIP EXPORT: Sending clip data to backend ===');
-          console.log(JSON.stringify(multiClipData, null, 2));
+          // Log each clip's segments and trimRange to verify data flow
+          multiClipData.clips.forEach((c, i) => {
+            console.log(`Clip ${i}: segments=${JSON.stringify(c.segments)}, trimRange=${JSON.stringify(c.trimRange)}, duration=${c.duration}`);
+          });
+          console.log('Full data:', JSON.stringify(multiClipData, null, 2));
           console.log('=======================================================');
 
           formData.append('multi_clip_data_json', JSON.stringify(multiClipData));
