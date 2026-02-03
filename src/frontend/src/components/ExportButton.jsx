@@ -245,12 +245,18 @@ const ExportButton = forwardRef(function ExportButton({
   // SINGLE SOURCE OF TRUTH for progress:
   // - During upload phase (localProgress > 0 and upload not complete): use local state
   // - After upload / from recovery: use store progress from WebSocket
-  // This prevents wild swings from mixing multiple progress sources
+  // - IMPORTANT: Progress should NEVER decrease - use maximum of all sources
+  // This prevents the "progress reset" bug where progress drops from 10% to 0%
+  // when switching from upload tracking to WebSocket tracking
   const storeProgress = currentExportFromStore?.progress?.percent ?? 0;
   const storeMessage = currentExportFromStore?.progress?.message ?? '';
 
   const isInUploadPhase = isExporting && !uploadCompleteRef.current && localProgress > 0;
-  const displayProgress = isInUploadPhase ? localProgress : storeProgress;
+  // Use the maximum progress to prevent backward jumps
+  // - localProgress tracks upload (0-10%)
+  // - storeProgress tracks processing (0-100% from WebSocket)
+  // After upload, storeProgress might still be 0 until WebSocket sends first update
+  const displayProgress = Math.max(localProgress, storeProgress);
   const displayMessage = isInUploadPhase ? progressMessage : (storeMessage || progressMessage);
 
   // Map effect type to toggle position
