@@ -52,9 +52,10 @@ function App() {
   // Framing store - for detecting uncommitted changes in mode switch
   const framingChangedSinceExport = useFramingStore(state => state.framingChangedSinceExport);
 
-  // Overlay store - for checking if working video exists
+  // Overlay store - for checking if working video exists and tracking changes
   const workingVideo = useOverlayStore(state => state.workingVideo);
   const isLoadingWorkingVideo = useOverlayStore(state => state.isLoadingWorkingVideo);
+  const overlayChangedSinceExport = useOverlayStore(state => state.overlayChangedSinceExport);
 
   // Clip data for "Edit in Annotate" button - try clipStore first, then projectDataStore
   // Use proper selectors (not method calls) to ensure Zustand tracks dependencies correctly
@@ -126,21 +127,38 @@ function App() {
   // Check if we can edit in annotate (clip has game association)
   const canEditInAnnotate = !!(selectedClipForAnnotate?.gameId || selectedClipForAnnotate?.game_id);
 
-  // Handle mode change between Framing and Overlay
+  // Handle mode change between Framing, Overlay, and Project Manager
   const handleModeChange = useCallback((newMode) => {
     if (newMode === editorMode) return;
 
     console.log(`[App] Switching from ${editorMode} to ${newMode} mode`);
 
-    // Check if switching from framing to overlay with uncommitted changes
-    if (editorMode === 'framing' && newMode === 'overlay' && hasOverlayVideo && framingChangedSinceExport) {
-      console.log('[App] Uncommitted framing changes detected - showing confirmation dialog');
-      openModeSwitchDialog('overlay');
+    // Check if leaving framing with uncommitted changes
+    // Show confirmation when: going to overlay with existing overlay video, OR going to project-manager
+    if (editorMode === 'framing' && framingChangedSinceExport) {
+      const needsConfirmation = (newMode === 'overlay' && hasOverlayVideo) || newMode === 'project-manager';
+      if (needsConfirmation) {
+        console.log('[App] Uncommitted framing changes detected - showing confirmation dialog');
+        openModeSwitchDialog(newMode, 'framing');
+        return;
+      }
+    }
+
+    // Check if leaving overlay with uncommitted changes (and project has final video)
+    if (editorMode === 'overlay' && overlayChangedSinceExport && selectedProject?.has_final_video) {
+      console.log('[App] Uncommitted overlay changes detected - showing confirmation dialog');
+      openModeSwitchDialog(newMode, 'overlay');
       return;
     }
 
+    // For project-manager, also clear selection and refresh projects
+    if (newMode === 'project-manager') {
+      clearSelection();
+      fetchProjects();
+    }
+
     setEditorMode(newMode);
-  }, [editorMode, hasOverlayVideo, framingChangedSinceExport, openModeSwitchDialog, setEditorMode]);
+  }, [editorMode, hasOverlayVideo, framingChangedSinceExport, overlayChangedSinceExport, selectedProject?.has_final_video, openModeSwitchDialog, setEditorMode, clearSelection, fetchProjects]);
 
   // Mode switch dialog handlers
   const handleModeSwitchCancel = useCallback(() => {
@@ -148,28 +166,49 @@ function App() {
   }, [closeModeSwitchDialog]);
 
   const handleModeSwitchExport = useCallback(() => {
+    const sourceMode = modeSwitchDialog.sourceMode;
     closeModeSwitchDialog();
     console.log('[App] User chose to export first - triggering export');
     if (exportButtonRef.current?.triggerExport) {
       exportButtonRef.current.triggerExport();
     }
-  }, [closeModeSwitchDialog]);
+    // Clear the "changed" flag since we triggered an export - user shouldn't be prompted again
+    if (sourceMode === 'framing') {
+      useFramingStore.getState().setFramingChangedSinceExport(false);
+    } else if (sourceMode === 'overlay') {
+      useOverlayStore.getState().setOverlayChangedSinceExport(false);
+    }
+  }, [closeModeSwitchDialog, modeSwitchDialog.sourceMode]);
 
   const handleModeSwitchDiscard = useCallback(async () => {
-    if (selectedProjectId) {
+    const targetMode = modeSwitchDialog.pendingMode;
+    const sourceMode = modeSwitchDialog.sourceMode;
+
+    // Handle discard based on source mode
+    if (sourceMode === 'overlay') {
+      // For overlay, just reset the changed flag (changes are auto-saved to backend)
+      console.log('[App] Discarding overlay changes (resetting flag)');
+      useOverlayStore.getState().setOverlayChangedSinceExport(false);
+    } else if (selectedProjectId) {
+      // For framing, call the backend to discard uncommitted changes
       try {
         console.log('[App] Discarding framing changes');
         await discardUncommittedChanges(selectedProjectId);
-        closeModeSwitchDialog();
-        setEditorMode('overlay');
       } catch (err) {
-        console.error('[App] Failed to discard changes:', err);
-        closeModeSwitchDialog();
+        console.error('[App] Failed to discard framing changes:', err);
       }
-    } else {
-      closeModeSwitchDialog();
     }
-  }, [selectedProjectId, discardUncommittedChanges, closeModeSwitchDialog, setEditorMode]);
+
+    closeModeSwitchDialog();
+
+    // Handle project-manager specific cleanup
+    if (targetMode === 'project-manager') {
+      clearSelection();
+      fetchProjects();
+    }
+
+    setEditorMode(targetMode || 'project-manager');
+  }, [selectedProjectId, discardUncommittedChanges, closeModeSwitchDialog, setEditorMode, modeSwitchDialog.pendingMode, modeSwitchDialog.sourceMode, clearSelection, fetchProjects]);
 
   // Backward-compatible wrapper for setExportingProject
   const setExportingProject = useCallback((value) => {
@@ -238,11 +277,7 @@ function App() {
                 variant="ghost"
                 icon={Home}
                 iconOnly
-                onClick={() => {
-                  clearSelection();
-                  fetchProjects();
-                  setEditorMode('project-manager');
-                }}
+                onClick={() => handleModeChange('project-manager')}
                 title="Home"
               />
               <Breadcrumb
@@ -291,6 +326,7 @@ function App() {
           {editorMode === 'overlay' && (
             <OverlayScreen
               onExportComplete={handleExportComplete}
+              exportButtonRef={exportButtonRef}
             />
           )}
 
@@ -316,22 +352,20 @@ function App() {
       {/* Mode Switch Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={modeSwitchDialog.isOpen}
-        title="Uncommitted Framing Changes"
-        message="You have made framing edits that haven't been exported yet. The current working video doesn't reflect these changes. What would you like to do?"
+        title={modeSwitchDialog.sourceMode === 'overlay' ? 'Unsaved Overlay Changes' : 'Unsaved Framing Changes'}
+        message={modeSwitchDialog.sourceMode === 'overlay'
+          ? 'You have made overlay edits that haven\'t been saved yet. If you save, you will create a new final video. Would you like to save your edits or discard them?'
+          : 'You have made framing edits that haven\'t been saved yet. If you save, you will lose your previously exported overlay. Would you like to save your edits or discard them?'
+        }
         onClose={handleModeSwitchCancel}
         buttons={[
           {
-            label: 'Cancel',
-            onClick: handleModeSwitchCancel,
-            variant: 'secondary'
-          },
-          {
-            label: 'Discard Changes',
+            label: 'Discard',
             onClick: handleModeSwitchDiscard,
             variant: 'danger'
           },
           {
-            label: 'Export First',
+            label: 'Save',
             onClick: handleModeSwitchExport,
             variant: 'primary'
           }

@@ -264,6 +264,27 @@ async def get_raw_clip_file(clip_id: int):
         raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
 
 
+async def _trigger_extraction_for_auto_project(
+    clip_id: int, project_id: int, game_id: int, video_filename: str,
+    start_time: float, end_time: float, background_tasks: BackgroundTasks
+):
+    """Trigger extraction when an auto-project is created for a 5-star clip."""
+    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+
+    user_id = get_current_user_id()
+    enqueue_clip_extraction(
+        clip_id=clip_id,
+        project_id=project_id,
+        game_id=game_id,
+        video_filename=video_filename,
+        start_time=start_time,
+        end_time=end_time,
+        user_id=user_id,
+    )
+    background_tasks.add_task(run_queue_processor_sync)
+    logger.info(f"[AutoProject] Enqueued extraction for clip {clip_id} in auto-project {project_id}")
+
+
 def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> int:
     """Create a 9:16 project for a 5-star clip and return the project ID."""
     # Fetch tags and rating from the raw clip to generate a name if needed
@@ -343,13 +364,13 @@ def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
 
 
 @router.post("/raw/save", response_model=RawClipSaveResponse)
-async def save_raw_clip(clip_data: RawClipCreate):
+async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTasks):
     """
     Save a raw clip during annotation (real-time save).
 
     Creates a pending clip record without extracting the video.
-    Extraction happens later via finish-annotation when the user leaves annotation mode.
-    If the clip is rated 5 stars, automatically creates a 9:16 project for it.
+    If the clip is rated 5 stars, automatically creates a 9:16 project for it
+    AND triggers extraction (since creating a project should extract its clips).
 
     Idempotent: If a clip with the same game_id + end_time already exists,
     updates that clip instead of creating a duplicate.
@@ -359,7 +380,7 @@ async def save_raw_clip(clip_data: RawClipCreate):
 
         # Check if clip already exists (lookup by game_id + end_time as natural key)
         cursor.execute("""
-            SELECT id, filename, rating, auto_project_id FROM raw_clips
+            SELECT id, filename, rating, auto_project_id, start_time FROM raw_clips
             WHERE game_id = ? AND end_time = ?
         """, (clip_data.game_id, clip_data.end_time))
         existing = cursor.fetchone()
@@ -367,17 +388,37 @@ async def save_raw_clip(clip_data: RawClipCreate):
         if existing:
             # Update existing clip metadata (don't touch filename - extraction is separate)
             clip_id = existing['id']
-            cursor.execute("""
-                UPDATE raw_clips SET name = ?, rating = ?, tags = ?, notes = ?, start_time = ?
-                WHERE id = ?
-            """, (
-                clip_data.name,
-                clip_data.rating,
-                json.dumps(clip_data.tags),
-                clip_data.notes,
-                clip_data.start_time,
-                clip_id
-            ))
+            old_start_time = existing['start_time']
+            boundaries_changed = old_start_time != clip_data.start_time
+
+            # Include boundaries_version increment if start_time changed
+            if boundaries_changed:
+                cursor.execute("""
+                    UPDATE raw_clips SET name = ?, rating = ?, tags = ?, notes = ?, start_time = ?,
+                        boundaries_version = COALESCE(boundaries_version, 0) + 1,
+                        boundaries_updated_at = datetime('now')
+                    WHERE id = ?
+                """, (
+                    clip_data.name,
+                    clip_data.rating,
+                    json.dumps(clip_data.tags),
+                    clip_data.notes,
+                    clip_data.start_time,
+                    clip_id
+                ))
+                logger.info(f"Clip {clip_id} start_time changed, incrementing boundaries_version")
+            else:
+                cursor.execute("""
+                    UPDATE raw_clips SET name = ?, rating = ?, tags = ?, notes = ?, start_time = ?
+                    WHERE id = ?
+                """, (
+                    clip_data.name,
+                    clip_data.rating,
+                    json.dumps(clip_data.tags),
+                    clip_data.notes,
+                    clip_data.start_time,
+                    clip_id
+                ))
 
             # Handle 5-star project sync
             old_rating = existing['rating']
@@ -392,8 +433,22 @@ async def save_raw_clip(clip_data: RawClipCreate):
                 _delete_auto_project(cursor, project_id, clip_id)
                 project_id = None
 
+            # Get game video filename if we need to trigger extraction
+            video_filename = None
+            if project_created and not existing['filename']:
+                cursor.execute("SELECT video_filename FROM games WHERE id = ?", (clip_data.game_id,))
+                game = cursor.fetchone()
+                video_filename = game['video_filename'] if game else None
+
             conn.commit()
             logger.info(f"Updated clip {clip_id} for game {clip_data.game_id}")
+
+            # Trigger extraction if auto-project was created and clip not yet extracted
+            if project_created and video_filename:
+                await _trigger_extraction_for_auto_project(
+                    clip_id, project_id, clip_data.game_id, video_filename,
+                    clip_data.start_time, clip_data.end_time, background_tasks
+                )
 
             return RawClipSaveResponse(
                 raw_clip_id=clip_id,
@@ -413,12 +468,24 @@ async def save_raw_clip(clip_data: RawClipCreate):
         # Handle 5-star project creation
         project_created = False
         project_id = None
+        video_filename = None
         if clip_data.rating == 5:
             project_id = _create_auto_project_for_clip(cursor, raw_clip_id, clip_data.name)
             project_created = True
+            # Get game video filename for extraction
+            cursor.execute("SELECT video_filename FROM games WHERE id = ?", (clip_data.game_id,))
+            game = cursor.fetchone()
+            video_filename = game['video_filename'] if game else None
 
         conn.commit()
         logger.info(f"Saved pending clip {raw_clip_id} for game {clip_data.game_id}")
+
+        # Trigger extraction if auto-project was created
+        if project_created and video_filename:
+            await _trigger_extraction_for_auto_project(
+                raw_clip_id, project_id, clip_data.game_id, video_filename,
+                clip_data.start_time, clip_data.end_time, background_tasks
+            )
 
         return RawClipSaveResponse(
             raw_clip_id=raw_clip_id,
@@ -429,22 +496,29 @@ async def save_raw_clip(clip_data: RawClipCreate):
 
 
 @router.put("/raw/{clip_id}")
-async def update_raw_clip(clip_id: int, update: RawClipUpdate):
+async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks: BackgroundTasks):
     """
     Update a raw clip's metadata.
 
     Handles 5-star sync:
-    - If rating changed TO 5: Create auto-project
+    - If rating changed TO 5: Create auto-project and trigger extraction
     - If rating changed FROM 5: Delete auto-project (if unmodified)
-    - If duration changed: Clear filename to mark for re-extraction
+    - If duration changed: Increment boundaries_version (extraction on user request)
     """
+    extraction_info = None  # Will hold info if we need to trigger extraction
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get current clip data
+        # Get current clip data with game info for potential extraction
         cursor.execute("""
-            SELECT id, filename, rating, name, start_time, end_time, auto_project_id
-            FROM raw_clips WHERE id = ?
+            SELECT rc.id, rc.filename, rc.rating, rc.name, rc.start_time, rc.end_time,
+                   rc.auto_project_id, rc.game_id,
+                   COALESCE(rc.boundaries_version, 1) as boundaries_version,
+                   g.video_filename
+            FROM raw_clips rc
+            LEFT JOIN games g ON rc.game_id = g.id
+            WHERE rc.id = ?
         """, (clip_id,))
         clip = cursor.fetchone()
 
@@ -459,8 +533,14 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate):
         new_end = update.end_time if update.end_time is not None else old_end
         auto_project_id = clip['auto_project_id']
 
+        # Debug logging to diagnose boundaries_version not incrementing
+        logger.info(f"[UpdateRawClip] clip_id={clip_id}, update request fields: start_time={update.start_time}, end_time={update.end_time}")
+        logger.info(f"[UpdateRawClip] old values: start={old_start}, end={old_end}")
+        logger.info(f"[UpdateRawClip] new values: start={new_start}, end={new_end}")
+
         # Check if duration changed - if so, clear filename to mark for re-extraction
         duration_changed = (new_start != old_start or new_end != old_end)
+        logger.info(f"[UpdateRawClip] duration_changed={duration_changed}")
 
         # Handle rating change: 5 -> non-5
         if old_rating == 5 and new_rating != 5 and auto_project_id:
@@ -473,6 +553,16 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate):
             clip_name = update.name if update.name is not None else clip['name']
             auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name)
             project_created = True
+            # Collect extraction info if clip not yet extracted and has game video
+            if not clip['filename'] and clip['game_id'] and clip['video_filename']:
+                extraction_info = {
+                    'clip_id': clip_id,
+                    'project_id': auto_project_id,
+                    'game_id': clip['game_id'],
+                    'video_filename': clip['video_filename'],
+                    'start_time': new_start,
+                    'end_time': new_end,
+                }
 
         # Build update query
         updates = []
@@ -497,11 +587,14 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate):
             updates.append("end_time = ?")
             params.append(update.end_time)
 
-        # If duration changed, clear filename to mark as needing re-extraction
-        if duration_changed and clip['filename']:
-            updates.append("filename = ?")
-            params.append('')
-            logger.info(f"Duration changed for clip {clip_id}, marked for re-extraction")
+        # If duration changed, increment boundaries_version so we can detect if framing used an older version
+        # NOTE: We do NOT clear filename here - the existing extracted clip is still valid for its original boundaries.
+        # When the user opens a project using this clip, the outdated-clips check will prompt them to update or keep original.
+        # Extraction only happens if the user explicitly chooses to update.
+        if duration_changed:
+            updates.append("boundaries_version = COALESCE(boundaries_version, 0) + 1")
+            updates.append("boundaries_updated_at = datetime('now')")
+            logger.info(f"Clip {clip_id} boundaries changed, incrementing version (v{clip['boundaries_version']} -> v{clip['boundaries_version'] + 1})")
 
         if updates:
             params.append(clip_id)
@@ -511,6 +604,15 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate):
 
         conn.commit()
         logger.info(f"Updated raw clip {clip_id}")
+
+    # Trigger extraction if auto-project was created and clip needs extraction
+    if extraction_info:
+        await _trigger_extraction_for_auto_project(
+            extraction_info['clip_id'], extraction_info['project_id'],
+            extraction_info['game_id'], extraction_info['video_filename'],
+            extraction_info['start_time'], extraction_info['end_time'],
+            background_tasks
+        )
 
     return {
         "success": True,
@@ -1058,11 +1160,16 @@ async def update_working_clip(
 
             logger.info(f"Creating new version {new_version} of clip {clip_id} (was exported)")
 
+            # Fetch current boundaries_version from raw_clips to track which annotation version we're framing
+            cursor.execute("SELECT boundaries_version FROM raw_clips WHERE id = ?", (current_clip['raw_clip_id'],))
+            raw_clip = cursor.fetchone()
+            raw_clip_version = raw_clip['boundaries_version'] if raw_clip and raw_clip['boundaries_version'] else 1
+
             cursor.execute("""
                 INSERT INTO working_clips (
                     project_id, raw_clip_id, uploaded_filename, sort_order, version,
-                    crop_data, timing_data, segments_data
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    crop_data, timing_data, segments_data, raw_clip_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 project_id,
                 current_clip['raw_clip_id'],
@@ -1072,6 +1179,7 @@ async def update_working_clip(
                 normalize_json_data(update.crop_data if update.crop_data is not None else current_clip['crop_data']),
                 normalize_json_data(update.timing_data if update.timing_data is not None else current_clip['timing_data']),
                 normalize_json_data(update.segments_data if update.segments_data is not None else current_clip['segments_data']),
+                raw_clip_version,
                 # exported_at defaults to NULL for new version (not exported yet)
             ))
             conn.commit()

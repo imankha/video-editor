@@ -5,10 +5,17 @@ FastAPI + Python 3.11 + SQLite + Cloudflare R2
 
 ## Testing
 ```bash
-pytest tests/ -v                    # All tests
-pytest tests/test_clips.py -v       # Specific file
-pytest tests/ -k "test_name" -v     # By name
+.venv/Scripts/python.exe run_tests.py    # All tests (use this, not pytest directly)
+pytest tests/test_clips.py -v             # Specific file
+pytest tests/ -k "test_name" -v           # By name
 ```
+
+## After Code Changes (REQUIRED)
+**Always run this after editing Python files to catch errors before the user starts the server:**
+```bash
+cd src/backend && .venv/Scripts/python.exe -c "from app.main import app"
+```
+This catches import errors, undefined names, and syntax errors immediately.
 
 ## Patterns
 

@@ -209,9 +209,19 @@ async def export_with_ai_upscale(
         except Exception as e:
             logger.warning(f"[Framing Export] Failed to fetch project name: {e}")
 
-    # Create export_jobs record for tracking (if project_id provided)
-    # Also clear final_video_id to regress status from "Complete" to "In Overlay"
+    # Regress status and create export_jobs record (if project_id provided)
     if project_id:
+        # Clear both video IDs FIRST in its own transaction so it always happens
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE projects SET working_video_id = NULL, final_video_id = NULL WHERE id = ?", (project_id,))
+                conn.commit()
+            logger.info(f"[Framing Export] Cleared working_video_id and final_video_id for project {project_id} (status regression)")
+        except Exception as e:
+            logger.warning(f"[Framing Export] Failed to clear video IDs: {e}")
+
+        # Create export_jobs record (separate transaction)
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
@@ -219,10 +229,8 @@ async def export_with_ai_upscale(
                     INSERT INTO export_jobs (id, project_id, type, status, input_data)
                     VALUES (?, ?, 'framing', 'processing', '{}')
                 """, (export_id, project_id))
-                # Regress status: clear final_video_id so project shows "In Overlay" not "Complete"
-                cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
                 conn.commit()
-            logger.info(f"[Framing Export] Created export_jobs record: {export_id}, cleared final_video_id for status regression")
+            logger.info(f"[Framing Export] Created export_jobs record: {export_id}")
         except Exception as e:
             logger.warning(f"[Framing Export] Failed to create export_jobs record: {e}")
 
@@ -696,9 +704,19 @@ async def render_project(request: RenderRequest):
         "status": "processing"
     }
 
-    # Create export_jobs record for tracking and recovery
-    # Also clear final_video_id to regress status from "Complete" to "In Overlay"
-    # This provides immediate visual feedback that re-framing is in progress
+    # Regress status: clear both working_video_id and final_video_id
+    # This makes project show "Not Started" during re-framing, then "In Overlay" when complete
+    # Do this FIRST in its own transaction so it always happens
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE projects SET working_video_id = NULL, final_video_id = NULL WHERE id = ?", (project_id,))
+            conn.commit()
+        logger.info(f"[Render] Cleared working_video_id and final_video_id for project {project_id} (status regression)")
+    except Exception as e:
+        logger.warning(f"[Render] Failed to clear video IDs: {e}")
+
+    # Create export_jobs record for tracking and recovery (separate transaction)
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -706,10 +724,8 @@ async def render_project(request: RenderRequest):
                 INSERT INTO export_jobs (id, project_id, type, status, input_data)
                 VALUES (?, ?, 'framing', 'processing', '{}')
             """, (export_id, project_id))
-            # Regress status: clear final_video_id so project shows "In Overlay" not "Complete"
-            cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
             conn.commit()
-        logger.info(f"[Render] Created export_jobs record: {export_id}, cleared final_video_id for status regression")
+        logger.info(f"[Render] Created export_jobs record: {export_id}")
     except Exception as e:
         logger.warning(f"[Render] Failed to create export_jobs record: {e}")
 

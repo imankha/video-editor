@@ -8,7 +8,7 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
  *
  * @param {string} title - Group header title (e.g., game name)
  * @param {number} count - Number of items in the group
- * @param {Object} statusCounts - Optional status breakdown { done, notStarted, inProgress }
+ * @param {Object} statusCounts - Optional status breakdown { done, inOverlay, inProgress, notStarted }
  * @param {boolean} defaultExpanded - Initial expanded state (default: false)
  * @param {React.ReactNode} children - Items to display when expanded
  * @param {string} className - Additional CSS classes
@@ -35,10 +35,19 @@ export function CollapsibleGroup({
 
   const ChevronIcon = isExpanded ? ChevronDown : ChevronRight;
 
-  // Determine which statuses to show in header
-  const showDone = statusCounts?.done > 0;
-  const showInProgress = statusCounts?.inProgress > 0;
-  const showNotStarted = statusCounts?.notStarted > 0;
+  // Determine which statuses to show in header (project-level counts)
+  const showDoneHeader = statusCounts?.done > 0;
+  const showInOverlayHeader = statusCounts?.inOverlay > 0;
+  const showInProgressHeader = statusCounts?.inProgress > 0;
+  const showNotStartedHeader = statusCounts?.notStarted > 0;
+
+  // Determine which statuses to show in legend (segment-level presence)
+  // Falls back to project-level counts if segments not provided
+  const segments = statusCounts?.segments || {};
+  const showDoneLegend = segments.done ?? statusCounts?.done > 0;
+  const showInOverlayLegend = segments.inOverlay ?? statusCounts?.inOverlay > 0;
+  const showInProgressLegend = segments.inProgress ?? statusCounts?.inProgress > 0;
+  const showNotStartedLegend = segments.notStarted ?? statusCounts?.notStarted > 0;
 
   return (
     <div className={`mb-2 ${className}`}>
@@ -57,22 +66,28 @@ export function CollapsibleGroup({
           {title}
         </span>
 
-        {/* Status indicators in header */}
+        {/* Status indicators in header (project counts) */}
         {statusCounts && (
           <div className="flex items-center gap-2 mr-2">
-            {showDone && (
+            {showDoneHeader && (
               <span className="flex items-center gap-1 text-xs text-green-400">
                 <span className="w-2 h-2 rounded-sm bg-green-500"></span>
                 {statusCounts.done}
               </span>
             )}
-            {showInProgress && (
+            {showInOverlayHeader && (
+              <span className="flex items-center gap-1 text-xs text-blue-300">
+                <span className="w-2 h-2 rounded-sm bg-blue-300"></span>
+                {statusCounts.inOverlay}
+              </span>
+            )}
+            {showInProgressHeader && (
               <span className="flex items-center gap-1 text-xs text-blue-400">
                 <span className="w-2 h-2 rounded-sm bg-blue-500"></span>
                 {statusCounts.inProgress}
               </span>
             )}
-            {showNotStarted && (
+            {showNotStartedHeader && (
               <span className="flex items-center gap-1 text-xs text-gray-400">
                 <span className="w-2 h-2 rounded-sm bg-gray-600"></span>
                 {statusCounts.notStarted}
@@ -89,22 +104,28 @@ export function CollapsibleGroup({
       {/* Collapsible Content */}
       {isExpanded && (
         <div className="mt-1 ml-3 pl-3 border-l border-gray-700/50">
-          {/* Legend inside expanded content */}
-          {statusCounts && (showDone || showInProgress || showNotStarted) && (
+          {/* Legend inside expanded content (shows all segment colors that appear in cards) */}
+          {statusCounts && (showDoneLegend || showInOverlayLegend || showInProgressLegend || showNotStartedLegend) && (
             <div className="flex gap-3 text-xs text-gray-500 mb-2 pb-2 border-b border-gray-700/30">
-              {showDone && (
+              {showDoneLegend && (
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-sm bg-green-500"></span>
                   Done
                 </span>
               )}
-              {showInProgress && (
+              {showInProgressLegend && (
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-sm bg-blue-500"></span>
                   In Progress
                 </span>
               )}
-              {showNotStarted && (
+              {showInOverlayLegend && (
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-sm bg-blue-300"></span>
+                  In Overlay
+                </span>
+              )}
+              {showNotStartedLegend && (
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-sm bg-gray-600"></span>
                   Not Started

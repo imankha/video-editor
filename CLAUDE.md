@@ -10,6 +10,12 @@ Browser-based video editor with three-mode workflow: **Annotate** (clip extracti
 - **Single source of truth**: All user data persists in SQLite → synced to R2. Never use localStorage.
 - **No band-aid fixes**: Never mask symptoms without understanding root causes. Add logging, gather data, understand the system, then build solutions based on that understanding. Example: `Math.max()` to prevent progress dropping is a band-aid; understanding why progress drops and fixing the data flow is a real fix.
 
+## Git Workflow
+- **NEVER commit directly to master**. Only the user commits to master after testing.
+- Create feature branches for all work (e.g., `feature/progress-bar-improvements`)
+- Commit freely to feature branches
+- When work is ready, tell the user so they can test and merge to master
+
 ## Stack
 - **Frontend**: React 18 + Vite + Zustand (port 5173)
 - **Backend**: FastAPI + Python (port 8000)
@@ -26,7 +32,7 @@ cd src/backend && uvicorn app.main:app --reload
 # Tests
 cd src/frontend && npm test           # Unit tests
 cd src/frontend && npm run test:e2e   # E2E (start servers first)
-cd src/backend && pytest tests/ -v    # Backend tests
+cd src/backend && .venv/Scripts/python.exe run_tests.py  # Backend tests (use this, not pytest directly)
 ```
 
 ## Key Docs

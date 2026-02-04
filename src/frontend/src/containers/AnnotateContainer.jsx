@@ -573,6 +573,16 @@ export function AnnotateContainer({
       if (updates.startTime !== undefined) backendUpdates.start_time = updates.startTime;
       if (updates.endTime !== undefined) backendUpdates.end_time = updates.endTime;
 
+      // Handle duration changes - need to send computed start_time
+      // Since duration changes keep endTime fixed and adjust startTime
+      if (updates.duration !== undefined && updates.startTime === undefined) {
+        const newStartTime = Math.max(0, region.endTime - updates.duration);
+        backendUpdates.start_time = newStartTime;
+        console.log('[AnnotateContainer] Duration change detected, computed start_time:', newStartTime);
+      }
+
+      console.log('[AnnotateContainer] Backend updates being sent:', backendUpdates, 'for rawClipId:', region.rawClipId);
+
       if (Object.keys(backendUpdates).length > 0) {
         const result = await updateClipRemote(region.rawClipId, backendUpdates);
         if (result?.project_created) {

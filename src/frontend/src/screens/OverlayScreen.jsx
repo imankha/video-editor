@@ -38,6 +38,8 @@ import { useExportStore } from '../stores/exportStore';
 export function OverlayScreen({
   // Export callback (legacy - will be moved to store in Task 07)
   onExportComplete,
+  // Optional ref for triggering export from parent (used for save dialog)
+  exportButtonRef: externalExportButtonRef,
 }) {
   // Navigation
   const navigate = useNavigationStore(state => state.navigate);
@@ -51,10 +53,12 @@ export function OverlayScreen({
     clipMetadata: overlayClipMetadata,
     effectType: highlightEffectType,
     isLoadingWorkingVideo,
+    overlayChangedSinceExport,
     setWorkingVideo,
     setClipMetadata: setOverlayClipMetadata,
     setEffectType: setHighlightEffectType,
     setIsLoadingWorkingVideo,
+    setOverlayChangedSinceExport,
   } = useOverlayStore();
 
   // Project data store - for framing clips (pass-through mode)
@@ -88,7 +92,8 @@ export function OverlayScreen({
   // Local state
   const [selectedLayer, setSelectedLayer] = useState('playhead');
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const exportButtonRef = useRef(null);
+  const internalExportButtonRef = useRef(null);
+  const exportButtonRef = externalExportButtonRef || internalExportButtonRef;
   const fullscreenContainerRef = useRef(null);
   const videoLoadedFromUrlRef = useRef(null); // Track which URL we've loaded to prevent infinite loops
   const justRestoredDataRef = useRef(false); // Skip auto-save immediately after restoring from backend
@@ -315,6 +320,8 @@ export function OverlayScreen({
           // Skip auto-save for this restore (we just loaded from backend, no need to save back)
           justRestoredDataRef.current = true;
           overlayDataLoadedForProjectRef.current = projectId;
+          // Reset changed flag since we just loaded from backend
+          setOverlayChangedSinceExport(false);
         } catch (err) {
           console.error('[OverlayScreen] Failed to load overlay data:', err);
           // On error, still create default region so user isn't stuck
@@ -363,8 +370,10 @@ export function OverlayScreen({
         return;
       }
       saveOverlayData();
+      // Mark overlay as changed (for navigation confirmation)
+      setOverlayChangedSinceExport(true);
     }
-  }, [highlightRegions, highlightEffectType, projectId, saveOverlayData]);
+  }, [highlightRegions, highlightEffectType, projectId, saveOverlayData, setOverlayChangedSinceExport]);
 
   // Dismiss "export complete" toast when user makes changes
   // This lets users know they need to re-export after modifying highlights
@@ -588,10 +597,12 @@ export function OverlayScreen({
 
   const handleExportComplete = useCallback(() => {
     refreshProject();
+    // Reset the "changed since export" flag since we just exported
+    setOverlayChangedSinceExport(false);
     if (onExportComplete) {
       onExportComplete();
     }
-  }, [refreshProject, onExportComplete]);
+  }, [refreshProject, setOverlayChangedSinceExport, onExportComplete]);
 
   // =========================================
   // RENDER
