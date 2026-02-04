@@ -575,10 +575,23 @@ async function triggerExtractionAndWait(page, maxWaitTime = 180000) {
 
   console.log(`[Test] Finish-annotation response: ${JSON.stringify(result)}`);
 
-  if (result.tasks_created === 0) {
-    console.log('[Test] No extraction tasks needed (clips may already be extracted)');
+  // Note: finish-annotation no longer triggers extraction (extraction happens when clips are added to projects)
+  // We still need to wait for any in-progress extractions to complete
+  // Check if clips are actually extracted before returning early
+  const quickCheck = await page.evaluate(async (gid) => {
+    const res = await fetch('/api/clips/raw');
+    const clips = res.ok ? await res.json() : [];
+    const gameClips = clips.filter(c => c.game_id === gid);
+    const extractedCount = gameClips.filter(c => c.filename && c.filename.length > 0).length;
+    return { total: gameClips.length, extracted: extractedCount };
+  }, gameId);
+
+  if (quickCheck.total > 0 && quickCheck.extracted === quickCheck.total) {
+    console.log(`[Test] All ${quickCheck.total} clips already extracted, skipping wait`);
     return;
   }
+
+  console.log(`[Test] Clips not fully extracted (${quickCheck.extracted}/${quickCheck.total}), waiting...`);
 
   // Wait for clips to be extracted
   // Filter by gameId to only count THIS game's clips (not clips from other tests)
