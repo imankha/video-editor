@@ -203,11 +203,11 @@ async def call_modal_framing_ai(
     logger.info(f"[Modal] User: {user_id}, Input: {input_key} -> Output: {output_key}")
     logger.info(f"[Modal] Target: {output_width}x{output_height}")
 
-    # Estimate processing time: ~0.8s per frame on T4 GPU for Real-ESRGAN
-    # 30 fps * duration = total frames
+    # Estimate processing time: ~1.1s per frame on T4 GPU for Real-ESRGAN
+    # Based on real benchmarks: 225 frames took 247s actual
     # Add download/upload overhead (~10s)
     estimated_frames = int((video_duration or 10) * fps)
-    estimated_time = estimated_frames * 0.8 + 10  # seconds
+    estimated_time = estimated_frames * 1.1 + 10  # seconds
     logger.info(f"[Modal] Estimated {estimated_frames} frames, ~{estimated_time:.0f}s processing time")
 
     try:
@@ -343,11 +343,12 @@ async def call_modal_multi_clip(
     logger.info(f"[Modal] User: {user_id}, {len(source_keys)} clips -> Output: {output_key}")
     logger.info(f"[Modal] Target: {target_width}x{target_height} @ {fps}fps")
 
-    # Estimate processing time: ~0.8s per frame on T4 GPU for Real-ESRGAN
+    # Estimate processing time: ~1.1s per frame on T4 GPU for Real-ESRGAN
+    # Based on real benchmarks: 225 frames took 247s actual
     # Assume ~10s per clip at 30fps = 300 frames per clip
     estimated_frames_per_clip = 300
     total_frames = len(clips_data) * estimated_frames_per_clip
-    estimated_time = total_frames * 0.8 + 30  # Add download/upload/concat overhead
+    estimated_time = total_frames * 1.1 + 30  # Add download/upload/concat overhead
     logger.info(f"[Modal] Estimated ~{estimated_time:.0f}s for {len(clips_data)} clips")
 
     modal_call_id = None  # Initialize for exception handler
