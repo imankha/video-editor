@@ -486,9 +486,9 @@ PHASE_WEIGHTS = {
 
 ### Benchmark Data We Already Have
 
-From our test session (225 frames, Framing AI, T4 GPU):
-
+**Test 1: Cold GPU Start (225 frames, 7.5s video)**
 ```
+Backend: 247s total
 Frontend timing: 251.9s total
 - modal_download: 20.1s (8.0%)
 - modal_init: 10.0s (4.0%)
@@ -496,12 +496,28 @@ Frontend timing: 251.9s total
 - modal_encode: 28.1s (11.2%)
 - modal_upload: 66.2s (26.3%)
 
-Derived metrics:
-- Per-frame upscale: 122.5s / 225 frames = 0.54s/frame (Modal-side)
-- Total time per frame: 247s / 225 = 1.1s/frame (including all overhead)
+Per-frame: 247s / 225 = 1.1s/frame total
 ```
 
-**Note:** The frontend phases are measured from WebSocket message timing, not actual Modal-side timing. Modal-side instrumentation will be more accurate.
+**Test 2: Warm GPU (187 frames, 6.25s trimmed video)**
+```
+Backend: 158.4s total
+Frontend timing: 162.5s total
+- modal_download: 26.0s (16.4%)
+- modal_init: 14.0s (8.9%)
+- modal_upscale: 118.3s (74.7%)
+- (encode/upload phases not captured - job finished early)
+
+Per-frame: 158s / 187 = 0.85s/frame total
+```
+
+**Key Insights:**
+1. Cold vs warm GPU makes a big difference: 1.1s vs 0.85s per frame
+2. Upload phase is significant (~27% of total) but was under-allocated in progress
+3. Frame count estimation must account for trim AND speed changes
+4. Using 1.0s/frame as balanced estimate (slightly pessimistic = better UX)
+
+**Note:** Frontend phases are measured from WebSocket message timing. Modal-side instrumentation would be more accurate.
 
 ### Factors That Affect Phase Weights
 
@@ -529,6 +545,27 @@ Document these when collecting benchmarks:
 - **Network latency**: Progress updates add network overhead. Batch updates (every 10 frames)
 - **Error handling**: If generator fails mid-stream, need graceful recovery
 - **Backwards compatibility**: Keep simulated progress as fallback
+
+## Fixes Already Implemented (Progress Bar Improvements Branch)
+
+These fixes improved simulated progress accuracy without real Modal progress:
+
+1. **Frame count calculation** (`highlight_transform.py`, `framing.py`)
+   - Added `get_output_duration()` to calculate actual output duration
+   - Accounts for trim (trim_start/trim_end) AND speed changes (0.5x = 2x frames)
+   - Previously used source video duration, not trimmed duration
+
+2. **Phase thresholds** (`modal_client.py`)
+   - Adjusted to match actual benchmark data
+   - Old: download=10%, init=5%, upscale=65%, encode=15%, upload=5%
+   - New: download=8%, init=4%, upscale=50%, encode=11%, upload=27%
+   - Upload was severely under-allocated (5% vs actual 27%)
+
+3. **Time estimate formula** (`modal_client.py`)
+   - Changed from 1.1s/frame + 10s overhead to 1.0s/frame total
+   - Balances cold start (1.1s) vs warm GPU (0.85s)
+
+These fixes make simulated progress feel more linear. Real Modal progress would further improve accuracy.
 
 ## Related Files
 
