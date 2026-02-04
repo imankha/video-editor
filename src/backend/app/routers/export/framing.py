@@ -31,6 +31,7 @@ from ...queries import latest_working_clips_subquery
 from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
 from ...services.ffmpeg_service import get_video_duration
 from ...services.modal_client import modal_enabled, call_modal_framing_ai
+from ...highlight_transform import get_output_duration
 from ...constants import ExportStatus
 from pydantic import BaseModel
 from typing import Optional
@@ -911,17 +912,23 @@ async def render_project(request: RenderRequest):
         if modal_enabled():
             logger.info(f"[Render] Using Modal cloud GPU for AI upscaling")
 
-            # First, get video duration for progress estimation
-            # Download source briefly to probe duration
-            input_path_temp = os.path.join(temp_dir, f"probe_{uuid.uuid4().hex[:8]}.mp4")
-            source_duration = 10.0  # Default estimate
-            try:
-                if download_from_r2(user_id, input_key, Path(input_path_temp)):
-                    source_duration = get_video_duration(input_path_temp)
-                    logger.info(f"[Render] Source video duration: {source_duration:.2f}s")
-                    os.unlink(input_path_temp)  # Clean up probe file
-            except Exception as e:
-                logger.warning(f"[Render] Could not probe source duration: {e}")
+            # Calculate effective output duration for progress estimation
+            # This accounts for trim and speed changes (0.5x speed = 2x output frames)
+            effective_duration = 10.0  # Default estimate
+            if segment_data:
+                # Use get_output_duration which handles trim + speed changes
+                effective_duration = get_output_duration(segment_data)
+                logger.info(f"[Render] Calculated output duration (trim+speed): {effective_duration:.2f}s")
+            else:
+                # Fall back to probing source video (no trim/speed data)
+                input_path_temp = os.path.join(temp_dir, f"probe_{uuid.uuid4().hex[:8]}.mp4")
+                try:
+                    if download_from_r2(user_id, input_key, Path(input_path_temp)):
+                        effective_duration = get_video_duration(input_path_temp)
+                        logger.info(f"[Render] Source video duration (no segment data): {effective_duration:.2f}s")
+                        os.unlink(input_path_temp)  # Clean up probe file
+                except Exception as e:
+                    logger.warning(f"[Render] Could not probe source duration: {e}")
 
             # Update progress
             init_data = {"progress": 15, "message": "Starting cloud AI upscaler...", "status": "processing", "projectId": project_id, "projectName": project_name, "type": "framing"}
@@ -968,7 +975,7 @@ async def render_project(request: RenderRequest):
                 output_height=1440,
                 fps=request.target_fps,
                 segment_data=segment_data,
-                video_duration=source_duration,
+                video_duration=effective_duration,
                 progress_callback=modal_progress_callback,
                 call_id_callback=store_modal_call_id,
             )
