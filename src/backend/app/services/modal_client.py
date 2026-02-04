@@ -252,42 +252,40 @@ async def call_modal_framing_ai(
             progress_start = 20  # Start progress at 20%
             progress_end = 90    # End progress at 90% (100% is for post-processing)
 
-            # Progress phases for better user experience
+            # Progress phases: (threshold, phase_id, message)
+            # Phase IDs match local processing for consistent frontend tracking
             phases = [
-                (0.05, "Downloading source video..."),
-                (0.10, "Initializing AI model..."),
-                (0.15, "AI upscaling in progress..."),
-                (0.50, "Processing frames..."),
-                (0.80, "Finalizing video..."),
-                (0.95, "Uploading result..."),
+                (0.00, "modal_download", "Downloading source video..."),
+                (0.10, "modal_init", "Initializing AI model..."),
+                (0.15, "modal_upscale", "AI upscaling in progress..."),
+                (0.80, "modal_encode", "Encoding video..."),
+                (0.95, "modal_upload", "Uploading result..."),
             ]
 
-            logger.info(f"[Progress Event] job={job_id} phase=modal_progress_start progress_range={progress_start}-{progress_end}%")
-            update_count = 0
+            current_phase = "modal_download"
 
             while not result_future.done():
                 elapsed = asyncio.get_event_loop().time() - start_time
-                # Use sigmoid-like curve for smoother progress feel
-                # Progress slows down as it approaches 90%
                 raw_progress = min(elapsed / estimated_time, 0.95)
                 progress = progress_start + raw_progress * (progress_end - progress_start)
 
-                # Determine current phase message
+                # Determine current phase
                 phase_msg = "Processing..."
-                for threshold, msg in phases:
+                for threshold, phase_id, msg in phases:
                     if raw_progress >= threshold:
+                        current_phase = phase_id
                         phase_msg = msg
 
                 try:
-                    update_count += 1
-                    logger.info(f"[Progress Event] job={job_id} update={update_count} elapsed={elapsed:.1f}s progress={progress:.1f}% phase={phase_msg}")
-                    await progress_callback(progress, phase_msg)
+                    await progress_callback(progress, phase_msg, current_phase)
                 except Exception as e:
                     logger.warning(f"[Modal] Progress callback failed: {e}")
 
                 await asyncio.sleep(2)  # Update every 2 seconds
 
-            logger.info(f"[Progress Event] job={job_id} phase=modal_progress_end total_updates={update_count} elapsed={asyncio.get_event_loop().time() - start_time:.1f}s")
+            # Log summary at end
+            total_time = asyncio.get_event_loop().time() - start_time
+            logger.info(f"[Modal Summary] job={job_id} total={total_time:.1f}s (simulated progress)")
 
         result = await result_future
 
@@ -397,14 +395,17 @@ async def call_modal_multi_clip(
             progress_start = 10
             progress_end = 90
 
+            # Progress phases: (threshold, phase_id, message)
             phases = [
-                (0.05, "Downloading source clips..."),
-                (0.10, "Loading AI model..."),
-                (0.15, "Processing clips with AI upscaling..."),
-                (0.60, "Encoding clips..."),
-                (0.80, "Concatenating clips..."),
-                (0.90, "Uploading result..."),
+                (0.00, "modal_download", "Downloading source clips..."),
+                (0.10, "modal_init", "Loading AI model..."),
+                (0.15, "modal_upscale", "Processing clips with AI upscaling..."),
+                (0.60, "modal_encode", "Encoding clips..."),
+                (0.80, "modal_concat", "Concatenating clips..."),
+                (0.90, "modal_upload", "Uploading result..."),
             ]
+
+            current_phase = "modal_download"
 
             while not result_future.done():
                 elapsed = asyncio.get_event_loop().time() - start_time
@@ -412,16 +413,21 @@ async def call_modal_multi_clip(
                 progress = progress_start + raw_progress * (progress_end - progress_start)
 
                 phase_msg = "Processing..."
-                for threshold, msg in phases:
+                for threshold, phase_id, msg in phases:
                     if raw_progress >= threshold:
+                        current_phase = phase_id
                         phase_msg = msg
 
                 try:
-                    await progress_callback(progress, phase_msg)
+                    await progress_callback(progress, phase_msg, current_phase)
                 except Exception as e:
                     logger.warning(f"[Modal] Progress callback failed: {e}")
 
                 await asyncio.sleep(3)  # Update every 3 seconds
+
+            # Log summary
+            total_time = asyncio.get_event_loop().time() - start_time
+            logger.info(f"[Modal Summary] job={job_id} total={total_time:.1f}s (simulated progress)")
 
         result = await result_future
 
@@ -536,13 +542,16 @@ async def call_modal_overlay(
             progress_start = 20
             progress_end = 90
 
+            # Progress phases: (threshold, phase_id, message)
             phases = [
-                (0.05, "Downloading video..."),
-                (0.10, "Applying highlights..."),
-                (0.50, "Processing frames..."),
-                (0.85, "Encoding video..."),
-                (0.95, "Uploading result..."),
+                (0.00, "modal_download", "Downloading video..."),
+                (0.10, "modal_overlay", "Applying highlights..."),
+                (0.50, "modal_process", "Processing frames..."),
+                (0.85, "modal_encode", "Encoding video..."),
+                (0.95, "modal_upload", "Uploading result..."),
             ]
+
+            current_phase = "modal_download"
 
             while not result_future.done():
                 elapsed = asyncio.get_event_loop().time() - start_time
@@ -550,16 +559,21 @@ async def call_modal_overlay(
                 progress = progress_start + raw_progress * (progress_end - progress_start)
 
                 phase_msg = "Processing..."
-                for threshold, msg in phases:
+                for threshold, phase_id, msg in phases:
                     if raw_progress >= threshold:
+                        current_phase = phase_id
                         phase_msg = msg
 
                 try:
-                    await progress_callback(progress, phase_msg)
+                    await progress_callback(progress, phase_msg, current_phase)
                 except Exception as e:
                     logger.warning(f"[Modal] Progress callback failed: {e}")
 
                 await asyncio.sleep(1.5)
+
+            # Log summary
+            total_time = asyncio.get_event_loop().time() - start_time
+            logger.info(f"[Modal Summary] job={job_id} total={total_time:.1f}s (simulated progress)")
 
         result = await result_future
 
@@ -783,12 +797,15 @@ async def call_modal_annotate_compilation(
             progress_start = 10
             progress_end = 90
 
+            # Progress phases: (threshold, phase_id, message)
             phases = [
-                (0.05, "Downloading source video..."),
-                (0.15, "Processing clips..."),
-                (0.70, "Merging clips..."),
-                (0.90, "Uploading result..."),
+                (0.00, "modal_download", "Downloading source video..."),
+                (0.15, "modal_process", "Processing clips..."),
+                (0.70, "modal_merge", "Merging clips..."),
+                (0.90, "modal_upload", "Uploading result..."),
             ]
+
+            current_phase = "modal_download"
 
             while not modal_future.done():
                 elapsed = asyncio.get_event_loop().time() - start_time
@@ -796,16 +813,21 @@ async def call_modal_annotate_compilation(
                 progress = progress_start + raw_progress * (progress_end - progress_start)
 
                 phase_msg = "Processing..."
-                for threshold, msg in phases:
+                for threshold, phase_id, msg in phases:
                     if raw_progress >= threshold:
+                        current_phase = phase_id
                         phase_msg = msg
 
                 try:
-                    await progress_callback(progress, phase_msg)
+                    await progress_callback(progress, phase_msg, current_phase)
                 except Exception as e:
                     logger.warning(f"[Modal] Progress callback failed: {e}")
 
                 await asyncio.sleep(1.5)
+
+            # Log summary
+            total_time = asyncio.get_event_loop().time() - start_time
+            logger.info(f"[Modal Summary] job={job_id} total={total_time:.1f}s (simulated progress)")
 
         result = await modal_future
 

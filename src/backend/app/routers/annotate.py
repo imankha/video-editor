@@ -769,9 +769,9 @@ async def export_clips(
                 update_progress(step + 1, total_steps, 'modal', 'Sending to cloud for processing...')
 
                 # Progress callback for Modal (maps Modal's 10-90 range to our progress tracker)
-                async def modal_progress(progress: float, message: str):
+                async def modal_progress(progress: float, message: str, phase: str = "modal_processing"):
                     # progress comes in as 10-90 range from modal_client
-                    update_progress(int(progress), 100, 'modal', message)
+                    update_progress(int(progress), 100, phase, message)
 
                 # R2 keys
                 input_r2_key = f"games/{video_filename}"

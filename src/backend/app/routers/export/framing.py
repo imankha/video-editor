@@ -929,11 +929,12 @@ async def render_project(request: RenderRequest):
             await manager.send_progress(export_id, init_data)
 
             # Create progress callback for real-time updates
-            async def modal_progress_callback(progress: float, message: str):
+            async def modal_progress_callback(progress: float, message: str, phase: str = "modal_processing"):
                 progress_data = {
                     "progress": progress,
                     "message": message,
                     "status": "processing",
+                    "phase": phase,  # Include phase for frontend tracking
                     "projectId": project_id,
                     "projectName": project_name,
                     "type": "framing"
