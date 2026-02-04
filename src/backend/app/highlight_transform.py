@@ -36,10 +36,22 @@ def get_trim_range(segments_data: Optional[Dict]) -> Tuple[float, float]:
     Extract trim range from segments_data.
 
     Returns (start, end) tuple. If no trim, returns (0, infinity).
+
+    Handles multiple formats:
+    - Frontend format: {trimRange: {start, end}} or {trimRange: [start, end]}
+    - DB format: {trim_start, trim_end}
     """
     if not segments_data:
         return (0.0, float('inf'))
 
+    # DB format: trim_start/trim_end at top level
+    if 'trim_start' in segments_data or 'trim_end' in segments_data:
+        return (
+            segments_data.get('trim_start', 0.0),
+            segments_data.get('trim_end', float('inf'))
+        )
+
+    # Frontend format: trimRange
     trim_range = segments_data.get('trimRange')
     if not trim_range:
         return (0.0, float('inf'))
@@ -70,6 +82,61 @@ def get_segment_speed(segments_data: Optional[Dict], segment_index: int) -> floa
     speeds = segments_data.get('segmentSpeeds', {})
     # Keys are strings in the frontend format
     return speeds.get(str(segment_index), 1.0)
+
+
+def get_output_duration(segments_data: Optional[Dict], source_duration: float = None) -> float:
+    """
+    Calculate the effective output duration accounting for trim and speed changes.
+
+    Used for progress estimation - tells us how long the output video will be.
+
+    Args:
+        segments_data: Segments configuration with boundaries, segmentSpeeds, trimRange
+        source_duration: Optional source video duration (used if no trim_end specified)
+
+    Returns:
+        Output duration in seconds
+    """
+    if not segments_data:
+        return source_duration or 0.0
+
+    trim_start, trim_end = get_trim_range(segments_data)
+
+    # If trim_end is infinite, use source_duration
+    if trim_end == float('inf') and source_duration:
+        trim_end = source_duration
+
+    boundaries = segments_data.get('boundaries', [])
+
+    # No boundaries = simple trim, no speed changes
+    if len(boundaries) < 2:
+        return max(0.0, trim_end - trim_start)
+
+    # Calculate output duration by walking through segments
+    output_duration = 0.0
+
+    for i in range(len(boundaries) - 1):
+        seg_start = boundaries[i]
+        seg_end = boundaries[i + 1]
+
+        # Skip fully trimmed segments
+        if seg_end <= trim_start or seg_start >= trim_end:
+            continue
+
+        # Clamp segment to trim range
+        effective_start = max(seg_start, trim_start)
+        effective_end = min(seg_end, trim_end)
+
+        # Get segment speed (0.5x = output is 2x longer, 2x = output is 0.5x as long)
+        speed = get_segment_speed(segments_data, i)
+
+        # Source duration divided by speed = output duration
+        segment_source_duration = effective_end - effective_start
+        segment_output_duration = segment_source_duration / speed
+
+        output_duration += segment_output_duration
+
+    return output_duration
 
 
 def get_segment_at_source_time(

@@ -758,13 +758,15 @@ async def export_multi_clip(
                 logger.info(f"[Multi-Clip Export] Uploaded source clip {clip_index} to R2: {source_key}")
 
             # Create progress callback
-            async def modal_progress_callback(progress: float, message: str):
+            async def modal_progress_callback(progress: float, message: str, phase: str = "modal_processing"):
                 progress_data = {
                     "progress": progress,
                     "message": message,
                     "status": "processing",
+                    "phase": phase,  # Include phase for frontend tracking
                     "projectId": project_id,
                     "projectName": project_name,
+                    "type": "multi_clip"
                 }
                 export_progress[export_id] = progress_data
                 await manager.send_progress(export_id, progress_data)

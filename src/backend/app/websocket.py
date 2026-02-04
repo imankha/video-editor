@@ -65,6 +65,7 @@ class ConnectionManager:
         """
         if export_id not in self.active_connections:
             # No one listening - that's fine, export continues silently
+            logger.debug(f"[WS Progress] No clients for {export_id}, dropping update: {data.get('progress', 0):.1f}%")
             return
 
         connections = self.active_connections[export_id]
@@ -84,8 +85,9 @@ class ConnectionManager:
         for ws in failed_connections:
             self.disconnect(export_id, ws)
 
+        # Progress logged at DEBUG level - summary logged by frontend at end
         if success_count > 0:
-            logger.debug(f"[WS] Sent progress to {success_count} client(s) for {export_id}: {data.get('progress', 0):.1f}%")
+            logger.debug(f"[WS] {export_id[-8:]} {data.get('progress', 0):.0f}%")
 
 
 # Global instance of the connection manager
