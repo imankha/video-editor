@@ -203,11 +203,11 @@ async def call_modal_framing_ai(
     logger.info(f"[Modal] User: {user_id}, Input: {input_key} -> Output: {output_key}")
     logger.info(f"[Modal] Target: {output_width}x{output_height}")
 
-    # Estimate processing time: ~1.1s per frame on T4 GPU for Real-ESRGAN
-    # Based on real benchmarks: 225 frames took 247s actual
-    # Add download/upload overhead (~10s)
+    # Estimate total processing time per frame on T4 GPU for Real-ESRGAN
+    # Cold start: ~1.1s/frame total, Warm GPU: ~0.85s/frame total
+    # Using 1.0s/frame as balance (slightly pessimistic = better UX)
     estimated_frames = int((video_duration or 10) * fps)
-    estimated_time = estimated_frames * 1.1 + 10  # seconds
+    estimated_time = estimated_frames * 1.0  # seconds total
     logger.info(f"[Modal] Estimated {estimated_frames} frames, ~{estimated_time:.0f}s processing time")
 
     try:
@@ -253,13 +253,14 @@ async def call_modal_framing_ai(
             progress_end = 90    # End progress at 90% (100% is for post-processing)
 
             # Progress phases: (threshold, phase_id, message)
-            # Phase IDs match local processing for consistent frontend tracking
+            # Thresholds based on actual benchmark data (225 frames test):
+            # download=8%, init=4%, upscale=50%, encode=11%, upload=27%
             phases = [
                 (0.00, "modal_download", "Downloading source video..."),
-                (0.10, "modal_init", "Initializing AI model..."),
-                (0.15, "modal_upscale", "AI upscaling in progress..."),
-                (0.80, "modal_encode", "Encoding video..."),
-                (0.95, "modal_upload", "Uploading result..."),
+                (0.08, "modal_init", "Initializing AI model..."),
+                (0.12, "modal_upscale", "AI upscaling in progress..."),
+                (0.62, "modal_encode", "Encoding video..."),
+                (0.73, "modal_upload", "Uploading result..."),
             ]
 
             current_phase = "modal_download"
@@ -343,12 +344,11 @@ async def call_modal_multi_clip(
     logger.info(f"[Modal] User: {user_id}, {len(source_keys)} clips -> Output: {output_key}")
     logger.info(f"[Modal] Target: {target_width}x{target_height} @ {fps}fps")
 
-    # Estimate processing time: ~1.1s per frame on T4 GPU for Real-ESRGAN
-    # Based on real benchmarks: 225 frames took 247s actual
+    # Estimate processing time: ~1.0s per frame total on T4 GPU for Real-ESRGAN
     # Assume ~10s per clip at 30fps = 300 frames per clip
     estimated_frames_per_clip = 300
     total_frames = len(clips_data) * estimated_frames_per_clip
-    estimated_time = total_frames * 1.1 + 30  # Add download/upload/concat overhead
+    estimated_time = total_frames * 1.0  # seconds total
     logger.info(f"[Modal] Estimated ~{estimated_time:.0f}s for {len(clips_data)} clips")
 
     modal_call_id = None  # Initialize for exception handler
@@ -397,13 +397,14 @@ async def call_modal_multi_clip(
             progress_end = 90
 
             # Progress phases: (threshold, phase_id, message)
+            # Adjusted based on single-clip benchmarks, with concat phase added
             phases = [
                 (0.00, "modal_download", "Downloading source clips..."),
-                (0.10, "modal_init", "Loading AI model..."),
-                (0.15, "modal_upscale", "Processing clips with AI upscaling..."),
-                (0.60, "modal_encode", "Encoding clips..."),
-                (0.80, "modal_concat", "Concatenating clips..."),
-                (0.90, "modal_upload", "Uploading result..."),
+                (0.08, "modal_init", "Loading AI model..."),
+                (0.12, "modal_upscale", "Processing clips with AI upscaling..."),
+                (0.55, "modal_encode", "Encoding clips..."),
+                (0.65, "modal_concat", "Concatenating clips..."),
+                (0.70, "modal_upload", "Uploading result..."),
             ]
 
             current_phase = "modal_download"
