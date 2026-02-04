@@ -133,7 +133,8 @@
       "Bash(pytest:*)",
       "Bash(C:Python311python.exe -m pip install numpy -q)",
       "Bash(C:Python311python.exe -m pytest:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Skill(run-tests)"
     ],
     "deny": [],
     "ask": []
