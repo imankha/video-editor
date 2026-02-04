@@ -980,80 +980,23 @@ def _delete_auto_project_if_unmodified(cursor, project_id: int) -> bool:
 
 
 @router.post("/{game_id}/finish-annotation")
-async def finish_annotation(game_id: int, background_tasks: BackgroundTasks):
+async def finish_annotation(game_id: int):
     """
     Called when user leaves annotation mode for a game.
 
-    Finds all projects that contain unextracted clips from this game and
-    enqueues them for extraction. This covers both:
-    - Auto-projects (created from 5-star clips)
-    - Manual projects (user added clips from this game)
+    This endpoint is a no-op - extraction is NOT triggered here.
 
-    Flow:
-    1. Find clips needing extraction (DB read)
-    2. Enqueue each clip to modal_tasks table (DB write)
-    3. Trigger queue processor in background (calls Modal)
+    Extraction only happens when:
+    1. A clip is added to a project (auto-project for 5-star, or manual add)
+    2. User chooses "Use Latest" on outdated clips prompt
 
-    This defers expensive GPU operations until the user is done editing annotations,
-    avoiding wasted extractions while they're still making changes.
+    This gives the user full control over when extraction (and GPU costs) occur.
     """
-    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
-
-    user_id = get_current_user_id()
-    tasks_created = 0
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        # Get game video filename
-        cursor.execute("SELECT video_filename FROM games WHERE id = ?", (game_id,))
-        game = cursor.fetchone()
-        if not game or not game['video_filename']:
-            return {"success": True, "tasks_created": 0, "message": "No video uploaded for this game"}
-
-        video_filename = game['video_filename']
-
-        # Find all unextracted raw_clips from this game that are used in ANY project
-        # This includes:
-        # 1. Clips with auto_project_id (5-star auto-projects)
-        # 2. Clips added to projects via working_clips
-        cursor.execute("""
-            SELECT DISTINCT rc.id, rc.start_time, rc.end_time, rc.name,
-                   COALESCE(rc.auto_project_id, wc.project_id) as project_id
-            FROM raw_clips rc
-            LEFT JOIN working_clips wc ON wc.raw_clip_id = rc.id
-            WHERE rc.game_id = ?
-              AND (rc.filename IS NULL OR rc.filename = '')
-              AND (rc.auto_project_id IS NOT NULL OR wc.project_id IS NOT NULL)
-        """, (game_id,))
-        pending_clips = cursor.fetchall()
-
-        if not pending_clips:
-            return {"success": True, "tasks_created": 0, "message": "No clips need extraction"}
-
-        logger.info(f"[FinishAnnotation] Found {len(pending_clips)} clips needing extraction for game {game_id}")
-
-    # Phase 2: Enqueue each clip (separate DB transactions)
-    for clip in pending_clips:
-        enqueue_clip_extraction(
-            clip_id=clip['id'],
-            project_id=clip['project_id'],
-            game_id=game_id,
-            video_filename=video_filename,
-            start_time=clip['start_time'],
-            end_time=clip['end_time'],
-            user_id=user_id,
-        )
-        tasks_created += 1
-
-    # Phase 3: Process queue in background (calls Modal)
-    background_tasks.add_task(run_queue_processor_sync)
-    logger.info(f"[FinishAnnotation] Enqueued {tasks_created} tasks, triggered queue processor")
-
+    logger.info(f"[FinishAnnotation] User left annotation mode for game {game_id} (no extraction triggered)")
     return {
         "success": True,
-        "tasks_created": tasks_created,
-        "message": f"Enqueued {tasks_created} clips for extraction"
+        "tasks_created": 0,
+        "message": "Annotation session ended"
     }
 
 

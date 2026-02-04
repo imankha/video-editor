@@ -186,7 +186,7 @@ Current DB is ~204KB - no optimization needed yet.
 | U1 | Temp folder multi-user isolation | `TODO` | Move temp uploads to `{user_id}/temp/...` instead of `temp/...` |
 | U2 | Framing export validation UX | `TODO` | Disable export until all clips framed, rollover lists unframed clips, checkmarks on framed clips |
 | U3 | [Progress Bar Improvements](tasks/progress-bar-improvements.md) | `TODO` | Fix reset bug, improve time estimates, add ETA |
-| U4 | [Project Status Regression](tasks/project-status-regression.md) | `TODO` | Re-framing/re-overlay updates project status correctly |
+| U4 | [Project Status Regression](tasks/project-status-regression.md) | `DONE` | Re-framing/re-overlay updates project status correctly |
 | U5 | [Modal Job Recovery](tasks/modal-job-recovery.md) | `DONE` (Phase 1) | Multi-clip: spawn() + call_id stored. /modal-status endpoint. Smart stale detection. |
 | U6 | Project filter persistence | `TODO` | Preserve last filter setting (localStorage) so filters persist across sessions |
 | U7 | [Player detection keyframes](tasks/player-detection-keyframes.md) | `TODO` | Detect on 4 frames (first 2s), create keyframes, click rectangle to set player |

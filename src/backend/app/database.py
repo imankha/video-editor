@@ -577,6 +577,11 @@ def ensure_database():
             "ALTER TABLE games ADD COLUMN tournament_name TEXT",
             # Auto-created projects (from 5-star clips)
             "ALTER TABLE projects ADD COLUMN is_auto_created INTEGER DEFAULT 0",
+            # Track when raw clip boundaries (start_time/end_time) were last changed
+            "ALTER TABLE raw_clips ADD COLUMN boundaries_version INTEGER DEFAULT 1",
+            "ALTER TABLE raw_clips ADD COLUMN boundaries_updated_at TIMESTAMP",
+            # Track which version of raw clip boundaries was used when framing was done
+            "ALTER TABLE working_clips ADD COLUMN raw_clip_version INTEGER",
         ]
 
         for migration in migrations:

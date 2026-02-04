@@ -129,7 +129,12 @@
       "Bash(gh pr list:*)",
       "Bash(gh pr view:*)",
       "Bash(git pull:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(pytest:*)",
+      "Bash(C:Python311python.exe -m pip install numpy -q)",
+      "Bash(C:Python311python.exe -m pytest:*)",
+      "Bash(echo:*)",
+      "Skill(run-tests)"
     ],
     "deny": [],
     "ask": []

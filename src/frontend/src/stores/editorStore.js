@@ -53,6 +53,7 @@ export const useEditorStore = create((set, get) => ({
   modeSwitchDialog: {
     isOpen: false,
     pendingMode: null,
+    sourceMode: null, // 'framing' or 'overlay' - which mode we're leaving
   },
 
   // Selected layer for arrow key navigation: 'playhead' | 'crop' | 'highlight'
@@ -81,16 +82,17 @@ export const useEditorStore = create((set, get) => ({
   /**
    * Open the mode switch confirmation dialog
    * @param {string} pendingMode - The mode user wants to switch to
+   * @param {string} sourceMode - The mode we're leaving ('framing' or 'overlay')
    */
-  openModeSwitchDialog: (pendingMode) => set({
-    modeSwitchDialog: { isOpen: true, pendingMode }
+  openModeSwitchDialog: (pendingMode, sourceMode = 'framing') => set({
+    modeSwitchDialog: { isOpen: true, pendingMode, sourceMode }
   }),
 
   /**
    * Close the mode switch dialog without changing mode
    */
   closeModeSwitchDialog: () => set({
-    modeSwitchDialog: { isOpen: false, pendingMode: null }
+    modeSwitchDialog: { isOpen: false, pendingMode: null, sourceMode: null }
   }),
 
   /**

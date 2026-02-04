@@ -153,24 +153,75 @@ export function ProjectManager({
   );
 
   // Helper to compute status counts for a list of projects
+  // Returns two things:
+  // 1. Project-level counts (for header badges): how many projects in each overall state
+  // 2. Segment-level presence (for legend): which colors appear in ANY project's progress strip
   const getProjectStatusCounts = useCallback((projectList) => {
-    let done = 0;
-    let notStarted = 0;
-    let inProgress = 0;
+    // Project-level counts (each project counted once based on overall status)
+    let projectsDone = 0;
+    let projectsInOverlay = 0;
+    let projectsInProgress = 0;
+    let projectsNotStarted = 0;
+
+    // Segment-level presence (for legend - tracks if ANY segment of this color exists)
+    let hasGreenSegments = false;      // done/exported clips or final video
+    let hasDarkBlueSegments = false;   // clips in progress (editing)
+    let hasLightBlueSegments = false;  // overlay ready (has working video)
+    let hasGraySegments = false;       // pending/not started
 
     projectList.forEach(project => {
-      const { has_final_video, clips_exported, clips_in_progress, has_working_video, has_overlay_edits } = project;
+      const { has_final_video, clips_exported, clips_in_progress, has_working_video, has_overlay_edits, clip_count } = project;
 
+      // === Project-level categorization (for header counts) ===
       if (has_final_video) {
-        done++;
-      } else if (clips_exported > 0 || clips_in_progress > 0 || has_working_video || has_overlay_edits) {
-        inProgress++;
+        projectsDone++;
+      } else if (has_working_video) {
+        projectsInOverlay++;
+      } else if (clips_exported > 0 || clips_in_progress > 0 || has_overlay_edits) {
+        projectsInProgress++;
       } else {
-        notStarted++;
+        projectsNotStarted++;
+      }
+
+      // === Segment-level presence (for legend) ===
+      // Green: any exported clips OR final video complete
+      if (has_final_video || clips_exported > 0) {
+        hasGreenSegments = true;
+      }
+      // Dark blue: any clips being edited OR overlay edits in progress
+      if (clips_in_progress > 0 || (has_overlay_edits && !has_final_video && !has_working_video)) {
+        hasDarkBlueSegments = true;
+      }
+      // Light blue: overlay ready (has working video but not final)
+      if (has_working_video && !has_final_video) {
+        hasLightBlueSegments = true;
+      }
+      // Gray: any pending clips OR pending overlay
+      const clipsWithProgress = (clips_exported || 0) + (clips_in_progress || 0);
+      const totalClips = clip_count || 0;
+      if (clipsWithProgress < totalClips) {
+        hasGraySegments = true; // Some clips not started
+      }
+      if (!has_working_video && !has_final_video) {
+        hasGraySegments = true; // Overlay not started
       }
     });
 
-    return { done, notStarted, inProgress, total: projectList.length };
+    return {
+      // Project counts (for header badges)
+      done: projectsDone,
+      inOverlay: projectsInOverlay,
+      inProgress: projectsInProgress,
+      notStarted: projectsNotStarted,
+      total: projectList.length,
+      // Segment presence flags (for legend)
+      segments: {
+        done: hasGreenSegments,
+        inProgress: hasDarkBlueSegments,
+        inOverlay: hasLightBlueSegments,
+        notStarted: hasGraySegments,
+      }
+    };
   }, []);
 
   // Group filtered projects by game group_key for hierarchical display

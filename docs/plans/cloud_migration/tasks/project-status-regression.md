@@ -1,6 +1,6 @@
 # Project Status Regression on Backward Steps
 
-## Status: IN PROGRESS
+## Status: DONE (user tested 2026-02-04)
 
 ## Problem Statement
 
@@ -263,3 +263,53 @@ To test the status regression:
 3. Navigate to Projects screen during export
 4. Verify project shows "In Overlay" (not "Complete") with "Exporting..." indicator
 5. Refresh page and verify status is still "In Overlay"
+
+---
+
+## Additional Issues Found During Testing (2026-02-03)
+
+### Issue 1: Overlay segment still shows green during re-frame - FIXED
+
+**Screenshot**: reframe.png - "Turn Drive Pass" shows "Exporting..." but Overlay segment is green
+
+**Root Cause**: The UPDATE and INSERT were in the same transaction. When INSERT failed (UNIQUE constraint), the UPDATE was rolled back too.
+
+**Fix Applied**: Separated the UPDATE (status regression) from the INSERT (export_jobs) into two independent transactions. The UPDATE now always succeeds even if INSERT fails.
+
+Files modified:
+- `framing.py` `/render` endpoint (line ~699-720)
+- `framing.py` `/upscale` endpoint (line ~212-232)
+- `multi_clip.py` (line ~656-680)
+
+### Issue 2: CIP shows "1/2 exported" - confusing display
+
+**Screenshot**: cip.png - "Class Interception Pass" shows 2 clips with first green, second blue
+
+**Analysis**: This is actually CORRECT behavior:
+- `clips_exported = 1` (first clip was exported previously)
+- `clips_in_progress = 1` (second clip has edits but not exported)
+
+This happens when a clip is added to a project after the initial export. The display is technically accurate but confusing to users.
+
+**Possible fix**: When clips are added, clear `exported_at` on all clips to force re-export of entire project. Or show a warning that re-export is needed.
+
+### Issue 3: Legend only shows 3 statuses, but cards show more - FIXED
+
+**Screenshot**: many_cards.png - Legend shows "In Progress" and "Not Started" but cards have green and light blue segments
+
+**Root Cause**: `getProjectStatusCounts()` only tracks 3 coarse statuses:
+- `done` (has_final_video)
+- `inProgress` (has any edits or working video)
+- `notStarted` (nothing)
+
+But project cards show 6 granular statuses in progress strips.
+
+**Fix Applied**: Expanded status tracking to 4 categories that match what users see:
+1. `done` (green) - has_final_video
+2. `inOverlay` (light blue) - has_working_video but not has_final_video
+3. `inProgress` (dark blue) - editing/exported but no working video
+4. `notStarted` (gray) - nothing started
+
+Files modified:
+- `src/frontend/src/components/ProjectManager.jsx` - getProjectStatusCounts() now returns 4 statuses
+- `src/frontend/src/components/shared/CollapsibleGroup.jsx` - legend and header show all 4 statuses with correct colors (bg-blue-300 for In Overlay to match project cards)

@@ -40,6 +40,9 @@ export const useOverlayStore = create((set, get) => ({
   // Loading states
   isLoadingWorkingVideo: false,
 
+  // Track if overlay has changed since last export (similar to framing)
+  overlayChangedSinceExport: false,
+
   // Actions
   setWorkingVideo: (video) => set({
     workingVideo: video,
@@ -60,6 +63,8 @@ export const useOverlayStore = create((set, get) => ({
 
   setIsLoadingWorkingVideo: (loading) => set({ isLoadingWorkingVideo: loading }),
 
+  setOverlayChangedSinceExport: (changed) => set({ overlayChangedSinceExport: changed }),
+
   // Computed
   hasWorkingVideo: () => get().workingVideo !== null,
 
@@ -70,6 +75,7 @@ export const useOverlayStore = create((set, get) => ({
     clipMetadata: null,
     effectType: getInitialEffectType(), // Preserve user's preference on reset
     isLoadingWorkingVideo: false,
+    overlayChangedSinceExport: false,
   }),
 }));
 
@@ -78,3 +84,4 @@ export const useOverlayWorkingVideo = () => useOverlayStore(state => state.worki
 export const useOverlayClipMetadata = () => useOverlayStore(state => state.clipMetadata);
 export const useOverlayEffectType = () => useOverlayStore(state => state.effectType);
 export const useOverlayIsLoading = () => useOverlayStore(state => state.isLoadingWorkingVideo);
+export const useOverlayChangedSinceExport = () => useOverlayStore(state => state.overlayChangedSinceExport);

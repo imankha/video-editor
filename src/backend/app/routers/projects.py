@@ -5,7 +5,7 @@ Projects organize clips for editing through Framing and Overlay modes.
 Each project has an aspect ratio (16:9 or 9:16) and contains working clips.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -558,31 +558,40 @@ async def create_project(project: ProjectCreate):
 def _build_clips_filter_query(game_ids: List[int], min_rating: int, tags: List[str]):
     """Build SQL query and params for filtering raw clips."""
     # min_rating = 0 means "All clips" (include everything regardless of rating)
+    # Include video_filename for extraction triggering
     if min_rating <= 0:
         query = """
-            SELECT id, filename, rating, tags, name, notes, start_time, end_time, game_id
-            FROM raw_clips
+            SELECT rc.id, rc.filename, rc.rating, rc.tags, rc.name, rc.notes,
+                   rc.start_time, rc.end_time, rc.game_id,
+                   COALESCE(rc.boundaries_version, 1) as boundaries_version,
+                   g.video_filename
+            FROM raw_clips rc
+            LEFT JOIN games g ON rc.game_id = g.id
             WHERE 1=1
         """
         params = []
     else:
         query = """
-            SELECT id, filename, rating, tags, name, notes, start_time, end_time, game_id
-            FROM raw_clips
-            WHERE COALESCE(rating, 0) >= ?
+            SELECT rc.id, rc.filename, rc.rating, rc.tags, rc.name, rc.notes,
+                   rc.start_time, rc.end_time, rc.game_id,
+                   COALESCE(rc.boundaries_version, 1) as boundaries_version,
+                   g.video_filename
+            FROM raw_clips rc
+            LEFT JOIN games g ON rc.game_id = g.id
+            WHERE COALESCE(rc.rating, 0) >= ?
         """
         params = [min_rating]
 
     if game_ids:
         placeholders = ','.join(['?' for _ in game_ids])
-        query += f" AND game_id IN ({placeholders})"
+        query += f" AND rc.game_id IN ({placeholders})"
         params.extend(game_ids)
 
     # Tag filtering - clips must have ALL specified tags
     # Tags are stored as JSON array, so we need to check each tag
     if tags:
         for tag in tags:
-            query += " AND tags LIKE ?"
+            query += " AND rc.tags LIKE ?"
             params.append(f'%"{tag}"%')
 
     query += " ORDER BY created_at DESC"
@@ -633,7 +642,7 @@ async def preview_clips(request: ClipsPreviewRequest):
 
 
 @router.post("/from-clips", response_model=ProjectResponse)
-async def create_project_from_clips(request: ProjectFromClipsCreate):
+async def create_project_from_clips(request: ProjectFromClipsCreate, background_tasks: BackgroundTasks):
     """
     Create a project pre-populated with filtered clips from the library.
 
@@ -642,6 +651,8 @@ async def create_project_from_clips(request: ProjectFromClipsCreate):
     - game_ids: List of game IDs to include (empty = all games)
     - min_rating: Minimum rating (1-5)
     - tags: List of tags that clips must have (empty = all tags)
+
+    Also triggers extraction for any clips that haven't been extracted yet.
     """
     # Validate aspect ratio
     if request.aspect_ratio not in ['16:9', '9:16', '4:3', '1:1']:
@@ -654,20 +665,25 @@ async def create_project_from_clips(request: ProjectFromClipsCreate):
         cursor = conn.cursor()
 
         # Get clips - either by specific IDs or by filters
+        # Include game video_filename for extraction
         if request.clip_ids is not None and len(request.clip_ids) > 0:
             # Use specific clip IDs (preserves order)
             placeholders = ','.join(['?' for _ in request.clip_ids])
             cursor.execute(f"""
-                SELECT id, filename, rating, tags, name, notes, start_time, end_time, game_id
-                FROM raw_clips
-                WHERE id IN ({placeholders})
+                SELECT rc.id, rc.filename, rc.rating, rc.tags, rc.name, rc.notes,
+                       rc.start_time, rc.end_time, rc.game_id,
+                       COALESCE(rc.boundaries_version, 1) as boundaries_version,
+                       g.video_filename
+                FROM raw_clips rc
+                LEFT JOIN games g ON rc.game_id = g.id
+                WHERE rc.id IN ({placeholders})
             """, request.clip_ids)
             rows = cursor.fetchall()
             # Re-order rows to match the order of clip_ids
             clips_by_id = {row['id']: row for row in rows}
             clips = [clips_by_id[cid] for cid in request.clip_ids if cid in clips_by_id]
         else:
-            # Use filter-based query
+            # Use filter-based query (already joins with games)
             query, params = _build_clips_filter_query(
                 request.game_ids, request.min_rating, request.tags
             )
@@ -688,11 +704,12 @@ async def create_project_from_clips(request: ProjectFromClipsCreate):
         project_id = cursor.lastrowid
 
         # Add all filtered clips as working clips
+        # Capture the raw_clip's current boundaries_version for change detection
         for sort_order, clip in enumerate(clips):
             cursor.execute("""
-                INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version)
-                VALUES (?, ?, ?, 1)
-            """, (project_id, clip['id'], sort_order))
+                INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version, raw_clip_version)
+                VALUES (?, ?, ?, 1, ?)
+            """, (project_id, clip['id'], sort_order, clip['boundaries_version']))
 
         conn.commit()
 
@@ -707,14 +724,45 @@ async def create_project_from_clips(request: ProjectFromClipsCreate):
             f"(total duration: {total_duration:.1f}s)"
         )
 
-        return ProjectResponse(
-            id=project_id,
-            name=request.name,
-            aspect_ratio=request.aspect_ratio,
-            working_video_id=None,
-            final_video_id=None,
-            created_at=datetime.now().isoformat()
-        )
+    # Trigger extraction for clips that need it (outside DB connection)
+    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+    user_id = get_current_user_id()
+
+    clips_to_extract = []
+    for clip in clips:
+        # Only extract clips that don't have a filename yet
+        video_filename = clip['video_filename'] if 'video_filename' in clip.keys() else None
+        if not clip['filename'] and clip['game_id'] and video_filename:
+            clips_to_extract.append({
+                'clip_id': clip['id'],
+                'start_time': clip['start_time'],
+                'end_time': clip['end_time'],
+                'game_id': clip['game_id'],
+                'video_filename': video_filename,
+            })
+
+    if clips_to_extract:
+        for clip_info in clips_to_extract:
+            enqueue_clip_extraction(
+                clip_id=clip_info['clip_id'],
+                project_id=project_id,
+                game_id=clip_info['game_id'],
+                video_filename=clip_info['video_filename'],
+                start_time=clip_info['start_time'],
+                end_time=clip_info['end_time'],
+                user_id=user_id,
+            )
+        background_tasks.add_task(run_queue_processor_sync)
+        logger.info(f"Enqueued {len(clips_to_extract)} clips for extraction for project {project_id}")
+
+    return ProjectResponse(
+        id=project_id,
+        name=request.name,
+        aspect_ratio=request.aspect_ratio,
+        working_video_id=None,
+        final_video_id=None,
+        created_at=datetime.now().isoformat()
+    )
 
 
 @router.get("/{project_id}", response_model=ProjectDetailResponse)
@@ -982,3 +1030,209 @@ async def get_working_video(project_id: int):
             media_type="video/mp4",
             filename=row['filename']
         )
+
+
+class OutdatedClipInfo(BaseModel):
+    working_clip_id: int
+    raw_clip_id: int
+    clip_name: str
+    framed_version: int
+    current_version: int
+    boundaries_updated_at: Optional[str] = None
+
+
+class OutdatedClipsResponse(BaseModel):
+    has_outdated_clips: bool
+    outdated_clips: List[OutdatedClipInfo]
+
+
+@router.get("/{project_id}/outdated-clips", response_model=OutdatedClipsResponse)
+async def check_outdated_clips(project_id: int):
+    """
+    Check if any working clips in a project have outdated annotation boundaries.
+
+    Compares each working_clip's raw_clip_version (captured when framing was done)
+    against the raw_clip's current boundaries_version. If they differ, it means
+    the annotation boundaries (start/end time) were changed after framing.
+
+    Returns a list of outdated clips so the frontend can prompt the user to
+    either use the latest clip boundaries or continue with original framing.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Verify project exists
+        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Get latest version of each working clip and compare with raw_clip boundaries
+        cursor.execute(f"""
+            SELECT
+                wc.id as working_clip_id,
+                wc.raw_clip_id,
+                wc.raw_clip_version,
+                rc.boundaries_version,
+                rc.boundaries_updated_at,
+                rc.start_time,
+                rc.end_time,
+                rc.name as clip_name,
+                rc.rating,
+                rc.tags
+            FROM working_clips wc
+            JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            WHERE wc.id IN ({latest_working_clips_subquery()})
+              AND wc.project_id = ?
+        """, (project_id, project_id))
+
+        rows = cursor.fetchall()
+        outdated_clips = []
+
+        for row in rows:
+            framed_version = row['raw_clip_version'] or 1
+            current_version = row['boundaries_version'] or 1
+
+            if framed_version < current_version:
+                # Derive a display name for the clip
+                tags = json.loads(row['tags']) if row['tags'] else []
+                clip_name = derive_clip_name(
+                    row['clip_name'],
+                    row['rating'] or 3,
+                    tags
+                )
+
+                outdated_clips.append(OutdatedClipInfo(
+                    working_clip_id=row['working_clip_id'],
+                    raw_clip_id=row['raw_clip_id'],
+                    clip_name=clip_name,
+                    framed_version=framed_version,
+                    current_version=current_version,
+                    boundaries_updated_at=row['boundaries_updated_at']
+                ))
+
+        return OutdatedClipsResponse(
+            has_outdated_clips=len(outdated_clips) > 0,
+            outdated_clips=outdated_clips
+        )
+
+
+class RefreshClipsRequest(BaseModel):
+    working_clip_ids: List[int]
+
+
+class RefreshClipsResponse(BaseModel):
+    success: bool
+    refreshed_count: int
+    extraction_triggered: bool = False
+
+
+@router.post("/{project_id}/refresh-outdated-clips", response_model=RefreshClipsResponse)
+async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, background_tasks: BackgroundTasks):
+    """
+    Refresh outdated working clips to use latest annotation boundaries.
+
+    This resets the framing data (crop_data, timing_data, segments_data) for the
+    specified working clips and updates their raw_clip_version to match the current
+    boundaries_version of the raw clip.
+
+    Also clears the raw_clip filename and triggers re-extraction with new boundaries.
+
+    Use this when the user chooses "Use Latest Clips" after being informed that
+    some clips have outdated annotation boundaries.
+    """
+    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+
+    clips_to_extract = []
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Verify project exists
+        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        refreshed_count = 0
+
+        for working_clip_id in request.working_clip_ids:
+            # Verify clip belongs to project and get raw_clip info for extraction
+            cursor.execute("""
+                SELECT wc.id, wc.raw_clip_id, rc.boundaries_version,
+                       rc.start_time, rc.end_time, rc.game_id, g.video_filename
+                FROM working_clips wc
+                JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+                LEFT JOIN games g ON rc.game_id = g.id
+                WHERE wc.id = ? AND wc.project_id = ?
+            """, (working_clip_id, project_id))
+
+            row = cursor.fetchone()
+            if not row:
+                logger.warning(f"Working clip {working_clip_id} not found in project {project_id}")
+                continue
+
+            current_boundaries_version = row['boundaries_version'] or 1
+
+            # Reset framing data and update raw_clip_version
+            cursor.execute("""
+                UPDATE working_clips
+                SET crop_data = NULL,
+                    timing_data = NULL,
+                    segments_data = NULL,
+                    raw_clip_version = ?,
+                    exported_at = NULL
+                WHERE id = ?
+            """, (current_boundaries_version, working_clip_id))
+
+            # Clear raw_clip filename to mark for re-extraction
+            cursor.execute("""
+                UPDATE raw_clips SET filename = '' WHERE id = ?
+            """, (row['raw_clip_id'],))
+
+            # Collect info for extraction if we have game video
+            if row['game_id'] and row['video_filename']:
+                clips_to_extract.append({
+                    'clip_id': row['raw_clip_id'],
+                    'start_time': row['start_time'],
+                    'end_time': row['end_time'],
+                    'game_id': row['game_id'],
+                    'video_filename': row['video_filename'],
+                    'project_id': project_id,
+                })
+
+            refreshed_count += 1
+            logger.info(f"Refreshed working clip {working_clip_id} to boundaries version {current_boundaries_version}")
+
+        conn.commit()
+
+        # If any clips were refreshed, clear project working video since framing is now incomplete
+        if refreshed_count > 0:
+            cursor.execute("""
+                UPDATE projects
+                SET working_video_id = NULL, final_video_id = NULL
+                WHERE id = ?
+            """, (project_id,))
+            conn.commit()
+            logger.info(f"Cleared working/final video for project {project_id} after refreshing clips")
+
+    # Trigger extraction for clips with updated boundaries (outside DB connection)
+    user_id = get_current_user_id()
+    for clip_info in clips_to_extract:
+        enqueue_clip_extraction(
+            clip_id=clip_info['clip_id'],
+            project_id=clip_info['project_id'],
+            game_id=clip_info['game_id'],
+            video_filename=clip_info['video_filename'],
+            start_time=clip_info['start_time'],
+            end_time=clip_info['end_time'],
+            user_id=user_id,
+        )
+
+    if clips_to_extract:
+        background_tasks.add_task(run_queue_processor_sync)
+        logger.info(f"Enqueued {len(clips_to_extract)} clips for re-extraction after boundary update")
+
+    return RefreshClipsResponse(
+        success=True,
+        refreshed_count=refreshed_count,
+        extraction_triggered=len(clips_to_extract) > 0
+    )
