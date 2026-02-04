@@ -654,6 +654,7 @@ async def export_multi_clip(
     logger.info(f"[Multi-Clip Export] Starting export {export_id}")
 
     # Create export_jobs record for tracking and recovery
+    # Also clear final_video_id to regress status from "Complete" to "In Overlay"
     if project_id:
         try:
             with get_db_connection() as conn:
@@ -662,8 +663,10 @@ async def export_multi_clip(
                     INSERT INTO export_jobs (id, project_id, type, status, input_data)
                     VALUES (?, ?, 'framing', 'processing', '{}')
                 """, (export_id, project_id))
+                # Regress status: clear final_video_id so project shows "In Overlay" not "Complete"
+                cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
                 conn.commit()
-            logger.info(f"[Multi-Clip Export] Created export_jobs record: {export_id} for project {project_id}")
+            logger.info(f"[Multi-Clip Export] Created export_jobs record: {export_id}, cleared final_video_id for status regression")
         except Exception as e:
             logger.warning(f"[Multi-Clip Export] Failed to create export_jobs record: {e}")
 

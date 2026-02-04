@@ -209,6 +209,7 @@ async def export_with_ai_upscale(
             logger.warning(f"[Framing Export] Failed to fetch project name: {e}")
 
     # Create export_jobs record for tracking (if project_id provided)
+    # Also clear final_video_id to regress status from "Complete" to "In Overlay"
     if project_id:
         try:
             with get_db_connection() as conn:
@@ -217,8 +218,10 @@ async def export_with_ai_upscale(
                     INSERT INTO export_jobs (id, project_id, type, status, input_data)
                     VALUES (?, ?, 'framing', 'processing', '{}')
                 """, (export_id, project_id))
+                # Regress status: clear final_video_id so project shows "In Overlay" not "Complete"
+                cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
                 conn.commit()
-            logger.info(f"[Framing Export] Created export_jobs record: {export_id} for project '{project_name}'")
+            logger.info(f"[Framing Export] Created export_jobs record: {export_id}, cleared final_video_id for status regression")
         except Exception as e:
             logger.warning(f"[Framing Export] Failed to create export_jobs record: {e}")
 
@@ -693,6 +696,8 @@ async def render_project(request: RenderRequest):
     }
 
     # Create export_jobs record for tracking and recovery
+    # Also clear final_video_id to regress status from "Complete" to "In Overlay"
+    # This provides immediate visual feedback that re-framing is in progress
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -700,8 +705,10 @@ async def render_project(request: RenderRequest):
                 INSERT INTO export_jobs (id, project_id, type, status, input_data)
                 VALUES (?, ?, 'framing', 'processing', '{}')
             """, (export_id, project_id))
+            # Regress status: clear final_video_id so project shows "In Overlay" not "Complete"
+            cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
             conn.commit()
-        logger.info(f"[Render] Created export_jobs record: {export_id}")
+        logger.info(f"[Render] Created export_jobs record: {export_id}, cleared final_video_id for status regression")
     except Exception as e:
         logger.warning(f"[Render] Failed to create export_jobs record: {e}")
 

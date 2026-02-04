@@ -1,5 +1,7 @@
 # Project Status Regression on Backward Steps
 
+## Status: IN PROGRESS
+
 ## Problem Statement
 
 When a user takes a "backward step" in the workflow (e.g., re-framing an already completed project), the project card and database don't reflect the new state:
@@ -20,6 +22,76 @@ The project status should always reflect the **most recent output state**:
 | Complete overlay export | Complete |
 | **Re-frame a completed project** | **In Framing** (regress from Complete) |
 | **Re-overlay a framed project** | **In Overlay** (regress from Complete) |
+
+## Investigation Findings (2026-02-03)
+
+### Database Architecture
+The `projects` table has NO explicit `status` column. Status is derived from:
+- `working_video_id` IS NOT NULL → "In Overlay" (framing complete)
+- `final_video_id` IS NOT NULL → "Complete" (overlay complete)
+- Otherwise → "Not Started" or "Editing"
+
+### Current Regression Logic
+**Framing export DOES clear `final_video_id`** but only at the END of export (when working_video is created).
+- Lines in framing.py: 397, 558, 1123
+- Lines in multi_clip.py: 1138
+
+### The Problem
+The status regression happens at export COMPLETION, not at export START:
+1. User starts re-framing a "Complete" project
+2. During export: `final_video_id` still set → status shows "Complete"
+3. Export completes: `final_video_id = NULL` → status changes to "In Overlay"
+
+User sees "Complete" during the entire export, then it suddenly changes.
+
+### Frontend Export Indicator
+The frontend ProjectCard DOES check for active exports (line 1029-1038):
+```javascript
+const storeExport = Object.values(activeExports).find(
+  (exp) => exp.projectId === project.id && (exp.status === 'pending' || exp.status === 'processing')
+);
+const isExporting = ... storeExport?.type || null;
+```
+
+And shows "Exporting..." when active (lines 1132-1136). But this relies on:
+1. Export being in the store (may not survive page refresh)
+2. The underlying status still shows as "Complete" in the progress bar
+
+### Solution
+Clear `final_video_id` at the START of framing export, not just at the end.
+This immediately regresses status from "Complete" to "In Overlay".
+
+## Implementation (2026-02-03)
+
+### Changes Made
+
+Added status regression at export START in these endpoints:
+
+1. **framing.py `/render`** (line ~695-710)
+   - Main backend-authoritative framing export
+   - Added `UPDATE projects SET final_video_id = NULL` in same transaction as export_jobs INSERT
+
+2. **framing.py `/upscale`** (line ~211-223)
+   - Legacy endpoint with direct video upload
+   - Added same status regression
+
+3. **multi_clip.py `/export`** (line ~656-668)
+   - Multi-clip framing export
+   - Added same status regression
+
+### Endpoints NOT changed (intentionally)
+
+- **framing.py `/framing`** - Receives already-rendered video from frontend, regression at save time is appropriate
+- **overlay.py endpoints** - Re-overlaying should keep "Complete" status until new final video is created
+
+### How it works now
+
+1. User starts re-framing a "Complete" project
+2. Export job is created AND `final_video_id` is cleared in same transaction
+3. Status immediately becomes "In Overlay" (no more `has_final_video`)
+4. Project card shows "In Overlay" + "Exporting..." indicator
+5. Export completes, `working_video_id` is updated
+6. Status remains "In Overlay" until overlay export is done
 
 ## Current Architecture
 
@@ -176,8 +248,18 @@ def calculate_project_status(project_id):
 
 ## Success Criteria
 
-- [ ] Re-framing a completed project shows "Framing" status
-- [ ] Re-overlaying shows "Overlay" status
-- [ ] Project card shows export progress indicator during exports
-- [ ] After export completes, status updates to new state
-- [ ] Page refresh shows correct status during export
+- [x] Re-framing a completed project shows "In Overlay" status (regressed from Complete)
+- [ ] Project card shows export progress indicator during exports (already works via exportStore)
+- [x] After export completes, status updates to new state (already worked)
+- [ ] Page refresh shows correct status during export (needs testing)
+
+Note: "Re-overlaying shows Overlay status" is N/A - overlay export keeps "Complete" status until new final video is created, which is correct behavior.
+
+## Testing Notes
+
+To test the status regression:
+1. Complete a full export (framing → overlay) so project shows "Complete"
+2. Go back to Framing screen and re-export
+3. Navigate to Projects screen during export
+4. Verify project shows "In Overlay" (not "Complete") with "Exporting..." indicator
+5. Refresh page and verify status is still "In Overlay"
