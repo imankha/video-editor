@@ -28,11 +28,6 @@ export function GlobalExportIndicator() {
     (exp) => exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING
   );
 
-  // Debug logging when count changes
-  if (processingExports.length > 0) {
-    console.log(`[GlobalExportIndicator] ${processingExports.length} active exports:`,
-      processingExports.map(e => `${e.exportId} (${e.status})`).join(', '));
-  }
 
   // Filter to get recent completed/failed exports (last 10 seconds)
   const recentCompletedExports = Object.values(activeExports).filter((exp) => {
