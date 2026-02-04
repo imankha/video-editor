@@ -1,6 +1,6 @@
 # Project Status Regression on Backward Steps
 
-## Status: DONE (pending user testing)
+## Status: DONE (user tested 2026-02-04)
 
 ## Problem Statement
 

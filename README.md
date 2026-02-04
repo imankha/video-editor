@@ -57,7 +57,8 @@ User Workflow:
 
 1. **Annotate Mode**: Mark clip regions on full game footage
    - Add metadata (tags, rating 1-5, notes)
-   - Export creates raw clips (4+ stars) + projects
+   - Clips saved to library when created (boundaries persisted)
+   - 5-star clips auto-create projects
    - Annotations stored in SQLite `annotations` table
 
 2. **Framing Mode**: Edit individual clips within a project
@@ -70,6 +71,18 @@ User Workflow:
    - Ellipse highlight regions with keyframe animation
    - Effect types (brightness, dark overlay)
    - Outputs: `final_videos/` (shown in Gallery)
+
+### Clip Extraction Behavior
+
+Clip extraction (cutting clips from game video) is triggered **only** when clips are added to a project:
+- **Auto-project creation**: 5-star clips automatically create a project and trigger extraction
+- **Manual project creation**: "Create Project from Clips" triggers extraction for all included clips
+- **Refresh outdated clips**: When entering Framing mode, if clip boundaries changed since import, user can choose to re-import (triggers re-extraction)
+
+Changing clip boundaries (start/end time) in Annotate mode does NOT immediately trigger extraction. Instead:
+1. `boundaries_version` increments on the raw_clip
+2. When user enters a project in Framing mode, `outdated-clips` check compares `raw_clip.boundaries_version` vs `working_clip.raw_clip_version`
+3. If mismatched, popup offers to "Use Latest Clip" (re-extract) or "Keep Original"
 
 ---
 
@@ -237,6 +250,8 @@ raw_clips (
     game_id,               -- FK to games (source game)
     auto_project_id,       -- FK to projects (auto-created for 5-star)
     default_highlight_regions,  -- JSON: cross-project highlight reuse
+    boundaries_version,    -- Increments when start_time/end_time changes
+    boundaries_updated_at, -- Timestamp of last boundary change
     created_at
 )
 
@@ -254,6 +269,7 @@ working_clips (
     id, project_id, raw_clip_id, uploaded_filename,
     exported_at,           -- NULL = not exported, timestamp = exported
     sort_order, version,   -- Version increments on re-export
+    raw_clip_version,      -- Snapshot of raw_clip.boundaries_version at import
     crop_data,             -- JSON: crop keyframes
     timing_data,           -- JSON: {trimRange}
     segments_data,         -- JSON: {boundaries, segmentSpeeds}
@@ -347,9 +363,12 @@ export_jobs (
 |--------|----------|---------|
 | GET | `/api/projects` | List all with clip counts |
 | POST | `/api/projects` | Create project |
+| POST | `/api/projects/from-clips` | Create project from library clips (triggers extraction) |
 | DELETE | `/api/projects/{id}` | Delete with all clips |
 | PATCH | `/api/projects/{id}/state` | Update mode/timestamps |
 | POST | `/api/projects/{id}/discard-uncommitted` | Revert unsaved edits |
+| GET | `/api/projects/{id}/outdated-clips` | Check if clips have stale boundaries |
+| POST | `/api/projects/{id}/refresh-outdated-clips` | Update clips and trigger re-extraction |
 
 ### Clips
 | Method | Endpoint | Purpose |
