@@ -161,11 +161,9 @@ class ExportWebSocketManager {
 
     try {
       const message = JSON.parse(trimmedData);
-      // Log all progress updates to understand the data flow
-      console.log(`[Progress WS] export=${exportId} progress=${message.progress}% status=${message.status} msg="${message.message || ''}".slice(0,50)`);
 
-      // Extract all fields from the message - backend sends projectId, type, and projectName
-      const { progress, message: progressMessage, status, projectId, type, projectName } = message;
+      // Extract all fields from the message - backend sends projectId, type, projectName, and phase
+      const { progress, message: progressMessage, status, projectId, type, projectName, phase } = message;
 
       // Update export store
       const store = useExportStore.getState();
@@ -209,7 +207,7 @@ class ExportWebSocketManager {
         // Close connection - export failed
         this._closeConnection(exportId, true);
       } else {
-        // Progress update - include projectId, type, and projectName from backend
+        // Progress update - include projectId, type, projectName, and phase from backend
         store.updateExportProgress(exportId, {
           current: progress,
           total: 100,
@@ -218,6 +216,7 @@ class ExportWebSocketManager {
           projectId,    // From backend WebSocket message
           type,         // From backend WebSocket message
           projectName,  // From backend WebSocket message
+          phase,        // From backend WebSocket message (ai_upscale, ffmpeg_encode, etc.)
         });
 
         // Notify callback (wrap in try-catch - callback may reference unmounted component)
@@ -398,13 +397,10 @@ class ExportWebSocketManager {
    * Emit an event to listeners
    */
   _emitEvent(exportId, event, data) {
-    console.log(`[ExportWSManager] Emitting '${event}' event for ${exportId}`);
-
     // Emit to specific export listeners
     const specificKey = `${exportId}:${event}`;
     const specificListeners = this.eventListeners.get(specificKey);
     if (specificListeners) {
-      console.log(`[ExportWSManager] Found ${specificListeners.size} specific listener(s) for ${specificKey}`);
       specificListeners.forEach(cb => {
         try {
           cb(data, exportId);
@@ -418,7 +414,6 @@ class ExportWebSocketManager {
     const wildcardKey = `*:${event}`;
     const wildcardListeners = this.eventListeners.get(wildcardKey);
     if (wildcardListeners) {
-      console.log(`[ExportWSManager] Found ${wildcardListeners.size} wildcard listener(s) for ${wildcardKey}`);
       wildcardListeners.forEach(cb => {
         try {
           cb(data, exportId);
@@ -426,10 +421,6 @@ class ExportWebSocketManager {
           console.warn(`[ExportWSManager] Event listener error:`, e);
         }
       });
-    }
-
-    if (!specificListeners && !wildcardListeners) {
-      console.log(`[ExportWSManager] No listeners found for '${event}' event`);
     }
   }
 

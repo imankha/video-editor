@@ -329,7 +329,7 @@ async def export_with_ai_upscale(
                 "type": "framing"
             }
             export_progress[export_id] = progress_data
-            logger.info(f"Progress: {overall_percent:.1f}% - {message}")
+            logger.debug(f"Progress: {overall_percent:.1f}% - {message}")
 
             try:
                 asyncio.run_coroutine_threadsafe(
@@ -1031,8 +1031,10 @@ async def render_project(request: RenderRequest):
             # Capture event loop for progress callbacks
             loop = asyncio.get_running_loop()
 
-            # Progress ranges
-            if request.export_mode == "FAST":
+            # Progress ranges - use case-insensitive comparison
+            # Frontend sends 'fast', backend code checks for 'FAST'
+            is_fast_mode = request.export_mode.upper() == "FAST"
+            if is_fast_mode:
                 progress_ranges = {
                     'ai_upscale': (15, 95),
                     'ffmpeg_encode': (95, 100)
@@ -1063,7 +1065,7 @@ async def render_project(request: RenderRequest):
                     "type": "framing"
                 }
                 export_progress[export_id] = progress_data
-                logger.info(f"[Render] Progress: {overall_percent:.1f}% - {message}")
+                logger.debug(f"[Render] Progress: {overall_percent:.1f}% - {message}")
 
                 try:
                     asyncio.run_coroutine_threadsafe(

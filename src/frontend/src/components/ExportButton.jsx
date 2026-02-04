@@ -253,25 +253,40 @@ const ExportButton = forwardRef(function ExportButton({
   const displayProgress = isInUploadPhase ? localProgress : storeProgress;
   const displayMessage = isInUploadPhase ? progressMessage : (storeMessage || progressMessage);
 
-  // === PROGRESS TRACKING LOGGING ===
-  // Log all progress state changes to understand the data flow
-  const exportStartTimeRef = useRef(null);
+  // Export timing tracker - logs single summary at end
+  const exportTimingRef = useRef(null);
   useEffect(() => {
-    if (isExporting && !exportStartTimeRef.current) {
-      exportStartTimeRef.current = Date.now();
-      console.log(`[Progress] Export started at ${new Date().toISOString()}`);
+    if (isExporting && !exportTimingRef.current) {
+      exportTimingRef.current = { start: Date.now(), phases: {}, lastPhase: null };
     }
-    if (!isExporting && exportStartTimeRef.current) {
-      const duration = Date.now() - exportStartTimeRef.current;
-      console.log(`[Progress] Export ended. Total duration: ${(duration/1000).toFixed(1)}s`);
-      exportStartTimeRef.current = null;
+    if (!isExporting && exportTimingRef.current) {
+      // Export ended - log summary
+      const timing = exportTimingRef.current;
+      const total = ((Date.now() - timing.start) / 1000).toFixed(1);
+      const phases = Object.entries(timing.phases)
+        .map(([phase, duration]) => `${phase}:${duration.toFixed(1)}s`)
+        .join(' ');
+      console.log(`[Export] ${total}s total | ${phases || 'no phases'}`);
+      exportTimingRef.current = null;
     }
   }, [isExporting]);
 
+  // Track phase transitions
   useEffect(() => {
-    const elapsed = exportStartTimeRef.current ? ((Date.now() - exportStartTimeRef.current)/1000).toFixed(1) : '0';
-    console.log(`[Progress] t=${elapsed}s | local=${localProgress}% store=${storeProgress}% display=${displayProgress}% | uploadComplete=${uploadCompleteRef.current} isInUploadPhase=${isInUploadPhase} | msg="${displayMessage}"`);
-  }, [localProgress, storeProgress, displayProgress, isInUploadPhase, displayMessage]);
+    if (!exportTimingRef.current) return;
+    const timing = exportTimingRef.current;
+    const currentPhase = isInUploadPhase ? 'upload' : (currentExportFromStore?.progress?.phase || 'process');
+
+    if (currentPhase !== timing.lastPhase) {
+      const now = Date.now();
+      // Record duration of previous phase
+      if (timing.lastPhase && timing.phaseStart) {
+        timing.phases[timing.lastPhase] = (now - timing.phaseStart) / 1000;
+      }
+      timing.lastPhase = currentPhase;
+      timing.phaseStart = now;
+    }
+  }, [isInUploadPhase, currentExportFromStore?.progress?.phase]);
 
   // Map effect type to toggle position
   const effectTypeToPosition = { 'brightness_boost': 0, 'original': 1, 'dark_overlay': 2 };

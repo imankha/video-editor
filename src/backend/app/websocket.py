@@ -85,9 +85,9 @@ class ConnectionManager:
         for ws in failed_connections:
             self.disconnect(export_id, ws)
 
+        # Progress logged at DEBUG level - summary logged by frontend at end
         if success_count > 0:
-            # Log all progress updates to understand the flow
-            logger.info(f"[WS Progress] export={export_id} progress={data.get('progress', 0):.1f}% status={data.get('status')} msg={data.get('message', '')[:50]}")
+            logger.debug(f"[WS] {export_id[-8:]} {data.get('progress', 0):.0f}%")
 
 
 # Global instance of the connection manager
