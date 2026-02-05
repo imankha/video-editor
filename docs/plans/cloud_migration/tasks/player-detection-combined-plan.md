@@ -148,3 +148,17 @@ When `MODAL_ENABLED=false`:
 cd src/backend
 MODAL_ENABLED=true .venv/Scripts/python.exe experiments/test_batch_detection.py
 ```
+
+## Future Work
+
+### Unify Single-Clip and Multi-Clip Export Endpoints
+
+Currently there are two separate export paths:
+- `/api/export/render` - single-clip, uses `framing_ai` Modal function
+- `/api/export/multi-clip` - multi-clip, uses `multi_clip_export_modal` Modal function
+
+A single clip is just a special case of multi-clip (N=1). These should be unified:
+1. Consolidate to single `/api/export/render` endpoint that handles both cases
+2. Single Modal function that handles 1-N clips
+3. Frontend sends same request format regardless of clip count
+4. Simplifies code maintenance and ensures feature parity
