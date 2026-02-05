@@ -52,18 +52,30 @@ Video encodes (AI upscaling)
     ↓
 Progress: "Detecting players..." (92%)
     ↓
-Batch detection runs on 4 timestamps per clip
+Batch detection runs on 4 timestamps per clip (0s, 0.66s, 1.33s, 2s)
     ↓
-Keyframes created with detected player positions:
-  - x, y: center of detected player
-  - radiusX, radiusY: based on bounding box size
-  - detected: true (flag for UI)
-  - confidence: detection confidence score
+Raw detection data saved to highlight regions:
+  - detections: [{ timestamp, boxes: [{x, y, width, height, confidence}] }]
+  - keyframes: [] (empty - user creates by clicking)
     ↓
 highlights_data saved to working_videos table
     ↓
-User enters Overlay mode with keyframes ready
+User enters Overlay mode
+    ↓
+Timeline shows GREEN BAR for regions with detection data
+    ↓
+User scrubs to detection area → sees player bounding boxes
+    ↓
+User clicks a box → keyframe created with GREEN DOT indicator
 ```
+
+## User Flow
+
+1. **Export** - Click "Frame Video", detection runs automatically at 92%
+2. **Timeline** - Green bar shows which clips have detection data available
+3. **Scrub** - Move playhead near detection timestamps to see boxes
+4. **Click** - Click a player box to create a keyframe at that position
+5. **Confirm** - Keyframe has green dot indicating it came from detection
 
 ## Modal Disabled Behavior
 
@@ -113,8 +125,22 @@ When `MODAL_ENABLED=false`:
 5. **Click "Frame Video"** to export
 6. **Watch progress bar** - should show "Detecting players..." around 92%
 7. **When complete**, go to Overlay mode
-8. **Check keyframes** - should have 4 keyframes with detected player positions
-9. **Toggle player boxes** - should show bounding boxes at detected positions
+8. **Check timeline** - should see GREEN BAR at bottom of highlight region (first 2s)
+9. **Scrub to 0s, 0.66s, 1.33s, or 2s** - should see player bounding boxes appear
+10. **Enable "Show Player Boxes"** toggle if boxes not visible
+11. **Click a player box** - should create a keyframe
+12. **Verify keyframe** - should have GREEN DOT inside the orange diamond
+
+### What to Look For
+
+| Check | Expected |
+|-------|----------|
+| Progress shows "Detecting players..." | Yes, around 92% |
+| Green bar on timeline | Yes, in regions with detection data |
+| Detection boxes appear when scrubbing | Yes, within 0.5s of detection timestamps |
+| Click box creates keyframe | Yes |
+| Keyframe has green dot | Yes (indicates from detection) |
+| Works with Modal disabled | Yes (no green bar, no boxes - graceful fallback) |
 
 ### Automated Tests
 
