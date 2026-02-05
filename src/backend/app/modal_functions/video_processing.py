@@ -284,9 +284,32 @@ def _process_overlay(job_id: str, input_path: str, output_path: str, params: dic
 
             # Render highlight if in a region
             if active_region:
-                frame = _render_highlight(
-                    frame, active_region, current_time, effect_type
-                )
+                # Check if keyframe coordinates need to be scaled from detection space to working video space
+                # Detection may have run on source video (e.g., 2560x1440) but rendering is on working video (e.g., 1080x1920)
+                detection_width = active_region.get('videoWidth')
+                detection_height = active_region.get('videoHeight')
+
+                if detection_width and detection_height and (detection_width != width or detection_height != height):
+                    # Create a copy of region with scaled coordinates
+                    scale_x = width / detection_width
+                    scale_y = height / detection_height
+                    scaled_keyframes = []
+                    for kf in active_region.get('keyframes', []):
+                        scaled_keyframes.append({
+                            **kf,
+                            'x': kf['x'] * scale_x,
+                            'y': kf['y'] * scale_y,
+                            'radiusX': kf['radiusX'] * scale_x,
+                            'radiusY': kf['radiusY'] * scale_y,
+                        })
+                    scaled_region = {**active_region, 'keyframes': scaled_keyframes}
+                    frame = _render_highlight(
+                        frame, scaled_region, current_time, effect_type
+                    )
+                else:
+                    frame = _render_highlight(
+                        frame, active_region, current_time, effect_type
+                    )
 
             # Write frame to FFmpeg - check if pipe is still open
             try:

@@ -137,7 +137,8 @@
       "Skill(run-tests)",
       "Bash(MODAL_ENABLED=true .venv/Scripts/python.exe:*)",
       "Bash(PYTHONUTF8=1 .venv/Scripts/python.exe:*)",
-      "Bash(PYTHONUTF8=1 MODAL_ENABLED=true .venv/Scripts/python.exe:*)"
+      "Bash(PYTHONUTF8=1 MODAL_ENABLED=true .venv/Scripts/python.exe:*)",
+      "Bash(.venvScriptspython.exe -c \"from app.main import app\")"
     ],
     "deny": [],
     "ask": []
