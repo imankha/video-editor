@@ -394,6 +394,13 @@ export_jobs (
 | PUT | `/api/games/{id}/video` | Upload game video |
 | POST | `/api/annotate/export` | Export clips + create projects |
 
+### Settings
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/settings` | Load user settings (merged with defaults) |
+| PUT | `/api/settings` | Partial update (deep merge) |
+| DELETE | `/api/settings` | Reset to defaults |
+
 ---
 
 ## Key Frontend Patterns

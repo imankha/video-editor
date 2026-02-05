@@ -38,7 +38,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import routers and websocket handler
-from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, downloads_router, auth_router, storage_router
+from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, downloads_router, auth_router, storage_router, settings_router
 from app.routers.exports import router as exports_router
 from app.websocket import websocket_export_progress, websocket_extractions
 from app.database import init_database
@@ -112,6 +112,7 @@ app.include_router(games_router)
 app.include_router(downloads_router)
 app.include_router(auth_router)
 app.include_router(storage_router)
+app.include_router(settings_router)
 app.include_router(exports_router, prefix="/api")
 
 

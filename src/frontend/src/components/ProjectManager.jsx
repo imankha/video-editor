@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag } from 'lucide-react';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores/exportStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
 import { Button } from './shared/Button';
@@ -52,10 +53,21 @@ export function ProjectManager({
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const gameFileInputRef = useRef(null);
 
-  // Project filter state
-  const [statusFilter, setStatusFilter] = useState('uncompleted'); // 'all' | 'uncompleted' | 'complete' | 'overlay' | 'editing' | 'not_started'
-  const [aspectFilter, setAspectFilter] = useState('all'); // 'all' | '9:16' | '16:9' | '1:1' | '4:5'
-  const [creationFilter, setCreationFilter] = useState('all'); // 'all' | 'auto' | 'custom'
+  // Project filter state - persisted via settings store
+  const {
+    settings,
+    loadSettings,
+    setStatusFilter,
+    setAspectFilter,
+    setCreationFilter,
+  } = useSettingsStore();
+
+  const { statusFilter, aspectFilter, creationFilter } = settings.projectFilters;
+
+  // Load settings on mount
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   // Filter projects based on selected filters
   const filteredProjects = useMemo(() => {

@@ -716,6 +716,22 @@ def ensure_database():
             ON modal_tasks(game_id)
         """)
 
+        # User settings - persisted preferences (synced to R2)
+        # Uses JSON for flexible settings storage without schema changes
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                settings_json TEXT NOT NULL DEFAULT '{}',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Initialize settings row if not exists
+        cursor.execute("""
+            INSERT OR IGNORE INTO user_settings (id, settings_json)
+            VALUES (1, '{}')
+        """)
+
         conn.commit()
         _initialized_users.add(user_id)
         logger.debug(f"Database verified/initialized for user: {user_id}")
