@@ -183,7 +183,7 @@ Current DB is ~204KB - no optimization needed yet.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| U1 | Temp folder multi-user isolation | `TODO` | Move temp uploads to `{user_id}/temp/...` instead of `temp/...` |
+| U1 | Temp folder multi-user isolation | `DONE` | Already isolated: R2 keys prefixed with `{user_id}/`, local temp uses random UUIDs |
 | U2 | Framing export validation UX | `TODO` | Disable export until all clips framed, rollover lists unframed clips, checkmarks on framed clips |
 | U3 | [Progress Bar Improvements](tasks/progress-bar-improvements.md) | `TODO` | Fix reset bug, improve time estimates, add ETA |
 | U4 | [Project Status Regression](tasks/project-status-regression.md) | `DONE` | Re-framing/re-overlay updates project status correctly |
