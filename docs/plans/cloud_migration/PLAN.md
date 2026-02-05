@@ -173,6 +173,7 @@ Current DB is ~204KB - no optimization needed yet.
 | 16 | [Performance Profiling](tasks/16-performance-profiling.md) | `TODO` | Claude | Memory/latency profiling, fix slow endpoints |
 | 17 | [Stale Session Detection](tasks/17-stale-session-detection.md) | `TODO` | Claude | Reject conflicting writes, UI for stale sessions |
 | 18 | [Modal GPU Cost Optimization](tasks/18-modal-gpu-cost-optimization.md) | `TODO` | Claude | Parallelize framing_ai, tune GPU thresholds |
+| 19 | [Gesture-Based Sync](tasks/gesture-based-sync.md) | `TODO` | Claude | Replace full-blob saves with atomic action endpoints |
 | 13 | [User Management](tasks/13-user-management.md) | `OPTIONAL` | Both | Auth, multi-tenancy |
 | 14 | [Wallet & Payments](tasks/14-wallet-payments.md) | `OPTIONAL` | Both | Stripe integration |
 | 15 | [Future GPU Features](tasks/15-future-gpu-features.md) | `FUTURE` | Claude | AI upscaling, tracking |
@@ -189,8 +190,8 @@ Current DB is ~204KB - no optimization needed yet.
 | U4 | [Project Status Regression](tasks/project-status-regression.md) | `DONE` | Re-framing/re-overlay updates project status correctly |
 | U5 | [Modal Job Recovery](tasks/modal-job-recovery.md) | `DONE` (Phase 1) | Multi-clip: spawn() + call_id stored. /modal-status endpoint. Smart stale detection. |
 | U6 | Project filter persistence | `DONE` | Settings persisted via SQLite + R2 sync (settingsStore.js, /api/settings) |
-| U7 | [Player detection keyframes](tasks/player-detection-keyframes.md) | `TODO` | Detect on 4 frames (first 2s), create keyframes, click rectangle to set player |
-| U8 | [Auto player detection](tasks/auto-player-detection.md) | `TODO` | After framing completes, auto-create overlay keyframes with player boxes |
+| U7 | [Player detection keyframes](tasks/player-detection-keyframes.md) | `DONE` | Detect on 4 frames (first 2s), create keyframes, click rectangle to set player |
+| U8 | [Auto player detection](tasks/auto-player-detection.md) | `DONE` | After framing completes, auto-create overlay keyframes with player boxes |
 | U9 | [Logging cleanup](tasks/logging-cleanup.md) | `DONE` | Vite strips console.log in prod, noisy libs quieted, DEBUG env var support |
 | U10 | [E2E Test Reliability](tasks/e2e-test-reliability.md) | `TODO` | Fix flaky tests: video upload timeout, test user cleanup race condition |
 
