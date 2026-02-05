@@ -30,12 +30,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configure logging with timestamps
+# Use DEBUG level if DEBUG env var is set, otherwise INFO
+log_level = logging.DEBUG if os.getenv("DEBUG") else logging.INFO
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# Quiet noisy third-party libraries (only show warnings and above)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("modal").setLevel(logging.WARNING)
+logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
 # Import routers and websocket handler
 from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, downloads_router, auth_router, storage_router, settings_router
