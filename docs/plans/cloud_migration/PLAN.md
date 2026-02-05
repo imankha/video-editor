@@ -184,14 +184,14 @@ Current DB is ~204KB - no optimization needed yet.
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | U1 | Temp folder multi-user isolation | `DONE` | Already isolated: R2 keys prefixed with `{user_id}/`, local temp uses random UUIDs |
-| U2 | Framing export validation UX | `TODO` | Disable export until all clips framed, rollover lists unframed clips, checkmarks on framed clips |
+| U2 | Framing export validation UX | `DONE` | Export disabled until framed, warning shown, checkmarks in ClipSelectorSidebar |
 | U3 | [Progress Bar Improvements](tasks/progress-bar-improvements.md) | `TODO` | Fix reset bug, improve time estimates, add ETA |
 | U4 | [Project Status Regression](tasks/project-status-regression.md) | `DONE` | Re-framing/re-overlay updates project status correctly |
 | U5 | [Modal Job Recovery](tasks/modal-job-recovery.md) | `DONE` (Phase 1) | Multi-clip: spawn() + call_id stored. /modal-status endpoint. Smart stale detection. |
 | U6 | Project filter persistence | `DONE` | Settings persisted via SQLite + R2 sync (settingsStore.js, /api/settings) |
 | U7 | [Player detection keyframes](tasks/player-detection-keyframes.md) | `TODO` | Detect on 4 frames (first 2s), create keyframes, click rectangle to set player |
 | U8 | [Auto player detection](tasks/auto-player-detection.md) | `TODO` | After framing completes, auto-create overlay keyframes with player boxes |
-| U9 | [Logging cleanup](tasks/logging-cleanup.md) | `TODO` | Remove debug logs, standardize log levels, ensure useful production logs |
+| U9 | [Logging cleanup](tasks/logging-cleanup.md) | `DONE` | Vite strips console.log in prod, noisy libs quieted, DEBUG env var support |
 
 **Status Key**: `DONE` | `TODO` | `IN_PROGRESS` | `TESTING` | `BLOCKED` | `OPTIONAL` | `FUTURE`
 
