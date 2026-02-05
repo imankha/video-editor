@@ -27,7 +27,14 @@ import logging
 from dotenv import load_dotenv
 
 # Load environment variables from .env file (if exists)
-load_dotenv()
+# Look in project root (two levels up from app/)
+from pathlib import Path
+_project_root = Path(__file__).parent.parent.parent.parent
+_env_file = _project_root / ".env"
+if _env_file.exists():
+    load_dotenv(_env_file)
+else:
+    load_dotenv()  # Fallback to current directory
 
 # Configure logging with timestamps
 # Use DEBUG level if DEBUG env var is set, otherwise INFO

@@ -146,6 +146,44 @@ class KeyframeInterpolator:
         }
 
     @staticmethod
+    def interpolate_highlight_from_regions(
+        regions: List[Dict[str, Any]],
+        time: float
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Find the active region for a given time and interpolate highlight.
+
+        Args:
+            regions: List of highlight regions, each with:
+                - start_time: Region start time
+                - end_time: Region end time
+                - enabled: Whether region is active
+                - keyframes: List of keyframes with time, x, y, radiusX, radiusY, opacity, color
+
+        Returns:
+            Interpolated highlight parameters, or None if no active region at this time
+        """
+        if not regions:
+            return None
+
+        # Find active region for this time
+        for region in regions:
+            # Skip disabled regions
+            if region.get('enabled') is False:
+                continue
+
+            start_time = region.get('start_time', 0)
+            end_time = region.get('end_time', 0)
+
+            # Check if time is within region
+            if start_time <= time <= end_time:
+                keyframes = region.get('keyframes', [])
+                if keyframes:
+                    return KeyframeInterpolator.interpolate_highlight(keyframes, time)
+
+        return None
+
+    @staticmethod
     def render_highlight_on_frame(
         frame: np.ndarray,
         highlight: Dict[str, Any],

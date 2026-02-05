@@ -579,83 +579,67 @@ const ExportButton = forwardRef(function ExportButton({
           // Backend reads crop_data, segments_data, timing_data from working_clips table
           // No need to send video or keyframes - backend fetches from storage
 
-          if (projectId && saveCurrentClipState) {
-            // Backend-authoritative mode: Save edits first, then request render
-            console.log('[ExportButton] Using backend-authoritative render');
-            setProgressMessage('Saving edits...');
-
-            try {
-              await saveCurrentClipState();
-              console.log('[ExportButton] Clip state saved, requesting render');
-            } catch (saveErr) {
-              console.error('[ExportButton] Failed to save clip state:', saveErr);
-              throw new Error('Failed to save clip edits before export. Please try again.');
-            }
-
-            // Use the new backend-authoritative endpoint
-            endpoint = `${API_BASE}/api/export/render`;
-
-            // Connect WebSocket for real-time progress updates
-            setProgressMessage('Connecting...');
-            await connectWebSocket(exportId);
-
-            // Send render request (JSON body, no file upload)
-            setProgressMessage('Starting render...');
-            const renderResponse = await axios.post(endpoint, {
-              project_id: projectId,
-              export_id: exportId,
-              export_mode: EXPORT_CONFIG.exportMode,
-              target_fps: EXPORT_CONFIG.targetFps,
-              include_audio: includeAudio
-            });
-
-            // Backend returns JSON with working_video info
-            console.log('[ExportButton] Backend render complete:', renderResponse.data);
-
-            // Trigger export complete flow
-            handleExportEnd();
-            setLocalProgress(100);
-            setProgressMessage('Export complete!');
-            completeExportInStore(exportId, {
-              status: 'complete',
-              workingVideoId: renderResponse.data.working_video_id,
-              filename: renderResponse.data.filename
-            });
-
-            // Trigger proceed to overlay if callback provided
-            // Pass projectId so the handler can verify this export matches the current project
-            if (onProceedToOverlay) {
-              onProceedToOverlay(null, buildClipMetadata(clips), projectId);
-            }
-            if (onExportComplete) {
-              onExportComplete();
-            }
-
-            setIsExporting(false);
-            return;  // Exit early - backend-authoritative path complete
-
-          } else {
-            // Fallback: Legacy client-sends-everything mode
-            // Used when saveCurrentClipState not available or no projectId
-            console.log('[ExportButton] Using legacy client-driven export');
-            endpoint = `${API_BASE}/api/export/upscale`;
-
-            formData.append('keyframes_json', JSON.stringify(cropKeyframes));
-            // Audio setting only applies to framing export (overlay preserves whatever audio is in input)
-            formData.append('include_audio', includeAudio ? 'true' : 'false');
-            formData.append('target_fps', String(EXPORT_CONFIG.targetFps));
-            formData.append('export_mode', EXPORT_CONFIG.exportMode);
-
-            // Add segment data if available (speed/trim)
-            if (segmentData) {
-              console.log('=== EXPORT: Sending segment data to backend ===');
-              console.log(JSON.stringify(segmentData, null, 2));
-              console.log('==============================================');
-              formData.append('segment_data_json', JSON.stringify(segmentData));
-            } else {
-              console.log('=== EXPORT: No segment data to send ===');
-            }
+          // Validate required data for backend-authoritative export
+          if (!projectId) {
+            throw new Error('Cannot export: No project selected. Please save your project first.');
           }
+          if (!saveCurrentClipState) {
+            throw new Error('Cannot export: Clip state manager not available. Please reload the page and try again.');
+          }
+
+          // Backend-authoritative mode: Save edits first, then request render
+          console.log('[ExportButton] Using backend-authoritative render');
+          setProgressMessage('Saving edits...');
+
+          try {
+            await saveCurrentClipState();
+            console.log('[ExportButton] Clip state saved, requesting render');
+          } catch (saveErr) {
+            console.error('[ExportButton] Failed to save clip state:', saveErr);
+            throw new Error('Failed to save clip edits before export. Please try again.');
+          }
+
+          // Use the backend-authoritative endpoint
+          endpoint = `${API_BASE}/api/export/render`;
+
+          // Connect WebSocket for real-time progress updates
+          setProgressMessage('Connecting...');
+          await connectWebSocket(exportId);
+
+          // Send render request (JSON body, no file upload)
+          setProgressMessage('Starting render...');
+          const renderResponse = await axios.post(endpoint, {
+            project_id: projectId,
+            export_id: exportId,
+            export_mode: EXPORT_CONFIG.exportMode,
+            target_fps: EXPORT_CONFIG.targetFps,
+            include_audio: includeAudio
+          });
+
+          // Backend returns JSON with working_video info
+          console.log('[ExportButton] Backend render complete:', renderResponse.data);
+
+          // Trigger export complete flow
+          handleExportEnd();
+          setLocalProgress(100);
+          setProgressMessage('Export complete!');
+          completeExportInStore(exportId, {
+            status: 'complete',
+            workingVideoId: renderResponse.data.working_video_id,
+            filename: renderResponse.data.filename
+          });
+
+          // Trigger proceed to overlay if callback provided
+          // Pass projectId so the handler can verify this export matches the current project
+          if (onProceedToOverlay) {
+            onProceedToOverlay(null, buildClipMetadata(clips), projectId);
+          }
+          if (onExportComplete) {
+            onExportComplete();
+          }
+
+          setIsExporting(false);
+          return;  // Exit early - backend-authoritative path complete
         }
         // Note: Highlight keyframes are NOT sent during framing export.
         // They are handled separately in Overlay mode after the video is cropped/upscaled.

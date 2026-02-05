@@ -33,9 +33,9 @@ from ...services.clip_pipeline import process_clip_with_pipeline
 from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR, ExportStatus
 from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
-from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url
+from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2
 from ...user_context import get_current_user_id, set_current_user_id
-from ...services.modal_client import modal_enabled, call_modal_multi_clip
+from ...services.modal_client import modal_enabled, call_modal_multi_clip, call_modal_detect_players_batch
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,274 @@ except (ImportError, OSError, AttributeError) as e:
 
 # Default duration for auto-generated highlight regions (seconds)
 DEFAULT_HIGHLIGHT_REGION_DURATION = 2.0
+
+# YOLO model singleton for local detection
+_yolo_model = None
+PERSON_CLASS_ID = 0
+
+
+def get_yolo_model():
+    """Load YOLO model for local detection (singleton pattern)."""
+    global _yolo_model
+    if _yolo_model is None:
+        try:
+            from ultralytics import YOLO
+            backend_dir = Path(__file__).parent.parent.parent
+            model_path = backend_dir / "yolov8x.pt"
+            if not model_path.exists():
+                logger.info(f"YOLO model not found at {model_path}, will download...")
+                model_path = "yolov8x.pt"
+            logger.info(f"Loading YOLO model from {model_path}")
+            _yolo_model = YOLO(str(model_path))
+            logger.info("YOLO model loaded successfully")
+        except ImportError:
+            logger.error("ultralytics package not installed")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to load YOLO model: {e}")
+            return None
+    return _yolo_model
+
+
+def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_threshold: float = 0.5) -> dict:
+    """
+    Run YOLO detection on a single frame extracted at the given timestamp.
+
+    Returns dict with 'boxes' array containing detected player bounding boxes.
+    """
+    import cv2
+
+    model = get_yolo_model()
+    if model is None:
+        return {'timestamp': timestamp, 'boxes': []}
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        logger.error(f"Cannot open video: {video_path}")
+        return {'timestamp': timestamp, 'boxes': []}
+
+    try:
+        # Get video properties
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        # Seek to timestamp
+        frame_number = int(timestamp * fps)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        ret, frame = cap.read()
+
+        if not ret or frame is None:
+            logger.warning(f"Failed to read frame at timestamp {timestamp}")
+            return {'timestamp': timestamp, 'boxes': []}
+
+        # Run YOLO detection
+        results = model(frame, verbose=False, conf=confidence_threshold)
+
+        # Extract person detections
+        boxes = []
+        for result in results:
+            if result.boxes is None:
+                continue
+            for box in result.boxes:
+                class_id = int(box.cls[0])
+                if class_id != PERSON_CLASS_ID:
+                    continue
+
+                conf = float(box.conf[0])
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+                # Convert to center + dimensions format
+                boxes.append({
+                    'x': (x1 + x2) / 2,
+                    'y': (y1 + y2) / 2,
+                    'width': x2 - x1,
+                    'height': y2 - y1,
+                    'confidence': conf
+                })
+
+        return {
+            'timestamp': timestamp,
+            'boxes': boxes,
+            'video_width': width,
+            'video_height': height
+        }
+
+    finally:
+        cap.release()
+
+
+async def run_local_batch_detection(
+    user_id: str,
+    output_key: str,
+    timestamps: List[float],
+    confidence_threshold: float = 0.5,
+    progress_callback=None
+) -> dict:
+    """
+    Run local YOLO detection on multiple timestamps.
+
+    Downloads video from R2, runs detection on each timestamp, returns results.
+    """
+    # Download video from R2 to temp file
+    temp_dir = Path(tempfile.gettempdir()) / "video_editor_detection"
+    temp_dir.mkdir(exist_ok=True)
+    temp_video = temp_dir / f"detect_{uuid.uuid4().hex[:8]}.mp4"
+
+    try:
+        logger.info(f"[Local Detection] Downloading video from R2: {output_key}")
+        success = download_from_r2(user_id, output_key, temp_video)
+
+        if not success:
+            logger.error(f"[Local Detection] Failed to download video from R2")
+            return {"status": "error", "error": "Failed to download video"}
+
+        logger.info(f"[Local Detection] Running detection on {len(timestamps)} timestamps")
+
+        if progress_callback:
+            await progress_callback(92, "Detecting players (local GPU)...", "detecting_players")
+
+        # Run detection on each timestamp
+        detections = []
+        video_width = 0
+        video_height = 0
+
+        for i, ts in enumerate(timestamps):
+            result = run_local_detection_on_frame(str(temp_video), ts, confidence_threshold)
+            detections.append({
+                'timestamp': ts,
+                'boxes': result.get('boxes', [])
+            })
+
+            # Capture video dimensions from first frame
+            if i == 0:
+                video_width = result.get('video_width', 0)
+                video_height = result.get('video_height', 0)
+
+            # Log progress periodically
+            if (i + 1) % 4 == 0:
+                logger.info(f"[Local Detection] Processed {i + 1}/{len(timestamps)} timestamps")
+
+        total_boxes = sum(len(d['boxes']) for d in detections)
+        logger.info(f"[Local Detection] Complete: {total_boxes} players detected across {len(timestamps)} frames")
+
+        return {
+            "status": "success",
+            "detections": detections,
+            "video_width": video_width,
+            "video_height": video_height
+        }
+
+    finally:
+        # Clean up temp file
+        if temp_video.exists():
+            temp_video.unlink()
+            logger.debug(f"[Local Detection] Cleaned up temp file: {temp_video}")
+
+
+async def run_local_detection_on_video_file(
+    video_path: str,
+    source_clips: List[Dict[str, Any]],
+    confidence_threshold: float = 0.5,
+) -> List[Dict[str, Any]]:
+    """
+    Run local YOLO detection directly on a video file (no R2 download needed).
+
+    This is used for local multi-clip export where the video is already on disk.
+    """
+    # Calculate detection timestamps
+    timestamps = calculate_detection_timestamps(source_clips)
+
+    if not timestamps:
+        logger.warning("[Local Detection] No timestamps to detect, returning default regions")
+        return generate_default_highlight_regions(source_clips)
+
+    logger.info(f"[Local Detection] Running detection on {len(timestamps)} timestamps from local file")
+
+    try:
+        # Run detection on each timestamp
+        detections = []
+        video_width = 0
+        video_height = 0
+
+        for i, ts in enumerate(timestamps):
+            result = run_local_detection_on_frame(video_path, ts, confidence_threshold)
+            detections.append({
+                'timestamp': ts,
+                'boxes': result.get('boxes', [])
+            })
+
+            # Capture video dimensions from first frame
+            if i == 0:
+                video_width = result.get('video_width', 0)
+                video_height = result.get('video_height', 0)
+
+            # Log progress periodically
+            if (i + 1) % 4 == 0:
+                logger.info(f"[Local Detection] Processed {i + 1}/{len(timestamps)} timestamps")
+
+        total_boxes = sum(len(d['boxes']) for d in detections)
+        logger.info(f"[Local Detection] Complete: {total_boxes} players detected across {len(timestamps)} frames")
+
+    except Exception as e:
+        logger.error(f"[Local Detection] Detection error: {e}, using default regions")
+        return generate_default_highlight_regions(source_clips)
+
+    # Build detection lookup by timestamp
+    detection_by_time = {}
+    for det in detections:
+        ts = det.get("timestamp", 0)
+        detection_by_time[round(ts, 2)] = det.get("boxes", [])
+
+    # Build highlight regions with raw detection data
+    regions = []
+    detection_idx = 0
+
+    for clip_idx, clip in enumerate(source_clips):
+        region_start = clip['start_time']
+        region_end = min(clip['start_time'] + DEFAULT_HIGHLIGHT_REGION_DURATION, clip['end_time'])
+
+        if region_end - region_start < 0.5:
+            detection_idx += 4
+            continue
+
+        # Collect detection data for this clip's timestamps
+        clip_detections = []
+        for i in range(4):
+            if detection_idx + i >= len(timestamps):
+                break
+
+            ts = timestamps[detection_idx + i]
+            ts_rounded = round(ts, 2)
+            boxes = detection_by_time.get(ts_rounded, [])
+
+            clip_detections.append({
+                'timestamp': ts,
+                'boxes': boxes,
+            })
+
+        detection_idx += 4
+
+        has_detections = sum(1 for d in clip_detections if d.get('boxes'))
+
+        region = {
+            'id': f'region-auto-{clip_idx}-{int(region_start * 1000)}',
+            'start_time': region_start,
+            'end_time': region_end,
+            'enabled': True,
+            'label': clip['name'],
+            'autoGenerated': True,
+            'keyframes': [],
+            'detections': clip_detections,
+            'videoWidth': video_width,
+            'videoHeight': video_height,
+        }
+        regions.append(region)
+
+        logger.info(f"[Local Detection] Clip {clip_idx}: {has_detections}/{len(clip_detections)} timestamps have player detections")
+
+    logger.info(f"[Local Detection] Generated {len(regions)} highlight regions with player detection")
+    return regions
 
 
 def normalize_clip_data_for_modal(clip_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -325,30 +593,178 @@ def generate_default_highlight_regions(source_clips: List[Dict[str, Any]]) -> Li
             'enabled': True,
             'label': clip['name'],
             'autoGenerated': True,
-            'keyframes': [
-                {
-                    'time': region_start,
-                    'x': 404,
-                    'y': 720,
-                    'radiusX': 86,
-                    'radiusY': 173,
-                    'opacity': 0.15,
-                    'color': '#FFFF00'
-                },
-                {
-                    'time': region_end,
-                    'x': 404,
-                    'y': 720,
-                    'radiusX': 86,
-                    'radiusY': 173,
-                    'opacity': 0.15,
-                    'color': '#FFFF00'
-                }
-            ]
+            'keyframes': [],  # Empty - user creates keyframes manually or via detection
+            'detections': [],  # No detection data (Modal disabled or fallback)
+            'videoWidth': None,
+            'videoHeight': None,
         }
         regions.append(region)
 
     logger.info(f"[Highlight Regions] Generated {len(regions)} default regions for {len(source_clips)} clips")
+    return regions
+
+
+def calculate_detection_timestamps(source_clips: List[Dict[str, Any]]) -> List[float]:
+    """
+    Calculate timestamps for player detection within each clip's overlay region.
+
+    For each clip, we detect at 4 evenly spaced timestamps within the first 2 seconds
+    (the overlay region): 0s, 0.66s, 1.33s, 2s relative to clip start.
+
+    Args:
+        source_clips: List of clip boundaries from build_clip_boundaries()
+
+    Returns:
+        List of absolute timestamps (in seconds) for detection in the working video
+    """
+    timestamps = []
+
+    for clip in source_clips:
+        clip_start = clip['start_time']
+        clip_duration = clip['duration']
+
+        # Overlay region is first 2 seconds of clip (or full clip if shorter)
+        overlay_duration = min(DEFAULT_HIGHLIGHT_REGION_DURATION, clip_duration)
+
+        # 4 evenly spaced detection points: 0, 0.66, 1.33, 2.0 seconds from clip start
+        # If clip is shorter than 2s, scale proportionally
+        for i in range(4):
+            relative_time = (i / 3) * overlay_duration  # 0, 0.33, 0.66, 1.0 × overlay_duration
+            absolute_time = clip_start + relative_time
+            timestamps.append(absolute_time)
+
+    return timestamps
+
+
+async def run_player_detection_for_highlights(
+    user_id: str,
+    output_key: str,
+    source_clips: List[Dict[str, Any]],
+    progress_callback=None,
+) -> List[Dict[str, Any]]:
+    """
+    Run batch player detection and enhance highlight regions with detected player boxes.
+
+    Uses Modal GPU when available, falls back to local YOLO when Modal is disabled.
+
+    Args:
+        user_id: User folder in R2
+        output_key: R2 key for the working video to analyze
+        source_clips: List of clip boundaries from build_clip_boundaries()
+        progress_callback: Optional async callback for progress updates
+
+    Returns:
+        List of highlight regions with detection-enhanced keyframes
+    """
+    # Calculate detection timestamps
+    timestamps = calculate_detection_timestamps(source_clips)
+
+    if not timestamps:
+        logger.warning("[Player Detection] No timestamps to detect, returning default regions")
+        return generate_default_highlight_regions(source_clips)
+
+    logger.info(f"[Player Detection] Running batch detection on {len(timestamps)} timestamps for {len(source_clips)} clips")
+
+    # Run batch detection - use Modal if enabled, otherwise local YOLO
+    try:
+        if modal_enabled():
+            if progress_callback:
+                await progress_callback(92, "Detecting players...", "detecting_players")
+
+            detection_result = await call_modal_detect_players_batch(
+                user_id=user_id,
+                input_key=output_key,
+                timestamps=timestamps,
+                confidence_threshold=0.5,
+            )
+        else:
+            # Use local YOLO detection (requires R2 access to download video)
+            from ..storage import get_r2_client
+            if get_r2_client() is None:
+                logger.warning("[Player Detection] Modal disabled AND R2 not configured - cannot run local detection. Configure R2_ENABLED=true with credentials, or enable Modal.")
+                return generate_default_highlight_regions(source_clips)
+
+            logger.info("[Player Detection] Modal disabled, using local YOLO detection")
+            detection_result = await run_local_batch_detection(
+                user_id=user_id,
+                output_key=output_key,
+                timestamps=timestamps,
+                confidence_threshold=0.5,
+                progress_callback=progress_callback,
+            )
+
+        if detection_result.get("status") != "success":
+            logger.warning(f"[Player Detection] Detection failed: {detection_result.get('error')}, using default regions")
+            return generate_default_highlight_regions(source_clips)
+
+        detections = detection_result.get("detections", [])
+        video_width = detection_result.get("video_width", 810)
+        video_height = detection_result.get("video_height", 1440)
+
+        logger.info(f"[Player Detection] Got {len(detections)} detection results, video size: {video_width}x{video_height}")
+
+    except Exception as e:
+        logger.error(f"[Player Detection] Detection error: {e}, using default regions")
+        return generate_default_highlight_regions(source_clips)
+
+    # Build detection lookup by timestamp (with small tolerance for floating point)
+    detection_by_time = {}
+    for det in detections:
+        ts = det.get("timestamp", 0)
+        # Round to 2 decimal places for matching
+        detection_by_time[round(ts, 2)] = det.get("boxes", [])
+
+    # Build highlight regions with raw detection data (no auto-created keyframes)
+    # User will click on detection boxes to create keyframes in the UI
+    regions = []
+    detection_idx = 0
+
+    for clip_idx, clip in enumerate(source_clips):
+        region_start = clip['start_time']
+        region_end = min(clip['start_time'] + DEFAULT_HIGHLIGHT_REGION_DURATION, clip['end_time'])
+
+        # Skip if region would be too short
+        if region_end - region_start < 0.5:
+            detection_idx += 4  # Skip the 4 detection timestamps for this clip
+            continue
+
+        # Collect raw detection data for this clip's 4 timestamps
+        clip_detections = []
+        for i in range(4):
+            if detection_idx + i >= len(timestamps):
+                break
+
+            ts = timestamps[detection_idx + i]
+            ts_rounded = round(ts, 2)
+            boxes = detection_by_time.get(ts_rounded, [])
+
+            clip_detections.append({
+                'timestamp': ts,
+                'boxes': boxes,  # Raw detection boxes - user clicks to create keyframe
+            })
+
+        detection_idx += 4  # Move to next clip's detection timestamps
+
+        # Count how many timestamps have detections
+        has_detections = sum(1 for d in clip_detections if d.get('boxes'))
+
+        region = {
+            'id': f'region-auto-{clip_idx}-{int(region_start * 1000)}',
+            'start_time': region_start,
+            'end_time': region_end,
+            'enabled': True,
+            'label': clip['name'],
+            'autoGenerated': True,
+            'keyframes': [],  # Empty - user creates by clicking detection boxes
+            'detections': clip_detections,  # Raw detection data for UI to display
+            'videoWidth': video_width,
+            'videoHeight': video_height,
+        }
+        regions.append(region)
+
+        logger.info(f"[Player Detection] Clip {clip_idx}: {has_detections}/{len(clip_detections)} timestamps have player detections")
+
+    logger.info(f"[Player Detection] Generated {len(regions)} highlight regions with player detection")
     return regions
 
 
@@ -863,6 +1279,23 @@ async def export_multi_clip(
             # Save to database if project_id provided
             working_video_id = None
             if project_id:
+                # Run player detection BEFORE DB transaction (async operation)
+                source_clips = build_clip_boundaries_from_input(normalized_clips_data, transition)
+
+                # Run batch player detection on the working video
+                # This creates highlight regions with detected player keyframes
+                try:
+                    highlight_regions = await run_player_detection_for_highlights(
+                        user_id=captured_user_id,
+                        output_key=output_key,
+                        source_clips=source_clips,
+                        progress_callback=modal_progress_callback,
+                    )
+                    logger.info(f"[Multi-Clip Export] Player detection complete: {len(highlight_regions)} regions with detected keyframes")
+                except Exception as det_error:
+                    logger.warning(f"[Multi-Clip Export] Player detection failed, using defaults: {det_error}")
+                    highlight_regions = generate_default_highlight_regions(source_clips)
+
                 try:
                     with get_db_connection() as conn:
                         cursor = conn.cursor()
@@ -874,10 +1307,6 @@ async def export_multi_clip(
                         """, (project_id,))
                         next_version = cursor.fetchone()['next_version']
 
-                        # Generate default highlight regions at clip boundaries
-                        # Use normalized clips_data for accurate duration calculation
-                        source_clips = build_clip_boundaries_from_input(normalized_clips_data, transition)
-                        highlight_regions = generate_default_highlight_regions(source_clips)
                         highlights_json = json.dumps(highlight_regions)
 
                         logger.info(f"[Multi-Clip Export] Generated {len(highlight_regions)} highlight regions for {len(source_clips)} clips")
@@ -1150,11 +1579,23 @@ async def export_multi_clip(
                     # Reset final_video_id (working video changed, need re-export overlay)
                     cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
 
-                    # Generate default highlight regions at clip boundaries
+                    # Generate highlight regions at clip boundaries
                     # Use actual durations from processed clips (not calculated from input data)
                     actual_durations = [get_video_duration(path) for path in processed_paths]
                     source_clips = build_clip_boundaries_from_durations(clips_data, actual_durations, transition)
-                    highlight_regions = generate_default_highlight_regions(source_clips)
+
+                    # Run player detection on local video file (before cleanup)
+                    # Use local YOLO directly on the temp file, no R2 download needed
+                    try:
+                        highlight_regions = await run_local_detection_on_video_file(
+                            video_path=final_output,
+                            source_clips=source_clips,
+                        )
+                        logger.info(f"[Multi-Clip Export] Local detection complete: {len(highlight_regions)} regions")
+                    except Exception as det_error:
+                        logger.warning(f"[Multi-Clip Export] Local detection failed, using defaults: {det_error}")
+                        highlight_regions = generate_default_highlight_regions(source_clips)
+
                     highlights_json = json.dumps(highlight_regions)
 
                     # Create working_videos record with duration and highlight regions

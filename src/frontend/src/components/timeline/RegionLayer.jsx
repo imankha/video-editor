@@ -372,6 +372,7 @@ export default function RegionLayer({
                 }
               >
                 {renderRegionBadge(region)}
+
               </div>
 
               {/* Lever handles for highlight mode - positioned outside region, using transform to extend */}

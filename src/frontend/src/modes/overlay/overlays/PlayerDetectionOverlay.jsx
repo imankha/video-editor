@@ -93,9 +93,11 @@ export default function PlayerDetectionOverlay({
     e.stopPropagation();
 
     if (onPlayerSelect) {
-      // Convert bounding box to highlight format (center + radii)
-      // The detection bbox is already center-based from the backend
-      const { bbox, confidence } = detection;
+      // Support both formats:
+      // - Old API format: { bbox: {x, y, width, height}, confidence }
+      // - Region format: { x, y, width, height, confidence }
+      const bbox = detection.bbox || detection;
+      const confidence = detection.confidence;
 
       // Convert to ellipse radii (use half of width/height)
       const radiusX = bbox.width / 2;
@@ -146,7 +148,16 @@ export default function PlayerDetectionOverlay({
         style={{ position: 'absolute', top: 0, left: 0 }}
       >
         {detections.map((detection, index) => {
-          const { bbox, confidence } = detection;
+          // Support both formats:
+          // - Old API format: { bbox: {x, y, width, height}, confidence }
+          // - Region format: { x, y, width, height, confidence }
+          const bbox = detection.bbox || detection;
+          const confidence = detection.confidence;
+
+          // Skip if missing required properties
+          if (bbox.x === undefined || bbox.y === undefined) {
+            return null;
+          }
 
           // Convert center-based bbox to corner-based for drawing
           const screenBox = videoToScreen(
