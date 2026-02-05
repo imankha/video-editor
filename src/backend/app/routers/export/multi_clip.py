@@ -33,7 +33,7 @@ from ...services.clip_pipeline import process_clip_with_pipeline
 from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR, ExportStatus
 from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
-from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url
+from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2
 from ...user_context import get_current_user_id, set_current_user_id
 from ...services.modal_client import modal_enabled, call_modal_multi_clip, call_modal_detect_players_batch
 
@@ -52,6 +52,169 @@ except (ImportError, OSError, AttributeError) as e:
 
 # Default duration for auto-generated highlight regions (seconds)
 DEFAULT_HIGHLIGHT_REGION_DURATION = 2.0
+
+# YOLO model singleton for local detection
+_yolo_model = None
+PERSON_CLASS_ID = 0
+
+
+def get_yolo_model():
+    """Load YOLO model for local detection (singleton pattern)."""
+    global _yolo_model
+    if _yolo_model is None:
+        try:
+            from ultralytics import YOLO
+            backend_dir = Path(__file__).parent.parent.parent
+            model_path = backend_dir / "yolov8x.pt"
+            if not model_path.exists():
+                logger.info(f"YOLO model not found at {model_path}, will download...")
+                model_path = "yolov8x.pt"
+            logger.info(f"Loading YOLO model from {model_path}")
+            _yolo_model = YOLO(str(model_path))
+            logger.info("YOLO model loaded successfully")
+        except ImportError:
+            logger.error("ultralytics package not installed")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to load YOLO model: {e}")
+            return None
+    return _yolo_model
+
+
+def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_threshold: float = 0.5) -> dict:
+    """
+    Run YOLO detection on a single frame extracted at the given timestamp.
+
+    Returns dict with 'boxes' array containing detected player bounding boxes.
+    """
+    import cv2
+
+    model = get_yolo_model()
+    if model is None:
+        return {'timestamp': timestamp, 'boxes': []}
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        logger.error(f"Cannot open video: {video_path}")
+        return {'timestamp': timestamp, 'boxes': []}
+
+    try:
+        # Get video properties
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        # Seek to timestamp
+        frame_number = int(timestamp * fps)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        ret, frame = cap.read()
+
+        if not ret or frame is None:
+            logger.warning(f"Failed to read frame at timestamp {timestamp}")
+            return {'timestamp': timestamp, 'boxes': []}
+
+        # Run YOLO detection
+        results = model(frame, verbose=False, conf=confidence_threshold)
+
+        # Extract person detections
+        boxes = []
+        for result in results:
+            if result.boxes is None:
+                continue
+            for box in result.boxes:
+                class_id = int(box.cls[0])
+                if class_id != PERSON_CLASS_ID:
+                    continue
+
+                conf = float(box.conf[0])
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+                # Convert to center + dimensions format
+                boxes.append({
+                    'x': (x1 + x2) / 2,
+                    'y': (y1 + y2) / 2,
+                    'width': x2 - x1,
+                    'height': y2 - y1,
+                    'confidence': conf
+                })
+
+        return {
+            'timestamp': timestamp,
+            'boxes': boxes,
+            'video_width': width,
+            'video_height': height
+        }
+
+    finally:
+        cap.release()
+
+
+async def run_local_batch_detection(
+    user_id: str,
+    output_key: str,
+    timestamps: List[float],
+    confidence_threshold: float = 0.5,
+    progress_callback=None
+) -> dict:
+    """
+    Run local YOLO detection on multiple timestamps.
+
+    Downloads video from R2, runs detection on each timestamp, returns results.
+    """
+    # Download video from R2 to temp file
+    temp_dir = Path(tempfile.gettempdir()) / "video_editor_detection"
+    temp_dir.mkdir(exist_ok=True)
+    temp_video = temp_dir / f"detect_{uuid.uuid4().hex[:8]}.mp4"
+
+    try:
+        logger.info(f"[Local Detection] Downloading video from R2: {output_key}")
+        success = download_from_r2(user_id, output_key, temp_video)
+
+        if not success:
+            logger.error(f"[Local Detection] Failed to download video from R2")
+            return {"status": "error", "error": "Failed to download video"}
+
+        logger.info(f"[Local Detection] Running detection on {len(timestamps)} timestamps")
+
+        if progress_callback:
+            await progress_callback(92, "Detecting players (local GPU)...", "detecting_players")
+
+        # Run detection on each timestamp
+        detections = []
+        video_width = 0
+        video_height = 0
+
+        for i, ts in enumerate(timestamps):
+            result = run_local_detection_on_frame(str(temp_video), ts, confidence_threshold)
+            detections.append({
+                'timestamp': ts,
+                'boxes': result.get('boxes', [])
+            })
+
+            # Capture video dimensions from first frame
+            if i == 0:
+                video_width = result.get('video_width', 0)
+                video_height = result.get('video_height', 0)
+
+            # Log progress periodically
+            if (i + 1) % 4 == 0:
+                logger.info(f"[Local Detection] Processed {i + 1}/{len(timestamps)} timestamps")
+
+        total_boxes = sum(len(d['boxes']) for d in detections)
+        logger.info(f"[Local Detection] Complete: {total_boxes} players detected across {len(timestamps)} frames")
+
+        return {
+            "status": "success",
+            "detections": detections,
+            "video_width": video_width,
+            "video_height": video_height
+        }
+
+    finally:
+        # Clean up temp file
+        if temp_video.exists():
+            temp_video.unlink()
+            logger.debug(f"[Local Detection] Cleaned up temp file: {temp_video}")
 
 
 def normalize_clip_data_for_modal(clip_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -377,6 +540,8 @@ async def run_player_detection_for_highlights(
     """
     Run batch player detection and enhance highlight regions with detected player boxes.
 
+    Uses Modal GPU when available, falls back to local YOLO when Modal is disabled.
+
     Args:
         user_id: User folder in R2
         output_key: R2 key for the working video to analyze
@@ -386,11 +551,6 @@ async def run_player_detection_for_highlights(
     Returns:
         List of highlight regions with detection-enhanced keyframes
     """
-    # Check if Modal is enabled - detection requires GPU
-    if not modal_enabled():
-        logger.info("[Player Detection] Modal disabled, skipping detection - using default regions")
-        return generate_default_highlight_regions(source_clips)
-
     # Calculate detection timestamps
     timestamps = calculate_detection_timestamps(source_clips)
 
@@ -400,17 +560,28 @@ async def run_player_detection_for_highlights(
 
     logger.info(f"[Player Detection] Running batch detection on {len(timestamps)} timestamps for {len(source_clips)} clips")
 
-    # Run batch detection
+    # Run batch detection - use Modal if enabled, otherwise local YOLO
     try:
-        if progress_callback:
-            await progress_callback(92, "Detecting players...", "detecting_players")
+        if modal_enabled():
+            if progress_callback:
+                await progress_callback(92, "Detecting players...", "detecting_players")
 
-        detection_result = await call_modal_detect_players_batch(
-            user_id=user_id,
-            input_key=output_key,
-            timestamps=timestamps,
-            confidence_threshold=0.5,
-        )
+            detection_result = await call_modal_detect_players_batch(
+                user_id=user_id,
+                input_key=output_key,
+                timestamps=timestamps,
+                confidence_threshold=0.5,
+            )
+        else:
+            # Use local YOLO detection (slower but free)
+            logger.info("[Player Detection] Modal disabled, using local YOLO detection")
+            detection_result = await run_local_batch_detection(
+                user_id=user_id,
+                output_key=output_key,
+                timestamps=timestamps,
+                confidence_threshold=0.5,
+                progress_callback=progress_callback,
+            )
 
         if detection_result.get("status") != "success":
             logger.warning(f"[Player Detection] Detection failed: {detection_result.get('error')}, using default regions")

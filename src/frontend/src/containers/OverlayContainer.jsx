@@ -158,8 +158,9 @@ export function OverlayContainer({
     }
 
     // Find the current region based on currentTime
+    // Note: regions use camelCase (startTime/endTime) from useHighlightRegions
     const currentRegion = highlightRegions.find(
-      region => region.enabled && currentTime >= region.start_time && currentTime <= region.end_time
+      region => region.enabled && currentTime >= region.startTime && currentTime <= region.endTime
     );
 
     if (!currentRegion?.detections?.length) {
@@ -178,8 +179,11 @@ export function OverlayContainer({
       }
     }
 
-    // Only show detections if within 0.5 seconds of a detection timestamp
-    if (!closestDetection || closestDistance > 0.5) {
+    // Only show detections if within ~1 frame of a detection timestamp
+    // This ensures boxes only appear when playhead is exactly at a detection point
+    // (e.g., after clicking a green marker on the timeline)
+    const DETECTION_DISPLAY_THRESHOLD = 0.05; // 50ms ≈ 1.5 frames at 30fps
+    if (!closestDetection || closestDistance > DETECTION_DISPLAY_THRESHOLD) {
       return {
         detections: [],
         videoWidth: currentRegion.videoWidth || 0,

@@ -162,3 +162,37 @@ A single clip is just a special case of multi-clip (N=1). These should be unifie
 2. Single Modal function that handles 1-N clips
 3. Frontend sends same request format regardless of clip count
 4. Simplifies code maintenance and ensures feature parity
+
+### Replace JSON Blob "Replace-All" Pattern with Atomic Operations
+
+**Problem:** Frontend sends entire JSON blobs (e.g., `highlights_data`) that replace server state, causing race conditions where backend-set data (like detection results) gets overwritten by stale frontend state.
+
+**Current problematic locations:**
+
+| File | Line | Pattern | Risk |
+|------|------|---------|------|
+| `OverlayScreen.jsx` | 372-378 | Auto-save replaces all `highlights_data` | HIGH - overwrites detection data |
+| `OverlayScreen.jsx` | 419-426 | Unmount save replaces all | HIGH |
+| `OverlayScreen.jsx` | 603-609 | Pre-export save replaces all | HIGH |
+| `OverlayContainer.jsx` | 346 | Project switch save | MEDIUM |
+| `AnnotateContainer.jsx` | 348, 360 | `settings_json`, `clips_json` | LOW (explicit action) |
+
+**Solution options:**
+
+1. **Atomic CRUD endpoints** (preferred):
+   - `POST /api/highlights/{regionId}/keyframes` - add keyframe
+   - `PUT /api/highlights/{regionId}/keyframes/{keyframeId}` - update keyframe
+   - `DELETE /api/highlights/{regionId}/keyframes/{keyframeId}` - delete keyframe
+   - Backend handles merging, frontend sends only changes
+
+2. **Merge strategy**:
+   - Frontend sends partial updates with operation type
+   - Backend merges changes into existing data
+   - Preserves fields not included in update (e.g., `detections`)
+
+3. **Version/timestamp guards**:
+   - Include `last_modified` timestamp with saves
+   - Backend rejects stale writes
+   - Frontend must fetch latest before saving
+
+**Implementation priority:** HIGH - This pattern caused the detection data loss bug where frontend auto-save overwrote backend detection results.

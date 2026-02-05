@@ -308,14 +308,11 @@ export default function RegionLayer({
           colorScheme="orange"
           isSelected={isSelected}
           isPermanent={isPermanent}
-          fromDetection={keyframe.fromDetection}
           onClick={() => onSeek && onSeek(keyframeTime)}
           onDelete={canDelete ? () => onRemoveKeyframe(keyframeTime) : undefined}
-          tooltip={keyframe.fromDetection
-            ? `Keyframe from player detection at ${keyframeTime.toFixed(2)}s`
-            : isPermanent
-              ? `Auto keyframe at ${keyframeTime.toFixed(2)}s`
-              : `Keyframe at ${keyframeTime.toFixed(2)}s`
+          tooltip={isPermanent
+            ? `Auto keyframe at ${keyframeTime.toFixed(2)}s`
+            : `Keyframe at ${keyframeTime.toFixed(2)}s`
           }
           edgePadding={edgePadding}
           showCopyButton={false}
@@ -376,13 +373,6 @@ export default function RegionLayer({
               >
                 {renderRegionBadge(region)}
 
-                {/* Detection indicator - green bar when detection data exists */}
-                {mode === 'highlight' && region.detections?.some(d => d.boxes?.length > 0) && (
-                  <div
-                    className="absolute bottom-0 left-0 right-0 h-2 bg-green-500 bg-opacity-80"
-                    title="Player detection available - scrub to see boxes, click box to create keyframe"
-                  />
-                )}
               </div>
 
               {/* Lever handles for highlight mode - positioned outside region, using transform to extend */}
