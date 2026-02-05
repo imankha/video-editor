@@ -539,6 +539,39 @@ async function ensureAnnotateModeWithClips(page) {
 }
 
 /**
+ * Navigate from home screen to the first project and enter Framing mode.
+ */
+async function navigateToProjectFromHome(page) {
+  console.log('[Test] Navigating to home then back to project for fresh load...');
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+
+  // Click Projects tab
+  const projectsTab = page.locator('button:has-text("Projects")');
+  if (await projectsTab.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await projectsTab.click();
+    await page.waitForTimeout(500);
+  }
+
+  // Click the project card in "Continue where you left off" or the project list
+  // Use text matching for the clickable row
+  const projectRow = page.getByText(/16:9.*\d+ clips/i).first();
+  if (await projectRow.isVisible({ timeout: 3000 }).catch(() => false)) {
+    console.log('[Test] Clicking project row to re-enter Framing...');
+    await projectRow.click();
+    await page.waitForTimeout(1000);
+  } else {
+    // Try clicking any visible project name
+    const projectName = page.getByText(/Vs.*\d+/i).first();
+    if (await projectName.isVisible({ timeout: 2000 }).catch(() => false)) {
+      console.log('[Test] Clicking project name...');
+      await projectName.click();
+      await page.waitForTimeout(1000);
+    }
+  }
+}
+
+/**
  * Trigger clip extraction and wait for clips to have actual video files.
  *
  * In the new architecture, clips are saved to the database with empty filenames
@@ -587,7 +620,9 @@ async function triggerExtractionAndWait(page, maxWaitTime = 180000) {
   }, gameId);
 
   if (quickCheck.total > 0 && quickCheck.extracted === quickCheck.total) {
-    console.log(`[Test] All ${quickCheck.total} clips already extracted, skipping wait`);
+    console.log(`[Test] All ${quickCheck.total} clips already extracted, navigating to project...`);
+    // Still need to navigate to the project
+    await navigateToProjectFromHome(page);
     return;
   }
 
@@ -617,36 +652,7 @@ async function triggerExtractionAndWait(page, maxWaitTime = 180000) {
     // Success: all of this game's clips are extracted
     if (extractedClips.length >= gameClips.length && gameClips.length > 0) {
       console.log(`[Test] All ${extractedClips.length} clips extracted after ${Math.round((Date.now() - startWait) / 1000)}s`);
-
-      // The Framing UI has stale data - navigate to home and back to get fresh data
-      console.log('[Test] Navigating to home then back to project for fresh load...');
-      await page.goto('/');
-      await page.waitForLoadState('networkidle');
-
-      // Click Projects tab
-      const projectsTab = page.locator('button:has-text("Projects")');
-      if (await projectsTab.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await projectsTab.click();
-        await page.waitForTimeout(500);
-      }
-
-      // Click the project card in "Continue where you left off" or the project list
-      // Use text matching for the clickable row
-      const projectRow = page.getByText(/16:9.*\d+ clips/i).first();
-      if (await projectRow.isVisible({ timeout: 3000 }).catch(() => false)) {
-        console.log('[Test] Clicking project row to re-enter Framing...');
-        await projectRow.click();
-        await page.waitForTimeout(1000);
-      } else {
-        // Try clicking any visible project name
-        const projectName = page.getByText(/Vs.*Jan.*\d+/i).first();
-        if (await projectName.isVisible({ timeout: 2000 }).catch(() => false)) {
-          console.log('[Test] Clicking project name...');
-          await projectName.click();
-          await page.waitForTimeout(1000);
-        }
-      }
-
+      await navigateToProjectFromHome(page);
       return;
     }
 
@@ -904,10 +910,21 @@ async function ensureFramingMode(page) {
   await ensureProjectsExist(page);
 
   // ensureProjectsExist now navigates directly to Framing mode after creating from clips
-  // Wait for framing mode to fully load - the Frame Video button appears when mode is ready
+  // Wait for framing mode to fully load - the export button appears when mode is ready
+  // Note: Button may say "Frame Video" or "Exporting..." if a previous export is still active
   const frameButton = page.locator('button:has-text("Frame Video")');
-  await expect(frameButton).toBeVisible({ timeout: 15000 });
-  console.log('[Test] Framing mode loaded - Frame Video button visible');
+  const exportingButton = page.locator('button:has-text("Exporting")');
+
+  // Wait for either button to be visible
+  const buttonVisible = await Promise.race([
+    frameButton.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'frame'),
+    exportingButton.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'exporting')
+  ]).catch(() => null);
+
+  if (!buttonVisible) {
+    throw new Error('Neither "Frame Video" nor "Exporting..." button visible in Framing mode');
+  }
+  console.log(`[Test] Framing mode loaded - ${buttonVisible === 'frame' ? 'Frame Video' : 'Exporting...'} button visible`);
 
   // Load video if needed (framing mode may prompt for video)
   // Use short video for faster AI upscaling in tests
@@ -1703,10 +1720,13 @@ test.describe('Full Coverage Tests @full', () => {
     // Keyframe data should be preserved (restoration should happen, no reinit after restore)
     // Just verify the UI is stable and functional
     // After framing export, project may open in Overlay mode (if working video exists) or Framing mode
+    // Note: Button may also say "Exporting..." if a previous export is still active
     const framingButton = page.locator('button:has-text("Frame Video")').first();
+    const exportingFramingButton = page.locator('button:has-text("Exporting")').first();
     const overlayButton = page.locator('button:has-text("Add Overlay")').first();
     const eitherButtonVisible = await Promise.race([
       framingButton.waitFor({ state: 'visible', timeout: 10000 }).then(() => 'framing'),
+      exportingFramingButton.waitFor({ state: 'visible', timeout: 10000 }).then(() => 'framing-exporting'),
       overlayButton.waitFor({ state: 'visible', timeout: 10000 }).then(() => 'overlay')
     ]).catch(() => null);
 
@@ -1728,15 +1748,21 @@ test.describe('Full Coverage Tests @full', () => {
     // Ensure we're in framing mode
     await ensureFramingMode(page);
 
-    // Start export
-    const exportButton = page.locator('button:has-text("Frame Video")').first();
-    await expect(exportButton).toBeEnabled({ timeout: 10000 });
-    await exportButton.click();
-
-    // Wait for export to start
+    // Check if export is already running (from previous test) or start a new one
     const exportingButton = page.locator('button:has-text("Exporting")');
-    await expect(exportingButton).toBeVisible({ timeout: 10000 });
-    console.log('[Full] Export started');
+    const frameButton = page.locator('button:has-text("Frame Video")').first();
+
+    const isAlreadyExporting = await exportingButton.isVisible({ timeout: 1000 }).catch(() => false);
+
+    if (isAlreadyExporting) {
+      console.log('[Full] Export already in progress, monitoring existing export');
+    } else {
+      // Start new export
+      await expect(frameButton).toBeEnabled({ timeout: 10000 });
+      await frameButton.click();
+      await expect(exportingButton).toBeVisible({ timeout: 10000 });
+      console.log('[Full] Export started');
+    }
 
     // SLA monitoring: progress must increase at least once every 30 seconds
     let lastProgress = 0;
