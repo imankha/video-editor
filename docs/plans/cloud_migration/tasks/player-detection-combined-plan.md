@@ -196,3 +196,47 @@ A single clip is just a special case of multi-clip (N=1). These should be unifie
    - Frontend must fetch latest before saving
 
 **Implementation priority:** HIGH - This pattern caused the detection data loss bug where frontend auto-save overwrote backend detection results.
+
+### Improve Re-Import / Re-Extraction Handling
+
+**Problem:** When a clip's boundaries are updated (re-annotated), the "Updated Clip Boundaries" dialog lets users choose to re-import. This triggers a complex state transition that can cause issues:
+
+1. **Observed symptoms:**
+   - Duplicate clips appearing in sidebar (same clip shown twice)
+   - State from previous load persisting into new load
+   - Project loading twice (once in overlay mode, then framing mode) during transition
+
+2. **Root cause (from logs):**
+   ```
+   [ProjectsScreen] Project loaded: clips: Array(1), mode: 'overlay'
+   [ProjectsScreen] Selecting project: 40
+   [useProjects] fetchProject(40): working_video_id=null  // <-- cleared by refresh
+   [useProjectLoader] Mode determination: targetMode=framing
+   [FramingScreen] Initializing from loaded clips: 1
+   ```
+   The project loads initially with working_video (overlay mode), then the refresh clears it, causing a second load in framing mode. The Zustand clipStore may not be fully cleared between loads.
+
+3. **Current flow:**
+   - User clicks "Use Latest Clips" in dialog
+   - Backend: `refresh-outdated-clips` endpoint resets clip, clears working video
+   - Frontend: `refreshProject()` called, fetches fresh project state
+   - Frontend: Project reloads but stores may have stale data from previous mode
+
+**Solution options:**
+
+1. **Dedicated re-import flow:**
+   - Add `forceReload: true` flag to project load
+   - When true, explicitly reset ALL stores before loading
+   - Don't rely on mode detection - force framing mode for re-imports
+
+2. **Better store clearing:**
+   - `useProjectLoader.loadProject()` already calls `reset()` on stores
+   - Verify all stores are actually cleared (clipStore, framingStore, overlayStore, videoStore)
+   - Add defensive deduplication in `loadProjectClips()` based on workingClipId
+
+3. **State transition guards:**
+   - Prevent renders during load transitions
+   - Use loading overlay to block UI until load complete
+   - Debounce rapid project reloads
+
+**Implementation priority:** MEDIUM - Causes confusing UX but self-corrects on refresh

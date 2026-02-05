@@ -687,7 +687,11 @@ export default function useHighlightRegions(videoMetadata) {
           id: region.id,
           start_time: region.startTime,
           end_time: region.endTime,
-          keyframes: regionKeyframes
+          keyframes: regionKeyframes,
+          // Preserve detection data from framing export (used for detection marker layer)
+          detections: region.detections || [],
+          videoWidth: region.videoWidth || null,
+          videoHeight: region.videoHeight || null,
         };
       });
   }, [regions, framerate, calculateDefaultHighlight, videoMetadata]);

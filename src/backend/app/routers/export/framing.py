@@ -35,6 +35,7 @@ from ...highlight_transform import get_output_duration
 from .multi_clip import (
     calculate_detection_timestamps,
     run_player_detection_for_highlights,
+    run_local_detection_on_video_file,
     generate_default_highlight_regions,
     DEFAULT_HIGHLIGHT_REGION_DURATION,
 )
@@ -842,12 +843,11 @@ async def render_project(request: RenderRequest):
             await manager.send_progress(export_id, progress_data)
 
         # Run batch player detection on the working video
+        # Use local file directly (still available before cleanup) instead of downloading from R2
         try:
-            highlight_regions = await run_player_detection_for_highlights(
-                user_id=captured_user_id,
-                output_key=output_key,
+            highlight_regions = await run_local_detection_on_video_file(
+                video_path=output_path,
                 source_clips=source_clips,
-                progress_callback=detection_progress_callback,
             )
             logger.info(f"[Render] Player detection complete: {len(highlight_regions)} regions with detected keyframes")
         except Exception as det_error:
