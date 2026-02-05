@@ -18,3 +18,4 @@ export { useFramingStore, useFramingVideoFile, useFramingIncludeAudio, useFramin
 export { useOverlayStore, useOverlayWorkingVideo, useOverlayClipMetadata, useOverlayEffectType, useOverlayIsLoading } from './overlayStore';
 export { useGalleryStore, useGalleryIsOpen, useGalleryCount, useGalleryActions } from './galleryStore';
 export { useGamesStore } from './gamesStore';
+export { useSettingsStore, useProjectFilters, useFramingSettings, useOverlaySettings, useSettingsLoading, useSettingsInitialized } from './settingsStore';
