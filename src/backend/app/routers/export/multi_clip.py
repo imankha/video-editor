@@ -35,7 +35,7 @@ from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
 from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url
 from ...user_context import get_current_user_id, set_current_user_id
-from ...services.modal_client import modal_enabled, call_modal_multi_clip
+from ...services.modal_client import modal_enabled, call_modal_multi_clip, call_modal_detect_players_batch
 
 logger = logging.getLogger(__name__)
 
@@ -349,6 +349,203 @@ def generate_default_highlight_regions(source_clips: List[Dict[str, Any]]) -> Li
         regions.append(region)
 
     logger.info(f"[Highlight Regions] Generated {len(regions)} default regions for {len(source_clips)} clips")
+    return regions
+
+
+def calculate_detection_timestamps(source_clips: List[Dict[str, Any]]) -> List[float]:
+    """
+    Calculate timestamps for player detection within each clip's overlay region.
+
+    For each clip, we detect at 4 evenly spaced timestamps within the first 2 seconds
+    (the overlay region): 0s, 0.66s, 1.33s, 2s relative to clip start.
+
+    Args:
+        source_clips: List of clip boundaries from build_clip_boundaries()
+
+    Returns:
+        List of absolute timestamps (in seconds) for detection in the working video
+    """
+    timestamps = []
+
+    for clip in source_clips:
+        clip_start = clip['start_time']
+        clip_duration = clip['duration']
+
+        # Overlay region is first 2 seconds of clip (or full clip if shorter)
+        overlay_duration = min(DEFAULT_HIGHLIGHT_REGION_DURATION, clip_duration)
+
+        # 4 evenly spaced detection points: 0, 0.66, 1.33, 2.0 seconds from clip start
+        # If clip is shorter than 2s, scale proportionally
+        for i in range(4):
+            relative_time = (i / 3) * overlay_duration  # 0, 0.33, 0.66, 1.0 × overlay_duration
+            absolute_time = clip_start + relative_time
+            timestamps.append(absolute_time)
+
+    return timestamps
+
+
+async def run_player_detection_for_highlights(
+    user_id: str,
+    output_key: str,
+    source_clips: List[Dict[str, Any]],
+    progress_callback=None,
+) -> List[Dict[str, Any]]:
+    """
+    Run batch player detection and enhance highlight regions with detected player boxes.
+
+    Args:
+        user_id: User folder in R2
+        output_key: R2 key for the working video to analyze
+        source_clips: List of clip boundaries from build_clip_boundaries()
+        progress_callback: Optional async callback for progress updates
+
+    Returns:
+        List of highlight regions with detection-enhanced keyframes
+    """
+    # Check if Modal is enabled - detection requires GPU
+    if not modal_enabled():
+        logger.info("[Player Detection] Modal disabled, skipping detection - using default regions")
+        return generate_default_highlight_regions(source_clips)
+
+    # Calculate detection timestamps
+    timestamps = calculate_detection_timestamps(source_clips)
+
+    if not timestamps:
+        logger.warning("[Player Detection] No timestamps to detect, returning default regions")
+        return generate_default_highlight_regions(source_clips)
+
+    logger.info(f"[Player Detection] Running batch detection on {len(timestamps)} timestamps for {len(source_clips)} clips")
+
+    # Run batch detection
+    try:
+        if progress_callback:
+            await progress_callback(92, "Detecting players...", "detecting_players")
+
+        detection_result = await call_modal_detect_players_batch(
+            user_id=user_id,
+            input_key=output_key,
+            timestamps=timestamps,
+            confidence_threshold=0.5,
+        )
+
+        if detection_result.get("status") != "success":
+            logger.warning(f"[Player Detection] Detection failed: {detection_result.get('error')}, using default regions")
+            return generate_default_highlight_regions(source_clips)
+
+        detections = detection_result.get("detections", [])
+        video_width = detection_result.get("video_width", 810)
+        video_height = detection_result.get("video_height", 1440)
+
+        logger.info(f"[Player Detection] Got {len(detections)} detection results, video size: {video_width}x{video_height}")
+
+    except Exception as e:
+        logger.error(f"[Player Detection] Detection error: {e}, using default regions")
+        return generate_default_highlight_regions(source_clips)
+
+    # Build detection lookup by timestamp (with small tolerance for floating point)
+    detection_by_time = {}
+    for det in detections:
+        ts = det.get("timestamp", 0)
+        # Round to 2 decimal places for matching
+        detection_by_time[round(ts, 2)] = det.get("boxes", [])
+
+    # Build enhanced highlight regions
+    regions = []
+    detection_idx = 0
+
+    for clip_idx, clip in enumerate(source_clips):
+        region_start = clip['start_time']
+        region_end = min(clip['start_time'] + DEFAULT_HIGHLIGHT_REGION_DURATION, clip['end_time'])
+
+        # Skip if region would be too short
+        if region_end - region_start < 0.5:
+            detection_idx += 4  # Skip the 4 detection timestamps for this clip
+            continue
+
+        # Get the 4 detection timestamps for this clip
+        keyframes = []
+        for i in range(4):
+            if detection_idx + i >= len(timestamps):
+                break
+
+            ts = timestamps[detection_idx + i]
+            ts_rounded = round(ts, 2)
+            boxes = detection_by_time.get(ts_rounded, [])
+
+            # Find the best player box (largest area, or highest confidence)
+            best_box = None
+            if boxes:
+                # Sort by area (width × height) descending, pick largest
+                boxes_with_area = [(box, box['width'] * box['height']) for box in boxes]
+                boxes_with_area.sort(key=lambda x: x[1], reverse=True)
+                best_box = boxes_with_area[0][0]
+
+            # Create keyframe with detected player or default center
+            if best_box:
+                # Use center of detected box
+                center_x = best_box['x'] + best_box['width'] / 2
+                center_y = best_box['y'] + best_box['height'] / 2
+                # Radius based on box size (scaled for overlay effect)
+                radius_x = max(40, best_box['width'] / 2 * 0.8)
+                radius_y = max(80, best_box['height'] / 2 * 0.5)
+
+                keyframe = {
+                    'time': ts,
+                    'x': int(center_x),
+                    'y': int(center_y),
+                    'radiusX': int(radius_x),
+                    'radiusY': int(radius_y),
+                    'opacity': 0.15,
+                    'color': '#FFFF00',
+                    'detected': True,  # Flag for UI to know this came from detection
+                    'confidence': best_box.get('confidence', 0),
+                }
+            else:
+                # Default center (no detection at this timestamp)
+                keyframe = {
+                    'time': ts,
+                    'x': video_width // 2,
+                    'y': video_height // 2,
+                    'radiusX': 86,
+                    'radiusY': 173,
+                    'opacity': 0.15,
+                    'color': '#FFFF00',
+                    'detected': False,
+                }
+
+            keyframes.append(keyframe)
+
+        detection_idx += 4  # Move to next clip's detection timestamps
+
+        # Ensure at least 2 keyframes (start and end)
+        if len(keyframes) < 2:
+            # Add end keyframe if missing
+            keyframes.append({
+                'time': region_end,
+                'x': keyframes[0]['x'] if keyframes else video_width // 2,
+                'y': keyframes[0]['y'] if keyframes else video_height // 2,
+                'radiusX': keyframes[0].get('radiusX', 86),
+                'radiusY': keyframes[0].get('radiusY', 173),
+                'opacity': 0.15,
+                'color': '#FFFF00',
+                'detected': False,
+            })
+
+        region = {
+            'id': f'region-auto-{clip_idx}-{int(region_start * 1000)}',
+            'start_time': region_start,
+            'end_time': region_end,
+            'enabled': True,
+            'label': clip['name'],
+            'autoGenerated': True,
+            'keyframes': keyframes,
+        }
+        regions.append(region)
+
+        detected_count = sum(1 for kf in keyframes if kf.get('detected'))
+        logger.info(f"[Player Detection] Clip {clip_idx}: {detected_count}/{len(keyframes)} keyframes have detected players")
+
+    logger.info(f"[Player Detection] Generated {len(regions)} highlight regions with player detection")
     return regions
 
 
@@ -863,6 +1060,23 @@ async def export_multi_clip(
             # Save to database if project_id provided
             working_video_id = None
             if project_id:
+                # Run player detection BEFORE DB transaction (async operation)
+                source_clips = build_clip_boundaries_from_input(normalized_clips_data, transition)
+
+                # Run batch player detection on the working video
+                # This creates highlight regions with detected player keyframes
+                try:
+                    highlight_regions = await run_player_detection_for_highlights(
+                        user_id=captured_user_id,
+                        output_key=output_key,
+                        source_clips=source_clips,
+                        progress_callback=modal_progress_callback,
+                    )
+                    logger.info(f"[Multi-Clip Export] Player detection complete: {len(highlight_regions)} regions with detected keyframes")
+                except Exception as det_error:
+                    logger.warning(f"[Multi-Clip Export] Player detection failed, using defaults: {det_error}")
+                    highlight_regions = generate_default_highlight_regions(source_clips)
+
                 try:
                     with get_db_connection() as conn:
                         cursor = conn.cursor()
@@ -874,10 +1088,6 @@ async def export_multi_clip(
                         """, (project_id,))
                         next_version = cursor.fetchone()['next_version']
 
-                        # Generate default highlight regions at clip boundaries
-                        # Use normalized clips_data for accurate duration calculation
-                        source_clips = build_clip_boundaries_from_input(normalized_clips_data, transition)
-                        highlight_regions = generate_default_highlight_regions(source_clips)
                         highlights_json = json.dumps(highlight_regions)
 
                         logger.info(f"[Multi-Clip Export] Generated {len(highlight_regions)} highlight regions for {len(source_clips)} clips")

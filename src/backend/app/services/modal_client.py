@@ -43,6 +43,7 @@ _render_overlay_fn = None
 _process_framing_ai_fn = None
 _process_multi_clip_fn = None
 _detect_players_fn = None
+_detect_players_batch_fn = None
 _extract_clip_fn = None
 _create_annotated_compilation_fn = None
 
@@ -101,6 +102,23 @@ def _get_detect_players_fn():
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to detect_players_modal: {e}")
         raise RuntimeError(f"Modal detect_players_modal not available: {e}")
+
+
+def _get_detect_players_batch_fn():
+    """Get a reference to the deployed detect_players_batch_modal function."""
+    global _detect_players_batch_fn
+
+    if _detect_players_batch_fn is not None:
+        return _detect_players_batch_fn
+
+    try:
+        import modal
+        _detect_players_batch_fn = modal.Function.from_name(MODAL_APP_NAME, "detect_players_batch_modal")
+        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/detect_players_batch_modal")
+        return _detect_players_batch_fn
+    except Exception as e:
+        logger.error(f"[Modal] Failed to connect to detect_players_batch_modal: {e}")
+        raise RuntimeError(f"Modal detect_players_batch_modal not available: {e}")
 
 
 def _get_extract_clip_fn():
@@ -678,6 +696,69 @@ async def call_modal_detect_players(
 
     except Exception as e:
         logger.error(f"[Modal] Player detection failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+async def call_modal_detect_players_batch(
+    user_id: str,
+    input_key: str,
+    timestamps: list[float],
+    confidence_threshold: float = 0.5,
+) -> dict:
+    """
+    Call Modal detect_players_batch_modal for batch YOLO player detection.
+
+    More efficient than calling single-frame detection multiple times because
+    the video is only downloaded once.
+
+    Args:
+        user_id: User folder in R2
+        input_key: R2 key for input video
+        timestamps: List of timestamps (seconds) to analyze
+        confidence_threshold: Minimum confidence for detections
+
+    Returns:
+        {
+            "status": "success",
+            "detections": [
+                {"timestamp": 0.0, "boxes": [...]},
+                {"timestamp": 0.66, "boxes": [...]},
+                ...
+            ],
+            "video_width": int,
+            "video_height": int,
+            "fps": float,
+            "duration": float
+        } or {"status": "error", "error": "..."}
+    """
+    if not _modal_enabled:
+        raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
+
+    detect_players_batch = _get_detect_players_batch_fn()
+
+    logger.info(f"[Modal] Calling detect_players_batch_modal for {len(timestamps)} timestamps")
+    logger.info(f"[Modal] User: {user_id}, Input: {input_key}")
+    logger.info(f"[Modal] Timestamps: {timestamps}")
+
+    try:
+        result = await asyncio.to_thread(
+            detect_players_batch.remote,
+            user_id=user_id,
+            input_key=input_key,
+            timestamps=timestamps,
+            confidence_threshold=confidence_threshold,
+        )
+
+        if result.get("status") == "success":
+            total_detections = sum(len(d.get("boxes", [])) for d in result.get("detections", []))
+            logger.info(f"[Modal] Batch detection completed: {total_detections} total players across {len(timestamps)} frames")
+        else:
+            logger.error(f"[Modal] Batch detection failed: {result.get('error')}")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"[Modal] Batch player detection failed: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
 
 

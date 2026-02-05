@@ -30,8 +30,14 @@ from ...database import get_db_connection, get_working_videos_path
 from ...queries import latest_working_clips_subquery
 from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
 from ...services.ffmpeg_service import get_video_duration
-from ...services.modal_client import modal_enabled, call_modal_framing_ai
+from ...services.modal_client import modal_enabled, call_modal_framing_ai, call_modal_detect_players_batch
 from ...highlight_transform import get_output_duration
+from .multi_clip import (
+    calculate_detection_timestamps,
+    run_player_detection_for_highlights,
+    generate_default_highlight_regions,
+    DEFAULT_HIGHLIGHT_REGION_DURATION,
+)
 from ...constants import ExportStatus
 from pydantic import BaseModel
 from typing import Optional
@@ -161,334 +167,6 @@ async def export_crop(
         filename=f"cropped_{video.filename}",
         background=None
     )
-
-
-@router.post("/upscale")
-async def export_with_ai_upscale(
-    video: UploadFile = File(...),
-    keyframes_json: str = Form(...),
-    target_fps: int = Form(30),
-    export_id: str = Form(...),
-    project_id: int = Form(None),  # Optional: for export_jobs tracking
-    export_mode: str = Form("quality"),
-    segment_data_json: str = Form(None),
-    include_audio: str = Form("true"),
-    enable_source_preupscale: str = Form("false"),
-    enable_diffusion_sr: str = Form("false"),
-):
-    """
-    Export video with AI upscaling and de-zoom (Framing mode).
-
-    This endpoint handles crop, trim, speed, and AI upscaling.
-    Highlight overlays are handled separately by /overlay endpoint.
-
-    Steps:
-    1. Extracts frames with crop applied (de-zoom - removes digital zoom)
-    2. Detects aspect ratio and determines target resolution
-    3. Upscales each frame using Real-ESRGAN AI model
-    4. Reassembles into final video
-    """
-    # CRITICAL: Capture user ID at the start of the request
-    # The AI upscaling runs for 10+ minutes in asyncio.to_thread(), and
-    # context variables can be lost during long-running async operations.
-    # We restore the user context before database operations to ensure
-    # the correct user's database is accessed.
-    captured_user_id = get_current_user_id()
-    logger.info(f"[Framing Export] Starting for user: {captured_user_id}")
-
-    # Fetch project name for progress messages
-    project_name = None
-    if project_id:
-        try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT name FROM projects WHERE id = ?", (project_id,))
-                row = cursor.fetchone()
-                if row:
-                    project_name = row['name']
-        except Exception as e:
-            logger.warning(f"[Framing Export] Failed to fetch project name: {e}")
-
-    # Regress status and create export_jobs record (if project_id provided)
-    if project_id:
-        # Clear both video IDs FIRST in its own transaction so it always happens
-        try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("UPDATE projects SET working_video_id = NULL, final_video_id = NULL WHERE id = ?", (project_id,))
-                conn.commit()
-            logger.info(f"[Framing Export] Cleared working_video_id and final_video_id for project {project_id} (status regression)")
-        except Exception as e:
-            logger.warning(f"[Framing Export] Failed to clear video IDs: {e}")
-
-        # Create export_jobs record (separate transaction)
-        try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO export_jobs (id, project_id, type, status, input_data)
-                    VALUES (?, ?, 'framing', 'processing', '{}')
-                """, (export_id, project_id))
-                conn.commit()
-            logger.info(f"[Framing Export] Created export_jobs record: {export_id}")
-        except Exception as e:
-            logger.warning(f"[Framing Export] Failed to create export_jobs record: {e}")
-
-    # Initialize progress tracking
-    export_progress[export_id] = {
-        "progress": 10,
-        "message": "Starting export...",
-        "status": "processing"
-    }
-
-    # Parse parameters
-    include_audio_bool = include_audio.lower() == "true"
-    enable_source_preupscale_bool = enable_source_preupscale.lower() == "true"
-    enable_diffusion_sr_bool = enable_diffusion_sr.lower() == "true"
-
-    logger.info(f"Audio setting: {'Include audio' if include_audio_bool else 'Video only'}")
-
-    # Parse keyframes
-    try:
-        keyframes_data = json.loads(keyframes_json)
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid keyframes JSON: {str(e)}")
-
-    keyframes = [CropKeyframe(**kf) for kf in keyframes_data]
-    if len(keyframes) == 0:
-        raise HTTPException(status_code=400, detail="No crop keyframes provided")
-
-    # Parse segment data (speed/trim)
-    segment_data = None
-    if segment_data_json:
-        try:
-            segment_data = json.loads(segment_data_json)
-            logger.info(f"Segment data received: {json.dumps(segment_data, indent=2)}")
-        except json.JSONDecodeError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid segment data JSON: {str(e)}")
-
-    # Create temp directory
-    temp_dir = tempfile.mkdtemp()
-    input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex}{Path(video.filename).suffix}")
-    output_path = os.path.join(temp_dir, f"upscaled_{uuid.uuid4().hex}.mp4")
-
-    try:
-        # Save uploaded file
-        with open(input_path, 'wb') as f:
-            content = await video.read()
-            f.write(content)
-
-        # Convert keyframes
-        keyframes_dict = [
-            {'time': kf.time, 'x': kf.x, 'y': kf.y, 'width': kf.width, 'height': kf.height}
-            for kf in keyframes
-        ]
-
-        # Check AI upscaler
-        if AIVideoUpscaler is None:
-            raise HTTPException(
-                status_code=503,
-                detail={"error": "AI upscaling dependencies not installed"}
-            )
-
-        # Initialize upscaler
-        upscaler = AIVideoUpscaler(
-            device='cuda',
-            export_mode=export_mode,
-            enable_source_preupscale=enable_source_preupscale_bool,
-            enable_diffusion_sr=enable_diffusion_sr_bool,
-            sr_model_name='realesr_general_x4v3'
-        )
-
-        if upscaler.upsampler is None:
-            raise HTTPException(
-                status_code=503,
-                detail={"error": "AI SR model failed to load"}
-            )
-
-        # Capture event loop
-        loop = asyncio.get_running_loop()
-
-        # Progress ranges
-        if export_mode == "FAST":
-            progress_ranges = {
-                'ai_upscale': (10, 95),
-                'ffmpeg_encode': (95, 100)
-            }
-        else:
-            progress_ranges = {
-                'ai_upscale': (10, 28),
-                'ffmpeg_pass1': (28, 81),
-                'ffmpeg_encode': (81, 100)
-            }
-
-        def progress_callback(current, total, message, phase='ai_upscale'):
-            if phase not in progress_ranges:
-                phase = 'ai_upscale'
-            start_percent, end_percent = progress_ranges[phase]
-            phase_progress = (current / total) if total > 0 else 0
-            overall_percent = start_percent + (phase_progress * (end_percent - start_percent))
-
-            progress_data = {
-                "progress": overall_percent,
-                "message": message,
-                "status": "processing",
-                "current": current,
-                "total": total,
-                "phase": phase,
-                "projectId": project_id,
-                "projectName": project_name,
-                "type": "framing"
-            }
-            export_progress[export_id] = progress_data
-            logger.debug(f"Progress: {overall_percent:.1f}% - {message}")
-
-            try:
-                asyncio.run_coroutine_threadsafe(
-                    manager.send_progress(export_id, progress_data),
-                    loop
-                )
-            except Exception as e:
-                logger.error(f"Failed to send WebSocket update: {e}")
-
-        # Update progress
-        init_data = {"progress": 10, "message": "Initializing AI upscaler...", "status": "processing", "projectId": project_id, "projectName": project_name, "type": "framing"}
-        export_progress[export_id] = init_data
-        await manager.send_progress(export_id, init_data)
-
-        # Run upscaling (no highlight params - those are handled by /overlay endpoint)
-        result = await asyncio.to_thread(
-            upscaler.process_video_with_upscale,
-            input_path=input_path,
-            output_path=output_path,
-            keyframes=keyframes_dict,
-            target_fps=target_fps,
-            export_mode=export_mode,
-            progress_callback=progress_callback,
-            segment_data=segment_data,
-            include_audio=include_audio_bool,
-        )
-
-        logger.info(f"AI upscaling complete. Output: {output_path}")
-
-        # CRITICAL: Restore user context after long-running task
-        # The asyncio.to_thread() may have caused context variable drift
-        set_current_user_id(captured_user_id)
-        logger.info(f"[Framing Export] Restored user context: {captured_user_id}")
-
-        # MVC: Backend saves the working video directly - no frontend involvement needed
-        # This ensures the export is durable even if user navigates away
-        working_video_id = None
-        working_filename = None
-        if project_id:
-            try:
-                with get_db_connection() as conn:
-                    cursor = conn.cursor()
-
-                    # Generate unique filename and upload directly to R2 (no local storage)
-                    working_filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
-                    user_id = captured_user_id  # Use captured user ID, not get_current_user_id()
-
-                    # Get video duration for cost-optimized GPU selection in overlay mode
-                    video_duration = get_video_duration(output_path)
-                    logger.info(f"[Framing Export] Video duration: {video_duration:.2f}s")
-
-                    # Upload directly from temp file to R2
-                    if not upload_to_r2(user_id, f"working_videos/{working_filename}", Path(output_path)):
-                        raise Exception("Failed to upload working video to R2")
-                    logger.info(f"[Framing Export] Uploaded working video to R2: {working_filename}")
-
-                    # Get next version number
-                    cursor.execute("""
-                        SELECT COALESCE(MAX(version), 0) + 1 as next_version
-                        FROM working_videos WHERE project_id = ?
-                    """, (project_id,))
-                    next_version = cursor.fetchone()['next_version']
-
-                    # Reset final_video_id (framing changed, need to re-export overlay)
-                    cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
-
-                    # Create working_videos record with duration
-                    cursor.execute("""
-                        INSERT INTO working_videos (project_id, filename, version, duration)
-                        VALUES (?, ?, ?, ?)
-                    """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None))
-                    working_video_id = cursor.lastrowid
-
-                    # Update project with new working_video_id
-                    cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
-
-                    # Update export_jobs record to complete with output reference
-                    cursor.execute("""
-                        UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (working_video_id, working_filename, export_id))
-
-                    # Set exported_at for working clips
-                    cursor.execute(f"""
-                        UPDATE working_clips SET exported_at = datetime('now')
-                        WHERE project_id = ? AND id IN ({latest_working_clips_subquery()})
-                    """, (project_id, project_id))
-
-                    conn.commit()
-                    logger.info(f"[Framing Export] Created working video {working_video_id} for project {project_id}")
-
-            except Exception as e:
-                logger.error(f"[Framing Export] Failed to save working video: {e}", exc_info=True)
-                # Don't fail the whole export - still return the video
-                working_video_id = None
-
-        # Complete - include working_video_id so frontend knows the video was saved
-        complete_data = {
-            "progress": 100,
-            "message": "Export complete!",
-            "status": ExportStatus.COMPLETE,
-            "projectId": project_id,
-            "projectName": project_name,
-            "type": "framing",
-            "workingVideoId": working_video_id,
-            "workingFilename": working_filename
-        }
-        export_progress[export_id] = complete_data
-        await manager.send_progress(export_id, complete_data)
-
-        # Return JSON response instead of blob - frontend doesn't need the video data
-        # The working video is already saved to DB, frontend just needs to know it's done
-        return JSONResponse({
-            'success': True,
-            'working_video_id': working_video_id,
-            'filename': working_filename,
-            'project_id': project_id,
-            'export_id': export_id
-        })
-
-    except Exception as e:
-        logger.error(f"AI upscaling failed: {str(e)}", exc_info=True)
-        # Update export_jobs record to error
-        if project_id:
-            try:
-                with get_db_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (str(e)[:500], export_id))
-                    conn.commit()
-            except Exception:
-                pass
-        error_data = {"progress": 0, "message": f"Export failed: {str(e)}", "status": "error", "projectId": project_id, "projectName": project_name, "type": "framing"}
-        export_progress[export_id] = error_data
-        await manager.send_progress(export_id, error_data)
-
-        import shutil
-        import time
-        time.sleep(0.5)
-        try:
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir, ignore_errors=True)
-        except Exception as cleanup_error:
-            logger.warning(f"[AI Upscale] Cleanup failed: {cleanup_error}")
-        raise HTTPException(status_code=500, detail=f"AI upscaling failed: {str(e)}")
 
 
 @router.post("/framing")
@@ -1139,7 +817,46 @@ async def render_project(request: RenderRequest):
         set_current_user_id(captured_user_id)
         logger.info(f"[Render] Restored user context: {captured_user_id}")
 
-        # Step 6: Save to database
+        # Step 6: Run player detection for overlay keyframes
+        # Build single-clip source structure for detection
+        source_clips = [{
+            'clip_index': 0,
+            'start_time': 0.0,
+            'end_time': video_duration,
+            'duration': video_duration,
+            'name': clip['clip_name'] or 'Clip 1',
+        }]
+
+        # Create progress callback for detection phase
+        async def detection_progress_callback(progress: float, message: str, phase: str = "detecting_players"):
+            progress_data = {
+                "progress": progress,
+                "message": message,
+                "status": "processing",
+                "phase": phase,
+                "projectId": project_id,
+                "projectName": project_name,
+                "type": "framing"
+            }
+            export_progress[export_id] = progress_data
+            await manager.send_progress(export_id, progress_data)
+
+        # Run batch player detection on the working video
+        try:
+            highlight_regions = await run_player_detection_for_highlights(
+                user_id=captured_user_id,
+                output_key=output_key,
+                source_clips=source_clips,
+                progress_callback=detection_progress_callback,
+            )
+            logger.info(f"[Render] Player detection complete: {len(highlight_regions)} regions with detected keyframes")
+        except Exception as det_error:
+            logger.warning(f"[Render] Player detection failed, using defaults: {det_error}")
+            highlight_regions = generate_default_highlight_regions(source_clips)
+
+        highlights_json = json.dumps(highlight_regions)
+
+        # Step 7: Save to database
         working_video_id = None
 
         with get_db_connection() as conn:
@@ -1155,11 +872,11 @@ async def render_project(request: RenderRequest):
             # Reset final_video_id (framing changed, need to re-export overlay)
             cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
 
-            # Create working_videos record with duration
+            # Create working_videos record with duration and highlights
             cursor.execute("""
-                INSERT INTO working_videos (project_id, filename, version, duration)
-                VALUES (?, ?, ?, ?)
-            """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None))
+                INSERT INTO working_videos (project_id, filename, version, duration, highlights_data)
+                VALUES (?, ?, ?, ?, ?)
+            """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None, highlights_json))
             working_video_id = cursor.lastrowid
 
             # Update project with new working_video_id

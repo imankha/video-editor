@@ -545,6 +545,161 @@ def detect_players_modal(
         return {"status": "error", "error": str(e)}
 
 
+@app.function(
+    image=yolo_image,
+    gpu="T4",
+    timeout=300,  # Longer timeout for batch detection
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+def detect_players_batch_modal(
+    user_id: str,
+    input_key: str,
+    timestamps: list[float],
+    confidence_threshold: float = 0.5,
+) -> dict:
+    """
+    Detect players (persons) in multiple video frames on GPU.
+
+    Batch detection is more efficient than calling single-frame detection
+    multiple times because the video is only downloaded once.
+
+    Args:
+        user_id: User folder in R2
+        input_key: R2 key for input video
+        timestamps: List of timestamps (in seconds) to analyze
+        confidence_threshold: Minimum confidence for detections
+
+    Returns:
+        {
+            "status": "success",
+            "detections": [
+                {
+                    "timestamp": float,
+                    "frame_number": int,
+                    "boxes": [{"bbox": {...}, "confidence": float, "class_name": "person"}]
+                },
+                ...
+            ],
+            "video_width": int,
+            "video_height": int
+        }
+    """
+    import cv2
+
+    try:
+        logger.info(f"[Detection] Batch detection for {len(timestamps)} timestamps")
+
+        r2 = get_r2_client()
+        bucket = os.environ["R2_BUCKET_NAME"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Download video from R2 once
+            input_path = os.path.join(temp_dir, "input.mp4")
+            full_input_key = f"{user_id}/{input_key}"
+            logger.info(f"[Detection] Downloading {full_input_key}")
+            r2.download_file(bucket, full_input_key, input_path)
+
+            # Open video
+            cap = cv2.VideoCapture(input_path)
+            if not cap.isOpened():
+                raise ValueError(f"Could not open video: {input_path}")
+
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            duration = total_frames / fps if fps > 0 else 0
+
+            logger.info(f"[Detection] Video: {width}x{height}, {total_frames} frames, {fps:.2f} fps, {duration:.2f}s")
+
+            # Load YOLO model
+            model = _get_yolo_model()
+
+            all_detections = []
+
+            for timestamp in timestamps:
+                # Convert timestamp to frame number
+                frame_number = int(timestamp * fps)
+
+                # Clamp to valid range
+                frame_number = max(0, min(frame_number, total_frames - 1))
+
+                # Seek to frame
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+                ret, frame = cap.read()
+
+                if not ret or frame is None:
+                    logger.warning(f"[Detection] Failed to read frame at {timestamp}s (frame {frame_number})")
+                    all_detections.append({
+                        "timestamp": timestamp,
+                        "frame_number": frame_number,
+                        "boxes": []
+                    })
+                    continue
+
+                # Run YOLO detection
+                results = model(frame, verbose=False, conf=confidence_threshold)
+
+                # Process results - filter for person class only
+                boxes = []
+                for result in results:
+                    result_boxes = result.boxes
+                    if result_boxes is None:
+                        continue
+
+                    for box in result_boxes:
+                        class_id = int(box.cls[0])
+                        if class_id != PERSON_CLASS_ID:
+                            continue
+
+                        conf = float(box.conf[0])
+                        x1, y1, x2, y2 = box.xyxy[0].tolist()
+                        center_x = (x1 + x2) / 2
+                        center_y = (y1 + y2) / 2
+                        box_width = x2 - x1
+                        box_height = y2 - y1
+
+                        boxes.append({
+                            "bbox": {
+                                "x": center_x,
+                                "y": center_y,
+                                "width": box_width,
+                                "height": box_height
+                            },
+                            "confidence": conf,
+                            "class_name": "person",
+                            "class_id": class_id
+                        })
+
+                # Sort by confidence (highest first)
+                boxes.sort(key=lambda d: d["confidence"], reverse=True)
+
+                all_detections.append({
+                    "timestamp": timestamp,
+                    "frame_number": frame_number,
+                    "boxes": boxes
+                })
+
+                logger.info(f"[Detection] Frame at {timestamp:.2f}s: {len(boxes)} players")
+
+            cap.release()
+
+            logger.info(f"[Detection] Batch complete: {len(all_detections)} frames processed")
+
+            return {
+                "status": "success",
+                "detections": all_detections,
+                "video_width": width,
+                "video_height": height,
+                "fps": fps,
+                "duration": duration
+            }
+
+    except Exception as e:
+        logger.error(f"[Detection] Batch detection failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
 # ============================================================================
 # Real-ESRGAN AI Upscaling Functions
 # ============================================================================
