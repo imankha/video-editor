@@ -6,11 +6,10 @@ const API_BASE_URL = API_BASE;
 /**
  * usePlayerDetection - Hook to fetch player detections for the current video frame
  *
- * NEW BEHAVIOR (manual trigger mode):
- * - Does NOT auto-detect on frame change (saves GPU costs)
- * - Auto-checks cache when frame changes
- * - If frame is cached, shows detections automatically
- * - If not cached, user must click "Detect Players" button
+ * BEHAVIOR:
+ * - Player detection now runs automatically during framing export (U8)
+ * - This hook checks cache for any pre-existing detections
+ * - Shows detection boxes when cached results are available
  * - User can toggle detection boxes on/off
  *
  * @param {number} projectId - Project ID (backend looks up working video R2 path)
@@ -18,7 +17,7 @@ const API_BASE_URL = API_BASE;
  * @param {number} framerate - Video framerate (default 30)
  * @param {boolean} enabled - Whether detection UI is enabled (in overlay mode + in region)
  * @param {number} confidenceThreshold - Minimum confidence for detections (default 0.5)
- * @returns {Object} { detections, isLoading, isCached, triggerDetection, ... }
+ * @returns {Object} { detections, isLoading, isCached, ... }
  */
 export function usePlayerDetection({
   projectId,
@@ -63,69 +62,6 @@ export function usePlayerDetection({
       return null;
     }
   }, [projectId]);
-
-  /**
-   * Trigger detection for current frame (called by button click)
-   */
-  const triggerDetection = useCallback(async () => {
-    if (!enabled || !projectId) {
-      return;
-    }
-
-    // Cancel any pending request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    abortControllerRef.current = new AbortController();
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const requestBody = {
-        project_id: projectId,
-        frame_number: currentFrame,
-        confidence_threshold: confidenceThreshold
-      };
-
-      const response = await fetch(`${API_BASE_URL}/api/detect/players`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal: abortControllerRef.current.signal
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Detection failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      setDetections(data.detections || []);
-      setVideoDimensions({
-        width: data.video_width,
-        height: data.video_height
-      });
-      setIsCached(true); // Now it's cached for future visits
-      lastCheckedFrameRef.current = currentFrame;
-
-      console.log('[usePlayerDetection] Detection complete:', data.detections?.length, 'players');
-
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        return;
-      }
-      console.error('[usePlayerDetection] Detection error:', err);
-      setError(err.message);
-      setDetections([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [enabled, projectId, currentFrame, confidenceThreshold]);
 
   /**
    * Check cache when frame changes (auto-fetch cached results)
@@ -198,10 +134,6 @@ export function usePlayerDetection({
     videoHeight: videoDimensions.height,
     currentFrame,
     framerate,
-    // Manual trigger function
-    triggerDetection,
-    // For UI to know if detection is available
-    canDetect: enabled && projectId && !isLoading && !isCached
   };
 }
 

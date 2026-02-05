@@ -64,12 +64,10 @@ export function OverlayModeView({
   onSelectedKeyframeChange,
   onHighlightEffectTypeChange,
 
-  // Player detection
+  // Player detection (auto-detected during framing export)
   playerDetectionEnabled,
   playerDetections,
   isDetectionLoading,
-  canDetect,
-  triggerDetection,
   onPlayerSelect,
   showPlayerBoxes,
   onTogglePlayerBoxes,

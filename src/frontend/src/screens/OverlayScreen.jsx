@@ -499,8 +499,6 @@ export function OverlayScreen({
     isDetectionLoading,
     isDetectionCached,
     detectionError,
-    triggerDetection,
-    canDetect,
     showPlayerBoxes,
     togglePlayerBoxes,
     enablePlayerBoxes,
@@ -658,8 +656,6 @@ export function OverlayScreen({
       playerDetectionEnabled={playerDetectionEnabled}
       playerDetections={playerDetections}
       isDetectionLoading={isDetectionLoading}
-      canDetect={canDetect}
-      triggerDetection={triggerDetection}
       onPlayerSelect={handlePlayerSelect}
       showPlayerBoxes={showPlayerBoxes}
       onTogglePlayerBoxes={togglePlayerBoxes}

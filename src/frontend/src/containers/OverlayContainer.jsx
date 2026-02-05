@@ -155,8 +155,6 @@ export function OverlayContainer({
     isLoading: isDetectionLoading,
     isCached: isDetectionCached,
     error: detectionError,
-    triggerDetection,
-    canDetect
   } = usePlayerDetection({
     projectId: selectedProjectId,
     currentTime,
@@ -369,8 +367,6 @@ export function OverlayContainer({
     isDetectionLoading,
     isDetectionCached,
     detectionError,
-    triggerDetection,
-    canDetect,
     showPlayerBoxes,
     togglePlayerBoxes,
     enablePlayerBoxes,
