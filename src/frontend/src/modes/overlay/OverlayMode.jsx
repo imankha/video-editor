@@ -1,7 +1,8 @@
 import React from 'react';
-import { Film, Circle } from 'lucide-react';
+import { Film, Circle, Crosshair } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBase';
 import RegionLayer from '../../components/timeline/RegionLayer';
+import DetectionMarkerLayer from './layers/DetectionMarkerLayer';
 
 /**
  * OverlayMode - Container component for Overlay mode.
@@ -65,9 +66,17 @@ export function OverlayMode({
   // Children (allows App.jsx to pass additional content)
   children,
 }) {
+  // Check if any region has detection data
+  const hasDetectionData = highlightRegions.some(
+    region => region.detections?.some(d => d.boxes?.length > 0)
+  );
+
   // Calculate total layer height for playhead line
-  // Video track (h-12=3rem) + gap (mt-1=0.25rem) + Highlight regions (h-20=5rem)
+  // Video track (h-12=3rem) + Detection layer (h-8=2rem if present) + gap + Highlight regions (h-20=5rem)
   const getTotalLayerHeight = () => {
+    if (hasDetectionData) {
+      return '10.75rem'; // Video (3rem) + Detection (2rem) + gaps + Highlight regions (5rem)
+    }
     return '8.5rem'; // Video (3rem) + gap (0.25rem) + Highlight regions (5rem) + padding
   };
 
@@ -94,6 +103,16 @@ export function OverlayMode({
       >
         <Film size={18} className={selectedLayer === 'playhead' ? 'text-blue-300' : 'text-blue-400'} />
       </div>
+
+      {/* Detection Marker Layer Label (only if detection data exists) */}
+      {hasDetectionData && (
+        <div
+          className="mt-1 h-8 flex items-center justify-center border-r border-gray-700/50 bg-gray-900"
+          title="Player detection points - click to jump"
+        >
+          <Crosshair size={16} className="text-green-500" />
+        </div>
+      )}
 
       {/* Highlight Region Layer Label */}
       <div
@@ -131,6 +150,20 @@ export function OverlayMode({
             trimRange={trimRange}
             isPlaying={isPlaying}
           >
+            {/* Detection Marker Layer (only if detection data exists) */}
+            {hasDetectionData && (
+              <div className="mt-1">
+                <DetectionMarkerLayer
+                  regions={highlightRegions}
+                  duration={duration}
+                  visualDuration={visualDuration || duration}
+                  onSeek={onSeek}
+                  sourceTimeToVisualTime={sourceTimeToVisualTime}
+                  edgePadding={EDGE_PADDING}
+                />
+              </div>
+            )}
+
             {/* Highlight Regions Layer - inside TimelineBase for proper alignment */}
             <div className="mt-1">
               <RegionLayer

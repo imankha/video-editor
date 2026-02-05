@@ -153,7 +153,7 @@ export default function useHighlightRegions(videoMetadata) {
       const startFrame = timeToFrame(startTime, framerate);
       const endFrame = timeToFrame(endTime, framerate);
 
-      const restoredKeyframes = (saved.keyframes || []).map((kf, idx) => {
+      let restoredKeyframes = (saved.keyframes || []).map((kf, idx) => {
         // If keyframe has time but no frame, convert time to frame
         let frame = kf.frame;
         if (frame === undefined || frame === null) {
@@ -178,12 +178,29 @@ export default function useHighlightRegions(videoMetadata) {
         };
       });
 
+      // If no keyframes exist, create permanent start/end keyframes with default highlight
+      // This ensures the region works like before (user can drag to add more keyframes)
+      if (restoredKeyframes.length === 0) {
+        const defaultHighlight = calculateDefaultHighlight(
+          saved.videoWidth || videoMetadata?.width,
+          saved.videoHeight || videoMetadata?.height
+        );
+        restoredKeyframes = [
+          { frame: startFrame, ...defaultHighlight },
+          { frame: endFrame, ...defaultHighlight }
+        ];
+      }
+
       return {
         id: saved.id || `region-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
         startTime,
         endTime,
         enabled: saved.enabled !== false, // Default to true if not specified
-        keyframes: restoredKeyframes
+        keyframes: restoredKeyframes,
+        // Preserve detection data from backend (populated during framing export)
+        detections: saved.detections || [],
+        videoWidth: saved.videoWidth || null,
+        videoHeight: saved.videoHeight || null,
       };
     });
 
@@ -670,7 +687,11 @@ export default function useHighlightRegions(videoMetadata) {
           id: region.id,
           start_time: region.startTime,
           end_time: region.endTime,
-          keyframes: regionKeyframes
+          keyframes: regionKeyframes,
+          // Preserve detection data from framing export (used for detection marker layer)
+          detections: region.detections || [],
+          videoWidth: region.videoWidth || null,
+          videoHeight: region.videoHeight || null,
         };
       });
   }, [regions, framerate, calculateDefaultHighlight, videoMetadata]);

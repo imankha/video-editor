@@ -261,31 +261,57 @@ export function OverlayScreen({
     }
   }, [effectiveOverlayMetadata?.duration, duration, initializeHighlightRegions]);
 
-  // Auto-create highlight regions from clip metadata (from framing export)
-  // This runs when transitioning from framing to overlay after a fresh export
-  // It takes priority over loading saved overlay data (which would be stale)
+  // Handle fresh export transition - load highlight regions from backend
+  // The backend now creates regions with player detection data during export
+  // We must fetch from backend to get that detection data (not create from clip metadata)
   useEffect(() => {
-    if (overlayClipMetadata && effectiveOverlayMetadata) {
-      // Reset any existing regions first - clip metadata means fresh framing export
-      resetHighlightRegions();
+    if (overlayClipMetadata && effectiveOverlayMetadata && projectId) {
+      console.log('[OverlayScreen] Fresh export detected, fetching overlay data from backend');
 
-      const count = initializeHighlightRegionsFromClips(
-        overlayClipMetadata,
-        effectiveOverlayMetadata.width,
-        effectiveOverlayMetadata.height
-      );
-
-      if (count > 0) {
-        console.log(`[OverlayScreen] Auto-created ${count} highlight regions from clip metadata`);
-      }
-
-      // Mark this project as loaded to prevent overlay data fetch from overwriting
-      overlayDataLoadedForProjectRef.current = projectId;
-
-      // Clear clip metadata after processing to prevent re-triggering
+      // Clear clip metadata to prevent re-triggering
       setOverlayClipMetadata(null);
+
+      // Fetch overlay data from backend (includes detection data from export)
+      (async () => {
+        try {
+          const response = await fetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`);
+          const data = await response.json();
+
+          if (data.has_data && data.highlights_data?.length > 0) {
+            // Reset existing regions first
+            resetHighlightRegions();
+
+            restoreHighlightRegions(data.highlights_data, effectiveOverlayMetadata.duration);
+            console.log('[OverlayScreen] Restored', data.highlights_data.length, 'highlight regions with detection data');
+
+            // Check if detection data was loaded
+            const hasDetections = data.highlights_data.some(r => r.detections?.some(d => d.boxes?.length > 0));
+            if (hasDetections) {
+              console.log('[OverlayScreen] Detection data loaded - green bar should appear');
+            }
+          } else {
+            // Fallback: create default region if backend has no data
+            console.log('[OverlayScreen] No saved highlight regions - creating default');
+            addHighlightRegion(0);
+          }
+
+          if (data.effect_type) {
+            setHighlightEffectType(data.effect_type);
+          }
+
+          // Skip auto-save for this restore
+          justRestoredDataRef.current = true;
+          overlayDataLoadedForProjectRef.current = projectId;
+          setOverlayChangedSinceExport(false);
+        } catch (err) {
+          console.error('[OverlayScreen] Failed to load overlay data after export:', err);
+          // On error, create default region
+          addHighlightRegion(0);
+          overlayDataLoadedForProjectRef.current = projectId;
+        }
+      })();
     }
-  }, [overlayClipMetadata, effectiveOverlayMetadata, initializeHighlightRegionsFromClips, setOverlayClipMetadata, resetHighlightRegions, projectId]);
+  }, [overlayClipMetadata, effectiveOverlayMetadata, projectId, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setOverlayChangedSinceExport]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
@@ -497,10 +523,7 @@ export function OverlayScreen({
     playerDetectionEnabled,
     playerDetections,
     isDetectionLoading,
-    isDetectionCached,
-    detectionError,
-    triggerDetection,
-    canDetect,
+    regionHasDetections,
     showPlayerBoxes,
     togglePlayerBoxes,
     enablePlayerBoxes,
@@ -658,8 +681,6 @@ export function OverlayScreen({
       playerDetectionEnabled={playerDetectionEnabled}
       playerDetections={playerDetections}
       isDetectionLoading={isDetectionLoading}
-      canDetect={canDetect}
-      triggerDetection={triggerDetection}
       onPlayerSelect={handlePlayerSelect}
       showPlayerBoxes={showPlayerBoxes}
       onTogglePlayerBoxes={togglePlayerBoxes}

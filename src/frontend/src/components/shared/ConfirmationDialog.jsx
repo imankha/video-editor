@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { Button } from './Button';
 
 /**
@@ -13,26 +13,28 @@ import { Button } from './Button';
  * - onClose: Called when clicking outside or pressing Escape
  */
 export function ConfirmationDialog({ isOpen, title, message, buttons = [], onClose }) {
-  if (!isOpen) return null;
-
-  const handleBackdropClick = (e) => {
+  const handleBackdropClick = useCallback((e) => {
     if (e.target === e.currentTarget) {
       onClose?.();
     }
-  };
+  }, [onClose]);
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      onClose?.();
-    }
-  };
+  // Effect for Escape key - runs regardless of isOpen to avoid hook order issues
+  useEffect(() => {
+    if (!isOpen) return;
 
-  React.useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-      return () => document.removeEventListener('keydown', handleKeyDown);
-    }
-  }, [isOpen]);
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose?.();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Early return AFTER hooks to maintain consistent hook order
+  if (!isOpen) return null;
 
   return (
     <div

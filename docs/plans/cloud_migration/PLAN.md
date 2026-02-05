@@ -192,6 +192,7 @@ Current DB is ~204KB - no optimization needed yet.
 | U7 | [Player detection keyframes](tasks/player-detection-keyframes.md) | `TODO` | Detect on 4 frames (first 2s), create keyframes, click rectangle to set player |
 | U8 | [Auto player detection](tasks/auto-player-detection.md) | `TODO` | After framing completes, auto-create overlay keyframes with player boxes |
 | U9 | [Logging cleanup](tasks/logging-cleanup.md) | `DONE` | Vite strips console.log in prod, noisy libs quieted, DEBUG env var support |
+| U10 | [E2E Test Reliability](tasks/e2e-test-reliability.md) | `TODO` | Fix flaky tests: video upload timeout, test user cleanup race condition |
 
 **Status Key**: `DONE` | `TODO` | `IN_PROGRESS` | `TESTING` | `BLOCKED` | `OPTIONAL` | `FUTURE`
 

@@ -927,47 +927,47 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
     has_final_video
   } = project;
 
-  // Total segments = clips + 1 for overlay stage
-  const totalSegments = Math.max(clip_count, 1) + 1;
-
   // Calculate how many clips are in each extraction state
   const clipsNotExtracted = clip_count - clips_extracted;
   const isAnyExtracting = clips_extracting > 0 || clips_pending_extraction > 0;
 
-  // Build segment data using per-clip extraction status when available
-  // Priority order (highest to lowest):
-  // 1. Final video exists = all green
-  // 2. Exported = green
-  // 3. Exporting (framing) = yellow
-  // 4. Editing (has edits) = blue
-  // 5. Extracting (GPU) = orange (animated) - from clip.is_extracting
-  // 6. Pending extraction = gray with orange border - from !clip.is_extracted && !clip.is_extracting
-  // 7. Not started = gray
-  const clipSegments = [];
-  for (let i = 0; i < clip_count; i++) {
-    // Get clip info from clips array if available
-    const clipInfo = clips[i];
-    const clipName = getClipDisplayName(clipInfo, `Clip ${i + 1}`);
-    const clipTags = clipInfo?.tags || [];
-    const clipIsExtracted = clipInfo?.is_extracted !== false; // Default to true for backwards compat
-    const clipIsExtracting = clipInfo?.is_extracting || false;
+  // Once framing is complete (has_working_video), show a single "Framing" segment
+  // instead of per-clip segments. Framing exports ALL clips into ONE working video,
+  // so per-clip progress is only meaningful BEFORE framing is done.
+  const framingComplete = has_working_video || has_final_video;
 
-    if (has_final_video || i < clips_exported) {
-      clipSegments.push({ status: 'done', label: clipName, tags: clipTags });
-    } else if (isExporting === 'framing') {
-      // When framing export is running, all non-exported clips show as exporting
-      clipSegments.push({ status: 'exporting', label: clipName, tags: clipTags });
-    } else if (i < clips_exported + clips_in_progress) {
-      clipSegments.push({ status: 'in_progress', label: clipName, tags: clipTags });
-    } else if (!clipIsExtracted) {
-      // Use per-clip extraction status
-      if (clipIsExtracting) {
-        clipSegments.push({ status: 'extracting', label: clipName, tags: clipTags });
+  // Build segment data
+  const clipSegments = [];
+
+  if (framingComplete) {
+    // Framing done - show single "Framing" segment as complete
+    clipSegments.push({ status: 'done', label: 'Framing', tags: [] });
+  } else if (isExporting === 'framing') {
+    // Currently exporting - show single "Framing" segment as exporting
+    clipSegments.push({ status: 'exporting', label: 'Framing', tags: [] });
+  } else {
+    // Framing not done - show per-clip progress for extraction/editing status
+    for (let i = 0; i < clip_count; i++) {
+      const clipInfo = clips[i];
+      const clipName = getClipDisplayName(clipInfo, `Clip ${i + 1}`);
+      const clipTags = clipInfo?.tags || [];
+      const clipIsExtracted = clipInfo?.is_extracted !== false;
+      const clipIsExtracting = clipInfo?.is_extracting || false;
+
+      if (!clipIsExtracted) {
+        // Clip still needs extraction
+        if (clipIsExtracting) {
+          clipSegments.push({ status: 'extracting', label: clipName, tags: clipTags });
+        } else {
+          clipSegments.push({ status: 'pending_extraction', label: clipName, tags: clipTags });
+        }
+      } else if (clips_in_progress > 0 && i < clips_in_progress) {
+        // Clip has edits in progress
+        clipSegments.push({ status: 'in_progress', label: clipName, tags: clipTags });
       } else {
-        clipSegments.push({ status: 'pending_extraction', label: clipName, tags: clipTags });
+        // Clip ready but not framed yet
+        clipSegments.push({ status: 'pending', label: clipName, tags: clipTags });
       }
-    } else {
-      clipSegments.push({ status: 'pending', label: clipName, tags: clipTags });
     }
   }
 
@@ -990,6 +990,9 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
   const overlaySegment = { status: overlayStatus, label: 'Overlay' };
 
   const allSegments = [...clipSegments, overlaySegment];
+
+  // Total segments for compact view calculation
+  const totalSegments = allSegments.length;
 
   // Calculate segment width - minimum 4px, flex to fill space
   const minWidth = 4;
@@ -1019,11 +1022,15 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
               <RefreshCw size={10} className="animate-spin" />
               Extracting ({clips_extracted}/{clip_count})
             </span>
+          ) : isExporting === 'framing' ? (
+            <span className="text-amber-400 flex items-center gap-1">
+              <RefreshCw size={10} className="animate-spin" />
+              Framing...
+            </span>
+          ) : framingComplete ? (
+            <span className="text-green-400">Framing</span>
           ) : (
-            <>
-              <span>Framing</span>
-              <span className="text-gray-600">({clips_exported}/{clip_count} exported)</span>
-            </>
+            <span>Framing</span>
           )}
         </span>
         <span>Overlay</span>

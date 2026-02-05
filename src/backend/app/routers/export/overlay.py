@@ -140,6 +140,23 @@ def _process_frames_to_ffmpeg(
             if active_region:
                 highlight = KeyframeInterpolator.interpolate_highlight(active_region['keyframes'], current_time)
                 if highlight is not None:
+                    # Check if keyframe coordinates need to be scaled from detection space to working video space
+                    # Detection may have run on source video (e.g., 2560x1440) but rendering is on working video (e.g., 1080x1920)
+                    detection_width = active_region.get('videoWidth')
+                    detection_height = active_region.get('videoHeight')
+
+                    if detection_width and detection_height and (detection_width != width or detection_height != height):
+                        # Scale coordinates from detection space to working video space
+                        scale_x = width / detection_width
+                        scale_y = height / detection_height
+                        highlight = {
+                            **highlight,
+                            'x': highlight['x'] * scale_x,
+                            'y': highlight['y'] * scale_y,
+                            'radiusX': highlight['radiusX'] * scale_x,
+                            'radiusY': highlight['radiusY'] * scale_y,
+                        }
+
                     frame = KeyframeInterpolator.render_highlight_on_frame(
                         frame,
                         highlight,
