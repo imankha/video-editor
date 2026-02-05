@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useMemo, useState } from 'react';
-import { OverlayMode, HighlightOverlay, usePlayerDetection, PlayerDetectionOverlay } from '../modes/overlay';
+import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from '../modes/overlay';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { API_BASE } from '../config';
 
@@ -150,18 +150,55 @@ export function OverlayContainer({
     setShowPlayerBoxes(true);
   }, []);
 
-  const {
-    detections: playerDetections,
-    isLoading: isDetectionLoading,
-    isCached: isDetectionCached,
-    error: detectionError,
-  } = usePlayerDetection({
-    projectId: selectedProjectId,
-    currentTime,
-    framerate: highlightRegionsFramerate || 30,
-    enabled: playerDetectionEnabled,
-    confidenceThreshold: 0.5
-  });
+  // Get detection data from the current highlight region (stored during framing export)
+  // This replaces the old usePlayerDetection hook that fetched from a per-frame cache
+  const regionDetectionData = useMemo(() => {
+    if (!playerDetectionEnabled || !highlightRegions?.length) {
+      return { detections: [], videoWidth: 0, videoHeight: 0, hasDetections: false };
+    }
+
+    // Find the current region based on currentTime
+    const currentRegion = highlightRegions.find(
+      region => region.enabled && currentTime >= region.start_time && currentTime <= region.end_time
+    );
+
+    if (!currentRegion?.detections?.length) {
+      return { detections: [], videoWidth: 0, videoHeight: 0, hasDetections: false };
+    }
+
+    // Find the closest detection timestamp to currentTime
+    let closestDetection = null;
+    let closestDistance = Infinity;
+
+    for (const detection of currentRegion.detections) {
+      const distance = Math.abs(detection.timestamp - currentTime);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestDetection = detection;
+      }
+    }
+
+    // Only show detections if within 0.5 seconds of a detection timestamp
+    if (!closestDetection || closestDistance > 0.5) {
+      return {
+        detections: [],
+        videoWidth: currentRegion.videoWidth || 0,
+        videoHeight: currentRegion.videoHeight || 0,
+        hasDetections: currentRegion.detections.some(d => d.boxes?.length > 0)
+      };
+    }
+
+    return {
+      detections: closestDetection.boxes || [],
+      videoWidth: currentRegion.videoWidth || 0,
+      videoHeight: currentRegion.videoHeight || 0,
+      hasDetections: true
+    };
+  }, [playerDetectionEnabled, highlightRegions, currentTime]);
+
+  const playerDetections = regionDetectionData.detections;
+  const isDetectionLoading = false; // No longer loading from API
+  const regionHasDetections = regionDetectionData.hasDetections;
 
   // DERIVED STATE: Current highlight state
   const currentHighlightState = useMemo(() => {
@@ -212,10 +249,11 @@ export function OverlayContainer({
       radiusX: playerData.radiusX,
       radiusY: playerData.radiusY,
       opacity: defaultOpacity,
-      color: defaultColor
+      color: defaultColor,
+      fromDetection: true,  // Mark keyframe as created from player detection
     };
 
-    console.log('[OverlayContainer] Player selected, adding keyframe:', {
+    console.log('[OverlayContainer] Player detected, creating keyframe:', {
       time: currentTime,
       position: { x: playerData.x, y: playerData.y },
       region: { start: region.startTime, end: region.endTime }
@@ -361,12 +399,11 @@ export function OverlayContainer({
     selectedHighlightKeyframeTime,
     setSelectedHighlightKeyframeTime,
 
-    // Player detection
+    // Player detection (from highlight region data, not per-frame API)
     playerDetectionEnabled,
     playerDetections,
     isDetectionLoading,
-    isDetectionCached,
-    detectionError,
+    regionHasDetections,  // Whether current region has any detection data
     showPlayerBoxes,
     togglePlayerBoxes,
     enablePlayerBoxes,

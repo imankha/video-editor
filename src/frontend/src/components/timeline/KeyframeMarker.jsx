@@ -14,6 +14,7 @@ export function KeyframeMarker({
   isPermanent = false,
   isStartKeyframe = false,
   isEndKeyframe = false,
+  fromDetection = false, // Whether keyframe was created from player detection
   onClick,
   onCopy,
   onDelete,
@@ -86,10 +87,17 @@ export function KeyframeMarker({
 
       {/* Diamond keyframe indicator */}
       <div
-        className={`w-3 h-3 transform rotate-45 transition-all ${markerColorClass} ${onClick ? 'cursor-pointer' : 'pointer-events-none'}`}
+        className={`w-3 h-3 transform rotate-45 transition-all ${markerColorClass} ${onClick ? 'cursor-pointer' : 'pointer-events-none'} relative`}
         onClick={onClick}
         title={tooltip}
-      />
+      >
+        {/* Green dot indicator for keyframes created from player detection */}
+        {fromDetection && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-400 transform -rotate-45" />
+          </div>
+        )}
+      </div>
 
       {/* Delete button (shown when selected) - z-50 to appear above all UI including playhead */}
       {showDeleteButton && onDelete && (
