@@ -402,6 +402,54 @@ function LoginForm() {
 
 ---
 
+## Multi-Device Sync & Session Invalidation
+
+**IMPORTANT**: When implementing auth, add single-session enforcement to handle R2 database sync.
+
+### Current Behavior (Single-User Mode)
+
+The backend only downloads the database from R2 on first access (server startup). It does NOT check R2 for newer versions on every request because that HEAD request was causing 20+ second delays when R2 connection was cold.
+
+See: T05 (Optimize Load Times) for details.
+
+### Required Behavior (Multi-Device Mode)
+
+When a user logs in on a new device, we need to:
+
+1. **Invalidate all other sessions** for that user
+2. **Force other devices to re-authenticate**
+3. **On re-auth, the server context resets** → downloads fresh DB from R2
+
+```python
+@router.get("/verify")
+async def verify_token(token: str, response: Response):
+    # ... validate token ...
+
+    # IMPORTANT: Invalidate all existing sessions for this user
+    # This forces other devices to re-authenticate
+    await invalidate_all_sessions(user["id"])
+
+    # Create new session for this device
+    session_id = str(uuid.uuid4())
+    await create_session(session_id, user["id"], session_expires)
+    # ...
+```
+
+### Why This Matters
+
+Without session invalidation:
+- User makes edits on Device A → syncs to R2
+- User opens Device B → sees stale local cache (never checks R2)
+- User makes conflicting edits on Device B → overwrites Device A's changes
+
+With session invalidation:
+- User makes edits on Device A → syncs to R2
+- User logs in on Device B → Device A's session invalidated
+- Device A's next request → 401 → must re-auth → fresh R2 download
+- No conflicting edits possible (only one active session)
+
+---
+
 ## Handoff Notes
 
 Start with anonymous users. Add authentication when:
@@ -410,3 +458,5 @@ Start with anonymous users. Add authentication when:
 - You're adding payments (link to Stripe customer)
 
 The per-user SQLite architecture already handles data isolation - auth is only needed for identity, not data separation.
+
+**When adding auth**: Remember to implement single-session enforcement (see "Multi-Device Sync" section above) to ensure R2 database sync works correctly across devices.
