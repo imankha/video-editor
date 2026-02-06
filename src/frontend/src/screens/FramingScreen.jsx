@@ -358,6 +358,9 @@ export function FramingScreen({
     handleKeyframeDelete: framingHandleKeyframeDelete,
     handleCopyCrop: framingHandleCopyCrop,
     handlePasteCrop: framingHandlePasteCrop,
+    handleAddSplit: framingHandleAddSplit,
+    handleRemoveSplit: framingHandleRemoveSplit,
+    handleSegmentSpeedChange: framingHandleSegmentSpeedChange,
     saveCurrentClipState: framingSaveCurrentClipState,
   } = framing;
 
@@ -1067,9 +1070,9 @@ export function FramingScreen({
       visualDuration={visualDuration}
       trimRange={trimRange}
       trimHistory={trimHistory}
-      onAddSegmentBoundary={(time) => { clipHasUserEditsRef.current = true; addSegmentBoundary(time); }}
-      onRemoveSegmentBoundary={(time) => { clipHasUserEditsRef.current = true; removeSegmentBoundary(time); }}
-      onSegmentSpeedChange={(idx, speed) => { clipHasUserEditsRef.current = true; setSegmentSpeed(idx, speed); }}
+      onAddSegmentBoundary={framingHandleAddSplit}
+      onRemoveSegmentBoundary={framingHandleRemoveSplit}
+      onSegmentSpeedChange={framingHandleSegmentSpeedChange}
       onSegmentTrim={framingHandleTrimSegment}
       onDetrimStart={framingHandleDetrimStart}
       onDetrimEnd={framingHandleDetrimEnd}
