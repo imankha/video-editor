@@ -43,6 +43,7 @@ cd src/backend && pytest tests/ -k "test_name" -v        # By name
 | **Single Source of Truth** | All persistence via SQLite → R2, never localStorage |
 | **No Band-Aid Fixes** | Understand root cause, don't mask symptoms |
 | **Heavy Testing** | Unit tests co-located, E2E with Playwright |
+| **Type Safety** | No magic strings (see frontend/backend type-safety skills) |
 
 ## Database
 - Location: `user_data/{user_id}/database.sqlite`

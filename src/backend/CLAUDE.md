@@ -31,8 +31,10 @@ This catches import errors, undefined names, and syntax errors immediately.
 | [api-guidelines](.claude/skills/api-guidelines/SKILL.md) | CRITICAL | R2 storage, parameterized queries |
 | [persistence-model](.claude/skills/persistence-model/SKILL.md) | CRITICAL | SQLite + R2 sync, version tracking |
 | [bug-reproduction](.claude/skills/bug-reproduction/SKILL.md) | CRITICAL | Test-first bug fixing: write failing test, fix, verify |
+| [type-safety](.claude/skills/type-safety/SKILL.md) | HIGH | Use `str, Enum` classes, no magic strings |
 | [database-schema](.claude/skills/database-schema/SKILL.md) | HIGH | Version identity, latest queries, FK cascades |
 | [gesture-based-sync](.claude/skills/gesture-based-sync/SKILL.md) | HIGH | Action-based API instead of full blobs |
+| [lint](.claude/skills/lint/SKILL.md) | MEDIUM | Import check + mypy for Python |
 
 ---
 

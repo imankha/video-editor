@@ -29,6 +29,21 @@
 
 ## Epics
 
+### Refactoring to Standards (SCANS DONE)
+
+[tasks/refactoring-standards/EPIC.md](tasks/refactoring-standards/EPIC.md) - Scan codebase, rate violations, refactor by priority
+
+**Scans Complete** - Found violations, refactor tasks prioritized:
+
+| ID | Task | Priority | Status |
+|----|------|----------|--------|
+| T301 | Refactor editorMode to EDITOR_MODES | 25 | TODO |
+| T311 | Remove workingVideo from overlayStore | 25 | TODO |
+| T312 | Remove clipMetadata from overlayStore | 25 | TODO |
+| T331 | Refactor ExportButton to container | 25 | TODO |
+| T302 | Refactor statusFilter to constants | 16 | TODO |
+| T303 | Refactor keyframe origin to constants | 16 | TODO |
+
 ### Deployment (TODO)
 
 [tasks/deployment/EPIC.md](tasks/deployment/EPIC.md) - Deploy to production
