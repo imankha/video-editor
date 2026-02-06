@@ -238,10 +238,11 @@ export function FramingContainer({
       // Save to backend (use frame-based keyframes for storage - FFmpeg conversion happens at export)
       if (saveFramingEdits) {
         // Store raw frame-based keyframes - time conversion happens only at FFmpeg export
-        const exportSegments = getSegmentExportData();
+        // IMPORTANT: Save internal format (segmentState) NOT export format (getSegmentExportData)
+        // Export format skips trimmed segments which breaks index mapping on restore
         const result = await saveFramingEdits(currentClip.workingClipId, {
           cropKeyframes: keyframes,  // Frame-based - NOT time-based
-          segments: exportSegments,
+          segments: segmentState,    // Internal format preserves segment indices
           trimRange: trimRange
         });
 
@@ -256,7 +257,7 @@ export function FramingContainer({
     } catch (e) {
       console.error('[FramingContainer] Failed to save framing state:', e);
     }
-  }, [selectedClipId, selectedProjectId, clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange, updateClipData, saveFramingEdits, getKeyframesForExport, getSegmentExportData]);
+  }, [selectedClipId, selectedProjectId, clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange, updateClipData, saveFramingEdits, getKeyframesForExport]);
 
   /**
    * Handle crop changes during drag/resize (live preview)

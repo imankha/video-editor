@@ -91,6 +91,43 @@ describe('useSegments', () => {
         expect(result.current.segmentSpeeds).toEqual({ 0: 0.5 });
         expect(result.current.boundaries).toContain(5.0);
       });
+
+      it('preserves segment indices with multiple segments and speed on later segment', () => {
+        // This tests the case where segment 2 has speed 0.5
+        // Internal format preserves the index correctly (unlike export format)
+        const result = setupHook();
+
+        act(() => {
+          result.current.restoreState({
+            boundaries: [0, 3.0, 6.0, VIDEO_DURATION],
+            segmentSpeeds: { 2: 0.5 },  // Speed on segment 2 (6-10)
+            trimRange: { start: 3.0, end: VIDEO_DURATION }  // Segment 0 is trimmed
+          }, VIDEO_DURATION);
+        });
+
+        // Segment 2 should have speed 0.5
+        expect(result.current.segmentSpeeds[2]).toBe(0.5);
+        // Segments 0 and 1 should have no explicit speed (default 1)
+        expect(result.current.segmentSpeeds[0]).toBeUndefined();
+        expect(result.current.segmentSpeeds[1]).toBeUndefined();
+      });
+
+      it('handles string keys from backend JSON (segment indices as strings)', () => {
+        // Backend saves segment indices as string keys in JSON
+        const result = setupHook();
+
+        act(() => {
+          result.current.restoreState({
+            segmentSpeeds: { "0": 0.5, "1": 2.0 }  // String keys from JSON
+          }, VIDEO_DURATION);
+        });
+
+        // Should work with both string and number access
+        expect(result.current.segmentSpeeds["0"]).toBe(0.5);
+        expect(result.current.segmentSpeeds["1"]).toBe(2.0);
+        expect(result.current.segmentSpeeds[0]).toBe(0.5);
+        expect(result.current.segmentSpeeds[1]).toBe(2.0);
+      });
     });
 
     describe('export format (from auto-save via getExportData)', () => {
