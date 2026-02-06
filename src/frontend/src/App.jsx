@@ -134,14 +134,13 @@ function App() {
     console.log(`[App] Switching from ${editorMode} to ${newMode} mode`);
 
     // Check if leaving framing with uncommitted changes
-    // Show confirmation when: going to overlay with existing overlay video, OR going to project-manager
-    if (editorMode === 'framing' && framingChangedSinceExport) {
-      const needsConfirmation = (newMode === 'overlay' && hasOverlayVideo) || newMode === 'project-manager';
-      if (needsConfirmation) {
-        console.log('[App] Uncommitted framing changes detected - showing confirmation dialog');
-        openModeSwitchDialog(newMode, 'framing');
-        return;
-      }
+    // Only show confirmation when there's a working video that would be invalidated
+    // With gesture-based sync, framing data is auto-saved, so we only need to warn about
+    // re-exporting if there's an existing working video
+    if (editorMode === 'framing' && framingChangedSinceExport && hasOverlayVideo) {
+      console.log('[App] Framing changes would invalidate working video - showing confirmation dialog');
+      openModeSwitchDialog(newMode, 'framing');
+      return;
     }
 
     // Check if leaving overlay with uncommitted changes (and project has final video)
