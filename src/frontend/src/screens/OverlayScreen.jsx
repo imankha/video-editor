@@ -366,13 +366,16 @@ export function OverlayScreen({
   // Each user gesture dispatches an atomic action to the backend.
   // Local state updates immediately (optimistic), backend sync is fire-and-forget.
 
-  // Track if we should sync actions (after data is loaded)
-  const shouldSyncActions = overlayDataLoadedForProjectRef.current === projectId && projectId && !justRestoredDataRef.current;
+  // Helper to check if we should sync actions (computed fresh each call, not captured in closure)
+  // This avoids stale closure issues since refs don't trigger re-renders
+  const canSyncActions = useCallback(() => {
+    return overlayDataLoadedForProjectRef.current === projectId && projectId && !justRestoredDataRef.current;
+  }, [projectId]);
 
   // Wrapped handler: Add highlight region
   const wrappedAddHighlightRegion = useCallback((clickTime) => {
     const regionId = addHighlightRegion(clickTime);
-    if (regionId && shouldSyncActions) {
+    if (regionId && canSyncActions()) {
       // Get the created region to extract times
       const region = highlightRegions.find(r => r.id === regionId);
       if (region) {
@@ -382,54 +385,54 @@ export function OverlayScreen({
     }
     setOverlayChangedSinceExport(true);
     return regionId;
-  }, [addHighlightRegion, projectId, shouldSyncActions, highlightRegions, setOverlayChangedSinceExport]);
+  }, [addHighlightRegion, projectId, canSyncActions, highlightRegions, setOverlayChangedSinceExport]);
 
   // Wrapped handler: Delete highlight region
   const wrappedDeleteHighlightRegion = useCallback((regionIndex) => {
     const region = highlightRegions[regionIndex];
     deleteHighlightRegion(regionIndex);
-    if (region && shouldSyncActions) {
+    if (region && canSyncActions()) {
       overlayActions.deleteRegion(projectId, region.id)
         .catch(err => console.error('[OverlayScreen] Failed to sync deleteRegion:', err));
     }
     setOverlayChangedSinceExport(true);
-  }, [deleteHighlightRegion, projectId, shouldSyncActions, highlightRegions, setOverlayChangedSinceExport]);
+  }, [deleteHighlightRegion, projectId, canSyncActions, highlightRegions, setOverlayChangedSinceExport]);
 
   // Wrapped handler: Move region start
   const wrappedMoveHighlightRegionStart = useCallback((regionId, newStartTime) => {
     moveHighlightRegionStart(regionId, newStartTime);
-    if (shouldSyncActions) {
+    if (canSyncActions()) {
       overlayActions.updateRegion(projectId, regionId, newStartTime, null)
         .catch(err => console.error('[OverlayScreen] Failed to sync updateRegion start:', err));
     }
     setOverlayChangedSinceExport(true);
-  }, [moveHighlightRegionStart, projectId, shouldSyncActions, setOverlayChangedSinceExport]);
+  }, [moveHighlightRegionStart, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   // Wrapped handler: Move region end
   const wrappedMoveHighlightRegionEnd = useCallback((regionId, newEndTime) => {
     moveHighlightRegionEnd(regionId, newEndTime);
-    if (shouldSyncActions) {
+    if (canSyncActions()) {
       overlayActions.updateRegion(projectId, regionId, null, newEndTime)
         .catch(err => console.error('[OverlayScreen] Failed to sync updateRegion end:', err));
     }
     setOverlayChangedSinceExport(true);
-  }, [moveHighlightRegionEnd, projectId, shouldSyncActions, setOverlayChangedSinceExport]);
+  }, [moveHighlightRegionEnd, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   // Wrapped handler: Toggle region enabled
   const wrappedToggleHighlightRegion = useCallback((regionIndex, enabled) => {
     const region = highlightRegions[regionIndex];
     toggleHighlightRegion(regionIndex, enabled);
-    if (region && shouldSyncActions) {
+    if (region && canSyncActions()) {
       overlayActions.toggleRegion(projectId, region.id, enabled)
         .catch(err => console.error('[OverlayScreen] Failed to sync toggleRegion:', err));
     }
     setOverlayChangedSinceExport(true);
-  }, [toggleHighlightRegion, projectId, shouldSyncActions, highlightRegions, setOverlayChangedSinceExport]);
+  }, [toggleHighlightRegion, projectId, canSyncActions, highlightRegions, setOverlayChangedSinceExport]);
 
   // Wrapped handler: Add/update keyframe
   const wrappedAddHighlightRegionKeyframe = useCallback((time, data) => {
     const success = addHighlightRegionKeyframe(time, data);
-    if (success && shouldSyncActions) {
+    if (success && canSyncActions()) {
       const region = getRegionAtTime(time);
       if (region) {
         overlayActions.addKeyframe(projectId, region.id, { time, ...data })
@@ -438,28 +441,28 @@ export function OverlayScreen({
     }
     setOverlayChangedSinceExport(true);
     return success;
-  }, [addHighlightRegionKeyframe, projectId, shouldSyncActions, getRegionAtTime, setOverlayChangedSinceExport]);
+  }, [addHighlightRegionKeyframe, projectId, canSyncActions, getRegionAtTime, setOverlayChangedSinceExport]);
 
   // Wrapped handler: Remove keyframe
   const wrappedRemoveHighlightRegionKeyframe = useCallback((time) => {
     const region = getRegionAtTime(time);
     removeHighlightRegionKeyframe(time);
-    if (region && shouldSyncActions) {
+    if (region && canSyncActions()) {
       overlayActions.deleteKeyframe(projectId, region.id, time)
         .catch(err => console.error('[OverlayScreen] Failed to sync deleteKeyframe:', err));
     }
     setOverlayChangedSinceExport(true);
-  }, [removeHighlightRegionKeyframe, projectId, shouldSyncActions, getRegionAtTime, setOverlayChangedSinceExport]);
+  }, [removeHighlightRegionKeyframe, projectId, canSyncActions, getRegionAtTime, setOverlayChangedSinceExport]);
 
   // Wrapped handler: Set effect type
   const wrappedSetHighlightEffectType = useCallback((effectType) => {
     setHighlightEffectType(effectType);
-    if (shouldSyncActions) {
+    if (canSyncActions()) {
       overlayActions.setEffectType(projectId, effectType)
         .catch(err => console.error('[OverlayScreen] Failed to sync setEffectType:', err));
     }
     setOverlayChangedSinceExport(true);
-  }, [setHighlightEffectType, projectId, shouldSyncActions, setOverlayChangedSinceExport]);
+  }, [setHighlightEffectType, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   // Clear the "just restored" flag after first render with loaded data
   useEffect(() => {
