@@ -582,6 +582,8 @@ def ensure_database():
             "ALTER TABLE raw_clips ADD COLUMN boundaries_updated_at TIMESTAMP",
             # Track which version of raw clip boundaries was used when framing was done
             "ALTER TABLE working_clips ADD COLUMN raw_clip_version INTEGER",
+            # Version tracking for gesture-based overlay sync (Task 19)
+            "ALTER TABLE working_videos ADD COLUMN overlay_version INTEGER DEFAULT 0",
         ]
 
         for migration in migrations:

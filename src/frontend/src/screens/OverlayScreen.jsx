@@ -7,6 +7,7 @@ import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
+import { frameToTime } from '../utils/videoUtils';
 import { API_BASE } from '../config';
 import { useProject } from '../contexts/ProjectContext';
 import { useNavigationStore } from '../stores/navigationStore';
@@ -14,6 +15,7 @@ import { useOverlayStore } from '../stores/overlayStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useFramingStore } from '../stores/framingStore';
 import { useExportStore } from '../stores/exportStore';
+import * as overlayActions from '../api/overlayActions';
 
 /**
  * OverlayScreen - Self-contained screen for Overlay mode
@@ -358,48 +360,117 @@ export function OverlayScreen({
     }
   }, [projectId, effectiveOverlayMetadata?.duration, restoreHighlightRegions, setHighlightEffectType, overlayClipMetadata, addHighlightRegion]);
 
-  // Save overlay data to backend (debounced)
-  const saveOverlayData = useCallback(async () => {
-    if (!projectId) return;
+  // =========================================
+  // ACTION-BASED SYNC (replaces full-blob saves)
+  // =========================================
+  // Each user gesture dispatches an atomic action to the backend.
+  // Local state updates immediately (optimistic), backend sync is fire-and-forget.
 
-    // Cancel any pending save
-    if (pendingOverlaySaveRef.current) {
-      clearTimeout(pendingOverlaySaveRef.current);
-    }
+  // Track if we should sync actions (after data is loaded)
+  const shouldSyncActions = overlayDataLoadedForProjectRef.current === projectId && projectId && !justRestoredDataRef.current;
 
-    // Debounce: wait 2 seconds after last change
-    pendingOverlaySaveRef.current = setTimeout(async () => {
-      try {
-        const formData = new FormData();
-        formData.append('highlights_data', JSON.stringify(getRegionsForExport() || []));
-        formData.append('text_overlays', JSON.stringify([]));
-        formData.append('effect_type', highlightEffectType || 'original');
-
-        await fetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`, {
-          method: 'PUT',
-          body: formData
-        });
-
-        console.log('[OverlayScreen] Overlay data saved');
-      } catch (err) {
-        console.error('[OverlayScreen] Failed to save overlay data:', err);
+  // Wrapped handler: Add highlight region
+  const wrappedAddHighlightRegion = useCallback((clickTime) => {
+    const regionId = addHighlightRegion(clickTime);
+    if (regionId && shouldSyncActions) {
+      // Get the created region to extract times
+      const region = highlightRegions.find(r => r.id === regionId);
+      if (region) {
+        overlayActions.createRegion(projectId, region.startTime, region.endTime, regionId)
+          .catch(err => console.error('[OverlayScreen] Failed to sync createRegion:', err));
       }
-    }, 2000);
-  }, [projectId, getRegionsForExport, highlightEffectType]);
+    }
+    setOverlayChangedSinceExport(true);
+    return regionId;
+  }, [addHighlightRegion, projectId, shouldSyncActions, highlightRegions, setOverlayChangedSinceExport]);
 
-  // Auto-save on changes (only after data loaded for this project)
+  // Wrapped handler: Delete highlight region
+  const wrappedDeleteHighlightRegion = useCallback((regionIndex) => {
+    const region = highlightRegions[regionIndex];
+    deleteHighlightRegion(regionIndex);
+    if (region && shouldSyncActions) {
+      overlayActions.deleteRegion(projectId, region.id)
+        .catch(err => console.error('[OverlayScreen] Failed to sync deleteRegion:', err));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [deleteHighlightRegion, projectId, shouldSyncActions, highlightRegions, setOverlayChangedSinceExport]);
+
+  // Wrapped handler: Move region start
+  const wrappedMoveHighlightRegionStart = useCallback((regionId, newStartTime) => {
+    moveHighlightRegionStart(regionId, newStartTime);
+    if (shouldSyncActions) {
+      overlayActions.updateRegion(projectId, regionId, newStartTime, null)
+        .catch(err => console.error('[OverlayScreen] Failed to sync updateRegion start:', err));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [moveHighlightRegionStart, projectId, shouldSyncActions, setOverlayChangedSinceExport]);
+
+  // Wrapped handler: Move region end
+  const wrappedMoveHighlightRegionEnd = useCallback((regionId, newEndTime) => {
+    moveHighlightRegionEnd(regionId, newEndTime);
+    if (shouldSyncActions) {
+      overlayActions.updateRegion(projectId, regionId, null, newEndTime)
+        .catch(err => console.error('[OverlayScreen] Failed to sync updateRegion end:', err));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [moveHighlightRegionEnd, projectId, shouldSyncActions, setOverlayChangedSinceExport]);
+
+  // Wrapped handler: Toggle region enabled
+  const wrappedToggleHighlightRegion = useCallback((regionIndex, enabled) => {
+    const region = highlightRegions[regionIndex];
+    toggleHighlightRegion(regionIndex, enabled);
+    if (region && shouldSyncActions) {
+      overlayActions.toggleRegion(projectId, region.id, enabled)
+        .catch(err => console.error('[OverlayScreen] Failed to sync toggleRegion:', err));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [toggleHighlightRegion, projectId, shouldSyncActions, highlightRegions, setOverlayChangedSinceExport]);
+
+  // Wrapped handler: Add/update keyframe
+  const wrappedAddHighlightRegionKeyframe = useCallback((time, data) => {
+    const success = addHighlightRegionKeyframe(time, data);
+    if (success && shouldSyncActions) {
+      const region = getRegionAtTime(time);
+      if (region) {
+        overlayActions.addKeyframe(projectId, region.id, { time, ...data })
+          .catch(err => console.error('[OverlayScreen] Failed to sync addKeyframe:', err));
+      }
+    }
+    setOverlayChangedSinceExport(true);
+    return success;
+  }, [addHighlightRegionKeyframe, projectId, shouldSyncActions, getRegionAtTime, setOverlayChangedSinceExport]);
+
+  // Wrapped handler: Remove keyframe
+  const wrappedRemoveHighlightRegionKeyframe = useCallback((time) => {
+    const region = getRegionAtTime(time);
+    removeHighlightRegionKeyframe(time);
+    if (region && shouldSyncActions) {
+      overlayActions.deleteKeyframe(projectId, region.id, time)
+        .catch(err => console.error('[OverlayScreen] Failed to sync deleteKeyframe:', err));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [removeHighlightRegionKeyframe, projectId, shouldSyncActions, getRegionAtTime, setOverlayChangedSinceExport]);
+
+  // Wrapped handler: Set effect type
+  const wrappedSetHighlightEffectType = useCallback((effectType) => {
+    setHighlightEffectType(effectType);
+    if (shouldSyncActions) {
+      overlayActions.setEffectType(projectId, effectType)
+        .catch(err => console.error('[OverlayScreen] Failed to sync setEffectType:', err));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [setHighlightEffectType, projectId, shouldSyncActions, setOverlayChangedSinceExport]);
+
+  // Clear the "just restored" flag after first render with loaded data
   useEffect(() => {
-    if (overlayDataLoadedForProjectRef.current === projectId && projectId) {
-      // Skip auto-save if we just restored from backend (no user changes yet)
-      if (justRestoredDataRef.current) {
+    if (justRestoredDataRef.current && overlayDataLoadedForProjectRef.current === projectId) {
+      // Allow a small delay then clear the flag
+      const timer = setTimeout(() => {
         justRestoredDataRef.current = false;
-        return;
-      }
-      saveOverlayData();
-      // Mark overlay as changed (for navigation confirmation)
-      setOverlayChangedSinceExport(true);
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [highlightRegions, highlightEffectType, projectId, saveOverlayData, setOverlayChangedSinceExport]);
+  }, [projectId]);
 
   // Dismiss "export complete" toast when user makes changes
   // This lets users know they need to re-export after modifying highlights
@@ -409,24 +480,20 @@ export function OverlayScreen({
     }
   }, [highlightRegions, highlightEffectType, dismissExportCompleteToast, projectId]);
 
-  // Save before unload
+  // Save before unload (safety net - full blob save in case actions failed)
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (pendingOverlaySaveRef.current) {
-        clearTimeout(pendingOverlaySaveRef.current);
-        pendingOverlaySaveRef.current = null;
-
-        if (projectId) {
-          const formData = new FormData();
-          formData.append('highlights_data', JSON.stringify(getRegionsForExport() || []));
-          formData.append('text_overlays', JSON.stringify([]));
-          formData.append('effect_type', highlightEffectType || 'original');
-          fetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`, {
-            method: 'PUT',
-            body: formData,
-            keepalive: true
-          }).catch(() => {});
-        }
+      // Only save if we have changes and data is loaded
+      if (projectId && overlayDataLoadedForProjectRef.current === projectId) {
+        const formData = new FormData();
+        formData.append('highlights_data', JSON.stringify(getRegionsForExport() || []));
+        formData.append('text_overlays', JSON.stringify([]));
+        formData.append('effect_type', highlightEffectType || 'original');
+        fetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`, {
+          method: 'PUT',
+          body: formData,
+          keepalive: true
+        }).catch(() => {});
       }
     };
 
@@ -493,7 +560,7 @@ export function OverlayScreen({
     selectedHighlightKeyframeTime,
     setSelectedHighlightKeyframeTime,
     highlightEffectType,
-    setHighlightEffectType,
+    setHighlightEffectType: wrappedSetHighlightEffectType,  // Use wrapped version
     pendingOverlaySaveRef,
     overlayDataLoadedForProjectRef,
     highlightRegions,
@@ -502,13 +569,13 @@ export function OverlayScreen({
     highlightRegionsFramerate,
     initializeHighlightRegions,
     resetHighlightRegions,
-    addHighlightRegion,
-    deleteHighlightRegion,
-    moveHighlightRegionStart,
-    moveHighlightRegionEnd,
-    toggleHighlightRegion,
-    addHighlightRegionKeyframe,
-    removeHighlightRegionKeyframe,
+    addHighlightRegion: wrappedAddHighlightRegion,  // Use wrapped version
+    deleteHighlightRegion: wrappedDeleteHighlightRegion,  // Use wrapped version
+    moveHighlightRegionStart: wrappedMoveHighlightRegionStart,  // Use wrapped version
+    moveHighlightRegionEnd: wrappedMoveHighlightRegionEnd,  // Use wrapped version
+    toggleHighlightRegion: wrappedToggleHighlightRegion,  // Use wrapped version
+    addHighlightRegionKeyframe: wrappedAddHighlightRegionKeyframe,  // Use wrapped version
+    removeHighlightRegionKeyframe: wrappedRemoveHighlightRegionKeyframe,  // Use wrapped version
     getRegionAtTime,
     isTimeInEnabledRegion,
     getRegionHighlightAtTime,
@@ -595,21 +662,16 @@ export function OverlayScreen({
   // =========================================
 
   const handleSwitchToFraming = useCallback(() => {
-    // Flush any pending saves
-    if (pendingOverlaySaveRef.current) {
-      clearTimeout(pendingOverlaySaveRef.current);
-      pendingOverlaySaveRef.current = null;
-      // Immediate save
-      if (projectId) {
-        const formData = new FormData();
-        formData.append('highlights_data', JSON.stringify(getRegionsForExport() || []));
-        formData.append('text_overlays', JSON.stringify([]));
-        formData.append('effect_type', highlightEffectType || 'original');
-        fetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`, {
-          method: 'PUT',
-          body: formData
-        }).catch(e => console.error('[OverlayScreen] Failed to flush overlay save:', e));
-      }
+    // Safety save before navigating (in case any actions failed)
+    if (projectId && overlayDataLoadedForProjectRef.current === projectId) {
+      const formData = new FormData();
+      formData.append('highlights_data', JSON.stringify(getRegionsForExport() || []));
+      formData.append('text_overlays', JSON.stringify([]));
+      formData.append('effect_type', highlightEffectType || 'original');
+      fetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`, {
+        method: 'PUT',
+        body: formData
+      }).catch(e => console.error('[OverlayScreen] Failed to save overlay data:', e));
     }
     navigate('framing');
   }, [navigate, projectId, getRegionsForExport, highlightEffectType]);
@@ -666,17 +728,17 @@ export function OverlayScreen({
       highlightEffectType={highlightEffectType}
       isTimeInEnabledRegion={isTimeInEnabledRegion}
       selectedHighlightKeyframeIndex={selectedHighlightKeyframeIndex}
-      // Highlight handlers
+      // Highlight handlers (wrapped for action-based sync)
       onHighlightChange={handleHighlightChange}
       onHighlightComplete={handleHighlightComplete}
-      onAddHighlightRegion={addHighlightRegion}
-      onDeleteHighlightRegion={deleteHighlightRegion}
-      onMoveHighlightRegionStart={moveHighlightRegionStart}
-      onMoveHighlightRegionEnd={moveHighlightRegionEnd}
-      onRemoveHighlightKeyframe={removeHighlightRegionKeyframe}
-      onToggleHighlightRegion={toggleHighlightRegion}
+      onAddHighlightRegion={wrappedAddHighlightRegion}
+      onDeleteHighlightRegion={wrappedDeleteHighlightRegion}
+      onMoveHighlightRegionStart={wrappedMoveHighlightRegionStart}
+      onMoveHighlightRegionEnd={wrappedMoveHighlightRegionEnd}
+      onRemoveHighlightKeyframe={wrappedRemoveHighlightRegionKeyframe}
+      onToggleHighlightRegion={wrappedToggleHighlightRegion}
       onSelectedKeyframeChange={setSelectedHighlightKeyframeTime}
-      onHighlightEffectTypeChange={setHighlightEffectType}
+      onHighlightEffectTypeChange={wrappedSetHighlightEffectType}
       // Player detection
       playerDetectionEnabled={playerDetectionEnabled}
       playerDetections={playerDetections}
