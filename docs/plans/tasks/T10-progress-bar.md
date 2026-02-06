@@ -106,12 +106,27 @@ Display as:
 
 ## Implementation Order
 
-1. [ ] Add progress event logging (backend)
-2. [ ] Collect timing data from real exports (analysis)
-3. [ ] Fix progress reset bug (frontend)
-4. [ ] Improve time estimates based on data (backend)
-5. [ ] Add ETA display to UI (frontend)
+1. [x] Add progress event logging (backend) - DONE
+2. [ ] Collect timing data from real exports (analysis) - Data now being collected via logs
+3. [x] Fix progress reset bug (frontend) - DONE (was already fixed in earlier changes)
+4. [ ] Improve time estimates based on data (backend) - Using elapsed/progress ratio
+5. [x] Add ETA display to UI (frontend) - DONE
 6. [ ] (Optional) Real Modal progress streaming
+
+## Completed Changes (2026-02-06)
+
+### Backend Progress Event Logging
+- Added `log_progress_event()` helper function to `modal_client.py` and `framing.py`
+- Logs structured events: `[Progress Event] job=xxx phase=yyy elapsed=zzz`
+- Phases tracked: `modal_start`, `modal_spawn`, `modal_complete`, `modal_error`
+- Extra data: frames, fps_actual, clips count for analysis
+- Works for both Modal (cloud GPU) and local GPU paths
+
+### Frontend ETA Display
+- Added `calculateETA()` function in `GlobalExportIndicator.jsx`
+- Uses elapsed time and current progress percentage to estimate remaining time
+- Shows human-friendly format: "About 2 minutes", "Less than a minute"
+- Displayed in both collapsed and expanded export indicator views
 
 ## Files to Modify
 

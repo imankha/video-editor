@@ -1,8 +1,49 @@
-import { useState, useEffect } from 'react';
-import { Download, Check, X, ChevronUp, ChevronDown, Loader } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Download, Check, X, ChevronUp, ChevronDown, Loader, Clock } from 'lucide-react';
 import { useExportStore } from '../stores/exportStore';
 import { toast } from './shared';
 import { ExportStatus } from '../constants/exportStatus';
+
+/**
+ * Calculate ETA for an export based on elapsed time and progress.
+ * Returns null if not enough data to estimate.
+ *
+ * @param {Object} exp - Export object with startedAt and progress
+ * @returns {{ seconds: number, formatted: string } | null}
+ */
+function calculateETA(exp) {
+  if (!exp.startedAt || !exp.progress?.percent) return null;
+
+  const percent = exp.progress.percent;
+  // Need at least 5% progress to have a meaningful estimate
+  if (percent < 5 || percent >= 100) return null;
+
+  const startedAt = new Date(exp.startedAt).getTime();
+  const now = Date.now();
+  const elapsedMs = now - startedAt;
+
+  // Calculate remaining time: elapsed * (remaining / completed)
+  const remainingPercent = 100 - percent;
+  const remainingMs = (elapsedMs / percent) * remainingPercent;
+  const remainingSeconds = Math.round(remainingMs / 1000);
+
+  // Format the time remaining
+  let formatted;
+  if (remainingSeconds < 60) {
+    formatted = 'Less than a minute';
+  } else if (remainingSeconds < 120) {
+    formatted = 'About 1 minute';
+  } else if (remainingSeconds < 3600) {
+    const minutes = Math.round(remainingSeconds / 60);
+    formatted = `About ${minutes} minutes`;
+  } else {
+    const hours = Math.floor(remainingSeconds / 3600);
+    const minutes = Math.round((remainingSeconds % 3600) / 60);
+    formatted = minutes > 0 ? `${hours}h ${minutes}m` : `${hours} hour${hours > 1 ? 's' : ''}`;
+  }
+
+  return { seconds: remainingSeconds, formatted };
+}
 
 /**
  * GlobalExportIndicator - Persistent indicator for active exports
@@ -83,6 +124,12 @@ export function GlobalExportIndicator() {
     (a, b) => new Date(b.startedAt) - new Date(a.startedAt)
   )[0];
 
+  // Calculate ETA for primary export (recalculate on progress changes)
+  const primaryETA = useMemo(() => {
+    if (!primaryExport) return null;
+    return calculateETA(primaryExport);
+  }, [primaryExport?.progress?.percent, primaryExport?.startedAt]);
+
   // Don't render if no active exports
   if (processingExports.length === 0) {
     return null;
@@ -141,6 +188,11 @@ export function GlobalExportIndicator() {
               {primaryExport && (
                 <div className="text-xs text-gray-400 truncate max-w-[180px]">
                   {primaryExport.projectName || `Project #${primaryExport.projectId}`} - {primaryExport.progress?.percent >= 0 ? `${primaryExport.progress.percent}%` : 'Processing...'}
+                  {primaryETA && (
+                    <span className="ml-1 text-gray-500">
+                      ({primaryETA.formatted})
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -216,6 +268,16 @@ export function GlobalExportIndicator() {
                         <div className="h-full bg-blue-500 animate-pulse w-full opacity-50" />
                       )}
                     </div>
+                    {/* ETA display */}
+                    {(() => {
+                      const eta = calculateETA(exp);
+                      return eta ? (
+                        <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                          <Clock className="w-3 h-3" />
+                          <span>{eta.formatted} remaining</span>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                 )}
 

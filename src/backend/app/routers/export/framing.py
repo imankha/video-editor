@@ -42,9 +42,21 @@ from .multi_clip import (
 from ...constants import ExportStatus
 from pydantic import BaseModel
 from typing import Optional
+import time as time_module
 from ...user_context import get_current_user_id, set_current_user_id
 
 logger = logging.getLogger(__name__)
+
+
+def log_progress_event(job_id: str, phase: str, elapsed: float = None, extra: dict = None):
+    """Log structured progress event for timing analysis."""
+    parts = [f"[Progress Event] job={job_id} phase={phase}"]
+    if elapsed is not None:
+        parts.append(f"elapsed={elapsed:.2f}s")
+    if extra:
+        for key, val in extra.items():
+            parts.append(f"{key}={val}")
+    logger.info(" ".join(parts))
 
 router = APIRouter()
 
@@ -717,6 +729,8 @@ async def render_project(request: RenderRequest):
         else:
             # Use local GPU (development)
             logger.info(f"[Render] Using local GPU for AI upscaling")
+            local_start_time = time_module.time()
+            log_progress_event(export_id, "local_start", extra={"type": "framing"})
 
             input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex[:8]}.mp4")
 
@@ -726,6 +740,8 @@ async def render_project(request: RenderRequest):
                     detail={"error": "video_not_found", "message": f"Failed to download source video from storage"}
                 )
 
+            download_elapsed = time_module.time() - local_start_time
+            log_progress_event(export_id, "download_complete", elapsed=download_elapsed)
             logger.info(f"[Render] Downloaded source video to {input_path}")
 
             # Step 5: Run the local upscaler
@@ -814,6 +830,8 @@ async def render_project(request: RenderRequest):
                 include_audio=request.include_audio,
             )
 
+            local_elapsed = time_module.time() - local_start_time
+            log_progress_event(export_id, "upscale_complete", elapsed=local_elapsed)
             logger.info(f"[Render] Local AI upscaling complete. Output: {output_path}")
 
             # Get video duration for cost-optimized GPU selection in overlay mode
@@ -823,6 +841,8 @@ async def render_project(request: RenderRequest):
             # Upload to R2
             if not upload_to_r2(user_id, output_key, Path(output_path)):
                 raise Exception("Failed to upload working video to R2")
+            upload_elapsed = time_module.time() - local_start_time
+            log_progress_event(export_id, "upload_complete", elapsed=upload_elapsed)
             logger.info(f"[Render] Uploaded working video to R2: {working_filename}")
 
         # CRITICAL: Restore user context after long-running task
