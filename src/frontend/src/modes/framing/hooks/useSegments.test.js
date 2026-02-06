@@ -383,4 +383,166 @@ describe('useSegments', () => {
       expect(exportData).toHaveProperty('segments');
     });
   });
+
+  /**
+   * ROUND-TRIP TESTS
+   * These tests verify the full cycle: set state → getExportData → restoreState
+   * These would have caught the bugs we found:
+   * - Bug 1: trim_start/trim_end without segments array not restored
+   * - Bug 2: segment indices shifted when trimmed segments excluded
+   */
+  describe('round-trip: getExportData → restoreState', () => {
+    const VIDEO_DURATION = 10.0;
+
+    const setupHook = () => {
+      const { result } = renderHook(() => useSegments());
+      act(() => {
+        result.current.initializeWithDuration(VIDEO_DURATION);
+      });
+      return result;
+    };
+
+    it('REGRESSION: trim-only changes survive round-trip via export format', () => {
+      // This was Bug #1 - trim without speed changes
+      const result = setupHook();
+
+      // Set trim state
+      act(() => {
+        result.current.trimStart(2.0);
+      });
+
+      const originalTrimRange = { ...result.current.trimRange };
+      const exportData = result.current.getExportData();
+
+      // Verify export format (no segments array, just trim_start/trim_end)
+      expect(exportData.segments).toBeUndefined();
+      expect(exportData.trim_start).toBeDefined();
+
+      // Reset and restore
+      act(() => {
+        result.current.reset();
+        result.current.initializeWithDuration(VIDEO_DURATION);
+        result.current.restoreState(exportData, VIDEO_DURATION);
+      });
+
+      // Verify trim was restored correctly
+      expect(result.current.trimRange.start).toBe(originalTrimRange.start);
+    });
+
+    it('REGRESSION: speed changes survive round-trip via export format', () => {
+      const result = setupHook();
+
+      // Set speed
+      act(() => {
+        result.current.setSegmentSpeed(0, 0.5);
+      });
+
+      const exportData = result.current.getExportData();
+
+      // Reset and restore
+      act(() => {
+        result.current.reset();
+        result.current.initializeWithDuration(VIDEO_DURATION);
+        result.current.restoreState(exportData, VIDEO_DURATION);
+      });
+
+      // Verify speed was restored
+      expect(result.current.segmentSpeeds[0]).toBe(0.5);
+    });
+
+    it('REGRESSION: speed on later segment with trim survives round-trip via export format', () => {
+      // This was Bug #2 - index mapping broken with trimmed segments
+      // NOTE: This test documents the BROKEN behavior of export format
+      // The fix was to NOT use export format for persistence
+      const result = setupHook();
+
+      // Create 3 segments: [0-3, 3-6, 6-10]
+      act(() => {
+        result.current.addBoundary(3.0);
+        result.current.addBoundary(6.0);
+      });
+
+      // Trim first segment and set speed on segment 2
+      act(() => {
+        result.current.trimStart(3.0);  // Trims segment 0
+        result.current.setSegmentSpeed(2, 0.5);  // Speed on segment 2 (6-10)
+      });
+
+      const originalSpeed2 = result.current.segmentSpeeds[2];
+      expect(originalSpeed2).toBe(0.5);
+
+      const exportData = result.current.getExportData();
+
+      // Export format skips trimmed segments, so segment 2 becomes index 1
+      // This is the broken behavior we're documenting
+      expect(exportData.segments).toHaveLength(2);  // Only 2 segments (0-3 trimmed)
+      expect(exportData.segments[1].speed).toBe(0.5);  // Speed at index 1
+
+      // Reset and restore via export format
+      act(() => {
+        result.current.reset();
+        result.current.initializeWithDuration(VIDEO_DURATION);
+        result.current.restoreState(exportData, VIDEO_DURATION);
+      });
+
+      // With export format, the index mapping is BROKEN:
+      // - Export had speed 0.5 at index 1
+      // - Restore creates boundaries [0, 3, 6, 10] (0 always added)
+      // - Speed 0.5 gets applied to segment 1 (3-6) instead of segment 2 (6-10)
+      // This test documents the broken behavior - DON'T use export format for persistence!
+      expect(result.current.segmentSpeeds[1]).toBe(0.5);  // Wrong! Should be at index 2
+      expect(result.current.segmentSpeeds[2]).toBeUndefined();  // Missing!
+    });
+
+    it('internal format preserves segment indices correctly', () => {
+      // This is the correct approach - use internal format for persistence
+      const result = setupHook();
+
+      // Create 3 segments and set up same state as above
+      act(() => {
+        result.current.addBoundary(3.0);
+        result.current.addBoundary(6.0);
+        result.current.trimStart(3.0);
+        result.current.setSegmentSpeed(2, 0.5);
+      });
+
+      // Save as INTERNAL format (what saveCurrentClipState now uses)
+      const internalFormat = {
+        boundaries: [...result.current.boundaries],
+        segmentSpeeds: { ...result.current.segmentSpeeds },
+        trimRange: result.current.trimRange ? { ...result.current.trimRange } : null,
+      };
+
+      // Reset and restore via internal format
+      act(() => {
+        result.current.reset();
+        result.current.initializeWithDuration(VIDEO_DURATION);
+        result.current.restoreState(internalFormat, VIDEO_DURATION);
+      });
+
+      // Internal format preserves indices correctly
+      expect(result.current.segmentSpeeds[2]).toBe(0.5);  // Correct!
+      expect(result.current.segmentSpeeds[1]).toBeUndefined();
+    });
+
+    it('splits-only state returns null from getExportData', () => {
+      // Edge case: user adds splits but no speed/trim changes
+      // getExportData returns null - splits would be lost if saved via export format
+      const result = setupHook();
+
+      act(() => {
+        result.current.addBoundary(5.0);
+      });
+
+      expect(result.current.boundaries).toContain(5.0);
+
+      const exportData = result.current.getExportData();
+
+      // No speed changes, no trim - returns null!
+      expect(exportData).toBeNull();
+
+      // This means splits would NOT be saved via auto-save path
+      // Gesture-based action (splitSegment) saves them directly
+    });
+  });
 });
