@@ -11,7 +11,7 @@ Files are stored in:
 """
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List
 import os
@@ -162,6 +162,361 @@ class WorkingClipUpdate(BaseModel):
     crop_data: Optional[str] = None
     timing_data: Optional[str] = None
     segments_data: Optional[str] = None
+
+
+# =============================================================================
+# Gesture-Based Framing Actions API
+# =============================================================================
+# Instead of sending full JSON blobs, the frontend sends atomic actions
+# that describe user gestures. This prevents overwrites and enables versioning.
+
+class FramingActionTarget(BaseModel):
+    """Target specifier for framing actions."""
+    frame: Optional[int] = None  # Frame number for keyframe operations
+    segment_index: Optional[int] = None  # Segment index for speed operations
+
+
+class FramingActionData(BaseModel):
+    """Data payload for framing actions."""
+    # Crop keyframe fields
+    frame: Optional[int] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
+    width: Optional[float] = None
+    height: Optional[float] = None
+    origin: Optional[str] = None  # 'permanent', 'user', 'trim'
+
+    # Segment fields
+    time: Optional[float] = None  # For split_segment
+    speed: Optional[float] = None  # For set_segment_speed
+
+    # Trim fields
+    start: Optional[float] = None
+    end: Optional[float] = None
+
+
+class FramingAction(BaseModel):
+    """
+    A single framing action representing a user gesture.
+
+    Actions:
+    - add_crop_keyframe: Add a keyframe at data.frame
+    - update_crop_keyframe: Update keyframe at target.frame with data.*
+    - delete_crop_keyframe: Delete keyframe at target.frame
+    - move_crop_keyframe: Move keyframe from target.frame to data.frame
+    - split_segment: Split at data.time
+    - remove_segment_split: Remove boundary at data.time
+    - set_segment_speed: Set speed for target.segment_index
+    - set_trim_range: Set trim to data.start, data.end
+    - clear_trim_range: Remove trim
+    """
+    action: str
+    target: Optional[FramingActionTarget] = None
+    data: Optional[FramingActionData] = None
+    expected_version: Optional[int] = None  # For conflict detection (future)
+
+
+def _get_clip_framing_data(cursor, clip_id: int, project_id: int) -> tuple:
+    """
+    Get current framing data for a clip.
+    Returns (crop_keyframes list, segments_data dict, clip row).
+    """
+    cursor.execute("""
+        SELECT id, project_id, raw_clip_id, uploaded_filename, exported_at, sort_order, version,
+               crop_data, timing_data, segments_data
+        FROM working_clips
+        WHERE id = ? AND project_id = ?
+    """, (clip_id, project_id))
+    clip = cursor.fetchone()
+
+    if not clip:
+        return None, None, None
+
+    crop_keyframes = []
+    if clip['crop_data']:
+        try:
+            crop_keyframes = json.loads(clip['crop_data'])
+        except json.JSONDecodeError:
+            crop_keyframes = []
+
+    segments_data = {}
+    if clip['segments_data']:
+        try:
+            segments_data = json.loads(clip['segments_data'])
+        except json.JSONDecodeError:
+            segments_data = {}
+
+    return crop_keyframes, segments_data, clip
+
+
+def _save_clip_framing_data(cursor, conn, clip: dict, project_id: int,
+                            crop_keyframes: list, segments_data: dict) -> dict:
+    """
+    Save framing data, handling version creation if clip was previously exported.
+    Returns dict with success, new_clip_id (if versioned), new_version.
+    """
+    crop_data_str = json.dumps(crop_keyframes) if crop_keyframes else None
+    segments_data_str = json.dumps(segments_data) if segments_data else None
+
+    was_exported = clip['exported_at'] is not None
+    data_changed = (
+        normalize_json_data(crop_data_str) != normalize_json_data(clip['crop_data']) or
+        normalize_json_data(segments_data_str) != normalize_json_data(clip['segments_data'])
+    )
+
+    if was_exported and data_changed:
+        # Create a NEW version
+        new_version = clip['version'] + 1
+        logger.info(f"[Framing Action] Creating new version {new_version} of clip {clip['id']}")
+
+        # Fetch raw_clip_version for tracking
+        cursor.execute("SELECT boundaries_version FROM raw_clips WHERE id = ?", (clip['raw_clip_id'],))
+        raw_clip = cursor.fetchone()
+        raw_clip_version = raw_clip['boundaries_version'] if raw_clip and raw_clip['boundaries_version'] else 1
+
+        cursor.execute("""
+            INSERT INTO working_clips (
+                project_id, raw_clip_id, uploaded_filename, sort_order, version,
+                crop_data, timing_data, segments_data, raw_clip_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            project_id,
+            clip['raw_clip_id'],
+            clip['uploaded_filename'],
+            clip['sort_order'],
+            new_version,
+            normalize_json_data(crop_data_str),
+            clip['timing_data'],  # Keep existing timing_data
+            normalize_json_data(segments_data_str),
+            raw_clip_version,
+        ))
+        conn.commit()
+
+        new_clip_id = cursor.lastrowid
+        return {
+            "success": True,
+            "refresh_required": True,
+            "new_clip_id": new_clip_id,
+            "new_version": new_version
+        }
+
+    # Regular update
+    cursor.execute("""
+        UPDATE working_clips
+        SET crop_data = ?, segments_data = ?
+        WHERE id = ?
+    """, (normalize_json_data(crop_data_str), normalize_json_data(segments_data_str), clip['id']))
+    conn.commit()
+
+    return {"success": True, "refresh_required": False}
+
+
+def _find_keyframe_by_frame(keyframes: list, frame: int) -> int:
+    """Find index of keyframe by frame number. Returns -1 if not found."""
+    for i, kf in enumerate(keyframes):
+        if kf.get('frame') == frame:
+            return i
+    return -1
+
+
+@router.post("/projects/{project_id}/clips/{clip_id}/actions")
+async def framing_action(project_id: int, clip_id: int, action: FramingAction):
+    """
+    Apply an atomic framing action to a clip.
+
+    This endpoint processes a single user gesture and updates the framing data
+    atomically. Handles version creation if the clip was previously exported.
+
+    Actions:
+    - add_crop_keyframe: data.frame, data.x, data.y, data.width, data.height, data.origin
+    - update_crop_keyframe: target.frame, data.x?, data.y?, data.width?, data.height?
+    - delete_crop_keyframe: target.frame
+    - move_crop_keyframe: target.frame (old), data.frame (new)
+    - split_segment: data.time
+    - remove_segment_split: data.time
+    - set_segment_speed: target.segment_index, data.speed
+    - set_trim_range: data.start, data.end
+    - clear_trim_range: (no params)
+
+    Response:
+    - success: boolean
+    - refresh_required: boolean (true if new version created)
+    - new_clip_id: new clip ID if version created
+    - new_version: new version number if created
+    - error: error message if failed
+    """
+    logger.info(f"[Framing Action] project={project_id}, clip={clip_id}, action={action.action}")
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Get current framing data
+        crop_keyframes, segments_data, clip = _get_clip_framing_data(cursor, clip_id, project_id)
+
+        if clip is None:
+            raise HTTPException(status_code=404, detail="Clip not found")
+
+        try:
+            if action.action == "add_crop_keyframe":
+                # Add a new crop keyframe
+                if not action.data or action.data.frame is None:
+                    raise ValueError("add_crop_keyframe requires data.frame")
+
+                # Check if keyframe already exists at this frame
+                idx = _find_keyframe_by_frame(crop_keyframes, action.data.frame)
+                if idx != -1:
+                    # Update existing
+                    kf = crop_keyframes[idx]
+                    if action.data.x is not None:
+                        kf['x'] = action.data.x
+                    if action.data.y is not None:
+                        kf['y'] = action.data.y
+                    if action.data.width is not None:
+                        kf['width'] = action.data.width
+                    if action.data.height is not None:
+                        kf['height'] = action.data.height
+                    if action.data.origin is not None:
+                        kf['origin'] = action.data.origin
+                    logger.info(f"[Framing Action] Updated keyframe at frame {action.data.frame}")
+                else:
+                    # Add new
+                    new_kf = {
+                        'frame': action.data.frame,
+                        'x': action.data.x or 0,
+                        'y': action.data.y or 0,
+                        'width': action.data.width or 640,
+                        'height': action.data.height or 360,
+                        'origin': action.data.origin or 'user'
+                    }
+                    crop_keyframes.append(new_kf)
+                    crop_keyframes.sort(key=lambda k: k.get('frame', 0))
+                    logger.info(f"[Framing Action] Added keyframe at frame {action.data.frame}")
+
+            elif action.action == "update_crop_keyframe":
+                # Update existing keyframe
+                if not action.target or action.target.frame is None:
+                    raise ValueError("update_crop_keyframe requires target.frame")
+
+                idx = _find_keyframe_by_frame(crop_keyframes, action.target.frame)
+                if idx == -1:
+                    raise ValueError(f"Keyframe at frame {action.target.frame} not found")
+
+                kf = crop_keyframes[idx]
+                if action.data:
+                    if action.data.x is not None:
+                        kf['x'] = action.data.x
+                    if action.data.y is not None:
+                        kf['y'] = action.data.y
+                    if action.data.width is not None:
+                        kf['width'] = action.data.width
+                    if action.data.height is not None:
+                        kf['height'] = action.data.height
+                    if action.data.origin is not None:
+                        kf['origin'] = action.data.origin
+                logger.info(f"[Framing Action] Updated keyframe at frame {action.target.frame}")
+
+            elif action.action == "delete_crop_keyframe":
+                # Delete a keyframe
+                if not action.target or action.target.frame is None:
+                    raise ValueError("delete_crop_keyframe requires target.frame")
+
+                idx = _find_keyframe_by_frame(crop_keyframes, action.target.frame)
+                if idx == -1:
+                    raise ValueError(f"Keyframe at frame {action.target.frame} not found")
+
+                # Don't allow deleting permanent keyframes
+                if crop_keyframes[idx].get('origin') == 'permanent':
+                    raise ValueError("Cannot delete permanent keyframe")
+
+                del crop_keyframes[idx]
+                logger.info(f"[Framing Action] Deleted keyframe at frame {action.target.frame}")
+
+            elif action.action == "move_crop_keyframe":
+                # Move keyframe to new frame
+                if not action.target or action.target.frame is None:
+                    raise ValueError("move_crop_keyframe requires target.frame")
+                if not action.data or action.data.frame is None:
+                    raise ValueError("move_crop_keyframe requires data.frame")
+
+                idx = _find_keyframe_by_frame(crop_keyframes, action.target.frame)
+                if idx == -1:
+                    raise ValueError(f"Keyframe at frame {action.target.frame} not found")
+
+                crop_keyframes[idx]['frame'] = action.data.frame
+                crop_keyframes.sort(key=lambda k: k.get('frame', 0))
+                logger.info(f"[Framing Action] Moved keyframe from frame {action.target.frame} to {action.data.frame}")
+
+            elif action.action == "split_segment":
+                # Add a new boundary
+                if not action.data or action.data.time is None:
+                    raise ValueError("split_segment requires data.time")
+
+                boundaries = segments_data.get('boundaries', [])
+                if action.data.time not in boundaries:
+                    boundaries.append(action.data.time)
+                    boundaries.sort()
+                    segments_data['boundaries'] = boundaries
+                logger.info(f"[Framing Action] Split segment at {action.data.time}s")
+
+            elif action.action == "remove_segment_split":
+                # Remove a boundary
+                if not action.data or action.data.time is None:
+                    raise ValueError("remove_segment_split requires data.time")
+
+                boundaries = segments_data.get('boundaries', [])
+                if action.data.time in boundaries:
+                    boundaries.remove(action.data.time)
+                    segments_data['boundaries'] = boundaries
+                    # Also remove any speed setting for affected segment
+                    segment_speeds = segments_data.get('segmentSpeeds', {})
+                    # Rebuild speeds dict with updated indices
+                    # (This is complex - for now just clear speeds)
+                    segments_data['segmentSpeeds'] = {}
+                logger.info(f"[Framing Action] Removed segment split at {action.data.time}s")
+
+            elif action.action == "set_segment_speed":
+                # Set speed for a segment
+                if not action.target or action.target.segment_index is None:
+                    raise ValueError("set_segment_speed requires target.segment_index")
+                if not action.data or action.data.speed is None:
+                    raise ValueError("set_segment_speed requires data.speed")
+
+                segment_speeds = segments_data.get('segmentSpeeds', {})
+                segment_speeds[str(action.target.segment_index)] = action.data.speed
+                segments_data['segmentSpeeds'] = segment_speeds
+                logger.info(f"[Framing Action] Set segment {action.target.segment_index} speed to {action.data.speed}")
+
+            elif action.action == "set_trim_range":
+                # Set trim range
+                if not action.data:
+                    raise ValueError("set_trim_range requires data.start and data.end")
+
+                trim_range = segments_data.get('trimRange') or {}
+                if action.data.start is not None:
+                    trim_range['start'] = action.data.start
+                if action.data.end is not None:
+                    trim_range['end'] = action.data.end
+                segments_data['trimRange'] = trim_range
+                logger.info(f"[Framing Action] Set trim range to {trim_range}")
+
+            elif action.action == "clear_trim_range":
+                # Clear trim range
+                segments_data['trimRange'] = None
+                logger.info(f"[Framing Action] Cleared trim range")
+
+            else:
+                raise ValueError(f"Unknown action: {action.action}")
+
+            # Save changes (handles versioning if needed)
+            result = _save_clip_framing_data(cursor, conn, clip, project_id, crop_keyframes, segments_data)
+            return result
+
+        except ValueError as e:
+            logger.warning(f"[Framing Action] Validation error: {e}")
+            return JSONResponse(status_code=400, content={"success": False, "error": str(e)})
+        except Exception as e:
+            logger.error(f"[Framing Action] Error: {e}", exc_info=True)
+            return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
 # ============ RAW CLIPS (LIBRARY) ============

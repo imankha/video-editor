@@ -72,7 +72,9 @@ export function OverlayContainer({
   highlightEffectType,
   setHighlightEffectType,
   pendingOverlaySaveRef,
-  overlayDataLoadedForProjectRef,
+  // Sync state machine (replaces overlayDataLoadedForProjectRef)
+  overlaySyncState,
+  overlayLoadedProjectId,
 
   // Highlight regions from useHighlightRegions hook (passed from App.jsx to avoid duplicate state)
   highlightRegions,
@@ -424,7 +426,8 @@ export function OverlayContainer({
 
     // Persistence
     saveOverlayData,
-    overlayDataLoadedForProjectRef,
+    overlaySyncState,
+    overlayLoadedProjectId,
     pendingOverlaySaveRef,
 
     // State setters (for external use)

@@ -170,9 +170,15 @@ export function useSegments() {
         setSegmentSpeeds(speeds);
       }
 
-      // Restore trim range
+      // Restore trim range (check both internal and export format keys)
       if (savedState.trimRange) {
         setTrimRange(savedState.trimRange);
+      } else if (savedState.trim_start !== undefined || savedState.trim_end !== undefined) {
+        // Handle export format keys (trim_start/trim_end) that may be saved without segments array
+        setTrimRange({
+          start: savedState.trim_start ?? 0,
+          end: savedState.trim_end ?? videoDuration
+        });
       } else {
         setTrimRange(null);
       }

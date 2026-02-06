@@ -3,25 +3,14 @@
 ## Project Overview
 Browser-based video editor with three-mode workflow: **Annotate** (clip extraction from game footage) → **Framing** (crop/upscale) → **Overlay** (highlight effects) → **Gallery** (downloads).
 
-## Philosophy
-- **Heavy testing**: Unit tests co-located with code, E2E with Playwright
-- **Data always ready**: Frontend assumes data is loaded before rendering
-- **MVC pattern**: Screens own state, containers handle logic, views are presentational
-- **Single source of truth**: All user data persists in SQLite → synced to R2. Never use localStorage.
-- **No band-aid fixes**: Never mask symptoms without understanding root causes. Add logging, gather data, understand the system, then build solutions based on that understanding. Example: `Math.max()` to prevent progress dropping is a band-aid; understanding why progress drops and fixing the data flow is a real fix.
-
-## Git Workflow
-- **NEVER commit directly to master**. Only the user commits to master after testing.
-- Create feature branches for all work (e.g., `feature/progress-bar-improvements`)
-- Commit freely to feature branches
-- When work is ready, tell the user so they can test and merge to master
-
 ## Stack
-- **Frontend**: React 18 + Vite + Zustand (port 5173)
-- **Backend**: FastAPI + Python (port 8000)
-- **Database**: SQLite per-user, synced to R2
-- **Storage**: Cloudflare R2
-- **GPU**: Modal (cloud) or local FFmpeg + Real-ESRGAN
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 18 + Vite + Zustand + Tailwind (port 5173) |
+| Backend | FastAPI + Python 3.11 (port 8000) |
+| Database | SQLite per-user, synced to R2 |
+| Storage | Cloudflare R2 |
+| GPU | Modal (cloud) or local FFmpeg + Real-ESRGAN |
 
 ## Commands
 ```bash
@@ -29,18 +18,50 @@ Browser-based video editor with three-mode workflow: **Annotate** (clip extracti
 cd src/frontend && npm run dev
 cd src/backend && uvicorn app.main:app --reload
 
-# Tests
-cd src/frontend && npm test           # Unit tests
-cd src/frontend && npm run test:e2e   # E2E (start servers first)
-cd src/backend && .venv/Scripts/python.exe run_tests.py  # Backend tests (use this, not pytest directly)
+# Frontend tests
+cd src/frontend && npm test           # Unit tests (Vitest)
+cd src/frontend && npm run test:e2e   # E2E (Playwright) - start servers first
+cd src/frontend && npm run test:e2e -- --ui  # E2E with visual UI
+
+# Backend tests
+cd src/backend && .venv/Scripts/python.exe run_tests.py  # All tests (use this, not pytest)
+cd src/backend && pytest tests/test_clips.py -v          # Specific file
+cd src/backend && pytest tests/ -k "test_name" -v        # By name
 ```
 
-## Key Docs
-- [README.md](README.md) - Full architecture and API reference
-- [docs/plans/cloud_migration/PLAN.md](docs/plans/cloud_migration/PLAN.md) - Current deployment plan
+## Git Workflow
+- **Never commit to master** - Only the user commits to master after testing
+- **Feature branches** - Create branches like `feature/progress-bar-improvements`
+- **Commit freely** - Commit often to feature branches
+- **Signal readiness** - Tell user when work is ready for testing and merge
 
-## Database Location
-- User databases are stored at: `user_data/{user_id}/database.sqlite`
-- Default dev user database: `C:\Users\imank\projects\video-editor\user_data\a\database.sqlite`
-- R2 bucket: `reel-ballers-users`, synced at `{user_id}/database.sqlite`
-- Sync strategy: On startup, download from R2 if newer. On mutations, upload to R2 with version check.
+## Core Principles
+| Principle | Summary |
+|-----------|---------|
+| **Data Always Ready** | Frontend assumes data loaded before render (see frontend skills) |
+| **MVC Pattern** | Screens own data, Containers logic, Views presentation |
+| **Single Source of Truth** | All persistence via SQLite → R2, never localStorage |
+| **No Band-Aid Fixes** | Understand root cause, don't mask symptoms |
+| **Heavy Testing** | Unit tests co-located, E2E with Playwright |
+| **Type Safety** | No magic strings (see frontend/backend type-safety skills) |
+
+## Database
+- Location: `user_data/{user_id}/database.sqlite`
+- Dev default: `user_data/a/database.sqlite`
+- R2 bucket: `reel-ballers-users` at `{user_id}/database.sqlite`
+- Sync: Download from R2 on startup if newer, upload on mutations with version check
+
+## Task Management
+
+Use the [task-management skill](.claude/skills/task-management/SKILL.md) for:
+- Creating new tasks (file + PLAN.md entry)
+- Prioritizing by feedback velocity
+- Organizing epics (bundled infrastructure moves)
+- AI handoff context in task files
+
+Current plan: [docs/plans/PLAN.md](docs/plans/PLAN.md)
+
+## Documentation
+- [src/frontend/CLAUDE.md](src/frontend/CLAUDE.md) - Frontend skills and patterns
+- [src/backend/CLAUDE.md](src/backend/CLAUDE.md) - Backend skills and patterns
+- [README.md](README.md) - Full architecture and API reference

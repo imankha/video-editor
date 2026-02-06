@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List, Union
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -49,6 +49,380 @@ from ...constants import ExportStatus
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# =============================================================================
+# Gesture-Based Overlay Actions API
+# =============================================================================
+# Instead of sending full JSON blobs, the frontend sends atomic actions
+# that describe user gestures. This prevents overwrites and enables
+# future conflict detection.
+
+class OverlayActionTarget(BaseModel):
+    """Target specifier for actions that modify existing items."""
+    region_id: Optional[str] = None
+    keyframe_time: Optional[float] = None  # Time in seconds
+
+
+class OverlayActionData(BaseModel):
+    """Data payload for overlay actions. Fields used depend on action type."""
+    # Region fields
+    region_id: Optional[str] = None  # Client-generated ID for optimistic updates
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    enabled: Optional[bool] = None
+
+    # Keyframe fields
+    time: Optional[float] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
+    radiusX: Optional[float] = None
+    radiusY: Optional[float] = None
+    opacity: Optional[float] = None
+    color: Optional[str] = None
+
+    # Detection data (for auto-created keyframes)
+    fromDetection: Optional[bool] = None
+
+    # Effect type
+    effect_type: Optional[str] = None
+
+
+class OverlayAction(BaseModel):
+    """
+    A single overlay action representing a user gesture.
+
+    Actions:
+    - create_region: Create a new highlight region
+    - delete_region: Delete a region by ID
+    - update_region: Update region start/end time
+    - toggle_region: Enable/disable a region
+    - add_keyframe: Add a keyframe to a region
+    - update_keyframe: Update keyframe properties
+    - delete_keyframe: Delete a keyframe
+    - set_effect_type: Change the highlight effect type
+    """
+    action: str
+    target: Optional[OverlayActionTarget] = None
+    data: Optional[OverlayActionData] = None
+    expected_version: Optional[int] = None  # For conflict detection (future)
+
+
+class OverlayActionResponse(BaseModel):
+    """Response from an overlay action."""
+    success: bool
+    version: int
+    region_id: Optional[str] = None  # Returned for create_region
+    error: Optional[str] = None
+
+
+def _get_overlay_data(cursor, project_id: int) -> tuple:
+    """
+    Get current overlay data for a project.
+    Returns (highlights_data list, effect_type str, working_video_id int, version int).
+    """
+    cursor.execute("""
+        SELECT wv.id, wv.highlights_data, wv.effect_type, wv.overlay_version
+        FROM working_videos wv
+        JOIN projects p ON p.working_video_id = wv.id
+        WHERE p.id = ?
+    """, (project_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        return None, None, None, None
+
+    highlights = []
+    if row['highlights_data']:
+        try:
+            highlights = json.loads(row['highlights_data'])
+        except json.JSONDecodeError:
+            highlights = []
+
+    effect_type = row['effect_type'] or 'original'
+    version = row['overlay_version'] or 0
+
+    return highlights, effect_type, row['id'], version
+
+
+def _save_overlay_data(cursor, working_video_id: int, highlights: list, effect_type: str, new_version: int):
+    """Save overlay data back to the working_videos table."""
+    cursor.execute("""
+        UPDATE working_videos
+        SET highlights_data = ?, effect_type = ?, overlay_version = ?
+        WHERE id = ?
+    """, (json.dumps(highlights), effect_type, new_version, working_video_id))
+
+
+def _find_region_index(highlights: list, region_id: str) -> int:
+    """Find index of region by ID. Returns -1 if not found."""
+    for i, region in enumerate(highlights):
+        if region.get('id') == region_id:
+            return i
+    return -1
+
+
+def _find_keyframe_index(keyframes: list, time: float, tolerance: float = 0.02) -> int:
+    """Find index of keyframe by time (with tolerance). Returns -1 if not found."""
+    for i, kf in enumerate(keyframes):
+        if abs(kf.get('time', 0) - time) < tolerance:
+            return i
+    return -1
+
+
+@router.post("/projects/{project_id}/overlay/actions")
+async def overlay_action(project_id: int, action: OverlayAction):
+    """
+    Apply an atomic overlay action.
+
+    This endpoint processes a single user gesture and updates the overlay data
+    atomically. This is preferred over the PUT /overlay-data endpoint which
+    sends full JSON blobs and can cause overwrites.
+
+    Actions:
+    - create_region: data.start_time, data.end_time
+    - delete_region: target.region_id
+    - update_region: target.region_id, data.start_time?, data.end_time?
+    - toggle_region: target.region_id, data.enabled
+    - add_keyframe: target.region_id, data.time, data.x, data.y, data.radiusX, data.radiusY, data.opacity, data.color
+    - update_keyframe: target.region_id, target.keyframe_time, data.*
+    - delete_keyframe: target.region_id, target.keyframe_time
+    - set_effect_type: data.effect_type
+
+    Response:
+    - success: boolean
+    - version: new version number
+    - region_id: (for create_region) the new region's ID
+    - error: error message if failed
+    """
+    logger.info(f"[Overlay Action] project={project_id}, action={action.action}")
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Get current overlay data
+        highlights, effect_type, working_video_id, version = _get_overlay_data(cursor, project_id)
+
+        if working_video_id is None:
+            raise HTTPException(status_code=404, detail="Project not found or has no working video")
+
+        # Future: Check expected_version for conflict detection
+        # if action.expected_version is not None and action.expected_version != version:
+        #     return JSONResponse(status_code=409, content={
+        #         "success": False,
+        #         "error": "version_conflict",
+        #         "current_version": version,
+        #         "message": "Data was modified. Refresh and retry."
+        #     })
+
+        new_version = version + 1
+        region_id = None
+        error = None
+
+        try:
+            if action.action == "create_region":
+                # Create a new highlight region
+                if not action.data or action.data.start_time is None:
+                    raise ValueError("create_region requires data.start_time")
+
+                # Use client-provided ID for optimistic updates, or generate one
+                region_id = action.data.region_id or f"region-{uuid.uuid4().hex[:12]}"
+                new_region = {
+                    "id": region_id,
+                    "startTime": action.data.start_time,
+                    "endTime": action.data.end_time or (action.data.start_time + 2.0),
+                    "enabled": True,
+                    "keyframes": [],
+                    "detections": [],
+                }
+                highlights.append(new_region)
+                logger.info(f"[Overlay Action] Created region {region_id}")
+
+            elif action.action == "delete_region":
+                # Delete a region by ID
+                if not action.target or not action.target.region_id:
+                    raise ValueError("delete_region requires target.region_id")
+
+                idx = _find_region_index(highlights, action.target.region_id)
+                if idx == -1:
+                    raise ValueError(f"Region {action.target.region_id} not found")
+
+                del highlights[idx]
+                logger.info(f"[Overlay Action] Deleted region {action.target.region_id}")
+
+            elif action.action == "update_region":
+                # Update region boundaries
+                if not action.target or not action.target.region_id:
+                    raise ValueError("update_region requires target.region_id")
+
+                idx = _find_region_index(highlights, action.target.region_id)
+                if idx == -1:
+                    raise ValueError(f"Region {action.target.region_id} not found")
+
+                region = highlights[idx]
+                if action.data:
+                    if action.data.start_time is not None:
+                        region['startTime'] = action.data.start_time
+                    if action.data.end_time is not None:
+                        region['endTime'] = action.data.end_time
+                logger.info(f"[Overlay Action] Updated region {action.target.region_id}")
+
+            elif action.action == "toggle_region":
+                # Toggle region enabled/disabled
+                if not action.target or not action.target.region_id:
+                    raise ValueError("toggle_region requires target.region_id")
+                if not action.data or action.data.enabled is None:
+                    raise ValueError("toggle_region requires data.enabled")
+
+                idx = _find_region_index(highlights, action.target.region_id)
+                if idx == -1:
+                    raise ValueError(f"Region {action.target.region_id} not found")
+
+                highlights[idx]['enabled'] = action.data.enabled
+                logger.info(f"[Overlay Action] Toggled region {action.target.region_id} to {action.data.enabled}")
+
+            elif action.action == "add_keyframe":
+                # Add a keyframe to a region
+                if not action.target or not action.target.region_id:
+                    raise ValueError("add_keyframe requires target.region_id")
+                if not action.data or action.data.time is None:
+                    raise ValueError("add_keyframe requires data.time")
+
+                idx = _find_region_index(highlights, action.target.region_id)
+                if idx == -1:
+                    raise ValueError(f"Region {action.target.region_id} not found")
+
+                region = highlights[idx]
+                keyframes = region.get('keyframes', [])
+
+                # Check if keyframe already exists at this time
+                kf_idx = _find_keyframe_index(keyframes, action.data.time)
+                if kf_idx != -1:
+                    # Update existing keyframe
+                    kf = keyframes[kf_idx]
+                    if action.data.x is not None:
+                        kf['x'] = action.data.x
+                    if action.data.y is not None:
+                        kf['y'] = action.data.y
+                    if action.data.radiusX is not None:
+                        kf['radiusX'] = action.data.radiusX
+                    if action.data.radiusY is not None:
+                        kf['radiusY'] = action.data.radiusY
+                    if action.data.opacity is not None:
+                        kf['opacity'] = action.data.opacity
+                    if action.data.color is not None:
+                        kf['color'] = action.data.color
+                    logger.info(f"[Overlay Action] Updated keyframe at {action.data.time}s")
+                else:
+                    # Create new keyframe
+                    new_kf = {
+                        'time': action.data.time,
+                        'x': action.data.x or 0.5,
+                        'y': action.data.y or 0.5,
+                        'radiusX': action.data.radiusX or 0.1,
+                        'radiusY': action.data.radiusY or 0.15,
+                        'opacity': action.data.opacity or 0.3,
+                        'color': action.data.color or '#FFFF00',
+                    }
+                    if action.data.fromDetection:
+                        new_kf['fromDetection'] = True
+                    keyframes.append(new_kf)
+                    # Sort keyframes by time
+                    keyframes.sort(key=lambda k: k.get('time', 0))
+                    region['keyframes'] = keyframes
+                    logger.info(f"[Overlay Action] Added keyframe at {action.data.time}s")
+
+            elif action.action == "update_keyframe":
+                # Update existing keyframe properties
+                if not action.target or not action.target.region_id or action.target.keyframe_time is None:
+                    raise ValueError("update_keyframe requires target.region_id and target.keyframe_time")
+
+                idx = _find_region_index(highlights, action.target.region_id)
+                if idx == -1:
+                    raise ValueError(f"Region {action.target.region_id} not found")
+
+                region = highlights[idx]
+                keyframes = region.get('keyframes', [])
+                kf_idx = _find_keyframe_index(keyframes, action.target.keyframe_time)
+                if kf_idx == -1:
+                    raise ValueError(f"Keyframe at {action.target.keyframe_time}s not found")
+
+                kf = keyframes[kf_idx]
+                if action.data:
+                    if action.data.time is not None:
+                        kf['time'] = action.data.time
+                    if action.data.x is not None:
+                        kf['x'] = action.data.x
+                    if action.data.y is not None:
+                        kf['y'] = action.data.y
+                    if action.data.radiusX is not None:
+                        kf['radiusX'] = action.data.radiusX
+                    if action.data.radiusY is not None:
+                        kf['radiusY'] = action.data.radiusY
+                    if action.data.opacity is not None:
+                        kf['opacity'] = action.data.opacity
+                    if action.data.color is not None:
+                        kf['color'] = action.data.color
+
+                # Re-sort if time changed
+                keyframes.sort(key=lambda k: k.get('time', 0))
+                logger.info(f"[Overlay Action] Updated keyframe at {action.target.keyframe_time}s")
+
+            elif action.action == "delete_keyframe":
+                # Delete a keyframe
+                if not action.target or not action.target.region_id or action.target.keyframe_time is None:
+                    raise ValueError("delete_keyframe requires target.region_id and target.keyframe_time")
+
+                idx = _find_region_index(highlights, action.target.region_id)
+                if idx == -1:
+                    raise ValueError(f"Region {action.target.region_id} not found")
+
+                region = highlights[idx]
+                keyframes = region.get('keyframes', [])
+                kf_idx = _find_keyframe_index(keyframes, action.target.keyframe_time)
+                if kf_idx == -1:
+                    raise ValueError(f"Keyframe at {action.target.keyframe_time}s not found")
+
+                del keyframes[kf_idx]
+                logger.info(f"[Overlay Action] Deleted keyframe at {action.target.keyframe_time}s")
+
+            elif action.action == "set_effect_type":
+                # Change effect type
+                if not action.data or not action.data.effect_type:
+                    raise ValueError("set_effect_type requires data.effect_type")
+
+                effect_type = action.data.effect_type
+                logger.info(f"[Overlay Action] Set effect type to {effect_type}")
+
+            else:
+                raise ValueError(f"Unknown action: {action.action}")
+
+            # Save changes
+            _save_overlay_data(cursor, working_video_id, highlights, effect_type, new_version)
+            conn.commit()
+
+            return JSONResponse({
+                "success": True,
+                "version": new_version,
+                "region_id": region_id,
+            })
+
+        except ValueError as e:
+            error = str(e)
+            logger.warning(f"[Overlay Action] Validation error: {error}")
+            return JSONResponse(status_code=400, content={
+                "success": False,
+                "version": version,
+                "error": error,
+            })
+        except Exception as e:
+            error = str(e)
+            logger.error(f"[Overlay Action] Error: {error}", exc_info=True)
+            return JSONResponse(status_code=500, content={
+                "success": False,
+                "version": version,
+                "error": error,
+            })
 
 
 def _process_frames_to_ffmpeg(
