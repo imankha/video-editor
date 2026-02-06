@@ -138,7 +138,10 @@
       "Bash(MODAL_ENABLED=true .venv/Scripts/python.exe:*)",
       "Bash(PYTHONUTF8=1 .venv/Scripts/python.exe:*)",
       "Bash(PYTHONUTF8=1 MODAL_ENABLED=true .venv/Scripts/python.exe:*)",
-      "Bash(.venvScriptspython.exe -c \"from app.main import app\")"
+      "Bash(.venvScriptspython.exe -c \"from app.main import app\")",
+      "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []

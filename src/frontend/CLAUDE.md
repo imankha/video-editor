@@ -10,21 +10,29 @@ npm run test:e2e           # E2E tests (Playwright) - start servers first!
 npm run test:e2e -- --ui   # E2E with visual UI
 ```
 
-## Architecture: Data Always Ready + MVC
+---
 
-### Screen → Container → View Pattern
-```
-Screen (data fetching, hook initialization)
-  └── Container (state logic, event handlers)
-        └── View (presentational, props only)
-```
+## Skills
 
-**Screens** own hooks and ensure data is loaded before rendering children.
-**Containers** receive data as props, manage derived state and handlers.
-**Views** are pure presentation - no hooks, no data fetching.
+This codebase uses structured skills with prioritized rules. Each skill has a SKILL.md and individual rule files.
+
+**Location:** `.claude/skills/`
+
+| Skill | Priority | Description |
+|-------|----------|-------------|
+| [data-always-ready](/.claude/skills/data-always-ready/SKILL.md) | CRITICAL | Parent guards data, children assume it exists |
+| [mvc-pattern](/.claude/skills/mvc-pattern/SKILL.md) | CRITICAL | Screen → Container → View separation |
+| [state-management](/.claude/skills/state-management/SKILL.md) | CRITICAL | Single store ownership, no duplicate state |
+| [keyframe-data-model](/.claude/skills/keyframe-data-model/SKILL.md) | HIGH | Frame-based keyframes, origins, state machine |
+| [ui-style-guide](/.claude/skills/ui-style-guide/SKILL.md) | MEDIUM | Colors, buttons, spacing, components |
+
+---
+
+## Quick Reference
 
 ### Data Always Ready
-Components should never render loading states internally. Parent ensures data exists:
+Components assume data is loaded before rendering. Parents guard, children render.
+
 ```jsx
 // Good - parent guards
 {selectedClip && <ClipEditor clip={selectedClip} />}
@@ -35,12 +43,14 @@ function ClipEditor({ clip }) {
 }
 ```
 
-## State Management
-- **Zustand stores**: Global state (`editorStore`, `exportStore`, etc.)
-- **Screen-owned hooks**: Each screen initializes `useVideo`, `useCrop`, etc.
-- **No prop drilling from App.jsx**: Screens are self-contained
+### MVC Pattern
+```
+Screen (data fetching, hook initialization)
+  └── Container (state logic, event handlers)
+        └── View (presentational, props only)
+```
 
-## Keyframes
+### Keyframe Structure
 ```javascript
 keyframe = {
   frame: number,                    // Frame-based, not time
@@ -49,31 +59,18 @@ keyframe = {
 }
 ```
 
-## Common Pitfalls
+---
 
-### All code paths must provide required data
-When a component has multiple conditions (e.g., `videoUrl && cropState && metadata`), ensure ALL code paths that render it satisfy ALL conditions. Example: streaming URLs bypassed metadata extraction, breaking CropOverlay.
+## State Management
+- **Zustand stores**: Global state (`editorStore`, `exportStore`, etc.)
+- **Screen-owned hooks**: Each screen initializes `useVideo`, `useCrop`, etc.
+- **No prop drilling from App.jsx**: Screens are self-contained
 
-### Prop-based data flow over timing flags
-Pass saved state as props and let hooks restore via effects:
-```jsx
-// Good - prop-based
-useCrop(metadata, trimRange, selectedClip?.cropKeyframes)
-
-// Bad - timing-dependent manual calls
-useEffect(() => {
-  if (justSwitchedClip) restoreCropState(clip.keyframes);
-}, [clip]);
-```
-
-### Test all entry points
-The same feature may be reached via different paths (file upload, clip switch, mode navigation). Each path may have different data available. Test them all.
-
-### Video metadata fallback
-For streaming URLs, metadata may not be pre-loaded. `useVideo.handleLoadedMetadata` extracts it from the video element as a fallback.
+---
 
 ## Don't
 - Don't add console.logs in committed code
 - Don't fetch data in View components
 - Don't render components without data guards
-- Don't use localStorage (see root CLAUDE.md - all persistence via SQLite + R2)
+- Don't use localStorage (all persistence via SQLite + R2)
+- Don't use time in seconds for keyframes (use frame numbers)
