@@ -1,6 +1,6 @@
 # T05: Optimize Load Times
 
-**Status:** TODO
+**Status:** IN PROGRESS
 **Impact:** HIGH (blocks testing velocity)
 **Complexity:** MEDIUM
 **Created:** 2026-02-06
@@ -202,6 +202,17 @@ app.add_middleware(PyInstrumentProfilerMiddleware)
 ### Progress Log
 
 **2026-02-06**: Task created. Observed 20s+ load times on settings, games, projects endpoints. Handler time is the issue, not DB sync.
+
+**2026-02-06**: Root cause identified and fixed:
+- **Problem**: `ensure_database()` was calling `sync_database_from_r2_if_newer()` on EVERY request
+- This made a HEAD request to R2 to check the database version
+- When R2 connection is cold/slow, this HEAD request takes 20+ seconds
+- **Fix**: Only download from R2 on first access (when `local_version is None`)
+  - No HEAD request on subsequent requests
+  - Multi-device sync deferred to user management (T200) with session invalidation
+  - This is the correct fix for a single-user app
+- Files modified: `app/database.py`, `app/storage.py`
+- All 333 backend tests pass
 
 ## Acceptance Criteria
 

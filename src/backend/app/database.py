@@ -331,18 +331,23 @@ def ensure_database():
     # Ensure directories exist
     ensure_directories()
 
-    # If R2 is enabled, check for newer version and sync if needed
+    # If R2 is enabled, download from R2 only on first access (no local DB yet)
+    # We do NOT check R2 version on every request - that HEAD request is slow (20s+ when cold)
+    # Multi-device sync will be handled by user management (T200) with session invalidation
     if R2_ENABLED:
         local_version = get_local_db_version(user_id)
-        was_synced, new_version = sync_database_from_r2_if_newer(user_id, db_path, local_version)
-        if was_synced:
-            logger.info(f"Database synced from R2 for user: {user_id}, version: {new_version}")
-            set_local_db_version(user_id, new_version)
-            # Force re-initialization since we got a new DB
-            already_initialized = False
-        elif new_version is not None and local_version is None:
-            # First time seeing this version, record it
-            set_local_db_version(user_id, new_version)
+
+        # Only download from R2 if we've never synced for this user (first access)
+        if local_version is None:
+            was_synced, new_version = sync_database_from_r2_if_newer(user_id, db_path, local_version)
+            if was_synced:
+                logger.info(f"Database downloaded from R2 for user: {user_id}, version: {new_version}")
+                set_local_db_version(user_id, new_version)
+                # Force re-initialization since we got a new DB
+                already_initialized = False
+            elif new_version is not None:
+                # R2 has a version but we didn't need to download (local exists)
+                set_local_db_version(user_id, new_version)
 
     # If already initialized, skip table creation
     if already_initialized:
