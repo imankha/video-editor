@@ -25,9 +25,9 @@ def setup_module():
 
 
 def teardown_module():
-    """Cleanup test user data directory."""
+    """Cleanup test user data directory and reset user context."""
     from app.database import get_user_data_path, USER_DATA_BASE
-    from app.user_context import set_current_user_id
+    from app.user_context import set_current_user_id, reset_user_id
 
     # Set the test user context to get the right path
     set_current_user_id(TEST_USER_ID)
@@ -35,9 +35,8 @@ def teardown_module():
     if test_path.exists():
         shutil.rmtree(test_path, ignore_errors=True)
 
-
-# Initialize user context before importing app
-setup_module()
+    # Reset to default user context for subsequent tests
+    reset_user_id()
 
 
 # Now import what we need
