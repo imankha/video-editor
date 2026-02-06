@@ -108,8 +108,7 @@ export function FramingContainer({
   onUserEdit,
   setFramingChangedSinceExport,
 }) {
-  // Refs for auto-save debouncing
-  const pendingFramingSaveRef = useRef(null);
+  // Ref to track if user has made edits (for clip switching save decision)
   const clipHasUserEditsRef = useRef(false);
 
   // DERIVED STATE: Current crop state at playhead
@@ -752,35 +751,8 @@ export function FramingContainer({
     clipHasUserEditsRef.current = false;
   }, [selectedClipId]);
 
-  // Ref to hold the latest save function (avoids stale closures and infinite loops)
-  const saveCurrentClipStateRef = useRef(saveCurrentClipState);
-  useEffect(() => {
-    saveCurrentClipStateRef.current = saveCurrentClipState;
-  }, [saveCurrentClipState]);
-
-  // Effect: Auto-save framing data when keyframes/segments change
-  // IMPORTANT: Only trigger on actual data changes, not on function/clips reference changes
-  useEffect(() => {
-    if (editorMode !== 'framing' || !selectedClipId || !selectedProjectId) return;
-    if (!clipHasUserEditsRef.current) return;
-
-    // Debounce save - clear any pending timeout
-    if (pendingFramingSaveRef.current) {
-      clearTimeout(pendingFramingSaveRef.current);
-    }
-
-    pendingFramingSaveRef.current = setTimeout(async () => {
-      // Use ref to get latest function without it being in deps
-      await saveCurrentClipStateRef.current();
-    }, 100); // Near-immediate save (small debounce prevents rapid-fire during drag)
-
-    // Cleanup on unmount or when deps change
-    return () => {
-      if (pendingFramingSaveRef.current) {
-        clearTimeout(pendingFramingSaveRef.current);
-      }
-    };
-  }, [keyframes, segmentBoundaries, segmentSpeeds, trimRange, editorMode, selectedClipId, selectedProjectId]);
+  // NOTE: Auto-save effect removed - gesture-based actions save immediately on each user action
+  // saveCurrentClipState is still available for explicit saves (export, clip switching)
 
   return {
     // Derived state
@@ -805,7 +777,6 @@ export function FramingContainer({
 
     // Persistence
     saveCurrentClipState,
-    pendingFramingSaveRef,
     clipHasUserEditsRef,
   };
 }

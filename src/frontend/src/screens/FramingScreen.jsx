@@ -82,7 +82,6 @@ export function FramingScreen({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [outdatedClipsDialog, setOutdatedClipsDialog] = useState({ isOpen: false, clips: [] });
   const clipHasUserEditsRef = useRef(false);
-  const pendingFramingSaveRef = useRef(null);
   const localExportButtonRef = useRef(null);
   const initialLoadDoneRef = useRef(false);
   const previousClipIdRef = useRef(null);
