@@ -483,26 +483,8 @@ export function OverlayScreen({
     }
   }, [highlightRegions, highlightEffectType, dismissExportCompleteToast, projectId]);
 
-  // Save before unload (safety net - full blob save in case actions failed)
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      // Only save if we have changes and data is loaded
-      if (projectId && overlayDataLoadedForProjectRef.current === projectId) {
-        const formData = new FormData();
-        formData.append('highlights_data', JSON.stringify(getRegionsForExport() || []));
-        formData.append('text_overlays', JSON.stringify([]));
-        formData.append('effect_type', highlightEffectType || 'original');
-        fetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`, {
-          method: 'PUT',
-          body: formData,
-          keepalive: true
-        }).catch(() => {});
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [projectId, getRegionsForExport, highlightEffectType]);
+  // NOTE: Safety blob saves removed - gesture-based actions sync immediately to backend.
+  // Full blob saves were overwriting good data when local state was corrupted.
 
   // =========================================
   // OVERLAY CONTAINER - Encapsulates overlay logic
@@ -665,19 +647,9 @@ export function OverlayScreen({
   // =========================================
 
   const handleSwitchToFraming = useCallback(() => {
-    // Safety save before navigating (in case any actions failed)
-    if (projectId && overlayDataLoadedForProjectRef.current === projectId) {
-      const formData = new FormData();
-      formData.append('highlights_data', JSON.stringify(getRegionsForExport() || []));
-      formData.append('text_overlays', JSON.stringify([]));
-      formData.append('effect_type', highlightEffectType || 'original');
-      fetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`, {
-        method: 'PUT',
-        body: formData
-      }).catch(e => console.error('[OverlayScreen] Failed to save overlay data:', e));
-    }
+    // NOTE: Safety blob save removed - gesture-based actions sync immediately to backend.
     navigate('framing');
-  }, [navigate, projectId, getRegionsForExport, highlightEffectType]);
+  }, [navigate]);
 
   const handleBackToProjects = useCallback(() => {
     navigate('project-manager');
