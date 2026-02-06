@@ -54,8 +54,16 @@ waiting for locator('video').first()
 
 ### Test 2: Framing - Auto-created Project
 
-**Symptom**: Test fails because expected data is missing - another test's cleanup ran during this test's execution.
+**Symptom**: Test fails with mode detection or missing data errors.
 
+**Error variant 1** (2026-02-06): Mode not detected after opening project:
+```
+Error: Should be in framing or overlay mode
+expect(isFramingMode || isOverlayMode, 'Should be in framing or overlay mode').toBe(true);
+```
+Artifacts: `test-results/artifacts/regression-tests-Full-Cove-f2cf6-ically-created-project-full-chromium/`
+
+**Error variant 2**: Data deleted by concurrent test cleanup:
 ```
 Error: Expected project/clip data not found
 (Data was deleted by concurrent test cleanup)
@@ -65,6 +73,8 @@ Error: Expected project/clip data not found
 1. Tests share the same test user (`e2e_{timestamp}_{random}`)
 2. When tests run in parallel, one test's cleanup can delete another test's data
 3. The `@full` tag runs the full pipeline which takes longer, increasing cleanup race window
+4. Mode transition may not complete before assertion (timing issue with state machine transitions)
+5. Project may load but UI state not yet updated to reflect framing/overlay mode
 
 **Proposed Fixes**:
 
@@ -106,6 +116,15 @@ Error: Expected project/clip data not found
    }
    ```
 
+6. **Wait for mode transition to complete**: Add explicit wait for UI mode indicators:
+   ```javascript
+   // Wait for mode-specific UI elements instead of checking state directly
+   await expect(
+     page.locator('[data-testid="framing-timeline"]')
+       .or(page.locator('[data-testid="overlay-timeline"]'))
+   ).toBeVisible({ timeout: 30000 });
+   ```
+
 ## Implementation Plan
 
 ### Phase 1: Immediate Fixes
@@ -114,6 +133,7 @@ Error: Expected project/clip data not found
 2. [ ] Add explicit wait states before video element check
 3. [ ] Generate truly unique user IDs per test (include test name)
 4. [ ] Add guards in cleanup to check data exists first
+5. [ ] Fix mode detection: wait for UI elements instead of checking state variables
 
 ### Phase 2: Robust Test Isolation
 
@@ -132,6 +152,7 @@ Error: Expected project/clip data not found
 
 - `src/frontend/e2e/annotate.spec.ts` - Fix video upload wait logic
 - `src/frontend/e2e/framing.spec.ts` - Fix test isolation
+- `src/frontend/e2e/regression-tests.spec.js` - Fix mode detection wait (line 2293)
 - `src/frontend/e2e/helpers/testUser.ts` - Improve user ID generation
 - `src/frontend/playwright.config.ts` - Review parallelization settings
 
