@@ -88,7 +88,11 @@ export function OverlayScreen({
     selectedHighlightKeyframeTime,
     setSelectedHighlightKeyframeTime,
     pendingOverlaySaveRef,
-    overlayDataLoadedForProjectRef,
+    // Sync state machine (replaces refs for reactive behavior)
+    overlaySyncState,
+    setOverlaySyncState,
+    overlayLoadedProjectId,
+    setOverlayLoadedProjectId,
   } = overlayState;
 
   // Local state
@@ -98,7 +102,6 @@ export function OverlayScreen({
   const exportButtonRef = externalExportButtonRef || internalExportButtonRef;
   const fullscreenContainerRef = useRef(null);
   const videoLoadedFromUrlRef = useRef(null); // Track which URL we've loaded to prevent infinite loops
-  const justRestoredDataRef = useRef(false); // Skip auto-save immediately after restoring from backend
 
   // =========================================
   // DETERMINE EFFECTIVE VIDEO SOURCE
@@ -267,11 +270,14 @@ export function OverlayScreen({
   // The backend now creates regions with player detection data during export
   // We must fetch from backend to get that detection data (not create from clip metadata)
   useEffect(() => {
-    if (overlayClipMetadata && effectiveOverlayMetadata && projectId) {
+    if (overlayClipMetadata && effectiveOverlayMetadata && projectId && overlaySyncState !== 'loading') {
       console.log('[OverlayScreen] Fresh export detected, fetching overlay data from backend');
 
       // Clear clip metadata to prevent re-triggering
       setOverlayClipMetadata(null);
+
+      // Transition to loading state
+      setOverlaySyncState('loading');
 
       // Fetch overlay data from backend (includes detection data from export)
       (async () => {
@@ -301,32 +307,44 @@ export function OverlayScreen({
             setHighlightEffectType(data.effect_type);
           }
 
-          // Skip auto-save for this restore
-          justRestoredDataRef.current = true;
-          overlayDataLoadedForProjectRef.current = projectId;
+          // Transition to ready state - actions will now sync to backend
+          setOverlayLoadedProjectId(projectId);
+          setOverlaySyncState('ready');
           setOverlayChangedSinceExport(false);
         } catch (err) {
           console.error('[OverlayScreen] Failed to load overlay data after export:', err);
-          // On error, create default region
+          // On error, create default region but still mark as ready
           addHighlightRegion(0);
-          overlayDataLoadedForProjectRef.current = projectId;
+          setOverlayLoadedProjectId(projectId);
+          setOverlaySyncState('ready');
         }
       })();
     }
-  }, [overlayClipMetadata, effectiveOverlayMetadata, projectId, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setOverlayChangedSinceExport]);
+  }, [overlayClipMetadata, effectiveOverlayMetadata, projectId, overlaySyncState, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
   // =========================================
 
+  // Reset sync state when project changes
+  useEffect(() => {
+    if (projectId !== overlayLoadedProjectId && overlaySyncState !== 'idle') {
+      setOverlaySyncState('idle');
+    }
+  }, [projectId, overlayLoadedProjectId, overlaySyncState, setOverlaySyncState]);
+
   // Load overlay data from backend
   // Skip if we have fresh clip metadata (from framing export) - that takes priority
-  // Uses projectId tracking to auto-load when switching projects
+  // Uses state machine to track loading state
   useEffect(() => {
     const effectiveDuration = effectiveOverlayMetadata?.duration;
-    // Don't load if: no projectId, already loaded for this project, no duration, or have clip metadata
-    const alreadyLoadedForProject = overlayDataLoadedForProjectRef.current === projectId;
-    if (projectId && !alreadyLoadedForProject && effectiveDuration && !overlayClipMetadata) {
+    // Only load if: we have a projectId, we're idle, we have duration, and no clip metadata
+    const shouldLoad = projectId && overlaySyncState === 'idle' && effectiveDuration && !overlayClipMetadata;
+
+    if (shouldLoad) {
+      // Transition to loading state
+      setOverlaySyncState('loading');
+
       (async () => {
         try {
           console.log('[OverlayScreen] Loading overlay data for project:', projectId);
@@ -345,20 +363,20 @@ export function OverlayScreen({
             setHighlightEffectType(data.effect_type);
           }
 
-          // Skip auto-save for this restore (we just loaded from backend, no need to save back)
-          justRestoredDataRef.current = true;
-          overlayDataLoadedForProjectRef.current = projectId;
-          // Reset changed flag since we just loaded from backend
+          // Transition to ready state - actions will now sync to backend
+          setOverlayLoadedProjectId(projectId);
+          setOverlaySyncState('ready');
           setOverlayChangedSinceExport(false);
         } catch (err) {
           console.error('[OverlayScreen] Failed to load overlay data:', err);
           // On error, still create default region so user isn't stuck
           addHighlightRegion(0);
-          overlayDataLoadedForProjectRef.current = projectId;
+          setOverlayLoadedProjectId(projectId);
+          setOverlaySyncState('ready');
         }
       })();
     }
-  }, [projectId, effectiveOverlayMetadata?.duration, restoreHighlightRegions, setHighlightEffectType, overlayClipMetadata, addHighlightRegion]);
+  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport]);
 
   // =========================================
   // ACTION-BASED SYNC (replaces full-blob saves)
@@ -366,16 +384,14 @@ export function OverlayScreen({
   // Each user gesture dispatches an atomic action to the backend.
   // Local state updates immediately (optimistic), backend sync is fire-and-forget.
 
-  // Helper to check if we should sync actions (computed fresh each call, not captured in closure)
-  // This avoids stale closure issues since refs don't trigger re-renders
-  const canSyncActions = useCallback(() => {
-    return overlayDataLoadedForProjectRef.current === projectId && projectId && !justRestoredDataRef.current;
-  }, [projectId]);
+  // Check if we should sync actions - now uses reactive state machine!
+  // Actions only sync when we're in 'ready' state (data loaded, not loading)
+  const canSyncActions = overlaySyncState === 'ready' && overlayLoadedProjectId === projectId;
 
   // Wrapped handler: Add highlight region
   const wrappedAddHighlightRegion = useCallback((clickTime) => {
     const regionId = addHighlightRegion(clickTime);
-    if (regionId && canSyncActions()) {
+    if (regionId && canSyncActions) {
       // Get the created region to extract times
       const region = highlightRegions.find(r => r.id === regionId);
       if (region) {
@@ -391,7 +407,7 @@ export function OverlayScreen({
   const wrappedDeleteHighlightRegion = useCallback((regionIndex) => {
     const region = highlightRegions[regionIndex];
     deleteHighlightRegion(regionIndex);
-    if (region && canSyncActions()) {
+    if (region && canSyncActions) {
       overlayActions.deleteRegion(projectId, region.id)
         .catch(err => console.error('[OverlayScreen] Failed to sync deleteRegion:', err));
     }
@@ -401,7 +417,7 @@ export function OverlayScreen({
   // Wrapped handler: Move region start
   const wrappedMoveHighlightRegionStart = useCallback((regionId, newStartTime) => {
     moveHighlightRegionStart(regionId, newStartTime);
-    if (canSyncActions()) {
+    if (canSyncActions) {
       overlayActions.updateRegion(projectId, regionId, newStartTime, null)
         .catch(err => console.error('[OverlayScreen] Failed to sync updateRegion start:', err));
     }
@@ -411,7 +427,7 @@ export function OverlayScreen({
   // Wrapped handler: Move region end
   const wrappedMoveHighlightRegionEnd = useCallback((regionId, newEndTime) => {
     moveHighlightRegionEnd(regionId, newEndTime);
-    if (canSyncActions()) {
+    if (canSyncActions) {
       overlayActions.updateRegion(projectId, regionId, null, newEndTime)
         .catch(err => console.error('[OverlayScreen] Failed to sync updateRegion end:', err));
     }
@@ -422,7 +438,7 @@ export function OverlayScreen({
   const wrappedToggleHighlightRegion = useCallback((regionIndex, enabled) => {
     const region = highlightRegions[regionIndex];
     toggleHighlightRegion(regionIndex, enabled);
-    if (region && canSyncActions()) {
+    if (region && canSyncActions) {
       overlayActions.toggleRegion(projectId, region.id, enabled)
         .catch(err => console.error('[OverlayScreen] Failed to sync toggleRegion:', err));
     }
@@ -432,7 +448,7 @@ export function OverlayScreen({
   // Wrapped handler: Add/update keyframe
   const wrappedAddHighlightRegionKeyframe = useCallback((time, data) => {
     const success = addHighlightRegionKeyframe(time, data);
-    if (success && canSyncActions()) {
+    if (success && canSyncActions) {
       const region = getRegionAtTime(time);
       if (region) {
         overlayActions.addKeyframe(projectId, region.id, { time, ...data })
@@ -447,7 +463,7 @@ export function OverlayScreen({
   const wrappedRemoveHighlightRegionKeyframe = useCallback((time) => {
     const region = getRegionAtTime(time);
     removeHighlightRegionKeyframe(time);
-    if (region && canSyncActions()) {
+    if (region && canSyncActions) {
       overlayActions.deleteKeyframe(projectId, region.id, time)
         .catch(err => console.error('[OverlayScreen] Failed to sync deleteKeyframe:', err));
     }
@@ -457,31 +473,20 @@ export function OverlayScreen({
   // Wrapped handler: Set effect type
   const wrappedSetHighlightEffectType = useCallback((effectType) => {
     setHighlightEffectType(effectType);
-    if (canSyncActions()) {
+    if (canSyncActions) {
       overlayActions.setEffectType(projectId, effectType)
         .catch(err => console.error('[OverlayScreen] Failed to sync setEffectType:', err));
     }
     setOverlayChangedSinceExport(true);
   }, [setHighlightEffectType, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
-  // Clear the "just restored" flag after first render with loaded data
-  useEffect(() => {
-    if (justRestoredDataRef.current && overlayDataLoadedForProjectRef.current === projectId) {
-      // Allow a small delay then clear the flag
-      const timer = setTimeout(() => {
-        justRestoredDataRef.current = false;
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [projectId]);
-
   // Dismiss "export complete" toast when user makes changes
   // This lets users know they need to re-export after modifying highlights
   useEffect(() => {
-    if (overlayDataLoadedForProjectRef.current === projectId) {
+    if (overlayLoadedProjectId === projectId && overlaySyncState === 'ready') {
       dismissExportCompleteToast();
     }
-  }, [highlightRegions, highlightEffectType, dismissExportCompleteToast, projectId]);
+  }, [highlightRegions, highlightEffectType, dismissExportCompleteToast, projectId, overlayLoadedProjectId, overlaySyncState]);
 
   // NOTE: Safety blob saves removed - gesture-based actions sync immediately to backend.
   // Full blob saves were overwriting good data when local state was corrupted.
@@ -547,7 +552,9 @@ export function OverlayScreen({
     highlightEffectType,
     setHighlightEffectType: wrappedSetHighlightEffectType,  // Use wrapped version
     pendingOverlaySaveRef,
-    overlayDataLoadedForProjectRef,
+    // Sync state machine (replaces overlayDataLoadedForProjectRef)
+    overlaySyncState,
+    overlayLoadedProjectId,
     highlightRegions,
     highlightBoundaries,
     highlightRegionKeyframes,

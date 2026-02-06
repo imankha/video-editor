@@ -329,20 +329,38 @@ describe('useOverlayState', () => {
       expect(result.current.pendingOverlaySaveRef.current).toBeNull();
     });
 
-    it('provides overlayDataLoadedForProjectRef', () => {
+    it('provides sync state machine', () => {
       const { result } = renderHook(() => useOverlayState());
 
-      expect(result.current.overlayDataLoadedForProjectRef).toBeDefined();
-      expect(result.current.overlayDataLoadedForProjectRef.current).toBeNull();
+      // Initial state
+      expect(result.current.overlaySyncState).toBe('idle');
+      expect(result.current.overlayLoadedProjectId).toBeNull();
+
+      // State setters are functions
+      expect(typeof result.current.setOverlaySyncState).toBe('function');
+      expect(typeof result.current.setOverlayLoadedProjectId).toBe('function');
     });
 
-    it('refs are mutable', () => {
+    it('sync state can be updated', () => {
       const { result } = renderHook(() => useOverlayState());
 
-      result.current.overlayDataLoadedForProjectRef.current = 123; // projectId
-      result.current.pendingOverlaySaveRef.current = { test: 'data' };
+      act(() => {
+        result.current.setOverlaySyncState('loading');
+      });
+      expect(result.current.overlaySyncState).toBe('loading');
 
-      expect(result.current.overlayDataLoadedForProjectRef.current).toBe(123);
+      act(() => {
+        result.current.setOverlayLoadedProjectId(123);
+        result.current.setOverlaySyncState('ready');
+      });
+      expect(result.current.overlaySyncState).toBe('ready');
+      expect(result.current.overlayLoadedProjectId).toBe(123);
+    });
+
+    it('pendingOverlaySaveRef is mutable', () => {
+      const { result } = renderHook(() => useOverlayState());
+
+      result.current.pendingOverlaySaveRef.current = { test: 'data' };
       expect(result.current.pendingOverlaySaveRef.current).toEqual({ test: 'data' });
     });
   });

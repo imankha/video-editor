@@ -141,7 +141,12 @@
       "Bash(.venvScriptspython.exe -c \"from app.main import app\")",
       "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe:*)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git reset:*)",
+      "Bash(.venv\\\\Scripts\\\\python.exe:*)",
+      "Bash(.venvScriptspython.exe:*)",
+      "Bash(C:\\\\Users\\\\imank\\\\projects\\\\video-editor\\\\src\\\\backend\\\\.venv\\\\Scripts\\\\python.exe:*)",
+      "Bash(\"C:/Users/imank/projects/video-editor/src/backend/.venv/Scripts/python.exe\" -c:*)"
     ],
     "deny": [],
     "ask": []

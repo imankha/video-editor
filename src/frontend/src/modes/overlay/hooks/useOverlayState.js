@@ -66,10 +66,21 @@ export default function useOverlayState() {
     setHighlightEffectTypeInternal(type);
   }, []);
 
-  // Overlay persistence refs
-  const pendingOverlaySaveRef = useRef(null);
+  // ===========================================
+  // OVERLAY DATA SYNC STATE MACHINE
+  // ===========================================
+  // States: 'idle' | 'loading' | 'ready' | 'error'
+  // - idle: No data loaded, waiting for projectId
+  // - loading: Fetching overlay data from backend
+  // - ready: Data loaded, actions will sync to backend
+  // - error: Load failed
+  const [overlaySyncState, setOverlaySyncState] = useState('idle');
+
   // Track which projectId we've loaded data for (null = not loaded)
-  const overlayDataLoadedForProjectRef = useRef(null);
+  const [overlayLoadedProjectId, setOverlayLoadedProjectId] = useState(null);
+
+  // Overlay persistence refs (only for values that don't affect rendering)
+  const pendingOverlaySaveRef = useRef(null);
 
   /**
    * Load overlay video from a URL (e.g., from framing export or working video)
@@ -136,9 +147,10 @@ export default function useOverlayState() {
     setIsLoadingWorkingVideo(false);
     setHighlightEffectTypeInternal(getInitialEffectType()); // Preserve user's preference on reset
 
-    // Reset refs
+    // Reset refs and sync state
     pendingOverlaySaveRef.current = null;
-    overlayDataLoadedForProjectRef.current = null;
+    setOverlaySyncState('idle');
+    setOverlayLoadedProjectId(null);
   }, [overlayVideoUrl, overlayVideoFile]);
 
   /**
@@ -178,9 +190,14 @@ export default function useOverlayState() {
     highlightEffectType,
     setHighlightEffectType,
 
-    // Persistence refs
+    // Sync state machine (replaces refs for reactive behavior)
+    overlaySyncState,
+    setOverlaySyncState,
+    overlayLoadedProjectId,
+    setOverlayLoadedProjectId,
+
+    // Persistence refs (only for values that don't affect rendering)
     pendingOverlaySaveRef,
-    overlayDataLoadedForProjectRef,
 
     // Actions
     loadOverlayVideoFromUrl,
