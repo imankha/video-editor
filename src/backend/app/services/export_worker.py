@@ -195,7 +195,7 @@ async def process_framing_export(job_id: str, project_id: int, config: dict) -> 
     working_videos_dir = get_working_videos_path()
     working_videos_dir.mkdir(parents=True, exist_ok=True)
 
-    # Get next version number
+    # Get next version number and existing overlay data to migrate
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -203,6 +203,17 @@ async def process_framing_export(job_id: str, project_id: int, config: dict) -> 
             FROM working_videos WHERE project_id = ?
         """, (project_id,))
         next_version = cursor.fetchone()['next_version']
+
+        # Get existing overlay data from current working video to carry forward
+        cursor.execute("""
+            SELECT wv.highlights_data, wv.effect_type
+            FROM projects p
+            LEFT JOIN working_videos wv ON p.working_video_id = wv.id
+            WHERE p.id = ?
+        """, (project_id,))
+        existing = cursor.fetchone()
+        existing_highlights = existing['highlights_data'] if existing else None
+        existing_effect_type = existing['effect_type'] if existing else 'original'
 
     output_filename = f"project_{project_id}_v{next_version}.mp4"
     output_path = str(working_videos_dir / output_filename)
@@ -251,13 +262,13 @@ async def process_framing_export(job_id: str, project_id: int, config: dict) -> 
     video_duration = get_video_duration(output_path)
     logger.info(f"[ExportWorker] Working video duration: {video_duration:.2f}s")
 
-    # Save to database
+    # Save to database (carry forward existing overlay data)
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO working_videos (project_id, filename, version, duration)
-            VALUES (?, ?, ?, ?)
-        """, (project_id, output_filename, next_version, video_duration))
+            INSERT INTO working_videos (project_id, filename, version, duration, highlights_data, effect_type)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (project_id, output_filename, next_version, video_duration, existing_highlights, existing_effect_type))
         working_video_id = cursor.lastrowid
 
         # Update project to point to new working video

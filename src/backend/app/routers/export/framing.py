@@ -244,17 +244,28 @@ async def export_framing(
         """, (project_id,))
         next_version = cursor.fetchone()['next_version']
 
+        # Get existing overlay data from current working video to carry forward
+        cursor.execute("""
+            SELECT wv.highlights_data, wv.effect_type
+            FROM projects p
+            LEFT JOIN working_videos wv ON p.working_video_id = wv.id
+            WHERE p.id = ?
+        """, (project_id,))
+        existing = cursor.fetchone()
+        existing_highlights = existing['highlights_data'] if existing else None
+        existing_effect_type = existing['effect_type'] if existing else 'original'
+
         # Reset final_video_id since framing changed (user needs to re-export from overlay)
         cursor.execute("""
             UPDATE projects SET final_video_id = NULL WHERE id = ?
         """, (project_id,))
         logger.info(f"[Framing Export] Reset final_video_id due to framing change")
 
-        # Create new working video entry with version number and duration
+        # Create new working video entry with version number and duration (carry forward overlay data)
         cursor.execute("""
-            INSERT INTO working_videos (project_id, filename, version, duration)
-            VALUES (?, ?, ?, ?)
-        """, (project_id, filename, next_version, video_duration if video_duration > 0 else None))
+            INSERT INTO working_videos (project_id, filename, version, duration, highlights_data, effect_type)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (project_id, filename, next_version, video_duration if video_duration > 0 else None, existing_highlights, existing_effect_type))
         working_video_id = cursor.lastrowid
 
         # Update project with new working video ID
