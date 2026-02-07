@@ -25,7 +25,7 @@ import logging
 import json
 
 # Define the Modal app
-app = modal.App("reel-ballers-video")
+app = modal.App("reel-ballers-video-v2")
 
 # Define the container image with all dependencies
 image = (
