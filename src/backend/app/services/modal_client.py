@@ -210,7 +210,7 @@ async def call_modal_framing_ai(
     Call Modal process_framing_ai function for AI-upscaled crop exports.
 
     Uses Real-ESRGAN on cloud GPU for frame-by-frame super resolution.
-    Simulates progress updates while waiting for Modal to complete.
+    Streams REAL progress updates from Modal via remote_gen().
 
     Args:
         job_id: Unique export job identifier
@@ -223,8 +223,8 @@ async def call_modal_framing_ai(
         fps: Target frame rate (default 30)
         segment_data: Optional trim/speed data
         video_duration: Video duration in seconds (for progress estimation)
-        progress_callback: async callable(progress: float, message: str) for updates
-        call_id_callback: Optional callable(call_id: str) to receive Modal call ID for recovery
+        progress_callback: async callable(progress: float, message: str, phase: str) for updates
+        call_id_callback: Optional callable(call_id: str) - NOT USED with remote_gen
 
     Returns:
         {"status": "success", "output_key": "..."} or
@@ -239,21 +239,20 @@ async def call_modal_framing_ai(
     logger.info(f"[Modal] User: {user_id}, Input: {input_key} -> Output: {output_key}")
     logger.info(f"[Modal] Target: {output_width}x{output_height}")
 
-    # Estimate total processing time per frame on T4 GPU for Real-ESRGAN
-    # Cold start: ~1.1s/frame total, Warm GPU: ~0.85s/frame total
-    # Using 1.0s/frame as balance (slightly pessimistic = better UX)
     estimated_frames = int((video_duration or 10) * fps)
-    estimated_time = estimated_frames * 1.0  # seconds total
-    logger.info(f"[Modal] Estimated {estimated_frames} frames, ~{estimated_time:.0f}s processing time")
+    logger.info(f"[Modal] Estimated {estimated_frames} frames")
 
     # Track timing for progress improvement
     job_start_time = time.time()
     log_progress_event(job_id, "modal_start", extra={"type": "framing_ai", "frames": estimated_frames})
 
     try:
-        # Use spawn() to get call_id for recovery (instead of remote() which blocks)
-        def spawn_modal_job():
-            call = process_framing_ai.spawn(
+        # Use remote_gen() to stream real progress from Modal
+        # This iterates over yield statements in the Modal function
+        loop = asyncio.get_running_loop()
+
+        def get_generator():
+            return process_framing_ai.remote_gen(
                 job_id=job_id,
                 user_id=user_id,
                 input_key=input_key,
@@ -264,82 +263,60 @@ async def call_modal_framing_ai(
                 fps=fps,
                 segment_data=segment_data,
             )
-            return call
 
-        loop = asyncio.get_running_loop()
-        modal_call = await loop.run_in_executor(None, spawn_modal_job)
+        # Get the generator in executor (Modal API is sync)
+        gen = await loop.run_in_executor(None, get_generator)
 
-        # Get call_id for recovery
-        modal_call_id = modal_call.object_id
-        spawn_elapsed = time.time() - job_start_time
-        log_progress_event(job_id, "modal_spawn", elapsed=spawn_elapsed, extra={"call_id": modal_call_id[:16]})
-        logger.info(f"[Modal] Framing AI job spawned with call_id: {modal_call_id}")
+        log_progress_event(job_id, "modal_streaming_started")
+        logger.info(f"[Modal] Streaming progress from Modal for job {job_id}")
 
-        # Notify caller of call_id so it can be stored for recovery
-        if call_id_callback:
+        result = None
+        last_progress = None
+
+        # Iterate over yielded progress updates
+        def next_item(generator):
             try:
-                call_id_callback(modal_call_id)
-            except Exception as e:
-                logger.warning(f"[Modal] call_id_callback failed: {e}")
+                return next(generator)
+            except StopIteration:
+                return None
 
-        # Create a future to wait for the result
-        async def wait_for_result():
-            return await loop.run_in_executor(None, modal_call.get)
+        while True:
+            update = await loop.run_in_executor(None, next_item, gen)
+            if update is None:
+                break
 
-        result_future = asyncio.create_task(wait_for_result())
+            # Check if this is the final result (has "status" key)
+            if "status" in update:
+                result = update
+                logger.info(f"[Modal] Received final result: {result.get('status')}")
+                break
 
-        # Simulate progress while waiting for Modal
-        if progress_callback:
-            start_time = asyncio.get_event_loop().time()
-            progress_start = 20  # Start progress at 20%
-            progress_end = 90    # End progress at 90% (100% is for post-processing)
+            # This is a progress update - forward to callback
+            progress = update.get("progress", 0)
+            message = update.get("message", "Processing...")
+            phase = update.get("phase", "processing")
 
-            # Progress phases: (threshold, phase_id, message)
-            # Thresholds based on actual benchmark data (225 frames test):
-            # download=8%, init=4%, upscale=50%, encode=11%, upload=27%
-            phases = [
-                (0.00, "modal_download", "Downloading source video..."),
-                (0.08, "modal_init", "Initializing AI model..."),
-                (0.12, "modal_upscale", "AI upscaling in progress..."),
-                (0.62, "modal_encode", "Encoding video..."),
-                (0.73, "modal_upload", "Uploading result..."),
-            ]
+            # Only log significant progress changes
+            if last_progress is None or abs(progress - last_progress) >= 5:
+                logger.info(f"[Modal] Progress: {progress}% - {message}")
+                last_progress = progress
 
-            current_phase = "modal_download"
-
-            while not result_future.done():
-                elapsed = asyncio.get_event_loop().time() - start_time
-                raw_progress = min(elapsed / estimated_time, 0.95)
-                progress = progress_start + raw_progress * (progress_end - progress_start)
-
-                # Determine current phase
-                phase_msg = "Processing..."
-                for threshold, phase_id, msg in phases:
-                    if raw_progress >= threshold:
-                        current_phase = phase_id
-                        phase_msg = msg
-
+            if progress_callback:
                 try:
-                    await progress_callback(progress, phase_msg, current_phase)
+                    await progress_callback(progress, message, phase)
                 except Exception as e:
                     logger.warning(f"[Modal] Progress callback failed: {e}")
 
-                await asyncio.sleep(2)  # Update every 2 seconds
-
-            # Log summary at end
-            total_time = asyncio.get_event_loop().time() - start_time
-            logger.info(f"[Modal Summary] job={job_id} total={total_time:.1f}s (simulated progress)")
-
-        result = await result_future
-
         total_elapsed = time.time() - job_start_time
+        frames_processed = result.get("frames_processed", estimated_frames) if result else estimated_frames
+
         log_progress_event(job_id, "modal_complete", elapsed=total_elapsed, extra={
-            "status": result.get("status", "unknown"),
-            "frames": estimated_frames,
-            "fps_actual": round(estimated_frames / total_elapsed, 1) if total_elapsed > 0 else 0
+            "status": result.get("status", "unknown") if result else "no_result",
+            "frames": frames_processed,
+            "fps_actual": round(frames_processed / total_elapsed, 1) if total_elapsed > 0 else 0
         })
         logger.info(f"[Modal] AI framing job {job_id} completed: {result}")
-        return result
+        return result or {"status": "error", "error": "No result received from Modal"}
 
     except Exception as e:
         total_elapsed = time.time() - job_start_time
@@ -539,7 +516,7 @@ async def call_modal_overlay(
 ) -> dict:
     """
     Call Modal render_overlay function for highlight overlays.
-    Simulates progress updates while waiting for Modal to complete.
+    Streams REAL progress updates from Modal via remote_gen().
 
     Args:
         job_id: Unique export job identifier
@@ -548,9 +525,9 @@ async def call_modal_overlay(
         output_key: R2 key for output video
         highlight_regions: Highlight regions with keyframes
         effect_type: "dark_overlay" | "brightness_boost" | "original"
-        video_duration: Video duration in seconds (for progress estimation)
-        progress_callback: async callable(progress: float, message: str) for updates
-        call_id_callback: Optional callable(call_id: str) to receive Modal call ID for recovery
+        video_duration: Video duration in seconds (for logging)
+        progress_callback: async callable(progress: float, message: str, phase: str) for updates
+        call_id_callback: Optional callable(call_id: str) - NOT USED with remote_gen
 
     Returns:
         {"status": "success", "output_key": "..."} or
@@ -565,20 +542,19 @@ async def call_modal_overlay(
     logger.info(f"[Modal] User: {user_id}, Input: {input_key} -> Output: {output_key}")
     logger.info(f"[Modal] Regions: {len(highlight_regions)}, Effect: {effect_type}")
 
-    # Estimate processing time: ~60 fps on T4 GPU for overlay processing
-    # Add download/upload overhead (~8s)
     estimated_frames = int((video_duration or 10) * 30)  # Assume 30fps
-    estimated_time = estimated_frames / 60 + 8  # seconds
-    logger.info(f"[Modal] Estimated {estimated_frames} frames, ~{estimated_time:.0f}s processing time")
+    logger.info(f"[Modal] Estimated {estimated_frames} frames")
 
     # Track timing for progress improvement
     job_start_time = time.time()
     log_progress_event(job_id, "modal_start", extra={"type": "overlay", "frames": estimated_frames})
 
     try:
-        # Use spawn() to get call_id for recovery (instead of remote() which blocks)
-        def spawn_modal_job():
-            call = render_overlay.spawn(
+        # Use remote_gen() to stream real progress from Modal
+        loop = asyncio.get_running_loop()
+
+        def get_generator():
+            return render_overlay.remote_gen(
                 job_id=job_id,
                 user_id=user_id,
                 input_key=input_key,
@@ -586,79 +562,59 @@ async def call_modal_overlay(
                 highlight_regions=highlight_regions,
                 effect_type=effect_type,
             )
-            return call
 
-        loop = asyncio.get_running_loop()
-        modal_call = await loop.run_in_executor(None, spawn_modal_job)
+        # Get the generator in executor (Modal API is sync)
+        gen = await loop.run_in_executor(None, get_generator)
 
-        # Get call_id for recovery
-        modal_call_id = modal_call.object_id
-        spawn_elapsed = time.time() - job_start_time
-        log_progress_event(job_id, "modal_spawn", elapsed=spawn_elapsed, extra={"call_id": modal_call_id[:16]})
-        logger.info(f"[Modal] Overlay job spawned with call_id: {modal_call_id}")
+        log_progress_event(job_id, "modal_streaming_started")
+        logger.info(f"[Modal] Streaming progress from Modal for overlay job {job_id}")
 
-        # Notify caller of call_id so it can be stored for recovery
-        if call_id_callback:
+        result = None
+        last_progress = None
+
+        # Iterate over yielded progress updates
+        def next_item(generator):
             try:
-                call_id_callback(modal_call_id)
-            except Exception as e:
-                logger.warning(f"[Modal] call_id_callback failed: {e}")
+                return next(generator)
+            except StopIteration:
+                return None
 
-        # Create a future to wait for the result
-        async def wait_for_result():
-            return await loop.run_in_executor(None, modal_call.get)
+        while True:
+            update = await loop.run_in_executor(None, next_item, gen)
+            if update is None:
+                break
 
-        result_future = asyncio.create_task(wait_for_result())
+            # Check if this is the final result (has "status" key)
+            if "status" in update:
+                result = update
+                logger.info(f"[Modal] Received final result: {result.get('status')}")
+                break
 
-        # Simulate progress while waiting for Modal
-        if progress_callback:
-            start_time = asyncio.get_event_loop().time()
-            progress_start = 20
-            progress_end = 90
+            # This is a progress update - forward to callback
+            progress = update.get("progress", 0)
+            message = update.get("message", "Processing...")
+            phase = update.get("phase", "processing")
 
-            # Progress phases: (threshold, phase_id, message)
-            phases = [
-                (0.00, "modal_download", "Downloading video..."),
-                (0.10, "modal_overlay", "Applying highlights..."),
-                (0.50, "modal_process", "Processing frames..."),
-                (0.85, "modal_encode", "Encoding video..."),
-                (0.95, "modal_upload", "Uploading result..."),
-            ]
+            # Only log significant progress changes
+            if last_progress is None or abs(progress - last_progress) >= 5:
+                logger.info(f"[Modal] Progress: {progress}% - {message}")
+                last_progress = progress
 
-            current_phase = "modal_download"
-
-            while not result_future.done():
-                elapsed = asyncio.get_event_loop().time() - start_time
-                raw_progress = min(elapsed / estimated_time, 0.95)
-                progress = progress_start + raw_progress * (progress_end - progress_start)
-
-                phase_msg = "Processing..."
-                for threshold, phase_id, msg in phases:
-                    if raw_progress >= threshold:
-                        current_phase = phase_id
-                        phase_msg = msg
-
+            if progress_callback:
                 try:
-                    await progress_callback(progress, phase_msg, current_phase)
+                    await progress_callback(progress, message, phase)
                 except Exception as e:
                     logger.warning(f"[Modal] Progress callback failed: {e}")
 
-                await asyncio.sleep(1.5)
-
-            # Log summary
-            total_time = asyncio.get_event_loop().time() - start_time
-            logger.info(f"[Modal Summary] job={job_id} total={total_time:.1f}s (simulated progress)")
-
-        result = await result_future
-
         total_elapsed = time.time() - job_start_time
+
         log_progress_event(job_id, "modal_complete", elapsed=total_elapsed, extra={
-            "status": result.get("status", "unknown"),
+            "status": result.get("status", "unknown") if result else "no_result",
             "frames": estimated_frames,
             "fps_actual": round(estimated_frames / total_elapsed, 1) if total_elapsed > 0 else 0
         })
         logger.info(f"[Modal] Overlay job {job_id} completed: {result}")
-        return result
+        return result or {"status": "error", "error": "No result received from Modal"}
 
     except Exception as e:
         total_elapsed = time.time() - job_start_time

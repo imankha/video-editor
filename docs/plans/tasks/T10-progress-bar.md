@@ -128,6 +128,34 @@ Display as:
 - Shows human-friendly format: "About 2 minutes", "Less than a minute"
 - Displayed in both collapsed and expanded export indicator views
 
+### Real Modal Progress Streaming (NEW)
+Implemented real-time progress from Modal using `.remote_gen()` instead of spawn/get:
+
+**Modal Functions (video_processing.py):**
+- `process_framing_ai`: Now a generator that yields progress at each phase
+  - Download: 5-12%
+  - Load model: 14-18%
+  - Upscaling: 18-75% (yields every 15 frames with actual frame count)
+  - Encoding: 76-88%
+  - Upload: 90-100%
+- `render_overlay`: Now a generator that yields progress at major phases
+  - Download: 10-20%
+  - Processing: 25-80%
+  - Upload: 85-100%
+
+**Modal Client (modal_client.py):**
+- `call_modal_framing_ai`: Uses `remote_gen()` to iterate over yielded progress
+- `call_modal_overlay`: Uses `remote_gen()` to iterate over yielded progress
+- Progress updates forwarded to WebSocket in real-time
+
+**Benefits:**
+- Progress based on actual frames processed, not time estimates
+- More accurate ETA calculations
+- Users see real processing milestones (download, upscale, encode, upload)
+
+**Note:** Multi-clip export (`process_multi_clip_modal`) still uses time-based simulation.
+This can be converted to streaming progress in a future update if needed.
+
 ## Files to Modify
 
 - `src/backend/app/services/modal_client.py` - Add logging, improve estimates

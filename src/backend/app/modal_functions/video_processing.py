@@ -140,9 +140,12 @@ def render_overlay(
     output_key: str,
     highlight_regions: list,
     effect_type: str = "dark_overlay",
-) -> dict:
+):
     """
     Apply highlight overlays to video on GPU.
+
+    This is a GENERATOR function that yields progress updates.
+    Use .remote_gen() to consume progress, final yield has status="success".
 
     Args:
         job_id: Unique export job identifier
@@ -152,14 +155,16 @@ def render_overlay(
         highlight_regions: List of regions with keyframes
         effect_type: "dark_overlay" | "brightness_boost" | "original"
 
-    Returns:
-        {"status": "success", "output_key": "..."} or
-        {"status": "error", "error": "..."}
+    Yields:
+        Progress updates: {"progress": 0-100, "phase": "...", "message": "..."}
+        Final result: {"status": "success", "output_key": "..."} or {"status": "error", "error": "..."}
     """
     try:
         logger.info(f"[{job_id}] Starting overlay render for user {user_id}")
         logger.info(f"[{job_id}] Input: {input_key}, Output: {output_key}")
         logger.info(f"[{job_id}] Regions: {len(highlight_regions)}, Effect: {effect_type}")
+
+        yield {"progress": 5, "phase": "initializing", "message": "Initializing..."}
 
         r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
@@ -169,18 +174,23 @@ def render_overlay(
             input_path = os.path.join(temp_dir, "input.mp4")
             full_input_key = f"{user_id}/{input_key}"
             logger.info(f"[{job_id}] Downloading {full_input_key}")
+            yield {"progress": 10, "phase": "downloading", "message": "Downloading video..."}
             r2.download_file(bucket, full_input_key, input_path)
+            yield {"progress": 20, "phase": "downloading", "message": "Download complete"}
 
             # Process overlay
             output_path = os.path.join(temp_dir, "output.mp4")
+            yield {"progress": 25, "phase": "processing", "message": "Applying highlights..."}
             _process_overlay(job_id, input_path, output_path, {
                 "highlight_regions": highlight_regions,
                 "effect_type": effect_type,
             })
+            yield {"progress": 80, "phase": "processing", "message": "Processing complete"}
 
             # Upload result to R2
             full_output_key = f"{user_id}/{output_key}"
             logger.info(f"[{job_id}] Uploading to {full_output_key}")
+            yield {"progress": 85, "phase": "uploading", "message": "Uploading result..."}
             r2.upload_file(
                 output_path,
                 bucket,
@@ -189,11 +199,17 @@ def render_overlay(
             )
 
             logger.info(f"[{job_id}] Overlay render complete")
-            return {"status": "success", "output_key": output_key}
+            yield {
+                "status": "success",
+                "output_key": output_key,
+                "progress": 100,
+                "phase": "complete",
+                "message": "Overlay complete"
+            }
 
     except Exception as e:
         logger.error(f"[{job_id}] Overlay render failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        yield {"status": "error", "error": str(e), "progress": 0, "phase": "error"}
 
 
 def _process_overlay(job_id: str, input_path: str, output_path: str, params: dict):
@@ -813,9 +829,12 @@ def process_framing_ai(
     output_height: int = 1440,
     fps: int = 30,
     segment_data: dict = None,
-) -> dict:
+):
     """
     Process video with AI upscaling using Real-ESRGAN on GPU.
+
+    This is a GENERATOR function that yields progress updates.
+    Use .remote_gen() to consume progress, final yield has status="success".
 
     This function:
     1. Downloads video from R2
@@ -835,9 +854,9 @@ def process_framing_ai(
         fps: Target frame rate
         segment_data: Optional trim/speed data
 
-    Returns:
-        {"status": "success", "output_key": "..."} or
-        {"status": "error", "error": "..."}
+    Yields:
+        Progress updates: {"progress": 0-100, "phase": "...", "message": "..."}
+        Final result: {"status": "success", "output_key": "..."} or {"status": "error", "error": "..."}
     """
     import cv2
     import subprocess
@@ -848,6 +867,9 @@ def process_framing_ai(
         logger.info(f"[{job_id}] Input: {input_key}, Output: {output_key}")
         logger.info(f"[{job_id}] Target: {output_width}x{output_height} @ {fps}fps")
 
+        # Yield initial progress
+        yield {"progress": 5, "phase": "initializing", "message": "Initializing..."}
+
         r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
 
@@ -856,7 +878,10 @@ def process_framing_ai(
             input_path = os.path.join(temp_dir, "input.mp4")
             full_input_key = f"{user_id}/{input_key}"
             logger.info(f"[{job_id}] Downloading {full_input_key}")
+
+            yield {"progress": 8, "phase": "downloading", "message": "Downloading source video..."}
             r2.download_file(bucket, full_input_key, input_path)
+            yield {"progress": 12, "phase": "downloading", "message": "Download complete"}
 
             # Get video properties
             cap = cv2.VideoCapture(input_path)
@@ -887,14 +912,21 @@ def process_framing_ai(
             sorted_keyframes = sorted(keyframes, key=lambda k: k['time'])
 
             # Load Real-ESRGAN model
+            yield {"progress": 14, "phase": "loading_model", "message": "Loading AI model..."}
             upsampler = _get_realesrgan_model()
+            yield {"progress": 18, "phase": "loading_model", "message": "AI model loaded"}
 
             # Create frames directory
             frames_dir = os.path.join(temp_dir, "frames")
             os.makedirs(frames_dir, exist_ok=True)
 
+            # Progress range for upscaling: 18% to 75%
+            upscale_progress_start = 18
+            upscale_progress_end = 75
+
             # Process frames
             output_frame_idx = 0
+            last_yield_frame = 0
             for frame_idx in range(start_frame, end_frame):
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
                 ret, frame = cap.read()
@@ -940,13 +972,23 @@ def process_framing_ai(
 
                 output_frame_idx += 1
 
-                # Log progress
-                if output_frame_idx % 30 == 0:
-                    progress = int(output_frame_idx / frames_to_process * 100)
+                # Yield progress every 15 frames (roughly 0.5 seconds of video)
+                if output_frame_idx - last_yield_frame >= 15:
+                    frame_progress = output_frame_idx / frames_to_process
+                    progress = int(upscale_progress_start + frame_progress * (upscale_progress_end - upscale_progress_start))
+                    yield {
+                        "progress": progress,
+                        "phase": "upscaling",
+                        "message": f"AI upscaling frame {output_frame_idx}/{frames_to_process}",
+                        "current": output_frame_idx,
+                        "total": frames_to_process
+                    }
+                    last_yield_frame = output_frame_idx
                     logger.info(f"[{job_id}] Progress: {progress}% ({output_frame_idx}/{frames_to_process})")
 
             cap.release()
 
+            yield {"progress": 76, "phase": "encoding", "message": "Encoding video..."}
             logger.info(f"[{job_id}] Processed {output_frame_idx} frames, encoding video...")
 
             # Encode video with FFmpeg
@@ -1112,23 +1154,29 @@ def process_framing_ai(
             else:
                 logger.info(f"[{job_id}] FFmpeg completed successfully")
 
+            yield {"progress": 88, "phase": "encoding", "message": "Video encoded"}
             logger.info(f"[{job_id}] Video encoded, uploading to R2...")
 
             # Upload to R2
+            yield {"progress": 90, "phase": "uploading", "message": "Uploading to storage..."}
             full_output_key = f"{user_id}/{output_key}"
             r2.upload_file(output_path, bucket, full_output_key)
 
             logger.info(f"[{job_id}] AI upscaling complete: {output_key}")
 
-            return {
+            # Final result - this is how caller knows processing is complete
+            yield {
                 "status": "success",
                 "output_key": output_key,
                 "frames_processed": output_frame_idx,
+                "progress": 100,
+                "phase": "complete",
+                "message": "Processing complete"
             }
 
     except Exception as e:
         logger.error(f"[{job_id}] AI upscaling failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        yield {"status": "error", "error": str(e), "progress": 0, "phase": "error"}
 
 
 # ============================================================================
