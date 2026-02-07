@@ -190,6 +190,27 @@ def _get_process_multi_clip_fn():
         raise RuntimeError(f"Modal process_multi_clip_modal not available: {e}")
 
 
+# Cached reference for unified function
+_process_clips_ai_fn = None
+
+
+def _get_process_clips_ai_fn():
+    """Get a reference to the deployed process_clips_ai function (unified AI processing)."""
+    global _process_clips_ai_fn
+
+    if _process_clips_ai_fn is not None:
+        return _process_clips_ai_fn
+
+    try:
+        import modal
+        _process_clips_ai_fn = modal.Function.from_name(MODAL_APP_NAME, "process_clips_ai")
+        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/process_clips_ai")
+        return _process_clips_ai_fn
+    except Exception as e:
+        logger.error(f"[Modal] Failed to connect to process_clips_ai: {e}")
+        raise RuntimeError(f"Modal process_clips_ai not available: {e}")
+
+
 
 
 async def call_modal_framing_ai(
@@ -322,6 +343,129 @@ async def call_modal_framing_ai(
         total_elapsed = time.time() - job_start_time
         log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(e)[:50]})
         logger.error(f"[Modal] AI framing job {job_id} failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+async def call_modal_clips_ai(
+    job_id: str,
+    user_id: str,
+    source_keys: list,
+    output_key: str,
+    clips_data: list,
+    target_width: int = 810,
+    target_height: int = 1440,
+    fps: int = 30,
+    include_audio: bool = True,
+    transition: dict = None,
+    progress_callback = None,
+) -> dict:
+    """
+    Call unified Modal process_clips_ai function for AI-upscaled exports.
+
+    Handles both single-clip and multi-clip exports with real-time progress streaming.
+
+    Args:
+        job_id: Unique export job identifier
+        user_id: User folder in R2
+        source_keys: List of R2 keys for source videos
+        output_key: R2 key for output video
+        clips_data: List of clip configs, each with:
+            - keyframes: [{time, x, y, width, height}, ...]
+            - segment_data: {trim_start, trim_end, segments: [{start, end, speed}]}
+        target_width: Output width (default 810 for 9:16)
+        target_height: Output height (default 1440)
+        fps: Target frame rate (default 30)
+        include_audio: Include audio track (default True)
+        transition: Optional {type: "cut"|"fade", duration: float} for multi-clip
+        progress_callback: async callable(progress: float, message: str, phase: str) for updates
+
+    Returns:
+        {"status": "success", "output_key": "...", "clips_processed": N} or
+        {"status": "error", "error": "..."}
+    """
+    if not _modal_enabled:
+        raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
+
+    process_clips_ai = _get_process_clips_ai_fn()
+
+    total_clips = len(clips_data)
+    logger.info(f"[Modal] Calling process_clips_ai for job {job_id} ({total_clips} clip(s))")
+    logger.info(f"[Modal] User: {user_id}, Output: {output_key}")
+    logger.info(f"[Modal] Target: {target_width}x{target_height} @ {fps}fps")
+
+    job_start_time = time.time()
+    log_progress_event(job_id, "modal_start", extra={"type": "clips_ai", "clips": total_clips})
+
+    try:
+        # Use remote_gen() to stream real progress from Modal
+        loop = asyncio.get_running_loop()
+
+        def get_generator():
+            return process_clips_ai.remote_gen(
+                job_id=job_id,
+                user_id=user_id,
+                source_keys=source_keys,
+                output_key=output_key,
+                clips_data=clips_data,
+                target_width=target_width,
+                target_height=target_height,
+                fps=fps,
+                include_audio=include_audio,
+                transition=transition,
+            )
+
+        gen = await loop.run_in_executor(None, get_generator)
+
+        log_progress_event(job_id, "modal_streaming_started")
+        logger.info(f"[Modal] Streaming progress for job {job_id}")
+
+        result = None
+        last_progress = None
+
+        def next_item(generator):
+            try:
+                return next(generator)
+            except StopIteration:
+                return None
+
+        while True:
+            update = await loop.run_in_executor(None, next_item, gen)
+            if update is None:
+                break
+
+            if "status" in update:
+                result = update
+                logger.info(f"[Modal] Received final result: {result.get('status')}")
+                break
+
+            progress = update.get("progress", 0)
+            message = update.get("message", "Processing...")
+            phase = update.get("phase", "processing")
+
+            if last_progress is None or abs(progress - last_progress) >= 5:
+                logger.info(f"[Modal] Progress: {progress}% - {message}")
+                last_progress = progress
+
+            if progress_callback:
+                try:
+                    await progress_callback(progress, message, phase)
+                except Exception as e:
+                    logger.warning(f"[Modal] Progress callback failed: {e}")
+
+        total_elapsed = time.time() - job_start_time
+        clips_processed = result.get("clips_processed", total_clips) if result else total_clips
+
+        log_progress_event(job_id, "modal_complete", elapsed=total_elapsed, extra={
+            "status": result.get("status", "unknown") if result else "no_result",
+            "clips": clips_processed
+        })
+        logger.info(f"[Modal] Clips AI job {job_id} completed: {result}")
+        return result or {"status": "error", "error": "No result received from Modal"}
+
+    except Exception as e:
+        total_elapsed = time.time() - job_start_time
+        log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(e)[:50]})
+        logger.error(f"[Modal] Clips AI job {job_id} failed: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
 
 
