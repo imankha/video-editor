@@ -54,7 +54,7 @@ def log_progress_event(job_id: str, phase: str, elapsed: float = None, extra: di
 _modal_enabled = os.environ.get("MODAL_ENABLED", "false").lower() == "true"
 
 # Modal app name (must match the name in video_processing.py)
-MODAL_APP_NAME = "reel-ballers-video"
+MODAL_APP_NAME = "reel-ballers-video-v2"
 
 # Cached function references
 _render_overlay_fn = None
