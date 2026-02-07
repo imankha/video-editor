@@ -868,6 +868,11 @@ class AIVideoUpscaler:
                                     logger.info("No highlight for first frame (time is after last keyframe)")
 
                             # AI upscale to target resolution
+                            # Send "starting" progress BEFORE AI upscale (which can take 30+ seconds per frame)
+                            # This prevents stall detection in tests when local GPU is slow
+                            if progress_callback:
+                                progress_callback(completed_frames, total_frames, f"AI upscaling frame {completed_frames + 1}/{total_frames}...", phase='ai_upscale')
+
                             enhanced = self.enhance_frame_ai(frame, target_resolution)
 
                             # Verify upscaling worked
