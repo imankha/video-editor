@@ -30,7 +30,7 @@ from ...database import get_db_connection, get_working_videos_path
 from ...queries import latest_working_clips_subquery
 from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
 from ...services.ffmpeg_service import get_video_duration
-from ...services.modal_client import modal_enabled, call_modal_framing_ai, call_modal_detect_players_batch
+from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
 from ...highlight_transform import get_output_duration
 from .multi_clip import (
     calculate_detection_timestamps,
@@ -689,20 +689,21 @@ async def render_project(request: RenderRequest):
                 except Exception as e:
                     logger.warning(f"[Render] Failed to store modal_call_id: {e}")
 
-            # Call Modal function with progress callback
-            modal_result = await call_modal_framing_ai(
+            # Call unified Modal function with progress callback
+            modal_result = await call_modal_clips_ai(
                 job_id=export_id,
                 user_id=user_id,
-                input_key=input_key,
+                source_keys=[input_key],
                 output_key=output_key,
-                keyframes=keyframes_dict,
-                output_width=810,  # 9:16 portrait
-                output_height=1440,
+                clips_data=[{
+                    "keyframes": keyframes_dict,
+                    "segment_data": segment_data,
+                }],
+                target_width=810,  # 9:16 portrait
+                target_height=1440,
                 fps=request.target_fps,
-                segment_data=segment_data,
-                video_duration=effective_duration,
+                include_audio=True,
                 progress_callback=modal_progress_callback,
-                call_id_callback=store_modal_call_id,
             )
 
             if modal_result.get("status") != "success":

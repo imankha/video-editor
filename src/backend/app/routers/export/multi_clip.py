@@ -35,7 +35,7 @@ from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
 from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2
 from ...user_context import get_current_user_id, set_current_user_id
-from ...services.modal_client import modal_enabled, call_modal_multi_clip, call_modal_detect_players_batch
+from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
 
 logger = logging.getLogger(__name__)
 
@@ -1220,24 +1220,31 @@ async def export_multi_clip(
                         logger.warning(f"[Multi-Clip Export] Failed to store modal_call_id: {e}")
 
             # Normalize clip data format for Modal
-            # Frontend sends {segments, trimRange}, Modal expects {segmentsData: {trimRange, segments}}
-            normalized_clips_data = [normalize_clip_data_for_modal(clip) for clip in clips_data]
+            # Frontend sends {segments, trimRange}, Modal expects {keyframes, segment_data}
+            normalized_clips_data = []
+            for clip in clips_data:
+                normalized = normalize_clip_data_for_modal(clip)
+                # Map to unified function format
+                normalized_clips_data.append({
+                    "keyframes": normalized.get("cropKeyframes", []),
+                    "segment_data": normalized.get("segmentsData", {}),
+                    "clipIndex": normalized.get("clipIndex", 0),
+                })
             logger.info(f"[Multi-Clip Export] Normalized {len(normalized_clips_data)} clips for Modal")
 
-            # Call Modal - single container processes all clips
-            result = await call_modal_multi_clip(
+            # Call unified Modal function - single container processes all clips
+            result = await call_modal_clips_ai(
                 job_id=export_id,
                 user_id=captured_user_id,
                 source_keys=source_keys,
                 output_key=output_key,
                 clips_data=normalized_clips_data,
-                transition=transition,
                 target_width=target_resolution[0],
                 target_height=target_resolution[1],
                 fps=target_fps,
                 include_audio=include_audio_bool,
+                transition=transition,
                 progress_callback=modal_progress_callback,
-                call_id_callback=store_modal_call_id,
             )
 
             if result.get("status") == "connection_lost":
