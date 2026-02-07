@@ -1822,9 +1822,12 @@ def create_annotated_compilation(
     output_key: str,
     clips: list,
     gallery_output_key: str = None,
-) -> dict:
+):
     """
     Create a video compilation with burned-in text annotations on Modal.
+
+    This is a GENERATOR function that yields progress updates.
+    Use .remote_gen() to consume progress, final yield has status="success".
 
     This function:
     1. Downloads game video from R2
@@ -1851,9 +1854,10 @@ def create_annotated_compilation(
                 ...
             ]
 
-    Returns:
-        {"status": "success", "output_key": "...", "clips_processed": N} or
-        {"status": "error", "error": "..."}
+    Yields:
+        Progress dicts: {"progress": 0-100, "phase": "...", "message": "..."}
+        Final yield: {"status": "success", "output_key": "...", "clips_processed": N}
+        On error: {"status": "error", "error": "..."}
     """
     import subprocess
 
@@ -1861,6 +1865,8 @@ def create_annotated_compilation(
         logger.info(f"[{job_id}] Starting annotated compilation for user {user_id}")
         logger.info(f"[{job_id}] Input: {input_key}, Output: {output_key}")
         logger.info(f"[{job_id}] Clips: {len(clips)}")
+
+        yield {"progress": 2, "phase": "initializing", "message": "Initializing..."}
 
         r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
@@ -1870,11 +1876,23 @@ def create_annotated_compilation(
             input_path = os.path.join(temp_dir, "source.mp4")
             full_input_key = f"{user_id}/{input_key}"
             logger.info(f"[{job_id}] Downloading {full_input_key}")
+
+            yield {"progress": 5, "phase": "downloading", "message": "Downloading source video..."}
             r2.download_file(bucket, full_input_key, input_path)
+            yield {"progress": 15, "phase": "downloading", "message": "Download complete"}
 
             # Process each clip with burned-in text
             clip_paths = []
+            total_clips = len(clips)
+            # Progress allocation: download=15%, clips=15-85% (70% total), concat=85-92%, upload=92-100%
+            clip_progress_start = 15
+            clip_progress_range = 70  # 70% of progress for processing clips
+            
             for idx, clip in enumerate(clips):
+                # Calculate progress for this clip (evenly distributed)
+                clip_base_progress = clip_progress_start + (idx / total_clips) * clip_progress_range
+                yield {"progress": int(clip_base_progress), "phase": "processing", "message": f"Processing clip {idx + 1}/{total_clips}..."}
+                
                 clip_name = clip.get('name', 'clip')
                 rating = clip.get('rating', 3)
                 tags = clip.get('tags', [])
@@ -1962,6 +1980,7 @@ def create_annotated_compilation(
             if not clip_paths:
                 raise RuntimeError("No clips were successfully processed")
 
+            yield {"progress": 85, "phase": "concatenating", "message": "Merging clips..."}
             logger.info(f"[{job_id}] Concatenating {len(clip_paths)} clips...")
 
             # Create concat file
@@ -1987,6 +2006,7 @@ def create_annotated_compilation(
                 raise RuntimeError(f"Concatenation failed: {result.stderr[:300]}")
 
             # Upload to R2 (primary download location)
+            yield {"progress": 92, "phase": "uploading", "message": "Uploading result..."}
             full_output_key = f"{user_id}/{output_key}"
             logger.info(f"[{job_id}] Uploading to {full_output_key}")
             r2.upload_file(
@@ -1999,6 +2019,7 @@ def create_annotated_compilation(
             # Also upload to gallery if key provided
             gallery_filename = None
             if gallery_output_key:
+                yield {"progress": 96, "phase": "uploading", "message": "Uploading to gallery..."}
                 full_gallery_key = f"{user_id}/{gallery_output_key}"
                 logger.info(f"[{job_id}] Uploading to gallery: {full_gallery_key}")
                 r2.upload_file(
@@ -2010,8 +2031,10 @@ def create_annotated_compilation(
                 gallery_filename = gallery_output_key.split('/')[-1]
 
             logger.info(f"[{job_id}] Annotated compilation complete: {len(clip_paths)} clips")
-            return {
+            yield {
                 "status": "success",
+                "progress": 100,
+                "message": "Annotated video complete!",
                 "output_key": output_key,
                 "gallery_filename": gallery_filename,
                 "clips_processed": len(clip_paths),
@@ -2019,7 +2042,7 @@ def create_annotated_compilation(
 
     except Exception as e:
         logger.error(f"[{job_id}] Annotated compilation failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        yield {"status": "error", "error": str(e), "progress": 0, "phase": "error"}
 
 
 @app.function(

@@ -1018,15 +1018,15 @@ async def call_modal_annotate_compilation(
     logger.info(f"[Modal] User: {user_id}, Input: {input_key} -> Output: {output_key}")
     logger.info(f"[Modal] Clips: {len(clips)}")
 
-    # Estimate processing time: ~3s per clip (download overhead + encode + upload)
-    estimated_time = len(clips) * 3 + 15  # base overhead
+    log_progress_event(job_id, "modal_start", extra={"type": "annotate", "clips": len(clips)})
 
     try:
-        # Start Modal job in executor
+        # Use remote_gen() to stream progress from Modal
         loop = asyncio.get_running_loop()
-        modal_future = loop.run_in_executor(
-            None,
-            lambda: create_annotated_compilation.remote(
+        start_time = time.time()
+
+        def run_modal_generator():
+            return create_annotated_compilation.remote_gen(
                 job_id=job_id,
                 user_id=user_id,
                 input_key=input_key,
@@ -1034,50 +1034,52 @@ async def call_modal_annotate_compilation(
                 clips=clips,
                 gallery_output_key=gallery_output_key,
             )
-        )
 
-        # Simulate progress while waiting
-        if progress_callback:
-            start_time = asyncio.get_event_loop().time()
-            progress_start = 10
-            progress_end = 90
+        log_progress_event(job_id, "modal_streaming_started")
+        logger.info(f"[Modal] Streaming progress for job {job_id}")
 
-            # Progress phases: (threshold, phase_id, message)
-            phases = [
-                (0.00, "modal_download", "Downloading source video..."),
-                (0.15, "modal_process", "Processing clips..."),
-                (0.70, "modal_merge", "Merging clips..."),
-                (0.90, "modal_upload", "Uploading result..."),
-            ]
+        # Get the generator in executor (synchronous call to get generator)
+        generator = await loop.run_in_executor(None, run_modal_generator)
 
-            current_phase = "modal_download"
+        result = None
+        last_progress = 0
 
-            while not modal_future.done():
-                elapsed = asyncio.get_event_loop().time() - start_time
-                raw_progress = min(elapsed / estimated_time, 0.95)
-                progress = progress_start + raw_progress * (progress_end - progress_start)
+        # Stream progress updates from Modal
+        for update in generator:
+            if isinstance(update, dict):
+                progress = update.get("progress", 0)
+                message = update.get("message", "Processing...")
+                phase = update.get("phase", "processing")
+                status = update.get("status")
 
-                phase_msg = "Processing..."
-                for threshold, phase_id, msg in phases:
-                    if raw_progress >= threshold:
-                        current_phase = phase_id
-                        phase_msg = msg
+                # Log progress updates
+                if progress != last_progress:
+                    logger.info(f"[Modal] Progress: {progress}% - {message}")
+                    last_progress = progress
 
-                try:
-                    await progress_callback(progress, phase_msg, current_phase)
-                except Exception as e:
-                    logger.warning(f"[Modal] Progress callback failed: {e}")
+                # Send progress to callback
+                if progress_callback and progress < 100:
+                    try:
+                        await progress_callback(progress, message, phase)
+                    except Exception as e:
+                        logger.warning(f"[Modal] Progress callback failed: {e}")
 
-                await asyncio.sleep(1.5)
+                # Check for final result
+                if status == "success":
+                    result = update
+                    break
+                elif status == "error":
+                    result = update
+                    break
 
-            # Log summary
-            total_time = asyncio.get_event_loop().time() - start_time
-            logger.info(f"[Modal Summary] job={job_id} total={total_time:.1f}s (simulated progress)")
+        elapsed = time.time() - start_time
+        log_progress_event(job_id, "modal_complete", elapsed=elapsed)
 
-        result = await modal_future
-
-        logger.info(f"[Modal] Annotated compilation job {job_id} completed: {result}")
-        return result
+        if result:
+            logger.info(f"[Modal] Annotated compilation job {job_id} completed: {result.get('clips_processed', 0)} clips in {elapsed:.1f}s")
+            return result
+        else:
+            return {"status": "error", "error": "No result from Modal function"}
 
     except Exception as e:
         logger.error(f"[Modal] Annotated compilation job {job_id} failed: {e}", exc_info=True)
