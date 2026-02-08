@@ -523,10 +523,37 @@ async def recover_orphaned_jobs():
     Recover jobs that were processing when the server stopped.
 
     Called on server startup to clean up any orphaned jobs.
-    For Modal jobs, we check if they're still running before marking as error.
+
+    Behavior controlled by CLEAR_PENDING_JOBS_ON_STARTUP env var:
+    - true: Mark all pending/processing jobs as error (dev mode)
+    - false/unset: Try to recover Modal jobs, mark local orphans as error (production)
     """
+    import os
+    clear_all = os.environ.get("CLEAR_PENDING_JOBS_ON_STARTUP", "false").lower() == "true"
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
+
+        if clear_all:
+            # Dev mode: clear all pending/processing jobs
+            cursor.execute("""
+                SELECT id, status FROM export_jobs WHERE status IN ('pending', 'processing')
+            """)
+            stale_jobs = cursor.fetchall()
+
+            if stale_jobs:
+                logger.info(f"[ExportWorker] CLEAR_PENDING_JOBS_ON_STARTUP=true, clearing {len(stale_jobs)} stale jobs")
+                cursor.execute("""
+                    UPDATE export_jobs
+                    SET status = 'error', error = 'Cleared on startup (dev mode)', completed_at = CURRENT_TIMESTAMP
+                    WHERE status IN ('pending', 'processing')
+                """)
+                conn.commit()
+                for row in stale_jobs:
+                    logger.info(f"[ExportWorker] Cleared stale job: {row['id']} (was {row['status']})")
+            return
+
+        # Production mode: try to recover Modal jobs
         cursor.execute("""
             SELECT id, modal_call_id FROM export_jobs WHERE status = 'processing'
         """)
