@@ -62,6 +62,8 @@ Compare to overlay's local progress callback pattern (overlay.py:1707-1738) whic
 2. [x] Use same progress allocation as Modal (15-85% for clips)
 3. [x] Apply same 10 + progress * 0.9 mapping for consistency
 4. [x] Test with `MODAL_ENABLED=false` to verify incremental progress
+5. [x] Add DRY download progress helper for all exporters
+6. [x] Show incremental progress during R2 download (5% → 15%)
 
 ### Progress Log
 
@@ -72,9 +74,19 @@ Compare to overlay's local progress callback pattern (overlay.py:1707-1738) whic
 - Progress now shows: 0% → 3% → 23% → 26% → 28% → ... → 86% → 92% → 100%
 - Committed as b4fd340
 
+**2026-02-08**: Added DRY download progress for all exporters.
+- Created `download_from_r2_with_progress()` helper in storage.py
+- Gets file size first, sends progress updates every 2% during download
+- Shows "Downloading... (X MB)" with actual bytes downloaded
+- Used by annotate, framing, and overlay exporters
+- Progress smoothly transitions 5% → 15% during download
+- Committed as 30f0624
+
 ## Acceptance Criteria
 
 - [x] Progress bar shows incremental updates during local annotate export
 - [x] Progress doesn't jump from 0% to 100% between clips
 - [x] Works consistently with `MODAL_ENABLED=false`
 - [x] Matches behavior of Modal exports (same progress allocation)
+- [x] Download phase shows incremental progress (not just start/end)
+- [x] DRY code shared across all exporters
