@@ -149,6 +149,11 @@ async def process_export_job(job_id: str):
             output_video_id, output_filename = await process_overlay_export(job_id, project_id, config)
         elif job_type == 'multi_clip':
             output_video_id, output_filename = await process_multi_clip_export(job_id, project_id, config)
+        elif job_type == 'annotate':
+            # Annotate exports are handled separately with their own processing function
+            # They don't return output_video_id like other exports
+            await process_annotate_export(job_id)
+            return  # process_annotate_export handles its own completion/error updates
         else:
             raise ValueError(f"Unknown export type: {job_type}")
 
@@ -553,3 +558,38 @@ async def recover_orphaned_jobs():
         # No modal_call_id or Modal job is gone - mark as error
         logger.warning(f"[ExportWorker] Found orphaned job: {job_id}, marking as error")
         update_job_error(job_id, "Server restarted during processing")
+
+
+async def process_annotate_export(job_id: str):
+    """
+    Process an annotate export job in the background.
+
+    This delegates to run_annotate_export_processing in annotate.py
+    which handles all the annotate-specific logic.
+    """
+    from ..routers.annotate import run_annotate_export_processing
+
+    logger.info(f"[ExportWorker] Starting annotate job: {job_id}")
+
+    # Get job from database
+    job = get_export_job(job_id)
+    if not job:
+        logger.error(f"[ExportWorker] Annotate job not found: {job_id}")
+        return
+
+    # Check if already processed
+    if job['status'] != 'pending':
+        logger.warning(f"[ExportWorker] Annotate job {job_id} already has status: {job['status']}")
+        return
+
+    try:
+        # Parse config from input_data
+        config = json.loads(job['input_data'])
+
+        # Delegate to annotate module's processing function
+        await run_annotate_export_processing(job_id, config)
+
+    except Exception as e:
+        logger.error(f"[ExportWorker] Annotate job {job_id} failed: {e}", exc_info=True)
+        update_job_error(job_id, str(e))
+        await send_progress(job_id, 0, f"Export failed: {e}", "error")
