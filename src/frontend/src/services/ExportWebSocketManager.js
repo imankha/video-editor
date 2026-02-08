@@ -162,8 +162,9 @@ class ExportWebSocketManager {
     try {
       const message = JSON.parse(trimmedData);
 
-      // Extract all fields from the message - backend sends projectId, type, projectName, and phase
-      const { progress, message: progressMessage, status, projectId, type, projectName, phase } = message;
+      // Extract all fields from the message - backend sends projectId, type, projectName, phase
+      // T12: Also extract gameId and gameName for annotate exports
+      const { progress, message: progressMessage, status, projectId, type, projectName, phase, gameId, gameName } = message;
 
       // Update export store
       const store = useExportStore.getState();
@@ -208,6 +209,7 @@ class ExportWebSocketManager {
         this._closeConnection(exportId, true);
       } else {
         // Progress update - include projectId, type, projectName, and phase from backend
+        // T12: Also include gameId and gameName for annotate exports
         store.updateExportProgress(exportId, {
           current: progress,
           total: 100,
@@ -217,6 +219,8 @@ class ExportWebSocketManager {
           type,         // From backend WebSocket message
           projectName,  // From backend WebSocket message
           phase,        // From backend WebSocket message (ai_upscale, ffmpeg_encode, etc.)
+          gameId,       // From backend WebSocket message (annotate exports)
+          gameName,     // From backend WebSocket message (annotate exports)
         });
 
         // Notify callback (wrap in try-catch - callback may reference unmounted component)

@@ -82,7 +82,7 @@ async def extract_clip_to_file(
     clip_name: str,
     clip_notes: str
 ) -> bool:
-    """Extract a single clip from source video using FFmpeg."""
+    """Extract a single clip from source video using FFmpeg (non-blocking)."""
     duration = end_time - start_time
 
     cmd = [
@@ -98,8 +98,13 @@ async def extract_clip_to_file(
 
     logger.info(f"Extracting clip: {clip_name} ({start_time:.2f}s - {end_time:.2f}s)")
 
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    _, stderr = process.communicate()
+    # Use async subprocess to avoid blocking the event loop
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    _, stderr = await process.communicate()
 
     if process.returncode != 0:
         logger.error(f"FFmpeg error: {stderr.decode()}")
@@ -234,8 +239,13 @@ async def create_clip_with_burned_text(
 
     logger.info(f"Creating burned-in clip: {clip_name} (encoder: {encoding_params[1]})")
 
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    _, stderr = process.communicate()
+    # Use async subprocess to avoid blocking the event loop
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    _, stderr = await process.communicate()
 
     if process.returncode != 0:
         logger.error(f"FFmpeg error: {stderr.decode()}")
@@ -252,7 +262,7 @@ async def create_clip_with_burned_text(
 
 
 async def concatenate_videos(input_paths: List[str], output_path: str) -> bool:
-    """Concatenate multiple video clips into one."""
+    """Concatenate multiple video clips into one (non-blocking)."""
     if not input_paths:
         return False
 
@@ -271,8 +281,13 @@ async def concatenate_videos(input_paths: List[str], output_path: str) -> bool:
         output_path
     ]
 
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    _, stderr = process.communicate()
+    # Use async subprocess to avoid blocking the event loop
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    _, stderr = await process.communicate()
 
     # Clean up concat file
     os.remove(concat_file)
