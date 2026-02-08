@@ -660,10 +660,6 @@ async def run_annotate_export_processing(export_id: str, config: dict):
 
             original_filename = game_name + ".mp4" if game_name else "game.mp4"
 
-        if use_modal:
-            # Modal path - stream from R2, no local download needed
-            logger.info(f"[AnnotateExport] {export_id}: Using Modal for compilation")
-
         # Calculate total steps based on mode
         if save_to_db:
             total_steps = len([c for c in clips if c.get('rating', 3) >= settings['min_rating_for_library']]) + 5
@@ -794,65 +790,32 @@ async def run_annotate_export_processing(export_id: str, config: dict):
             # Download-only mode - create burned-in compilation
             logger.info(f"[AnnotateExport] {export_id}: Creating burned-in compilation ({len(all_clips)} clips)")
 
-            if use_modal:
-                # Use Modal for compilation
-                await update_progress(10, 100, 'modal', 'Starting cloud processing...')
+            # Use unified interface - call_modal_annotate_compilation handles Modal or local fallback
+            await update_progress(10, 100, 'processing', 'Starting video processing...')
 
-                result = await call_modal_annotate_compilation(
-                    user_id=user_id,
-                    game_id=game_id,
-                    video_r2_key=f"games/{video_filename}",
-                    clips=all_clips,
-                    export_id=export_id,
-                )
+            # Generate output filename
+            output_filename = f"{video_base}_annotated_{download_id}.mp4"
 
-                if result.get('success'):
-                    download_urls['clips_compilation'] = {
-                        'filename': result.get('filename'),
-                        'url': result.get('url')
-                    }
-                else:
-                    raise Exception(result.get('error', 'Modal compilation failed'))
+            # Create progress callback for unified interface
+            async def unified_progress_callback(progress: float, message: str, phase: str = "processing"):
+                await update_progress(int(10 + progress * 0.75), 100, phase, message)
+
+            result = await call_modal_annotate_compilation(
+                job_id=export_id,
+                user_id=user_id,
+                input_key=f"games/{video_filename}",
+                output_key=f"downloads/{output_filename}",
+                clips=all_clips,
+                progress_callback=unified_progress_callback,
+            )
+
+            if result.get('status') == 'success':
+                download_urls['clips_compilation'] = {
+                    'filename': output_filename,
+                    'url': generate_presigned_url(user_id, f"downloads/{output_filename}") if R2_ENABLED else f"/api/annotate/download/{output_filename}"
+                }
             else:
-                # Local FFmpeg compilation
-                burned_clips = []
-                step = 2
-
-                for i, clip in enumerate(all_clips):
-                    progress = int(20 + (i / len(all_clips)) * 60)
-                    await update_progress(progress, 100, 'burn', f"Processing clip {i+1}/{len(all_clips)}...")
-
-                    clip_path = os.path.join(temp_dir, f"burned_{i}.mp4")
-                    success = await create_clip_with_burned_text(
-                        source_path=source_path,
-                        output_path=clip_path,
-                        start_time=clip['start_time'],
-                        end_time=clip['end_time'],
-                        clip_name=clip.get('name', ''),
-                        rating=clip.get('rating', 3)
-                    )
-                    if success:
-                        burned_clips.append(clip_path)
-
-                if burned_clips:
-                    compilation_filename = f"{video_base}_annotated_{download_id}.mp4"
-                    compilation_path = os.path.join(temp_dir, compilation_filename)
-
-                    await update_progress(85, 100, 'concat', 'Creating final video...')
-                    if await concatenate_videos(burned_clips, compilation_path):
-                        if R2_ENABLED:
-                            upload_to_r2(user_id, f"downloads/{compilation_filename}", Path(compilation_path))
-                            download_urls['clips_compilation'] = {
-                                'filename': compilation_filename,
-                                'url': generate_presigned_url(user_id, f"downloads/{compilation_filename}")
-                            }
-                        else:
-                            downloads_dir = get_downloads_path()
-                            shutil.copy(compilation_path, downloads_dir / compilation_filename)
-                            download_urls['clips_compilation'] = {
-                                'filename': compilation_filename,
-                                'url': f"/api/annotate/download/{compilation_filename}"
-                            }
+                raise Exception(result.get('error', 'Compilation failed'))
 
             message = f"Generated annotated video with {len(all_clips)} clips"
 

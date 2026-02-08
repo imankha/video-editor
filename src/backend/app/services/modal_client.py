@@ -233,6 +233,9 @@ async def call_modal_framing_ai(
     Uses Real-ESRGAN on cloud GPU for frame-by-frame super resolution.
     Streams REAL progress updates from Modal via remote_gen().
 
+    When MODAL_ENABLED=false, uses local Real-ESRGAN/FFmpeg with the same interface.
+    This enables testing the full code path without Modal costs.
+
     Args:
         job_id: Unique export job identifier
         user_id: User folder in R2
@@ -252,7 +255,22 @@ async def call_modal_framing_ai(
         {"status": "error", "error": "..."}
     """
     if not _modal_enabled:
-        raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
+        # Use local fallback with same interface
+        from app.services.local_processors import local_framing
+        logger.info(f"[Modal] Using local fallback for framing job {job_id}")
+        return await local_framing(
+            job_id=job_id,
+            user_id=user_id,
+            input_key=input_key,
+            output_key=output_key,
+            keyframes=keyframes,
+            output_width=output_width,
+            output_height=output_height,
+            fps=fps,
+            video_duration=video_duration,
+            segment_data=segment_data,
+            progress_callback=progress_callback,
+        )
 
     process_framing_ai = _get_process_framing_ai_fn()
 
@@ -662,6 +680,9 @@ async def call_modal_overlay(
     Call Modal render_overlay function for highlight overlays.
     Streams REAL progress updates from Modal via remote_gen().
 
+    When MODAL_ENABLED=false, uses local FFmpeg processing with the same interface.
+    This enables testing the full code path without Modal costs.
+
     Args:
         job_id: Unique export job identifier
         user_id: User folder in R2
@@ -678,7 +699,19 @@ async def call_modal_overlay(
         {"status": "error", "error": "..."}
     """
     if not _modal_enabled:
-        raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
+        # Use local fallback with same interface
+        from app.services.local_processors import local_overlay
+        logger.info(f"[Modal] Using local fallback for overlay job {job_id}")
+        return await local_overlay(
+            job_id=job_id,
+            user_id=user_id,
+            input_key=input_key,
+            output_key=output_key,
+            highlight_regions=highlight_regions,
+            effect_type=effect_type,
+            video_duration=video_duration,
+            progress_callback=progress_callback,
+        )
 
     render_overlay = _get_render_overlay_fn()
 
@@ -996,6 +1029,9 @@ async def call_modal_annotate_compilation(
     Creates a video compilation with burned-in text annotations on Modal cloud.
     Avoids downloading large game videos locally.
 
+    When MODAL_ENABLED=false, uses local FFmpeg with the same interface.
+    This enables testing the full code path without Modal costs.
+
     Args:
         job_id: Unique job identifier
         user_id: User folder in R2 (e.g., "a")
@@ -1010,7 +1046,17 @@ async def call_modal_annotate_compilation(
         {"status": "error", "error": "..."}
     """
     if not _modal_enabled:
-        raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
+        # Use local fallback with same interface
+        from app.services.local_processors import local_annotate_compilation
+        logger.info(f"[Modal] Using local fallback for annotate job {job_id}")
+        return await local_annotate_compilation(
+            job_id=job_id,
+            user_id=user_id,
+            input_key=input_key,
+            output_key=output_key,
+            clips=clips,
+            progress_callback=progress_callback,
+        )
 
     create_annotated_compilation = _get_create_annotated_compilation_fn()
 
