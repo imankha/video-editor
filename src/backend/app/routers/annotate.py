@@ -797,12 +797,22 @@ async def export_clips(
 
             else:
                 # Local processing (fallback or when Modal not available)
+                # Use same progress allocation as Modal for consistency:
+                # clips: 15-85% (70% range), concat: 85-92%, upload: 92-100%
                 logger.info(f"[Export] Using local processing for annotated compilation")
+
+                total_clips = len(all_clips)
+                clip_progress_start = 15
+                clip_progress_range = 70  # 70% of progress for processing clips
 
                 for idx, clip in enumerate(all_clips):
                     clip_name = clip.get('name', 'clip')
-                    step += 1
-                    await update_progress(step, total_steps, 'clips', f'Creating clip {idx + 1}/{len(all_clips)}: {clip_name}')
+                    # Calculate progress same as Modal (15-85% for clips)
+                    clip_base_progress = clip_progress_start + (idx / total_clips) * clip_progress_range
+                    # Apply same 10 + progress * 0.9 mapping as Modal path
+                    mapped_progress = 10 + int(clip_base_progress * 0.9)
+                    await update_progress(mapped_progress, 100, 'processing', f'Processing clip {idx + 1}/{total_clips}: {clip_name}')
+
                     burned_path = os.path.join(temp_dir, f"burned_{uuid.uuid4().hex[:8]}.mp4")
 
                     success = await create_clip_with_burned_text(
@@ -819,15 +829,19 @@ async def export_clips(
                     if success:
                         burned_clip_paths.append(burned_path)
 
-                # Concatenate burned clips into compilation
+                # Concatenate burned clips into compilation (85% in Modal's allocation)
                 if burned_clip_paths:
-                    step += 1
-                    await update_progress(step, total_steps, 'concatenating', f'Merging {len(burned_clip_paths)} clips into compilation...')
+                    mapped_progress = 10 + int(85 * 0.9)  # 86%
+                    await update_progress(mapped_progress, 100, 'concatenating', f'Merging {len(burned_clip_paths)} clips into compilation...')
                     compilation_path = os.path.join(temp_dir, compilation_filename)
 
                     if await concatenate_videos(burned_clip_paths, compilation_path):
                         compilation_size = os.path.getsize(compilation_path)
                         logger.info(f"Generated clips compilation: {compilation_filename} ({compilation_size / (1024*1024):.1f}MB)")
+
+                        # Upload to R2 (92% in Modal's allocation)
+                        mapped_progress = 10 + int(92 * 0.9)  # 92%
+                        await update_progress(mapped_progress, 100, 'uploading', 'Uploading result...')
 
                         # Upload to R2 downloads folder for the download endpoint
                         if not upload_to_r2(user_id, f"downloads/{compilation_filename}", Path(compilation_path)):
