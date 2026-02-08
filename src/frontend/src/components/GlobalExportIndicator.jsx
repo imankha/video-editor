@@ -5,6 +5,17 @@ import { toast } from './shared';
 import { ExportStatus } from '../constants/exportStatus';
 
 /**
+ * Get display label for an export.
+ * For annotate exports, shows game name. For others, shows project name.
+ */
+function getExportLabel(exp) {
+  if (exp.type === 'annotate') {
+    return exp.gameName || 'Annotation';
+  }
+  return getExportLabel(exp);
+}
+
+/**
  * Calculate ETA for an export based on elapsed time and progress.
  * Returns null if not enough data to estimate.
  *
@@ -85,7 +96,7 @@ export function GlobalExportIndicator() {
     );
 
     newlyCompleted.forEach((exp) => {
-      const projectLabel = exp.projectName || `Project #${exp.projectId}`;
+      const projectLabel = getExportLabel(exp);
       if (exp.status === ExportStatus.COMPLETE) {
         toast.success('Export Complete', {
           message: `${projectLabel} - ${exp.type} export finished successfully`,
@@ -187,7 +198,7 @@ export function GlobalExportIndicator() {
               </div>
               {primaryExport && (
                 <div className="text-xs text-gray-400 truncate max-w-[180px]">
-                  {primaryExport.projectName || `Project #${primaryExport.projectId}`} - {primaryExport.progress?.percent >= 0 ? `${primaryExport.progress.percent}%` : 'Processing...'}
+                  {getExportLabel(primaryExport)} - {primaryExport.progress?.percent >= 0 ? `${primaryExport.progress.percent}%` : 'Processing...'}
                   {primaryETA && (
                     <span className="ml-1 text-gray-500">
                       ({primaryETA.formatted})
@@ -234,7 +245,7 @@ export function GlobalExportIndicator() {
                         {exp.type} Export
                       </div>
                       <div className="text-xs text-gray-400 truncate max-w-[180px]">
-                        {exp.projectName || `Project #${exp.projectId}`}
+                        {getExportLabel(exp)}
                       </div>
                     </div>
                   </div>

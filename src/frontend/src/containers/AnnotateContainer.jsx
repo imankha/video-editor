@@ -414,7 +414,10 @@ export function AnnotateContainer({
       throw err;
     } finally {
       exportWebSocketManager.disconnect(exportId);
-      setTimeout(() => setExportProgress(null), 2000);
+      // Only auto-clear progress on success - errors stay visible until user dismisses
+      if (exportProgress && !exportProgress.error) {
+        setTimeout(() => setExportProgress(null), 2000);
+      }
     }
   }, [annotateVideoFile, annotateGameId, annotateGameName, startExportInStore]);
 
@@ -1080,7 +1083,7 @@ export function AnnotateExportPanel({
               <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-300 ${
-                    exportProgress.done ? 'bg-green-500' : 'bg-blue-500'
+                    exportProgress.error ? 'bg-red-500' : exportProgress.done ? 'bg-green-500' : 'bg-blue-500'
                   }`}
                   style={{
                     width: exportProgress.total > 0
