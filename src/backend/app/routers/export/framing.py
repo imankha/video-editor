@@ -496,12 +496,13 @@ async def render_project(request: RenderRequest):
         working_clips = cursor.fetchall()
 
     if not working_clips:
-        error_data = {
-            "progress": 0,
-            "message": "Project has no clips to export. Add clips first.",
-            "status": "error",
-            "error": "no_clips"
-        }
+        from app.websocket import make_progress_data
+        error_data = make_progress_data(
+            current=0, total=100, phase='error',
+            message="Project has no clips to export. Add clips first.",
+            export_type='framing',
+            project_id=project_id, project_name=project_name,
+        )
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
         raise HTTPException(
@@ -974,14 +975,13 @@ async def render_project(request: RenderRequest):
             pass
 
         # Send error progress via WebSocket
-        error_data = {
-            "progress": 0,
-            "message": f"Export failed: {error_msg}",
-            "status": "error",
-            "projectId": project_id,
-            "projectName": project_name,
-            "type": "framing"
-        }
+        from app.websocket import make_progress_data
+        error_data = make_progress_data(
+            current=0, total=100, phase='error',
+            message=f"Export failed: {error_msg}",
+            export_type='framing',
+            project_id=project_id, project_name=project_name,
+        )
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
 
@@ -1002,14 +1002,13 @@ async def render_project(request: RenderRequest):
         except Exception:
             pass
 
-        error_data = {
-            "progress": 0,
-            "message": f"Export failed: {str(e)}",
-            "status": "error",
-            "projectId": project_id,
-            "projectName": project_name,
-            "type": "framing"
-        }
+        from app.websocket import make_progress_data
+        error_data = make_progress_data(
+            current=0, total=100, phase='error',
+            message=f"Export failed: {str(e)}",
+            export_type='framing',
+            project_id=project_id, project_name=project_name,
+        )
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
 

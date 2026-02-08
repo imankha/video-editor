@@ -840,7 +840,13 @@ async def export_overlay_only(
                 pass
 
         # Send error progress via WebSocket
-        error_data = {"progress": 0, "message": f"Export failed: {error_msg}", "status": "error", "projectId": project_id, "projectName": project_name, "type": "overlay"}
+        from app.websocket import make_progress_data
+        error_data = make_progress_data(
+            current=0, total=100, phase='error',
+            message=f"Export failed: {error_msg}",
+            export_type='overlay',
+            project_id=project_id, project_name=project_name,
+        )
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
 
@@ -867,7 +873,13 @@ async def export_overlay_only(
                     conn.commit()
             except Exception:
                 pass
-        error_data = {"progress": 0, "message": f"Export failed: {str(e)}", "status": "error", "projectId": project_id, "projectName": project_name, "type": "overlay"}
+        from app.websocket import make_progress_data
+        error_data = make_progress_data(
+            current=0, total=100, phase='error',
+            message=f"Export failed: {str(e)}",
+            export_type='overlay',
+            project_id=project_id, project_name=project_name,
+        )
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
         import shutil
@@ -1826,14 +1838,16 @@ async def render_overlay(request: OverlayRenderRequest):
         except Exception:
             pass
 
-        error_data = {
-            "progress": 0,
-            "message": f"Export failed: {e}",
-            "status": "error",
-            "projectId": project_id,
-            "projectName": project_name,
-            "type": "overlay"
-        }
+        from app.websocket import make_progress_data
+        error_data = make_progress_data(
+            current=0,
+            total=100,
+            phase='error',
+            message=f"Export failed: {e}",
+            export_type='overlay',
+            project_id=project_id,
+            project_name=project_name,
+        )
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
 

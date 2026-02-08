@@ -606,29 +606,20 @@ async def run_annotate_export_processing(export_id: str, config: dict):
     temp_dir = tempfile.mkdtemp(prefix="annotate_")
     logger.info(f"[AnnotateExport] {export_id}: Created temp directory: {temp_dir}")
 
-    # Progress helper
-    async def update_progress(current: int, total: int, phase: str, message: str, done: bool = False):
-        # Determine status - error phase means error status
-        if phase == 'error':
-            status = ExportStatus.ERROR
-        elif done:
-            status = ExportStatus.COMPLETE
-        else:
-            status = 'processing'
+    # Progress helper - uses shared make_progress_data for consistent status handling
+    from app.websocket import make_progress_data
 
-        progress_data = {
-            'current': current,
-            'total': total,
-            'phase': phase,
-            'message': message,
-            'done': done,
-            'progress': int((current / total) * 100) if total > 0 else 0,
-            'status': status,
-            'type': 'annotate',
-            'gameId': game_id,
-            'gameName': game_name,
-            'error': message if phase == 'error' else None,  # Include error message for frontend
-        }
+    async def update_progress(current: int, total: int, phase: str, message: str, done: bool = False):
+        progress_data = make_progress_data(
+            current=current,
+            total=total,
+            phase=phase,
+            message=message,
+            export_type='annotate',
+            done=done,
+            game_id=game_id,
+            game_name=game_name,
+        )
         export_progress[export_id] = progress_data
         await manager.send_progress(export_id, progress_data)
         if current % 5 == 0 or done or phase == 'error':
@@ -704,7 +695,7 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                 rating = clip.get('rating', 3)
                 notes = clip.get('notes', '')
                 tags = ','.join(clip.get('tags', []))
-                f.write(f"{name}\t{format_time_display(start)}\t{format_time_display(end)}\t{format_time_display(duration)}\t{rating}\t{notes}\t{tags}\n")
+                f.write(f"{name}\t{format_time_for_tsv(start)}\t{format_time_for_tsv(end)}\t{format_time_for_tsv(duration)}\t{rating}\t{notes}\t{tags}\n")
 
         # Upload TSV to R2
         if R2_ENABLED:

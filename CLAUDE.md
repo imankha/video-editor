@@ -47,6 +47,7 @@ cd src/backend && pytest tests/ -k "test_name" -v        # By name
 | **No Band-Aid Fixes** | Understand root cause, don't mask symptoms |
 | **Heavy Testing** | Unit tests co-located, E2E with Playwright |
 | **Type Safety** | No magic strings (see frontend/backend type-safety skills) |
+| **Minimize Code Paths** | Before adding new code, search for similar functionality. Extract shared utilities rather than duplicating logic. When modal_enabled=false, test the same code paths as modal_enabled=true. |
 
 ## Database
 - Location: `user_data/{user_id}/database.sqlite`

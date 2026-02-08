@@ -5,14 +5,74 @@ This module handles WebSocket connections and progress tracking for video export
 """
 
 from fastapi import WebSocket, WebSocketDisconnect
-from typing import Dict, List
+from typing import Dict, List, Optional
 import logging
+
+from app.constants import ExportStatus
 
 logger = logging.getLogger(__name__)
 
 # Global progress tracking for exports
 # Format: {export_id: {"progress": 0-100, "message": "...", "status": "processing|complete|error"}}
 export_progress: Dict[str, dict] = {}
+
+
+def make_progress_data(
+    current: int,
+    total: int,
+    phase: str,
+    message: str,
+    export_type: str,
+    done: bool = False,
+    project_id: Optional[int] = None,
+    project_name: Optional[str] = None,
+    game_id: Optional[int] = None,
+    game_name: Optional[str] = None,
+) -> dict:
+    """
+    Create a properly formatted progress data object for WebSocket updates.
+
+    This is the single source of truth for progress data formatting across all export types.
+    Ensures correct status handling: 'error' phase → ERROR status, done → COMPLETE status.
+
+    Args:
+        current: Current progress value (0-100)
+        total: Total progress value (usually 100)
+        phase: Processing phase (init, download, processing, upload, done, error)
+        message: Human-readable progress message
+        export_type: Type of export (annotate, framing, overlay)
+        done: Whether the export is complete
+        project_id: Project ID (for framing/overlay exports)
+        project_name: Project name (for framing/overlay exports)
+        game_id: Game ID (for annotate exports)
+        game_name: Game name (for annotate exports)
+
+    Returns:
+        Properly formatted progress data dict ready for WebSocket transmission
+    """
+    # Determine status - error phase means error status
+    if phase == 'error':
+        status = ExportStatus.ERROR
+    elif done:
+        status = ExportStatus.COMPLETE
+    else:
+        status = 'processing'
+
+    return {
+        'current': current,
+        'total': total,
+        'phase': phase,
+        'message': message,
+        'done': done,
+        'progress': int((current / total) * 100) if total > 0 else 0,
+        'status': status,
+        'type': export_type,
+        'projectId': project_id,
+        'projectName': project_name,
+        'gameId': game_id,
+        'gameName': game_name,
+        'error': message if phase == 'error' else None,
+    }
 
 
 class ConnectionManager:
