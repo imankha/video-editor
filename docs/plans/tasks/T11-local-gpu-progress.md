@@ -1,6 +1,6 @@
 # T11: Local GPU Progress Bar (modal_enabled=false)
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** MEDIUM
 **Complexity:** LOW
 **Created:** 2026-02-08
@@ -58,18 +58,23 @@ Compare to overlay's local progress callback pattern (overlay.py:1707-1738) whic
 ## Implementation
 
 ### Steps
-1. [ ] Review how overlay.py sends local progress updates (lines 1707-1738)
-2. [ ] Add progress callback to `create_clip_with_burned_text()` function
-3. [ ] Wire callback to send WebSocket updates during local FFmpeg processing
-4. [ ] Test with `MODAL_ENABLED=false` to verify incremental progress
+1. [x] Review how overlay.py sends local progress updates (lines 1707-1738)
+2. [x] Use same progress allocation as Modal (15-85% for clips)
+3. [x] Apply same 10 + progress * 0.9 mapping for consistency
+4. [x] Test with `MODAL_ENABLED=false` to verify incremental progress
 
 ### Progress Log
 
-*No progress yet*
+**2026-02-08**: Implemented consistent progress for local annotate export.
+- Modified local processing path to use Modal's progress allocation formula
+- Clips get 15-85% (70% range, evenly distributed across all clips)
+- Concatenation at 85%, upload at 92%
+- Progress now shows: 0% → 3% → 23% → 26% → 28% → ... → 86% → 92% → 100%
+- Committed as b4fd340
 
 ## Acceptance Criteria
 
-- [ ] Progress bar shows incremental updates during local annotate export
-- [ ] Progress doesn't jump from 0% to 100% between clips
-- [ ] Works consistently with `MODAL_ENABLED=false`
-- [ ] Matches behavior of framing/overlay local exports
+- [x] Progress bar shows incremental updates during local annotate export
+- [x] Progress doesn't jump from 0% to 100% between clips
+- [x] Works consistently with `MODAL_ENABLED=false`
+- [x] Matches behavior of Modal exports (same progress allocation)

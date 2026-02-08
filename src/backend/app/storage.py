@@ -69,7 +69,7 @@ def r2_key(user_id: str, path: str) -> str:
     return f"{user_id}/{path}"
 
 
-def download_from_r2(user_id: str, relative_path: str, local_path: Path) -> bool:
+def download_from_r2(user_id: str, relative_path: str, local_path: Path, progress_callback=None) -> bool:
     """
     Download a file from R2 to local filesystem.
 
@@ -77,6 +77,7 @@ def download_from_r2(user_id: str, relative_path: str, local_path: Path) -> bool
         user_id: User namespace
         relative_path: Path relative to user_data/<user_id>/
         local_path: Local path to save the file
+        progress_callback: Optional callback(bytes_transferred) for download progress
 
     Returns:
         True if download succeeded, False otherwise
@@ -90,7 +91,11 @@ def download_from_r2(user_id: str, relative_path: str, local_path: Path) -> bool
         # Ensure parent directory exists
         local_path.parent.mkdir(parents=True, exist_ok=True)
 
-        client.download_file(R2_BUCKET, key, str(local_path))
+        # Use callback if provided for progress tracking
+        if progress_callback:
+            client.download_file(R2_BUCKET, key, str(local_path), Callback=progress_callback)
+        else:
+            client.download_file(R2_BUCKET, key, str(local_path))
         logger.debug(f"Downloaded from R2: {key} -> {local_path}")
         return True
     except client.exceptions.NoSuchKey:
@@ -99,6 +104,142 @@ def download_from_r2(user_id: str, relative_path: str, local_path: Path) -> bool
     except Exception as e:
         logger.error(f"Failed to download from R2: {key} - {e}")
         return False
+
+
+def get_r2_file_size(user_id: str, relative_path: str) -> Optional[int]:
+    """
+    Get the size of a file in R2.
+
+    Args:
+        user_id: User namespace
+        relative_path: Path relative to user_data/<user_id>/
+
+    Returns:
+        File size in bytes, or None if file not found or error
+    """
+    client = get_r2_client()
+    if not client:
+        return None
+
+    key = r2_key(user_id, relative_path)
+    try:
+        response = client.head_object(Bucket=R2_BUCKET, Key=key)
+        return response.get('ContentLength')
+    except Exception as e:
+        logger.debug(f"Could not get file size from R2: {key} - {e}")
+        return None
+
+
+async def download_from_r2_with_progress(
+    user_id: str,
+    relative_path: str,
+    local_path: Path,
+    export_id: str,
+    export_type: str,
+    project_id: int = None,
+    project_name: str = None,
+    progress_start: int = 5,
+    progress_end: int = 15,
+) -> bool:
+    """
+    Download a file from R2 with WebSocket progress updates.
+
+    DRY helper for annotate, framing, and overlay exports.
+    Sends progress updates during download matching Modal's pattern.
+
+    Args:
+        user_id: User namespace
+        relative_path: Path relative to user_data/<user_id>/
+        local_path: Local path to save the file
+        export_id: Export ID for WebSocket progress
+        export_type: 'annotate', 'framing', or 'overlay'
+        project_id: Optional project ID for progress data
+        project_name: Optional project name for progress data
+        progress_start: Starting progress percentage (default 5%)
+        progress_end: Ending progress percentage (default 15%)
+
+    Returns:
+        True if download succeeded, False otherwise
+    """
+    import asyncio
+    from app.websocket import manager
+
+    # Get file size for progress calculation
+    total_size = get_r2_file_size(user_id, relative_path)
+
+    # Send initial progress
+    progress_data = {
+        'progress': progress_start,
+        'message': 'Downloading source video...',
+        'phase': 'downloading',
+        'status': 'processing',
+        'type': export_type
+    }
+    if project_id is not None:
+        progress_data['projectId'] = project_id
+    if project_name is not None:
+        progress_data['projectName'] = project_name
+
+    await manager.send_progress(export_id, progress_data)
+
+    # Download with progress callback
+    if total_size and total_size > 0:
+        downloaded_bytes = [0]
+        last_progress_sent = [progress_start]
+        loop = asyncio.get_running_loop()
+
+        def download_callback(bytes_transferred):
+            downloaded_bytes[0] += bytes_transferred
+            # Calculate progress within our range
+            download_fraction = min(downloaded_bytes[0] / total_size, 1.0)
+            current_progress = int(progress_start + download_fraction * (progress_end - progress_start))
+
+            # Send update every 2% or more
+            if current_progress >= last_progress_sent[0] + 2:
+                last_progress_sent[0] = current_progress
+                mb_downloaded = downloaded_bytes[0] / (1024 * 1024)
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        manager.send_progress(export_id, {
+                            'progress': current_progress,
+                            'message': f'Downloading... ({mb_downloaded:.0f} MB)',
+                            'phase': 'downloading',
+                            'status': 'processing',
+                            'type': export_type,
+                            **({"projectId": project_id} if project_id else {}),
+                            **({"projectName": project_name} if project_name else {}),
+                        }),
+                        loop
+                    )
+                except Exception:
+                    pass
+
+        # Run sync download in thread pool
+        success = await asyncio.to_thread(
+            download_from_r2, user_id, relative_path, local_path, download_callback
+        )
+    else:
+        # No file size available - just do simple download
+        success = await asyncio.to_thread(
+            download_from_r2, user_id, relative_path, local_path
+        )
+
+    if success:
+        # Send download complete
+        complete_data = {
+            'progress': progress_end,
+            'message': 'Download complete',
+            'phase': 'downloading',
+            'status': 'processing',
+            'type': export_type
+        }
+        if project_id is not None:
+            complete_data['projectId'] = project_id
+        if project_name is not None:
+            complete_data['projectName'] = project_name
+        await manager.send_progress(export_id, complete_data)
+
+    return success
 
 
 def upload_to_r2(user_id: str, relative_path: str, local_path: Path) -> bool:

@@ -27,7 +27,7 @@ from app.database import get_db_connection, get_raw_clips_path, get_downloads_pa
 from app.services.clip_cache import get_clip_cache
 from app.services.ffmpeg_service import get_encoding_command_parts
 from app.services.modal_client import modal_enabled, call_modal_annotate_compilation
-from app.storage import generate_presigned_url, upload_to_r2, download_from_r2, R2_ENABLED
+from app.storage import generate_presigned_url, upload_to_r2, download_from_r2, download_from_r2_with_progress, R2_ENABLED
 from app.user_context import get_current_user_id
 from app.websocket import manager, export_progress
 
@@ -505,10 +505,21 @@ async def export_clips(
             user_id = get_current_user_id()
             source_path = os.path.join(temp_dir, f"game_{uuid.uuid4().hex[:8]}.mp4")
             r2_key = f"games/{video_filename}"
+
             logger.info(f"[Export] Downloading game video from R2: {r2_key}")
-            if not download_from_r2(user_id, r2_key, Path(source_path)):
-                logger.error(f"[Export] Failed to download game video from R2: {r2_key}")
-                raise HTTPException(status_code=404, detail="Game video not found in storage")
+            if export_id:
+                # Use DRY helper for download with progress (5% -> 15%)
+                if not await download_from_r2_with_progress(
+                    user_id, r2_key, Path(source_path),
+                    export_id=export_id, export_type='annotate'
+                ):
+                    logger.error(f"[Export] Failed to download game video from R2: {r2_key}")
+                    raise HTTPException(status_code=404, detail="Game video not found in storage")
+            else:
+                # No export_id, use simple download
+                if not download_from_r2(user_id, r2_key, Path(source_path)):
+                    logger.error(f"[Export] Failed to download game video from R2: {r2_key}")
+                    raise HTTPException(status_code=404, detail="Game video not found in storage")
             logger.info(f"[Export] Downloaded game video to: {source_path}")
         elif use_modal_for_compilation:
             logger.info(f"[Export] Skipping game video download - Modal will stream from R2")

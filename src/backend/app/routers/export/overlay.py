@@ -33,7 +33,7 @@ _frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ov
 from ...websocket import export_progress, manager
 from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path, get_uploads_path
 from ...services.ffmpeg_service import get_encoding_command_parts
-from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
+from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2, download_from_r2_with_progress
 from ...user_context import get_current_user_id
 from ...highlight_transform import (
     transform_all_regions_to_raw,
@@ -1695,7 +1695,12 @@ async def render_overlay(request: OverlayRenderRequest):
             output_path = os.path.join(temp_dir, "output.mp4")
 
             try:
-                if not download_from_r2(user_id, f"working_videos/{working_filename}", Path(input_path)):
+                # Use DRY helper for download with progress (5% -> 15%)
+                if not await download_from_r2_with_progress(
+                    user_id, f"working_videos/{working_filename}", Path(input_path),
+                    export_id=export_id, export_type='overlay',
+                    project_id=project_id, project_name=project_name
+                ):
                     raise RuntimeError("Failed to download working video from R2")
 
                 # Process locally

@@ -28,7 +28,7 @@ from ...websocket import export_progress, manager
 from ...interpolation import generate_crop_filter
 from ...database import get_db_connection, get_working_videos_path
 from ...queries import latest_working_clips_subquery
-from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
+from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2, download_from_r2_with_progress
 from ...services.ffmpeg_service import get_video_duration
 from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
 from ...highlight_transform import get_output_duration
@@ -735,7 +735,12 @@ async def render_project(request: RenderRequest):
 
             input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex[:8]}.mp4")
 
-            if not download_from_r2(user_id, input_key, Path(input_path)):
+            # Use DRY helper for download with progress (5% -> 15%)
+            if not await download_from_r2_with_progress(
+                user_id, input_key, Path(input_path),
+                export_id=export_id, export_type='framing',
+                project_id=project_id, project_name=project_name
+            ):
                 raise HTTPException(
                     status_code=500,
                     detail={"error": "video_not_found", "message": f"Failed to download source video from storage"}
