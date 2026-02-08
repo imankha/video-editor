@@ -247,16 +247,16 @@ async def create_clip_with_burned_text(
 
     logger.info(f"Creating burned-in clip: {clip_name} (encoder: {encoding_params[1]})")
 
-    # Use async subprocess to avoid blocking the event loop
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
+    # Run FFmpeg in thread to avoid blocking (asyncio.create_subprocess_exec doesn't work on Windows)
+    import subprocess
+    result = await asyncio.to_thread(
+        subprocess.run,
+        cmd,
+        capture_output=True,
     )
-    _, stderr = await process.communicate()
 
-    if process.returncode != 0:
-        logger.error(f"FFmpeg error: {stderr.decode()}")
+    if result.returncode != 0:
+        logger.error(f"FFmpeg error: {result.stderr.decode()}")
         return False
 
     # Save to cache for future use
@@ -289,19 +289,19 @@ async def concatenate_videos(input_paths: List[str], output_path: str) -> bool:
         output_path
     ]
 
-    # Use async subprocess to avoid blocking the event loop
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
+    # Run FFmpeg in thread to avoid blocking (asyncio.create_subprocess_exec doesn't work on Windows)
+    import subprocess
+    result = await asyncio.to_thread(
+        subprocess.run,
+        cmd,
+        capture_output=True,
     )
-    _, stderr = await process.communicate()
 
     # Clean up concat file
     os.remove(concat_file)
 
-    if process.returncode != 0:
-        logger.error(f"FFmpeg concat error: {stderr.decode()}")
+    if result.returncode != 0:
+        logger.error(f"FFmpeg concat error: {result.stderr.decode()}")
         return False
     return True
 
