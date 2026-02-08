@@ -30,6 +30,7 @@ from app.services.modal_client import modal_enabled, call_modal_annotate_compila
 from app.storage import generate_presigned_url, upload_to_r2, download_from_r2, download_from_r2_with_progress, R2_ENABLED
 from app.user_context import get_current_user_id
 from app.websocket import manager, export_progress
+from app.constants import ExportStatus
 
 logger = logging.getLogger(__name__)
 
@@ -314,6 +315,61 @@ def cleanup_temp_dir(temp_dir: str):
         logger.warning(f"Failed to clean up: {e}")
 
 
+# ============================================================================
+# Export Job Tracking (T12: Progress State Recovery)
+# ============================================================================
+
+def create_annotate_export_job(export_id: str, game_id: Optional[int], game_name: Optional[str], clip_count: int) -> str:
+    """
+    Create an export_jobs record for annotate export.
+    Uses project_id=0 since annotate exports don't belong to a project.
+    """
+    input_data = json.dumps({
+        "type": "annotate",
+        "game_id": game_id,
+        "clip_count": clip_count,
+    })
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO export_jobs (id, project_id, type, status, input_data, game_id, game_name)
+            VALUES (?, 0, 'annotate', 'processing', ?, ?, ?)
+        """, (export_id, input_data, game_id, game_name))
+        conn.commit()
+
+    logger.info(f"[AnnotateExport] Created export job {export_id} for game {game_id} ({game_name})")
+    return export_id
+
+
+def complete_annotate_export_job(export_id: str, output_filename: Optional[str] = None):
+    """Mark annotate export job as complete."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE export_jobs
+            SET status = ?, completed_at = datetime('now'), output_filename = ?
+            WHERE id = ?
+        """, (ExportStatus.COMPLETE, output_filename, export_id))
+        conn.commit()
+
+    logger.info(f"[AnnotateExport] Completed export job {export_id}")
+
+
+def fail_annotate_export_job(export_id: str, error_message: str):
+    """Mark annotate export job as failed."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE export_jobs
+            SET status = ?, completed_at = datetime('now'), error = ?
+            WHERE id = ?
+        """, (ExportStatus.ERROR, error_message, export_id))
+        conn.commit()
+
+    logger.error(f"[AnnotateExport] Failed export job {export_id}: {error_message}")
+
+
 @router.get("/download/{filename}")
 async def download_file(filename: str):
     """
@@ -488,9 +544,26 @@ async def export_clips(
         logger.info(f"[Export] Using uploaded video: {video.filename}")
         source_from_r2 = False
         video_filename = None
+        game_id_int = None
+        game_name = None
     else:
         logger.error("[Export] VALIDATION ERROR - Neither video file nor game_id provided")
         raise HTTPException(status_code=400, detail="Either video file or game_id required")
+
+    # Track game_name for display (T12: Progress Recovery)
+    if game_id:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM games WHERE id = ?", (game_id_int,))
+            game_row = cursor.fetchone()
+            game_name = game_row['name'] if game_row else f"Game {game_id}"
+    else:
+        game_name = video.filename if video else "Uploaded Video"
+
+    # Create export job for progress recovery (T12)
+    # Only create job if export_id is provided (frontend wants progress tracking)
+    if export_id:
+        create_annotate_export_job(export_id, game_id_int, game_name, len(clips))
 
     # Create temp directory for processing
     temp_dir = tempfile.mkdtemp(prefix="annotate_")
@@ -541,6 +614,7 @@ async def export_clips(
         video_base = sanitize_filename(os.path.splitext(original_filename)[0])
 
         # Helper function to update progress via WebSocket (same pattern as overlay)
+        # T12: Include gameId and gameName for progress recovery
         async def update_progress(current: int, total: int, phase: str, message: str, done: bool = False):
             if export_id:
                 progress_data = {
@@ -550,8 +624,11 @@ async def export_clips(
                     'message': message,
                     'done': done,
                     'progress': int((current / total) * 100) if total > 0 else 0,
-                    'status': 'complete' if done else 'processing',
-                    'type': 'annotate'
+                    'status': ExportStatus.COMPLETE if done else 'processing',
+                    'type': 'annotate',
+                    # T12: Include game info for progress recovery
+                    'gameId': game_id_int,
+                    'gameName': game_name,
                 }
                 export_progress[export_id] = progress_data
                 await manager.send_progress(export_id, progress_data)
@@ -917,6 +994,11 @@ async def export_clips(
         # Mark progress as done
         await update_progress(total_steps, total_steps, 'done', message, done=True)
 
+        # Mark export job as complete (T12: Progress Recovery)
+        if export_id:
+            output_file = download_urls.get('clips_compilation', {}).get('filename')
+            complete_annotate_export_job(export_id, output_file)
+
         # Build response
         response_data = {
             'success': True,
@@ -934,9 +1016,15 @@ async def export_clips(
     except HTTPException as e:
         # HTTPException already logged before raising, just cleanup and re-raise
         logger.warning(f"[Export] Request failed with HTTPException: {e.status_code} - {e.detail}")
+        # Mark export job as failed (T12: Progress Recovery)
+        if export_id:
+            fail_annotate_export_job(export_id, e.detail)
         cleanup_temp_dir(temp_dir)
         raise
     except Exception as e:
         logger.error(f"[Export] UNEXPECTED ERROR - Export failed: {type(e).__name__}: {e}", exc_info=True)
+        # Mark export job as failed (T12: Progress Recovery)
+        if export_id:
+            fail_annotate_export_job(export_id, str(e))
         cleanup_temp_dir(temp_dir)
         raise HTTPException(status_code=500, detail=str(e))

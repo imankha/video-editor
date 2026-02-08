@@ -65,6 +65,9 @@ class ExportJobResponse(BaseModel):
     created_at: str
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
+    # T12: Annotate exports use game_id instead of project_id
+    game_id: Optional[int] = None
+    game_name: Optional[str] = None
 
 
 class ExportJobListResponse(BaseModel):
@@ -367,10 +370,12 @@ def get_active_exports() -> List[dict]:
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        # T12: Include game_id and game_name for annotate exports
         cursor.execute("""
             SELECT e.id, e.project_id, p.name as project_name, e.type, e.status, e.error,
                    e.output_video_id, e.output_filename,
-                   e.created_at, e.started_at, e.completed_at
+                   e.created_at, e.started_at, e.completed_at,
+                   e.game_id, e.game_name
             FROM export_jobs e
             LEFT JOIN projects p ON e.project_id = p.id
             WHERE e.status IN ('pending', 'processing')
@@ -662,7 +667,10 @@ async def list_active_exports():
                 output_filename=e['output_filename'],
                 created_at=e['created_at'],
                 started_at=e['started_at'],
-                completed_at=e['completed_at']
+                completed_at=e['completed_at'],
+                # T12: Include game_id and game_name for annotate exports
+                game_id=e.get('game_id'),
+                game_name=e.get('game_name'),
             )
             for e in exports
         ]
@@ -699,6 +707,96 @@ async def list_recent_exports(hours: int = Query(default=24, ge=1, le=168)):
             for e in exports
         ]
     )
+
+
+@router.get("/unacknowledged", response_model=ExportJobListResponse)
+async def list_unacknowledged_exports():
+    """
+    T12: Get exports that completed while user was away (not yet acknowledged).
+
+    Use this on app startup to:
+    - Find completed exports that need notifications
+    - Show "export finished while you were away" messages
+
+    Only returns exports from the last 24 hours that:
+    - Status is 'complete' or 'error'
+    - Not yet acknowledged (acknowledged_at is NULL)
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT e.id, e.project_id, p.name as project_name, e.type, e.status, e.error,
+                   e.output_video_id, e.output_filename,
+                   e.created_at, e.started_at, e.completed_at,
+                   e.game_id, e.game_name
+            FROM export_jobs e
+            LEFT JOIN projects p ON e.project_id = p.id
+            WHERE e.status IN ('complete', 'error')
+              AND e.acknowledged_at IS NULL
+              AND e.completed_at >= datetime('now', '-24 hours')
+            ORDER BY e.completed_at DESC
+        """)
+        rows = cursor.fetchall()
+        exports = [dict(row) for row in rows]
+
+    return ExportJobListResponse(
+        exports=[
+            ExportJobResponse(
+                job_id=e['id'],
+                project_id=e['project_id'],
+                project_name=e.get('project_name'),
+                type=e['type'],
+                status=e['status'],
+                error=e['error'],
+                output_video_id=e['output_video_id'],
+                output_filename=e['output_filename'],
+                created_at=e['created_at'],
+                started_at=e['started_at'],
+                completed_at=e['completed_at'],
+                game_id=e.get('game_id'),
+                game_name=e.get('game_name'),
+            )
+            for e in exports
+        ]
+    )
+
+
+@router.post("/acknowledge")
+async def acknowledge_exports(job_ids: List[str] = None):
+    """
+    T12: Mark exports as acknowledged (notification shown).
+
+    Call this after showing completion notifications to prevent
+    duplicate notifications on subsequent page loads.
+
+    If job_ids is empty/null, acknowledges all unacknowledged exports.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        if job_ids:
+            # Acknowledge specific exports
+            placeholders = ','.join(['?' for _ in job_ids])
+            cursor.execute(f"""
+                UPDATE export_jobs
+                SET acknowledged_at = datetime('now')
+                WHERE id IN ({placeholders})
+                  AND acknowledged_at IS NULL
+            """, job_ids)
+        else:
+            # Acknowledge all unacknowledged exports
+            cursor.execute("""
+                UPDATE export_jobs
+                SET acknowledged_at = datetime('now')
+                WHERE acknowledged_at IS NULL
+                  AND status IN ('complete', 'error')
+            """)
+
+        conn.commit()
+        acknowledged_count = cursor.rowcount
+
+    logger.info(f"[ExportJobs] Acknowledged {acknowledged_count} exports")
+    return {"acknowledged": acknowledged_count}
 
 
 @router.get("/{job_id}", response_model=ExportJobResponse)
