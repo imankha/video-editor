@@ -725,10 +725,12 @@ async def export_clips(
                 logger.info(f"[Export] Using Modal for annotated compilation ({len(all_clips)} clips)")
                 await update_progress(step + 1, total_steps, 'modal', 'Sending to cloud for processing...')
 
-                # Progress callback for Modal (maps Modal's 10-90 range to our progress tracker)
+                # Progress callback for Modal - map Modal's 0-100% to our 10-100% range
+                # This prevents progress from going backwards after initial backend steps (0-7%)
                 async def modal_progress(progress: float, message: str, phase: str = "modal_processing"):
-                    # progress comes in as 10-90 range from modal_client
-                    await update_progress(int(progress), 100, phase, message)
+                    # Map Modal's 0-100 range to 10-100 of overall progress
+                    mapped_progress = 10 + int(progress * 0.9)
+                    await update_progress(mapped_progress, 100, phase, message)
 
                 # R2 keys
                 input_r2_key = f"games/{video_filename}"
