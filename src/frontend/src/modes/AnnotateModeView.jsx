@@ -267,7 +267,7 @@ export function AnnotateModeView({
                       </span>
                     )}
                   </div>
-                  <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-3 bg-gray-700 rounded-full overflow-hidden border border-gray-600">
                     <div
                       className={`h-full transition-all duration-300 ${
                         exportProgress.done ? 'bg-green-500' : 'bg-blue-500'

@@ -324,11 +324,12 @@ export function AnnotateContainer({
       await exportWebSocketManager.connect(exportId, {
         onProgress: (progress, message) => {
           console.log('[AnnotateContainer] WS progress:', progress, '%', message);
-          setExportProgress({ progress, message, done: false });
+          // UI expects current/total format for progress bar display
+          setExportProgress({ current: progress, total: 100, message, done: false });
         },
         onComplete: (data) => {
           console.log('[AnnotateContainer] WS complete:', data);
-          setExportProgress({ progress: 100, message: 'Export complete!', done: true });
+          setExportProgress({ current: 100, total: 100, message: 'Export complete!', done: true });
         },
         onError: (error) => {
           console.error('[AnnotateContainer] WS error:', error);
