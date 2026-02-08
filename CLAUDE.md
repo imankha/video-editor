@@ -47,7 +47,19 @@ cd src/backend && pytest tests/ -k "test_name" -v        # By name
 | **No Band-Aid Fixes** | Understand root cause, don't mask symptoms |
 | **Heavy Testing** | Unit tests co-located, E2E with Playwright |
 | **Type Safety** | No magic strings (see frontend/backend type-safety skills) |
-| **Minimize Code Paths** | Before adding new code, search for similar functionality. Extract shared utilities rather than duplicating logic. When modal_enabled=false, test the same code paths as modal_enabled=true. |
+| **Minimize Code Paths** | See detailed section below |
+
+## Minimize Code Paths (DRY Architecture)
+
+When developing new features or modifying existing ones:
+
+1. **Search First**: Before writing new code, search for similar functionality in the codebase. Use existing utilities rather than creating duplicates.
+
+2. **Extract Shared Logic**: When you see the same pattern in 2+ places, extract it to a shared helper.
+
+3. **Unified Interfaces**: When code has production vs development modes (cloud vs local, API vs mock), create unified interfaces that work identically for both. Never have large if/else blocks based on environment - route internally instead.
+
+4. **Cross-Feature Consistency**: When multiple features (annotate, framing, overlay) do similar things, extract shared helpers rather than duplicating logic across files.
 
 ## Database
 - Location: `user_data/{user_id}/database.sqlite`

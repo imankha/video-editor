@@ -226,6 +226,8 @@ async def call_modal_framing_ai(
     video_duration: float = None,
     progress_callback = None,
     call_id_callback = None,
+    include_audio: bool = True,
+    export_mode: str = "quality",
 ) -> dict:
     """
     Call Modal process_framing_ai function for AI-upscaled crop exports.
@@ -270,6 +272,8 @@ async def call_modal_framing_ai(
             video_duration=video_duration,
             segment_data=segment_data,
             progress_callback=progress_callback,
+            include_audio=include_audio,
+            export_mode=export_mode,
         )
 
     process_framing_ai = _get_process_framing_ai_fn()

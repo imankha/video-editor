@@ -141,12 +141,14 @@ async def local_framing(
     input_key: str,
     output_key: str,
     keyframes: list,
-    output_width: int,
-    output_height: int,
-    fps: float = 30.0,
+    output_width: int = 810,
+    output_height: int = 1440,
+    fps: int = 30,
     video_duration: float = None,
     segment_data: dict = None,
     progress_callback=None,
+    include_audio: bool = True,
+    export_mode: str = "quality",
 ) -> dict:
     """
     Local fallback for Modal process_framing_ai.
@@ -155,7 +157,6 @@ async def local_framing(
     Downloads from R2, processes with local Real-ESRGAN/FFmpeg, uploads result to R2.
     """
     from app.storage import download_from_r2, upload_to_r2
-    from app.ai_upscaler import process_video_upscale_gpu
 
     logger.info(f"[LocalProcessor] Framing job {job_id} starting")
     logger.info(f"[LocalProcessor] User: {user_id}, Input: {input_key} -> Output: {output_key}")
@@ -170,6 +171,13 @@ async def local_framing(
             logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
     try:
+        # Import AIVideoUpscaler here to avoid import errors if dependencies not installed
+        try:
+            from app.ai_upscaler import AIVideoUpscaler
+        except (ImportError, OSError, AttributeError) as e:
+            logger.error(f"[LocalProcessor] AI upscaler not available: {e}")
+            return {"status": "error", "error": f"AI upscaler not available: {e}"}
+
         with tempfile.TemporaryDirectory(prefix="framing_") as temp_dir:
             input_path = os.path.join(temp_dir, "input.mp4")
             output_path = os.path.join(temp_dir, "output.mp4")
@@ -183,36 +191,67 @@ async def local_framing(
 
             if progress_callback:
                 try:
-                    await progress_callback(10, "Processing with AI upscaler...", "processing")
+                    await progress_callback(15, "Processing with AI upscaler...", "processing")
                 except Exception as e:
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
+
+            # Initialize upscaler
+            upscaler = AIVideoUpscaler(
+                device='cuda',
+                export_mode=export_mode,
+                enable_source_preupscale=False,
+                enable_diffusion_sr=False,
+                sr_model_name='realesr_general_x4v3'
+            )
+
+            if upscaler.upsampler is None:
+                return {"status": "error", "error": "AI SR model failed to load"}
 
             # Get event loop for thread-safe callbacks
             loop = asyncio.get_running_loop()
 
-            def sync_progress_callback(progress: int, message: str):
+            # Progress ranges for local processing
+            is_fast_mode = export_mode.upper() == "FAST"
+            if is_fast_mode:
+                progress_ranges = {
+                    'ai_upscale': (15, 95),
+                    'ffmpeg_encode': (95, 100)
+                }
+            else:
+                progress_ranges = {
+                    'ai_upscale': (15, 30),
+                    'ffmpeg_pass1': (30, 85),
+                    'ffmpeg_encode': (85, 100)
+                }
+
+            def sync_progress_callback(current, total, message, phase='ai_upscale'):
                 """Wrap async callback for sync processing thread."""
                 if progress_callback:
                     try:
-                        scaled = 10 + int(progress * 0.8)
+                        if phase not in progress_ranges:
+                            phase = 'ai_upscale'
+                        start_pct, end_pct = progress_ranges[phase]
+                        phase_progress = (current / total) if total > 0 else 0
+                        overall = start_pct + (phase_progress * (end_pct - start_pct))
+
                         asyncio.run_coroutine_threadsafe(
-                            progress_callback(scaled, message, "processing"),
+                            progress_callback(overall, message, phase),
                             loop
                         )
                     except Exception as e:
                         logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
             # Process with Real-ESRGAN
-            await asyncio.to_thread(
-                process_video_upscale_gpu,
-                input_path,
-                output_path,
-                keyframes,
-                output_width,
-                output_height,
-                fps,
-                sync_progress_callback,
-                segment_data
+            result = await asyncio.to_thread(
+                upscaler.process_video_with_upscale,
+                input_path=input_path,
+                output_path=output_path,
+                keyframes=keyframes,
+                target_fps=fps,
+                export_mode=export_mode,
+                progress_callback=sync_progress_callback,
+                segment_data=segment_data,
+                include_audio=include_audio,
             )
 
             process_time = time.time() - start_time - download_time
@@ -304,8 +343,9 @@ async def local_annotate_compilation(
                     start_time=clip['start_time'],
                     end_time=clip['end_time'],
                     clip_name=clip.get('name', ''),
-                    rating=clip.get('rating', 3),
                     clip_notes=clip.get('notes', ''),
+                    rating=clip.get('rating', 3),
+                    tags=clip.get('tags', []),
                 )
                 if success:
                     burned_clips.append(clip_path)

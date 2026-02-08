@@ -445,25 +445,9 @@ async def render_project(request: RenderRequest):
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        project_name = project['name']
-
-        # If project name matches "Clip {id}" pattern, try to derive a better name from clip data
-        # This handles legacy auto-projects created before we added derive_clip_name
-        import re
-        if project_name and re.match(r'^Clip \d+$', project_name):
-            cursor.execute("""
-                SELECT rc.name, rc.rating, rc.tags
-                FROM raw_clips rc
-                WHERE rc.auto_project_id = ?
-                LIMIT 1
-            """, (project_id,))
-            raw_clip = cursor.fetchone()
-            if raw_clip:
-                tags = json.loads(raw_clip['tags']) if raw_clip['tags'] else []
-                from app.queries import derive_clip_name
-                derived_name = derive_clip_name(raw_clip['name'], raw_clip['rating'] or 0, tags)
-                if derived_name:
-                    project_name = derived_name
+        # Use shared helper to derive a better name if needed
+        from app.services.export_helpers import derive_project_name
+        project_name = derive_project_name(project_id, cursor) or project['name']
 
         # Create export_jobs record
         try:
@@ -634,223 +618,67 @@ async def render_project(request: RenderRequest):
     output_path = os.path.join(temp_dir, working_filename)
 
     try:
-        # Use Modal cloud GPU when enabled (production)
-        if modal_enabled():
-            logger.info(f"[Render] Using Modal cloud GPU for AI upscaling")
+        # Use unified interface - routes to Modal or local automatically
+        from app.services.export_helpers import send_progress, create_progress_callback
+        from app.services.modal_client import call_modal_framing_ai
 
-            # Calculate effective output duration for progress estimation
-            # This accounts for trim and speed changes (0.5x speed = 2x output frames)
-            effective_duration = 10.0  # Default estimate
-            if segment_data:
-                # Use get_output_duration which handles trim + speed changes
-                effective_duration = get_output_duration(segment_data)
-                logger.info(f"[Render] Calculated output duration (trim+speed): {effective_duration:.2f}s")
-            else:
-                # Fall back to probing source video (no trim/speed data)
-                input_path_temp = os.path.join(temp_dir, f"probe_{uuid.uuid4().hex[:8]}.mp4")
-                try:
-                    if download_from_r2(user_id, input_key, Path(input_path_temp)):
-                        effective_duration = get_video_duration(input_path_temp)
-                        logger.info(f"[Render] Source video duration (no segment data): {effective_duration:.2f}s")
-                        os.unlink(input_path_temp)  # Clean up probe file
-                except Exception as e:
-                    logger.warning(f"[Render] Could not probe source duration: {e}")
+        logger.info(f"[Render] Starting AI upscaling (Modal: {modal_enabled()})")
 
-            # Update progress
-            init_data = {"progress": 15, "message": "Starting cloud AI upscaler...", "status": "processing", "projectId": project_id, "projectName": project_name, "type": "framing"}
-            export_progress[export_id] = init_data
-            await manager.send_progress(export_id, init_data)
+        # Calculate effective output duration for progress estimation
+        effective_duration = 10.0  # Default estimate
+        if segment_data:
+            effective_duration = get_output_duration(segment_data)
+            logger.info(f"[Render] Calculated output duration (trim+speed): {effective_duration:.2f}s")
 
-            # Create progress callback for real-time updates
-            async def modal_progress_callback(progress: float, message: str, phase: str = "modal_processing"):
-                progress_data = {
-                    "progress": progress,
-                    "message": message,
-                    "status": "processing",
-                    "phase": phase,  # Include phase for frontend tracking
-                    "projectId": project_id,
-                    "projectName": project_name,
-                    "type": "framing"
-                }
-                export_progress[export_id] = progress_data
-                await manager.send_progress(export_id, progress_data)
+        # Send initial progress
+        await send_progress(
+            export_id, 10, 100, 'init', 'Starting AI upscaler...',
+            'framing', project_id=project_id, project_name=project_name
+        )
 
-            # Callback to store Modal call_id for job recovery
-            def store_modal_call_id(modal_call_id: str):
-                try:
-                    with get_db_connection() as conn:
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                            UPDATE export_jobs
-                            SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP
-                            WHERE id = ?
-                        """, (modal_call_id, export_id))
-                        conn.commit()
-                    logger.info(f"[Render] Stored modal_call_id: {modal_call_id}")
-                except Exception as e:
-                    logger.warning(f"[Render] Failed to store modal_call_id: {e}")
+        # Create progress callback for unified interface
+        progress_callback = create_progress_callback(
+            export_id, 'framing',
+            project_id=project_id, project_name=project_name
+        )
 
-            # Call unified Modal function with progress callback
-            modal_result = await call_modal_clips_ai(
-                job_id=export_id,
-                user_id=user_id,
-                source_keys=[input_key],
-                output_key=output_key,
-                clips_data=[{
-                    "keyframes": keyframes_dict,
-                    "segment_data": segment_data,
-                }],
-                target_width=810,  # 9:16 portrait
-                target_height=1440,
-                fps=request.target_fps,
-                include_audio=True,
-                progress_callback=modal_progress_callback,
+        # Call unified interface - routes to Modal or local_framing automatically
+        result = await call_modal_framing_ai(
+            job_id=export_id,
+            user_id=user_id,
+            input_key=input_key,
+            output_key=output_key,
+            keyframes=keyframes_dict,
+            output_width=810,  # 9:16 portrait
+            output_height=1440,
+            fps=request.target_fps,
+            segment_data=segment_data,
+            video_duration=effective_duration,
+            progress_callback=progress_callback,
+            include_audio=request.include_audio,
+            export_mode=request.export_mode,
+        )
+
+        if result.get("status") != "success":
+            raise HTTPException(
+                status_code=500,
+                detail={"error": "processing_failed", "message": result.get("error", "AI processing failed")}
             )
 
-            if modal_result.get("status") != "success":
-                raise HTTPException(
-                    status_code=500,
-                    detail={"error": "modal_failed", "message": modal_result.get("error", "Modal processing failed")}
-                )
+        logger.info(f"[Render] AI upscaling complete: {result}")
 
-            logger.info(f"[Render] Modal AI upscaling complete: {modal_result}")
+        # Get video duration for DB (download output to measure)
+        await send_progress(
+            export_id, 92, 100, 'finalizing', 'Finalizing...',
+            'framing', project_id=project_id, project_name=project_name
+        )
 
-            # Update progress
-            dl_data = {"progress": 92, "message": "Downloading result...", "status": "processing", "projectId": project_id, "projectName": project_name, "type": "framing"}
-            export_progress[export_id] = dl_data
-            await manager.send_progress(export_id, dl_data)
-
-            # Download output to get duration for DB
-            if not download_from_r2(user_id, output_key, Path(output_path)):
-                logger.warning("[Render] Could not download output to measure duration")
-                video_duration = 0.0
-            else:
-                video_duration = get_video_duration(output_path)
-                logger.info(f"[Render] Video duration: {video_duration:.2f}s")
-
+        if not download_from_r2(user_id, output_key, Path(output_path)):
+            logger.warning("[Render] Could not download output to measure duration")
+            video_duration = 0.0
         else:
-            # Use local GPU (development)
-            logger.info(f"[Render] Using local GPU for AI upscaling")
-            local_start_time = time_module.time()
-            log_progress_event(export_id, "local_start", extra={"type": "framing"})
-
-            input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex[:8]}.mp4")
-
-            # Use DRY helper for download with progress (5% -> 15%)
-            if not await download_from_r2_with_progress(
-                user_id, input_key, Path(input_path),
-                export_id=export_id, export_type='framing',
-                project_id=project_id, project_name=project_name
-            ):
-                raise HTTPException(
-                    status_code=500,
-                    detail={"error": "video_not_found", "message": f"Failed to download source video from storage"}
-                )
-
-            download_elapsed = time_module.time() - local_start_time
-            log_progress_event(export_id, "download_complete", elapsed=download_elapsed)
-            logger.info(f"[Render] Downloaded source video to {input_path}")
-
-            # Step 5: Run the local upscaler
-            if AIVideoUpscaler is None:
-                raise HTTPException(
-                    status_code=503,
-                    detail={"error": "ai_not_available", "message": "AI upscaling dependencies not installed"}
-                )
-
-            upscaler = AIVideoUpscaler(
-                device='cuda',
-                export_mode=request.export_mode,
-                enable_source_preupscale=False,
-                enable_diffusion_sr=False,
-                sr_model_name='realesr_general_x4v3'
-            )
-
-            if upscaler.upsampler is None:
-                raise HTTPException(
-                    status_code=503,
-                    detail={"error": "ai_not_available", "message": "AI SR model failed to load"}
-                )
-
-            # Capture event loop for progress callbacks
-            loop = asyncio.get_running_loop()
-
-            # Progress ranges - use case-insensitive comparison
-            # Frontend sends 'fast', backend code checks for 'FAST'
-            is_fast_mode = request.export_mode.upper() == "FAST"
-            if is_fast_mode:
-                progress_ranges = {
-                    'ai_upscale': (15, 95),
-                    'ffmpeg_encode': (95, 100)
-                }
-            else:
-                progress_ranges = {
-                    'ai_upscale': (15, 30),
-                    'ffmpeg_pass1': (30, 85),
-                    'ffmpeg_encode': (85, 100)
-                }
-
-            def progress_callback(current, total, message, phase='ai_upscale'):
-                if phase not in progress_ranges:
-                    phase = 'ai_upscale'
-                start_percent, end_percent = progress_ranges[phase]
-                phase_progress = (current / total) if total > 0 else 0
-                overall_percent = start_percent + (phase_progress * (end_percent - start_percent))
-
-                progress_data = {
-                    "progress": overall_percent,
-                    "message": message,
-                    "status": "processing",
-                    "current": current,
-                    "total": total,
-                    "phase": phase,
-                    "projectId": project_id,
-                    "projectName": project_name,
-                    "type": "framing"
-                }
-                export_progress[export_id] = progress_data
-                logger.debug(f"[Render] Progress: {overall_percent:.1f}% - {message}")
-
-                try:
-                    asyncio.run_coroutine_threadsafe(
-                        manager.send_progress(export_id, progress_data),
-                        loop
-                    )
-                except Exception as e:
-                    logger.error(f"[Render] Failed to send WebSocket update: {e}")
-
-            # Update progress
-            init_data = {"progress": 15, "message": "Processing video with AI upscaler...", "status": "processing", "projectId": project_id, "projectName": project_name, "type": "framing"}
-            export_progress[export_id] = init_data
-            await manager.send_progress(export_id, init_data)
-
-            # Run upscaling
-            result = await asyncio.to_thread(
-                upscaler.process_video_with_upscale,
-                input_path=input_path,
-                output_path=output_path,
-                keyframes=keyframes_dict,
-                target_fps=request.target_fps,
-                export_mode=request.export_mode,
-                progress_callback=progress_callback,
-                segment_data=segment_data,
-                include_audio=request.include_audio,
-            )
-
-            local_elapsed = time_module.time() - local_start_time
-            log_progress_event(export_id, "upscale_complete", elapsed=local_elapsed)
-            logger.info(f"[Render] Local AI upscaling complete. Output: {output_path}")
-
-            # Get video duration for cost-optimized GPU selection in overlay mode
             video_duration = get_video_duration(output_path)
             logger.info(f"[Render] Video duration: {video_duration:.2f}s")
-
-            # Upload to R2
-            if not upload_to_r2(user_id, output_key, Path(output_path)):
-                raise Exception("Failed to upload working video to R2")
-            upload_elapsed = time_module.time() - local_start_time
-            log_progress_event(export_id, "upload_complete", elapsed=upload_elapsed)
-            logger.info(f"[Render] Uploaded working video to R2: {working_filename}")
 
         # CRITICAL: Restore user context after long-running task
         set_current_user_id(captured_user_id)
