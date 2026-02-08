@@ -9,10 +9,10 @@ v3: Removed full_annotated.mp4, added TSV export, streaming downloads
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse, RedirectResponse
+from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
 from starlette.background import BackgroundTask
 from pathlib import Path
-from typing import List, Dict, Any, Optional, AsyncGenerator
+from typing import List, Dict, Any, Optional
 import json
 import os
 import tempfile
@@ -29,14 +29,11 @@ from app.services.ffmpeg_service import get_encoding_command_parts
 from app.services.modal_client import modal_enabled, call_modal_annotate_compilation
 from app.storage import generate_presigned_url, upload_to_r2, download_from_r2, R2_ENABLED
 from app.user_context import get_current_user_id
+from app.websocket import manager, export_progress
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/annotate", tags=["annotate"])
-
-# Track export progress for SSE streaming
-# Key: export_id, Value: { 'total': int, 'current': int, 'phase': str, 'message': str, 'done': bool }
-_export_progress: Dict[str, Dict[str, Any]] = {}
 
 
 def sanitize_filename(name: str) -> str:
@@ -351,53 +348,6 @@ async def download_file(filename: str):
     raise HTTPException(status_code=404, detail="Failed to generate R2 URL for download")
 
 
-@router.get("/progress/{export_id}")
-async def get_export_progress(export_id: str):
-    """
-    SSE endpoint for real-time export progress updates.
-
-    Connect to this endpoint after starting an export to receive progress updates.
-
-    Event format:
-    data: {"current": 3, "total": 10, "phase": "clips", "message": "Processing clip 3/10...", "done": false}
-
-    Phases:
-    - "starting": Export initialized
-    - "clips": Processing individual clips (with burned-in text)
-    - "concatenating": Merging clips into compilation video
-    - "saving": Saving to database and creating projects
-    - "done": Export complete
-    """
-    async def generate_progress() -> AsyncGenerator[str, None]:
-        """Generator that yields SSE events."""
-        while True:
-            if export_id not in _export_progress:
-                # Export not started yet, send waiting message
-                yield f"data: {json.dumps({'phase': 'waiting', 'message': 'Waiting for export to start...'})}\n\n"
-                await asyncio.sleep(0.5)
-                continue
-
-            progress = _export_progress[export_id]
-            yield f"data: {json.dumps(progress)}\n\n"
-
-            if progress.get('done', False):
-                # Clean up and close connection
-                del _export_progress[export_id]
-                break
-
-            await asyncio.sleep(0.3)
-
-    return StreamingResponse(
-        generate_progress(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
-    )
-
-
 @router.post("/export")
 async def export_clips(
     video: UploadFile = File(None),  # Optional if game_id provided
@@ -579,16 +529,23 @@ async def export_clips(
         download_id = uuid.uuid4().hex[:8]
         video_base = sanitize_filename(os.path.splitext(original_filename)[0])
 
-        # Helper function to update progress
-        def update_progress(current: int, total: int, phase: str, message: str, done: bool = False):
+        # Helper function to update progress via WebSocket (same pattern as overlay)
+        async def update_progress(current: int, total: int, phase: str, message: str, done: bool = False):
             if export_id:
-                _export_progress[export_id] = {
+                progress_data = {
                     'current': current,
                     'total': total,
                     'phase': phase,
                     'message': message,
-                    'done': done
+                    'done': done,
+                    'progress': int((current / total) * 100) if total > 0 else 0,
+                    'status': 'complete' if done else 'processing',
+                    'type': 'annotate'
                 }
+                export_progress[export_id] = progress_data
+                await manager.send_progress(export_id, progress_data)
+                if current % 5 == 0 or done:
+                    logger.info(f"[Annotate Progress] {export_id}: {current}/{total} ({phase}) - {message}")
 
         # Separate clips by rating using configurable threshold
         good_clips = [c for c in clips if c.get('rating', 3) >= min_rating_for_library]
@@ -601,7 +558,7 @@ async def export_clips(
             total_steps = len(good_clips) + 1  # extracting good clips + TSV
         else:
             total_steps = len(clips) + 2  # burned-in clips + TSV + concatenation
-        update_progress(0, total_steps, 'starting', 'Initializing export...')
+        await update_progress(0, total_steps, 'starting', 'Initializing export...')
         all_clips = clips
 
         used_names = set()
@@ -618,7 +575,7 @@ async def export_clips(
             for idx, clip in enumerate(good_clips):
                 clip_name = clip.get('name', 'clip')
                 step += 1
-                update_progress(step, total_steps, 'extracting', f'Extracting clip {idx + 1}/{len(good_clips)}: {clip_name}')
+                await update_progress(step, total_steps, 'extracting', f'Extracting clip {idx + 1}/{len(good_clips)}: {clip_name}')
 
                 base_name = sanitize_filename(clip_name)
                 unique_name = ensure_unique_filename(base_name, used_names)
@@ -737,7 +694,7 @@ async def export_clips(
 
         # 1. Generate annotations.tsv
         step += 1
-        update_progress(step, total_steps, 'tsv', 'Generating annotations TSV...')
+        await update_progress(step, total_steps, 'tsv', 'Generating annotations TSV...')
         tsv_filename = f"{video_base}_{download_id}_annotations.tsv"
         tsv_path = os.path.join(temp_dir, tsv_filename)  # Write to temp dir
         tsv_content = generate_annotations_tsv(all_clips, original_filename)
@@ -766,12 +723,12 @@ async def export_clips(
             # Use Modal for cloud processing if enabled (avoids downloading large game video)
             if modal_enabled() and game_id and video_filename:
                 logger.info(f"[Export] Using Modal for annotated compilation ({len(all_clips)} clips)")
-                update_progress(step + 1, total_steps, 'modal', 'Sending to cloud for processing...')
+                await update_progress(step + 1, total_steps, 'modal', 'Sending to cloud for processing...')
 
                 # Progress callback for Modal (maps Modal's 10-90 range to our progress tracker)
                 async def modal_progress(progress: float, message: str, phase: str = "modal_processing"):
                     # progress comes in as 10-90 range from modal_client
-                    update_progress(int(progress), 100, phase, message)
+                    await update_progress(int(progress), 100, phase, message)
 
                 # R2 keys
                 input_r2_key = f"games/{video_filename}"
@@ -843,7 +800,7 @@ async def export_clips(
                 for idx, clip in enumerate(all_clips):
                     clip_name = clip.get('name', 'clip')
                     step += 1
-                    update_progress(step, total_steps, 'clips', f'Creating clip {idx + 1}/{len(all_clips)}: {clip_name}')
+                    await update_progress(step, total_steps, 'clips', f'Creating clip {idx + 1}/{len(all_clips)}: {clip_name}')
                     burned_path = os.path.join(temp_dir, f"burned_{uuid.uuid4().hex[:8]}.mp4")
 
                     success = await create_clip_with_burned_text(
@@ -863,7 +820,7 @@ async def export_clips(
                 # Concatenate burned clips into compilation
                 if burned_clip_paths:
                     step += 1
-                    update_progress(step, total_steps, 'concatenating', f'Merging {len(burned_clip_paths)} clips into compilation...')
+                    await update_progress(step, total_steps, 'concatenating', f'Merging {len(burned_clip_paths)} clips into compilation...')
                     compilation_path = os.path.join(temp_dir, compilation_filename)
 
                     if await concatenate_videos(burned_clip_paths, compilation_path):
@@ -931,7 +888,7 @@ async def export_clips(
             message = f"Generated annotated video with {len(all_clips)} clips"
 
         # Mark progress as done
-        update_progress(total_steps, total_steps, 'done', message, done=True)
+        await update_progress(total_steps, total_steps, 'done', message, done=True)
 
         # Build response
         response_data = {

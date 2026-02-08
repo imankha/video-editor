@@ -1073,6 +1073,8 @@ async def call_modal_annotate_compilation(
                 if progress_callback and progress < 100:
                     try:
                         await progress_callback(progress, message, phase)
+                        # Yield to event loop so WebSocket progress can be sent
+                        await asyncio.sleep(0)
                     except Exception as e:
                         logger.warning(f"[Modal] Progress callback failed: {e}")
 

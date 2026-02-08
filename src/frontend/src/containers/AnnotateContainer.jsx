@@ -7,6 +7,7 @@ import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore } from '../stores';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { API_BASE } from '../config';
+import exportWebSocketManager from '../services/ExportWebSocketManager';
 
 /**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
@@ -317,27 +318,24 @@ export function AnnotateContainer({
     }
 
     const exportId = `exp_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-    let eventSource = null;
 
+    // Connect to WebSocket for real-time progress updates (same pattern as overlay)
     try {
-      eventSource = new EventSource(`${API_BASE}/api/annotate/progress/${exportId}`);
-      eventSource.onmessage = (event) => {
-        try {
-          const progress = JSON.parse(event.data);
-          console.log('[AnnotateContainer] SSE progress:', progress.current, '/', progress.total, '=', Math.round((progress.current / progress.total) * 100) + '%', progress.message);
-          setExportProgress(progress);
-          if (progress.done) {
-            eventSource?.close();
-          }
-        } catch (e) {
-          console.warn('[AnnotateContainer] Failed to parse progress:', e);
+      await exportWebSocketManager.connect(exportId, {
+        onProgress: (progress, message) => {
+          console.log('[AnnotateContainer] WS progress:', progress, '%', message);
+          setExportProgress({ progress, message, done: false });
+        },
+        onComplete: (data) => {
+          console.log('[AnnotateContainer] WS complete:', data);
+          setExportProgress({ progress: 100, message: 'Export complete!', done: true });
+        },
+        onError: (error) => {
+          console.error('[AnnotateContainer] WS error:', error);
         }
-      };
-      eventSource.onerror = () => {
-        eventSource?.close();
-      };
+      });
     } catch (e) {
-      console.warn('[AnnotateContainer] Failed to connect to progress endpoint:', e);
+      console.warn('[AnnotateContainer] Failed to connect to WebSocket:', e);
     }
 
     const formData = new FormData();
@@ -364,7 +362,7 @@ export function AnnotateContainer({
     } else if (annotateVideoFile) {
       formData.append('video', annotateVideoFile);
     } else {
-      eventSource?.close();
+      exportWebSocketManager.disconnect(exportId);
       throw new Error('No video source available');
     }
 
@@ -399,7 +397,7 @@ export function AnnotateContainer({
         throw new Error(`Export error: ${fetchErr.message}`);
       }
     } finally {
-      eventSource?.close();
+      exportWebSocketManager.disconnect(exportId);
       setTimeout(() => setExportProgress(null), 1000);
     }
   }, [annotateVideoFile, annotateGameId]);
