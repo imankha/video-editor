@@ -112,6 +112,11 @@ Need to detect exports that completed while user was away and show toast/envelop
 
 ### Progress Log
 
+**2026-02-08** - Immediate progress bar display:
+- Frontend: callAnnotateExportApi now calls startExportInStore immediately after generating exportId
+- Progress bar shows at 0% with "Starting export..." message instantly when user clicks export
+- Same pattern as framing/overlay exports (useExportManager)
+
 **2026-02-08** - Initial implementation complete:
 - Backend: Added export_jobs tracking for annotate exports with game_id/game_name
 - Backend: Added /api/exports/unacknowledged endpoint for completed exports

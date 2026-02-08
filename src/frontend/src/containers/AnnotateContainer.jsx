@@ -117,6 +117,7 @@ export function AnnotateContainer({
     setExportProgress,
     setExportCompleteToastId,
     dismissExportCompleteToast,
+    startExport: startExportInStore,
   } = useExportStore();
 
   // Ref to track previous isPlaying state for detecting pause transitions
@@ -319,6 +320,9 @@ export function AnnotateContainer({
 
     const exportId = `exp_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
+    // T12: Register export in store IMMEDIATELY for instant progress bar display (0%)
+    startExportInStore(exportId, { gameId: annotateGameId, gameName: annotateGameName }, 'annotate');
+
     // Connect to WebSocket for real-time progress updates (same pattern as overlay)
     try {
       await exportWebSocketManager.connect(exportId, {
@@ -401,7 +405,7 @@ export function AnnotateContainer({
       exportWebSocketManager.disconnect(exportId);
       setTimeout(() => setExportProgress(null), 1000);
     }
-  }, [annotateVideoFile, annotateGameId]);
+  }, [annotateVideoFile, annotateGameId, annotateGameName, startExportInStore]);
 
   /**
    * Create Annotated Video - Creates compilation and adds to gallery, stays on annotate screen
