@@ -323,24 +323,35 @@ export function AnnotateContainer({
     // T12: Register export in store IMMEDIATELY for instant progress bar display (0%)
     startExportInStore(exportId, { gameId: annotateGameId, gameName: annotateGameName }, 'annotate');
 
-    // Connect to WebSocket for real-time progress updates (same pattern as overlay)
+    // Create a promise that resolves when WebSocket receives complete/error
+    // This ensures we wait for the background task to finish
+    let wsResolve, wsReject;
+    const wsCompletionPromise = new Promise((resolve, reject) => {
+      wsResolve = resolve;
+      wsReject = reject;
+    });
+
+    // Connect to WebSocket for real-time progress updates
     try {
       await exportWebSocketManager.connect(exportId, {
         onProgress: (progress, message) => {
           console.log('[AnnotateContainer] WS progress:', progress, '%', message);
-          // UI expects current/total format for progress bar display
           setExportProgress({ current: progress, total: 100, message, done: false });
         },
         onComplete: (data) => {
           console.log('[AnnotateContainer] WS complete:', data);
           setExportProgress({ current: 100, total: 100, message: 'Export complete!', done: true });
+          wsResolve(data);
         },
         onError: (error) => {
           console.error('[AnnotateContainer] WS error:', error);
+          setExportProgress({ current: 0, total: 100, message: `Export failed: ${error}`, done: true, error: true });
+          wsReject(new Error(error || 'Export failed'));
         }
       });
     } catch (e) {
       console.warn('[AnnotateContainer] Failed to connect to WebSocket:', e);
+      wsReject(e);
     }
 
     const formData = new FormData();
@@ -382,28 +393,28 @@ export function AnnotateContainer({
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData.detail || `Export failed with status ${response.status}: ${response.statusText}`;
         console.error('[AnnotateContainer] Export request failed:', errorMessage);
+        exportWebSocketManager.disconnect(exportId);
         throw new Error(errorMessage);
       }
 
-      console.log('[AnnotateContainer] Export request succeeded');
-      return await response.json();
-    } catch (fetchErr) {
-      // Re-throw if it's already our formatted error
-      if (fetchErr.message.includes('Export failed') || fetchErr.message.includes('status')) {
-        throw fetchErr;
-      }
-      // Network or other fetch errors
-      console.error('[AnnotateContainer] Export fetch error:', fetchErr);
-      if (fetchErr.name === 'AbortError') {
-        throw new Error('Export request timed out. The video processing may be taking too long.');
-      } else if (fetchErr.message.includes('Failed to fetch') || fetchErr.message.includes('NetworkError')) {
-        throw new Error('Lost connection to server during export. Please check your network and try again.');
-      } else {
-        throw new Error(`Export error: ${fetchErr.message}`);
-      }
+      console.log('[AnnotateContainer] Export request accepted, waiting for background job...');
+
+      // Wait for the background job to complete via WebSocket
+      // Set a timeout of 30 minutes for long exports
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Export timed out after 30 minutes')), 30 * 60 * 1000);
+      });
+
+      const result = await Promise.race([wsCompletionPromise, timeoutPromise]);
+      console.log('[AnnotateContainer] Background job completed:', result);
+
+      return { success: true, ...result };
+    } catch (err) {
+      console.error('[AnnotateContainer] Export error:', err);
+      throw err;
     } finally {
       exportWebSocketManager.disconnect(exportId);
-      setTimeout(() => setExportProgress(null), 1000);
+      setTimeout(() => setExportProgress(null), 2000);
     }
   }, [annotateVideoFile, annotateGameId, annotateGameName, startExportInStore]);
 

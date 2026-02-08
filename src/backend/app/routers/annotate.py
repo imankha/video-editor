@@ -608,6 +608,14 @@ async def run_annotate_export_processing(export_id: str, config: dict):
 
     # Progress helper
     async def update_progress(current: int, total: int, phase: str, message: str, done: bool = False):
+        # Determine status - error phase means error status
+        if phase == 'error':
+            status = ExportStatus.ERROR
+        elif done:
+            status = ExportStatus.COMPLETE
+        else:
+            status = 'processing'
+
         progress_data = {
             'current': current,
             'total': total,
@@ -615,14 +623,15 @@ async def run_annotate_export_processing(export_id: str, config: dict):
             'message': message,
             'done': done,
             'progress': int((current / total) * 100) if total > 0 else 0,
-            'status': ExportStatus.COMPLETE if done else 'processing',
+            'status': status,
             'type': 'annotate',
             'gameId': game_id,
             'gameName': game_name,
+            'error': message if phase == 'error' else None,  # Include error message for frontend
         }
         export_progress[export_id] = progress_data
         await manager.send_progress(export_id, progress_data)
-        if current % 5 == 0 or done:
+        if current % 5 == 0 or done or phase == 'error':
             logger.info(f"[AnnotateExport] {export_id}: {current}/{total} ({phase}) - {message}")
 
     try:
