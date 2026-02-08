@@ -106,12 +106,55 @@ Display as:
 
 ## Implementation Order
 
-1. [ ] Add progress event logging (backend)
-2. [ ] Collect timing data from real exports (analysis)
-3. [ ] Fix progress reset bug (frontend)
-4. [ ] Improve time estimates based on data (backend)
-5. [ ] Add ETA display to UI (frontend)
+1. [x] Add progress event logging (backend) - DONE
+2. [ ] Collect timing data from real exports (analysis) - Data now being collected via logs
+3. [x] Fix progress reset bug (frontend) - DONE (was already fixed in earlier changes)
+4. [ ] Improve time estimates based on data (backend) - Using elapsed/progress ratio
+5. [x] Add ETA display to UI (frontend) - DONE
 6. [ ] (Optional) Real Modal progress streaming
+
+## Completed Changes (2026-02-06)
+
+### Backend Progress Event Logging
+- Added `log_progress_event()` helper function to `modal_client.py` and `framing.py`
+- Logs structured events: `[Progress Event] job=xxx phase=yyy elapsed=zzz`
+- Phases tracked: `modal_start`, `modal_spawn`, `modal_complete`, `modal_error`
+- Extra data: frames, fps_actual, clips count for analysis
+- Works for both Modal (cloud GPU) and local GPU paths
+
+### Frontend ETA Display
+- Added `calculateETA()` function in `GlobalExportIndicator.jsx`
+- Uses elapsed time and current progress percentage to estimate remaining time
+- Shows human-friendly format: "About 2 minutes", "Less than a minute"
+- Displayed in both collapsed and expanded export indicator views
+
+### Real Modal Progress Streaming (NEW)
+Implemented real-time progress from Modal using `.remote_gen()` instead of spawn/get:
+
+**Modal Functions (video_processing.py):**
+- `process_framing_ai`: Now a generator that yields progress at each phase
+  - Download: 5-12%
+  - Load model: 14-18%
+  - Upscaling: 18-75% (yields every 15 frames with actual frame count)
+  - Encoding: 76-88%
+  - Upload: 90-100%
+- `render_overlay`: Now a generator that yields progress at major phases
+  - Download: 10-20%
+  - Processing: 25-80%
+  - Upload: 85-100%
+
+**Modal Client (modal_client.py):**
+- `call_modal_framing_ai`: Uses `remote_gen()` to iterate over yielded progress
+- `call_modal_overlay`: Uses `remote_gen()` to iterate over yielded progress
+- Progress updates forwarded to WebSocket in real-time
+
+**Benefits:**
+- Progress based on actual frames processed, not time estimates
+- More accurate ETA calculations
+- Users see real processing milestones (download, upscale, encode, upload)
+
+**Note:** Multi-clip export (`process_multi_clip_modal`) still uses time-based simulation.
+This can be converted to streaming progress in a future update if needed.
 
 ## Files to Modify
 

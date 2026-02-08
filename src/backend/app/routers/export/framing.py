@@ -30,7 +30,7 @@ from ...database import get_db_connection, get_working_videos_path
 from ...queries import latest_working_clips_subquery
 from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2
 from ...services.ffmpeg_service import get_video_duration
-from ...services.modal_client import modal_enabled, call_modal_framing_ai, call_modal_detect_players_batch
+from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
 from ...highlight_transform import get_output_duration
 from .multi_clip import (
     calculate_detection_timestamps,
@@ -42,9 +42,21 @@ from .multi_clip import (
 from ...constants import ExportStatus
 from pydantic import BaseModel
 from typing import Optional
+import time as time_module
 from ...user_context import get_current_user_id, set_current_user_id
 
 logger = logging.getLogger(__name__)
+
+
+def log_progress_event(job_id: str, phase: str, elapsed: float = None, extra: dict = None):
+    """Log structured progress event for timing analysis."""
+    parts = [f"[Progress Event] job={job_id} phase={phase}"]
+    if elapsed is not None:
+        parts.append(f"elapsed={elapsed:.2f}s")
+    if extra:
+        for key, val in extra.items():
+            parts.append(f"{key}={val}")
+    logger.info(" ".join(parts))
 
 router = APIRouter()
 
@@ -677,20 +689,21 @@ async def render_project(request: RenderRequest):
                 except Exception as e:
                     logger.warning(f"[Render] Failed to store modal_call_id: {e}")
 
-            # Call Modal function with progress callback
-            modal_result = await call_modal_framing_ai(
+            # Call unified Modal function with progress callback
+            modal_result = await call_modal_clips_ai(
                 job_id=export_id,
                 user_id=user_id,
-                input_key=input_key,
+                source_keys=[input_key],
                 output_key=output_key,
-                keyframes=keyframes_dict,
-                output_width=810,  # 9:16 portrait
-                output_height=1440,
+                clips_data=[{
+                    "keyframes": keyframes_dict,
+                    "segment_data": segment_data,
+                }],
+                target_width=810,  # 9:16 portrait
+                target_height=1440,
                 fps=request.target_fps,
-                segment_data=segment_data,
-                video_duration=effective_duration,
+                include_audio=True,
                 progress_callback=modal_progress_callback,
-                call_id_callback=store_modal_call_id,
             )
 
             if modal_result.get("status") != "success":
@@ -717,6 +730,8 @@ async def render_project(request: RenderRequest):
         else:
             # Use local GPU (development)
             logger.info(f"[Render] Using local GPU for AI upscaling")
+            local_start_time = time_module.time()
+            log_progress_event(export_id, "local_start", extra={"type": "framing"})
 
             input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex[:8]}.mp4")
 
@@ -726,6 +741,8 @@ async def render_project(request: RenderRequest):
                     detail={"error": "video_not_found", "message": f"Failed to download source video from storage"}
                 )
 
+            download_elapsed = time_module.time() - local_start_time
+            log_progress_event(export_id, "download_complete", elapsed=download_elapsed)
             logger.info(f"[Render] Downloaded source video to {input_path}")
 
             # Step 5: Run the local upscaler
@@ -814,6 +831,8 @@ async def render_project(request: RenderRequest):
                 include_audio=request.include_audio,
             )
 
+            local_elapsed = time_module.time() - local_start_time
+            log_progress_event(export_id, "upscale_complete", elapsed=local_elapsed)
             logger.info(f"[Render] Local AI upscaling complete. Output: {output_path}")
 
             # Get video duration for cost-optimized GPU selection in overlay mode
@@ -823,6 +842,8 @@ async def render_project(request: RenderRequest):
             # Upload to R2
             if not upload_to_r2(user_id, output_key, Path(output_path)):
                 raise Exception("Failed to upload working video to R2")
+            upload_elapsed = time_module.time() - local_start_time
+            log_progress_event(export_id, "upload_complete", elapsed=upload_elapsed)
             logger.info(f"[Render] Uploaded working video to R2: {working_filename}")
 
         # CRITICAL: Restore user context after long-running task

@@ -25,7 +25,7 @@ import logging
 import json
 
 # Define the Modal app
-app = modal.App("reel-ballers-video")
+app = modal.App("reel-ballers-video-v2")
 
 # Define the container image with all dependencies
 image = (
@@ -140,9 +140,12 @@ def render_overlay(
     output_key: str,
     highlight_regions: list,
     effect_type: str = "dark_overlay",
-) -> dict:
+):
     """
     Apply highlight overlays to video on GPU.
+
+    This is a GENERATOR function that yields progress updates.
+    Use .remote_gen() to consume progress, final yield has status="success".
 
     Args:
         job_id: Unique export job identifier
@@ -152,14 +155,16 @@ def render_overlay(
         highlight_regions: List of regions with keyframes
         effect_type: "dark_overlay" | "brightness_boost" | "original"
 
-    Returns:
-        {"status": "success", "output_key": "..."} or
-        {"status": "error", "error": "..."}
+    Yields:
+        Progress updates: {"progress": 0-100, "phase": "...", "message": "..."}
+        Final result: {"status": "success", "output_key": "..."} or {"status": "error", "error": "..."}
     """
     try:
         logger.info(f"[{job_id}] Starting overlay render for user {user_id}")
         logger.info(f"[{job_id}] Input: {input_key}, Output: {output_key}")
         logger.info(f"[{job_id}] Regions: {len(highlight_regions)}, Effect: {effect_type}")
+
+        yield {"progress": 5, "phase": "initializing", "message": "Initializing..."}
 
         r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
@@ -169,18 +174,23 @@ def render_overlay(
             input_path = os.path.join(temp_dir, "input.mp4")
             full_input_key = f"{user_id}/{input_key}"
             logger.info(f"[{job_id}] Downloading {full_input_key}")
+            yield {"progress": 10, "phase": "downloading", "message": "Downloading video..."}
             r2.download_file(bucket, full_input_key, input_path)
+            yield {"progress": 20, "phase": "downloading", "message": "Download complete"}
 
             # Process overlay
             output_path = os.path.join(temp_dir, "output.mp4")
+            yield {"progress": 25, "phase": "processing", "message": "Applying highlights..."}
             _process_overlay(job_id, input_path, output_path, {
                 "highlight_regions": highlight_regions,
                 "effect_type": effect_type,
             })
+            yield {"progress": 80, "phase": "processing", "message": "Processing complete"}
 
             # Upload result to R2
             full_output_key = f"{user_id}/{output_key}"
             logger.info(f"[{job_id}] Uploading to {full_output_key}")
+            yield {"progress": 85, "phase": "uploading", "message": "Uploading result..."}
             r2.upload_file(
                 output_path,
                 bucket,
@@ -189,11 +199,17 @@ def render_overlay(
             )
 
             logger.info(f"[{job_id}] Overlay render complete")
-            return {"status": "success", "output_key": output_key}
+            yield {
+                "status": "success",
+                "output_key": output_key,
+                "progress": 100,
+                "phase": "complete",
+                "message": "Overlay complete"
+            }
 
     except Exception as e:
         logger.error(f"[{job_id}] Overlay render failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        yield {"status": "error", "error": str(e), "progress": 0, "phase": "error"}
 
 
 def _process_overlay(job_id: str, input_path: str, output_path: str, params: dict):
@@ -813,9 +829,12 @@ def process_framing_ai(
     output_height: int = 1440,
     fps: int = 30,
     segment_data: dict = None,
-) -> dict:
+):
     """
     Process video with AI upscaling using Real-ESRGAN on GPU.
+
+    This is a GENERATOR function that yields progress updates.
+    Use .remote_gen() to consume progress, final yield has status="success".
 
     This function:
     1. Downloads video from R2
@@ -835,9 +854,9 @@ def process_framing_ai(
         fps: Target frame rate
         segment_data: Optional trim/speed data
 
-    Returns:
-        {"status": "success", "output_key": "..."} or
-        {"status": "error", "error": "..."}
+    Yields:
+        Progress updates: {"progress": 0-100, "phase": "...", "message": "..."}
+        Final result: {"status": "success", "output_key": "..."} or {"status": "error", "error": "..."}
     """
     import cv2
     import subprocess
@@ -848,6 +867,9 @@ def process_framing_ai(
         logger.info(f"[{job_id}] Input: {input_key}, Output: {output_key}")
         logger.info(f"[{job_id}] Target: {output_width}x{output_height} @ {fps}fps")
 
+        # Yield initial progress
+        yield {"progress": 5, "phase": "initializing", "message": "Initializing..."}
+
         r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
 
@@ -856,7 +878,10 @@ def process_framing_ai(
             input_path = os.path.join(temp_dir, "input.mp4")
             full_input_key = f"{user_id}/{input_key}"
             logger.info(f"[{job_id}] Downloading {full_input_key}")
+
+            yield {"progress": 8, "phase": "downloading", "message": "Downloading source video..."}
             r2.download_file(bucket, full_input_key, input_path)
+            yield {"progress": 12, "phase": "downloading", "message": "Download complete"}
 
             # Get video properties
             cap = cv2.VideoCapture(input_path)
@@ -887,14 +912,21 @@ def process_framing_ai(
             sorted_keyframes = sorted(keyframes, key=lambda k: k['time'])
 
             # Load Real-ESRGAN model
+            yield {"progress": 14, "phase": "loading_model", "message": "Loading AI model..."}
             upsampler = _get_realesrgan_model()
+            yield {"progress": 18, "phase": "loading_model", "message": "AI model loaded"}
 
             # Create frames directory
             frames_dir = os.path.join(temp_dir, "frames")
             os.makedirs(frames_dir, exist_ok=True)
 
+            # Progress range for upscaling: 18% to 75%
+            upscale_progress_start = 18
+            upscale_progress_end = 75
+
             # Process frames
             output_frame_idx = 0
+            last_yield_frame = 0
             for frame_idx in range(start_frame, end_frame):
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
                 ret, frame = cap.read()
@@ -940,13 +972,23 @@ def process_framing_ai(
 
                 output_frame_idx += 1
 
-                # Log progress
-                if output_frame_idx % 30 == 0:
-                    progress = int(output_frame_idx / frames_to_process * 100)
+                # Yield progress every 15 frames (roughly 0.5 seconds of video)
+                if output_frame_idx - last_yield_frame >= 15:
+                    frame_progress = output_frame_idx / frames_to_process
+                    progress = int(upscale_progress_start + frame_progress * (upscale_progress_end - upscale_progress_start))
+                    yield {
+                        "progress": progress,
+                        "phase": "upscaling",
+                        "message": f"AI upscaling frame {output_frame_idx}/{frames_to_process}",
+                        "current": output_frame_idx,
+                        "total": frames_to_process
+                    }
+                    last_yield_frame = output_frame_idx
                     logger.info(f"[{job_id}] Progress: {progress}% ({output_frame_idx}/{frames_to_process})")
 
             cap.release()
 
+            yield {"progress": 76, "phase": "encoding", "message": "Encoding video..."}
             logger.info(f"[{job_id}] Processed {output_frame_idx} frames, encoding video...")
 
             # Encode video with FFmpeg
@@ -1112,23 +1154,29 @@ def process_framing_ai(
             else:
                 logger.info(f"[{job_id}] FFmpeg completed successfully")
 
+            yield {"progress": 88, "phase": "encoding", "message": "Video encoded"}
             logger.info(f"[{job_id}] Video encoded, uploading to R2...")
 
             # Upload to R2
+            yield {"progress": 90, "phase": "uploading", "message": "Uploading to storage..."}
             full_output_key = f"{user_id}/{output_key}"
             r2.upload_file(output_path, bucket, full_output_key)
 
             logger.info(f"[{job_id}] AI upscaling complete: {output_key}")
 
-            return {
+            # Final result - this is how caller knows processing is complete
+            yield {
                 "status": "success",
                 "output_key": output_key,
                 "frames_processed": output_frame_idx,
+                "progress": 100,
+                "phase": "complete",
+                "message": "Processing complete"
             }
 
     except Exception as e:
         logger.error(f"[{job_id}] AI upscaling failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        yield {"status": "error", "error": str(e), "progress": 0, "phase": "error"}
 
 
 # ============================================================================
@@ -1774,9 +1822,12 @@ def create_annotated_compilation(
     output_key: str,
     clips: list,
     gallery_output_key: str = None,
-) -> dict:
+):
     """
     Create a video compilation with burned-in text annotations on Modal.
+
+    This is a GENERATOR function that yields progress updates.
+    Use .remote_gen() to consume progress, final yield has status="success".
 
     This function:
     1. Downloads game video from R2
@@ -1803,9 +1854,10 @@ def create_annotated_compilation(
                 ...
             ]
 
-    Returns:
-        {"status": "success", "output_key": "...", "clips_processed": N} or
-        {"status": "error", "error": "..."}
+    Yields:
+        Progress dicts: {"progress": 0-100, "phase": "...", "message": "..."}
+        Final yield: {"status": "success", "output_key": "...", "clips_processed": N}
+        On error: {"status": "error", "error": "..."}
     """
     import subprocess
 
@@ -1813,6 +1865,8 @@ def create_annotated_compilation(
         logger.info(f"[{job_id}] Starting annotated compilation for user {user_id}")
         logger.info(f"[{job_id}] Input: {input_key}, Output: {output_key}")
         logger.info(f"[{job_id}] Clips: {len(clips)}")
+
+        yield {"progress": 2, "phase": "initializing", "message": "Initializing..."}
 
         r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
@@ -1822,11 +1876,23 @@ def create_annotated_compilation(
             input_path = os.path.join(temp_dir, "source.mp4")
             full_input_key = f"{user_id}/{input_key}"
             logger.info(f"[{job_id}] Downloading {full_input_key}")
+
+            yield {"progress": 5, "phase": "downloading", "message": "Downloading source video..."}
             r2.download_file(bucket, full_input_key, input_path)
+            yield {"progress": 15, "phase": "downloading", "message": "Download complete"}
 
             # Process each clip with burned-in text
             clip_paths = []
+            total_clips = len(clips)
+            # Progress allocation: download=15%, clips=15-85% (70% total), concat=85-92%, upload=92-100%
+            clip_progress_start = 15
+            clip_progress_range = 70  # 70% of progress for processing clips
+            
             for idx, clip in enumerate(clips):
+                # Calculate progress for this clip (evenly distributed)
+                clip_base_progress = clip_progress_start + (idx / total_clips) * clip_progress_range
+                yield {"progress": int(clip_base_progress), "phase": "processing", "message": f"Processing clip {idx + 1}/{total_clips}..."}
+                
                 clip_name = clip.get('name', 'clip')
                 rating = clip.get('rating', 3)
                 tags = clip.get('tags', [])
@@ -1914,6 +1980,7 @@ def create_annotated_compilation(
             if not clip_paths:
                 raise RuntimeError("No clips were successfully processed")
 
+            yield {"progress": 85, "phase": "concatenating", "message": "Merging clips..."}
             logger.info(f"[{job_id}] Concatenating {len(clip_paths)} clips...")
 
             # Create concat file
@@ -1939,6 +2006,7 @@ def create_annotated_compilation(
                 raise RuntimeError(f"Concatenation failed: {result.stderr[:300]}")
 
             # Upload to R2 (primary download location)
+            yield {"progress": 92, "phase": "uploading", "message": "Uploading result..."}
             full_output_key = f"{user_id}/{output_key}"
             logger.info(f"[{job_id}] Uploading to {full_output_key}")
             r2.upload_file(
@@ -1951,6 +2019,7 @@ def create_annotated_compilation(
             # Also upload to gallery if key provided
             gallery_filename = None
             if gallery_output_key:
+                yield {"progress": 96, "phase": "uploading", "message": "Uploading to gallery..."}
                 full_gallery_key = f"{user_id}/{gallery_output_key}"
                 logger.info(f"[{job_id}] Uploading to gallery: {full_gallery_key}")
                 r2.upload_file(
@@ -1962,8 +2031,10 @@ def create_annotated_compilation(
                 gallery_filename = gallery_output_key.split('/')[-1]
 
             logger.info(f"[{job_id}] Annotated compilation complete: {len(clip_paths)} clips")
-            return {
+            yield {
                 "status": "success",
+                "progress": 100,
+                "message": "Annotated video complete!",
                 "output_key": output_key,
                 "gallery_filename": gallery_filename,
                 "clips_processed": len(clip_paths),
@@ -1971,7 +2042,7 @@ def create_annotated_compilation(
 
     except Exception as e:
         logger.error(f"[{job_id}] Annotated compilation failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        yield {"status": "error", "error": str(e), "progress": 0, "phase": "error"}
 
 
 @app.function(
@@ -2074,6 +2145,560 @@ def extract_clip_modal(
     except Exception as e:
         logger.error(f"[ClipExtract] Failed: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
+
+
+# =============================================================================
+# Unified AI Processing Function
+# =============================================================================
+
+def _get_trim_range(segment_data: dict, duration: float) -> tuple:
+    """
+    Extract trim range from segment_data, supporting both formats.
+
+    Formats supported:
+    - Simple: {trim_start: float, trim_end: float}
+    - Nested: {trimRange: {start: float, end: float}}
+
+    Returns:
+        (start_time, end_time) in seconds
+    """
+    if not segment_data:
+        return 0, duration
+
+    # Try simple format first (preferred)
+    if 'trim_start' in segment_data:
+        start = segment_data.get('trim_start', 0)
+        end = segment_data.get('trim_end', duration)
+        return start, end
+
+    # Try nested format (backwards compatibility)
+    trim_range = segment_data.get('trimRange', {})
+    if trim_range:
+        start = trim_range.get('start', 0)
+        end = trim_range.get('end', duration)
+        return start, end
+
+    return 0, duration
+
+
+def _build_simple_ffmpeg_cmd(frame_pattern, source_path, output_path, fps, has_audio, trim_start, frame_count):
+    """Build FFmpeg command for simple encoding (no speed changes)."""
+    if has_audio:
+        return [
+            "ffmpeg", "-y",
+            "-framerate", str(fps),
+            "-i", frame_pattern,
+            "-ss", str(trim_start),
+            "-t", str(frame_count / fps),
+            "-i", source_path,
+            "-map", "0:v",
+            "-map", "1:a?",
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-preset", "fast",
+            "-crf", "23",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-movflags", "+faststart",
+            "-shortest",
+            output_path
+        ]
+    else:
+        return [
+            "ffmpeg", "-y",
+            "-framerate", str(fps),
+            "-i", frame_pattern,
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-preset", "fast",
+            "-crf", "23",
+            "-movflags", "+faststart",
+            output_path
+        ]
+
+
+@app.function(
+    image=upscale_image,
+    gpu="T4",
+    timeout=3600,  # 1 hour for large multi-clip compilations
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+def process_clips_ai(
+    job_id: str,
+    user_id: str,
+    source_keys: list,
+    output_key: str,
+    clips_data: list,
+    target_width: int = 810,
+    target_height: int = 1440,
+    fps: int = 30,
+    include_audio: bool = True,
+    transition: dict = None,
+):
+    """
+    Unified AI video processing - handles single-clip and multi-clip exports.
+
+    This is a GENERATOR function that yields real-time progress updates.
+    Replaces both process_framing_ai and process_multi_clip_modal.
+
+    Args:
+        job_id: Unique export job identifier
+        user_id: User folder in R2
+        source_keys: List of R2 keys for source videos
+        output_key: R2 key for output video
+        clips_data: List of clip configs, each with:
+            - keyframes: [{time, x, y, width, height}, ...]
+            - segment_data: {trim_start, trim_end, segments: [{start, end, speed}]}
+        target_width: Output width (default 810 for 9:16)
+        target_height: Output height (default 1440)
+        fps: Target frame rate (default 30)
+        include_audio: Include audio track (default True)
+        transition: Optional {type: "cut"|"fade", duration: float} for multi-clip
+
+    Yields:
+        Progress: {"progress": 0-100, "phase": "...", "message": "...", "clip": N, "total_clips": N}
+        Final: {"status": "success", "output_key": "...", "clips_processed": N}
+    """
+    import cv2
+    import subprocess
+    import numpy as np
+
+    total_clips = len(clips_data)
+
+    try:
+        logger.info(f"[{job_id}] Starting AI upscaling for {total_clips} clip(s)")
+        logger.info(f"[{job_id}] Target: {target_width}x{target_height} @ {fps}fps")
+
+        yield {
+            "progress": 2,
+            "phase": "initializing",
+            "message": "Initializing...",
+            "clip": 0,
+            "total_clips": total_clips
+        }
+
+        r2 = get_r2_client()
+        bucket = os.environ["R2_BUCKET_NAME"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # === PHASE 1: Download all source clips ===
+            logger.info(f"[{job_id}] Downloading {len(source_keys)} source clip(s)...")
+            source_paths = []
+
+            for i, source_key in enumerate(source_keys):
+                yield {
+                    "progress": 2 + int((i / len(source_keys)) * 8),
+                    "phase": "downloading",
+                    "message": f"Downloading clip {i+1}/{len(source_keys)}...",
+                    "clip": i + 1,
+                    "total_clips": total_clips
+                }
+
+                source_path = os.path.join(temp_dir, f"source_{i}.mp4")
+                full_key = f"{user_id}/{source_key}"
+                logger.info(f"[{job_id}] Downloading: {full_key}")
+                r2.download_file(bucket, full_key, source_path)
+                source_paths.append(source_path)
+
+            yield {
+                "progress": 10,
+                "phase": "downloading",
+                "message": "Downloads complete",
+                "clip": 0,
+                "total_clips": total_clips
+            }
+
+            # === PHASE 2: Load Real-ESRGAN model ONCE ===
+            yield {
+                "progress": 12,
+                "phase": "loading_model",
+                "message": "Loading AI model...",
+                "clip": 0,
+                "total_clips": total_clips
+            }
+
+            upsampler = _get_realesrgan_model()
+
+            yield {
+                "progress": 15,
+                "phase": "loading_model",
+                "message": "AI model loaded",
+                "clip": 0,
+                "total_clips": total_clips
+            }
+
+            # === PHASE 3: Process each clip ===
+            # Progress range: 15% to 75% for upscaling
+            upscale_progress_start = 15
+            upscale_progress_end = 75
+            upscale_progress_per_clip = (upscale_progress_end - upscale_progress_start) / total_clips
+
+            processed_paths = []
+
+            for clip_idx, clip_data in enumerate(clips_data):
+                clip_progress_start = upscale_progress_start + (clip_idx * upscale_progress_per_clip)
+                clip_progress_end = clip_progress_start + upscale_progress_per_clip
+
+                # Get source path (handle index mapping if needed)
+                source_idx = clip_data.get('clipIndex', clip_idx)
+                if source_idx >= len(source_paths):
+                    source_idx = clip_idx
+                source_path = source_paths[source_idx]
+
+                keyframes = clip_data.get('keyframes', [])
+                segment_data = clip_data.get('segment_data', {})
+
+                logger.info(f"[{job_id}] Processing clip {clip_idx+1}/{total_clips}")
+
+                yield {
+                    "progress": int(clip_progress_start),
+                    "phase": "upscaling",
+                    "message": f"Processing clip {clip_idx+1}/{total_clips}...",
+                    "clip": clip_idx + 1,
+                    "total_clips": total_clips
+                }
+
+                # Open source video
+                cap = cv2.VideoCapture(source_path)
+                if not cap.isOpened():
+                    raise ValueError(f"Could not open source video: {source_path}")
+
+                original_fps = cap.get(cv2.CAP_PROP_FPS) or fps
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                duration = total_frames / original_fps if original_fps > 0 else 0
+
+                logger.info(f"[{job_id}] Clip {clip_idx+1}: {original_width}x{original_height} @ {original_fps:.1f}fps, {total_frames} frames")
+
+                # Calculate trim range
+                trim_start, trim_end = _get_trim_range(segment_data, duration)
+                start_frame = int(trim_start * original_fps)
+                end_frame = min(int(trim_end * original_fps), total_frames)
+                frames_to_process = max(1, end_frame - start_frame)
+
+                logger.info(f"[{job_id}] Clip {clip_idx+1}: Processing frames {start_frame}-{end_frame} ({frames_to_process} frames)")
+
+                # Sort keyframes by time
+                sorted_keyframes = sorted(keyframes, key=lambda k: k.get('time', 0)) if keyframes else []
+
+                # Create frames directory for this clip
+                frames_dir = os.path.join(temp_dir, f"frames_{clip_idx}")
+                os.makedirs(frames_dir, exist_ok=True)
+
+                # Process frames
+                cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+                output_frame_idx = 0
+                last_yield_frame = 0
+
+                for frame_num in range(start_frame, end_frame):
+                    ret, frame = cap.read()
+                    if not ret or frame is None:
+                        logger.warning(f"[{job_id}] Could not read frame {frame_num}")
+                        continue
+
+                    frame_time = frame_num / original_fps
+
+                    # Get interpolated crop or use smart center crop
+                    if sorted_keyframes:
+                        crop = _interpolate_crop(sorted_keyframes, frame_time)
+                    else:
+                        # Smart center crop: maintain target aspect ratio
+                        target_ratio = target_width / target_height
+                        source_ratio = original_width / original_height
+
+                        if source_ratio > target_ratio:
+                            # Source is wider - crop sides
+                            crop_height = original_height
+                            crop_width = int(original_height * target_ratio)
+                            crop_x = (original_width - crop_width) / 2
+                            crop_y = 0
+                        else:
+                            # Source is taller - crop top/bottom
+                            crop_width = original_width
+                            crop_height = int(original_width / target_ratio)
+                            crop_x = 0
+                            crop_y = (original_height - crop_height) / 2
+
+                        crop = {
+                            'x': crop_x,
+                            'y': crop_y,
+                            'width': crop_width,
+                            'height': crop_height
+                        }
+
+                    # Apply crop with bounds checking
+                    x = max(0, min(int(crop['x']), original_width - int(crop['width'])))
+                    y = max(0, min(int(crop['y']), original_height - int(crop['height'])))
+                    w = int(crop['width'])
+                    h = int(crop['height'])
+
+                    # Ensure valid dimensions
+                    w = max(1, min(w, original_width - x))
+                    h = max(1, min(h, original_height - y))
+
+                    cropped = frame[y:y+h, x:x+w]
+
+                    # AI upscale with Real-ESRGAN (4x for quality)
+                    try:
+                        upscaled, _ = upsampler.enhance(cropped, outscale=4)
+                    except Exception as e:
+                        logger.warning(f"[{job_id}] Upscale failed for frame {frame_num}: {e}, using resize")
+                        upscaled = cv2.resize(cropped, (target_width, target_height), interpolation=cv2.INTER_LANCZOS4)
+
+                    # Resize to target dimensions
+                    if upscaled.shape[1] != target_width or upscaled.shape[0] != target_height:
+                        upscaled = cv2.resize(upscaled, (target_width, target_height), interpolation=cv2.INTER_LANCZOS4)
+
+                    # Save frame
+                    frame_path = os.path.join(frames_dir, f"frame_{output_frame_idx:06d}.png")
+                    cv2.imwrite(frame_path, upscaled)
+                    output_frame_idx += 1
+
+                    # Yield progress every 15 frames
+                    if output_frame_idx - last_yield_frame >= 15:
+                        frame_progress = output_frame_idx / frames_to_process
+                        progress = int(clip_progress_start + frame_progress * (clip_progress_end - clip_progress_start))
+                        yield {
+                            "progress": progress,
+                            "phase": "upscaling",
+                            "message": f"Clip {clip_idx+1}: frame {output_frame_idx}/{frames_to_process}",
+                            "clip": clip_idx + 1,
+                            "total_clips": total_clips,
+                            "current_frame": output_frame_idx,
+                            "total_frames": frames_to_process
+                        }
+                        last_yield_frame = output_frame_idx
+
+                cap.release()
+                logger.info(f"[{job_id}] Clip {clip_idx+1}: {output_frame_idx} frames upscaled")
+
+                # === Encode this clip ===
+                yield {
+                    "progress": int(clip_progress_end - 2),
+                    "phase": "encoding",
+                    "message": f"Encoding clip {clip_idx+1}/{total_clips}...",
+                    "clip": clip_idx + 1,
+                    "total_clips": total_clips
+                }
+
+                clip_output_path = os.path.join(temp_dir, f"clip_{clip_idx}.mp4")
+                frame_pattern = os.path.join(frames_dir, "frame_%06d.png")
+
+                # Check if source has audio
+                has_audio = _has_audio_stream(source_path) and include_audio
+
+                # Check for speed changes
+                segments = segment_data.get('segments', []) if segment_data else []
+                has_speed_changes = any(seg.get('speed', 1.0) != 1.0 for seg in segments)
+
+                # Build FFmpeg command
+                if has_speed_changes and segments:
+                    # Complex filtergraph for speed changes
+                    logger.info(f"[{job_id}] Clip {clip_idx+1}: Applying speed changes")
+
+                    filter_parts = []
+                    audio_filter_parts = []
+                    output_labels = []
+                    audio_labels = []
+
+                    trim_offset = trim_start
+                    output_duration = output_frame_idx / fps
+
+                    for seg_idx, seg in enumerate(segments):
+                        seg_start = max(0, seg['start'] - trim_offset)
+                        seg_end = min(output_duration, seg['end'] - trim_offset)
+                        speed = seg.get('speed', 1.0)
+
+                        if seg_end <= seg_start:
+                            continue
+
+                        # Video speed
+                        if speed != 1.0:
+                            filter_parts.append(
+                                f"[0:v]trim=start={seg_start}:end={seg_end},setpts=(PTS-STARTPTS)/{speed}[v{seg_idx}]"
+                            )
+                        else:
+                            filter_parts.append(
+                                f"[0:v]trim=start={seg_start}:end={seg_end},setpts=PTS-STARTPTS[v{seg_idx}]"
+                            )
+                        output_labels.append(f"[v{seg_idx}]")
+
+                        # Audio speed
+                        if has_audio:
+                            audio_start = seg['start']
+                            audio_end = seg['end']
+                            if speed != 1.0:
+                                atempo_val = max(0.5, min(2.0, speed))
+                                audio_filter_parts.append(
+                                    f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS,atempo={atempo_val}[a{seg_idx}]"
+                                )
+                            else:
+                                audio_filter_parts.append(
+                                    f"[1:a]atrim=start={audio_start}:end={audio_end},asetpts=PTS-STARTPTS[a{seg_idx}]"
+                                )
+                            audio_labels.append(f"[a{seg_idx}]")
+
+                    if output_labels:
+                        v_concat = ''.join(output_labels)
+
+                        if has_audio and audio_filter_parts:
+                            a_concat = ''.join(audio_labels)
+                            all_filters = ';'.join(filter_parts + audio_filter_parts)
+                            filter_complex = f"{all_filters};{v_concat}concat=n={len(output_labels)}:v=1:a=0[outv];{a_concat}concat=n={len(audio_labels)}:v=0:a=1[outa]"
+
+                            ffmpeg_cmd = [
+                                "ffmpeg", "-y",
+                                "-framerate", str(fps),
+                                "-i", frame_pattern,
+                                "-i", source_path,
+                                "-filter_complex", filter_complex,
+                                "-map", "[outv]",
+                                "-map", "[outa]",
+                                "-c:v", "libx264",
+                                "-pix_fmt", "yuv420p",
+                                "-preset", "fast",
+                                "-crf", "23",
+                                "-c:a", "aac",
+                                "-b:a", "192k",
+                                "-movflags", "+faststart",
+                                clip_output_path
+                            ]
+                        else:
+                            all_filters = ';'.join(filter_parts)
+                            filter_complex = f"{all_filters};{v_concat}concat=n={len(output_labels)}:v=1:a=0[outv]"
+
+                            ffmpeg_cmd = [
+                                "ffmpeg", "-y",
+                                "-framerate", str(fps),
+                                "-i", frame_pattern,
+                                "-filter_complex", filter_complex,
+                                "-map", "[outv]",
+                                "-c:v", "libx264",
+                                "-pix_fmt", "yuv420p",
+                                "-preset", "fast",
+                                "-crf", "23",
+                                "-movflags", "+faststart",
+                                clip_output_path
+                            ]
+                    else:
+                        # Fallback to simple encoding
+                        ffmpeg_cmd = _build_simple_ffmpeg_cmd(
+                            frame_pattern, source_path, clip_output_path,
+                            fps, has_audio, trim_start, output_frame_idx
+                        )
+                else:
+                    # Simple encoding (no speed changes)
+                    ffmpeg_cmd = _build_simple_ffmpeg_cmd(
+                        frame_pattern, source_path, clip_output_path,
+                        fps, has_audio, trim_start, output_frame_idx
+                    )
+
+                logger.info(f"[{job_id}] FFmpeg command: {' '.join(ffmpeg_cmd[:8])}...")
+                result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+
+                if result.returncode != 0:
+                    logger.error(f"[{job_id}] FFmpeg error: {result.stderr[:500]}")
+                    raise RuntimeError(f"FFmpeg encoding failed for clip {clip_idx+1}")
+
+                processed_paths.append(clip_output_path)
+                logger.info(f"[{job_id}] Clip {clip_idx+1} encoded successfully")
+
+            # === PHASE 4: Concatenate clips (if multiple) ===
+            yield {
+                "progress": 78,
+                "phase": "concatenating",
+                "message": "Finalizing video...",
+                "clip": 0,
+                "total_clips": total_clips
+            }
+
+            if len(processed_paths) == 1:
+                # Single clip - just use it directly
+                final_output = processed_paths[0]
+            else:
+                # Multiple clips - concatenate
+                logger.info(f"[{job_id}] Concatenating {len(processed_paths)} clips...")
+                final_output = os.path.join(temp_dir, "final_output.mp4")
+
+                concat_list = os.path.join(temp_dir, "concat.txt")
+                with open(concat_list, 'w') as f:
+                    for path in processed_paths:
+                        f.write(f"file '{path}'\n")
+
+                # Use stream copy for cut transitions (fastest)
+                transition_type = transition.get('type', 'cut') if transition else 'cut'
+
+                if transition_type == 'cut':
+                    concat_cmd = [
+                        "ffmpeg", "-y",
+                        "-f", "concat",
+                        "-safe", "0",
+                        "-i", concat_list,
+                        "-c", "copy",
+                        "-movflags", "+faststart",
+                        final_output
+                    ]
+                else:
+                    # Re-encode for transitions (future: add xfade support)
+                    concat_cmd = [
+                        "ffmpeg", "-y",
+                        "-f", "concat",
+                        "-safe", "0",
+                        "-i", concat_list,
+                        "-c:v", "libx264",
+                        "-preset", "fast",
+                        "-crf", "23",
+                        "-c:a", "aac",
+                        "-b:a", "192k",
+                        "-movflags", "+faststart",
+                        final_output
+                    ]
+
+                result = subprocess.run(concat_cmd, capture_output=True, text=True)
+                if result.returncode != 0:
+                    raise RuntimeError(f"Concat failed: {result.stderr[:500]}")
+
+                logger.info(f"[{job_id}] Concatenation complete")
+
+            # === PHASE 5: Upload to R2 ===
+            yield {
+                "progress": 90,
+                "phase": "uploading",
+                "message": "Uploading result...",
+                "clip": 0,
+                "total_clips": total_clips
+            }
+
+            full_output_key = f"{user_id}/{output_key}"
+            logger.info(f"[{job_id}] Uploading to {full_output_key}")
+            r2.upload_file(
+                final_output,
+                bucket,
+                full_output_key,
+                ExtraArgs={"ContentType": "video/mp4"},
+            )
+
+            logger.info(f"[{job_id}] Processing complete: {len(processed_paths)} clip(s)")
+
+            # Final result
+            yield {
+                "status": "success",
+                "output_key": output_key,
+                "clips_processed": len(processed_paths),
+                "progress": 100,
+                "phase": "complete",
+                "message": "Processing complete"
+            }
+
+    except Exception as e:
+        logger.error(f"[{job_id}] Processing failed: {e}", exc_info=True)
+        yield {
+            "status": "error",
+            "error": str(e),
+            "progress": 0,
+            "phase": "error"
+        }
 
 
 # Local testing entrypoint

@@ -4,6 +4,7 @@ import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import { generateClipName } from './annotate/constants/soccerTags';
 import { useExportStore } from '../stores';
+import { ExportProgress } from '../components/shared';
 
 /**
  * AnnotateModeView - Complete view for Annotate mode
@@ -256,36 +257,13 @@ export function AnnotateModeView({
                 </div>
               )}
 
-              {/* Progress bar (shown during export) */}
-              {exportProgress && (
-                <div className="bg-gray-800 rounded-lg p-3 mb-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-300">{exportProgress.message}</span>
-                    {exportProgress.total > 0 && (
-                      <span className="text-xs text-gray-500">
-                        {Math.round((exportProgress.current / exportProgress.total) * 100)}%
-                      </span>
-                    )}
-                  </div>
-                  <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-300 ${
-                        exportProgress.done ? 'bg-green-500' : 'bg-blue-500'
-                      }`}
-                      style={{
-                        width: exportProgress.total > 0
-                          ? `${(exportProgress.current / exportProgress.total) * 100}%`
-                          : '0%'
-                      }}
-                    />
-                  </div>
-                  {exportProgress.phase === 'clips' && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      {exportProgress.current > 0 && 'Using cache for unchanged clips'}
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Progress bar (shown during export) - uses same component as framing/overlay */}
+              <ExportProgress
+                isExporting={!!exportProgress}
+                progress={exportProgress?.total > 0 ? Math.round((exportProgress.current / exportProgress.total) * 100) : 0}
+                progressMessage={exportProgress?.message}
+                label="Creating Video"
+              />
 
               {/* Create Annotated Video - stays on screen */}
               <button

@@ -1704,13 +1704,37 @@ async def render_overlay(request: OverlayRenderRequest):
                     import shutil
                     shutil.copy(input_path, output_path)
                 else:
-                    # Process with local frame-by-frame rendering
-                    _process_frames_to_ffmpeg(
+                    # Capture event loop for progress callbacks from thread
+                    loop = asyncio.get_running_loop()
+
+                    def local_progress_callback(progress: int, message: str):
+                        """Send progress updates via WebSocket from processing thread."""
+                        progress_data = {
+                            "progress": progress,
+                            "message": message,
+                            "status": "processing",
+                            "phase": "overlay_render",
+                            "projectId": project_id,
+                            "projectName": project_name,
+                            "type": "overlay"
+                        }
+                        export_progress[export_id] = progress_data
+                        try:
+                            asyncio.run_coroutine_threadsafe(
+                                manager.send_progress(export_id, progress_data),
+                                loop
+                            )
+                        except Exception as e:
+                            logger.warning(f"[Overlay Render] Failed to send progress: {e}")
+
+                    # Run processing in thread to avoid blocking event loop
+                    await asyncio.to_thread(
+                        _process_frames_to_ffmpeg,
                         input_path,
                         output_path,
                         highlight_regions,
                         effect_type,
-                        lambda p, m: None  # No progress callback for now
+                        local_progress_callback
                     )
 
                 # Upload result to R2

@@ -7,6 +7,7 @@ import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore } from '../stores';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { API_BASE } from '../config';
+import exportWebSocketManager from '../services/ExportWebSocketManager';
 
 /**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
@@ -317,27 +318,25 @@ export function AnnotateContainer({
     }
 
     const exportId = `exp_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-    let eventSource = null;
 
+    // Connect to WebSocket for real-time progress updates (same pattern as overlay)
     try {
-      eventSource = new EventSource(`${API_BASE}/api/annotate/progress/${exportId}`);
-      eventSource.onmessage = (event) => {
-        try {
-          const progress = JSON.parse(event.data);
-          console.log('[AnnotateContainer] SSE progress:', progress.current, '/', progress.total, '=', Math.round((progress.current / progress.total) * 100) + '%', progress.message);
-          setExportProgress(progress);
-          if (progress.done) {
-            eventSource?.close();
-          }
-        } catch (e) {
-          console.warn('[AnnotateContainer] Failed to parse progress:', e);
+      await exportWebSocketManager.connect(exportId, {
+        onProgress: (progress, message) => {
+          console.log('[AnnotateContainer] WS progress:', progress, '%', message);
+          // UI expects current/total format for progress bar display
+          setExportProgress({ current: progress, total: 100, message, done: false });
+        },
+        onComplete: (data) => {
+          console.log('[AnnotateContainer] WS complete:', data);
+          setExportProgress({ current: 100, total: 100, message: 'Export complete!', done: true });
+        },
+        onError: (error) => {
+          console.error('[AnnotateContainer] WS error:', error);
         }
-      };
-      eventSource.onerror = () => {
-        eventSource?.close();
-      };
+      });
     } catch (e) {
-      console.warn('[AnnotateContainer] Failed to connect to progress endpoint:', e);
+      console.warn('[AnnotateContainer] Failed to connect to WebSocket:', e);
     }
 
     const formData = new FormData();
@@ -364,7 +363,7 @@ export function AnnotateContainer({
     } else if (annotateVideoFile) {
       formData.append('video', annotateVideoFile);
     } else {
-      eventSource?.close();
+      exportWebSocketManager.disconnect(exportId);
       throw new Error('No video source available');
     }
 
@@ -399,13 +398,13 @@ export function AnnotateContainer({
         throw new Error(`Export error: ${fetchErr.message}`);
       }
     } finally {
-      eventSource?.close();
+      exportWebSocketManager.disconnect(exportId);
       setTimeout(() => setExportProgress(null), 1000);
     }
   }, [annotateVideoFile, annotateGameId]);
 
   /**
-   * Create Annotated Video - Downloads compilation video, stays on annotate screen
+   * Create Annotated Video - Creates compilation and adds to gallery, stays on annotate screen
    */
   const handleCreateAnnotatedVideo = useCallback(async (clipData) => {
     console.log('[AnnotateContainer] Create annotated video requested with clips:', clipData);
@@ -418,33 +417,22 @@ export function AnnotateContainer({
 
     setIsCreatingAnnotatedVideo(true);
     try {
-      console.log('[AnnotateContainer] Creating annotated video (download only)...');
+      console.log('[AnnotateContainer] Creating annotated video (adds to gallery)...');
 
       const result = await callAnnotateExportApi(clipData, false);
 
       console.log('[AnnotateContainer] Annotated video created:', {
         success: result.success,
-        downloads: Object.keys(result.downloads || {})
+        message: result.message
       });
 
-      if (result.downloads?.clips_compilation?.url) {
-        console.log('[AnnotateContainer] Downloading clips compilation...');
-        const a = document.createElement('a');
-        a.href = `${API_BASE}${result.downloads.clips_compilation.url}`;
-        a.download = result.downloads.clips_compilation.filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        console.log('[AnnotateContainer] Downloaded:', result.downloads.clips_compilation.filename);
-      }
-
-      // Show persistent toast - dismissed when user makes changes
+      // Show persistent toast - video is in the gallery for download
       const toastId = toast.success('Annotated video created!', {
-        message: 'Your video has been downloaded successfully.',
+        message: 'Your video has been added to the gallery.',
         duration: 0  // Persistent - dismissed when user makes changes
       });
       setExportCompleteToastId(toastId);
-      console.log('[AnnotateContainer] Create annotated video complete');
+      console.log('[AnnotateContainer] Create annotated video complete - added to gallery');
 
     } catch (err) {
       console.error('[AnnotateContainer] Create annotated video failed:', err);
