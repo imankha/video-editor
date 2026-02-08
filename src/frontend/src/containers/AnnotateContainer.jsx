@@ -405,7 +405,7 @@ export function AnnotateContainer({
   }, [annotateVideoFile, annotateGameId]);
 
   /**
-   * Create Annotated Video - Downloads compilation video, stays on annotate screen
+   * Create Annotated Video - Creates compilation and adds to gallery, stays on annotate screen
    */
   const handleCreateAnnotatedVideo = useCallback(async (clipData) => {
     console.log('[AnnotateContainer] Create annotated video requested with clips:', clipData);
@@ -418,33 +418,22 @@ export function AnnotateContainer({
 
     setIsCreatingAnnotatedVideo(true);
     try {
-      console.log('[AnnotateContainer] Creating annotated video (download only)...');
+      console.log('[AnnotateContainer] Creating annotated video (adds to gallery)...');
 
       const result = await callAnnotateExportApi(clipData, false);
 
       console.log('[AnnotateContainer] Annotated video created:', {
         success: result.success,
-        downloads: Object.keys(result.downloads || {})
+        message: result.message
       });
 
-      if (result.downloads?.clips_compilation?.url) {
-        console.log('[AnnotateContainer] Downloading clips compilation...');
-        const a = document.createElement('a');
-        a.href = `${API_BASE}${result.downloads.clips_compilation.url}`;
-        a.download = result.downloads.clips_compilation.filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        console.log('[AnnotateContainer] Downloaded:', result.downloads.clips_compilation.filename);
-      }
-
-      // Show persistent toast - dismissed when user makes changes
+      // Show persistent toast - video is in the gallery for download
       const toastId = toast.success('Annotated video created!', {
-        message: 'Your video has been downloaded successfully.',
+        message: 'Your video has been added to the gallery.',
         duration: 0  // Persistent - dismissed when user makes changes
       });
       setExportCompleteToastId(toastId);
-      console.log('[AnnotateContainer] Create annotated video complete');
+      console.log('[AnnotateContainer] Create annotated video complete - added to gallery');
 
     } catch (err) {
       console.error('[AnnotateContainer] Create annotated video failed:', err);

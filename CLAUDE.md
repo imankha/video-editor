@@ -32,7 +32,10 @@ cd src/backend && pytest tests/ -k "test_name" -v        # By name
 ## Git Workflow
 - **Never commit to master** - Only the user commits to master after testing
 - **Feature branches** - Create branches like `feature/progress-bar-improvements`
-- **Commit freely** - Commit often to feature branches
+- **Commit when you add value** - Commit whenever you believe you've improved the product state
+  - Don't wait for manual testing - commit once there's reason to believe the change adds value toward the roadmap
+  - Never commit broken code - the codebase must remain functional after each commit
+  - Run relevant tests before committing (minimal tests that activate changed code paths to verify they work as intended)
 - **Signal readiness** - Tell user when work is ready for testing and merge
 
 ## Core Principles

@@ -1021,11 +1021,12 @@ async def call_modal_annotate_compilation(
     log_progress_event(job_id, "modal_start", extra={"type": "annotate", "clips": len(clips)})
 
     try:
-        # Use remote_gen() to stream progress from Modal
+        # Use remote_gen() to stream real progress from Modal
+        # Must iterate in executor to avoid blocking the event loop (like framing does)
         loop = asyncio.get_running_loop()
         start_time = time.time()
 
-        def run_modal_generator():
+        def get_generator():
             return create_annotated_compilation.remote_gen(
                 job_id=job_id,
                 user_id=user_id,
@@ -1035,17 +1036,28 @@ async def call_modal_annotate_compilation(
                 gallery_output_key=gallery_output_key,
             )
 
+        # Get the generator in executor (Modal API is sync)
+        gen = await loop.run_in_executor(None, get_generator)
+
         log_progress_event(job_id, "modal_streaming_started")
         logger.info(f"[Modal] Streaming progress for job {job_id}")
-
-        # Get the generator in executor (synchronous call to get generator)
-        generator = await loop.run_in_executor(None, run_modal_generator)
 
         result = None
         last_progress = 0
 
-        # Stream progress updates from Modal
-        for update in generator:
+        # Helper to get next item without blocking
+        def next_item(generator):
+            try:
+                return next(generator)
+            except StopIteration:
+                return None
+
+        # Stream progress updates from Modal (non-blocking iteration)
+        while True:
+            update = await loop.run_in_executor(None, next_item, gen)
+            if update is None:
+                break
+
             if isinstance(update, dict):
                 progress = update.get("progress", 0)
                 message = update.get("message", "Processing...")
