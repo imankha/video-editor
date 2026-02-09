@@ -1,5 +1,7 @@
 # Frontend Guidelines
 
+> Full implementation guidelines: [../../.claude/workflows/2-implementation.md](../../.claude/workflows/2-implementation.md)
+
 ## Skills
 
 | Skill | Priority | Description |
@@ -12,13 +14,10 @@
 | [ui-style-guide](.claude/skills/ui-style-guide/SKILL.md) | MEDIUM | Colors, buttons, spacing, components |
 | [lint](.claude/skills/lint/SKILL.md) | MEDIUM | Build check for JS/JSX errors |
 
----
-
 ## Quick Reference
 
 ### Data Guards
 ```jsx
-// Parent guards, child renders
 {selectedClip && <ClipEditor clip={selectedClip} />}
 ```
 
@@ -34,7 +33,6 @@ Screen (data fetching, hook initialization)
 keyframe = {
   frame: number,                    // Frame-based, not time
   origin: 'permanent' | 'user' | 'trim',
-  // + mode-specific data (x, y, width, height for crop)
 }
 ```
 
@@ -42,8 +40,6 @@ keyframe = {
 - **Zustand stores**: Global state (`editorStore`, `exportStore`, etc.)
 - **Screen-owned hooks**: Each screen initializes `useVideo`, `useCrop`, etc.
 - **No prop drilling from App.jsx**: Screens are self-contained
-
----
 
 ## Don't
 - Don't add console.logs in committed code
