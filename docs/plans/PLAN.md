@@ -11,7 +11,7 @@
 | ID | Task | Status | Impact | Complexity |
 |----|------|--------|--------|------------|
 | T05 | [Optimize Load Times](tasks/T05-optimize-load-times.md) | DONE | HIGH | MEDIUM |
-| T06 | [Move Tracking Toggle to Layer Icon](tasks/T06-remove-player-tracking-button.md) | TODO | LOW | LOW |
+| T06 | [Move Tracking Toggle to Layer Icon](tasks/T06-remove-player-tracking-button.md) | DONE | LOW | LOW |
 | T07 | [Video Load Times](tasks/T07-video-load-times.md) | DONE | MEDIUM | LOW |
 | T10 | [Progress Bar Improvements](tasks/T10-progress-bar.md) | DONE | HIGH | MEDIUM |
 | T11 | [Local GPU Progress Bar](tasks/T11-local-gpu-progress.md) | DONE | MEDIUM | LOW |
