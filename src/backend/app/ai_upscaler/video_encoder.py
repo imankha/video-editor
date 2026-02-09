@@ -284,11 +284,15 @@ class VideoEncoder:
             logger.info("=" * 60)
             logger.info("APPLYING SEGMENT SPEED/TRIM PROCESSING")
             logger.info("=" * 60)
+            logger.info(f"DEBUG: segment_data received: {segment_data}")
 
             segments = segment_data.get('segments', [])
             trim_start = segment_data.get('trim_start', 0)
             trim_end = segment_data.get('trim_end')
             frames_pretrimmed = segment_data.get('frames_pretrimmed', False)
+
+            logger.info(f"DEBUG: segments count: {len(segments)}")
+            logger.info(f"DEBUG: trim_start={trim_start}, trim_end={trim_end}, frames_pretrimmed={frames_pretrimmed}")
 
             # Calculate time offset for pre-trimmed frames
             # If frames are pre-trimmed, they start at 0.0s in the frame sequence
@@ -359,10 +363,13 @@ class VideoEncoder:
                         minterpolate_filter = self._get_minterpolate_filter(fps * 2)
 
                         # Trim video using adjusted times, reset PTS, interpolate to double FPS
+                        # IMPORTANT: Add fps={fps} at the end to normalize frame rate before concat
+                        # Without this, the 60fps stream from minterpolate won't concat properly
+                        # with the ~30fps normal segments, causing the slow motion to not work
                         filter_parts.append(
                             f"[0:v]trim=start={video_start}:end={video_end},setpts=PTS-STARTPTS,"
                             f"{minterpolate_filter},"
-                            f"setpts=PTS*2[v{i}]"
+                            f"setpts=PTS*2,fps={fps}[v{i}]"
                         )
 
                         # Audio: trim using original source times and slow down with atempo=0.5
@@ -391,14 +398,15 @@ class VideoEncoder:
                         # Trim video using adjusted times
                         # Apply setpts to adjust playback speed:
                         # - setpts=PTS/speed adjusts timing (e.g., PTS/2 = 2x speed, PTS/0.5 = 0.5x speed)
+                        # Add fps={fps} to normalize frame rate for concat compatibility
                         if speed != 1.0:
                             logger.info(f"  → Applying setpts=PTS/{speed} to video for {speed}x speed")
                             filter_parts.append(
-                                f"[0:v]trim=start={video_start}:end={video_end},setpts=(PTS-STARTPTS)/{speed}[v{i}]"
+                                f"[0:v]trim=start={video_start}:end={video_end},setpts=(PTS-STARTPTS)/{speed},fps={fps}[v{i}]"
                             )
                         else:
                             filter_parts.append(
-                                f"[0:v]trim=start={video_start}:end={video_end},setpts=PTS-STARTPTS[v{i}]"
+                                f"[0:v]trim=start={video_start}:end={video_end},setpts=PTS-STARTPTS,fps={fps}[v{i}]"
                             )
 
                         # Audio: build atempo filter for speed adjustment using original source times
@@ -789,6 +797,12 @@ class VideoEncoder:
             '-movflags', '+faststart',
             str(output_path)
         ])
+
+        # Log the full FFmpeg command for debugging
+        logger.info("=" * 60)
+        logger.info("DEBUG: Full FFmpeg command:")
+        logger.info(' '.join(cmd_pass2))
+        logger.info("=" * 60)
 
         try:
             # Use Popen to read stderr in real-time for progress monitoring
