@@ -65,6 +65,8 @@ cd src/backend && pytest tests/test_clips.py -v          # Specific file
 | **Tester** | Phase 1: create failing tests. Phase 2: run tests until pass | [tester.md](.claude/agents/tester.md) |
 | **Implementor** | Execute approved design with MVC, no state duplication | [implementor.md](.claude/agents/implementor.md) |
 | **Reviewer** | Verify implementation matches approved design | [reviewer.md](.claude/agents/reviewer.md) |
+| **Project Manager** | Roadmap, prioritization, development cycles | [project-manager.md](.claude/agents/project-manager.md) |
+| **UI Designer** | Define UI details, maintain style guide; requires approval | [ui-designer.md](.claude/agents/ui-designer.md) |
 
 **Orchestration**: See [ORCHESTRATION.md](.claude/ORCHESTRATION.md) for agent spawning, handoffs, and skill access.
 
@@ -75,6 +77,7 @@ cd src/backend && pytest tests/test_clips.py -v          # Specific file
 | [Code Smells](.claude/references/code-smells.md) | Fowler's refactoring catalog with examples |
 | [Design Patterns](.claude/references/design-patterns.md) | GoF patterns relevant to React + FastAPI |
 | [Testing Matrix](.claude/references/testing-matrix.md) | Coverage guidance by change type |
+| [UI Style Guide](.claude/references/ui-style-guide.md) | Colors, typography, components, patterns |
 | [Handoff Schemas](.claude/schemas/handoffs.md) | Structured context passing between agents |
 | [Error Recovery](.claude/workflows/error-recovery.md) | Recovery procedures when things go wrong |
 | [Retrospectives](.claude/retrospectives/README.md) | Template for task retrospectives |
