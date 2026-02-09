@@ -56,6 +56,7 @@
 | T100 | [Fly.io Backend](tasks/deployment/T100-flyio-backend.md) | TODO |
 | T110 | [Cloudflare Pages](tasks/deployment/T110-cloudflare-pages.md) | TODO |
 | T120 | [DNS & SSL](tasks/deployment/T120-dns-ssl.md) | TODO |
+| T130 | [Modal Production Workspace](tasks/deployment/T130-modal-production-workspace.md) | TODO |
 
 ---
 
