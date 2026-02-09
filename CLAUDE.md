@@ -47,7 +47,32 @@ cd src/backend && pytest tests/ -k "test_name" -v        # By name
 | **No Band-Aid Fixes** | Understand root cause, don't mask symptoms |
 | **Heavy Testing** | Unit tests co-located, E2E with Playwright |
 | **Type Safety** | No magic strings (see frontend/backend type-safety skills) |
+| **Derive, Don't Duplicate** | See detailed section below |
 | **Minimize Code Paths** | See detailed section below |
+
+## Derive, Don't Duplicate
+
+When multiple variables represent the same underlying state, bugs happen when they get out of sync.
+
+**Bad** - Multiple independent variables:
+```python
+def send_progress(phase, done, status, progress):  # 4 ways to say "complete"
+    if done or phase == 'complete' or status == 'complete' or progress >= 100:
+        ...  # Which one is right? They can disagree!
+```
+
+**Good** - One source of truth, derive the rest:
+```python
+def send_progress(phase):  # phase is the ONLY input
+    status = phase_to_status(phase)  # Derived - can't be wrong
+    done = phase in (Phase.COMPLETE, Phase.ERROR)  # Derived
+```
+
+**Rules:**
+1. **Pick ONE authoritative variable** - Usually the most granular one (e.g., `phase` not `done`)
+2. **Derive everything else** - Write functions that compute derived values
+3. **Never pass derived values as parameters** - If it can be computed, compute it
+4. **Use enums, not strings** - `ExportPhase.COMPLETE` catches typos at import time
 
 ## Minimize Code Paths (DRY Architecture)
 
