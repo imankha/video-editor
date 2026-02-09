@@ -4,14 +4,29 @@
 
 Create a design document focused on **architecture quality**: DRY, minimal code paths, clean design patterns. This document requires user approval before implementation begins.
 
+## Core Architecture: MVC + Data Always Ready
+
+All designs must follow these patterns:
+
+```
+Screen (data fetching, guards data readiness)
+  └── Container (state logic, event handlers)
+        └── View (presentational only, assumes data exists)
+```
+
+**Data Always Ready**: Parent components guard data, children assume it exists. Views never fetch or check for null - they render what they're given.
+
+**Reactive Updates**: Views respond to state changes via store subscriptions. No imperative "refresh" calls.
+
 ## Primary Concerns
 
 | Concern | What to Evaluate |
 |---------|------------------|
+| **MVC Compliance** | Does design follow Screen → Container → View? |
+| **Data Flow** | Is data guarded at the right level? Views assume data ready? |
 | **DRY** | Is there duplicate logic? Can we extract shared helpers? |
 | **Code Paths** | Are there multiple ways to do the same thing? Can we unify? |
 | **Branches** | Are there unnecessary if/else blocks? Can we route internally? |
-| **Design Patterns** | Does the solution follow established patterns? |
 | **Code Smells** | Does the current code have smells we should fix? |
 | **Refactoring** | Should we refactor existing code as part of this task? |
 
@@ -168,10 +183,13 @@ Before presenting design, verify:
 - [ ] Strategy pattern where appropriate
 - [ ] Internal routing over external branching
 
-### Design Patterns
+### MVC + Data Always Ready
 - [ ] Follows MVC (Screen → Container → View)
-- [ ] State in appropriate location
-- [ ] Props flow downward
+- [ ] Data guarded at Screen/Container level
+- [ ] Views assume data exists (no null checks)
+- [ ] Views are purely presentational (no fetching)
+- [ ] State changes trigger reactive updates
+- [ ] Props flow downward, events flow upward
 
 ### Code Smells
 - [ ] Identified smells in current code

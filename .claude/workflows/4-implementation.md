@@ -4,14 +4,34 @@
 
 Execute the approved design. Focus on **implementation quality**: clean code, no state duplication, proper patterns.
 
+## Core Pattern: MVC + Data Always Ready
+
+All implementations must follow:
+
+```
+Screen (data fetching, guards data readiness)
+  └── Container (state logic, event handlers)
+        └── View (presentational only, assumes data exists)
+```
+
+**Data Always Ready**:
+- Parent guards: `{data && <Child data={data} />}`
+- Child assumes: `function Child({ data }) { /* data is never null */ }`
+- Views never fetch, never check for null
+
+**Reactive Updates**:
+- State lives in Zustand stores or Screen-level hooks
+- Views subscribe to state, re-render on changes
+- No imperative "refresh" or "update" calls
+
 ## Primary Concerns
 
 | Concern | What to Check |
 |---------|---------------|
+| **MVC Compliance** | Screen guards, Container handles logic, View renders |
+| **Data Always Ready** | Parents guard, children assume data exists |
 | **State Duplication** | One source of truth, derive everything else |
-| **Implementation Standards** | Follow frontend/backend patterns |
 | **Type Safety** | No magic strings, use enums and constants |
-| **Error Handling** | Appropriate guards and fallbacks |
 
 ---
 
