@@ -443,6 +443,14 @@ def _process_frames_to_ffmpeg(
     import cv2
     from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
 
+    # DEBUG: Log what we received
+    logger.info(f"[Overlay Export] DEBUG - _process_frames_to_ffmpeg called with {len(highlight_regions)} regions, effect={highlight_effect_type}")
+    if highlight_regions and len(highlight_regions) > 0:
+        first_region = highlight_regions[0]
+        logger.info(f"[Overlay Export] DEBUG - First region: {first_region.get('start_time')}-{first_region.get('end_time')}s, {len(first_region.get('keyframes', []))} keyframes")
+        if first_region.get('keyframes'):
+            logger.info(f"[Overlay Export] DEBUG - First keyframe: {first_region['keyframes'][0]}")
+
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
         raise ValueError("Could not open video file")
@@ -1588,10 +1596,18 @@ async def render_overlay(request: OverlayRenderRequest):
     if project['highlights_data']:
         try:
             highlight_regions = json.loads(project['highlights_data'])
-        except json.JSONDecodeError:
-            pass
+            # DEBUG: Log what we loaded from database
+            logger.info(f"[Overlay Render] DEBUG - Loaded highlights_data from DB: {len(project['highlights_data'])} chars")
+            if highlight_regions and highlight_regions[0].get('keyframes'):
+                first_kf = highlight_regions[0]['keyframes'][:3]
+                logger.info(f"[Overlay Render] DEBUG - First region keyframes sample: {first_kf}")
+        except json.JSONDecodeError as e:
+            logger.error(f"[Overlay Render] DEBUG - JSON decode error: {e}")
+    else:
+        logger.warning(f"[Overlay Render] DEBUG - highlights_data is empty/None!")
 
     # Use saved effect_type if not specified
+    logger.info(f"[Overlay Render] DEBUG - effect_type from request: {effect_type}, from DB: {project['effect_type']}")
     if not effect_type and project['effect_type']:
         effect_type = project['effect_type']
     effect_type = effect_type or "dark_overlay"

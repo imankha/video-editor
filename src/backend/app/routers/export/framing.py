@@ -709,18 +709,28 @@ async def render_project(request: RenderRequest):
             await manager.send_progress(export_id, progress_data)
 
         # Run batch player detection on the working video
-        # Use local file directly (still available before cleanup) instead of downloading from R2
-        try:
-            highlight_regions = await run_local_detection_on_video_file(
-                video_path=output_path,
-                source_clips=source_clips,
-            )
-            logger.info(f"[Render] Player detection complete: {len(highlight_regions)} regions with detected keyframes")
-        except Exception as det_error:
-            logger.warning(f"[Render] Player detection failed, using defaults: {det_error}")
+        # Download from R2 since unified interface uploads there (local_framing uses its own temp dir)
+        from app.storage import download_from_r2
+        if not await asyncio.to_thread(download_from_r2, user_id, output_key, Path(output_path)):
+            logger.warning(f"[Render] Failed to download working video for detection, using defaults")
             highlight_regions = generate_default_highlight_regions(source_clips)
+        else:
+            try:
+                highlight_regions = await run_local_detection_on_video_file(
+                    video_path=output_path,
+                    source_clips=source_clips,
+                )
+                logger.info(f"[Render] Player detection complete: {len(highlight_regions)} regions with detected keyframes")
+                # DEBUG: Log first region's keyframes to verify detection quality
+                if highlight_regions and highlight_regions[0].get('keyframes'):
+                    first_kf = highlight_regions[0]['keyframes'][:3]  # First 3 keyframes
+                    logger.info(f"[Render] DEBUG - First region keyframes sample: {first_kf}")
+            except Exception as det_error:
+                logger.warning(f"[Render] Player detection failed, using defaults: {det_error}")
+                highlight_regions = generate_default_highlight_regions(source_clips)
 
         highlights_json = json.dumps(highlight_regions)
+        logger.info(f"[Render] DEBUG - highlights_json length: {len(highlights_json)} chars")
 
         # Step 7: Save to database
         working_video_id = None

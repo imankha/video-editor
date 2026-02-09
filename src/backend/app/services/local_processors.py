@@ -47,6 +47,14 @@ async def local_overlay(
     logger.info(f"[LocalProcessor] Overlay job {job_id} starting")
     logger.info(f"[LocalProcessor] User: {user_id}, Input: {input_key} -> Output: {output_key}")
     logger.info(f"[LocalProcessor] Regions: {len(highlight_regions)}, Effect: {effect_type}")
+    # DEBUG: Log first region's keyframes to verify data passed correctly
+    if highlight_regions and len(highlight_regions) > 0:
+        first_region = highlight_regions[0]
+        logger.info(f"[LocalProcessor] DEBUG - First region: start={first_region.get('start_time')}, end={first_region.get('end_time')}")
+        if first_region.get('keyframes'):
+            logger.info(f"[LocalProcessor] DEBUG - First region keyframes sample: {first_region['keyframes'][:3]}")
+    else:
+        logger.warning(f"[LocalProcessor] DEBUG - highlight_regions is EMPTY!")
 
     start_time = time.time()
 
