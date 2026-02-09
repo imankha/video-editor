@@ -28,6 +28,9 @@ const RECONNECT_CONFIG = {
 // Keepalive configuration
 const KEEPALIVE_INTERVAL = 30000; // 30 seconds
 
+// Status polling configuration
+const STATUS_POLL_INTERVAL = 60000; // Poll every 60 seconds as backup
+
 class ExportWebSocketManager {
   constructor() {
     // Map of exportId -> WebSocket connection info
@@ -88,6 +91,8 @@ class ExportWebSocketManager {
         clearTimeout(timeout);
         console.log(`[ExportWSManager] Connected to ${exportId}`);
 
+        const wasReconnect = connectionInfo.reconnectAttempt > 0;
+
         // Reset reconnect attempts on successful connection
         connectionInfo.reconnectAttempt = 0;
 
@@ -102,6 +107,15 @@ class ExportWebSocketManager {
             }
           }
         }, KEEPALIVE_INTERVAL);
+
+        // Start periodic status polling as backup (catches missed WebSocket messages)
+        this._startStatusPolling(exportId, callbacks);
+
+        // If this was a reconnect, poll status immediately to catch any missed updates
+        if (wasReconnect) {
+          console.log(`[ExportWSManager] Reconnected, polling status to sync state`);
+          this._pollExportStatus(exportId, callbacks);
+        }
 
         resolve(true);
       };
@@ -257,8 +271,11 @@ class ExportWebSocketManager {
     const { reconnectAttempt } = connectionInfo;
 
     if (reconnectAttempt >= RECONNECT_CONFIG.maxAttempts) {
-      console.warn(`[ExportWSManager] Max reconnect attempts reached for ${exportId}`);
-      this.connections.delete(exportId);
+      console.warn(`[ExportWSManager] Max reconnect attempts reached for ${exportId}, polling status`);
+      // Poll backend status as final fallback before giving up
+      this._pollExportStatus(exportId, connectionInfo.callbacks).then(() => {
+        this.connections.delete(exportId);
+      });
       return;
     }
 
@@ -295,6 +312,11 @@ class ExportWebSocketManager {
     // Clear keepalive
     if (connectionInfo.keepaliveInterval) {
       clearInterval(connectionInfo.keepaliveInterval);
+    }
+
+    // Clear status polling
+    if (connectionInfo.statusPollInterval) {
+      clearInterval(connectionInfo.statusPollInterval);
     }
 
     // Clear reconnect timeout
@@ -428,6 +450,96 @@ class ExportWebSocketManager {
         }
       });
     }
+  }
+
+  /**
+   * Poll backend REST API for export status.
+   * Used as fallback when WebSocket connection fails.
+   *
+   * @param {string} exportId - Export to check
+   * @param {object} callbacks - Optional callbacks from connect()
+   * @returns {Promise<object|null>} - Export status or null if not found
+   */
+  async _pollExportStatus(exportId, callbacks = {}) {
+    try {
+      console.log(`[ExportWSManager] Polling status for ${exportId}`);
+      const response = await fetch(`/api/exports/${exportId}`);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.warn(`[ExportWSManager] Export ${exportId} not found in database`);
+          return null;
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`[ExportWSManager] Polled status for ${exportId}:`, data.status);
+
+      const store = useExportStore.getState();
+
+      // Handle terminal states
+      if (data.status === ExportStatus.COMPLETE) {
+        store.completeExport(exportId, data.output_video_id, data.output_filename);
+        if (callbacks.onComplete) {
+          try {
+            callbacks.onComplete(data);
+          } catch (e) {
+            console.warn(`[ExportWSManager] onComplete callback error:`, e);
+          }
+        }
+        this._emitEvent(exportId, 'complete', data);
+        return data;
+      } else if (data.status === ExportStatus.ERROR) {
+        const errorMsg = data.error || 'Export failed (job was cancelled by server)';
+        store.failExport(exportId, errorMsg);
+        if (callbacks.onError) {
+          try {
+            callbacks.onError(errorMsg);
+          } catch (e) {
+            console.warn(`[ExportWSManager] onError callback error:`, e);
+          }
+        }
+        this._emitEvent(exportId, 'error', { error: errorMsg });
+        return data;
+      }
+
+      return data;
+    } catch (e) {
+      console.warn(`[ExportWSManager] Failed to poll status for ${exportId}:`, e);
+      return null;
+    }
+  }
+
+  /**
+   * Start periodic status polling for an export.
+   * Used as backup when WebSocket is connected but may miss messages.
+   *
+   * @param {string} exportId - Export to poll
+   * @param {object} callbacks - Callbacks from connect()
+   */
+  _startStatusPolling(exportId, callbacks) {
+    const connectionInfo = this.connections.get(exportId);
+    if (!connectionInfo) return;
+
+    // Clear any existing poll interval
+    if (connectionInfo.statusPollInterval) {
+      clearInterval(connectionInfo.statusPollInterval);
+    }
+
+    connectionInfo.statusPollInterval = setInterval(async () => {
+      const exportState = useExportStore.getState().activeExports[exportId];
+
+      // Stop polling if export is no longer active
+      if (!exportState || exportState.status === ExportStatus.COMPLETE || exportState.status === ExportStatus.ERROR) {
+        clearInterval(connectionInfo.statusPollInterval);
+        connectionInfo.statusPollInterval = null;
+        return;
+      }
+
+      // Poll backend status as backup
+      await this._pollExportStatus(exportId, callbacks);
+    }, STATUS_POLL_INTERVAL);
   }
 
   /**

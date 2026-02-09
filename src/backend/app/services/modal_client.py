@@ -50,6 +50,31 @@ def log_progress_event(job_id: str, phase: str, elapsed: float = None, extra: di
             parts.append(f"{key}={val}")
     logger.info(" ".join(parts))
 
+
+def _translate_modal_error(error: Exception) -> str:
+    """
+    Translate technical Modal errors to user-friendly messages.
+
+    Common Modal errors:
+    - "Input aborted - not reschedulable": GPU container was preempted/crashed
+    - "CUDA out of memory": GPU ran out of VRAM
+    - Timeouts: Container exceeded time limit
+    """
+    error_msg = str(error)
+
+    if "Input aborted" in error_msg or "not reschedulable" in error_msg:
+        return "GPU processing was interrupted by cloud provider. Please retry - this is temporary."
+    elif "CUDA out of memory" in error_msg or "OutOfMemoryError" in error_msg:
+        return "GPU ran out of memory. Try processing fewer clips or lower resolution."
+    elif "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+        return "Processing took too long and was cancelled. Try shorter clips or fewer clips."
+    elif "connection" in error_msg.lower() or "network" in error_msg.lower():
+        return "Network error communicating with GPU server. Please retry."
+
+    # Return original if no translation available
+    return error_msg
+
+
 # Modal is available if MODAL_ENABLED=true
 _modal_enabled = os.environ.get("MODAL_ENABLED", "false").lower() == "true"
 
@@ -365,7 +390,7 @@ async def call_modal_framing_ai(
         total_elapsed = time.time() - job_start_time
         log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(e)[:50]})
         logger.error(f"[Modal] AI framing job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_clips_ai(
@@ -488,7 +513,7 @@ async def call_modal_clips_ai(
         total_elapsed = time.time() - job_start_time
         log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(e)[:50]})
         logger.error(f"[Modal] Clips AI job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_multi_clip(
@@ -666,7 +691,7 @@ async def call_modal_multi_clip(
             return {"status": "connection_lost", "call_id": modal_call_id, "message": "Connection lost but job may still be running. Refresh to check status."}
 
         logger.error(f"[Modal] Multi-clip job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_overlay(
@@ -801,7 +826,7 @@ async def call_modal_overlay(
         total_elapsed = time.time() - job_start_time
         log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(e)[:50]})
         logger.error(f"[Modal] Overlay job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_overlay_auto(
@@ -895,7 +920,7 @@ async def call_modal_detect_players(
 
     except Exception as e:
         logger.error(f"[Modal] Player detection failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_detect_players_batch(
@@ -958,7 +983,7 @@ async def call_modal_detect_players_batch(
 
     except Exception as e:
         logger.error(f"[Modal] Batch player detection failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_extract_clip(
@@ -1015,7 +1040,7 @@ async def call_modal_extract_clip(
 
     except Exception as e:
         logger.error(f"[Modal] Clip extraction failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_annotate_compilation(
@@ -1147,7 +1172,7 @@ async def call_modal_annotate_compilation(
 
     except Exception as e:
         logger.error(f"[Modal] Annotated compilation job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 # Test function
