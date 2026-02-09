@@ -12,6 +12,7 @@ Modal GPU jobs currently run in development workspace. For production deployment
 ## Acceptance Criteria
 
 - [ ] Production Modal workspace created
+- [ ] Applied for Modal startup credits (requires workspace first)
 - [ ] GPU functions deployed to production workspace (framing, overlay, detection)
 - [ ] Production secrets configured (R2 credentials, API keys)
 - [ ] Backend can switch between dev/prod Modal workspaces via environment
@@ -35,12 +36,15 @@ For production, need:
 ### Modal Workspace Setup
 ```
 1. Create new Modal workspace (e.g., "reelballers-prod")
-2. Configure secrets:
+2. Apply for Modal startup credits
+   - Requires workspace to exist before applying
+   - https://modal.com/startups
+3. Configure secrets:
    - R2_ACCESS_KEY_ID
    - R2_SECRET_ACCESS_KEY
    - R2_BUCKET_NAME
    - R2_ENDPOINT_URL
-3. Deploy functions to production workspace
+4. Deploy functions to production workspace
 ```
 
 ### Backend Environment Switch
