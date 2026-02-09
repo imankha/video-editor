@@ -609,20 +609,21 @@ async def run_annotate_export_processing(export_id: str, config: dict):
     # Progress helper - uses shared make_progress_data for consistent status handling
     from app.websocket import make_progress_data
 
-    async def update_progress(current: int, total: int, phase: str, message: str, done: bool = False):
+    async def update_progress(current: int, total: int, phase: str, message: str):
+        # Status and done are derived from phase (single source of truth)
         progress_data = make_progress_data(
             current=current,
             total=total,
             phase=phase,
             message=message,
             export_type='annotate',
-            done=done,
             game_id=game_id,
             game_name=game_name,
         )
         export_progress[export_id] = progress_data
         await manager.send_progress(export_id, progress_data)
-        if current % 5 == 0 or done or phase == 'error':
+        is_terminal = phase in ('complete', 'done', 'error')
+        if current % 5 == 0 or is_terminal:
             logger.info(f"[AnnotateExport] {export_id}: {current}/{total} ({phase}) - {message}")
 
     try:
@@ -819,8 +820,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
 
             message = f"Generated annotated video with {len(all_clips)} clips"
 
-        # Mark progress as complete
-        await update_progress(100, 100, 'done', message, done=True)
+        # Mark progress as complete (phase='complete' derives status=COMPLETE, done=True)
+        await update_progress(100, 100, 'complete', message)
 
         # Mark job as complete
         output_filename = download_urls.get('clips_compilation', {}).get('filename')

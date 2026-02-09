@@ -8,7 +8,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict, List, Optional
 import logging
 
-from app.constants import ExportStatus
+from app.constants import ExportStatus, phase_to_status
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,6 @@ def make_progress_data(
     phase: str,
     message: str,
     export_type: str,
-    done: bool = False,
     project_id: Optional[int] = None,
     project_name: Optional[str] = None,
     game_id: Optional[int] = None,
@@ -32,16 +31,17 @@ def make_progress_data(
     """
     Create a properly formatted progress data object for WebSocket updates.
 
-    This is the single source of truth for progress data formatting across all export types.
-    Ensures correct status handling: 'error' phase → ERROR status, done → COMPLETE status.
+    SINGLE SOURCE OF TRUTH: Status and done are derived from phase.
+    - phase in (complete, done) → status=COMPLETE, done=True
+    - phase == error → status=ERROR, done=True
+    - all other phases → status=PROCESSING, done=False
 
     Args:
         current: Current progress value (0-100)
         total: Total progress value (usually 100)
-        phase: Processing phase (init, download, processing, upload, done, error)
+        phase: Processing phase (init, download, processing, upload, complete, error)
         message: Human-readable progress message
         export_type: Type of export (annotate, framing, overlay)
-        done: Whether the export is complete
         project_id: Project ID (for framing/overlay exports)
         project_name: Project name (for framing/overlay exports)
         game_id: Game ID (for annotate exports)
@@ -50,13 +50,9 @@ def make_progress_data(
     Returns:
         Properly formatted progress data dict ready for WebSocket transmission
     """
-    # Determine status - error phase means error status
-    if phase == 'error':
-        status = ExportStatus.ERROR
-    elif done:
-        status = ExportStatus.COMPLETE
-    else:
-        status = 'processing'
+    # SINGLE SOURCE OF TRUTH: derive status and done from phase
+    status = phase_to_status(phase)
+    done = phase in ('complete', 'done', 'error')
 
     return {
         'current': current,

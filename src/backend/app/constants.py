@@ -21,6 +21,57 @@ class ExportStatus(str, Enum):
     COMPLETE = "complete"
     ERROR = "error"
 
+
+class ExportPhase(str, Enum):
+    """
+    Progress phases within an export job.
+
+    This is the SINGLE SOURCE OF TRUTH for export progress state.
+    Status is derived from phase - never set independently:
+    - COMPLETE → ExportStatus.COMPLETE
+    - ERROR → ExportStatus.ERROR
+    - All others → ExportStatus.PROCESSING
+
+    Usage:
+        phase = ExportPhase.PROCESSING
+        status = phase.to_status()  # Returns ExportStatus.PROCESSING
+    """
+    INIT = "init"
+    DOWNLOAD = "download"
+    PROCESSING = "processing"
+    UPLOAD = "upload"
+    FINALIZING = "finalizing"
+    COMPLETE = "complete"
+    ERROR = "error"
+
+    def to_status(self) -> ExportStatus:
+        """Derive ExportStatus from this phase. Single source of truth."""
+        if self == ExportPhase.COMPLETE:
+            return ExportStatus.COMPLETE
+        elif self == ExportPhase.ERROR:
+            return ExportStatus.ERROR
+        else:
+            return ExportStatus.PROCESSING
+
+    @property
+    def is_done(self) -> bool:
+        """Whether this phase indicates completion (success or error)."""
+        return self in (ExportPhase.COMPLETE, ExportPhase.ERROR)
+
+
+def phase_to_status(phase: str) -> ExportStatus:
+    """
+    Derive ExportStatus from a phase string. Single source of truth.
+
+    Accepts string for backwards compatibility with existing code.
+    """
+    if phase == ExportPhase.COMPLETE or phase == "done":
+        return ExportStatus.COMPLETE
+    elif phase == ExportPhase.ERROR:
+        return ExportStatus.ERROR
+    else:
+        return ExportStatus.PROCESSING
+
 # Rating adjectives for clip name generation (1-5 stars)
 # Used to generate names like "Brilliant Goal and Dribble"
 RATING_ADJECTIVES: Dict[int, str] = {

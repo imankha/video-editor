@@ -159,7 +159,6 @@ async def send_progress(
     phase: str,
     message: str,
     export_type: str,
-    done: bool = False,
     project_id: int = None,
     project_name: str = None,
     game_id: int = None,
@@ -170,16 +169,15 @@ async def send_progress(
     Send progress update via WebSocket using shared make_progress_data.
 
     This is the single entry point for progress updates across all export types.
-    Ensures consistent formatting and status handling.
+    Status and done are derived from phase (single source of truth).
 
     Args:
         export_id: Export job ID
         current: Current progress value (0-100)
         total: Total progress value (usually 100)
-        phase: Processing phase (init, download, processing, upload, done, error)
+        phase: Processing phase (init, download, processing, upload, complete, error)
         message: Human-readable progress message
         export_type: 'annotate', 'framing', or 'overlay'
-        done: Whether the export is complete
         project_id: Project ID (for framing/overlay)
         project_name: Project name (for framing/overlay)
         game_id: Game ID (for annotate)
@@ -192,7 +190,6 @@ async def send_progress(
         phase=phase,
         message=message,
         export_type=export_type,
-        done=done,
         project_id=project_id,
         project_name=project_name,
         game_id=game_id,
@@ -202,8 +199,9 @@ async def send_progress(
     export_progress[export_id] = progress_data
     await manager.send_progress(export_id, progress_data)
 
-    # Log significant progress changes
-    if current % log_every == 0 or done or phase == 'error':
+    # Log significant progress changes (done is derived from phase)
+    is_terminal = phase in ('complete', 'done', 'error')
+    if current % log_every == 0 or is_terminal:
         logger.info(f"[Export] {export_id}: {current}/{total} ({phase}) - {message}")
 
 
@@ -219,6 +217,7 @@ def create_progress_callback(
     Create an async progress callback for unified Modal/local processors.
 
     Returns an async function that can be passed to call_modal_* functions.
+    Status and done are derived from phase (single source of truth).
 
     Usage:
         progress_callback = create_progress_callback(
@@ -227,8 +226,7 @@ def create_progress_callback(
         result = await call_modal_framing_ai(..., progress_callback=progress_callback)
     """
     async def callback(progress: float, message: str, phase: str = "processing"):
-        # Set done=True when phase is "complete" or "done", or progress is 100%
-        is_done = phase in ('complete', 'done') or progress >= 100
+        # Status and done are derived from phase in make_progress_data
         await send_progress(
             export_id=export_id,
             current=int(progress),
@@ -236,7 +234,6 @@ def create_progress_callback(
             phase=phase,
             message=message,
             export_type=export_type,
-            done=is_done,
             project_id=project_id,
             project_name=project_name,
             game_id=game_id,
