@@ -1,6 +1,6 @@
 # T06: Move Player Tracking Toggle to Layer Icon
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** LOW
 **Complexity:** LOW
 **Created:** 2026-02-06

@@ -164,7 +164,6 @@ export function OverlayModeView({
         {effectiveOverlayVideoUrl && !isFullscreen && (
           <div className="mb-6 flex gap-4 items-center">
             <div className="ml-auto flex items-center gap-3">
-              {/* Player boxes toggle moved to layer icon in timeline (T06) */}
               <ZoomControls
                 zoom={zoom}
                 onZoomIn={onZoomIn}
