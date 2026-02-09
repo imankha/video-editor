@@ -156,6 +156,22 @@ Implemented real-time progress from Modal using `.remote_gen()` instead of spawn
 **Note:** Multi-clip export (`process_multi_clip_modal`) still uses time-based simulation.
 This can be converted to streaming progress in a future update if needed.
 
+### Annotate Export WebSocket Progress (2026-02-08)
+
+Converted annotate export from SSE polling to WebSocket streaming:
+
+**Backend (annotate.py):**
+- Removed SSE endpoint and `_export_progress` dictionary
+- Added WebSocket-based `update_progress()` function
+- Modal path: Maps Modal's 0-100% to 10-100% overall using `10 + int(progress * 0.9)`
+- This prevents progress from going backwards after initial backend steps (0-7%)
+
+**Frontend (AnnotateContainer.jsx):**
+- Changed from EventSource to ExportWebSocketManager
+- Uses shared ExportProgress component (same as framing/overlay)
+
+**Commits:** 1c25ba0, bf41508, da9d67a, 5cfadb2
+
 ## Files to Modify
 
 - `src/backend/app/services/modal_client.py` - Add logging, improve estimates

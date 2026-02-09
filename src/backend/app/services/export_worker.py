@@ -149,6 +149,11 @@ async def process_export_job(job_id: str):
             output_video_id, output_filename = await process_overlay_export(job_id, project_id, config)
         elif job_type == 'multi_clip':
             output_video_id, output_filename = await process_multi_clip_export(job_id, project_id, config)
+        elif job_type == 'annotate':
+            # Annotate exports are handled separately with their own processing function
+            # They don't return output_video_id like other exports
+            await process_annotate_export(job_id)
+            return  # process_annotate_export handles its own completion/error updates
         else:
             raise ValueError(f"Unknown export type: {job_type}")
 
@@ -518,10 +523,37 @@ async def recover_orphaned_jobs():
     Recover jobs that were processing when the server stopped.
 
     Called on server startup to clean up any orphaned jobs.
-    For Modal jobs, we check if they're still running before marking as error.
+
+    Behavior controlled by CLEAR_PENDING_JOBS_ON_STARTUP env var:
+    - true: Mark all pending/processing jobs as error (dev mode)
+    - false/unset: Try to recover Modal jobs, mark local orphans as error (production)
     """
+    import os
+    clear_all = os.environ.get("CLEAR_PENDING_JOBS_ON_STARTUP", "false").lower() == "true"
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
+
+        if clear_all:
+            # Dev mode: clear all pending/processing jobs
+            cursor.execute("""
+                SELECT id, status FROM export_jobs WHERE status IN ('pending', 'processing')
+            """)
+            stale_jobs = cursor.fetchall()
+
+            if stale_jobs:
+                logger.info(f"[ExportWorker] CLEAR_PENDING_JOBS_ON_STARTUP=true, clearing {len(stale_jobs)} stale jobs")
+                cursor.execute("""
+                    UPDATE export_jobs
+                    SET status = 'error', error = 'Cleared on startup (dev mode)', completed_at = CURRENT_TIMESTAMP
+                    WHERE status IN ('pending', 'processing')
+                """)
+                conn.commit()
+                for row in stale_jobs:
+                    logger.info(f"[ExportWorker] Cleared stale job: {row['id']} (was {row['status']})")
+            return
+
+        # Production mode: try to recover Modal jobs
         cursor.execute("""
             SELECT id, modal_call_id FROM export_jobs WHERE status = 'processing'
         """)
@@ -553,3 +585,38 @@ async def recover_orphaned_jobs():
         # No modal_call_id or Modal job is gone - mark as error
         logger.warning(f"[ExportWorker] Found orphaned job: {job_id}, marking as error")
         update_job_error(job_id, "Server restarted during processing")
+
+
+async def process_annotate_export(job_id: str):
+    """
+    Process an annotate export job in the background.
+
+    This delegates to run_annotate_export_processing in annotate.py
+    which handles all the annotate-specific logic.
+    """
+    from ..routers.annotate import run_annotate_export_processing
+
+    logger.info(f"[ExportWorker] Starting annotate job: {job_id}")
+
+    # Get job from database
+    job = get_export_job(job_id)
+    if not job:
+        logger.error(f"[ExportWorker] Annotate job not found: {job_id}")
+        return
+
+    # Check if already processed
+    if job['status'] != 'pending':
+        logger.warning(f"[ExportWorker] Annotate job {job_id} already has status: {job['status']}")
+        return
+
+    try:
+        # Parse config from input_data
+        config = json.loads(job['input_data'])
+
+        # Delegate to annotate module's processing function
+        await run_annotate_export_processing(job_id, config)
+
+    except Exception as e:
+        logger.error(f"[ExportWorker] Annotate job {job_id} failed: {e}", exc_info=True)
+        update_job_error(job_id, str(e))
+        await send_progress(job_id, 0, f"Export failed: {e}", "error")

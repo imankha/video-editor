@@ -93,8 +93,77 @@ export function useExportRecovery() {
         }
 
         console.log('[ExportRecovery] Recovery complete');
+
+        // T12: Fetch and notify about exports that completed while away
+        await showCompletedExportNotifications();
       } catch (err) {
         console.error('[ExportRecovery] Failed to load exports:', err);
+      }
+    }
+
+    /**
+     * T12: Fetch unacknowledged completed exports and show notifications.
+     * These are exports that completed while the user was away.
+     */
+    async function showCompletedExportNotifications() {
+      try {
+        const response = await fetch(`${API_BASE}/api/exports/unacknowledged`);
+        if (!response.ok) {
+          console.warn('[ExportRecovery] Failed to fetch unacknowledged exports:', response.status);
+          return;
+        }
+
+        const data = await response.json();
+        const completedExports = data.exports || [];
+
+        if (completedExports.length === 0) {
+          console.log('[ExportRecovery] No unacknowledged completed exports');
+          return;
+        }
+
+        console.log(`[ExportRecovery] Found ${completedExports.length} exports that completed while away`);
+
+        // Show notifications for each completed export
+        const jobIdsToAcknowledge = [];
+        for (const exp of completedExports) {
+          const displayName = exp.type === 'annotate'
+            ? (exp.game_name || `Game ${exp.game_id}`)
+            : (exp.project_name || `Project ${exp.project_id}`);
+
+          if (exp.status === ExportStatus.COMPLETE) {
+            toast.success('Export Completed', {
+              message: `${displayName} finished while you were away`,
+              duration: 5000,
+            });
+            // Update store with completed status
+            completeExport(exp.job_id, exp.output_video_id, exp.output_filename);
+          } else if (exp.status === ExportStatus.ERROR) {
+            toast.error('Export Failed', {
+              message: `${displayName}: ${exp.error || 'Unknown error'}`,
+              duration: 8000,
+            });
+            // Update store with failed status
+            failExport(exp.job_id, exp.error || 'Export failed');
+          }
+
+          jobIdsToAcknowledge.push(exp.job_id);
+        }
+
+        // Acknowledge all shown notifications to prevent duplicates
+        if (jobIdsToAcknowledge.length > 0) {
+          try {
+            await fetch(`${API_BASE}/api/exports/acknowledge`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(jobIdsToAcknowledge),
+            });
+            console.log(`[ExportRecovery] Acknowledged ${jobIdsToAcknowledge.length} exports`);
+          } catch (ackErr) {
+            console.warn('[ExportRecovery] Failed to acknowledge exports:', ackErr);
+          }
+        }
+      } catch (err) {
+        console.error('[ExportRecovery] Failed to show completed export notifications:', err);
       }
     }
 
@@ -172,13 +241,17 @@ export function useExportRecovery() {
             console.warn(`[ExportRecovery] Failed to start progress loop for ${exp.job_id}:`, err);
           }
 
-          // Show initial progress while we wait for WebSocket updates
+          // T12: Show initial progress while we wait for WebSocket updates
+          // Include gameId/gameName for annotate exports
           updateExportProgress(exp.job_id, {
             projectId: exp.project_id,
             projectName: exp.project_name,
             type: exp.type,
             percent: 10, // Start at 10% (job already running)
             message: 'Reconnecting to cloud GPU...',
+            // T12: Annotate export fields
+            gameId: exp.game_id,
+            gameName: exp.game_name,
           });
           return true;
         } else if (data.status === ExportStatus.ERROR) {

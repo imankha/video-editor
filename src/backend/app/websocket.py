@@ -5,14 +5,70 @@ This module handles WebSocket connections and progress tracking for video export
 """
 
 from fastapi import WebSocket, WebSocketDisconnect
-from typing import Dict, List
+from typing import Dict, List, Optional
 import logging
+
+from app.constants import ExportStatus, ExportPhase, phase_to_status
 
 logger = logging.getLogger(__name__)
 
 # Global progress tracking for exports
 # Format: {export_id: {"progress": 0-100, "message": "...", "status": "processing|complete|error"}}
 export_progress: Dict[str, dict] = {}
+
+
+def make_progress_data(
+    current: int,
+    total: int,
+    phase: str,
+    message: str,
+    export_type: str,
+    project_id: Optional[int] = None,
+    project_name: Optional[str] = None,
+    game_id: Optional[int] = None,
+    game_name: Optional[str] = None,
+) -> dict:
+    """
+    Create a properly formatted progress data object for WebSocket updates.
+
+    SINGLE SOURCE OF TRUTH: Status and done are derived from phase.
+    - phase in (complete, done) → status=COMPLETE, done=True
+    - phase == error → status=ERROR, done=True
+    - all other phases → status=PROCESSING, done=False
+
+    Args:
+        current: Current progress value (0-100)
+        total: Total progress value (usually 100)
+        phase: Processing phase (init, download, processing, upload, complete, error)
+        message: Human-readable progress message
+        export_type: Type of export (annotate, framing, overlay)
+        project_id: Project ID (for framing/overlay exports)
+        project_name: Project name (for framing/overlay exports)
+        game_id: Game ID (for annotate exports)
+        game_name: Game name (for annotate exports)
+
+    Returns:
+        Properly formatted progress data dict ready for WebSocket transmission
+    """
+    # SINGLE SOURCE OF TRUTH: derive status and done from phase
+    status = phase_to_status(phase)
+    done = phase in (ExportPhase.COMPLETE, 'done', ExportPhase.ERROR)
+
+    return {
+        'current': current,
+        'total': total,
+        'phase': phase,
+        'message': message,
+        'done': done,
+        'progress': int((current / total) * 100) if total > 0 else 0,
+        'status': status,
+        'type': export_type,
+        'projectId': project_id,
+        'projectName': project_name,
+        'gameId': game_id,
+        'gameName': game_name,
+        'error': message if phase == ExportPhase.ERROR else None,
+    }
 
 
 class ConnectionManager:

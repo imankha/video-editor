@@ -47,6 +47,44 @@ cd src/backend && pytest tests/ -k "test_name" -v        # By name
 | **No Band-Aid Fixes** | Understand root cause, don't mask symptoms |
 | **Heavy Testing** | Unit tests co-located, E2E with Playwright |
 | **Type Safety** | No magic strings (see frontend/backend type-safety skills) |
+| **Derive, Don't Duplicate** | See detailed section below |
+| **Minimize Code Paths** | See detailed section below |
+
+## Derive, Don't Duplicate
+
+When multiple variables represent the same underlying state, bugs happen when they get out of sync.
+
+**Bad** - Multiple independent variables:
+```python
+def send_progress(phase, done, status, progress):  # 4 ways to say "complete"
+    if done or phase == 'complete' or status == 'complete' or progress >= 100:
+        ...  # Which one is right? They can disagree!
+```
+
+**Good** - One source of truth, derive the rest:
+```python
+def send_progress(phase):  # phase is the ONLY input
+    status = phase_to_status(phase)  # Derived - can't be wrong
+    done = phase in (Phase.COMPLETE, Phase.ERROR)  # Derived
+```
+
+**Rules:**
+1. **Pick ONE authoritative variable** - Usually the most granular one (e.g., `phase` not `done`)
+2. **Derive everything else** - Write functions that compute derived values
+3. **Never pass derived values as parameters** - If it can be computed, compute it
+4. **Use enums, not strings** - `ExportPhase.COMPLETE` catches typos at import time
+
+## Minimize Code Paths (DRY Architecture)
+
+When developing new features or modifying existing ones:
+
+1. **Search First**: Before writing new code, search for similar functionality in the codebase. Use existing utilities rather than creating duplicates.
+
+2. **Extract Shared Logic**: When you see the same pattern in 2+ places, extract it to a shared helper.
+
+3. **Unified Interfaces**: When code has production vs development modes (cloud vs local, API vs mock), create unified interfaces that work identically for both. Never have large if/else blocks based on environment - route internally instead.
+
+4. **Cross-Feature Consistency**: When multiple features (annotate, framing, overlay) do similar things, extract shared helpers rather than duplicating logic across files.
 
 ## Database
 - Location: `user_data/{user_id}/database.sqlite`

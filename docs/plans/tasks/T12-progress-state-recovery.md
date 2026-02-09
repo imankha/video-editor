@@ -1,6 +1,6 @@
 # T12: Progress Bar State Recovery After Refresh
 
-**Status:** TODO
+**Status:** IN_PROGRESS
 **Impact:** HIGH
 **Complexity:** MEDIUM
 **Created:** 2026-02-08
@@ -101,18 +101,30 @@ Need to detect exports that completed while user was away and show toast/envelop
 ## Implementation
 
 ### Steps
-1. [ ] Add export_jobs record creation to annotate export endpoint
-2. [ ] Modify exportStore to handle exports without projectId
-3. [ ] Update useExportRecovery to reconnect WebSockets for in-progress exports
-4. [ ] Add completion notification logic for exports finished while away
-5. [ ] Add "acknowledged" field to prevent duplicate notifications
+1. [x] Add export_jobs record creation to annotate export endpoint
+2. [x] Modify exportStore to handle exports without projectId
+3. [x] Update useExportRecovery to reconnect WebSockets for in-progress exports
+4. [x] Add completion notification logic for exports finished while away
+5. [x] Add "acknowledged" field to prevent duplicate notifications
 6. [ ] Test with browser refresh during Modal export
 7. [ ] Test with browser refresh during local FFmpeg export
 8. [ ] Test completion notification when export finishes while on different page
 
 ### Progress Log
 
-*No progress yet*
+**2026-02-08** - Immediate progress bar display:
+- Frontend: callAnnotateExportApi now calls startExportInStore immediately after generating exportId
+- Progress bar shows at 0% with "Starting export..." message instantly when user clicks export
+- Same pattern as framing/overlay exports (useExportManager)
+
+**2026-02-08** - Initial implementation complete:
+- Backend: Added export_jobs tracking for annotate exports with game_id/game_name
+- Backend: Added /api/exports/unacknowledged endpoint for completed exports
+- Backend: Added /api/exports/acknowledge endpoint for preventing duplicates
+- Backend: Added acknowledged_at column to export_jobs table
+- Frontend: exportStore now handles annotate exports with gameId
+- Frontend: useExportRecovery fetches and notifies about completed exports
+- All 333 backend tests pass
 
 ## Acceptance Criteria
 

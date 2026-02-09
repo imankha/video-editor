@@ -589,6 +589,12 @@ def ensure_database():
             "ALTER TABLE working_clips ADD COLUMN raw_clip_version INTEGER",
             # Version tracking for gesture-based overlay sync (Task 19)
             "ALTER TABLE working_videos ADD COLUMN overlay_version INTEGER DEFAULT 0",
+            # Export jobs: game_id for annotate exports (T12: Progress Recovery)
+            "ALTER TABLE export_jobs ADD COLUMN game_id INTEGER",
+            # Export jobs: game_name for display in progress UI (T12)
+            "ALTER TABLE export_jobs ADD COLUMN game_name TEXT",
+            # Export jobs: acknowledged_at for preventing duplicate notifications (T12)
+            "ALTER TABLE export_jobs ADD COLUMN acknowledged_at TIMESTAMP",
         ]
 
         for migration in migrations:

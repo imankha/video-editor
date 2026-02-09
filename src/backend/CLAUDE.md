@@ -53,11 +53,57 @@ await upload_to_r2(user_id, r2_key, local_path)
 url = generate_presigned_url(user_id, r2_key)
 ```
 
-### Modal GPU
+### Modal GPU (Unified Interface)
+
+The `modal_client.py` functions automatically route to local fallbacks when `MODAL_ENABLED=false`.
+This enables testing production code paths without Modal costs.
+
 ```python
-from app.services.modal_client import call_modal_framing_ai, modal_enabled
+from app.services.modal_client import call_modal_framing_ai, call_modal_overlay
+
+# CORRECT: Always call the unified interface - it routes internally
+result = await call_modal_framing_ai(job_id, user_id, input_key, output_key, ...)
+
+# WRONG: Don't check modal_enabled() in routers
 if modal_enabled():
-    result = await call_modal_framing_ai(..., progress_callback=callback)
+    result = await call_modal_framing_ai(...)
+else:
+    # 100 lines of local processing...  <- This duplicates code!
+```
+
+**Architecture:**
+- `modal_client.py` → unified interface, routes to Modal or local
+- `local_processors.py` → local fallbacks with same interface as Modal
+- Router endpoints → always call `call_modal_*()`, never branch on `modal_enabled()`
+
+### Export Helpers
+
+Shared utilities for all export types (annotate, framing, overlay):
+
+```python
+from app.services.export_helpers import (
+    create_export_job,
+    complete_export_job,
+    fail_export_job,
+    send_progress,
+    create_progress_callback,
+    derive_project_name,
+)
+
+# Create job tracking record
+create_export_job(export_id, project_id, 'framing')
+
+# Send progress via WebSocket
+await send_progress(export_id, 50, 100, 'processing', 'Halfway done...', 'framing',
+                    project_id=project_id, project_name=project_name)
+
+# Create callback for Modal/local processors
+progress_callback = create_progress_callback(export_id, 'framing', project_id, project_name)
+result = await call_modal_framing_ai(..., progress_callback=progress_callback)
+
+# Complete or fail
+complete_export_job(export_id, output_filename)
+fail_export_job(export_id, "Something went wrong")
 ```
 
 ### Version-based Queries
