@@ -101,6 +101,11 @@ Use the [task-management skill](.claude/skills/task-management/SKILL.md) for:
 - Organizing epics (bundled infrastructure moves)
 - AI handoff context in task files
 
+For roadmap decisions, use the [Project Manager agent](.claude/agents/project-manager.md):
+- Adding tasks (knows where to place them)
+- Suggesting next task (based on development phase)
+- Development cycles: **INFRA → FEATURES → POLISH → repeat**
+
 Current plan: [docs/plans/PLAN.md](docs/plans/PLAN.md)
 
 ## Documentation
