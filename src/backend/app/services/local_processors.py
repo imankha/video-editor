@@ -62,7 +62,7 @@ async def local_overlay(
             output_path = os.path.join(temp_dir, "output.mp4")
 
             # Download from R2
-            if not download_from_r2(user_id, input_key, Path(input_path)):
+            if not await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path)):
                 return {"status": "error", "error": "Failed to download from R2"}
 
             download_time = time.time() - start_time
@@ -116,7 +116,7 @@ async def local_overlay(
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
             # Upload to R2
-            if not upload_to_r2(user_id, output_key, Path(output_path)):
+            if not await asyncio.to_thread(upload_to_r2, user_id, output_key, Path(output_path)):
                 return {"status": "error", "error": "Failed to upload to R2"}
 
             total_time = time.time() - start_time
@@ -183,7 +183,7 @@ async def local_framing(
             output_path = os.path.join(temp_dir, "output.mp4")
 
             # Download from R2
-            if not download_from_r2(user_id, input_key, Path(input_path)):
+            if not await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path)):
                 return {"status": "error", "error": "Failed to download from R2"}
 
             download_time = time.time() - start_time
@@ -264,7 +264,7 @@ async def local_framing(
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
             # Upload to R2
-            if not upload_to_r2(user_id, output_key, Path(output_path)):
+            if not await asyncio.to_thread(upload_to_r2, user_id, output_key, Path(output_path)):
                 return {"status": "error", "error": "Failed to upload to R2"}
 
             total_time = time.time() - start_time
@@ -318,7 +318,7 @@ async def local_annotate_compilation(
             output_path = os.path.join(temp_dir, "output.mp4")
 
             # Download from R2
-            if not download_from_r2(user_id, input_key, Path(input_path)):
+            if not await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path)):
                 return {"status": "error", "error": "Failed to download from R2"}
 
             download_time = time.time() - start_time
@@ -373,7 +373,7 @@ async def local_annotate_compilation(
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
             # Upload to R2
-            if not upload_to_r2(user_id, output_key, Path(output_path)):
+            if not await asyncio.to_thread(upload_to_r2, user_id, output_key, Path(output_path)):
                 return {"status": "error", "error": "Failed to upload to R2"}
 
             total_time = time.time() - start_time
