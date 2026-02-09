@@ -4,7 +4,48 @@
 
 Create a design document focused on **architecture quality**: DRY, minimal code paths, clean design patterns. This document requires user approval before implementation begins.
 
-## Core Architecture: MVC + Data Always Ready
+## References
+
+- [Code Smells](../references/code-smells.md) - Fowler's refactoring catalog
+- [Design Patterns](../references/design-patterns.md) - GoF patterns for this project
+
+## Core Principles
+
+### Loose Coupling, Tight Cohesion
+
+**Tight Cohesion**: Each module/class does ONE thing well. All its methods relate to that single purpose.
+```javascript
+// GOOD: Tightly cohesive - all methods relate to video playback
+class VideoPlayer {
+  play() {}
+  pause() {}
+  seek(time) {}
+  getCurrentTime() {}
+}
+
+// BAD: Low cohesion - unrelated responsibilities
+class VideoManager {
+  play() {}
+  uploadToCloud() {}
+  compressFile() {}
+  sendAnalytics() {}
+}
+```
+
+**Loose Coupling**: Modules depend on abstractions, not concrete implementations. Changes in one don't cascade.
+```javascript
+// BAD: Tight coupling - directly depends on concrete
+function ExportButton() {
+  const result = await ModalClient.process(file);  // Tied to Modal
+}
+
+// GOOD: Loose coupling - depends on abstraction
+function ExportButton({ processor }) {
+  const result = await processor.process(file);  // Any processor works
+}
+```
+
+### MVC + Data Always Ready
 
 All designs must follow these patterns:
 
@@ -22,13 +63,15 @@ Screen (data fetching, guards data readiness)
 
 | Concern | What to Evaluate |
 |---------|------------------|
+| **Cohesion** | Does each module do ONE thing? Are all methods related? |
+| **Coupling** | Do modules depend on abstractions? Can parts change independently? |
 | **MVC Compliance** | Does design follow Screen → Container → View? |
 | **Data Flow** | Is data guarded at the right level? Views assume data ready? |
 | **DRY** | Is there duplicate logic? Can we extract shared helpers? |
 | **Code Paths** | Are there multiple ways to do the same thing? Can we unify? |
 | **Branches** | Are there unnecessary if/else blocks? Can we route internally? |
-| **Code Smells** | Does the current code have smells we should fix? |
-| **Refactoring** | Should we refactor existing code as part of this task? |
+| **Code Smells** | Does current code have smells? See [code-smells.md](../references/code-smells.md) |
+| **Design Patterns** | Would a pattern help? See [design-patterns.md](../references/design-patterns.md) |
 
 ## When to Invoke
 

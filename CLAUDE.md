@@ -36,7 +36,7 @@ cd src/backend && pytest tests/test_clips.py -v          # Specific file
 | 1 | Task Start | [1-task-start.md](.claude/workflows/1-task-start.md) | Code Expert | - |
 | 2 | Architecture | [2-architecture.md](.claude/workflows/2-architecture.md) | Architect | **Approval Required** |
 | 3 | Test First | [3-test-first.md](.claude/workflows/3-test-first.md) | Tester (Phase 1) | - |
-| 4 | Implementation | [4-implementation.md](.claude/workflows/4-implementation.md) | - | - |
+| 4 | Implementation | [4-implementation.md](.claude/workflows/4-implementation.md) | Implementor | - |
 | 5 | Automated Testing | [5-automated-testing.md](.claude/workflows/5-automated-testing.md) | Tester (Phase 2) | - |
 | 6 | Manual Testing | [6-manual-testing.md](.claude/workflows/6-manual-testing.md) | - | **Approval Required** |
 | 7 | Task Complete | [7-task-complete.md](.claude/workflows/7-task-complete.md) | - | - |
@@ -57,8 +57,16 @@ cd src/backend && pytest tests/test_clips.py -v          # Specific file
 | Agent | Purpose | Definition |
 |-------|---------|------------|
 | **Code Expert** | Audit codebase: entry points, data flow, similar patterns | [code-expert.md](.claude/agents/code-expert.md) |
-| **Architect** | Create design doc with diagrams, pseudo code, requires approval | [architect.md](.claude/agents/architect.md) |
+| **Architect** | Design with DRY, patterns, code smells; requires approval | [architect.md](.claude/agents/architect.md) |
 | **Tester** | Phase 1: create failing tests. Phase 2: run tests until pass | [tester.md](.claude/agents/tester.md) |
+| **Implementor** | Execute approved design with MVC, no state duplication | [implementor.md](.claude/agents/implementor.md) |
+
+## References
+
+| Reference | Content |
+|-----------|---------|
+| [Code Smells](.claude/references/code-smells.md) | Fowler's refactoring catalog with examples |
+| [Design Patterns](.claude/references/design-patterns.md) | GoF patterns relevant to React + FastAPI |
 
 ## Design Document
 

@@ -1,5 +1,13 @@
 # Stage 4: Implementation
 
+## Agent
+
+**Spawn the Implementor agent** to write code:
+```
+Task tool with subagent_type: general-purpose
+See: .claude/agents/implementor.md
+```
+
 ## Purpose
 
 Execute the approved design. Focus on **implementation quality**: clean code, no state duplication, proper patterns.
