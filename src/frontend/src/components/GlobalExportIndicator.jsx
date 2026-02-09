@@ -12,7 +12,7 @@ function getExportLabel(exp) {
   if (exp.type === 'annotate') {
     return exp.gameName || 'Annotation';
   }
-  return getExportLabel(exp);
+  return exp.projectName || `Project #${exp.projectId}`;
 }
 
 /**
