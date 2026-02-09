@@ -49,6 +49,9 @@ export function OverlayMode({
   // Zoom state (from useZoom in App.jsx)
   zoom,
   panOffset,
+  // Player detection visibility
+  showPlayerBoxes = true,
+  onTogglePlayerBoxes,
   // Timeline state
   visualDuration,
   selectedLayer,
@@ -107,10 +110,18 @@ export function OverlayMode({
       {/* Detection Marker Layer Label (only if detection data exists) */}
       {hasDetectionData && (
         <div
-          className="mt-1 h-8 flex items-center justify-center border-r border-gray-700/50 bg-gray-900"
-          title="Player detection points - click to jump"
+          className="mt-1 h-8 flex items-center justify-center border-r border-gray-700/50 bg-gray-900 cursor-pointer hover:bg-gray-800 transition-colors"
+          title={showPlayerBoxes ? 'Hide player boxes' : 'Show player boxes'}
+          onClick={() => onTogglePlayerBoxes && onTogglePlayerBoxes()}
         >
-          <Crosshair size={16} className="text-green-500" />
+          <div className="relative">
+            <Crosshair size={16} className={showPlayerBoxes ? 'text-green-500' : 'text-gray-500'} />
+            {!showPlayerBoxes && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-5 h-0.5 bg-red-500 rotate-45 transform origin-center" />
+              </div>
+            )}
+          </div>
         </div>
       )}
 
