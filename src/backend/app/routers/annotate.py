@@ -30,7 +30,7 @@ from app.services.modal_client import modal_enabled, call_modal_annotate_compila
 from app.storage import generate_presigned_url, upload_to_r2, download_from_r2, download_from_r2_with_progress, R2_ENABLED
 from app.user_context import get_current_user_id
 from app.websocket import manager, export_progress
-from app.constants import ExportStatus
+from app.constants import ExportStatus, ExportPhase
 
 logger = logging.getLogger(__name__)
 
@@ -622,13 +622,13 @@ async def run_annotate_export_processing(export_id: str, config: dict):
         )
         export_progress[export_id] = progress_data
         await manager.send_progress(export_id, progress_data)
-        is_terminal = phase in ('complete', 'done', 'error')
+        is_terminal = phase in (ExportPhase.COMPLETE, 'done', ExportPhase.ERROR)
         if current % 5 == 0 or is_terminal:
             logger.info(f"[AnnotateExport] {export_id}: {current}/{total} ({phase}) - {message}")
 
     try:
         # Send initial progress
-        await update_progress(0, 100, 'init', 'Starting export...')
+        await update_progress(0, 100, ExportPhase.INIT, 'Starting export...')
 
         # Determine video source
         use_modal = modal_enabled() and game_id and video_filename and not save_to_db
@@ -639,7 +639,7 @@ async def run_annotate_export_processing(export_id: str, config: dict):
             source_path = staged_video_path
             original_filename = os.path.basename(staged_video_path)
             logger.info(f"[AnnotateExport] {export_id}: Using staged video: {source_path}")
-            await update_progress(5, 100, 'download', 'Using uploaded video...')
+            await update_progress(5, 100, ExportPhase.DOWNLOAD, 'Using uploaded video...')
 
         elif game_id and video_filename:
             # Game video - download from R2 or use local
@@ -657,7 +657,7 @@ async def run_annotate_export_processing(export_id: str, config: dict):
             elif not R2_ENABLED:
                 source_path = str(get_games_path() / video_filename)
                 logger.info(f"[AnnotateExport] {export_id}: Using local game video: {source_path}")
-                await update_progress(15, 100, 'download', 'Using local video...')
+                await update_progress(15, 100, ExportPhase.DOWNLOAD, 'Using local video...')
 
             original_filename = game_name + ".mp4" if game_name else "game.mp4"
 
@@ -792,7 +792,7 @@ async def run_annotate_export_processing(export_id: str, config: dict):
             logger.info(f"[AnnotateExport] {export_id}: Creating burned-in compilation ({len(all_clips)} clips)")
 
             # Use unified interface - call_modal_annotate_compilation handles Modal or local fallback
-            await update_progress(10, 100, 'processing', 'Starting video processing...')
+            await update_progress(10, 100, ExportPhase.PROCESSING, 'Starting video processing...')
 
             # Generate output filename
             output_filename = f"{video_base}_annotated_{download_id}.mp4"
@@ -820,8 +820,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
 
             message = f"Generated annotated video with {len(all_clips)} clips"
 
-        # Mark progress as complete (phase='complete' derives status=COMPLETE, done=True)
-        await update_progress(100, 100, 'complete', message)
+        # Mark progress as complete (phase=COMPLETE derives status=COMPLETE, done=True)
+        await update_progress(100, 100, ExportPhase.COMPLETE, message)
 
         # Mark job as complete
         output_filename = download_urls.get('clips_compilation', {}).get('filename')
@@ -832,7 +832,7 @@ async def run_annotate_export_processing(export_id: str, config: dict):
     except Exception as e:
         logger.error(f"[AnnotateExport] {export_id}: Failed - {e}", exc_info=True)
         update_job_error(export_id, str(e))
-        await update_progress(0, 100, 'error', f"Export failed: {e}")
+        await update_progress(0, 100, ExportPhase.ERROR, f"Export failed: {e}")
 
     finally:
         # Cleanup temp directory

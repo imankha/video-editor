@@ -20,6 +20,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from app.constants import ExportPhase
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,7 +53,7 @@ async def local_overlay(
     # Send initial progress
     if progress_callback:
         try:
-            await progress_callback(5, "Downloading video...", "download")
+            await progress_callback(5, "Downloading video...", ExportPhase.DOWNLOAD)
         except Exception as e:
             logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
@@ -70,7 +72,7 @@ async def local_overlay(
 
             if progress_callback:
                 try:
-                    await progress_callback(10, "Processing frames...", "processing")
+                    await progress_callback(10, "Processing frames...", ExportPhase.PROCESSING)
                 except Exception as e:
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
@@ -90,7 +92,7 @@ async def local_overlay(
                             # Scale progress from 0-100 to 10-90 range
                             scaled = 10 + int(progress * 0.8)
                             asyncio.run_coroutine_threadsafe(
-                                progress_callback(scaled, message, "processing"),
+                                progress_callback(scaled, message, ExportPhase.PROCESSING),
                                 loop
                             )
                         except Exception as e:
@@ -111,7 +113,7 @@ async def local_overlay(
 
             if progress_callback:
                 try:
-                    await progress_callback(92, "Uploading result...", "upload")
+                    await progress_callback(92, "Uploading result...", ExportPhase.UPLOAD)
                 except Exception as e:
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
@@ -124,7 +126,7 @@ async def local_overlay(
 
             if progress_callback:
                 try:
-                    await progress_callback(100, "Complete!", "complete")
+                    await progress_callback(100, "Complete!", ExportPhase.COMPLETE)
                 except Exception as e:
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
@@ -166,7 +168,7 @@ async def local_framing(
 
     if progress_callback:
         try:
-            await progress_callback(5, "Downloading video...", "download")
+            await progress_callback(5, "Downloading video...", ExportPhase.DOWNLOAD)
         except Exception as e:
             logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
@@ -191,7 +193,7 @@ async def local_framing(
 
             if progress_callback:
                 try:
-                    await progress_callback(15, "Processing with AI upscaler...", "processing")
+                    await progress_callback(15, "Processing with AI upscaler...", ExportPhase.PROCESSING)
                 except Exception as e:
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
@@ -259,7 +261,7 @@ async def local_framing(
 
             if progress_callback:
                 try:
-                    await progress_callback(92, "Uploading result...", "upload")
+                    await progress_callback(92, "Uploading result...", ExportPhase.UPLOAD)
                 except Exception as e:
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
@@ -272,7 +274,7 @@ async def local_framing(
 
             if progress_callback:
                 try:
-                    await progress_callback(100, "Complete!", "complete")
+                    await progress_callback(100, "Complete!", ExportPhase.COMPLETE)
                 except Exception as e:
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
@@ -308,7 +310,7 @@ async def local_annotate_compilation(
 
     if progress_callback:
         try:
-            await progress_callback(5, "Downloading video...", "download")
+            await progress_callback(5, "Downloading video...", ExportPhase.DOWNLOAD)
         except Exception as e:
             logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
@@ -332,7 +334,7 @@ async def local_annotate_compilation(
                 progress_pct = int(10 + (i / total_clips) * 70)
                 if progress_callback:
                     try:
-                        await progress_callback(progress_pct, f"Processing clip {i+1}/{total_clips}...", "processing")
+                        await progress_callback(progress_pct, f"Processing clip {i+1}/{total_clips}...", ExportPhase.PROCESSING)
                     except Exception as e:
                         logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
@@ -368,7 +370,7 @@ async def local_annotate_compilation(
 
             if progress_callback:
                 try:
-                    await progress_callback(92, "Uploading result...", "upload")
+                    await progress_callback(92, "Uploading result...", ExportPhase.UPLOAD)
                 except Exception as e:
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
@@ -381,7 +383,7 @@ async def local_annotate_compilation(
 
             if progress_callback:
                 try:
-                    await progress_callback(100, "Complete!", "complete")
+                    await progress_callback(100, "Complete!", ExportPhase.COMPLETE)
                 except Exception as e:
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 

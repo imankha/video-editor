@@ -8,7 +8,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict, List, Optional
 import logging
 
-from app.constants import ExportStatus, phase_to_status
+from app.constants import ExportStatus, ExportPhase, phase_to_status
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ def make_progress_data(
     """
     # SINGLE SOURCE OF TRUTH: derive status and done from phase
     status = phase_to_status(phase)
-    done = phase in ('complete', 'done', 'error')
+    done = phase in (ExportPhase.COMPLETE, 'done', ExportPhase.ERROR)
 
     return {
         'current': current,
@@ -67,7 +67,7 @@ def make_progress_data(
         'projectName': project_name,
         'gameId': game_id,
         'gameName': game_name,
-        'error': message if phase == 'error' else None,
+        'error': message if phase == ExportPhase.ERROR else None,
     }
 
 

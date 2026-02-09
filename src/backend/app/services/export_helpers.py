@@ -23,7 +23,7 @@ import re
 from typing import Optional
 
 from app.database import get_db_connection
-from app.constants import ExportStatus
+from app.constants import ExportStatus, ExportPhase
 from app.websocket import manager, export_progress, make_progress_data
 
 logger = logging.getLogger(__name__)
@@ -200,7 +200,7 @@ async def send_progress(
     await manager.send_progress(export_id, progress_data)
 
     # Log significant progress changes (done is derived from phase)
-    is_terminal = phase in ('complete', 'done', 'error')
+    is_terminal = phase in (ExportPhase.COMPLETE, 'done', ExportPhase.ERROR)
     if current % log_every == 0 or is_terminal:
         logger.info(f"[Export] {export_id}: {current}/{total} ({phase}) - {message}")
 
