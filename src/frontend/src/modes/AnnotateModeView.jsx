@@ -23,6 +23,10 @@ export function AnnotateModeView({
   currentTime,
   duration,
   isPlaying,
+  isLoading = false,
+  isVideoElementLoading = false,
+  loadingProgress = null,
+  error = null,
   handlers,
 
   // Fullscreen state
@@ -139,6 +143,11 @@ export function AnnotateModeView({
               videoRef={videoRef}
               videoUrl={annotateVideoUrl}
               handlers={handlers}
+              isLoading={isLoading}
+              isVideoElementLoading={isVideoElementLoading}
+              loadingProgress={loadingProgress}
+              error={error}
+              loadingMessage="Loading video..."
               overlays={[
                 // NotesOverlay - shows name, rating, notes for region at playhead
                 (() => {

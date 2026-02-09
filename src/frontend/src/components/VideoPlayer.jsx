@@ -5,10 +5,13 @@ import React, { useState, useRef, useCallback } from 'react';
  *
  * This component is overlay-agnostic - modes pass their own overlays as children.
  *
+ * Video loading state is managed by useVideoStore (via useVideo hook).
+ * This component receives loading state as props for display.
+ *
  * @param {Object} props
  * @param {React.RefObject} props.videoRef - Ref to video element
  * @param {string} props.videoUrl - Video source URL
- * @param {Object} props.handlers - Video element event handlers
+ * @param {Object} props.handlers - Video element event handlers (from useVideo)
  * @param {Function} props.onFileSelect - Callback for file upload via drag-and-drop
  * @param {React.ReactNode[]} props.overlays - Array of overlay components to render over video
  * @param {number} props.zoom - Zoom level (1 = 100%)
@@ -17,7 +20,10 @@ import React, { useState, useRef, useCallback } from 'react';
  * @param {Function} props.onPanChange - Callback when pan changes (drag)
  * @param {boolean} props.isFullscreen - Whether the player is in fullscreen mode
  * @param {number|null} props.clipRating - Rating (1-5) of clip at current time, null if not in clip
- * @param {boolean} props.isLoading - Whether video is currently loading
+ * @param {boolean} props.isLoading - Whether hook is loading video URL (pre-element)
+ * @param {boolean} props.isVideoElementLoading - Whether video element is buffering
+ * @param {number|null} props.loadingProgress - Buffering progress 0-100, null when not loading
+ * @param {string|null} props.error - Video load error message
  * @param {string} props.loadingMessage - Optional loading message to display
  */
 export function VideoPlayer({
@@ -33,6 +39,9 @@ export function VideoPlayer({
   isFullscreen = false,
   clipRating = null,
   isLoading = false,
+  isVideoElementLoading = false,
+  loadingProgress = null,
+  error = null,
   loadingMessage = 'Loading video...'
 }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -148,6 +157,47 @@ export function VideoPlayer({
     }
   }, [isPanning, handleMouseMove, handleMouseUp]);
 
+  // Render loading overlay with progress bar
+  const renderLoadingOverlay = () => {
+    // Determine progress state:
+    // - loadingProgress > 0: We have buffer info, show percentage
+    // - loadingProgress === 0: Just started or still fetching metadata
+    // - loadingProgress === null: Indeterminate state
+    const hasProgress = loadingProgress !== null && loadingProgress > 0 && loadingProgress < 100;
+    const isIndeterminate = loadingProgress === null || loadingProgress === 0;
+
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-40">
+        <div className="text-center w-64">
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-gray-600 border-t-purple-500"></div>
+          <p className="mt-4 text-sm text-gray-300">{loadingMessage}</p>
+          <div className="mt-3">
+            <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+              {hasProgress ? (
+                <div
+                  className="h-full bg-purple-500 transition-all duration-300"
+                  style={{ width: `${loadingProgress}%` }}
+                />
+              ) : (
+                // Indeterminate progress - sliding bar animation
+                <div
+                  className="h-full w-1/3 bg-gradient-to-r from-purple-600 via-purple-400 to-purple-600 rounded-full"
+                  style={{
+                    animation: 'slide 1.2s ease-in-out infinite',
+                    transformOrigin: 'left center'
+                  }}
+                />
+              )}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              {hasProgress ? `Buffering ${loadingProgress}%` : 'Connecting to server...'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div
       ref={containerRef}
@@ -179,22 +229,40 @@ export function VideoPlayer({
               className={`object-contain ${
                 isFullscreen ? 'w-full h-full' : 'max-w-full max-h-full'
               }`}
+              onLoadStart={handlers.onLoadStart}
               onTimeUpdate={handlers.onTimeUpdate}
               onPlay={handlers.onPlay}
               onPause={handlers.onPause}
               onSeeking={handlers.onSeeking}
               onSeeked={handlers.onSeeked}
               onLoadedMetadata={handlers.onLoadedMetadata}
+              onLoadedData={handlers.onLoadedData}
+              onProgress={handlers.onProgress}
               onWaiting={handlers.onWaiting}
               onPlaying={handlers.onPlaying}
               onCanPlay={handlers.onCanPlay}
+              onError={handlers.onError}
               preload="auto"
               style={{ pointerEvents: 'none' }}
             />
           </div>
 
+          {/* Video loading overlay - shown while video element is buffering */}
+          {isVideoElementLoading && !error && renderLoadingOverlay()}
+
           {/* Render any overlays passed by the mode */}
           {overlays}
+
+          {/* Video error overlay */}
+          {error && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
+              <div className="text-center max-w-md px-4">
+                <div className="text-red-500 text-4xl mb-4">⚠️</div>
+                <p className="text-red-400 font-semibold mb-2">Video failed to load</p>
+                <p className="text-gray-400 text-sm">{error}</p>
+              </div>
+            </div>
+          )}
 
           {/* Rating-based border overlay when inside a clip region */}
           {clipRating !== null && (() => {

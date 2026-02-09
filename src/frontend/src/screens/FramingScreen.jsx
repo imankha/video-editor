@@ -209,6 +209,8 @@ export function FramingScreen({
     duration,
     error,
     isLoading,
+    isVideoElementLoading,
+    loadingProgress,
     loadVideo,
     loadVideoFromUrl,
     loadVideoFromStreamingUrl,
@@ -1016,6 +1018,8 @@ export function FramingScreen({
       duration={duration}
       isPlaying={isPlaying}
       isLoading={isLoading}
+      isVideoElementLoading={isVideoElementLoading}
+      loadingProgress={loadingProgress}
       isProjectLoading={isLoadingProjectData}
       loadingStage={loadingStage}
       error={error}

@@ -31,6 +31,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     isBuffering,
     error,
     isLoading,
+    isVideoElementLoading,
+    loadingProgress,
     setVideoFile,
     setVideoUrl,
     setMetadata,
@@ -42,6 +44,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     setError,
     setIsLoading,
     setVideoLoaded,
+    setVideoElementReady,
+    setLoadingProgress,
   } = useVideoStore();
 
   /**
@@ -380,6 +384,69 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     }
   };
 
+  // Video element started loading (new src set)
+  const handleLoadStart = () => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      const urlPreview = video.src?.length > 60 ? `${video.src.substring(0, 60)}...` : video.src;
+      console.log(`[VIDEO] Loading: ${urlPreview}`);
+      // Set loading state - this catches cases where URL is set directly (e.g., Annotate mode)
+      useVideoStore.getState().setIsVideoElementLoading(true);
+      useVideoStore.getState().setLoadingProgress(0);
+      useVideoStore.getState().setLoadStartTime(performance.now());
+    }
+  };
+
+  // Video element has enough data to display first frame
+  const handleLoadedData = () => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      const durationStr = video.duration ? video.duration.toFixed(1) : 'unknown';
+      const loadStartTime = useVideoStore.getState().loadStartTime;
+      const elapsed = loadStartTime ? Math.round(performance.now() - loadStartTime) : 0;
+      console.log(`[VIDEO] Loaded in ${elapsed}ms (${durationStr}s video)`);
+      setVideoElementReady();
+    }
+  };
+
+  // Track buffering progress during initial load
+  const handleProgress = () => {
+    const { isVideoElementLoading: isLoading, loadingProgress: currentProgress, loadStartTime } = useVideoStore.getState();
+    if (videoRef.current && isLoading) {
+      const video = videoRef.current;
+      const elapsed = loadStartTime ? Math.round((performance.now() - loadStartTime) / 1000) : 0;
+
+      if (video.buffered.length > 0) {
+        // Calculate how much of the first few seconds is buffered
+        // For streaming, we just need enough to start playing
+        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+        const targetBuffer = Math.min(5, video.duration || 5); // Buffer 5 seconds or full duration
+        const progress = Math.min(99, Math.round((bufferedEnd / targetBuffer) * 100)); // Cap at 99 until loadeddata
+        console.log(`[VIDEO] Buffering: ${progress}% (${bufferedEnd.toFixed(1)}s / ${targetBuffer}s target, ${elapsed}s elapsed)`);
+        useVideoStore.getState().setLoadingProgress(progress);
+      } else {
+        // No buffered data yet - for large videos without faststart, browser is fetching metadata
+        // Log progress event count to help debug
+        console.log(`[VIDEO] Downloading metadata... (${elapsed}s elapsed, buffered.length=0)`);
+        // Keep progress at 0 but show elapsed time in UI
+        // The UI will show "Loading video metadata..." instead of "Buffering 0%"
+      }
+    }
+  };
+
+  // Handle video load error
+  const handleError = () => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      const error = video.error;
+      const errorMessage = error
+        ? `${error.message || 'Unknown error'} (code: ${error.code})`
+        : 'Failed to load video';
+      console.log(`[VIDEO] Error: ${errorMessage}`);
+      setError(errorMessage);
+    }
+  };
+
   // Adjust playback rate based on current segment speed
   // ARCHITECTURE: We need BOTH proactive and reactive validation:
   // - Proactive (clampToVisibleRange): Prevents manual seeks to trimmed frames
@@ -445,6 +512,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     isBuffering,
     error,
     isLoading,
+    isVideoElementLoading,
+    loadingProgress,
 
     // Actions
     loadVideo,
@@ -460,12 +529,16 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
     // Event handlers for video element
     handlers: {
+      onLoadStart: handleLoadStart,
       onTimeUpdate: handleTimeUpdate,
       onPlay: handlePlay,
       onPause: handlePause,
       onSeeking: handleSeeking,
       onSeeked: handleSeeked,
       onLoadedMetadata: handleLoadedMetadata,
+      onLoadedData: handleLoadedData,
+      onProgress: handleProgress,
+      onError: handleError,
       onWaiting: handleWaiting,
       onPlaying: handlePlaying,
       onCanPlay: handleCanPlay,

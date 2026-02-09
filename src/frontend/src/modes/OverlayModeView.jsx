@@ -33,6 +33,9 @@ export function OverlayModeView({
   handlers,
   // Loading state
   isLoading = false,
+  isVideoElementLoading = false,
+  loadingProgress = null,
+  error = null,
   loadingMessage = 'Loading video...',
 
   // Playback controls
@@ -241,6 +244,9 @@ export function OverlayModeView({
             onPanChange={onPanChange}
             isFullscreen={isFullscreen}
             isLoading={isLoading}
+            isVideoElementLoading={isVideoElementLoading}
+            loadingProgress={loadingProgress}
+            error={error}
             loadingMessage={loadingMessage}
           />
 

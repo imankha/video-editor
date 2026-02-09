@@ -1,9 +1,10 @@
 # T07: Video Load Times
 
-**Status:** TODO
+**Status:** TESTING (Phase 1)
 **Impact:** MEDIUM
 **Complexity:** LOW
 **Created:** 2026-02-06
+**Completed:** 2026-02-08
 
 ## Problem
 
@@ -17,12 +18,18 @@ Sometimes loading a video takes a long time. We need visibility before we can fi
 
 ## Implementation
 
-### Phase 1: Visibility
+### Phase 1: Visibility (DONE)
 
-- [ ] Add preloader/spinner when video is loading
-- [ ] Log video load start time
-- [ ] Log video load complete time (or error)
-- [ ] Log video metadata (size, duration, source type: R2 presigned URL vs local)
+- [x] Add preloader/spinner when video is loading
+- [x] Log video load start time
+- [x] Log video load complete time (or error)
+- [x] Log video metadata (duration)
+- [x] Show error UI if video fails to load
+
+**Changes made:**
+- `VideoPlayer.jsx`: Added load timing (performance.now), error handling, error overlay UI
+- `AnnotateModeView.jsx`: Now passes `isLoading` to VideoPlayer
+- `AnnotateScreen.jsx`: Now extracts and passes `isLoading` from useVideo
 
 ### Phase 2: Analysis (after collecting logs)
 
@@ -58,6 +65,6 @@ Potential slow points:
 
 ## Acceptance Criteria
 
-- [ ] User always sees loading indicator while video loads
-- [ ] Video load times are logged with enough context to diagnose issues
-- [ ] After collecting data, slow loads are investigated and addressed
+- [x] User always sees loading indicator while video loads
+- [x] Video load times are logged with enough context to diagnose issues
+- [ ] After collecting data, slow loads are investigated and addressed (Phase 2)

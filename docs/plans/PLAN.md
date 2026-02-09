@@ -12,10 +12,10 @@
 |----|------|--------|--------|------------|
 | T05 | [Optimize Load Times](tasks/T05-optimize-load-times.md) | DONE | HIGH | MEDIUM |
 | T06 | [Move Tracking Toggle to Layer Icon](tasks/T06-remove-player-tracking-button.md) | TODO | LOW | LOW |
-| T07 | [Video Load Times](tasks/T07-video-load-times.md) | TODO | MEDIUM | LOW |
+| T07 | [Video Load Times](tasks/T07-video-load-times.md) | TESTING | MEDIUM | LOW |
 | T10 | [Progress Bar Improvements](tasks/T10-progress-bar.md) | DONE | HIGH | MEDIUM |
 | T11 | [Local GPU Progress Bar](tasks/T11-local-gpu-progress.md) | DONE | MEDIUM | LOW |
-| T12 | [Progress State Recovery](tasks/T12-progress-state-recovery.md) | TODO | HIGH | MEDIUM |
+| T12 | [Progress State Recovery](tasks/T12-progress-state-recovery.md) | DONE | HIGH | MEDIUM |
 | T20 | [E2E Test Reliability](tasks/T20-e2e-test-reliability.md) | TODO | MEDIUM | MEDIUM |
 
 ---

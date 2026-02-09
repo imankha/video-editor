@@ -71,6 +71,10 @@ export function AnnotateScreen({ onClearSelection }) {
     currentTime,
     duration,
     isPlaying,
+    isLoading: isVideoLoading,
+    isVideoElementLoading,
+    loadingProgress,
+    error: videoError,
     togglePlay,
     seek,
     stepForward,
@@ -367,6 +371,10 @@ export function AnnotateScreen({ onClearSelection }) {
         currentTime={currentTime}
         duration={duration}
         isPlaying={isPlaying}
+        isLoading={isVideoLoading || isUploadingGameVideo}
+        isVideoElementLoading={isVideoElementLoading}
+        loadingProgress={loadingProgress}
+        error={videoError}
         handlers={handlers}
         // Fullscreen state
         annotateFullscreen={annotateFullscreen}
