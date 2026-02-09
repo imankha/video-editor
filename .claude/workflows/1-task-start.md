@@ -12,54 +12,51 @@ git checkout -b feature/T{id}-{short-description}
 - Understand the problem, solution, and acceptance criteria
 - Note any referenced files or screenshots
 
-### 3. Audit: Find Similar Code
+### 3. Run Code Expert Agent
 
-**Search for existing patterns before writing new code:**
+**Spawn the Code Expert agent** to audit the codebase:
 
 ```
-# Search for similar functionality
-- Components with similar UI patterns
-- Hooks with similar state management
-- API endpoints with similar operations
-- Utility functions that could be reused
+Use Task tool with subagent_type: Explore
+
+Prompt: See .claude/agents/code-expert.md for full template
+
+Key points to include:
+- Task ID and title
+- Task description and acceptance criteria
+- Request: entry points, data flow, similar patterns, dependencies
 ```
 
-**Questions to answer:**
-- Does similar functionality already exist?
-- Can existing utilities be reused or extended?
-- What patterns do similar features follow?
+The Code Expert will return a report with:
+- Entry points (files/lines to modify)
+- Data flow through the system
+- Similar patterns to follow
+- Dependencies and side effects
+- Implementation recommendations
 
-### 4. Audit: Identify Interacting Systems
+### 4. Document Findings
 
-**Map the touch points:**
+Update the task file based on Code Expert report:
 
-| Layer | What to Check |
-|-------|---------------|
-| Frontend | Which components render this? Which stores manage state? |
-| Backend | Which endpoints are called? What database tables? |
-| State | Where does data flow from/to? |
-| Side Effects | What gets triggered (API calls, R2 uploads, WebSocket)? |
-
-### 5. Document Findings
-
-Update the task file's "Relevant Files" section:
+**Relevant Files section:**
 ```markdown
 ### Relevant Files
-- `src/frontend/src/components/Foo.jsx` - Main component to modify
-- `src/backend/app/routers/bar.py` - API endpoint
-- `src/frontend/src/stores/bazStore.js` - State management
+- `src/frontend/src/components/Foo.jsx:42` - Entry point, renders the feature
+- `src/backend/app/routers/bar.py:100` - API endpoint
+- `src/frontend/src/modes/Baz.jsx:200` - Similar pattern to follow
 ```
 
-Add to Progress Log:
+**Progress Log:**
 ```markdown
-**{date}**: Started implementation. Audit findings:
-- Similar pattern exists in X, will follow that approach
-- Interacts with Y component and Z endpoint
-- Will reuse existing utility W
+**{date}**: Started implementation.
+- Entry points: [list from Code Expert]
+- Similar patterns: [patterns to follow]
+- Will reuse: [existing utilities]
+- Risks: [potential issues noted]
 ```
 
 ---
 
 ## After Completing This Stage
 
-Proceed to [2-implementation.md](2-implementation.md) for coding guidelines.
+Proceed to [2-test-first.md](2-test-first.md) to create failing tests.
