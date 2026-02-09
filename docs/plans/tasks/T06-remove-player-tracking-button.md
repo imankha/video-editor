@@ -1,10 +1,10 @@
 # T06: Move Player Tracking Toggle to Layer Icon
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** LOW
 **Complexity:** LOW
 **Created:** 2026-02-06
-**Updated:** 2026-02-06
+**Updated:** 2026-02-09
 
 ## Problem
 
@@ -23,19 +23,27 @@ See `screenshots/player tracking.png` - the circled layer icon should become the
 ## Context
 
 ### Relevant Files
-- TBD - Need to locate the layer icon and tracking button components
+- `src/frontend/src/modes/OverlayModeView.jsx` - Removed old toggle button
+- `src/frontend/src/modes/overlay/OverlayMode.jsx` - Added toggle to layer icon
 
 ### Progress Log
 
 **2026-02-06**: Task created. Clarified: not removing tracking functionality, just moving the toggle to the layer icon with visual feedback (slash when off).
 
+**2026-02-09**: Implementation complete.
+- Removed the "Player boxes: On/Off" toggle button from OverlayModeView controls bar
+- Made the Crosshair (detection marker) layer icon clickable to toggle player box visibility
+- Added red diagonal slash overlay when tracking is OFF (icon also dims to gray)
+- Icon turns green and slash disappears when tracking is ON
+- Used existing `showPlayerBoxes` and `onTogglePlayerBoxes` props (no new state)
+
 ## Implementation
 
-1. [ ] Locate the current player tracking toggle button
-2. [ ] Locate the layer icon component
-3. [ ] Add click handler to layer icon that toggles tracking
-4. [ ] Add visual state: slash through icon when tracking is OFF
-5. [ ] Remove the old separate toggle button
+1. [x] Locate the current player tracking toggle button
+2. [x] Locate the layer icon component
+3. [x] Add click handler to layer icon that toggles tracking
+4. [x] Add visual state: slash through icon when tracking is OFF
+5. [x] Remove the old separate toggle button
 6. [ ] Test toggle behavior works correctly
 
 ## Acceptance Criteria

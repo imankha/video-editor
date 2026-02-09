@@ -4,7 +4,7 @@ import ZoomControls from '../components/ZoomControls';
 import ExportButton from '../components/ExportButton';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from './overlay';
-import { Eye, EyeOff, Minimize } from 'lucide-react';
+import { Minimize } from 'lucide-react';
 
 /**
  * OverlayModeView - Complete view for Overlay mode
@@ -164,25 +164,7 @@ export function OverlayModeView({
         {effectiveOverlayVideoUrl && !isFullscreen && (
           <div className="mb-6 flex gap-4 items-center">
             <div className="ml-auto flex items-center gap-3">
-              {/* Player detection is now automatic during framing export (U8) */}
-              {/* Show player boxes toggle only when there are pre-detected boxes from framing */}
-              {playerDetectionEnabled && playerDetections?.length > 0 && (
-                <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5">
-                  <span className="text-xs text-gray-400 mr-1">Player boxes:</span>
-                  <button
-                    onClick={onTogglePlayerBoxes}
-                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-sm font-medium transition-colors ${
-                      showPlayerBoxes
-                        ? 'bg-green-600 hover:bg-green-700 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                    }`}
-                    title={showPlayerBoxes ? 'Hide player boxes' : 'Show player boxes'}
-                  >
-                    {showPlayerBoxes ? <Eye size={14} /> : <EyeOff size={14} />}
-                    <span>{showPlayerBoxes ? 'On' : 'Off'}</span>
-                  </button>
-                </div>
-              )}
+              {/* Player boxes toggle moved to layer icon in timeline (T06) */}
               <ZoomControls
                 zoom={zoom}
                 onZoomIn={onZoomIn}
@@ -320,6 +302,8 @@ export function OverlayModeView({
             trimRange={null}
             isPlaying={isPlaying}
             isFullscreen={isFullscreen}
+            showPlayerBoxes={showPlayerBoxes}
+            onTogglePlayerBoxes={onTogglePlayerBoxes}
               />
             ) : isLoading ? (
               <div className="animate-pulse">
