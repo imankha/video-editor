@@ -302,13 +302,15 @@ class ExportWebSocketManager {
       clearTimeout(connectionInfo.reconnectTimeout);
     }
 
+    // Delete from map BEFORE closing to prevent onclose from scheduling reconnect
+    // (ws.close() may trigger onclose synchronously in some browsers)
+    if (permanent) {
+      this.connections.delete(exportId);
+    }
+
     // Close WebSocket
     if (connectionInfo.ws && connectionInfo.ws.readyState === WebSocket.OPEN) {
       connectionInfo.ws.close();
-    }
-
-    if (permanent) {
-      this.connections.delete(exportId);
     }
   }
 

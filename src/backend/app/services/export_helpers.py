@@ -227,6 +227,8 @@ def create_progress_callback(
         result = await call_modal_framing_ai(..., progress_callback=progress_callback)
     """
     async def callback(progress: float, message: str, phase: str = "processing"):
+        # Set done=True when phase is "complete" or "done", or progress is 100%
+        is_done = phase in ('complete', 'done') or progress >= 100
         await send_progress(
             export_id=export_id,
             current=int(progress),
@@ -234,6 +236,7 @@ def create_progress_callback(
             phase=phase,
             message=message,
             export_type=export_type,
+            done=is_done,
             project_id=project_id,
             project_name=project_name,
             game_id=game_id,
