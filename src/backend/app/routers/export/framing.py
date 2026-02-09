@@ -48,6 +48,48 @@ from ...user_context import get_current_user_id, set_current_user_id
 logger = logging.getLogger(__name__)
 
 
+def convert_segment_data_to_encoder_format(segment_data: dict) -> dict:
+    """
+    Convert frontend segment format to encoder format.
+
+    Frontend format (from database):
+        {"boundaries": [...], "segmentSpeeds": {"2": 0.5}, "trimRange": {"start": ..., "end": ...}}
+
+    Encoder format (expected by video_encoder.py):
+        {"segments": [{start, end, speed}, ...], "trim_start": ..., "trim_end": ...}
+
+    This conversion ensures slowdowns and trims are applied correctly in the final output.
+    """
+    if not segment_data:
+        return None
+
+    result = {}
+
+    # Convert trimRange to trim_start/trim_end
+    trim_range = segment_data.get('trimRange')
+    if trim_range:
+        result['trim_start'] = trim_range.get('start', 0)
+        result['trim_end'] = trim_range.get('end')
+
+    # Convert boundaries + segmentSpeeds to segments array
+    boundaries = segment_data.get('boundaries', [])
+    speeds = segment_data.get('segmentSpeeds', {})
+
+    if len(boundaries) >= 2:
+        segments = []
+        for i in range(len(boundaries) - 1):
+            segments.append({
+                'start': boundaries[i],
+                'end': boundaries[i + 1],
+                'speed': speeds.get(str(i), 1.0)
+            })
+        if segments:
+            result['segments'] = segments
+            logger.info(f"[convert_segment_data] Converted {len(segments)} segments: {segments}")
+
+    return result if result else None
+
+
 def log_progress_event(job_id: str, phase: str, elapsed: float = None, extra: dict = None):
     """Log structured progress event for timing analysis."""
     parts = [f"[Progress Event] job={job_id} phase={phase}"]
@@ -549,11 +591,15 @@ async def render_project(request: RenderRequest):
     except (json.JSONDecodeError, TypeError) as e:
         raise HTTPException(status_code=500, detail=f"Invalid crop_data in database: {e}")
 
-    segment_data = None
+    segment_data_raw = None  # Frontend format for get_output_duration
+    segment_data = None  # Encoder format for video processing
     if clip['segments_data']:
         try:
-            segment_data = json.loads(clip['segments_data'])
-            logger.info(f"[Render] Parsed segment_data: {segment_data}")
+            segment_data_raw = json.loads(clip['segments_data'])
+            logger.info(f"[Render] Parsed segment_data (raw): {segment_data_raw}")
+            # Convert from frontend format to encoder format
+            segment_data = convert_segment_data_to_encoder_format(segment_data_raw)
+            logger.info(f"[Render] Converted segment_data (encoder): {segment_data}")
         except (json.JSONDecodeError, TypeError):
             logger.warning(f"[Render] Invalid segments_data, ignoring")
 
@@ -625,9 +671,10 @@ async def render_project(request: RenderRequest):
         logger.info(f"[Render] Starting AI upscaling (Modal: {modal_enabled()})")
 
         # Calculate effective output duration for progress estimation
+        # Note: get_output_duration expects raw frontend format (boundaries + segmentSpeeds)
         effective_duration = 10.0  # Default estimate
-        if segment_data:
-            effective_duration = get_output_duration(segment_data)
+        if segment_data_raw:
+            effective_duration = get_output_duration(segment_data_raw)
             logger.info(f"[Render] Calculated output duration (trim+speed): {effective_duration:.2f}s")
 
         # Send initial progress
