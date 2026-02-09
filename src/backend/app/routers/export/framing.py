@@ -710,7 +710,7 @@ async def render_project(request: RenderRequest):
 
         # Run batch player detection on the working video
         # Download from R2 since unified interface uploads there (local_framing uses its own temp dir)
-        from app.storage import download_from_r2
+        # Note: download_from_r2 is already imported at module level
         if not await asyncio.to_thread(download_from_r2, user_id, output_key, Path(output_path)):
             logger.warning(f"[Render] Failed to download working video for detection, using defaults")
             highlight_regions = generate_default_highlight_regions(source_clips)
