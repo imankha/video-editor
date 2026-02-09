@@ -443,6 +443,14 @@ def _process_frames_to_ffmpeg(
     import cv2
     from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
 
+    # DEBUG: Log what we received
+    logger.info(f"[Overlay Export] DEBUG - _process_frames_to_ffmpeg called with {len(highlight_regions)} regions, effect={highlight_effect_type}")
+    if highlight_regions and len(highlight_regions) > 0:
+        first_region = highlight_regions[0]
+        logger.info(f"[Overlay Export] DEBUG - First region: {first_region.get('start_time')}-{first_region.get('end_time')}s, {len(first_region.get('keyframes', []))} keyframes")
+        if first_region.get('keyframes'):
+            logger.info(f"[Overlay Export] DEBUG - First keyframe: {first_region['keyframes'][0]}")
+
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
         raise ValueError("Could not open video file")
@@ -840,7 +848,13 @@ async def export_overlay_only(
                 pass
 
         # Send error progress via WebSocket
-        error_data = {"progress": 0, "message": f"Export failed: {error_msg}", "status": "error", "projectId": project_id, "projectName": project_name, "type": "overlay"}
+        from app.websocket import make_progress_data
+        error_data = make_progress_data(
+            current=0, total=100, phase='error',
+            message=f"Export failed: {error_msg}",
+            export_type='overlay',
+            project_id=project_id, project_name=project_name,
+        )
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
 
@@ -867,7 +881,13 @@ async def export_overlay_only(
                     conn.commit()
             except Exception:
                 pass
-        error_data = {"progress": 0, "message": f"Export failed: {str(e)}", "status": "error", "projectId": project_id, "projectName": project_name, "type": "overlay"}
+        from app.websocket import make_progress_data
+        error_data = make_progress_data(
+            current=0, total=100, phase='error',
+            message=f"Export failed: {str(e)}",
+            export_type='overlay',
+            project_id=project_id, project_name=project_name,
+        )
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
         import shutil
@@ -1551,24 +1571,9 @@ async def render_overlay(request: OverlayRenderRequest):
         if not project:
             raise HTTPException(status_code=404, detail="Project not found or has no working video")
 
-        project_name = project['name']
-
-        # If project name matches "Clip {id}" pattern, try to derive a better name from clip data
-        # This handles legacy auto-projects created before we added derive_clip_name
-        if project_name and re.match(r'^Clip \d+$', project_name):
-            cursor.execute("""
-                SELECT rc.name, rc.rating, rc.tags
-                FROM raw_clips rc
-                WHERE rc.auto_project_id = ?
-                LIMIT 1
-            """, (project_id,))
-            raw_clip = cursor.fetchone()
-            if raw_clip:
-                tags = json.loads(raw_clip['tags']) if raw_clip['tags'] else []
-                from app.queries import derive_clip_name
-                derived_name = derive_clip_name(raw_clip['name'], raw_clip['rating'] or 0, tags)
-                if derived_name:
-                    project_name = derived_name
+        # Use shared helper to derive a better name if needed
+        from app.services.export_helpers import derive_project_name
+        project_name = derive_project_name(project_id, cursor) or project['name']
 
         working_filename = project['working_filename']
 
@@ -1591,10 +1596,18 @@ async def render_overlay(request: OverlayRenderRequest):
     if project['highlights_data']:
         try:
             highlight_regions = json.loads(project['highlights_data'])
-        except json.JSONDecodeError:
-            pass
+            # DEBUG: Log what we loaded from database
+            logger.info(f"[Overlay Render] DEBUG - Loaded highlights_data from DB: {len(project['highlights_data'])} chars")
+            if highlight_regions and highlight_regions[0].get('keyframes'):
+                first_kf = highlight_regions[0]['keyframes'][:3]
+                logger.info(f"[Overlay Render] DEBUG - First region keyframes sample: {first_kf}")
+        except json.JSONDecodeError as e:
+            logger.error(f"[Overlay Render] DEBUG - JSON decode error: {e}")
+    else:
+        logger.warning(f"[Overlay Render] DEBUG - highlights_data is empty/None!")
 
     # Use saved effect_type if not specified
+    logger.info(f"[Overlay Render] DEBUG - effect_type from request: {effect_type}, from DB: {project['effect_type']}")
     if not effect_type and project['effect_type']:
         effect_type = project['effect_type']
     effect_type = effect_type or "dark_overlay"
@@ -1616,139 +1629,50 @@ async def render_overlay(request: OverlayRenderRequest):
     await manager.send_progress(export_id, progress_data)
 
     try:
+        # Use unified interface - routes to Modal or local automatically
+        from app.services.export_helpers import send_progress, create_progress_callback, store_modal_call_id as store_call_id
+
         # Generate output filename
         output_filename = f"final_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
-        parallel_used = False  # Will be set to True if parallel processing is used
+        parallel_used = False
 
-        if modal_enabled():
-            # Use Modal GPU processing
-            logger.info(f"[Overlay Render] Using Modal GPU")
+        logger.info(f"[Overlay Render] Starting overlay processing (Modal: {modal_enabled()})")
 
-            # Create progress callback for real-time updates
-            async def modal_progress_callback(progress: float, message: str, phase: str = "modal_processing"):
-                progress_data = {
-                    "progress": progress,
-                    "message": message,
-                    "status": "processing",
-                    "phase": phase,  # Include phase for frontend tracking
-                    "projectId": project_id,
-                    "projectName": project_name,
-                    "type": "overlay"
-                }
-                export_progress[export_id] = progress_data
-                await manager.send_progress(export_id, progress_data)
+        # Create progress callback for unified interface
+        progress_callback = create_progress_callback(
+            export_id, 'overlay',
+            project_id=project_id, project_name=project_name
+        )
 
-            # Callback to store Modal call_id for job recovery
-            def store_modal_call_id(modal_call_id: str):
-                try:
-                    with get_db_connection() as conn:
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                            UPDATE export_jobs
-                            SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP
-                            WHERE id = ?
-                        """, (modal_call_id, export_id))
-                        conn.commit()
-                    logger.info(f"[Overlay Render] Stored modal_call_id: {modal_call_id}")
-                except Exception as e:
-                    logger.warning(f"[Overlay Render] Failed to store modal_call_id: {e}")
+        # Callback to store Modal call_id for job recovery
+        def modal_call_id_callback(modal_call_id: str):
+            store_call_id(export_id, modal_call_id)
 
-            # Use auto-selection: parallel for longer videos, sequential for shorter
-            result = await call_modal_overlay_auto(
-                job_id=export_id,
-                user_id=user_id,
-                input_key=f"working_videos/{working_filename}",
-                output_key=f"final_videos/{output_filename}",
-                highlight_regions=highlight_regions,
-                effect_type=effect_type,
-                video_duration=video_duration,
-                progress_callback=modal_progress_callback,
-                call_id_callback=store_modal_call_id,
-            )
+        # Call unified interface - routes to Modal or local_overlay automatically
+        result = await call_modal_overlay_auto(
+            job_id=export_id,
+            user_id=user_id,
+            input_key=f"working_videos/{working_filename}",
+            output_key=f"final_videos/{output_filename}",
+            highlight_regions=highlight_regions,
+            effect_type=effect_type,
+            video_duration=video_duration,
+            progress_callback=progress_callback,
+            call_id_callback=modal_call_id_callback,
+        )
 
-            if result.get("status") != "success":
-                error = result.get("error", "Unknown error")
-                raise RuntimeError(f"Modal processing failed: {error}")
+        if result.get("status") != "success":
+            error = result.get("error", "Unknown error")
+            raise RuntimeError(f"Overlay processing failed: {error}")
 
-            # Update to 95% after Modal completes
-            progress_data = {
-                "progress": 95,
-                "message": "Saving to library...",
-                "status": "processing",
-                "projectId": project_id,
-                "projectName": project_name,
-                "type": "overlay"
-            }
-            export_progress[export_id] = progress_data
-            await manager.send_progress(export_id, progress_data)
+        # Send progress update
+        await send_progress(
+            export_id, 95, 100, 'finalizing', 'Saving to library...',
+            'overlay', project_id=project_id, project_name=project_name
+        )
 
-            parallel_used = result.get("parallel", False)
-            logger.info(f"[Overlay Render] Modal processing complete (parallel={parallel_used})")
-
-        else:
-            # Local processing fallback
-            logger.info(f"[Overlay Render] Using local processing (Modal disabled)")
-
-            # Download working video from R2
-            temp_dir = tempfile.mkdtemp()
-            input_path = os.path.join(temp_dir, "input.mp4")
-            output_path = os.path.join(temp_dir, "output.mp4")
-
-            try:
-                # Use DRY helper for download with progress (5% -> 15%)
-                if not await download_from_r2_with_progress(
-                    user_id, f"working_videos/{working_filename}", Path(input_path),
-                    export_id=export_id, export_type='overlay',
-                    project_id=project_id, project_name=project_name
-                ):
-                    raise RuntimeError("Failed to download working video from R2")
-
-                # Process locally
-                if not highlight_regions:
-                    # No highlights - just copy
-                    import shutil
-                    shutil.copy(input_path, output_path)
-                else:
-                    # Capture event loop for progress callbacks from thread
-                    loop = asyncio.get_running_loop()
-
-                    def local_progress_callback(progress: int, message: str):
-                        """Send progress updates via WebSocket from processing thread."""
-                        progress_data = {
-                            "progress": progress,
-                            "message": message,
-                            "status": "processing",
-                            "phase": "overlay_render",
-                            "projectId": project_id,
-                            "projectName": project_name,
-                            "type": "overlay"
-                        }
-                        export_progress[export_id] = progress_data
-                        try:
-                            asyncio.run_coroutine_threadsafe(
-                                manager.send_progress(export_id, progress_data),
-                                loop
-                            )
-                        except Exception as e:
-                            logger.warning(f"[Overlay Render] Failed to send progress: {e}")
-
-                    # Run processing in thread to avoid blocking event loop
-                    await asyncio.to_thread(
-                        _process_frames_to_ffmpeg,
-                        input_path,
-                        output_path,
-                        highlight_regions,
-                        effect_type,
-                        local_progress_callback
-                    )
-
-                # Upload result to R2
-                if not upload_to_r2(user_id, f"final_videos/{output_filename}", Path(output_path)):
-                    raise RuntimeError("Failed to upload final video to R2")
-
-            finally:
-                import shutil
-                shutil.rmtree(temp_dir, ignore_errors=True)
+        parallel_used = result.get("parallel", False)
+        logger.info(f"[Overlay Render] Processing complete (parallel={parallel_used})")
 
         # Save to database
         with get_db_connection() as conn:
@@ -1826,14 +1750,16 @@ async def render_overlay(request: OverlayRenderRequest):
         except Exception:
             pass
 
-        error_data = {
-            "progress": 0,
-            "message": f"Export failed: {e}",
-            "status": "error",
-            "projectId": project_id,
-            "projectName": project_name,
-            "type": "overlay"
-        }
+        from app.websocket import make_progress_data
+        error_data = make_progress_data(
+            current=0,
+            total=100,
+            phase='error',
+            message=f"Export failed: {e}",
+            export_type='overlay',
+            project_id=project_id,
+            project_name=project_name,
+        )
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
 

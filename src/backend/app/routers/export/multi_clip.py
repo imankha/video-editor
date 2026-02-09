@@ -64,7 +64,8 @@ def get_yolo_model():
     if _yolo_model is None:
         try:
             from ultralytics import YOLO
-            backend_dir = Path(__file__).parent.parent.parent
+            # Go up from app/routers/export/ to src/backend/
+            backend_dir = Path(__file__).parent.parent.parent.parent
             model_path = backend_dir / "yolov8x.pt"
             if not model_path.exists():
                 logger.info(f"YOLO model not found at {model_path}, will download...")

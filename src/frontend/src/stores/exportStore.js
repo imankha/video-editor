@@ -60,6 +60,8 @@ export const useExportStore = create((set, get) => ({
     console.log(`[ExportStore] setExportsFromServer called with ${serverExports.length} exports`);
     const exports = {};
     for (const exp of serverExports) {
+      // T12: For annotate exports, use gameId/gameName instead of projectId/projectName
+      const isAnnotate = exp.type === 'annotate';
       exports[exp.job_id] = {
         exportId: exp.job_id,
         projectId: exp.project_id,
@@ -77,6 +79,9 @@ export const useExportStore = create((set, get) => ({
         error: exp.error || null,
         outputVideoId: exp.output_video_id || null,
         outputFilename: exp.output_filename || null,
+        // T12: Annotate export fields
+        gameId: isAnnotate ? exp.game_id : null,
+        gameName: isAnnotate ? exp.game_name : null,
       };
     }
     set({ activeExports: exports });
@@ -86,8 +91,13 @@ export const useExportStore = create((set, get) => ({
   /**
    * Start tracking a new export (optimistic update while backend creates record)
    * WebSocket updates will override this with real progress.
+   *
+   * T12: For annotate exports, pass { gameId, gameName } as second arg instead of projectId.
+   * @param {string} exportId - Unique export identifier
+   * @param {number|object} projectIdOrOptions - Project ID, or { gameId, gameName } for annotate
+   * @param {string} type - Export type ('framing', 'overlay', 'annotate')
    */
-  startExport: (exportId, projectId, type) => {
+  startExport: (exportId, projectIdOrOptions, type) => {
     set((state) => {
       // Guard against duplicate adds (e.g., React StrictMode double-render)
       if (state.activeExports[exportId]) {
@@ -95,7 +105,22 @@ export const useExportStore = create((set, get) => ({
         return state;
       }
 
-      console.log(`[ExportStore] Adding new export: ${exportId} for project ${projectId}`);
+      // T12: Support annotate exports with gameId instead of projectId
+      const isAnnotate = type === 'annotate';
+      let projectId, gameId, gameName;
+
+      if (isAnnotate && typeof projectIdOrOptions === 'object') {
+        projectId = 0;
+        gameId = projectIdOrOptions.gameId;
+        gameName = projectIdOrOptions.gameName;
+        console.log(`[ExportStore] Adding new annotate export: ${exportId} for game ${gameId} (${gameName})`);
+      } else {
+        projectId = projectIdOrOptions;
+        gameId = null;
+        gameName = null;
+        console.log(`[ExportStore] Adding new export: ${exportId} for project ${projectId}`);
+      }
+
       return {
         activeExports: {
           ...state.activeExports,
@@ -110,6 +135,9 @@ export const useExportStore = create((set, get) => ({
             error: null,
             outputVideoId: null,
             outputFilename: null,
+            // T12: Annotate export fields
+            gameId,
+            gameName,
           },
         },
         // Legacy state for backward compatibility
@@ -123,6 +151,9 @@ export const useExportStore = create((set, get) => ({
    *
    * MVC: The store should only reflect backend state. WebSocket messages
    * from the backend include projectId and type, which we use to create entries.
+   *
+   * T12: Annotate exports use gameId instead of projectId. We allow exports
+   * with either projectId OR gameId (for annotate type).
    */
   updateExportProgress: (exportId, progress) => {
     set((state) => {
@@ -130,19 +161,27 @@ export const useExportStore = create((set, get) => ({
 
       if (!existing) {
         // Export not in store yet - create from WebSocket data
-        // Backend MUST send projectId for proper tracking
-        if (!progress.projectId) {
-          console.warn(`[ExportStore] Received progress for unknown export ${exportId} without projectId - ignoring`);
-          return state; // Don't create entries without projectId
+        // T12: Allow annotate exports with gameId instead of projectId
+        const isAnnotate = progress.type === 'annotate';
+        const hasIdentifier = progress.projectId || (isAnnotate && progress.gameId);
+
+        if (!hasIdentifier) {
+          console.warn(`[ExportStore] Received progress for unknown export ${exportId} without projectId or gameId - ignoring`);
+          return state; // Don't create entries without identifier
         }
 
-        console.log(`[ExportStore] Creating export ${exportId} from WebSocket (project: ${progress.projectId}, name: ${progress.projectName}, type: ${progress.type})`);
+        const displayName = isAnnotate
+          ? progress.gameName || `Game ${progress.gameId}`
+          : progress.projectName;
+
+        console.log(`[ExportStore] Creating export ${exportId} from WebSocket (${isAnnotate ? 'game' : 'project'}: ${isAnnotate ? progress.gameId : progress.projectId}, name: ${displayName}, type: ${progress.type})`);
+
         return {
           activeExports: {
             ...state.activeExports,
             [exportId]: {
               exportId,
-              projectId: progress.projectId,
+              projectId: progress.projectId || 0,
               projectName: progress.projectName || null,
               type: progress.type || 'unknown',
               status: 'processing',
@@ -157,6 +196,9 @@ export const useExportStore = create((set, get) => ({
               error: null,
               outputVideoId: null,
               outputFilename: null,
+              // T12: Annotate export fields
+              gameId: isAnnotate ? progress.gameId : null,
+              gameName: isAnnotate ? progress.gameName : null,
             },
           },
           exportProgress: progress,
@@ -179,6 +221,9 @@ export const useExportStore = create((set, get) => ({
             type: existing.type === 'unknown' ? (progress.type || existing.type) : existing.type,
             status: 'processing',
             progress: { ...progress, percent },
+            // T12: Update gameId/gameName if missing
+            gameId: existing.gameId || progress.gameId || null,
+            gameName: existing.gameName || progress.gameName || null,
           },
         },
         exportProgress: progress,
