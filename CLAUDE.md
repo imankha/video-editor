@@ -37,6 +37,7 @@ cd src/backend && pytest tests/ -k "test_name" -v        # By name
   - Never commit broken code - the codebase must remain functional after each commit
   - Run relevant tests before committing (minimal tests that activate changed code paths to verify they work as intended)
 - **Signal readiness** - Tell user when work is ready for testing and merge
+- **Task status** - Mark tasks as TESTING when implementation is complete; only the user marks tasks as DONE after testing
 
 ## Core Principles
 | Principle | Summary |

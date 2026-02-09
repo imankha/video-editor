@@ -118,3 +118,16 @@ body {
   height: 100vh !important;
 }
 
+/* Indeterminate progress bar animation for video loading */
+@keyframes slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(200%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+

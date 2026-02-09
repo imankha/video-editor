@@ -27,6 +27,8 @@ export function FramingModeView({
   duration,
   isPlaying,
   isLoading,
+  isVideoElementLoading = false,
+  loadingProgress = null,
   isProjectLoading = false,
   loadingStage = null,
   error,
@@ -224,6 +226,9 @@ export function FramingModeView({
               onPanChange={onPanChange}
               isFullscreen={isFullscreen}
               isLoading={isLoading || isProjectLoading}
+              isVideoElementLoading={isVideoElementLoading}
+              loadingProgress={loadingProgress}
+              error={error}
               loadingMessage={
                 loadingStage === 'clips' ? 'Loading clips...' :
                 loadingStage === 'video' ? 'Loading video...' :

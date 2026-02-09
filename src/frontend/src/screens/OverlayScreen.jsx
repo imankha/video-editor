@@ -134,6 +134,8 @@ export function OverlayScreen({
     duration,
     error,
     isLoading,
+    isVideoElementLoading,
+    loadingProgress,
     loadVideo,
     loadVideoFromUrl,
     loadVideoFromStreamingUrl,
@@ -694,6 +696,9 @@ export function OverlayScreen({
       handlers={handlers}
       // Loading state
       isLoading={isLoading || isLoadingWorkingVideo || shouldWaitForWorkingVideo}
+      isVideoElementLoading={isVideoElementLoading}
+      loadingProgress={loadingProgress}
+      error={error}
       loadingMessage={isLoadingWorkingVideo || shouldWaitForWorkingVideo ? 'Loading working video...' : 'Loading video...'}
       // Playback controls
       togglePlay={togglePlay}
