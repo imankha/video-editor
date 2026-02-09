@@ -408,16 +408,15 @@ export function AnnotateContainer({
       const result = await Promise.race([wsCompletionPromise, timeoutPromise]);
       console.log('[AnnotateContainer] Background job completed:', result);
 
+      // Clear progress after success
+      setTimeout(() => setExportProgress(null), 2000);
       return { success: true, ...result };
     } catch (err) {
       console.error('[AnnotateContainer] Export error:', err);
+      // Don't clear progress on error - let it stay visible with red bar
       throw err;
     } finally {
       exportWebSocketManager.disconnect(exportId);
-      // Only auto-clear progress on success - errors stay visible until user dismisses
-      if (exportProgress && !exportProgress.error) {
-        setTimeout(() => setExportProgress(null), 2000);
-      }
     }
   }, [annotateVideoFile, annotateGameId, annotateGameName, startExportInStore]);
 
