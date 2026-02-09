@@ -2,21 +2,29 @@
 
 ## Purpose
 
-Create a design document that describes the system changes at a high level. This document requires user approval before implementation begins, ensuring all design decisions are made upfront.
+Create a design document focused on **architecture quality**: DRY, minimal code paths, clean design patterns. This document requires user approval before implementation begins.
+
+## Primary Concerns
+
+| Concern | What to Evaluate |
+|---------|------------------|
+| **DRY** | Is there duplicate logic? Can we extract shared helpers? |
+| **Code Paths** | Are there multiple ways to do the same thing? Can we unify? |
+| **Branches** | Are there unnecessary if/else blocks? Can we route internally? |
+| **Design Patterns** | Does the solution follow established patterns? |
+| **Code Smells** | Does the current code have smells we should fix? |
+| **Refactoring** | Should we refactor existing code as part of this task? |
 
 ## When to Invoke
 
-The main AI should spawn this agent after Code Expert completes, using:
-
+After Code Expert completes, using:
 ```
 Task tool with subagent_type: Plan
 ```
 
 ## Output
 
-Creates a design document at: `docs/plans/tasks/T{id}-design.md`
-
-This document must be approved by the user before implementation proceeds.
+Creates: `docs/plans/tasks/T{id}-design.md`
 
 ---
 
@@ -33,143 +41,150 @@ You are the Architect agent for task T{id}: {task_title}.
 
 ## Your Mission
 
-Create a design document that I can review and approve. The document should be efficient and visual - use Mermaid diagrams and pseudo code rather than verbose explanations.
+Design the solution with these priorities:
+1. **DRY** - No duplicate logic, extract shared helpers
+2. **Minimal Code Paths** - One way to do each thing
+3. **Minimal Branches** - Avoid if/else sprawl, route internally
+4. **Clean Patterns** - Follow established design patterns
+5. **Fix Smells** - Address code smells discovered during audit
 
 ## Document Structure
 
 Create `docs/plans/tasks/T{id}-design.md` with these sections:
 
-### 1. Current State ("As Is")
+### 1. Current State Analysis
 
-Describe how the relevant systems work TODAY:
-
-**Data Flow Diagram:**
+**Architecture Diagram:**
 ```mermaid
 flowchart LR
-    A[User Action] --> B[Component]
+    A[Entry Point] --> B[Component]
     B --> C[Store]
-    C --> D[API]
-    D --> E[Database]
 ```
 
-**Key Code Paths:**
+**Code Smells Identified:**
+| Smell | Location | Impact |
+|-------|----------|--------|
+| Duplicate logic | file.jsx:50, other.jsx:80 | Bug risk if one changes |
+| Multiple code paths | Same action handled 2 ways | Confusion, bugs |
+| Unnecessary branches | Large if/else in handler | Hard to maintain |
+
+**Current Behavior (pseudo code):**
 ```pseudo
-// Current behavior
-when user clicks X:
-    ComponentA.handleClick()
-        → calls storeB.doThing()
-        → API POST /endpoint
-        → returns result
-        → updates UI
+when X happens:
+    if condition A:
+        do thing one way
+    else:
+        do thing another way  // <-- code smell: two paths
 ```
 
-**Current Limitations:**
-- [What's wrong or missing]
+### 2. Target Architecture
 
-### 2. Target State ("Should Be")
+**Design Principles Applied:**
+- [ ] DRY: Extract shared logic to `utils/helper.js`
+- [ ] Single code path: Remove duplicate handler
+- [ ] No branches: Use strategy pattern / internal routing
+- [ ] Pattern: Follow existing MVC pattern
 
-Describe the IDEAL end state after this task:
-
-**Updated Data Flow:**
+**Target Diagram:**
 ```mermaid
 flowchart LR
-    A[User Action] --> B[Component]
-    B --> C[New Handler]
-    C --> D[Store]
+    A[Entry Point] --> B[Unified Handler]
+    B --> C[Store]
 ```
 
 **Target Behavior:**
 ```pseudo
-// After implementation
-when user clicks X:
-    ComponentA.handleClick()
-        → calls NEW handler
-        → updates state directly
-        → UI reflects change
+when X happens:
+    unifiedHandler()  // <-- single code path
+        → shared utility
+        → store update
 ```
 
-**Why This Design:**
-- [Brief rationale for key decisions]
+### 3. Refactoring Plan
 
-### 3. Implementation Plan ("Will Be")
+**Before This Task:**
+| Change | Reason |
+|--------|--------|
+| Extract `sharedHelper()` | Used in 3 places |
+| Remove duplicate handler | Consolidate to one |
 
-Concrete changes to make:
-
-**Files to Modify:**
+**The Task Itself:**
 | File | Change |
 |------|--------|
-| `path/to/file.jsx` | Add onClick handler to icon |
-| `path/to/other.jsx` | Remove old toggle button |
+| `path/file.jsx` | Add new handler using shared util |
+| `path/other.jsx` | Remove old code |
 
-**Pseudo Code Changes:**
-
+**Pseudo Code:**
 ```pseudo
-// In ComponentX.jsx
-- remove: <ToggleButton onClick={toggle} />
-+ add: <LayerIcon onClick={toggle} className={active ? 'green' : 'gray'} />
+// NEW: shared utility
++ function toggleFeature(state) { return !state }
 
-// In ComponentY.jsx
-+ add prop: onToggle
-+ add: onClick={() => onToggle()}
+// In ComponentA - USE shared utility
+- custom toggle logic
++ toggleFeature(state)
+
+// In ComponentB - REMOVE duplicate
+- entire toggle handler (now uses A)
 ```
 
-**State Changes:**
-- No new state (reuse existing `showPlayerBoxes`)
-- OR: Add new state `featureEnabled` to store X
+### 4. Design Decisions
 
-**New Dependencies:**
-- None
-- OR: Need to add package X
+| Decision | Options Considered | Choice | Rationale |
+|----------|-------------------|--------|-----------|
+| Where to put logic | Component vs Hook vs Util | Hook | Reusable, testable |
+| State location | Local vs Store | Store | Shared across components |
 
-### 4. Risk Assessment
+### 5. Risks
 
 | Risk | Mitigation |
 |------|------------|
-| [What could go wrong] | [How we'll handle it] |
+| Breaking existing behavior | Add tests before refactoring |
+| Scope creep from refactoring | Limit to directly related code |
 
-### 5. Open Questions
+### 6. Open Questions
 
-- [ ] [Any decisions that need user input]
-- [ ] [Ambiguities to resolve]
-
----
-
-## Output Format
-
-Return the complete markdown document content. The main AI will:
-1. Write it to `docs/plans/tasks/T{id}-design.md`
-2. Present it to the user for approval
-3. Wait for approval before proceeding
+- [ ] Should we refactor X while we're here?
+- [ ] Is pattern Y the right choice?
 ```
 
 ---
 
-## Design Document Guidelines
+## Architecture Quality Checklist
 
-### Use Mermaid Diagrams For:
-- Data flow (flowchart)
-- Component hierarchy (flowchart TD)
-- State transitions (stateDiagram-v2)
-- Sequence of operations (sequenceDiagram)
+Before presenting design, verify:
 
-### Use Pseudo Code For:
-- Logic changes
-- Event handling
-- API contracts
+### DRY
+- [ ] No duplicate logic between files
+- [ ] Shared utilities extracted
+- [ ] Common patterns abstracted
 
-### Keep Text Minimal:
-- Bullet points over paragraphs
-- Tables for structured info
-- Only explain non-obvious decisions
+### Code Paths
+- [ ] One way to perform each action
+- [ ] No parallel implementations
+- [ ] Unified interfaces (cloud/local, prod/dev)
+
+### Branches
+- [ ] Minimal if/else blocks
+- [ ] Strategy pattern where appropriate
+- [ ] Internal routing over external branching
+
+### Design Patterns
+- [ ] Follows MVC (Screen → Container → View)
+- [ ] State in appropriate location
+- [ ] Props flow downward
+
+### Code Smells
+- [ ] Identified smells in current code
+- [ ] Plan to address (or note as out of scope)
 
 ---
 
 ## Approval Flow
 
 1. Architect creates design doc
-2. Main AI presents to user: "Please review the design at `docs/plans/tasks/T{id}-design.md`"
+2. Main AI presents: "Please review the design at `docs/plans/tasks/T{id}-design.md`"
 3. User can:
-   - **Approve**: "Looks good" / "Approved" → Proceed to Test First
+   - **Approve**: "Looks good" → Proceed to Test First
    - **Request changes**: "Change X to Y" → Architect revises
-   - **Ask questions**: Main AI clarifies, may revise doc
+   - **Ask questions**: Main AI clarifies
 4. Only after approval does implementation begin

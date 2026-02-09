@@ -1,16 +1,17 @@
 # Stage 4: Implementation
 
-## Core Principles
+## Purpose
 
-| Principle | Summary |
-|-----------|---------|
-| **Data Always Ready** | Frontend assumes data loaded before render |
-| **MVC Pattern** | Screens own data, Containers logic, Views presentation |
-| **Single Source of Truth** | All persistence via SQLite → R2, never localStorage |
-| **No Band-Aid Fixes** | Understand root cause, don't mask symptoms |
-| **Type Safety** | No magic strings, use `as const` objects and enums |
-| **Derive, Don't Duplicate** | One authoritative variable, derive the rest |
-| **Minimize Code Paths** | Search first, extract shared logic, unified interfaces |
+Execute the approved design. Focus on **implementation quality**: clean code, no state duplication, proper patterns.
+
+## Primary Concerns
+
+| Concern | What to Check |
+|---------|---------------|
+| **State Duplication** | One source of truth, derive everything else |
+| **Implementation Standards** | Follow frontend/backend patterns |
+| **Type Safety** | No magic strings, use enums and constants |
+| **Error Handling** | Appropriate guards and fallbacks |
 
 ---
 
@@ -40,65 +41,57 @@ def send_progress(phase):  # phase is the ONLY input
 
 ---
 
-## Git Workflow
+## Implementation Checklist
 
-- **Never commit to master** - Only user commits to master after testing
-- **Commit when you add value** - Don't wait for manual testing
-- **Never commit broken code** - Run relevant tests first
-- **Run minimal tests** - Tests that activate changed code paths
+Before writing code, verify:
+- [ ] Design document approved (Stage 2)
+- [ ] Failing tests created (Stage 3)
+- [ ] Understand the pseudo code from design doc
 
----
-
-## Database
-
-- Location: `user_data/{user_id}/database.sqlite`
-- Dev default: `user_data/a/database.sqlite`
-- R2 sync: Download on startup if newer, upload on mutations
+While writing code:
+- [ ] Follow the approved design exactly
+- [ ] No state duplication - derive values
+- [ ] Use existing utilities (identified by Architect)
+- [ ] Follow MVC pattern (Screen → Container → View)
 
 ---
 
-## Frontend Guidelines
+## Frontend Standards
 
-### Skills (load as needed)
-
-| Skill | Priority | Path |
-|-------|----------|------|
-| data-always-ready | CRITICAL | `src/frontend/.claude/skills/data-always-ready/SKILL.md` |
-| mvc-pattern | CRITICAL | `src/frontend/.claude/skills/mvc-pattern/SKILL.md` |
-| state-management | CRITICAL | `src/frontend/.claude/skills/state-management/SKILL.md` |
-| type-safety | HIGH | `src/frontend/.claude/skills/type-safety/SKILL.md` |
-| keyframe-data-model | HIGH | `src/frontend/.claude/skills/keyframe-data-model/SKILL.md` |
-| ui-style-guide | MEDIUM | `src/frontend/.claude/skills/ui-style-guide/SKILL.md` |
-
-### Quick Patterns
-
-**Data Guards:**
+### Data Guards
 ```jsx
 {selectedClip && <ClipEditor clip={selectedClip} />}
 ```
 
-**MVC Structure:**
+### MVC Structure
 ```
 Screen (data fetching, hook initialization)
   └── Container (state logic, event handlers)
         └── View (presentational, props only)
 ```
 
-**Keyframes:**
-```javascript
-keyframe = {
-  frame: number,                    // Frame-based, not time
-  origin: 'permanent' | 'user' | 'trim',
-  // + mode-specific data
-}
-```
-
-**State:**
+### State
 - Zustand stores for global state
 - Screen-owned hooks for local state
 - No prop drilling from App.jsx
 
-### Frontend Don'ts
+### Keyframes
+```javascript
+keyframe = {
+  frame: number,  // Frame-based, not time
+  origin: 'permanent' | 'user' | 'trim',
+}
+```
+
+### Skills (load as needed)
+| Skill | Path |
+|-------|------|
+| data-always-ready | `src/frontend/.claude/skills/data-always-ready/SKILL.md` |
+| mvc-pattern | `src/frontend/.claude/skills/mvc-pattern/SKILL.md` |
+| state-management | `src/frontend/.claude/skills/state-management/SKILL.md` |
+| type-safety | `src/frontend/.claude/skills/type-safety/SKILL.md` |
+
+### Don'ts
 - Don't add console.logs in committed code
 - Don't fetch data in View components
 - Don't render without data guards
@@ -107,11 +100,10 @@ keyframe = {
 
 ---
 
-## Backend Guidelines
+## Backend Standards
 
 ### Virtual Environment
 ```bash
-# Run commands directly
 cd src/backend && .venv/Scripts/python.exe <script.py>
 ```
 
@@ -120,51 +112,53 @@ cd src/backend && .venv/Scripts/python.exe <script.py>
 cd src/backend && .venv/Scripts/python.exe -c "from app.main import app"
 ```
 
-### Skills (load as needed)
-
-| Skill | Priority | Path |
-|-------|----------|------|
-| api-guidelines | CRITICAL | `src/backend/.claude/skills/api-guidelines/SKILL.md` |
-| persistence-model | CRITICAL | `src/backend/.claude/skills/persistence-model/SKILL.md` |
-| bug-reproduction | CRITICAL | `src/backend/.claude/skills/bug-reproduction/SKILL.md` |
-| type-safety | HIGH | `src/backend/.claude/skills/type-safety/SKILL.md` |
-| database-schema | HIGH | `src/backend/.claude/skills/database-schema/SKILL.md` |
-| gesture-based-sync | HIGH | `src/backend/.claude/skills/gesture-based-sync/SKILL.md` |
-
-### Quick Patterns
-
-**File Paths:**
+### Common Patterns
 ```python
+# File paths
 from app.database import RAW_CLIPS_PATH, WORKING_VIDEOS_PATH
 file_path = RAW_CLIPS_PATH / filename
-```
 
-**R2 Storage:**
-```python
+# R2 Storage
 from app.services.r2_storage import upload_to_r2, generate_presigned_url
-await upload_to_r2(user_id, r2_key, local_path)
-```
 
-**Modal GPU (Unified Interface):**
-```python
+# Modal GPU (unified interface - routes internally)
 from app.services.modal_client import call_modal_framing_ai
-# Always call unified interface - routes internally
-result = await call_modal_framing_ai(job_id, user_id, ...)
-```
 
-**Export Helpers:**
-```python
+# Export helpers
 from app.services.export_helpers import (
-    create_export_job, complete_export_job, fail_export_job,
-    send_progress, create_progress_callback
+    create_export_job, complete_export_job, send_progress
 )
 ```
 
-### Backend Don'ts
+### Skills (load as needed)
+| Skill | Path |
+|-------|------|
+| api-guidelines | `src/backend/.claude/skills/api-guidelines/SKILL.md` |
+| persistence-model | `src/backend/.claude/skills/persistence-model/SKILL.md` |
+| type-safety | `src/backend/.claude/skills/type-safety/SKILL.md` |
+| database-schema | `src/backend/.claude/skills/database-schema/SKILL.md` |
+
+### Don'ts
 - Don't use raw SQL without parameterization
 - Don't store secrets in code
 - Don't skip R2 upload for user files
 - Don't send full state blobs (use gesture-based actions)
+
+---
+
+## Git Workflow
+
+- **Never commit to master** - Only user commits after testing
+- **Commit when you add value** - Don't wait for manual testing
+- **Never commit broken code** - Run relevant tests first
+
+---
+
+## Database Reference
+
+- Location: `user_data/{user_id}/database.sqlite`
+- Dev default: `user_data/a/database.sqlite`
+- R2 sync: Download on startup if newer, upload on mutations
 
 ---
 
