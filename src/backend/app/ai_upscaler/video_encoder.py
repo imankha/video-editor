@@ -284,15 +284,11 @@ class VideoEncoder:
             logger.info("=" * 60)
             logger.info("APPLYING SEGMENT SPEED/TRIM PROCESSING")
             logger.info("=" * 60)
-            logger.info(f"DEBUG: segment_data received: {segment_data}")
 
             segments = segment_data.get('segments', [])
             trim_start = segment_data.get('trim_start', 0)
             trim_end = segment_data.get('trim_end')
             frames_pretrimmed = segment_data.get('frames_pretrimmed', False)
-
-            logger.info(f"DEBUG: segments count: {len(segments)}")
-            logger.info(f"DEBUG: trim_start={trim_start}, trim_end={trim_end}, frames_pretrimmed={frames_pretrimmed}")
 
             # Calculate time offset for pre-trimmed frames
             # If frames are pre-trimmed, they start at 0.0s in the frame sequence
@@ -797,12 +793,6 @@ class VideoEncoder:
             '-movflags', '+faststart',
             str(output_path)
         ])
-
-        # Log the full FFmpeg command for debugging
-        logger.info("=" * 60)
-        logger.info("DEBUG: Full FFmpeg command:")
-        logger.info(' '.join(cmd_pass2))
-        logger.info("=" * 60)
 
         try:
             # Use Popen to read stderr in real-time for progress monitoring
