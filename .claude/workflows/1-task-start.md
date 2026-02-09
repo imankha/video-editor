@@ -59,4 +59,4 @@ Update the task file based on Code Expert report:
 
 ## After Completing This Stage
 
-Proceed to [2-test-first.md](2-test-first.md) to create failing tests.
+Proceed to [2-architecture.md](2-architecture.md) to create the design document.

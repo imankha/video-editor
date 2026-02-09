@@ -31,31 +31,46 @@ cd src/backend && pytest tests/test_clips.py -v          # Specific file
 
 **Detect the current stage and load the appropriate workflow file:**
 
-| Stage | Trigger | Workflow | Agent |
-|-------|---------|----------|-------|
-| **1. Task Start** | "Implement T{id}..." | [1-task-start.md](.claude/workflows/1-task-start.md) | Code Expert |
-| **2. Test First** | After task start | [2-test-first.md](.claude/workflows/2-test-first.md) | Tester (Phase 1) |
-| **3. Implementation** | After tests created | [3-implementation.md](.claude/workflows/3-implementation.md) | - |
-| **4. Automated Testing** | Implementation complete | [4-automated-testing.md](.claude/workflows/4-automated-testing.md) | Tester (Phase 2) |
-| **5. Manual Testing** | All tests pass | [5-manual-testing.md](.claude/workflows/5-manual-testing.md) | - |
-| **6. Task Complete** | User approves | [6-task-complete.md](.claude/workflows/6-task-complete.md) | - |
+| # | Stage | Workflow | Agent | User Gate |
+|---|-------|----------|-------|-----------|
+| 1 | Task Start | [1-task-start.md](.claude/workflows/1-task-start.md) | Code Expert | - |
+| 2 | Architecture | [2-architecture.md](.claude/workflows/2-architecture.md) | Architect | **Approval Required** |
+| 3 | Test First | [3-test-first.md](.claude/workflows/3-test-first.md) | Tester (Phase 1) | - |
+| 4 | Implementation | [4-implementation.md](.claude/workflows/4-implementation.md) | - | - |
+| 5 | Automated Testing | [5-automated-testing.md](.claude/workflows/5-automated-testing.md) | Tester (Phase 2) | - |
+| 6 | Manual Testing | [6-manual-testing.md](.claude/workflows/6-manual-testing.md) | - | **Approval Required** |
+| 7 | Task Complete | [7-task-complete.md](.claude/workflows/7-task-complete.md) | - | - |
 
 ## Stage Detection Rules
 
 | User Says | Action |
 |-----------|--------|
-| "Implement T{id}..." / assigns task | → Stages 1, 2, 3 (start → test-first → implement) |
-| Active coding/debugging | → Use Stage 3 (implementation) |
-| "I think this works" / "ready for testing" | → Stage 4 (automated testing) |
-| All tests pass | → Stage 5 (manual testing instructions) |
-| "Approved" / "that worked" / "merge it" | → Stage 6 (task complete) |
+| "Implement T{id}..." / assigns task | → Stage 1 (task start) → Stage 2 (architecture) |
+| Reviews design doc | → Wait for "approved" or feedback |
+| "Approved" / "looks good" (design) | → Stage 3 (test-first) → Stage 4 (implement) |
+| "I think this works" / code complete | → Stage 5 (automated testing) |
+| All tests pass | → Stage 6 (manual testing instructions) |
+| "Approved" / "that worked" (testing) | → Stage 7 (task complete) |
 
 ## Agents
 
 | Agent | Purpose | Definition |
 |-------|---------|------------|
-| **Code Expert** | Audit codebase, find entry points, similar patterns | [.claude/agents/code-expert.md](.claude/agents/code-expert.md) |
-| **Tester** | Find coverage, create tests, run tests, verify | [.claude/agents/tester.md](.claude/agents/tester.md) |
+| **Code Expert** | Audit codebase: entry points, data flow, similar patterns | [code-expert.md](.claude/agents/code-expert.md) |
+| **Architect** | Create design doc with diagrams, pseudo code, requires approval | [architect.md](.claude/agents/architect.md) |
+| **Tester** | Phase 1: create failing tests. Phase 2: run tests until pass | [tester.md](.claude/agents/tester.md) |
+
+## Design Document
+
+Created at Stage 2: `docs/plans/tasks/T{id}-design.md`
+
+Contains:
+- **Current State** - Mermaid diagrams + pseudo code of how it works now
+- **Target State** - Mermaid diagrams + pseudo code of the goal
+- **Implementation Plan** - Files to change, pseudo code changes
+- **Risks & Open Questions**
+
+**Must be approved before implementation begins.**
 
 ## Resources
 - [Current Plan](docs/plans/PLAN.md)

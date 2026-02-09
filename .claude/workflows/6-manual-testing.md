@@ -1,4 +1,4 @@
-# Stage 5: Manual Testing
+# Stage 6: Manual Testing
 
 ## Purpose
 
@@ -93,4 +93,4 @@ Let me know if approved or if changes are needed!
 
 When user says "approved", "that worked", "looks good", or "merge it":
 
-Proceed to [6-task-complete.md](6-task-complete.md) to finalize.
+Proceed to [7-task-complete.md](7-task-complete.md) to finalize.

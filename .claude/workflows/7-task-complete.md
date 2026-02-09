@@ -1,4 +1,4 @@
-# Stage 6: Task Complete
+# Stage 7: Task Complete
 
 ## Purpose
 
@@ -81,8 +81,9 @@ The user will:
 
 The full workflow completed:
 1. **Task Start** - Branch created, Code Expert audited codebase
-2. **Test First** - Failing tests created for acceptance criteria
-3. **Implementation** - Code written following guidelines
-4. **Automated Testing** - Tester ran tests, all passing
-5. **Manual Testing** - User verified feature works
-6. **Task Complete** - Cleanup done, ready for merge
+2. **Architecture** - Design doc created, user approved
+3. **Test First** - Failing tests created for acceptance criteria
+4. **Implementation** - Code written following approved design
+5. **Automated Testing** - Tester ran tests, all passing
+6. **Manual Testing** - User verified feature works
+7. **Task Complete** - Cleanup done, ready for merge

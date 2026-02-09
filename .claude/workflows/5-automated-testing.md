@@ -1,4 +1,4 @@
-# Stage 4: Automated Testing
+# Stage 5: Automated Testing
 
 ## Purpose
 
@@ -17,7 +17,7 @@ Prompt: See .claude/agents/tester.md Phase 2 template
 
 Include:
 - Task ID and title
-- Test files created in Stage 2 (test-first)
+- Test files created in Stage 3 (test-first)
 - Any additional tests identified during implementation
 - Request: run tests, analyze failures, provide fix suggestions
 ```
@@ -91,4 +91,4 @@ cd src/backend && pytest tests/test_foo.py -v
 
 ## After All Tests Pass
 
-Proceed to [5-manual-testing.md](5-manual-testing.md) to prepare for user testing.
+Proceed to [6-manual-testing.md](6-manual-testing.md) to prepare for user testing.

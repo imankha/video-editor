@@ -1,4 +1,4 @@
-# Stage 2: Test First
+# Stage 3: Test First
 
 ## Purpose
 
@@ -78,4 +78,4 @@ Update task file Progress Log:
 
 ## After Completing This Stage
 
-Proceed to [3-implementation.md](3-implementation.md) to write the code.
+Proceed to [4-implementation.md](4-implementation.md) to write the code.

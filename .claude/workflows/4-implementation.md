@@ -1,4 +1,4 @@
-# Stage 3: Implementation
+# Stage 4: Implementation
 
 ## Core Principles
 
@@ -170,4 +170,4 @@ from app.services.export_helpers import (
 
 ## After Implementation Complete
 
-Proceed to [4-automated-testing.md](4-automated-testing.md) to run tests.
+Proceed to [5-automated-testing.md](5-automated-testing.md) to run tests.
