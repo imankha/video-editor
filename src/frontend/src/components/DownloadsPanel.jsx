@@ -228,26 +228,57 @@ export function DownloadsPanel({
     }
   };
 
-  // Render a single download item card
-  const renderDownloadCard = (download) => (
-    <div
-      key={download.id}
-      className="p-3 bg-gray-700 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors"
-    >
-      <div className="flex items-start gap-3">
-        {/* Video icon */}
-        <div className="w-10 h-10 rounded bg-purple-900/40 flex items-center justify-center flex-shrink-0">
-          <Video size={20} className="text-purple-400" />
-        </div>
+  // Check if a filename is a UUID/hash pattern (not meaningful to users)
+  const isUuidFilename = (filename) => {
+    if (!filename) return true;
+    // Match patterns like: "3fc140fc2a79.mp4", "final_64_9753b5fe.mp4", "8ea26608de38.mp4"
+    return /^[a-f0-9]{12}\.mp4$/i.test(filename) ||
+           /^final_\d+_[a-f0-9]+\.mp4$/i.test(filename) ||
+           /^working_\d+_[a-f0-9]+\.mp4$/i.test(filename);
+  };
 
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="text-white font-medium truncate">
-            {download.project_name}
+  // Get human-readable source type label
+  const getSourceTypeLabel = (sourceType) => {
+    switch (sourceType) {
+      case 'brilliant_clip': return 'Brilliant Clip';
+      case 'custom_project': return 'Custom Project';
+      case 'annotated_game': return 'Annotated Game';
+      default: return null;
+    }
+  };
+
+  // Render a single download item card
+  const renderDownloadCard = (download) => {
+    // Determine what to show as subtitle (avoid redundant or meaningless info)
+    const showFilename = !isUuidFilename(download.filename);
+    // Only show source type if project_name doesn't already indicate it
+    const projectNameLower = (download.project_name || '').toLowerCase();
+    const sourceTypeLabel = getSourceTypeLabel(download.source_type);
+    const showSourceType = sourceTypeLabel &&
+      !projectNameLower.includes('annotated') &&
+      !projectNameLower.includes('brilliant');
+
+    return (
+      <div
+        key={download.id}
+        className="p-3 bg-gray-700 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors"
+      >
+        <div className="flex items-start gap-3">
+          {/* Video icon */}
+          <div className="w-10 h-10 rounded bg-purple-900/40 flex items-center justify-center flex-shrink-0">
+            <Video size={20} className="text-purple-400" />
           </div>
-          <div className="text-sm text-gray-400 truncate">
-            {download.filename}
-          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <div className="text-white font-medium truncate">
+              {download.project_name}
+            </div>
+            {(showFilename || showSourceType) && (
+              <div className="text-sm text-gray-400 truncate">
+                {showFilename ? download.filename : sourceTypeLabel}
+              </div>
+            )}
           <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
             <span>{formatDate(download.created_at)}</span>
             <span>{formatFileSize(download.file_size)}</span>
@@ -313,6 +344,7 @@ export function DownloadsPanel({
       </div>
     </div>
   );
+  };
 
   // Group items by game within a date group
   const groupByGame = (items) => {
@@ -500,7 +532,20 @@ export function DownloadsPanel({
                 <Video size={20} className="text-purple-400" />
                 <div>
                   <h3 className="text-white font-medium">{playingVideo.project_name}</h3>
-                  <p className="text-sm text-gray-400">{playingVideo.filename}</p>
+                  {(() => {
+                    const showFilename = !isUuidFilename(playingVideo.filename);
+                    const projectNameLower = (playingVideo.project_name || '').toLowerCase();
+                    const sourceTypeLabel = getSourceTypeLabel(playingVideo.source_type);
+                    const showSourceType = sourceTypeLabel &&
+                      !projectNameLower.includes('annotated') &&
+                      !projectNameLower.includes('brilliant');
+                    if (showFilename) {
+                      return <p className="text-sm text-gray-400">{playingVideo.filename}</p>;
+                    } else if (showSourceType) {
+                      return <p className="text-sm text-gray-400">{sourceTypeLabel}</p>;
+                    }
+                    return null;
+                  })()}
                 </div>
               </div>
               <div className="flex items-center gap-2">
