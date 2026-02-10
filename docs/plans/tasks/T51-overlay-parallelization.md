@@ -1,10 +1,16 @@
 # T51: Overlay Parallelization Analysis
 
-**Status:** TODO
+**Status:** WON'T DO
 **Impact:** MEDIUM
 **Complexity:** MEDIUM
 **Created:** 2026-02-09
-**Updated:** 2026-02-09
+**Updated:** 2026-02-10
+
+## Decision
+
+**WON'T DO** - Analysis showed parallelization costs 62-248% MORE than sequential processing. Per-frame processing is only ~25ms, making parallel overhead dominate.
+
+See completed analysis in PLAN.md "Performance Analysis (2026-02)" section.
 
 ## Problem
 

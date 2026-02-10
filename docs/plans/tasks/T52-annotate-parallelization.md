@@ -1,10 +1,16 @@
 # T52: Annotate Parallelization Analysis
 
-**Status:** TODO
+**Status:** WON'T DO
 **Impact:** MEDIUM
 **Complexity:** MEDIUM
 **Created:** 2026-02-09
-**Updated:** 2026-02-09
+**Updated:** 2026-02-10
+
+## Decision
+
+**WON'T DO** - Annotate is CPU-bound (FFmpeg text rendering), not GPU-bound. Parallelization won't help since the bottleneck is CPU, not GPU containers.
+
+See completed analysis in PLAN.md "Performance Analysis (2026-02)" section.
 
 ## Problem
 

@@ -26,8 +26,8 @@
 |----|------|--------|--------|------------|
 | T30 | [Performance Profiling](tasks/T30-performance-profiling.md) | DONE (local) | MEDIUM | MEDIUM |
 | T50 | [Modal Cost Optimization](tasks/T50-modal-cost-optimization.md) | DONE | MEDIUM | MEDIUM |
-| T51 | [Overlay Parallelization](tasks/T51-overlay-parallelization.md) | TODO | MEDIUM | MEDIUM |
-| T52 | [Annotate Parallelization](tasks/T52-annotate-parallelization.md) | TODO | MEDIUM | MEDIUM |
+| T51 | [Overlay Parallelization](tasks/T51-overlay-parallelization.md) | WON'T DO | MEDIUM | MEDIUM |
+| T52 | [Annotate Parallelization](tasks/T52-annotate-parallelization.md) | WON'T DO | MEDIUM | MEDIUM |
 | T53 | [Fix Tracking Marker Navigation](tasks/T53-tracking-marker-navigation.md) | DONE | HIGH | LOW |
 | T54 | [Fix useOverlayState Test Failures](tasks/T54-fix-overlay-state-tests.md) | DONE | LOW | LOW |
 
