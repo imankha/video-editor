@@ -2,6 +2,7 @@ import { useEffect, useCallback, useMemo, useState } from 'react';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from '../modes/overlay';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { API_BASE } from '../config';
+import { EDITOR_MODES } from '../stores';
 
 /**
  * OverlayContainer - Encapsulates all Overlay mode logic and UI
@@ -139,7 +140,7 @@ export function OverlayContainer({
   }, [overlayVideoFile, hasMultipleClips, hasFramingEdits, framingVideoFile]);
 
   // Player detection for click-to-track feature
-  const playerDetectionEnabled = editorMode === 'overlay' && isTimeInEnabledRegion(currentTime);
+  const playerDetectionEnabled = editorMode === EDITOR_MODES.OVERLAY && isTimeInEnabledRegion(currentTime);
 
   // Toggle for showing/hiding player detection boxes (default: visible)
   const [showPlayerBoxes, setShowPlayerBoxes] = useState(true);

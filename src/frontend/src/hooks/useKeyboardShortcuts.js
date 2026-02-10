@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { EDITOR_MODES } from '../stores';
 
 /**
  * useKeyboardShortcuts - Consolidated keyboard handler for video editor
@@ -102,7 +103,7 @@ export function useKeyboardShortcuts({
       if (event.ctrlKey || event.metaKey || event.altKey) return;
 
       // Handle annotate mode
-      if (editorMode === 'annotate' && annotateVideoUrl) {
+      if (editorMode === EDITOR_MODES.ANNOTATE && annotateVideoUrl) {
         event.preventDefault();
         const isLeft = event.code === 'ArrowLeft';
 
