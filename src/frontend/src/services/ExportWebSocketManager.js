@@ -28,8 +28,7 @@ const RECONNECT_CONFIG = {
 // Keepalive configuration
 const KEEPALIVE_INTERVAL = 30000; // 30 seconds
 
-// Status polling configuration
-const STATUS_POLL_INTERVAL = 60000; // Poll every 60 seconds as backup
+// Status polling is only used as fallback when WebSocket fails, not during normal operation
 
 class ExportWebSocketManager {
   constructor() {
@@ -107,15 +106,6 @@ class ExportWebSocketManager {
             }
           }
         }, KEEPALIVE_INTERVAL);
-
-        // Start periodic status polling as backup (catches missed WebSocket messages)
-        this._startStatusPolling(exportId, callbacks);
-
-        // If this was a reconnect, poll status immediately to catch any missed updates
-        if (wasReconnect) {
-          console.log(`[ExportWSManager] Reconnected, polling status to sync state`);
-          this._pollExportStatus(exportId, callbacks);
-        }
 
         resolve(true);
       };
@@ -314,11 +304,6 @@ class ExportWebSocketManager {
       clearInterval(connectionInfo.keepaliveInterval);
     }
 
-    // Clear status polling
-    if (connectionInfo.statusPollInterval) {
-      clearInterval(connectionInfo.statusPollInterval);
-    }
-
     // Clear reconnect timeout
     if (connectionInfo.reconnectTimeout) {
       clearTimeout(connectionInfo.reconnectTimeout);
@@ -509,37 +494,6 @@ class ExportWebSocketManager {
       console.warn(`[ExportWSManager] Failed to poll status for ${exportId}:`, e);
       return null;
     }
-  }
-
-  /**
-   * Start periodic status polling for an export.
-   * Used as backup when WebSocket is connected but may miss messages.
-   *
-   * @param {string} exportId - Export to poll
-   * @param {object} callbacks - Callbacks from connect()
-   */
-  _startStatusPolling(exportId, callbacks) {
-    const connectionInfo = this.connections.get(exportId);
-    if (!connectionInfo) return;
-
-    // Clear any existing poll interval
-    if (connectionInfo.statusPollInterval) {
-      clearInterval(connectionInfo.statusPollInterval);
-    }
-
-    connectionInfo.statusPollInterval = setInterval(async () => {
-      const exportState = useExportStore.getState().activeExports[exportId];
-
-      // Stop polling if export is no longer active
-      if (!exportState || exportState.status === ExportStatus.COMPLETE || exportState.status === ExportStatus.ERROR) {
-        clearInterval(connectionInfo.statusPollInterval);
-        connectionInfo.statusPollInterval = null;
-        return;
-      }
-
-      // Poll backend status as backup
-      await this._pollExportStatus(exportId, callbacks);
-    }, STATUS_POLL_INTERVAL);
   }
 
   /**
