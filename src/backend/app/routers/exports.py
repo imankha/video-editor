@@ -97,15 +97,17 @@ def create_export_job(project_id: int, job_type: str, config: dict) -> str:
 
 
 def get_export_job(job_id: str) -> Optional[dict]:
-    """Get an export job by ID."""
+    """Get an export job by ID, including project name."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, project_id, type, status, error, input_data,
-                   output_video_id, output_filename, modal_call_id,
-                   created_at, started_at, completed_at
-            FROM export_jobs
-            WHERE id = ?
+            SELECT e.id, e.project_id, p.name as project_name,
+                   e.type, e.status, e.error, e.input_data,
+                   e.output_video_id, e.output_filename, e.modal_call_id,
+                   e.created_at, e.started_at, e.completed_at
+            FROM export_jobs e
+            LEFT JOIN projects p ON e.project_id = p.id
+            WHERE e.id = ?
         """, (job_id,))
         row = cursor.fetchone()
         if row:

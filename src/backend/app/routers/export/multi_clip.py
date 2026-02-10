@@ -405,7 +405,8 @@ def calculate_effective_duration(clip_data: Dict[str, Any], raw_duration: float)
     clip_index = clip_data.get('clipIndex', '?')
 
     # Check for normalized format first (segmentsData wrapper)
-    segments_data = clip_data.get('segmentsData', {})
+    # Note: normalized_clips_data uses 'segment_data' key, not 'segmentsData'
+    segments_data = clip_data.get('segmentsData', {}) or clip_data.get('segment_data', {})
     segments = clip_data.get('segments') or segments_data.get('segments')
     trim_range = clip_data.get('trimRange') or segments_data.get('trimRange')
 
