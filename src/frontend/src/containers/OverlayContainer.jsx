@@ -155,6 +155,11 @@ export function OverlayContainer({
 
   // Get detection data from the current highlight region (stored during framing export)
   // This replaces the old usePlayerDetection hook that fetched from a per-frame cache
+  //
+  // FRAME-BASED DETECTION MATCHING:
+  // We use frame numbers (integers) instead of timestamps (floats) for matching.
+  // This avoids floating-point precision issues and accounts for video seeking
+  // imprecision (browsers seek to nearest keyframe, not exact requested time).
   const regionDetectionData = useMemo(() => {
     if (!playerDetectionEnabled || !highlightRegions?.length) {
       return { detections: [], videoWidth: 0, videoHeight: 0, hasDetections: false };
@@ -170,25 +175,37 @@ export function OverlayContainer({
       return { detections: [], videoWidth: 0, videoHeight: 0, hasDetections: false };
     }
 
-    // Find the closest detection timestamp to currentTime
+    // Get fps from region (set during framing export) or use default
+    const fps = currentRegion.fps || highlightRegionsFramerate || 30;
+
+    // Calculate current frame from currentTime (integer comparison is more reliable)
+    const currentFrame = Math.round(currentTime * fps);
+
+    // Find the closest detection by frame number (integer comparison)
     let closestDetection = null;
-    let closestDistance = Infinity;
+    let closestFrameDistance = Infinity;
 
     for (const detection of currentRegion.detections) {
-      const distance = Math.abs(detection.timestamp - currentTime);
-      if (distance < closestDistance) {
-        closestDistance = distance;
+      // Use frame number if available, otherwise calculate from timestamp
+      const detectionFrame = detection.frame !== undefined
+        ? detection.frame
+        : Math.round(detection.timestamp * fps);
+
+      const frameDistance = Math.abs(detectionFrame - currentFrame);
+      if (frameDistance < closestFrameDistance) {
+        closestFrameDistance = frameDistance;
         closestDetection = detection;
       }
     }
 
-    // Only show detections if within a few frames of a detection timestamp
-    // This ensures boxes only appear when playhead is near a detection point
-    // (e.g., after clicking a green marker on the timeline)
-    // Note: Video seeking may not land exactly on the target frame due to keyframe-based seeking,
-    // so we use a slightly larger threshold to account for this imprecision.
-    const DETECTION_DISPLAY_THRESHOLD = 0.1; // 100ms ≈ 3 frames at 30fps
-    if (!closestDetection || closestDistance > DETECTION_DISPLAY_THRESHOLD) {
+    // FRAME-BASED THRESHOLD: ±2 frame tolerance
+    // This accounts for browser seek imprecision (typically 50-100ms):
+    // - At 30fps: ±2 frames = ±83ms tolerance
+    // - At 60fps: ±2 frames = ±42ms tolerance
+    // This guarantees boxes show when within 2 frames of a detection,
+    // which is visually indistinguishable and handles seek imprecision.
+    const DETECTION_FRAME_THRESHOLD = 2; // ±2 frame tolerance (~83ms at 30fps)
+    if (!closestDetection || closestFrameDistance > DETECTION_FRAME_THRESHOLD) {
       return {
         detections: [],
         videoWidth: currentRegion.videoWidth || 0,
@@ -203,7 +220,7 @@ export function OverlayContainer({
       videoHeight: currentRegion.videoHeight || 0,
       hasDetections: true
     };
-  }, [playerDetectionEnabled, highlightRegions, currentTime]);
+  }, [playerDetectionEnabled, highlightRegions, currentTime, highlightRegionsFramerate]);
 
   const playerDetections = regionDetectionData.detections;
   const isDetectionLoading = false; // No longer loading from API
