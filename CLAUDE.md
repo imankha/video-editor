@@ -133,6 +133,27 @@ For roadmap decisions, use the [Project Manager agent](.claude/agents/project-ma
 
 Current plan: [docs/plans/PLAN.md](docs/plans/PLAN.md)
 
+## Coding Principles
+
+### No Silent Fallbacks for Internal Data
+
+**Don't use fallbacks to hide missing data from our own code.** Fallbacks are appropriate for external dependencies (network, third-party services), but for internal data flow, missing data indicates a bug that should be visible.
+
+**Bad:**
+```javascript
+const fps = region.fps || 30;  // Silently uses default, hides the bug
+```
+
+**Good:**
+```javascript
+if (!region.fps) {
+  console.warn(`[Component] Region ${region.id} missing fps - re-export to fix.`);
+}
+const fps = region.fps;  // May be null, caller handles appropriately
+```
+
+This keeps failures visible and debuggable rather than silently producing wrong results.
+
 ## Resources
 - [src/frontend/CLAUDE.md](src/frontend/CLAUDE.md) - Frontend skills and patterns
 - [src/backend/CLAUDE.md](src/backend/CLAUDE.md) - Backend skills and patterns
