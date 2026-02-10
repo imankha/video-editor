@@ -12,7 +12,7 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useClipStore, useProjectDataStore } from './stores';
+import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useClipStore, useProjectDataStore, EDITOR_MODES } from './stores';
 
 /**
  * App.jsx - Main application shell
@@ -101,7 +101,7 @@ function App() {
   const handleLoadGame = useCallback((gameId) => {
     console.log('[App] Loading game - setting pendingGameId in sessionStorage:', gameId);
     sessionStorage.setItem('pendingGameId', gameId.toString());
-    setEditorMode('annotate');
+    setEditorMode(EDITOR_MODES.ANNOTATE);
   }, [setEditorMode]);
 
   // Computed state for UI
@@ -121,7 +121,7 @@ function App() {
     }
 
     // Switch to annotate mode
-    setEditorMode('annotate');
+    setEditorMode(EDITOR_MODES.ANNOTATE);
   }, [selectedClipForAnnotate, setEditorMode]);
 
   // Check if we can edit in annotate (clip has game association)
@@ -137,21 +137,21 @@ function App() {
     // Only show confirmation when there's a working video that would be invalidated
     // With gesture-based sync, framing data is auto-saved, so we only need to warn about
     // re-exporting if there's an existing working video
-    if (editorMode === 'framing' && framingChangedSinceExport && hasOverlayVideo) {
+    if (editorMode === EDITOR_MODES.FRAMING && framingChangedSinceExport && hasOverlayVideo) {
       console.log('[App] Framing changes would invalidate working video - showing confirmation dialog');
-      openModeSwitchDialog(newMode, 'framing');
+      openModeSwitchDialog(newMode, EDITOR_MODES.FRAMING);
       return;
     }
 
     // Check if leaving overlay with uncommitted changes (and project has final video)
-    if (editorMode === 'overlay' && overlayChangedSinceExport && selectedProject?.has_final_video) {
+    if (editorMode === EDITOR_MODES.OVERLAY && overlayChangedSinceExport && selectedProject?.has_final_video) {
       console.log('[App] Uncommitted overlay changes detected - showing confirmation dialog');
-      openModeSwitchDialog(newMode, 'overlay');
+      openModeSwitchDialog(newMode, EDITOR_MODES.OVERLAY);
       return;
     }
 
     // For project-manager, also clear selection and refresh projects
-    if (newMode === 'project-manager') {
+    if (newMode === EDITOR_MODES.PROJECT_MANAGER) {
       clearSelection();
       fetchProjects();
     }
@@ -172,9 +172,9 @@ function App() {
       exportButtonRef.current.triggerExport();
     }
     // Clear the "changed" flag since we triggered an export - user shouldn't be prompted again
-    if (sourceMode === 'framing') {
+    if (sourceMode === EDITOR_MODES.FRAMING) {
       useFramingStore.getState().setFramingChangedSinceExport(false);
-    } else if (sourceMode === 'overlay') {
+    } else if (sourceMode === EDITOR_MODES.OVERLAY) {
       useOverlayStore.getState().setOverlayChangedSinceExport(false);
     }
   }, [closeModeSwitchDialog, modeSwitchDialog.sourceMode]);
@@ -184,7 +184,7 @@ function App() {
     const sourceMode = modeSwitchDialog.sourceMode;
 
     // Handle discard based on source mode
-    if (sourceMode === 'overlay') {
+    if (sourceMode === EDITOR_MODES.OVERLAY) {
       // For overlay, just reset the changed flag (changes are auto-saved to backend)
       console.log('[App] Discarding overlay changes (resetting flag)');
       useOverlayStore.getState().setOverlayChangedSinceExport(false);
@@ -201,12 +201,12 @@ function App() {
     closeModeSwitchDialog();
 
     // Handle project-manager specific cleanup
-    if (targetMode === 'project-manager') {
+    if (targetMode === EDITOR_MODES.PROJECT_MANAGER) {
       clearSelection();
       fetchProjects();
     }
 
-    setEditorMode(targetMode || 'project-manager');
+    setEditorMode(targetMode || EDITOR_MODES.PROJECT_MANAGER);
   }, [selectedProjectId, discardUncommittedChanges, closeModeSwitchDialog, setEditorMode, modeSwitchDialog.pendingMode, modeSwitchDialog.sourceMode, clearSelection, fetchProjects]);
 
   // Backward-compatible wrapper for setExportingProject
@@ -241,7 +241,7 @@ function App() {
   ]);
 
   // If no project selected and not in annotate mode, show ProjectsScreen
-  if (!selectedProject && editorMode !== 'annotate') {
+  if (!selectedProject && editorMode !== EDITOR_MODES.ANNOTATE) {
     return (
       <>
         <ProjectsScreen
@@ -262,10 +262,10 @@ function App() {
       {/* Connection status banner - shows when backend is unreachable */}
       <ConnectionStatus />
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
-      {editorMode === 'annotate' && <AnnotateScreen onClearSelection={clearSelection} />}
+      {editorMode === EDITOR_MODES.ANNOTATE && <AnnotateScreen onClearSelection={clearSelection} />}
 
       {/* Main Content - For framing/overlay modes */}
-      {editorMode !== 'annotate' && (
+      {editorMode !== EDITOR_MODES.ANNOTATE && (
       <div className="flex-1 overflow-auto">
         <div className="container mx-auto px-4 py-8">
           {/* Header */}
@@ -276,7 +276,7 @@ function App() {
                 variant="ghost"
                 icon={Home}
                 iconOnly
-                onClick={() => handleModeChange('project-manager')}
+                onClick={() => handleModeChange(EDITOR_MODES.PROJECT_MANAGER)}
                 title="Home"
               />
               <Breadcrumb
@@ -315,14 +315,14 @@ function App() {
           </div>
 
           {/* Mode-specific views */}
-          {editorMode === 'framing' && (
+          {editorMode === EDITOR_MODES.FRAMING && (
             <FramingScreen
               onExportComplete={handleExportComplete}
               exportButtonRef={exportButtonRef}
             />
           )}
 
-          {editorMode === 'overlay' && (
+          {editorMode === EDITOR_MODES.OVERLAY && (
             <OverlayScreen
               onExportComplete={handleExportComplete}
               exportButtonRef={exportButtonRef}
@@ -343,7 +343,7 @@ function App() {
       <DownloadsPanel
         onOpenProject={(projectId) => {
           selectProject(projectId);
-          setEditorMode('overlay');
+          setEditorMode(EDITOR_MODES.OVERLAY);
         }}
         onOpenGame={handleLoadGame}
       />
