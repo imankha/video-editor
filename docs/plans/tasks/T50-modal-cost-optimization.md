@@ -438,24 +438,33 @@ FRAMING_AI_GPU_THRESHOLDS = {
 
 **Test Video:** 449 frames (~15s), 810x1440 output
 
-| Config | Time | Speedup | FPS |
-|--------|------|---------|-----|
-| Sequential (1 GPU) | 310.0s | 1.00x | 1.45 |
-| Parallel (2 GPUs) | 160.8s | **1.93x** | 2.79 |
-| Parallel (4 GPUs) | 87.0s | **3.56x** | 5.16 |
+| Config | Wall-Clock | Speedup | GPU-Seconds | Cost |
+|--------|------------|---------|-------------|------|
+| Sequential (1 GPU) | 310.0s | 1.00x | 310s | $0.051 |
+| Parallel (2 GPUs) | 160.8s | 1.93x | 300s | $0.049 |
+| **Parallel (4 GPUs)** | **87.0s** | **3.56x** | 300s | **$0.049** |
+| Parallel (8 GPUs) | 103.3s | 3.00x | 707s | $0.116 |
 
 **Key Findings:**
-- 2 GPUs: ~2x faster (saves 49% time)
-- 4 GPUs: ~3.6x faster (saves 72% time)
-- Parallelization overhead is minimal (~10-15s for concatenation)
-- 4 GPUs clearly beats 2 GPUs - consider adding 8 GPU tier
+- **4 GPUs is optimal**: 3.56x faster at the same cost as sequential
+- 8 GPUs is WORSE: slower (103s vs 87s) and 2.4x more expensive
+- Per-chunk overhead (download, model load, concat) dominates with too many chunks
+- Parallelization is essentially cost-neutral - same GPU-seconds, just distributed
 
-### Phase 3 - Tuning (TODO)
+**Final Thresholds (capped at 4 GPUs):**
+```python
+FRAMING_AI_GPU_THRESHOLDS = {
+    3: (1, "sequential"),       # 0-3s: 1 GPU
+    10: (2, "2-gpu-parallel"),  # 3-10s: 2 GPUs
+    float('inf'): (4, "4-gpu-parallel"),  # 10s+: 4 GPUs (max)
+}
+```
 
-Collect production data to validate:
-- Monitor real-world usage patterns
-- Consider adding 8 GPU tier for videos >30s (if 4 beats 2, 8 should beat 4)
-- Track cost vs time tradeoffs in production
+### Phase 3 - Production Monitoring (TODO)
+
+- Track real-world processing times
+- Monitor for any reliability issues with parallel processing
+- Consider adjusting thresholds based on actual video duration distribution
 
 ---
 

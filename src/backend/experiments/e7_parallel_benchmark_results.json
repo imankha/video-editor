@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-02-09T20:38:12",
+  "timestamp": "2026-02-09T21:18:46",
   "job_prefix": "e7_1770697821",
   "test_config": {
     "user_id": "a",
@@ -9,12 +9,18 @@
     "frames_processed": 449,
     "video_duration_approx": "~15s"
   },
+  "pricing": {
+    "T4_per_second": 0.000164
+  },
   "results": [
     {
       "type": "sequential",
+      "num_chunks": 1,
       "elapsed_seconds": 310.0,
       "frames_processed": 449,
       "fps": 1.45,
+      "gpu_seconds": 310,
+      "cost": 0.051,
       "status": "success"
     },
     {
@@ -23,6 +29,8 @@
       "elapsed_seconds": 160.8,
       "frames_processed": 449,
       "fps": 2.79,
+      "gpu_seconds": 300,
+      "cost": 0.049,
       "status": "success"
     },
     {
@@ -31,6 +39,18 @@
       "elapsed_seconds": 87.0,
       "frames_processed": 449,
       "fps": 5.16,
+      "gpu_seconds": 300,
+      "cost": 0.049,
+      "status": "success"
+    },
+    {
+      "type": "parallel_8",
+      "num_chunks": 8,
+      "elapsed_seconds": 103.3,
+      "frames_processed": 449,
+      "fps": 4.34,
+      "gpu_seconds": 707,
+      "cost": 0.116,
       "status": "success"
     }
   ],
@@ -38,8 +58,8 @@
     "sequential_time": 310.0,
     "par2_speedup": 1.93,
     "par4_speedup": 3.56,
-    "par2_time_saved": "149.2s (48%)",
-    "par4_time_saved": "223.0s (72%)",
-    "conclusion": "Parallelization provides significant speedup. 4 GPUs is 3.56x faster than sequential."
+    "par8_speedup": 3.00,
+    "optimal_chunks": 4,
+    "conclusion": "4 GPUs is optimal: 3.56x faster at same cost. 8 GPUs is slower and 2.4x more expensive due to per-chunk overhead."
   }
 }
