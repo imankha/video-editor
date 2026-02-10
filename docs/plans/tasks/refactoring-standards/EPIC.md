@@ -112,18 +112,18 @@ For each file with violations:
 
 ## Refactor Tasks (by Priority)
 
-| ID | Task | Priority | Source |
-|----|------|----------|--------|
-| T301 | Refactor editorMode to EDITOR_MODES constant | 25 | T300 |
-| T311 | Remove workingVideo from overlayStore | 25 | T310 |
-| T312 | Remove clipMetadata from overlayStore | 25 | T310 |
-| T331 | Refactor ExportButton - extract logic to container | 25 | T330 |
-| T302 | Refactor statusFilter/segment.status to constants | 16 | T300 |
-| T303 | Refactor keyframe origin to KEYFRAME_ORIGINS | 16 | T300 |
-| T332 | Refactor ProjectManager - receive data from screen | 16 | T330 |
-| T313 | Investigate clips duplication in stores | 15 | T310 |
-| T304 | Create EffectType enum (Python) | 12 | T300 |
-| T305 | Create ExportMode enum (Python) | 9 | T300 |
+| ID | Task | Priority | Source | Status |
+|----|------|----------|--------|--------|
+| T301 | Refactor editorMode to EDITOR_MODES constant | 25 | T300 | DONE |
+| T311 | Remove workingVideo from overlayStore | 25 | T310 | TODO |
+| T312 | Remove clipMetadata from overlayStore | 25 | T310 | TODO |
+| T331 | Refactor ExportButton - extract logic to container | 25 | T330 | TODO |
+| T302 | Refactor statusFilter/segment.status to constants | 16 | T300 | TODO |
+| T303 | Refactor keyframe origin to KEYFRAME_ORIGINS | 16 | T300 | TODO |
+| T332 | Refactor ProjectManager - receive data from screen | 16 | T330 | TODO |
+| T313 | Investigate clips duplication in stores | 15 | T310 | TODO |
+| T304 | Create EffectType enum (Python) | 12 | T300 | TODO |
+| T305 | Create ExportMode enum (Python) | 9 | T300 | TODO |
 
 ---
 
