@@ -69,9 +69,11 @@ export function FramingScreen({
     setFramingChangedSinceExport,
   } = useFramingStore();
 
-  // Overlay store - for setting working video on export
+  // Project data store - for setting working video on export
+  const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
+
+  // Overlay store - for setting clip metadata on export
   const {
-    setWorkingVideo,
     setClipMetadata: setOverlayClipMetadata,
     reset: resetOverlayStore,
   } = useOverlayStore();

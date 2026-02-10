@@ -52,8 +52,10 @@ function App() {
   // Framing store - for detecting uncommitted changes in mode switch
   const framingChangedSinceExport = useFramingStore(state => state.framingChangedSinceExport);
 
-  // Overlay store - for checking if working video exists and tracking changes
-  const workingVideo = useOverlayStore(state => state.workingVideo);
+  // Working video from project data store (canonical owner)
+  const workingVideo = useProjectDataStore(state => state.workingVideo);
+
+  // Overlay store - for loading state and tracking changes
   const isLoadingWorkingVideo = useOverlayStore(state => state.isLoadingWorkingVideo);
   const overlayChangedSinceExport = useOverlayStore(state => state.overlayChangedSinceExport);
 

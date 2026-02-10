@@ -82,7 +82,6 @@ export function useProjectLoader() {
   const resetClipStore = useClipStore(state => state.reset);
   const resetFramingStore = useFramingStore(state => state.reset);
   const resetOverlayStore = useOverlayStore(state => state.reset);
-  const setOverlayWorkingVideo = useOverlayStore(state => state.setWorkingVideo);
   const resetVideoStore = useVideoStore(state => state.reset);
 
   /**
@@ -201,9 +200,8 @@ export function useProjectLoader() {
           const metadata = await extractVideoMetadataFromUrl(project.working_video_url, 'working_video.mp4');
 
           workingVideo = { file: null, url: project.working_video_url, metadata };
+          // Set in projectDataStore (canonical owner for working video)
           setWorkingVideo(workingVideo);
-          // Also set in overlayStore for OverlayScreen to consume
-          setOverlayWorkingVideo(workingVideo);
 
           // Notify App.jsx about working video (for legacy integration)
           if (onWorkingVideoLoaded) {
@@ -241,7 +239,7 @@ export function useProjectLoader() {
       setLoading(false);
       throw err;
     }
-  }, [setProjectId, navigate, resetProjectData, resetClipStore, resetFramingStore, resetOverlayStore, setOverlayWorkingVideo, resetVideoStore, setClips, setWorkingVideo, setAspectRatio, setClipMetadata, setLoading]);
+  }, [setProjectId, navigate, resetProjectData, resetClipStore, resetFramingStore, resetOverlayStore, resetVideoStore, setClips, setWorkingVideo, setAspectRatio, setClipMetadata, setLoading]);
 
   return { loadProject };
 }

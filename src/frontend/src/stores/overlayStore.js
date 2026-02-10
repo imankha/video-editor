@@ -16,8 +16,8 @@ import { HighlightEffect } from '../constants/highlightEffects';
  */
 
 export const useOverlayStore = create((set, get) => ({
-  // Working video (from framing export or loaded from project)
-  workingVideo: null, // { file, url, metadata }
+  // NOTE: workingVideo is now stored in projectDataStore (canonical owner)
+  // Use useProjectDataStore(state => state.workingVideo) to access it
 
   // Clip metadata for auto-generating highlight regions
   clipMetadata: null,
@@ -32,11 +32,6 @@ export const useOverlayStore = create((set, get) => ({
   overlayChangedSinceExport: false,
 
   // Actions
-  setWorkingVideo: (video) => set({
-    workingVideo: video,
-    isLoadingWorkingVideo: false,
-  }),
-
   setClipMetadata: (metadata) => set({ clipMetadata: metadata }),
 
   setEffectType: (type) => set({ effectType: type }),
@@ -45,13 +40,7 @@ export const useOverlayStore = create((set, get) => ({
 
   setOverlayChangedSinceExport: (changed) => set({ overlayChangedSinceExport: changed }),
 
-  // Computed
-  hasWorkingVideo: () => get().workingVideo !== null,
-
-  getVideoDuration: () => get().workingVideo?.metadata?.duration || 0,
-
   reset: () => set({
-    workingVideo: null,
     clipMetadata: null,
     effectType: HighlightEffect.DARK_OVERLAY,
     isLoadingWorkingVideo: false,
@@ -60,7 +49,7 @@ export const useOverlayStore = create((set, get) => ({
 }));
 
 // Selector hooks
-export const useOverlayWorkingVideo = () => useOverlayStore(state => state.workingVideo);
+// NOTE: useOverlayWorkingVideo removed - use useWorkingVideo from projectDataStore
 export const useOverlayClipMetadata = () => useOverlayStore(state => state.clipMetadata);
 export const useOverlayEffectType = () => useOverlayStore(state => state.effectType);
 export const useOverlayIsLoading = () => useOverlayStore(state => state.isLoadingWorkingVideo);

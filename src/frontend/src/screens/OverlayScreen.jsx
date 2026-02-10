@@ -50,14 +50,16 @@ export function OverlayScreen({
   // Project context
   const { projectId, project, refresh: refreshProject } = useProject();
 
-  // Overlay store - working video (set by FramingScreen on export)
+  // Working video from project data store (canonical owner)
+  const workingVideo = useProjectDataStore(state => state.workingVideo);
+  const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
+
+  // Overlay store - for overlay-specific state (loading, effects, changes)
   const {
-    workingVideo,
     clipMetadata: overlayClipMetadata,
     effectType: highlightEffectType,
     isLoadingWorkingVideo,
     overlayChangedSinceExport,
-    setWorkingVideo,
     setClipMetadata: setOverlayClipMetadata,
     setEffectType: setHighlightEffectType,
     setIsLoadingWorkingVideo,
@@ -545,9 +547,9 @@ export function OverlayScreen({
     overlayVideoMetadata: workingVideo?.metadata,
     overlayClipMetadata,
     isLoadingWorkingVideo,
-    setOverlayVideoFile: (file) => setWorkingVideo(prev => prev ? { ...prev, file } : { file, url: null, metadata: null }),
-    setOverlayVideoUrl: (url) => setWorkingVideo(prev => prev ? { ...prev, url } : { file: null, url, metadata: null }),
-    setOverlayVideoMetadata: (meta) => setWorkingVideo(prev => prev ? { ...prev, metadata: meta } : { file: null, url: null, metadata: meta }),
+    setOverlayVideoFile: (file) => setWorkingVideo(workingVideo ? { ...workingVideo, file } : { file, url: null, metadata: null }),
+    setOverlayVideoUrl: (url) => setWorkingVideo(workingVideo ? { ...workingVideo, url } : { file: null, url, metadata: null }),
+    setOverlayVideoMetadata: (meta) => setWorkingVideo(workingVideo ? { ...workingVideo, metadata: meta } : { file: null, url: null, metadata: meta }),
     setOverlayClipMetadata,
     setIsLoadingWorkingVideo,
     dragHighlight,
