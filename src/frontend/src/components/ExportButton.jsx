@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { Download, Loader, AlertCircle } from 'lucide-react';
 import axios from 'axios';
-import ThreePositionToggle from './ThreePositionToggle';
 import { Button, Toggle, ExportProgress, toast } from './shared';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores';
@@ -9,6 +8,7 @@ import { useExportManager } from '../hooks/useExportManager';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 import { ExportStatus } from '../constants/exportStatus';
+import { HighlightEffect } from '../constants/highlightEffects';
 
 /**
  * Generate a unique ID for tracking export progress
@@ -121,10 +121,11 @@ function buildClipMetadata(clips) {
   };
 }
 
-// Highlight effect styles mapped to toggle positions
-const HIGHLIGHT_EFFECT_STYLES = ['brightness_boost', 'original', 'dark_overlay'];
-const HIGHLIGHT_EFFECT_LABELS = ['Bright Inside', 'Yellow Inside', 'Dim Outside'];
-const HIGHLIGHT_EFFECT_COLORS = ['bg-blue-600', 'bg-yellow-600', 'bg-purple-600'];
+// Highlight effect labels for toggle display
+const HIGHLIGHT_EFFECT_LABELS = {
+  [HighlightEffect.BRIGHTNESS_BOOST]: 'Bright Inside',
+  [HighlightEffect.DARK_OVERLAY]: 'Dim Outside',
+};
 
 /**
  * ExportButton component - handles video export with AI upscaling
@@ -147,7 +148,7 @@ const ExportButton = forwardRef(function ExportButton({
   disabled,
   includeAudio,
   onIncludeAudioChange,
-  highlightEffectType = 'original',       // 'brightness_boost' | 'original' | 'dark_overlay'
+  highlightEffectType = HighlightEffect.DARK_OVERLAY,  // 'brightness_boost' | 'dark_overlay'
   onHighlightEffectTypeChange,            // Callback to change effect type (updates preview too)
   editorMode: editorModeProp,             // 'framing' | 'overlay' - now optional, from context
   onProceedToOverlay,          // Callback when framing export completes (receives blob)
@@ -288,10 +289,8 @@ const ExportButton = forwardRef(function ExportButton({
     }
   }, [isInUploadPhase, currentExportFromStore?.progress?.phase]);
 
-  // Map effect type to toggle position
-  const effectTypeToPosition = { 'brightness_boost': 0, 'original': 1, 'dark_overlay': 2 };
-  const positionToEffectType = ['brightness_boost', 'original', 'dark_overlay'];
-  const highlightEffectPosition = effectTypeToPosition[highlightEffectType] ?? 1;
+  // Map effect type to toggle state (dark_overlay = true, brightness_boost = false)
+  const isDarkOverlay = highlightEffectType === HighlightEffect.DARK_OVERLAY;
 
   // Note: WebSocket connections are now managed globally by ExportWebSocketManager
   // so they persist across component unmount/remount (e.g., navigation)
@@ -700,6 +699,14 @@ const ExportButton = forwardRef(function ExportButton({
               modalUsed: renderResponse.data.modal_used
             });
           }
+
+          // Show toast notification for overlay export completion
+          const toastId = toast.success('Video exported!', {
+            message: projectName ? `"${projectName}" has been downloaded and saved to your gallery.` : 'Your video has been downloaded.',
+            duration: 0  // Persistent - dismissed when user makes changes
+          });
+          setExportCompleteToastId(toastId);
+
           setIsExporting(false);
           return;  // Exit early - backend-authoritative path complete
         }
@@ -1034,15 +1041,15 @@ const ExportButton = forwardRef(function ExportButton({
               <span className="text-xs text-gray-400">
                 {!isHighlightEnabled
                   ? 'Enable highlight layer'
-                  : HIGHLIGHT_EFFECT_LABELS[highlightEffectPosition]}
+                  : HIGHLIGHT_EFFECT_LABELS[highlightEffectType]}
               </span>
             </div>
 
-            <ThreePositionToggle
-              value={highlightEffectPosition}
-              onChange={(pos) => onHighlightEffectTypeChange?.(positionToEffectType[pos])}
-              colors={HIGHLIGHT_EFFECT_COLORS}
-              labels={HIGHLIGHT_EFFECT_LABELS}
+            <Toggle
+              checked={isDarkOverlay}
+              onChange={(checked) => onHighlightEffectTypeChange?.(
+                checked ? HighlightEffect.DARK_OVERLAY : HighlightEffect.BRIGHTNESS_BOOST
+              )}
               disabled={isCurrentlyExporting || !isHighlightEnabled}
             />
           </div>

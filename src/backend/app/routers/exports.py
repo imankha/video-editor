@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 from ..database import get_db_connection, get_user_data_path
 from ..storage import generate_presigned_url
 from ..user_context import get_current_user_id
-from ..constants import ExportStatus
+from ..constants import ExportStatus, DEFAULT_HIGHLIGHT_EFFECT
 
 logger = logging.getLogger(__name__)
 
@@ -97,15 +97,17 @@ def create_export_job(project_id: int, job_type: str, config: dict) -> str:
 
 
 def get_export_job(job_id: str) -> Optional[dict]:
-    """Get an export job by ID."""
+    """Get an export job by ID, including project name."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, project_id, type, status, error, input_data,
-                   output_video_id, output_filename, modal_call_id,
-                   created_at, started_at, completed_at
-            FROM export_jobs
-            WHERE id = ?
+            SELECT e.id, e.project_id, p.name as project_name,
+                   e.type, e.status, e.error, e.input_data,
+                   e.output_video_id, e.output_filename, e.modal_call_id,
+                   e.created_at, e.started_at, e.completed_at
+            FROM export_jobs e
+            LEFT JOIN projects p ON e.project_id = p.id
+            WHERE e.id = ?
         """, (job_id,))
         row = cursor.fetchone()
         if row:
@@ -564,7 +566,7 @@ async def start_overlay_export(
     project_id: int = Form(...),
     highlight_regions_json: str = Form(None),
     highlight_keyframes_json: str = Form(None),
-    highlight_effect_type: str = Form("original"),
+    highlight_effect_type: str = Form(DEFAULT_HIGHLIGHT_EFFECT.value),
 ):
     """
     Start an overlay export job with video file upload.

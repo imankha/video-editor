@@ -30,8 +30,53 @@ import os
 import asyncio
 import logging
 import time
+import socket
 
 logger = logging.getLogger(__name__)
+
+# Retry configuration for transient network errors
+NETWORK_RETRY_ATTEMPTS = 3
+NETWORK_RETRY_DELAY = 2.0  # seconds
+NETWORK_RETRY_BACKOFF = 2.0  # exponential backoff multiplier
+
+
+def _is_transient_network_error(error: Exception) -> bool:
+    """
+    Check if an error is a transient network error that should be retried.
+
+    These are errors that can happen due to flaky internet connections
+    and are likely to succeed on retry.
+    """
+    error_msg = str(error).lower()
+
+    # DNS resolution failures
+    if isinstance(error, socket.gaierror):
+        return True
+
+    # Connection errors
+    if isinstance(error, (ConnectionError, ConnectionResetError, ConnectionRefusedError)):
+        return True
+
+    # Check error message for network-related keywords
+    network_keywords = [
+        "getaddrinfo failed",
+        "name resolution",
+        "dns",
+        "connection reset",
+        "connection refused",
+        "connection aborted",
+        "network unreachable",
+        "host unreachable",
+        "temporary failure",
+        "timed out",
+        "broken pipe",
+    ]
+
+    for keyword in network_keywords:
+        if keyword in error_msg:
+            return True
+
+    return False
 
 
 def log_progress_event(job_id: str, phase: str, elapsed: float = None, extra: dict = None):
@@ -49,6 +94,36 @@ def log_progress_event(job_id: str, phase: str, elapsed: float = None, extra: di
         for key, val in extra.items():
             parts.append(f"{key}={val}")
     logger.info(" ".join(parts))
+
+
+def _translate_modal_error(error: Exception) -> str:
+    """
+    Translate technical Modal errors to user-friendly messages.
+
+    Common Modal errors:
+    - "Input aborted - not reschedulable": GPU container was preempted/crashed
+    - "CUDA out of memory": GPU ran out of VRAM
+    - Timeouts: Container exceeded time limit
+    - Network errors: DNS, connection issues
+    """
+    error_msg = str(error)
+
+    if "Input aborted" in error_msg or "not reschedulable" in error_msg:
+        return "GPU processing was interrupted by cloud provider. Please retry - this is temporary."
+    elif "CUDA out of memory" in error_msg or "OutOfMemoryError" in error_msg:
+        return "GPU ran out of memory. Try processing fewer clips or lower resolution."
+    elif "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+        return "Processing took too long and was cancelled. Try shorter clips or fewer clips."
+
+    # Network-related errors - be specific about the cause
+    if _is_transient_network_error(error):
+        return "Internet connection lost during processing. Please check your connection and retry."
+    elif "connection" in error_msg.lower() or "network" in error_msg.lower():
+        return "Network error communicating with GPU server. Please retry."
+
+    # Return original if no translation available
+    return error_msg
+
 
 # Modal is available if MODAL_ENABLED=true
 _modal_enabled = os.environ.get("MODAL_ENABLED", "false").lower() == "true"
@@ -365,7 +440,7 @@ async def call_modal_framing_ai(
         total_elapsed = time.time() - job_start_time
         log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(e)[:50]})
         logger.error(f"[Modal] AI framing job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_clips_ai(
@@ -380,11 +455,13 @@ async def call_modal_clips_ai(
     include_audio: bool = True,
     transition: dict = None,
     progress_callback = None,
+    call_id_callback = None,
 ) -> dict:
     """
     Call unified Modal process_clips_ai function for AI-upscaled exports.
 
     Handles both single-clip and multi-clip exports with real-time progress streaming.
+    Includes retry logic for transient network errors.
 
     Args:
         job_id: Unique export job identifier
@@ -400,15 +477,15 @@ async def call_modal_clips_ai(
         include_audio: Include audio track (default True)
         transition: Optional {type: "cut"|"fade", duration: float} for multi-clip
         progress_callback: async callable(progress: float, message: str, phase: str) for updates
+        call_id_callback: Optional callable(modal_call_id: str) to store call ID for recovery
 
     Returns:
         {"status": "success", "output_key": "...", "clips_processed": N} or
-        {"status": "error", "error": "..."}
+        {"status": "error", "error": "..."} or
+        {"status": "connection_lost", "error": "...", "recoverable": True}
     """
     if not _modal_enabled:
         raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
-
-    process_clips_ai = _get_process_clips_ai_fn()
 
     total_clips = len(clips_data)
     logger.info(f"[Modal] Calling process_clips_ai for job {job_id} ({total_clips} clip(s))")
@@ -418,77 +495,138 @@ async def call_modal_clips_ai(
     job_start_time = time.time()
     log_progress_event(job_id, "modal_start", extra={"type": "clips_ai", "clips": total_clips})
 
-    try:
-        # Use remote_gen() to stream real progress from Modal
-        loop = asyncio.get_running_loop()
+    # Retry logic for initial connection
+    last_error = None
+    for attempt in range(NETWORK_RETRY_ATTEMPTS):
+        try:
+            process_clips_ai = _get_process_clips_ai_fn()
 
-        def get_generator():
-            return process_clips_ai.remote_gen(
-                job_id=job_id,
-                user_id=user_id,
-                source_keys=source_keys,
-                output_key=output_key,
-                clips_data=clips_data,
-                target_width=target_width,
-                target_height=target_height,
-                fps=fps,
-                include_audio=include_audio,
-                transition=transition,
-            )
+            # Use remote_gen() to stream real progress from Modal
+            loop = asyncio.get_running_loop()
 
-        gen = await loop.run_in_executor(None, get_generator)
+            def get_generator():
+                return process_clips_ai.remote_gen(
+                    job_id=job_id,
+                    user_id=user_id,
+                    source_keys=source_keys,
+                    output_key=output_key,
+                    clips_data=clips_data,
+                    target_width=target_width,
+                    target_height=target_height,
+                    fps=fps,
+                    include_audio=include_audio,
+                    transition=transition,
+                )
 
-        log_progress_event(job_id, "modal_streaming_started")
-        logger.info(f"[Modal] Streaming progress for job {job_id}")
+            gen = await loop.run_in_executor(None, get_generator)
 
-        result = None
-        last_progress = None
-
-        def next_item(generator):
+            # Try to get the Modal call_id for recovery
             try:
-                return next(generator)
-            except StopIteration:
-                return None
+                if hasattr(gen, 'object_id'):
+                    modal_call_id = gen.object_id
+                    if call_id_callback and modal_call_id:
+                        call_id_callback(modal_call_id)
+                        logger.info(f"[Modal] Stored call_id for recovery: {modal_call_id[:20]}...")
+            except Exception as e:
+                logger.warning(f"[Modal] Could not get call_id for recovery: {e}")
 
-        while True:
-            update = await loop.run_in_executor(None, next_item, gen)
-            if update is None:
-                break
+            log_progress_event(job_id, "modal_streaming_started")
+            logger.info(f"[Modal] Streaming progress for job {job_id}")
 
-            if "status" in update:
-                result = update
-                logger.info(f"[Modal] Received final result: {result.get('status')}")
-                break
+            result = None
+            last_progress = None
+            job_started = False  # Track if Modal actually started processing
 
-            progress = update.get("progress", 0)
-            message = update.get("message", "Processing...")
-            phase = update.get("phase", "processing")
-
-            if last_progress is None or abs(progress - last_progress) >= 5:
-                logger.info(f"[Modal] Progress: {progress}% - {message}")
-                last_progress = progress
-
-            if progress_callback:
+            def next_item(generator):
                 try:
-                    await progress_callback(progress, message, phase)
-                except Exception as e:
-                    logger.warning(f"[Modal] Progress callback failed: {e}")
+                    return next(generator)
+                except StopIteration:
+                    return None
 
-        total_elapsed = time.time() - job_start_time
-        clips_processed = result.get("clips_processed", total_clips) if result else total_clips
+            while True:
+                try:
+                    update = await loop.run_in_executor(None, next_item, gen)
+                except Exception as stream_error:
+                    # Connection lost during streaming
+                    if _is_transient_network_error(stream_error):
+                        total_elapsed = time.time() - job_start_time
+                        log_progress_event(job_id, "modal_connection_lost", elapsed=total_elapsed)
+                        logger.warning(f"[Modal] Connection lost during streaming for job {job_id}: {stream_error}")
 
-        log_progress_event(job_id, "modal_complete", elapsed=total_elapsed, extra={
-            "status": result.get("status", "unknown") if result else "no_result",
-            "clips": clips_processed
-        })
-        logger.info(f"[Modal] Clips AI job {job_id} completed: {result}")
-        return result or {"status": "error", "error": "No result received from Modal"}
+                        # If the job started (we got at least one progress update), it may complete on Modal
+                        if job_started:
+                            return {
+                                "status": "connection_lost",
+                                "error": "Internet connection lost. Your export may still complete - check back in a few minutes.",
+                                "recoverable": True,
+                                "message": "Connection lost but job may still be running. Use 'Check Status' to see if it completed.",
+                            }
+                        else:
+                            # Job never started - retry
+                            raise stream_error
+                    else:
+                        raise stream_error
 
-    except Exception as e:
-        total_elapsed = time.time() - job_start_time
-        log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(e)[:50]})
-        logger.error(f"[Modal] Clips AI job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+                if update is None:
+                    break
+
+                job_started = True  # We received at least one update
+
+                if "status" in update:
+                    result = update
+                    logger.info(f"[Modal] Received final result: {result.get('status')}")
+                    break
+
+                progress = update.get("progress", 0)
+                message = update.get("message", "Processing...")
+                phase = update.get("phase", "processing")
+
+                if last_progress is None or abs(progress - last_progress) >= 5:
+                    logger.info(f"[Modal] Progress: {progress}% - {message}")
+                    last_progress = progress
+
+                if progress_callback:
+                    try:
+                        await progress_callback(progress, message, phase)
+                    except Exception as e:
+                        logger.warning(f"[Modal] Progress callback failed: {e}")
+
+            total_elapsed = time.time() - job_start_time
+            clips_processed = result.get("clips_processed", total_clips) if result else total_clips
+
+            log_progress_event(job_id, "modal_complete", elapsed=total_elapsed, extra={
+                "status": result.get("status", "unknown") if result else "no_result",
+                "clips": clips_processed
+            })
+            logger.info(f"[Modal] Clips AI job {job_id} completed: {result}")
+            return result or {"status": "error", "error": "No result received from Modal"}
+
+        except Exception as e:
+            last_error = e
+            if _is_transient_network_error(e) and attempt < NETWORK_RETRY_ATTEMPTS - 1:
+                delay = NETWORK_RETRY_DELAY * (NETWORK_RETRY_BACKOFF ** attempt)
+                logger.warning(f"[Modal] Network error on attempt {attempt + 1}, retrying in {delay}s: {e}")
+                await asyncio.sleep(delay)
+                continue
+            else:
+                # Non-retryable error or exhausted retries
+                break
+
+    # All retries exhausted or non-retryable error
+    total_elapsed = time.time() - job_start_time
+    log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(last_error)[:50]})
+    logger.error(f"[Modal] Clips AI job {job_id} failed: {last_error}", exc_info=True)
+
+    # Return recoverable status for network errors (job might still be running on Modal)
+    if _is_transient_network_error(last_error):
+        return {
+            "status": "connection_lost",
+            "error": "Internet connection lost. Your export may still complete - check back in a few minutes.",
+            "recoverable": True,
+            "message": "Connection lost. Use 'Check Status' to see if the export completed.",
+        }
+
+    return {"status": "error", "error": _translate_modal_error(last_error)}
 
 
 async def call_modal_multi_clip(
@@ -666,7 +804,7 @@ async def call_modal_multi_clip(
             return {"status": "connection_lost", "call_id": modal_call_id, "message": "Connection lost but job may still be running. Refresh to check status."}
 
         logger.error(f"[Modal] Multi-clip job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_overlay(
@@ -801,7 +939,7 @@ async def call_modal_overlay(
         total_elapsed = time.time() - job_start_time
         log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(e)[:50]})
         logger.error(f"[Modal] Overlay job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_overlay_auto(
@@ -895,7 +1033,7 @@ async def call_modal_detect_players(
 
     except Exception as e:
         logger.error(f"[Modal] Player detection failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_detect_players_batch(
@@ -958,7 +1096,7 @@ async def call_modal_detect_players_batch(
 
     except Exception as e:
         logger.error(f"[Modal] Batch player detection failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_extract_clip(
@@ -1015,7 +1153,7 @@ async def call_modal_extract_clip(
 
     except Exception as e:
         logger.error(f"[Modal] Clip extraction failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 async def call_modal_annotate_compilation(
@@ -1147,7 +1285,7 @@ async def call_modal_annotate_compilation(
 
     except Exception as e:
         logger.error(f"[Modal] Annotated compilation job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": _translate_modal_error(e)}
 
 
 # Test function

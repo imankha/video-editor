@@ -39,7 +39,7 @@ from .multi_clip import (
     generate_default_highlight_regions,
     DEFAULT_HIGHLIGHT_REGION_DURATION,
 )
-from ...constants import ExportStatus
+from ...constants import ExportStatus, DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 from pydantic import BaseModel
 from typing import Optional
 import time as time_module
@@ -307,7 +307,7 @@ async def export_framing(
         """, (project_id,))
         existing = cursor.fetchone()
         existing_highlights = existing['highlights_data'] if existing else None
-        existing_effect_type = existing['effect_type'] if existing else 'original'
+        existing_effect_type = normalize_effect_type(existing['effect_type']) if existing else DEFAULT_HIGHLIGHT_EFFECT.value
 
         # Reset final_video_id since framing changed (user needs to re-export from overlay)
         cursor.execute("""

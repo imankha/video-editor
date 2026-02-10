@@ -31,6 +31,7 @@ from ..routers.exports import (
 )
 from .ffmpeg_service import get_encoding_command_parts
 from .modal_client import modal_enabled, call_modal_overlay
+from ..constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +219,7 @@ async def process_framing_export(job_id: str, project_id: int, config: dict) -> 
         """, (project_id,))
         existing = cursor.fetchone()
         existing_highlights = existing['highlights_data'] if existing else None
-        existing_effect_type = existing['effect_type'] if existing else 'original'
+        existing_effect_type = normalize_effect_type(existing['effect_type']) if existing else DEFAULT_HIGHLIGHT_EFFECT.value
 
     output_filename = f"project_{project_id}_v{next_version}.mp4"
     output_path = str(working_videos_dir / output_filename)
@@ -304,7 +305,7 @@ async def process_overlay_export(job_id: str, project_id: int, config: dict) -> 
     # Extract config
     video_path = config.get('video_path')
     highlight_regions = config.get('highlight_regions', [])
-    highlight_effect_type = config.get('highlight_effect_type', 'original')
+    highlight_effect_type = normalize_effect_type(config.get('highlight_effect_type'))
 
     if not video_path or not os.path.exists(video_path):
         raise ValueError(f"Video file not found: {video_path}")

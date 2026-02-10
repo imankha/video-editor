@@ -44,7 +44,7 @@ from ...services.image_extractor import (
     list_highlight_images,
 )
 from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto
-from ...constants import ExportStatus
+from ...constants import ExportStatus, HighlightEffect, DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +139,7 @@ def _get_overlay_data(cursor, project_id: int) -> tuple:
         except json.JSONDecodeError:
             highlights = []
 
-    effect_type = row['effect_type'] or 'original'
+    effect_type = normalize_effect_type(row['effect_type'])
     version = row['overlay_version'] or 0
 
     return highlights, effect_type, row['id'], version
@@ -580,7 +580,7 @@ async def export_overlay_only(
     project_id: int = Form(None),  # Optional: for export_jobs tracking
     highlight_regions_json: str = Form(None),
     highlight_keyframes_json: str = Form(None),  # Legacy format (deprecated)
-    highlight_effect_type: str = Form("original"),
+    highlight_effect_type: str = Form(DEFAULT_HIGHLIGHT_EFFECT.value),
 ):
     """
     Export video with highlight overlays ONLY - no cropping, no AI upscaling.
@@ -1096,7 +1096,7 @@ async def save_overlay_data(
     project_id: int,
     highlights_data: str = Form("[]"),
     text_overlays: str = Form("[]"),
-    effect_type: str = Form("original")
+    effect_type: str = Form(DEFAULT_HIGHLIGHT_EFFECT.value)
 ):
     """
     Save overlay editing state for a project.
@@ -1111,7 +1111,7 @@ async def save_overlay_data(
     Request (form data):
     - highlights_data: JSON string of highlight regions
     - text_overlays: JSON string of text overlay configs
-    - effect_type: 'original' | 'brightness_boost' | 'dark_overlay'
+    - effect_type: 'brightness_boost' | 'dark_overlay'
 
     Response:
     - success: boolean
@@ -1408,7 +1408,7 @@ async def get_overlay_data(project_id: int):
     Response:
     - highlights_data: Parsed JSON array of highlight regions
     - text_overlays: Parsed JSON array of text overlay configs
-    - effect_type: 'original' | 'brightness_boost' | 'dark_overlay'
+    - effect_type: 'brightness_boost' | 'dark_overlay'
     - has_data: boolean indicating if any data exists
     - from_raw_clip: boolean indicating if data came from raw_clip defaults
     """
@@ -1428,7 +1428,7 @@ async def get_overlay_data(project_id: int):
         # Parse project-specific overlay data
         highlights = []
         text_overlays = []
-        effect_type = 'original'
+        effect_type = DEFAULT_HIGHLIGHT_EFFECT.value
         from_raw_clip = False
 
         if result:
@@ -1444,7 +1444,7 @@ async def get_overlay_data(project_id: int):
                 except json.JSONDecodeError:
                     pass
 
-            effect_type = result['effect_type'] or 'original'
+            effect_type = normalize_effect_type(result['effect_type'])
 
         # If no project-specific highlights, check raw_clips for defaults
         if not highlights:
@@ -1615,6 +1615,106 @@ async def render_overlay(request: OverlayRenderRequest):
     # Always use sequential processing (parallel costs 3-4x more per E7 experiment)
     logger.info(f"[Overlay Render] Working video: {working_filename}, {len(highlight_regions)} regions, effect: {effect_type}")
     logger.info(f"[Overlay Render] Duration: {video_duration}s, Config: sequential (1 GPU)")
+
+    # Check if we actually need overlay processing
+    # Skip Modal/GPU if there are no highlight regions with keyframes to render
+    has_keyframes = any(
+        region.get('keyframes') and len(region.get('keyframes', [])) > 0
+        for region in highlight_regions
+    )
+
+    if not has_keyframes:
+        # No overlays to render - just copy working video to final video
+        logger.info(f"[Overlay Render] Skipping GPU processing (no keyframes to render)")
+        logger.info("[Overlay Render] Copying working video to final video directly")
+
+        progress_data = {
+            "progress": 50,
+            "message": "Copying video...",
+            "status": "processing",
+            "projectId": project_id,
+            "projectName": project_name,
+            "type": "overlay"
+        }
+        export_progress[export_id] = progress_data
+        await manager.send_progress(export_id, progress_data)
+
+        try:
+            from app.services.export_helpers import send_progress
+            from app.storage import copy_file_in_r2
+
+            # Generate output filename and copy in R2
+            output_filename = f"final_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+            source_key = f"working_videos/{working_filename}"
+            dest_key = f"final_videos/{output_filename}"
+
+            await copy_file_in_r2(user_id, source_key, dest_key)
+            logger.info(f"[Overlay Render] Copied {source_key} -> {dest_key}")
+
+            # Send progress update
+            await send_progress(
+                export_id, 95, 100, 'finalizing', 'Saving to library...',
+                'overlay', project_id=project_id, project_name=project_name
+            )
+
+            # Save to database (same logic as Modal path)
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                # Get next version number
+                cursor.execute("""
+                    SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                    FROM final_videos WHERE project_id = ?
+                """, (project_id,))
+                next_version = cursor.fetchone()['next_version']
+
+                # Determine source_type
+                cursor.execute("SELECT id FROM raw_clips WHERE auto_project_id = ?", (project_id,))
+                is_auto_project = cursor.fetchone() is not None
+                source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
+
+                # Create final_videos record
+                cursor.execute("""
+                    INSERT INTO final_videos (project_id, filename, version, source_type)
+                    VALUES (?, ?, ?, ?)
+                """, (project_id, output_filename, next_version, source_type))
+                final_video_id = cursor.lastrowid
+
+                # Update export_jobs record
+                cursor.execute("""
+                    UPDATE export_jobs
+                    SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (final_video_id, output_filename, export_id))
+
+                conn.commit()
+
+            logger.info(f"[Overlay Render] Complete (no GPU): final_video_id={final_video_id}")
+
+            # Send final completion
+            completion_data = {
+                "progress": 100,
+                "status": "complete",
+                "message": "Export complete (no overlay effect)",
+                "projectId": project_id,
+                "projectName": project_name,
+                "type": "overlay"
+            }
+            export_progress[export_id] = completion_data
+            await manager.send_progress(export_id, completion_data)
+
+            return JSONResponse({
+                "status": "success",
+                "final_video_id": final_video_id,
+                "filename": output_filename,
+                "modal_used": False,
+                "parallel_used": False,
+                "skipped_processing": True
+            })
+
+        except Exception as e:
+            logger.error(f"[Overlay Render] Copy failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to copy video: {e}")
 
     # Update progress
     progress_data = {

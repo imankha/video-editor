@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS = {
     defaultTransition: 'cut',
   },
   overlay: {
-    highlightEffectType: 'original',
+    highlightEffectType: 'dark_overlay',
   },
 };
 

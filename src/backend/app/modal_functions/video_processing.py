@@ -39,6 +39,7 @@ image = (
 )
 
 # Separate image for YOLO detection (includes ultralytics)
+# Model weights are downloaded during image build to avoid cold-start latency (~140MB)
 yolo_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg", "libgl1-mesa-glx", "libglib2.0-0")
@@ -50,15 +51,20 @@ yolo_image = (
         "torch",
         "torchvision",
     )
+    # Pre-download YOLOv8x model during image build
+    .run_commands(
+        "python -c \"from ultralytics import YOLO; YOLO('yolov8x.pt')\"",
+    )
 )
 
 # Image for Real-ESRGAN AI upscaling
 # Must use torch 2.1.0 + torchvision 0.16.0:
 # - torchvision 0.17+ removed functional_tensor module that basicsr imports
 # - numpy 1.26.4 for compatibility with torch 2.1.0
+# Model weights are downloaded during image build to avoid cold-start latency
 upscale_image = (
     modal.Image.debian_slim(python_version="3.11")
-    .apt_install("ffmpeg", "libgl1-mesa-glx", "libglib2.0-0")
+    .apt_install("ffmpeg", "libgl1-mesa-glx", "libglib2.0-0", "wget")
     .pip_install(
         "boto3",
         "opencv-python-headless",
@@ -67,6 +73,13 @@ upscale_image = (
         "torchvision==0.16.0",
         "basicsr==1.4.2",
         "realesrgan==0.3.0",
+    )
+    # Pre-download Real-ESRGAN model weights during image build
+    # This avoids downloading on every cold start (~5MB, but adds latency)
+    .run_commands(
+        "mkdir -p /root/.cache/realesrgan/weights",
+        "wget -q -O /root/.cache/realesrgan/weights/realesr-general-x4v3.pth "
+        "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth",
     )
 )
 
@@ -762,10 +775,20 @@ def _get_realesrgan_model():
         # RRDBNet is used by RealESRGAN_x4plus.pth
         model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu')
 
-        # Initialize upsampler - model will be auto-downloaded
+        # Use pre-downloaded model from image build (avoids cold-start download)
+        # Falls back to URL if local file doesn't exist (e.g., during local testing)
+        local_model_path = "/root/.cache/realesrgan/weights/realesr-general-x4v3.pth"
+        model_url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth"
+        model_path = local_model_path if os.path.exists(local_model_path) else model_url
+
+        if os.path.exists(local_model_path):
+            logger.info("Using pre-cached model weights (no download needed)")
+        else:
+            logger.info("Model not cached, will download from GitHub")
+
         _realesrgan_model = RealESRGANer(
             scale=4,
-            model_path="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth",
+            model_path=model_path,
             dni_weight=None,
             model=model,
             tile=0,  # No tiling for GPU with enough VRAM

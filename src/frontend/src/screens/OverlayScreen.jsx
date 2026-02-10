@@ -8,6 +8,7 @@ import useTimelineZoom from '../hooks/useTimelineZoom';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { frameToTime } from '../utils/videoUtils';
+import { forceRefreshUrl } from '../utils/storageUrls';
 import { API_BASE } from '../config';
 import { useProject } from '../contexts/ProjectContext';
 import { useNavigationStore } from '../stores/navigationStore';
@@ -144,6 +145,8 @@ export function OverlayScreen({
     stepForward,
     stepBackward,
     restart,
+    clearError,
+    isUrlExpiredError,
     handlers,
   } = useVideo(null, null); // No segment functions in overlay mode
 
@@ -655,6 +658,32 @@ export function OverlayScreen({
   // HANDLERS
   // =========================================
 
+  // Retry video loading when URL expires
+  const handleRetryVideo = useCallback(async () => {
+    if (!projectId) return;
+
+    console.log('[OverlayScreen] Retrying video load for project:', projectId);
+    clearError();
+
+    // Get a fresh presigned URL for the working video
+    const localFallbackUrl = `${API_BASE}/api/projects/${projectId}/working-video`;
+
+    try {
+      // Working videos are stored as working_videos/{projectId}.mp4
+      const freshUrl = await forceRefreshUrl('working_videos', `${projectId}.mp4`, localFallbackUrl);
+      console.log('[OverlayScreen] Got fresh URL:', freshUrl?.substring(0, 60));
+
+      if (freshUrl && !freshUrl.startsWith('blob:')) {
+        loadVideoFromStreamingUrl(freshUrl, effectiveOverlayMetadata);
+      } else {
+        // Fallback to blob download
+        await loadVideoFromUrl(freshUrl || localFallbackUrl, `${projectId}.mp4`);
+      }
+    } catch (err) {
+      console.error('[OverlayScreen] Failed to retry video load:', err);
+    }
+  }, [projectId, clearError, loadVideoFromStreamingUrl, loadVideoFromUrl, effectiveOverlayMetadata]);
+
   const handleSwitchToFraming = useCallback(() => {
     // NOTE: Safety blob save removed - gesture-based actions sync immediately to backend.
     navigate('framing');
@@ -699,6 +728,8 @@ export function OverlayScreen({
       isVideoElementLoading={isVideoElementLoading}
       loadingProgress={loadingProgress}
       error={error}
+      isUrlExpiredError={isUrlExpiredError}
+      onRetryVideo={handleRetryVideo}
       loadingMessage={isLoadingWorkingVideo || shouldWaitForWorkingVideo ? 'Loading working video...' : 'Loading video...'}
       // Playback controls
       togglePlay={togglePlay}

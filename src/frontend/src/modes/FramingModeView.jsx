@@ -32,6 +32,8 @@ export function FramingModeView({
   isProjectLoading = false,
   loadingStage = null,
   error,
+  isUrlExpiredError = () => false,
+  onRetryVideo,
   handlers,
 
   // Fullscreen
@@ -128,8 +130,16 @@ export function FramingModeView({
       {/* Error Message */}
       {error && (
         <div className="mb-6 bg-red-500/20 border border-red-500 rounded-lg p-4">
-          <p className="text-red-200 font-semibold mb-1">❌ Error</p>
+          <p className="text-red-200 font-semibold mb-1">Video Error</p>
           <p className="text-red-300 text-sm">{error}</p>
+          {isUrlExpiredError() && onRetryVideo && (
+            <button
+              onClick={onRetryVideo}
+              className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
+            >
+              Retry Loading Video
+            </button>
+          )}
         </div>
       )}
 
@@ -229,6 +239,8 @@ export function FramingModeView({
               isVideoElementLoading={isVideoElementLoading}
               loadingProgress={loadingProgress}
               error={error}
+              isUrlExpiredError={isUrlExpiredError}
+              onRetryVideo={onRetryVideo}
               loadingMessage={
                 loadingStage === 'clips' ? 'Loading clips...' :
                 loadingStage === 'video' ? 'Loading video...' :

@@ -12,7 +12,7 @@ export default function HighlightOverlay({
   onHighlightChange,
   onHighlightComplete,
   isEnabled = false,
-  effectType = 'original',  // 'brightness_boost' | 'original' | 'dark_overlay'
+  effectType = 'dark_overlay',  // 'brightness_boost' | 'dark_overlay'
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   isFullscreen = false
@@ -341,33 +341,17 @@ export default function HighlightOverlay({
           />
         )}
 
-        {/* Original effect - colored ellipse with outline */}
-        {effectType === 'original' && (
-          <ellipse
-            cx={screenHighlight.x}
-            cy={screenHighlight.y}
-            rx={screenHighlight.radiusX}
-            ry={screenHighlight.radiusY}
-            fill={fillColor}
-            fillOpacity={currentHighlight.opacity}
-            stroke={strokeColor}
-            strokeWidth="3"
-            strokeOpacity="0.6"
-            className="pointer-events-none"
-          />
-        )}
-
-        {/* Interactive ellipse for dragging (always visible as outline) */}
+        {/* Interactive ellipse for dragging (always visible as dashed outline) */}
         <ellipse
           cx={screenHighlight.x}
           cy={screenHighlight.y}
           rx={screenHighlight.radiusX}
           ry={screenHighlight.radiusY}
           fill="transparent"
-          stroke={effectType === 'original' ? 'transparent' : strokeColor}
-          strokeWidth={effectType === 'original' ? '0' : '2'}
+          stroke={strokeColor}
+          strokeWidth="2"
           strokeOpacity="0.6"
-          strokeDasharray={effectType !== 'original' ? '5,5' : 'none'}
+          strokeDasharray="5,5"
           className="pointer-events-auto cursor-move"
           onMouseDown={handleEllipseMouseDown}
         />

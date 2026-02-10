@@ -245,6 +245,45 @@ export function clearUrlCache() {
 }
 
 /**
+ * Force refresh a URL (invalidate cache and fetch new presigned URL)
+ * Useful when a video fails to load due to expired URL
+ *
+ * @param {string} fileType - Type of file
+ * @param {string} filename - Filename
+ * @param {string} localFallbackUrl - URL to use if refresh fails
+ * @param {number} expiresIn - URL expiration time in seconds
+ * @returns {Promise<string>} The refreshed URL
+ */
+export async function forceRefreshUrl(fileType, filename, localFallbackUrl, expiresIn = DEFAULT_EXPIRES_IN) {
+  const cacheKey = getCacheKey(fileType, filename);
+
+  // Clear the cached entry
+  urlCache.delete(cacheKey);
+  console.log(`[storageUrls] Force refreshing URL for ${fileType}/${filename}`);
+
+  // Fetch fresh URL
+  return getFileUrl(fileType, filename, localFallbackUrl, expiresIn);
+}
+
+/**
+ * Invalidate a cached URL by its full URL
+ * Useful when you have the full presigned URL but not the fileType/filename
+ *
+ * @param {string} url - The full presigned URL to invalidate
+ */
+export function invalidateUrl(url) {
+  // Find and remove the cache entry for this URL
+  for (const [key, entry] of urlCache.entries()) {
+    if (entry.url === url) {
+      urlCache.delete(key);
+      console.log(`[storageUrls] Invalidated cached URL: ${key}`);
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Helper: Get game video URL (maps to games/{id}.mp4)
  */
 export async function getGameVideoUrl(gameId, localFallbackUrl) {

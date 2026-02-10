@@ -11,7 +11,7 @@ import { API_BASE } from '../config';
  * - Highlight region management (create, edit, delete regions)
  * - Player detection for click-to-track feature
  * - Highlight keyframe management within regions
- * - Effect type selection (brightness_boost, original, dark_overlay)
+ * - Effect type selection (brightness_boost, dark_overlay)
  * - Persistence of overlay data to backend
  *
  * NOTE: Overlay state and highlight regions are passed as props from App.jsx
@@ -350,7 +350,7 @@ export function OverlayContainer({
         const formData = new FormData();
         formData.append('highlights_data', JSON.stringify(data.highlightRegions || []));
         formData.append('text_overlays', JSON.stringify(data.textOverlays || []));
-        formData.append('effect_type', data.effectType || 'original');
+        formData.append('effect_type', data.effectType || 'dark_overlay');
 
         await fetch(`${API_BASE}/api/export/projects/${saveProjectId}/overlay-data`, {
           method: 'PUT',
