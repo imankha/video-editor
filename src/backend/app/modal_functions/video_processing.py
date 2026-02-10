@@ -87,6 +87,38 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+# ============================================================================
+# GPU Parallelization Thresholds for Framing AI
+# ============================================================================
+# Framing AI is ~25x slower than overlay per frame (~680ms vs ~25ms).
+# Based on E6 benchmark: T4 processes 180 frames in 122s (1.47 fps, 681ms/frame).
+# Break-even for parallelization is very low due to high per-frame cost.
+#
+# Starting conservative - max 4 GPUs until we have data showing 4 beats 2.
+FRAMING_AI_GPU_THRESHOLDS = {
+    # video_duration_seconds -> (num_chunks, description)
+    3: (1, "sequential"),       # 0-3s: 1 GPU (overhead not worth it for <90 frames)
+    10: (2, "2-gpu-parallel"),  # 3-10s: 2 GPUs
+    float('inf'): (4, "4-gpu-parallel"),  # 10s+: 4 GPUs (max until data proves higher is better)
+}
+
+
+def get_framing_ai_gpu_config(video_duration: float) -> tuple:
+    """
+    Get optimal GPU config for framing_ai based on video duration.
+
+    Args:
+        video_duration: Video duration in seconds
+
+    Returns:
+        (num_chunks, description) tuple
+    """
+    for threshold, config in sorted(FRAMING_AI_GPU_THRESHOLDS.items()):
+        if video_duration < threshold:
+            return config
+    return (4, "4-gpu-parallel")
+
+
 def get_r2_client():
     """Create an R2 client using environment credentials."""
     import boto3
@@ -1386,6 +1418,421 @@ def process_framing_ai_l4(
     except Exception as e:
         logger.error(f"[{job_id}] AI upscaling (L4) failed: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
+
+
+# ============================================================================
+# Parallel Framing AI Processing
+# ============================================================================
+
+
+@app.function(
+    image=upscale_image,
+    gpu="T4",
+    timeout=900,  # 15 minutes per chunk (chunks are smaller than full video)
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+def process_framing_ai_chunk(
+    job_id: str,
+    chunk_index: int,
+    total_chunks: int,
+    user_id: str,
+    input_key: str,
+    output_chunk_key: str,
+    start_frame: int,
+    end_frame: int,
+    keyframes: list,
+    output_width: int,
+    output_height: int,
+    original_fps: float,
+) -> dict:
+    """
+    Process a single chunk of video with Real-ESRGAN upscaling.
+
+    This function processes frames [start_frame, end_frame) and uploads
+    the chunk to R2 for later concatenation.
+
+    Args:
+        job_id: Unique export job identifier
+        chunk_index: Index of this chunk (0-based)
+        total_chunks: Total number of chunks
+        user_id: User folder in R2
+        input_key: R2 key for source video
+        output_chunk_key: R2 key for output chunk video
+        start_frame: First frame to process (inclusive)
+        end_frame: Last frame to process (exclusive)
+        keyframes: Crop keyframes for interpolation
+        output_width: Target width
+        output_height: Target height
+        original_fps: Source video FPS for time calculations
+
+    Returns:
+        {"status": "success", "output_chunk_key": "...", "frames_processed": N}
+    """
+    import cv2
+    import subprocess
+    import numpy as np
+
+    chunk_id = f"{job_id}_chunk{chunk_index}"
+
+    try:
+        logger.info(f"[{chunk_id}] Starting chunk {chunk_index+1}/{total_chunks}")
+        logger.info(f"[{chunk_id}] Frames: {start_frame}-{end_frame} ({end_frame - start_frame} frames)")
+
+        r2 = get_r2_client()
+        bucket = os.environ["R2_BUCKET_NAME"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Download input from R2
+            input_path = os.path.join(temp_dir, "input.mp4")
+            full_input_key = f"{user_id}/{input_key}"
+            logger.info(f"[{chunk_id}] Downloading {full_input_key}")
+            r2.download_file(bucket, full_input_key, input_path)
+
+            # Open video and seek to start
+            cap = cv2.VideoCapture(input_path)
+            if not cap.isOpened():
+                raise ValueError("Could not open video file")
+
+            # Sort keyframes for interpolation
+            sorted_keyframes = sorted(keyframes, key=lambda k: k['time'])
+
+            # Load Real-ESRGAN model
+            logger.info(f"[{chunk_id}] Loading AI model...")
+            upsampler = _get_realesrgan_model()
+
+            # Create frames directory
+            frames_dir = os.path.join(temp_dir, "frames")
+            os.makedirs(frames_dir, exist_ok=True)
+
+            # Process frames in this chunk
+            output_frame_idx = 0
+            frames_to_process = end_frame - start_frame
+
+            for frame_idx in range(start_frame, end_frame):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    logger.warning(f"[{chunk_id}] Could not read frame {frame_idx}")
+                    continue
+
+                # Get interpolated crop for this time
+                time = frame_idx / original_fps
+                crop = _interpolate_crop(sorted_keyframes, time)
+
+                if crop:
+                    # Apply crop
+                    x = int(max(0, crop['x']))
+                    y = int(max(0, crop['y']))
+                    w = int(crop['width'])
+                    h = int(crop['height'])
+
+                    # Get frame dimensions
+                    frame_height, frame_width = frame.shape[:2]
+                    x = min(x, frame_width - 1)
+                    y = min(y, frame_height - 1)
+                    w = min(w, frame_width - x)
+                    h = min(h, frame_height - y)
+
+                    cropped = frame[y:y+h, x:x+w]
+                else:
+                    cropped = frame
+
+                # AI upscale with Real-ESRGAN
+                try:
+                    upscaled, _ = upsampler.enhance(cropped, outscale=4)
+                except Exception as e:
+                    logger.warning(f"[{chunk_id}] Upscale failed for frame {frame_idx}: {e}")
+                    upscaled = cv2.resize(cropped, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
+
+                # Resize to target resolution
+                if upscaled.shape[1] != output_width or upscaled.shape[0] != output_height:
+                    upscaled = cv2.resize(upscaled, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
+
+                # Save frame
+                frame_path = os.path.join(frames_dir, f"frame_{output_frame_idx:06d}.png")
+                cv2.imwrite(frame_path, upscaled)
+                output_frame_idx += 1
+
+                # Log progress every 30 frames
+                if output_frame_idx % 30 == 0:
+                    progress = int((output_frame_idx / frames_to_process) * 100)
+                    logger.info(f"[{chunk_id}] Progress: {progress}% ({output_frame_idx}/{frames_to_process})")
+
+            cap.release()
+
+            logger.info(f"[{chunk_id}] Processed {output_frame_idx} frames, encoding chunk...")
+
+            # Encode chunk video (no audio - will be added during concatenation)
+            output_path = os.path.join(temp_dir, "chunk.mp4")
+            cmd = [
+                "ffmpeg", "-y",
+                "-framerate", str(original_fps),
+                "-i", os.path.join(frames_dir, "frame_%06d.png"),
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-preset", "fast",
+                "-crf", "18",  # Higher quality for intermediate chunks
+                output_path,
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                raise RuntimeError(f"FFmpeg encoding failed: {result.stderr[:500]}")
+
+            # Upload chunk to R2
+            full_output_key = f"{user_id}/{output_chunk_key}"
+            logger.info(f"[{chunk_id}] Uploading chunk to {full_output_key}")
+            r2.upload_file(output_path, bucket, full_output_key, ExtraArgs={"ContentType": "video/mp4"})
+
+            logger.info(f"[{chunk_id}] Chunk complete: {output_frame_idx} frames")
+
+            return {
+                "status": "success",
+                "output_chunk_key": output_chunk_key,
+                "frames_processed": output_frame_idx,
+                "chunk_index": chunk_index,
+            }
+
+    except Exception as e:
+        logger.error(f"[{chunk_id}] Chunk processing failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e), "chunk_index": chunk_index}
+
+
+@app.function(
+    image=upscale_image,
+    gpu=None,  # CPU only - orchestrates GPU workers
+    timeout=3600,  # 1 hour for orchestration
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+def process_framing_ai_parallel(
+    job_id: str,
+    user_id: str,
+    input_key: str,
+    output_key: str,
+    keyframes: list,
+    output_width: int = 810,
+    output_height: int = 1440,
+    fps: int = 30,
+    num_chunks: int = 2,
+):
+    """
+    Orchestrate parallel Real-ESRGAN processing using multiple GPUs.
+
+    This is a GENERATOR function that yields progress updates.
+    Use .remote_gen() to consume progress.
+
+    The orchestrator:
+    1. Gets video info (frame count, fps)
+    2. Splits into chunk configs
+    3. Calls process_framing_ai_chunk.map() for parallel processing
+    4. Concatenates chunk outputs
+    5. Adds audio from source
+    6. Uploads final result
+    7. Cleans up temp chunks
+
+    Args:
+        job_id: Unique export job identifier
+        user_id: User folder in R2
+        input_key: R2 key for source video
+        output_key: R2 key for output video
+        keyframes: Crop keyframes for interpolation
+        output_width: Target width (default 810)
+        output_height: Target height (default 1440)
+        fps: Target frame rate (default 30)
+        num_chunks: Number of parallel GPU workers (default 2)
+
+    Yields:
+        Progress updates and final result
+    """
+    import subprocess
+    import cv2
+
+    try:
+        logger.info(f"[{job_id}] Starting parallel framing with {num_chunks} chunks")
+        yield {"progress": 2, "phase": "initializing", "message": f"Starting {num_chunks}-GPU parallel processing..."}
+
+        r2 = get_r2_client()
+        bucket = os.environ["R2_BUCKET_NAME"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Download video to get frame count
+            input_path = os.path.join(temp_dir, "input.mp4")
+            full_input_key = f"{user_id}/{input_key}"
+            logger.info(f"[{job_id}] Downloading {full_input_key} to analyze")
+            yield {"progress": 5, "phase": "downloading", "message": "Downloading video..."}
+            r2.download_file(bucket, full_input_key, input_path)
+
+            # Get video properties
+            cap = cv2.VideoCapture(input_path)
+            if not cap.isOpened():
+                raise ValueError("Could not open video file")
+
+            original_fps = cap.get(cv2.CAP_PROP_FPS)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            cap.release()
+
+            logger.info(f"[{job_id}] Video: {total_frames} frames @ {original_fps:.2f}fps")
+            yield {"progress": 8, "phase": "analyzing", "message": f"Video has {total_frames} frames"}
+
+            # Calculate chunk boundaries
+            frames_per_chunk = total_frames // num_chunks
+            chunk_configs = []
+            chunk_keys = []
+
+            for i in range(num_chunks):
+                start_frame = i * frames_per_chunk
+                # Last chunk gets remaining frames
+                end_frame = total_frames if i == num_chunks - 1 else (i + 1) * frames_per_chunk
+
+                chunk_key = f"temp_chunks/{job_id}_chunk{i}.mp4"
+                chunk_keys.append(chunk_key)
+
+                chunk_configs.append({
+                    "job_id": job_id,
+                    "chunk_index": i,
+                    "total_chunks": num_chunks,
+                    "user_id": user_id,
+                    "input_key": input_key,
+                    "output_chunk_key": chunk_key,
+                    "start_frame": start_frame,
+                    "end_frame": end_frame,
+                    "keyframes": keyframes,
+                    "output_width": output_width,
+                    "output_height": output_height,
+                    "original_fps": original_fps,
+                })
+
+                logger.info(f"[{job_id}] Chunk {i}: frames {start_frame}-{end_frame}")
+
+            yield {"progress": 10, "phase": "dispatching", "message": f"Dispatching to {num_chunks} GPUs..."}
+
+            # Dispatch chunks to parallel GPU workers using .map()
+            logger.info(f"[{job_id}] Dispatching {num_chunks} chunks via .map()")
+
+            # Use starmap pattern - pass each config as kwargs
+            chunk_results = list(process_framing_ai_chunk.starmap([
+                (
+                    cfg["job_id"],
+                    cfg["chunk_index"],
+                    cfg["total_chunks"],
+                    cfg["user_id"],
+                    cfg["input_key"],
+                    cfg["output_chunk_key"],
+                    cfg["start_frame"],
+                    cfg["end_frame"],
+                    cfg["keyframes"],
+                    cfg["output_width"],
+                    cfg["output_height"],
+                    cfg["original_fps"],
+                )
+                for cfg in chunk_configs
+            ]))
+
+            # Check for failures
+            failed_chunks = [r for r in chunk_results if r.get("status") != "success"]
+            if failed_chunks:
+                errors = [f"Chunk {r.get('chunk_index')}: {r.get('error')}" for r in failed_chunks]
+                raise RuntimeError(f"Chunk processing failed: {'; '.join(errors)}")
+
+            total_frames_processed = sum(r.get("frames_processed", 0) for r in chunk_results)
+            logger.info(f"[{job_id}] All chunks complete: {total_frames_processed} frames total")
+            yield {"progress": 75, "phase": "concatenating", "message": "Merging video chunks..."}
+
+            # Download chunks and concatenate
+            chunk_paths = []
+            concat_list_path = os.path.join(temp_dir, "concat_list.txt")
+
+            with open(concat_list_path, "w") as f:
+                for i, chunk_key in enumerate(chunk_keys):
+                    chunk_path = os.path.join(temp_dir, f"chunk_{i}.mp4")
+                    full_chunk_key = f"{user_id}/{chunk_key}"
+                    logger.info(f"[{job_id}] Downloading chunk {i} from {full_chunk_key}")
+                    r2.download_file(bucket, full_chunk_key, chunk_path)
+                    chunk_paths.append(chunk_path)
+                    f.write(f"file '{chunk_path}'\n")
+
+            yield {"progress": 82, "phase": "concatenating", "message": "Encoding final video..."}
+
+            # Concatenate chunks
+            concat_output = os.path.join(temp_dir, "concat.mp4")
+            concat_cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_list_path,
+                "-c", "copy",
+                concat_output,
+            ]
+
+            result = subprocess.run(concat_cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                raise RuntimeError(f"Concatenation failed: {result.stderr[:500]}")
+
+            yield {"progress": 85, "phase": "audio", "message": "Adding audio..."}
+
+            # Add audio from source
+            output_path = os.path.join(temp_dir, "output.mp4")
+            has_audio = _has_audio_stream(input_path)
+
+            if has_audio:
+                audio_cmd = [
+                    "ffmpeg", "-y",
+                    "-i", concat_output,
+                    "-i", input_path,
+                    "-map", "0:v",
+                    "-map", "1:a",
+                    "-c:v", "copy",
+                    "-c:a", "aac",
+                    "-b:a", "192k",
+                    "-shortest",
+                    "-movflags", "+faststart",
+                    output_path,
+                ]
+                result = subprocess.run(audio_cmd, capture_output=True, text=True)
+                if result.returncode != 0:
+                    logger.warning(f"[{job_id}] Audio merge failed, using video-only: {result.stderr[:200]}")
+                    output_path = concat_output
+            else:
+                # No audio - add faststart flag
+                finalize_cmd = [
+                    "ffmpeg", "-y",
+                    "-i", concat_output,
+                    "-c", "copy",
+                    "-movflags", "+faststart",
+                    output_path,
+                ]
+                subprocess.run(finalize_cmd, capture_output=True, text=True)
+
+            yield {"progress": 90, "phase": "uploading", "message": "Uploading result..."}
+
+            # Upload final result
+            full_output_key = f"{user_id}/{output_key}"
+            logger.info(f"[{job_id}] Uploading final result to {full_output_key}")
+            r2.upload_file(output_path, bucket, full_output_key, ExtraArgs={"ContentType": "video/mp4"})
+
+            # Cleanup temp chunks from R2
+            logger.info(f"[{job_id}] Cleaning up {len(chunk_keys)} temp chunks")
+            for chunk_key in chunk_keys:
+                try:
+                    r2.delete_object(Bucket=bucket, Key=f"{user_id}/{chunk_key}")
+                except Exception as e:
+                    logger.warning(f"[{job_id}] Failed to delete temp chunk {chunk_key}: {e}")
+
+            logger.info(f"[{job_id}] Parallel framing complete: {total_frames_processed} frames")
+
+            yield {
+                "status": "success",
+                "output_key": output_key,
+                "frames_processed": total_frames_processed,
+                "num_chunks": num_chunks,
+                "progress": 100,
+                "phase": "complete",
+                "message": "Processing complete"
+            }
+
+    except Exception as e:
+        logger.error(f"[{job_id}] Parallel framing failed: {e}", exc_info=True)
+        yield {"status": "error", "error": str(e), "progress": 0, "phase": "error"}
 
 
 # Rating notation mapping (matches frontend constants)

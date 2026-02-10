@@ -134,6 +134,7 @@ MODAL_APP_NAME = "reel-ballers-video-v2"
 # Cached function references
 _render_overlay_fn = None
 _process_framing_ai_fn = None
+_process_framing_ai_parallel_fn = None
 _process_multi_clip_fn = None
 _detect_players_fn = None
 _detect_players_batch_fn = None
@@ -178,6 +179,45 @@ def _get_process_framing_ai_fn():
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to process_framing_ai: {e}")
         raise RuntimeError(f"Modal process_framing_ai not available: {e}")
+
+
+def _get_process_framing_ai_parallel_fn():
+    """Get a reference to the deployed process_framing_ai_parallel function."""
+    global _process_framing_ai_parallel_fn
+
+    if _process_framing_ai_parallel_fn is not None:
+        return _process_framing_ai_parallel_fn
+
+    try:
+        import modal
+        _process_framing_ai_parallel_fn = modal.Function.from_name(MODAL_APP_NAME, "process_framing_ai_parallel")
+        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/process_framing_ai_parallel")
+        return _process_framing_ai_parallel_fn
+    except Exception as e:
+        logger.error(f"[Modal] Failed to connect to process_framing_ai_parallel: {e}")
+        raise RuntimeError(f"Modal process_framing_ai_parallel not available: {e}")
+
+
+# GPU thresholds for framing AI parallelization (mirrors video_processing.py)
+# Based on E6 benchmark: T4 processes at ~1.47 fps (681ms/frame)
+FRAMING_AI_GPU_THRESHOLDS = {
+    3: (1, "sequential"),       # 0-3s: 1 GPU
+    10: (2, "2-gpu-parallel"),  # 3-10s: 2 GPUs
+    float('inf'): (4, "4-gpu-parallel"),  # 10s+: 4 GPUs
+}
+
+
+def get_framing_ai_gpu_config(video_duration: float) -> tuple:
+    """
+    Get optimal GPU config for framing_ai based on video duration.
+
+    Returns:
+        (num_chunks, description) tuple
+    """
+    for threshold, config in sorted(FRAMING_AI_GPU_THRESHOLDS.items()):
+        if video_duration < threshold:
+            return config
+    return (4, "4-gpu-parallel")
 
 
 def _get_detect_players_fn():
@@ -351,36 +391,69 @@ async def call_modal_framing_ai(
             export_mode=export_mode,
         )
 
-    process_framing_ai = _get_process_framing_ai_fn()
+    # Determine parallelization strategy based on video duration
+    effective_duration = video_duration or 10  # Default to 10s if unknown
+    num_chunks, config_name = get_framing_ai_gpu_config(effective_duration)
 
-    logger.info(f"[Modal] Calling process_framing_ai for job {job_id}")
+    logger.info(f"[Modal] Framing AI: {effective_duration:.1f}s video -> {config_name} ({num_chunks} GPU(s))")
     logger.info(f"[Modal] User: {user_id}, Input: {input_key} -> Output: {output_key}")
     logger.info(f"[Modal] Target: {output_width}x{output_height}")
 
-    estimated_frames = int((video_duration or 10) * fps)
+    estimated_frames = int(effective_duration * fps)
     logger.info(f"[Modal] Estimated {estimated_frames} frames")
 
     # Track timing for progress improvement
     job_start_time = time.time()
-    log_progress_event(job_id, "modal_start", extra={"type": "framing_ai", "frames": estimated_frames})
+    log_progress_event(job_id, "modal_start", extra={
+        "type": "framing_ai",
+        "frames": estimated_frames,
+        "config": config_name,
+        "num_chunks": num_chunks,
+    })
 
     try:
         # Use remote_gen() to stream real progress from Modal
         # This iterates over yield statements in the Modal function
         loop = asyncio.get_running_loop()
 
-        def get_generator():
-            return process_framing_ai.remote_gen(
-                job_id=job_id,
-                user_id=user_id,
-                input_key=input_key,
-                output_key=output_key,
-                keyframes=keyframes,
-                output_width=output_width,
-                output_height=output_height,
-                fps=fps,
-                segment_data=segment_data,
-            )
+        # Choose parallel or sequential processing
+        if num_chunks > 1 and segment_data is None:
+            # Use parallel processing (not supported with segment_data/speed changes yet)
+            process_fn = _get_process_framing_ai_parallel_fn()
+            logger.info(f"[Modal] Using parallel processing with {num_chunks} chunks")
+
+            def get_generator():
+                return process_fn.remote_gen(
+                    job_id=job_id,
+                    user_id=user_id,
+                    input_key=input_key,
+                    output_key=output_key,
+                    keyframes=keyframes,
+                    output_width=output_width,
+                    output_height=output_height,
+                    fps=fps,
+                    num_chunks=num_chunks,
+                )
+        else:
+            # Use sequential processing
+            process_fn = _get_process_framing_ai_fn()
+            if segment_data:
+                logger.info(f"[Modal] Using sequential processing (segment_data present)")
+            else:
+                logger.info(f"[Modal] Using sequential processing (short video)")
+
+            def get_generator():
+                return process_fn.remote_gen(
+                    job_id=job_id,
+                    user_id=user_id,
+                    input_key=input_key,
+                    output_key=output_key,
+                    keyframes=keyframes,
+                    output_width=output_width,
+                    output_height=output_height,
+                    fps=fps,
+                    segment_data=segment_data,
+                )
 
         # Get the generator in executor (Modal API is sync)
         gen = await loop.run_in_executor(None, get_generator)

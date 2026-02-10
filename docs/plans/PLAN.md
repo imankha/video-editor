@@ -25,7 +25,7 @@
 | ID | Task | Status | Impact | Complexity |
 |----|------|--------|--------|------------|
 | T30 | [Performance Profiling](tasks/T30-performance-profiling.md) | TODO | MEDIUM | MEDIUM |
-| T50 | [Modal Cost Optimization](tasks/T50-modal-cost-optimization.md) | TODO | MEDIUM | MEDIUM |
+| T50 | [Modal Cost Optimization](tasks/T50-modal-cost-optimization.md) | DONE | MEDIUM | MEDIUM |
 
 ---
 
