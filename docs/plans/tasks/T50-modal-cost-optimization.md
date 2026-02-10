@@ -397,9 +397,80 @@ def get_dynamic_gpu_config(video_duration: float, peak_hours: bool) -> tuple:
 
 ---
 
+## Implementation Notes (2026-02-09)
+
+### Phase 1 - Baseline Data (COMPLETE)
+
+Used E6 benchmark results:
+- **T4 GPU**: 180 frames in 122s → **1.47 fps** → **681ms per frame**
+- **L4 GPU**: 180 frames in 205s → 0.88 fps → 1.14s per frame (slower, not used)
+
+### Phase 2 - Implementation (COMPLETE)
+
+Added parallelization to `process_framing_ai` with conservative thresholds:
+
+**Files Changed:**
+- `src/backend/app/modal_functions/video_processing.py`:
+  - Added `FRAMING_AI_GPU_THRESHOLDS` config
+  - Added `get_framing_ai_gpu_config()` helper
+  - Added `process_framing_ai_chunk()` - GPU worker for processing a frame range
+  - Added `process_framing_ai_parallel()` - CPU orchestrator using `.starmap()`
+
+- `src/backend/app/services/modal_client.py`:
+  - Added `_get_process_framing_ai_parallel_fn()` getter
+  - Added threshold config (mirrors video_processing.py)
+  - Updated `call_modal_framing_ai()` to route based on video duration
+
+**Thresholds (Conservative - max 4 GPUs until data proves higher is better):**
+```python
+FRAMING_AI_GPU_THRESHOLDS = {
+    3: (1, "sequential"),       # 0-3s: 1 GPU
+    10: (2, "2-gpu-parallel"),  # 3-10s: 2 GPUs
+    float('inf'): (4, "4-gpu-parallel"),  # 10s+: 4 GPUs
+}
+```
+
+**Limitations:**
+- Parallel processing disabled when `segment_data` is present (speed changes)
+- Max 4 GPUs until we have data proving 4 beats 2
+
+### E7 Benchmark Results (2026-02-09)
+
+**Test Video:** 449 frames (~15s), 810x1440 output
+
+| Config | Wall-Clock | Speedup | GPU-Seconds | Cost |
+|--------|------------|---------|-------------|------|
+| Sequential (1 GPU) | 310.0s | 1.00x | 310s | $0.051 |
+| Parallel (2 GPUs) | 160.8s | 1.93x | 300s | $0.049 |
+| **Parallel (4 GPUs)** | **87.0s** | **3.56x** | 300s | **$0.049** |
+| Parallel (8 GPUs) | 103.3s | 3.00x | 707s | $0.116 |
+
+**Key Findings:**
+- **4 GPUs is optimal**: 3.56x faster at the same cost as sequential
+- 8 GPUs is WORSE: slower (103s vs 87s) and 2.4x more expensive
+- Per-chunk overhead (download, model load, concat) dominates with too many chunks
+- Parallelization is essentially cost-neutral - same GPU-seconds, just distributed
+
+**Final Thresholds (capped at 4 GPUs):**
+```python
+FRAMING_AI_GPU_THRESHOLDS = {
+    3: (1, "sequential"),       # 0-3s: 1 GPU
+    10: (2, "2-gpu-parallel"),  # 3-10s: 2 GPUs
+    float('inf'): (4, "4-gpu-parallel"),  # 10s+: 4 GPUs (max)
+}
+```
+
+### Phase 3 - Production Monitoring (TODO)
+
+- Track real-world processing times
+- Monitor for any reliability issues with parallel processing
+- Consider adjusting thresholds based on actual video duration distribution
+
+---
+
 ## Next Steps
 
-1. **Immediate**: Complete stable build (prerequisite)
-2. **Phase 1**: Run profiling experiments, collect baseline data
-3. **Phase 2**: Implement `process_framing_ai_parallel` based on data
+1. ~~**Immediate**: Complete stable build (prerequisite)~~
+2. ~~**Phase 1**: Run profiling experiments, collect baseline data~~
+3. ~~**Phase 2**: Implement `process_framing_ai_parallel` based on data~~
 4. **Phase 3**: Deploy, monitor, and tune thresholds based on production usage

@@ -25,7 +25,10 @@
 | ID | Task | Status | Impact | Complexity |
 |----|------|--------|--------|------------|
 | T30 | [Performance Profiling](tasks/T30-performance-profiling.md) | TODO | MEDIUM | MEDIUM |
-| T50 | [Modal Cost Optimization](tasks/T50-modal-cost-optimization.md) | TODO | MEDIUM | MEDIUM |
+| T50 | [Modal Cost Optimization](tasks/T50-modal-cost-optimization.md) | DONE | MEDIUM | MEDIUM |
+| T51 | [Overlay Parallelization](tasks/T51-overlay-parallelization.md) | TODO | MEDIUM | MEDIUM |
+| T52 | [Annotate Parallelization](tasks/T52-annotate-parallelization.md) | TODO | MEDIUM | MEDIUM |
+| T53 | [Fix Tracking Marker Navigation](tasks/T53-tracking-marker-navigation.md) | TODO | HIGH | LOW |
 
 ---
 
