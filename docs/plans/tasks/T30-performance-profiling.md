@@ -35,13 +35,22 @@ Local development hides production-specific issues:
 - Backend logging with timing (`[SLOW REQUEST]` tags already exist)
 
 **Targets:**
-| Endpoint Type | Target | Current |
-|---------------|--------|---------|
-| Health check | <50ms | TBD |
-| List endpoints (games, projects, clips) | <200ms | TBD |
-| Single item GET | <100ms | TBD |
-| Database writes | <300ms | TBD |
-| R2 presigned URL generation | <100ms | TBD |
+| Endpoint Type | Target | Local Baseline (2026-02-09) |
+|---------------|--------|------------------------------|
+| Health check | <50ms | 10ms ✅ |
+| List endpoints (games, projects, clips) | <200ms | 16-45ms ✅ |
+| Single item GET | <100ms | TBD (staging) |
+| Database writes | <300ms | TBD (staging) |
+| R2 presigned URL generation | <100ms | TBD (staging) |
+
+**Local Profiling Baseline (2026-02-09):**
+| Endpoint | Time | Target | Status |
+|----------|------|--------|--------|
+| GET /api/health | 10ms | <50ms | ✅ Pass |
+| GET /api/games | 16ms | <200ms | ✅ Pass |
+| GET /api/projects | 23ms | <200ms | ✅ Pass |
+| GET /api/downloads | 45ms | <200ms | ✅ Pass |
+| GET /api/clips/raw | ~35ms | <200ms | ✅ Pass |
 
 **Known slow paths to investigate:**
 - `/api/games` - loads all games with aggregate counts
@@ -192,11 +201,44 @@ ab -n 100 -c 10 https://api.reelballers.com/api/games
 
 ## Success Criteria
 
-- [ ] All list endpoints <200ms at p95
-- [ ] Memory stays flat over 1 hour of requests
-- [ ] No [SLOW REQUEST] warnings in normal operation
-- [ ] Database sync stays under 500ms threshold
-- [ ] Cold start <3s (Fly.io constraint)
+- [x] All list endpoints <200ms at p95 (local)
+- [ ] Memory stays flat over 1 hour of requests (staging)
+- [x] No [SLOW REQUEST] warnings in normal operation (local)
+- [x] Database sync stays under 500ms threshold
+- [ ] Cold start <3s (Fly.io constraint) (staging)
+
+---
+
+## Implementation Log
+
+### T30 Local Profiling (2026-02-09)
+
+**Infrastructure Changes:**
+1. `app/middleware/db_sync.py`: Lowered `SLOW_REQUEST_THRESHOLD` from 2.0s to 0.2s (200ms)
+2. `app/database.py`: Added query timing to `TrackedCursor.execute()` with 100ms threshold
+   - Logs `[SLOW QUERY]` warnings for queries exceeding 100ms
+   - Uses `time.perf_counter()` for high-resolution timing
+
+**Query Pattern Analysis:**
+| Endpoint | Queries | Pattern | N+1 Risk |
+|----------|---------|---------|----------|
+| `/api/games` | 1 | Single SELECT | None ✅ |
+| `/api/projects` | 4 | Main + 3 batch | None ✅ |
+| `/api/downloads` | 3 | Main + 2 batch | None ✅ |
+| `/api/clips/raw` | 1 | Single JOIN | None ✅ |
+
+**Indexes Verified:**
+- `idx_raw_clips_game_id` - game filtering
+- `idx_raw_clips_game_end_time` - natural key lookup
+- `idx_working_clips_project_version` - version queries
+- `idx_export_jobs_project/status` - job lookups
+- `idx_modal_tasks_status/game_id` - task filtering
+
+**Findings:**
+- All endpoints well within targets for local profiling
+- No N+1 query patterns detected
+- Comprehensive indexes in place
+- Need staging deployment for network latency, R2 latency, cold start testing
 
 ---
 

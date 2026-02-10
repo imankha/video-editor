@@ -16,6 +16,7 @@ the development database. If no header is provided, the default user 'a' is used
 import sqlite3
 import logging
 import threading
+import time
 from pathlib import Path
 from contextlib import contextmanager
 from typing import Optional, Any
@@ -46,6 +47,9 @@ _db_version_lock = threading.Lock()
 DB_SIZE_WARNING_THRESHOLD = 512 * 1024  # 512KB - start warning
 DB_SIZE_MIGRATION_THRESHOLD = 1024 * 1024  # 1MB - recommend migration
 
+# Query timing threshold for slow query warnings (in seconds)
+SLOW_QUERY_THRESHOLD = 0.1  # 100ms - warn if query takes this long
+
 # Thread-local storage for request context (write tracking)
 _request_context = threading.local()
 
@@ -68,10 +72,21 @@ class TrackedCursor:
         if sql_upper.startswith(('INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'REPLACE')):
             self._connection._mark_write()
 
+        start = time.perf_counter()
         if parameters is None:
             self._cursor.execute(sql)
         else:
             self._cursor.execute(sql, parameters)
+        duration = time.perf_counter() - start
+
+        if duration >= SLOW_QUERY_THRESHOLD:
+            # Extract first 100 chars of SQL for logging (avoid huge queries in logs)
+            sql_preview = sql[:100].replace('\n', ' ').strip()
+            if len(sql) > 100:
+                sql_preview += '...'
+            logger.warning(
+                f"[SLOW QUERY] {duration:.3f}s - {sql_preview}"
+            )
         return self
 
     def executemany(self, sql: str, seq_of_parameters) -> 'TrackedCursor':

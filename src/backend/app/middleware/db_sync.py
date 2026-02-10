@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Thresholds for slow request warnings (in seconds)
 SLOW_SYNC_THRESHOLD = 0.5  # 500ms - warn if DB sync takes this long
-SLOW_REQUEST_THRESHOLD = 2.0  # 2s - warn if total request takes this long
+SLOW_REQUEST_THRESHOLD = 0.2  # 200ms - warn if total request takes this long (profiling target)
 
 
 class DatabaseSyncMiddleware(BaseHTTPMiddleware):
