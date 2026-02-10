@@ -171,6 +171,7 @@ export function OverlayMode({
                   onSeek={onSeek}
                   sourceTimeToVisualTime={sourceTimeToVisualTime}
                   edgePadding={EDGE_PADDING}
+                  framerate={highlightFramerate}
                 />
               </div>
             )}
