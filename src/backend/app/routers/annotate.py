@@ -794,8 +794,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
             # Use unified interface - call_modal_annotate_compilation handles Modal or local fallback
             await update_progress(10, 100, ExportPhase.PROCESSING, 'Starting video processing...')
 
-            # Generate output filename
-            output_filename = f"{video_base}_annotated_{download_id}.mp4"
+            # Generate output filename (UUID-based for final_videos storage)
+            final_filename = f"{uuid.uuid4().hex[:12]}.mp4"
 
             # Create progress callback for unified interface
             async def unified_progress_callback(progress: float, message: str, phase: str = "processing"):
@@ -805,15 +805,24 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                 job_id=export_id,
                 user_id=user_id,
                 input_key=f"games/{video_filename}",
-                output_key=f"downloads/{output_filename}",
+                output_key=f"final_videos/{final_filename}",
                 clips=all_clips,
                 progress_callback=unified_progress_callback,
             )
 
             if result.get('status') == 'success':
+                # Insert into final_videos table so it appears in gallery
+                with get_db_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO final_videos (project_id, filename, version, source_type, game_id, name)
+                        VALUES (0, ?, 1, 'annotated_game', ?, ?)
+                    """, (final_filename, game_id, f"{game_name} (Annotated)" if game_name else "Annotated Export"))
+                    conn.commit()
+
                 download_urls['clips_compilation'] = {
-                    'filename': output_filename,
-                    'url': generate_presigned_url(user_id, f"downloads/{output_filename}") if R2_ENABLED else f"/api/annotate/download/{output_filename}"
+                    'filename': final_filename,
+                    'url': generate_presigned_url(user_id, f"final_videos/{final_filename}") if R2_ENABLED else f"/api/annotate/download/{final_filename}"
                 }
             else:
                 raise Exception(result.get('error', 'Compilation failed'))
