@@ -181,10 +181,12 @@ export function OverlayContainer({
       }
     }
 
-    // Only show detections if within ~1 frame of a detection timestamp
-    // This ensures boxes only appear when playhead is exactly at a detection point
+    // Only show detections if within a few frames of a detection timestamp
+    // This ensures boxes only appear when playhead is near a detection point
     // (e.g., after clicking a green marker on the timeline)
-    const DETECTION_DISPLAY_THRESHOLD = 0.05; // 50ms ≈ 1.5 frames at 30fps
+    // Note: Video seeking may not land exactly on the target frame due to keyframe-based seeking,
+    // so we use a slightly larger threshold to account for this imprecision.
+    const DETECTION_DISPLAY_THRESHOLD = 0.1; // 100ms ≈ 3 frames at 30fps
     if (!closestDetection || closestDistance > DETECTION_DISPLAY_THRESHOLD) {
       return {
         detections: [],

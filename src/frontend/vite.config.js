@@ -25,6 +25,11 @@ export default defineConfig({
         timeout: 1800000, // 30 minutes
         proxyTimeout: 1800000, // 30 minutes
       },
+      '/storage': {
+        target: `http://localhost:${API_PORT}`,
+        changeOrigin: true,
+        // Presigned URL generation is fast, no need for long timeout
+      },
       '/ws': {
         target: `http://localhost:${API_PORT}`,
         ws: true,

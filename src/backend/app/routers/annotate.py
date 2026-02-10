@@ -681,8 +681,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
         created_projects = []
         all_clips = clips
 
-        # Generate TSV file
-        await update_progress(1, total_steps, 'tsv', 'Generating TSV file...')
+        # Generate TSV file (17% - after download at 15%)
+        await update_progress(17, 100, 'tsv', 'Generating TSV file...')
         tsv_filename = f"{video_base}_{download_id}.tsv"
         tsv_path = os.path.join(temp_dir, tsv_filename)
 
@@ -714,11 +714,13 @@ async def run_annotate_export_processing(export_id: str, config: dict):
         # Process based on mode
         if save_to_db:
             # Extract individual clips to raw_clips
+            # Progress scale: 20-80% for extraction (after download at 15%, TSV at 17%)
             logger.info(f"[AnnotateExport] {export_id}: Extracting {len(good_clips)} clips to raw_clips")
-            step = 2
+            num_clips = len(good_clips) or 1  # Avoid division by zero
 
             for i, clip in enumerate(good_clips):
-                await update_progress(step + i, total_steps, 'extract', f"Extracting clip {i+1}/{len(good_clips)}...")
+                extract_progress = int(20 + (i / num_clips) * 60)
+                await update_progress(extract_progress, 100, 'extract', f"Extracting clip {i+1}/{len(good_clips)}...")
 
                 success = await extract_clip_to_file(
                     source_path=source_path,
@@ -766,7 +768,7 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                 compilation_filename = f"{video_base}_compilation_{download_id}.mp4"
                 compilation_path = os.path.join(temp_dir, compilation_filename)
 
-                await update_progress(total_steps - 2, total_steps, 'concat', 'Creating compilation...')
+                await update_progress(85, 100, 'concat', 'Creating compilation...')
                 if await concatenate_videos(compilation_clips, compilation_path):
                     # Upload to gallery
                     if R2_ENABLED:
@@ -792,14 +794,15 @@ async def run_annotate_export_processing(export_id: str, config: dict):
             logger.info(f"[AnnotateExport] {export_id}: Creating burned-in compilation ({len(all_clips)} clips)")
 
             # Use unified interface - call_modal_annotate_compilation handles Modal or local fallback
-            await update_progress(10, 100, ExportPhase.PROCESSING, 'Starting video processing...')
+            # Progress scale: 20-85% for processing (after download at 15%, TSV at 17%)
+            await update_progress(20, 100, ExportPhase.PROCESSING, 'Starting video processing...')
 
             # Generate output filename (UUID-based for final_videos storage)
             final_filename = f"{uuid.uuid4().hex[:12]}.mp4"
 
-            # Create progress callback for unified interface
+            # Create progress callback for unified interface (maps 0-100% to 20-85%)
             async def unified_progress_callback(progress: float, message: str, phase: str = "processing"):
-                await update_progress(int(10 + progress * 0.75), 100, phase, message)
+                await update_progress(int(20 + progress * 0.65), 100, phase, message)
 
             result = await call_modal_annotate_compilation(
                 job_id=export_id,
