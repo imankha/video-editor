@@ -43,9 +43,9 @@
 
 | ID | Task | Priority | Status |
 |----|------|----------|--------|
-| T301 | Refactor editorMode to EDITOR_MODES | 25 | TODO |
-| T311 | Remove workingVideo from overlayStore | 25 | TODO |
-| T312 | Remove clipMetadata from overlayStore | 25 | TODO |
+| T301 | Refactor editorMode to EDITOR_MODES | 25 | DONE |
+| T311 | Remove workingVideo from overlayStore | 25 | DONE |
+| T312 | Remove clipMetadata from overlayStore | 25 | DONE |
 | T331 | Refactor ExportButton to container | 25 | TODO |
 | T302 | Refactor statusFilter to constants | 16 | TODO |
 | T303 | Refactor keyframe origin to constants | 16 | TODO |
