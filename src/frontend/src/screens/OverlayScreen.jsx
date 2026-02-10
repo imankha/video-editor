@@ -50,22 +50,22 @@ export function OverlayScreen({
   // Project context
   const { projectId, project, refresh: refreshProject } = useProject();
 
-  // Overlay store - working video (set by FramingScreen on export)
+  // Project data store - canonical owner for working video and clip metadata
+  const workingVideo = useProjectDataStore(state => state.workingVideo);
+  const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
+  const overlayClipMetadata = useProjectDataStore(state => state.clipMetadata);
+  const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
+  const clips = useProjectDataStore(state => state.clips);
+
+  // Overlay store - for overlay-specific state (loading, effects, changes)
   const {
-    workingVideo,
-    clipMetadata: overlayClipMetadata,
     effectType: highlightEffectType,
     isLoadingWorkingVideo,
     overlayChangedSinceExport,
-    setWorkingVideo,
-    setClipMetadata: setOverlayClipMetadata,
     setEffectType: setHighlightEffectType,
     setIsLoadingWorkingVideo,
     setOverlayChangedSinceExport,
   } = useOverlayStore();
-
-  // Project data store - for framing clips (pass-through mode)
-  const clips = useProjectDataStore(state => state.clips);
   const hasClips = clips && clips.length > 0;
 
   // Get unique tags from all clips for display
@@ -545,9 +545,9 @@ export function OverlayScreen({
     overlayVideoMetadata: workingVideo?.metadata,
     overlayClipMetadata,
     isLoadingWorkingVideo,
-    setOverlayVideoFile: (file) => setWorkingVideo(prev => prev ? { ...prev, file } : { file, url: null, metadata: null }),
-    setOverlayVideoUrl: (url) => setWorkingVideo(prev => prev ? { ...prev, url } : { file: null, url, metadata: null }),
-    setOverlayVideoMetadata: (meta) => setWorkingVideo(prev => prev ? { ...prev, metadata: meta } : { file: null, url: null, metadata: meta }),
+    setOverlayVideoFile: (file) => setWorkingVideo(workingVideo ? { ...workingVideo, file } : { file, url: null, metadata: null }),
+    setOverlayVideoUrl: (url) => setWorkingVideo(workingVideo ? { ...workingVideo, url } : { file: null, url, metadata: null }),
+    setOverlayVideoMetadata: (meta) => setWorkingVideo(workingVideo ? { ...workingVideo, metadata: meta } : { file: null, url: null, metadata: meta }),
     setOverlayClipMetadata,
     setIsLoadingWorkingVideo,
     dragHighlight,
