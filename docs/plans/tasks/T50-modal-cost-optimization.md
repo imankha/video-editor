@@ -434,12 +434,28 @@ FRAMING_AI_GPU_THRESHOLDS = {
 - Parallel processing disabled when `segment_data` is present (speed changes)
 - Max 4 GPUs until we have data proving 4 beats 2
 
+### E7 Benchmark Results (2026-02-09)
+
+**Test Video:** 449 frames (~15s), 810x1440 output
+
+| Config | Time | Speedup | FPS |
+|--------|------|---------|-----|
+| Sequential (1 GPU) | 310.0s | 1.00x | 1.45 |
+| Parallel (2 GPUs) | 160.8s | **1.93x** | 2.79 |
+| Parallel (4 GPUs) | 87.0s | **3.56x** | 5.16 |
+
+**Key Findings:**
+- 2 GPUs: ~2x faster (saves 49% time)
+- 4 GPUs: ~3.6x faster (saves 72% time)
+- Parallelization overhead is minimal (~10-15s for concatenation)
+- 4 GPUs clearly beats 2 GPUs - consider adding 8 GPU tier
+
 ### Phase 3 - Tuning (TODO)
 
 Collect production data to validate:
-- 2 GPUs vs 4 GPUs cost/time tradeoff
-- Adjust thresholds based on real usage patterns
-- Consider 8 GPUs if 4 proves beneficial
+- Monitor real-world usage patterns
+- Consider adding 8 GPU tier for videos >30s (if 4 beats 2, 8 should beat 4)
+- Track cost vs time tradeoffs in production
 
 ---
 
