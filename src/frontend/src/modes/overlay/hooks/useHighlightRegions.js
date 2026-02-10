@@ -201,6 +201,7 @@ export default function useHighlightRegions(videoMetadata) {
         detections: saved.detections || [],
         videoWidth: saved.videoWidth || null,
         videoHeight: saved.videoHeight || null,
+        fps: saved.fps || null,  // Preserve fps for accurate frame-to-time conversion
       };
     });
 
@@ -692,6 +693,7 @@ export default function useHighlightRegions(videoMetadata) {
           detections: region.detections || [],
           videoWidth: region.videoWidth || null,
           videoHeight: region.videoHeight || null,
+          fps: region.fps || null,  // Preserve fps for detection marker navigation
         };
       });
   }, [regions, framerate, calculateDefaultHighlight, videoMetadata]);

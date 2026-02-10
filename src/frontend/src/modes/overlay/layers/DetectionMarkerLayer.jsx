@@ -19,7 +19,6 @@ export default function DetectionMarkerLayer({
   onSeek,
   sourceTimeToVisualTime = (t) => t,
   edgePadding = 20,
-  framerate = 30,
 }) {
   const timelineDuration = visualDuration || duration;
 
@@ -30,8 +29,10 @@ export default function DetectionMarkerLayer({
     regions.forEach((region) => {
       if (!region.detections?.length) return;
 
-      // Use region's fps if available, otherwise use prop
-      const regionFps = region.fps || framerate;
+      // Log warning if fps is missing - indicates data issue that needs re-export
+      if (!region.fps) {
+        console.warn(`[DetectionMarkerLayer] Region ${region.id} missing fps - detection marker navigation may be inaccurate. Re-export framing to fix.`);
+      }
 
       region.detections.forEach((detection) => {
         if (!detection.boxes?.length) return;
@@ -44,7 +45,7 @@ export default function DetectionMarkerLayer({
           markers.push({
             timestamp: detection.timestamp,
             frame: detection.frame,  // Frame number for precise seeking
-            fps: regionFps,
+            fps: region.fps,  // May be null if data is from old export
             positionPercent,
             boxCount: detection.boxes.length,
             regionId: region.id,
@@ -54,7 +55,7 @@ export default function DetectionMarkerLayer({
     });
 
     return markers;
-  }, [regions, timelineDuration, sourceTimeToVisualTime, framerate]);
+  }, [regions, timelineDuration, sourceTimeToVisualTime]);
 
   // Don't render if no detection markers
   if (detectionMarkers.length === 0) {
@@ -85,7 +86,8 @@ export default function DetectionMarkerLayer({
                   const preciseTime = frameToTime(marker.frame, marker.fps);
                   onSeek(preciseTime);
                 } else {
-                  // Fallback to timestamp if frame not available
+                  // Missing frame/fps data - use timestamp (less precise, may show wrong frame)
+                  console.warn(`[DetectionMarkerLayer] Missing frame/fps data for marker at ${marker.timestamp}s - using timestamp. Re-export framing to fix.`);
                   onSeek(marker.timestamp);
                 }
               }
