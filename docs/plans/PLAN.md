@@ -75,6 +75,13 @@
 
 ## Completed
 
+### Performance Analysis (2026-02)
+- T51: [Modal Parallelization Analysis](tasks/T51-modal-parallelization-analysis.md) - **DONE**
+  - Overlay: E7 showed parallel costs 62-248% MORE (25ms/frame too low)
+  - Detection: Batch API already exists and is used during export
+  - Annotate: CPU-bound FFmpeg, parallelization won't help
+  - Model loading: Already baked into Modal images (no runtime downloads)
+
 ### Infrastructure: Modal Integration (2026-01)
 - Modal account setup
 - GPU functions deployed (framing, overlay, detection)
