@@ -436,6 +436,21 @@ def calculate_effective_duration(clip_data: Dict[str, Any], raw_duration: float)
 
     # Step 2: Check for speed changes and calculate duration accordingly
 
+    # Handle segments as a list of {start, end, speed} objects directly
+    # This happens when segments comes from segment_data.segments (normalized format)
+    if segments and isinstance(segments, list) and len(segments) > 0:
+        first_seg = segments[0]
+        if isinstance(first_seg, dict) and 'speed' in first_seg:
+            total_duration = 0.0
+            for seg in segments:
+                seg_start = max(seg.get('start', 0), trim_start)
+                seg_end = min(seg.get('end', raw_duration), trim_end)
+                if seg_end > seg_start:
+                    speed = seg.get('speed', 1.0)
+                    total_duration += (seg_end - seg_start) / speed
+            logger.info(f"[calc_effective_duration] Clip {clip_index}: list format, trim_start={trim_start}, trim_end={trim_end}, total_duration={total_duration}")
+            return total_duration
+
     # DB Export format: segments contains 'segments' array of {start, end, speed}
     if segments and isinstance(segments, dict) and 'segments' in segments:
         segment_list = segments.get('segments', [])
@@ -1227,10 +1242,13 @@ async def export_multi_clip(
             for clip in clips_data:
                 normalized = normalize_clip_data_for_modal(clip)
                 # Map to unified function format
+                # Include duration and clipName for build_clip_boundaries_from_input
                 normalized_clips_data.append({
                     "keyframes": normalized.get("cropKeyframes", []),
                     "segment_data": normalized.get("segmentsData", {}),
                     "clipIndex": normalized.get("clipIndex", 0),
+                    "duration": clip.get("duration", 15.0),
+                    "clipName": clip.get("clipName") or clip.get("fileName"),
                 })
             logger.info(f"[Multi-Clip Export] Normalized {len(normalized_clips_data)} clips for Modal")
 
