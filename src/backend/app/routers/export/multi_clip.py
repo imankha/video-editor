@@ -222,19 +222,21 @@ async def run_local_detection_on_video_file(
     video_path: str,
     source_clips: List[Dict[str, Any]],
     confidence_threshold: float = 0.5,
+    fps: int = 30,
 ) -> List[Dict[str, Any]]:
     """
     Run local YOLO detection directly on a video file (no R2 download needed).
 
     This is used for local multi-clip export where the video is already on disk.
     """
-    # Calculate detection timestamps
-    timestamps = calculate_detection_timestamps(source_clips)
+    # Calculate detection timestamps and frame numbers
+    detection_points = calculate_detection_timestamps(source_clips, fps)
 
-    if not timestamps:
+    if not detection_points:
         logger.warning("[Local Detection] No timestamps to detect, returning default regions")
         return generate_default_highlight_regions(source_clips)
 
+    timestamps = [p['timestamp'] for p in detection_points]
     logger.info(f"[Local Detection] Running detection on {len(timestamps)} timestamps from local file")
 
     try:
@@ -287,15 +289,18 @@ async def run_local_detection_on_video_file(
         # Collect detection data for this clip's timestamps
         clip_detections = []
         for i in range(4):
-            if detection_idx + i >= len(timestamps):
+            if detection_idx + i >= len(detection_points):
                 break
 
-            ts = timestamps[detection_idx + i]
+            point = detection_points[detection_idx + i]
+            ts = point['timestamp']
+            frame = point['frame']
             ts_rounded = round(ts, 2)
             boxes = detection_by_time.get(ts_rounded, [])
 
             clip_detections.append({
                 'timestamp': ts,
+                'frame': frame,  # Frame number for precise seeking
                 'boxes': boxes,
             })
 
@@ -314,6 +319,7 @@ async def run_local_detection_on_video_file(
             'detections': clip_detections,
             'videoWidth': video_width,
             'videoHeight': video_height,
+            'fps': fps,  # Include fps for frame-to-time conversion in frontend
         }
         regions.append(region)
 
@@ -621,20 +627,21 @@ def generate_default_highlight_regions(source_clips: List[Dict[str, Any]]) -> Li
     return regions
 
 
-def calculate_detection_timestamps(source_clips: List[Dict[str, Any]]) -> List[float]:
+def calculate_detection_timestamps(source_clips: List[Dict[str, Any]], fps: int = 30) -> List[Dict[str, Any]]:
     """
-    Calculate timestamps for player detection within each clip's overlay region.
+    Calculate timestamps and frame numbers for player detection within each clip's overlay region.
 
     For each clip, we detect at 4 evenly spaced timestamps within the first 2 seconds
     (the overlay region): 0s, 0.66s, 1.33s, 2s relative to clip start.
 
     Args:
         source_clips: List of clip boundaries from build_clip_boundaries()
+        fps: Frame rate of the working video (default 30)
 
     Returns:
-        List of absolute timestamps (in seconds) for detection in the working video
+        List of dicts with 'timestamp' and 'frame' for each detection point
     """
-    timestamps = []
+    detection_points = []
 
     for clip in source_clips:
         clip_start = clip['start_time']
@@ -648,9 +655,13 @@ def calculate_detection_timestamps(source_clips: List[Dict[str, Any]]) -> List[f
         for i in range(4):
             relative_time = (i / 3) * overlay_duration  # 0, 0.33, 0.66, 1.0 × overlay_duration
             absolute_time = clip_start + relative_time
-            timestamps.append(absolute_time)
+            frame = int(round(absolute_time * fps))
+            detection_points.append({
+                'timestamp': absolute_time,
+                'frame': frame,
+            })
 
-    return timestamps
+    return detection_points
 
 
 async def run_player_detection_for_highlights(
@@ -658,6 +669,7 @@ async def run_player_detection_for_highlights(
     output_key: str,
     source_clips: List[Dict[str, Any]],
     progress_callback=None,
+    fps: int = 30,
 ) -> List[Dict[str, Any]]:
     """
     Run batch player detection and enhance highlight regions with detected player boxes.
@@ -669,16 +681,20 @@ async def run_player_detection_for_highlights(
         output_key: R2 key for the working video to analyze
         source_clips: List of clip boundaries from build_clip_boundaries()
         progress_callback: Optional async callback for progress updates
+        fps: Frame rate of the working video (for frame number calculation)
 
     Returns:
         List of highlight regions with detection-enhanced keyframes
     """
-    # Calculate detection timestamps
-    timestamps = calculate_detection_timestamps(source_clips)
+    # Calculate detection timestamps and frame numbers
+    detection_points = calculate_detection_timestamps(source_clips, fps)
 
-    if not timestamps:
+    if not detection_points:
         logger.warning("[Player Detection] No timestamps to detect, returning default regions")
         return generate_default_highlight_regions(source_clips)
+
+    # Extract just timestamps for the detection API (it returns boxes keyed by timestamp)
+    timestamps = [p['timestamp'] for p in detection_points]
 
     logger.info(f"[Player Detection] Running batch detection on {len(timestamps)} timestamps for {len(source_clips)} clips")
 
@@ -748,15 +764,18 @@ async def run_player_detection_for_highlights(
         # Collect raw detection data for this clip's 4 timestamps
         clip_detections = []
         for i in range(4):
-            if detection_idx + i >= len(timestamps):
+            if detection_idx + i >= len(detection_points):
                 break
 
-            ts = timestamps[detection_idx + i]
+            point = detection_points[detection_idx + i]
+            ts = point['timestamp']
+            frame = point['frame']
             ts_rounded = round(ts, 2)
             boxes = detection_by_time.get(ts_rounded, [])
 
             clip_detections.append({
                 'timestamp': ts,
+                'frame': frame,  # Frame number for precise seeking
                 'boxes': boxes,  # Raw detection boxes - user clicks to create keyframe
             })
 
@@ -776,6 +795,7 @@ async def run_player_detection_for_highlights(
             'detections': clip_detections,  # Raw detection data for UI to display
             'videoWidth': video_width,
             'videoHeight': video_height,
+            'fps': fps,  # Include fps for frame-to-time conversion in frontend
         }
         regions.append(region)
 
