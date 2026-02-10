@@ -2333,11 +2333,18 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Verify we're in an editing mode (framing or overlay)
     // Projects with existing working videos open in overlay mode directly
+    // Use longer timeout and combined locator for reliability
     const frameVideoButton = page.locator('button:has-text("Frame Video")').first();
     const addOverlayButton = page.locator('button:has-text("Add Overlay")').first();
+    const modeIndicator = frameVideoButton.or(addOverlayButton);
 
-    const isFramingMode = await frameVideoButton.isVisible({ timeout: 2000 }).catch(() => false);
-    const isOverlayMode = await addOverlayButton.isVisible({ timeout: 2000 }).catch(() => false);
+    // Wait for either mode indicator to be visible with robust retry
+    await expect(async () => {
+      await expect(modeIndicator).toBeVisible();
+    }).toPass({ timeout: 30000, intervals: [1000, 2000, 5000] });
+
+    const isFramingMode = await frameVideoButton.isVisible().catch(() => false);
+    const isOverlayMode = await addOverlayButton.isVisible().catch(() => false);
 
     expect(isFramingMode || isOverlayMode, 'Should be in framing or overlay mode').toBe(true);
     console.log(`[Full] Opened in ${isFramingMode ? 'framing' : 'overlay'} mode`);

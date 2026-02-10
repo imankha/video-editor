@@ -16,7 +16,7 @@
 | T10 | [Progress Bar Improvements](tasks/T10-progress-bar.md) | DONE | HIGH | MEDIUM |
 | T11 | [Local GPU Progress Bar](tasks/T11-local-gpu-progress.md) | DONE | MEDIUM | LOW |
 | T12 | [Progress State Recovery](tasks/T12-progress-state-recovery.md) | DONE | HIGH | MEDIUM |
-| T20 | [E2E Test Reliability](tasks/T20-e2e-test-reliability.md) | TODO | MEDIUM | MEDIUM |
+| T20 | [E2E Test Reliability](tasks/T20-e2e-test-reliability.md) | DONE | MEDIUM | MEDIUM |
 
 ---
 
@@ -25,7 +25,6 @@
 | ID | Task | Status | Impact | Complexity |
 |----|------|--------|--------|------------|
 | T30 | [Performance Profiling](tasks/T30-performance-profiling.md) | TODO | MEDIUM | MEDIUM |
-| T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | TODO | HIGH | MEDIUM |
 | T50 | [Modal Cost Optimization](tasks/T50-modal-cost-optimization.md) | TODO | MEDIUM | MEDIUM |
 
 ---
@@ -64,6 +63,7 @@
 
 | ID | Task | Impact | Complexity | Notes |
 |----|------|--------|------------|-------|
+| T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | HIGH | MEDIUM | After staging; not feeling the pinch yet |
 | T200 | [User Management](tasks/T200-user-management.md) | MEDIUM | HIGH | Auth, multi-tenant |
 | T210 | [Wallet & Payments](tasks/T210-wallet-payments.md) | MEDIUM | HIGH | Stripe integration |
 | T220 | [Future GPU Features](tasks/T220-future-gpu-features.md) | LOW | HIGH | Advanced AI features |

@@ -27,6 +27,30 @@ cd src/backend && .venv/Scripts/python.exe run_tests.py  # All tests
 cd src/backend && pytest tests/test_clips.py -v          # Specific file
 ```
 
+## Task Rules
+
+### Never Skip (ALL tasks, including bug fixes)
+
+| Step | When | Action |
+|------|------|--------|
+| Classify | Before starting | State complexity: "This is a TRIVIAL/SIMPLE/STANDARD/COMPLEX task" |
+| Branch | Before first change | `git checkout -b feature/T{id}-{description}` (skip for TRIVIAL) |
+| Commit | After implementation | Commit with co-author line |
+| PLAN.md | After commit | Update task status to DONE |
+
+### Skip Based on Complexity
+
+| Complexity | Skip These Stages |
+|------------|-------------------|
+| TRIVIAL | All stages - just fix, test manually, commit |
+| SIMPLE | Architecture (Stage 2), Code Expert deep dive |
+| STANDARD | Nothing - full workflow |
+| COMPLEX | Nothing - full workflow + extra review |
+
+See [0-task-classification.md](.claude/workflows/0-task-classification.md) for classification criteria.
+
+---
+
 ## Workflow Stages
 
 **Detect the current stage and load the appropriate workflow file:**

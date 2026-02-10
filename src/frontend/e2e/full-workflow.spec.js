@@ -99,8 +99,16 @@ async function enterAnnotateModeWithClips(page) {
   await expect(createButton).toBeEnabled({ timeout: 5000 });
   await createButton.click();
 
-  // Wait for annotate mode to load with video
-  await expect(page.locator('video')).toBeVisible({ timeout: 120000 });
+  // Wait for annotate mode to load with video using robust retry logic
+  // Sometimes the video takes time to appear after form submission
+  console.log('[Setup] Waiting for video element...');
+  await expect(async () => {
+    const video = page.locator('video').first();
+    await expect(video).toBeVisible();
+    // Also verify video has a src and is ready
+    const hasSrc = await video.evaluate(v => !!v.src);
+    expect(hasSrc).toBeTruthy();
+  }).toPass({ timeout: 120000, intervals: [1000, 2000, 5000] });
   console.log('[Setup] Video loaded');
 
   // Wait for video upload to complete BEFORE importing TSV
