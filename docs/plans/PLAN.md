@@ -72,6 +72,11 @@
 
 ## Completed
 
+### Performance Analysis (2026-02)
+- T51: Overlay Parallelization Analysis - **CLOSED: NOT BENEFICIAL**
+  - E7 experiment showed parallel overlay costs 62-248% MORE than sequential
+  - 25ms/frame cost is too low; parallelization overhead dominates gains
+
 ### Infrastructure: Modal Integration (2026-01)
 - Modal account setup
 - GPU functions deployed (framing, overlay, detection)
