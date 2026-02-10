@@ -36,6 +36,8 @@ export function OverlayModeView({
   isVideoElementLoading = false,
   loadingProgress = null,
   error = null,
+  isUrlExpiredError = () => false,
+  onRetryVideo,
   loadingMessage = 'Loading video...',
 
   // Playback controls
@@ -228,6 +230,8 @@ export function OverlayModeView({
             isVideoElementLoading={isVideoElementLoading}
             loadingProgress={loadingProgress}
             error={error}
+            isUrlExpiredError={isUrlExpiredError}
+            onRetryVideo={onRetryVideo}
             loadingMessage={loadingMessage}
           />
 

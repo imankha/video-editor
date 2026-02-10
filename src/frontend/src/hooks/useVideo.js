@@ -1,7 +1,8 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import { extractVideoMetadata, createVideoURL, revokeVideoURL, getFramerate } from '../utils/videoUtils';
 import { validateVideoFile } from '../utils/fileValidation';
 import { useVideoStore } from '../stores';
+import { invalidateUrl } from '../utils/storageUrls';
 
 /**
  * Custom hook for managing video state and playback
@@ -18,6 +19,10 @@ import { useVideoStore } from '../stores';
  */
 export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const videoRef = useRef(null);
+
+  // Track retry attempts to prevent infinite loops
+  const retryAttemptRef = useRef(0);
+  const MAX_RETRY_ATTEMPTS = 2;
 
   // Get state and setters from the store
   const {
@@ -153,6 +158,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const loadVideoFromStreamingUrl = (url, preloadedMetadata = null) => {
     console.log('[useVideo] loadVideoFromStreamingUrl called with:', url?.substring(0, 60));
     setError(null);
+    retryAttemptRef.current = 0; // Reset retry counter on new video load
 
     // Clean up previous blob URL (only if it's a blob URL we created)
     if (videoUrl && videoUrl.startsWith('blob:')) {
@@ -435,17 +441,55 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   };
 
   // Handle video load error
-  const handleError = () => {
+  // MediaError codes: 1=ABORTED, 2=NETWORK, 3=DECODE, 4=SRC_NOT_SUPPORTED
+  const handleError = useCallback(() => {
     if (videoRef.current) {
       const video = videoRef.current;
-      const error = video.error;
-      const errorMessage = error
-        ? `${error.message || 'Unknown error'} (code: ${error.code})`
-        : 'Failed to load video';
-      console.log(`[VIDEO] Error: ${errorMessage}`);
-      setError(errorMessage);
+      const mediaError = video.error;
+
+      // Detect network errors (often caused by expired presigned URLs)
+      const isNetworkError = mediaError?.code === MediaError.MEDIA_ERR_NETWORK;
+      const errorCode = mediaError?.code;
+      const errorMessage = mediaError?.message || 'Unknown error';
+
+      // Build user-friendly error message
+      let userMessage;
+      if (isNetworkError) {
+        userMessage = 'Video connection lost. The link may have expired.';
+        // Invalidate the URL cache so next load gets a fresh URL
+        if (videoUrl && !videoUrl.startsWith('blob:')) {
+          invalidateUrl(videoUrl);
+        }
+      } else if (errorCode === MediaError.MEDIA_ERR_DECODE) {
+        userMessage = 'Video could not be decoded. The file may be corrupted.';
+      } else if (errorCode === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+        userMessage = 'Video format not supported.';
+      } else {
+        userMessage = `Failed to load video: ${errorMessage}`;
+      }
+
+      console.log(`[VIDEO] Error: ${userMessage} (code: ${errorCode}, raw: ${errorMessage})`);
+      setError(userMessage);
+      retryAttemptRef.current += 1;
     }
-  };
+  }, [videoUrl, setError]);
+
+  /**
+   * Clear the current error state
+   * Call this before attempting to reload the video
+   */
+  const clearError = useCallback(() => {
+    setError(null);
+  }, [setError]);
+
+  /**
+   * Check if the current error is likely due to an expired URL
+   * (network error on a non-blob URL)
+   */
+  const isUrlExpiredError = useCallback(() => {
+    if (!error) return false;
+    return error.includes('connection lost') || error.includes('expired');
+  }, [error]);
 
   // Adjust playback rate based on current segment speed
   // ARCHITECTURE: We need BOTH proactive and reactive validation:
@@ -526,6 +570,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     stepForward,
     stepBackward,
     restart,
+
+    // Error handling
+    clearError,
+    isUrlExpiredError,
 
     // Event handlers for video element
     handlers: {

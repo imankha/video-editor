@@ -14,6 +14,7 @@ import { FileUpload } from '../components/FileUpload';
 import { ConfirmationDialog } from '../components/shared';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
+import { forceRefreshUrl } from '../utils/storageUrls';
 import { API_BASE } from '../config';
 import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useNavigationStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
@@ -219,6 +220,8 @@ export function FramingScreen({
     stepForward,
     stepBackward,
     restart,
+    clearError,
+    isUrlExpiredError,
     handlers,
   } = useVideo(getSegmentAtTime, clampToVisibleRange);
 
@@ -705,6 +708,32 @@ export function FramingScreen({
     setIsFullscreen(prev => !prev);
   }, []);
 
+  // Retry video loading when URL expires
+  const handleRetryVideo = useCallback(async () => {
+    if (!selectedClip) return;
+
+    console.log('[FramingScreen] Retrying video load for clip:', selectedClip.id);
+    clearError();
+
+    // Get a fresh presigned URL
+    const filename = selectedClip.filename || `${selectedClip.id}.mp4`;
+    const localFallbackUrl = `${API_BASE}/api/clips/${selectedClip.id}/file`;
+
+    try {
+      const freshUrl = await forceRefreshUrl('raw_clips', filename, localFallbackUrl);
+      console.log('[FramingScreen] Got fresh URL:', freshUrl?.substring(0, 60));
+
+      if (freshUrl && !freshUrl.startsWith('blob:')) {
+        loadVideoFromStreamingUrl(freshUrl, selectedClip.metadata || null);
+      } else {
+        // Fallback to blob download
+        await loadVideoFromUrl(freshUrl || localFallbackUrl, filename);
+      }
+    } catch (err) {
+      console.error('[FramingScreen] Failed to retry video load:', err);
+    }
+  }, [selectedClip, clearError, loadVideoFromStreamingUrl, loadVideoFromUrl]);
+
   // Outdated clips dialog handlers
   const handleContinueWithOriginal = useCallback(() => {
     console.log('[FramingScreen] User chose to continue with original framing');
@@ -1023,6 +1052,8 @@ export function FramingScreen({
       isProjectLoading={isLoadingProjectData}
       loadingStage={loadingStage}
       error={error}
+      isUrlExpiredError={isUrlExpiredError}
+      onRetryVideo={handleRetryVideo}
       handlers={handlers}
       // Fullscreen
       fullscreenContainerRef={fullscreenContainerRef}
