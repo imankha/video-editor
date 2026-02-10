@@ -1265,6 +1265,7 @@ async def export_multi_clip(
                 include_audio=include_audio_bool,
                 transition=transition,
                 progress_callback=modal_progress_callback,
+                call_id_callback=store_modal_call_id,  # Store for recovery if connection drops
             )
 
             if result.get("status") == "connection_lost":
@@ -1685,12 +1686,31 @@ async def export_multi_clip(
         raise
     except Exception as e:
         import traceback
+        import socket
         full_traceback = traceback.format_exc()
         logger.error(f"[Multi-Clip Export] Failed: {str(e)}")
         logger.error(f"[Multi-Clip Export] Full traceback:\n{full_traceback}")
-        error_msg = f"Export failed: {str(e)}"
+
+        # Translate network errors to user-friendly messages
+        error_str = str(e)
+        if isinstance(e, socket.gaierror) or "getaddrinfo failed" in error_str:
+            user_error = "Internet connection lost. Your export may still complete - check 'In Progress' exports to see if it finished."
+            is_recoverable = True
+        elif "connection" in error_str.lower() or "network" in error_str.lower():
+            user_error = "Network error during export. Please check your internet connection and try again."
+            is_recoverable = True
+        else:
+            user_error = f"Export failed: {error_str}"
+            is_recoverable = False
+
         # Send both 'message' and 'error' for frontend compatibility
-        error_data = {"progress": 0, "message": error_msg, "error": error_msg, "status": "error"}
+        error_data = {
+            "progress": 0,
+            "message": user_error,
+            "error": user_error,
+            "status": "error",
+            "recoverable": is_recoverable,
+        }
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
 
@@ -1718,7 +1738,7 @@ async def export_multi_clip(
                 shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception as cleanup_error:
             logger.warning(f"[Multi-Clip Export] Cleanup failed: {cleanup_error}")
-        raise HTTPException(status_code=500, detail=f"Multi-clip export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=user_error)
 
 
 @router.post("/chapters")
