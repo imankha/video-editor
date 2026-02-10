@@ -66,11 +66,13 @@ describe('useOverlayState', () => {
       expect(result.current.highlightEffectType).toBe('dark_overlay');
     });
 
-    it('loads effect type from localStorage if present', () => {
+    it('uses default effect type (ignores localStorage - backend is source of truth)', () => {
+      // localStorage is NOT used - effect type is persisted to backend, not localStorage
       localStorageMock.store['highlightEffectType'] = 'brightness_boost';
       const { result } = renderHook(() => useOverlayState());
 
-      expect(result.current.highlightEffectType).toBe('brightness_boost');
+      // Should use default, not localStorage value
+      expect(result.current.highlightEffectType).toBe('dark_overlay');
     });
 
     it('starts with loading state false', () => {
@@ -222,8 +224,8 @@ describe('useOverlayState', () => {
       expect(result.current.dragHighlight).toBeNull();
       expect(result.current.selectedHighlightKeyframeTime).toBeNull();
       expect(result.current.isLoadingWorkingVideo).toBe(false);
-      // Effect type is preserved from localStorage (was set to 'brightness_boost' before reset)
-      expect(result.current.highlightEffectType).toBe('brightness_boost');
+      // Effect type is reset to default (backend is source of truth, not localStorage)
+      expect(result.current.highlightEffectType).toBe('dark_overlay');
       expect(result.current.hasOverlayVideo).toBe(false);
     });
 
