@@ -380,13 +380,20 @@ async def list_downloads(source_type: Optional[str] = None):
             # Fallback name: use filename without _final.mp4 suffix, cleaned up
             fallback_name = row['filename'].replace('_final.mp4', '').replace('_', ' ').strip() if row['filename'] else f"Video {row['id']}"
 
+            # Append 'Z' to indicate UTC so JavaScript parses correctly
+            # SQLite stores as 'YYYY-MM-DD HH:MM:SS' but JS needs timezone info
+            created_at_utc = row['created_at']
+            if created_at_utc and not created_at_utc.endswith('Z'):
+                # Convert space to 'T' for ISO format and append 'Z' for UTC
+                created_at_utc = created_at_utc.replace(' ', 'T') + 'Z'
+
             downloads.append(DownloadItem(
                 id=row['id'],
                 project_id=row['project_id'],
                 project_name=row['project_name'] or fallback_name,
                 filename=row['filename'],
                 file_url=get_download_file_url(row['filename']),
-                created_at=row['created_at'],
+                created_at=created_at_utc,
                 file_size=file_size,
                 source_type=row['source_type'],
                 game_id=row['game_id'],
