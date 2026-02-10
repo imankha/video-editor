@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { extractVideoMetadataFromUrl } from '../../../utils/videoMetadata';
+import { HighlightEffect } from '../../../constants/highlightEffects';
 
 /**
  * useOverlayState - Consolidates overlay mode state management
@@ -15,24 +16,10 @@ import { extractVideoMetadataFromUrl } from '../../../utils/videoMetadata';
  *
  * This reduces prop drilling from App.jsx and keeps overlay-specific
  * state together in one place.
+ *
+ * NOTE: Effect type is persisted to the backend via overlayActions.setEffectType(),
+ * not localStorage. The default is only used until backend data is loaded.
  */
-
-// localStorage key for persisting effect type preference
-const EFFECT_TYPE_STORAGE_KEY = 'highlightEffectType';
-const DEFAULT_EFFECT_TYPE = 'dark_overlay';
-
-// Load saved effect type from localStorage, or use default
-function getInitialEffectType() {
-  try {
-    const saved = localStorage.getItem(EFFECT_TYPE_STORAGE_KEY);
-    if (saved && ['brightness_boost', 'original', 'dark_overlay'].includes(saved)) {
-      return saved;
-    }
-  } catch (e) {
-    // localStorage not available
-  }
-  return DEFAULT_EFFECT_TYPE;
-}
 
 export default function useOverlayState() {
   // Video state
@@ -53,18 +40,9 @@ export default function useOverlayState() {
   const [isLoadingWorkingVideo, setIsLoadingWorkingVideo] = useState(false);
 
   // Highlight effect type - controls both client-side preview and export
-  // 'brightness_boost' | 'original' | 'dark_overlay'
-  const [highlightEffectType, setHighlightEffectTypeInternal] = useState(getInitialEffectType);
-
-  // Wrapper that persists to localStorage
-  const setHighlightEffectType = useCallback((type) => {
-    try {
-      localStorage.setItem(EFFECT_TYPE_STORAGE_KEY, type);
-    } catch (e) {
-      // localStorage not available
-    }
-    setHighlightEffectTypeInternal(type);
-  }, []);
+  // Uses HighlightEffect constants (BRIGHTNESS_BOOST, DARK_OVERLAY)
+  // Persisted to backend via overlayActions.setEffectType(), not localStorage
+  const [highlightEffectType, setHighlightEffectType] = useState(HighlightEffect.DARK_OVERLAY);
 
   // ===========================================
   // OVERLAY DATA SYNC STATE MACHINE
@@ -145,7 +123,7 @@ export default function useOverlayState() {
     setDragHighlight(null);
     setSelectedHighlightKeyframeTime(null);
     setIsLoadingWorkingVideo(false);
-    setHighlightEffectTypeInternal(getInitialEffectType()); // Preserve user's preference on reset
+    setHighlightEffectType(HighlightEffect.DARK_OVERLAY);
 
     // Reset refs and sync state
     pendingOverlaySaveRef.current = null;

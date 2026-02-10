@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.database import get_db_connection
+from app.constants import DEFAULT_HIGHLIGHT_EFFECT
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ DEFAULT_SETTINGS = {
     },
     # Overlay preferences
     "overlay": {
-        "highlightEffectType": "original",
+        "highlightEffectType": DEFAULT_HIGHLIGHT_EFFECT.value,
     },
 }
 

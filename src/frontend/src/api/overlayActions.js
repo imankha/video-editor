@@ -135,7 +135,7 @@ export async function deleteKeyframe(projectId, regionId, keyframeTime) {
 /**
  * Set the highlight effect type
  * @param {number} projectId
- * @param {string} effectType - 'original' | 'brightness_boost' | 'dark_overlay'
+ * @param {string} effectType - 'brightness_boost' | 'dark_overlay'
  * @returns {Promise<{success: boolean, version: number}>}
  */
 export async function setEffectType(projectId, effectType) {

@@ -321,6 +321,45 @@ def delete_from_r2(user_id: str, relative_path: str) -> bool:
         return False
 
 
+async def copy_file_in_r2(user_id: str, source_path: str, dest_path: str) -> bool:
+    """
+    Copy a file within R2 (server-side copy, no download/upload).
+
+    Args:
+        user_id: User namespace
+        source_path: Source path relative to user_data/<user_id>/
+        dest_path: Destination path relative to user_data/<user_id>/
+
+    Returns:
+        True if copy succeeded, False otherwise
+    """
+    import asyncio
+
+    client = get_r2_client()
+    if not client:
+        logger.error("R2 client not available for copy")
+        return False
+
+    source_key = r2_key(user_id, source_path)
+    dest_key = r2_key(user_id, dest_path)
+
+    try:
+        # Use asyncio.to_thread for async compatibility
+        def do_copy():
+            client.copy_object(
+                Bucket=R2_BUCKET,
+                CopySource={'Bucket': R2_BUCKET, 'Key': source_key},
+                Key=dest_key
+            )
+
+        await asyncio.to_thread(do_copy)
+        logger.info(f"Copied in R2: {source_key} -> {dest_key}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to copy in R2: {source_key} -> {dest_key} - {e}")
+        return False
+
+
 def file_exists_in_r2(user_id: str, relative_path: str) -> bool:
     """Check if a file exists in R2."""
     client = get_r2_client()

@@ -175,6 +175,42 @@ def get_tag_short_name(tag: str) -> str:
 
 
 # =============================================================================
+# Highlight Effect Constants
+# =============================================================================
+
+class HighlightEffect(str, Enum):
+    """
+    Visual effect types for player highlight overlays.
+
+    BRIGHTNESS_BOOST: Increases brightness inside the highlight ellipse
+    DARK_OVERLAY: Darkens the area outside the highlight ellipse (spotlight effect)
+
+    Note: 'original' was removed from UI but may exist in legacy DB data.
+    Use normalize_effect_type() to convert legacy values.
+    """
+    BRIGHTNESS_BOOST = "brightness_boost"
+    DARK_OVERLAY = "dark_overlay"
+
+
+# Default effect type for new overlays
+DEFAULT_HIGHLIGHT_EFFECT = HighlightEffect.DARK_OVERLAY
+
+
+def normalize_effect_type(effect_type: str | None) -> str:
+    """
+    Normalize effect type for backwards compatibility.
+
+    Converts legacy 'original' to 'dark_overlay' since 'original' was removed.
+    Returns the default if the value is None or invalid.
+    """
+    if effect_type is None or effect_type == 'original':
+        return DEFAULT_HIGHLIGHT_EFFECT.value
+    if effect_type in (HighlightEffect.BRIGHTNESS_BOOST.value, HighlightEffect.DARK_OVERLAY.value):
+        return effect_type
+    return DEFAULT_HIGHLIGHT_EFFECT.value
+
+
+# =============================================================================
 # Video Processing Constants
 # =============================================================================
 

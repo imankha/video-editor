@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { HighlightEffect } from '../constants/highlightEffects';
+
 /**
  * Store for overlay mode state
  * - Working video data (set by FramingScreen on export)
@@ -8,24 +10,10 @@ import { create } from 'zustand';
  *
  * This store allows OverlayScreen to be self-contained while receiving
  * data from FramingScreen's export process.
+ *
+ * NOTE: Effect type is persisted to the backend via overlayActions.setEffectType(),
+ * not localStorage. The default is only used until backend data is loaded.
  */
-
-// localStorage key for persisting effect type preference
-const EFFECT_TYPE_STORAGE_KEY = 'highlightEffectType';
-const DEFAULT_EFFECT_TYPE = 'dark_overlay';
-
-// Load saved effect type from localStorage, or use default
-function getInitialEffectType() {
-  try {
-    const saved = localStorage.getItem(EFFECT_TYPE_STORAGE_KEY);
-    if (saved && ['brightness_boost', 'original', 'dark_overlay'].includes(saved)) {
-      return saved;
-    }
-  } catch (e) {
-    // localStorage not available
-  }
-  return DEFAULT_EFFECT_TYPE;
-}
 
 export const useOverlayStore = create((set, get) => ({
   // Working video (from framing export or loaded from project)
@@ -34,8 +22,8 @@ export const useOverlayStore = create((set, get) => ({
   // Clip metadata for auto-generating highlight regions
   clipMetadata: null,
 
-  // Effect settings (loaded from localStorage or default to 'dark_overlay')
-  effectType: getInitialEffectType(),
+  // Effect settings (default to dark_overlay, backend loads actual value)
+  effectType: HighlightEffect.DARK_OVERLAY,
 
   // Loading states
   isLoadingWorkingVideo: false,
@@ -51,15 +39,7 @@ export const useOverlayStore = create((set, get) => ({
 
   setClipMetadata: (metadata) => set({ clipMetadata: metadata }),
 
-  setEffectType: (type) => {
-    // Persist to localStorage
-    try {
-      localStorage.setItem(EFFECT_TYPE_STORAGE_KEY, type);
-    } catch (e) {
-      // localStorage not available
-    }
-    set({ effectType: type });
-  },
+  setEffectType: (type) => set({ effectType: type }),
 
   setIsLoadingWorkingVideo: (loading) => set({ isLoadingWorkingVideo: loading }),
 
@@ -73,7 +53,7 @@ export const useOverlayStore = create((set, get) => ({
   reset: () => set({
     workingVideo: null,
     clipMetadata: null,
-    effectType: getInitialEffectType(), // Preserve user's preference on reset
+    effectType: HighlightEffect.DARK_OVERLAY,
     isLoadingWorkingVideo: false,
     overlayChangedSinceExport: false,
   }),

@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 from ..database import get_db_connection, get_user_data_path
 from ..storage import generate_presigned_url
 from ..user_context import get_current_user_id
-from ..constants import ExportStatus
+from ..constants import ExportStatus, DEFAULT_HIGHLIGHT_EFFECT
 
 logger = logging.getLogger(__name__)
 
@@ -566,7 +566,7 @@ async def start_overlay_export(
     project_id: int = Form(...),
     highlight_regions_json: str = Form(None),
     highlight_keyframes_json: str = Form(None),
-    highlight_effect_type: str = Form("original"),
+    highlight_effect_type: str = Form(DEFAULT_HIGHLIGHT_EFFECT.value),
 ):
     """
     Start an overlay export job with video file upload.
