@@ -11,7 +11,6 @@ import { useGalleryStore } from '../stores/galleryStore';
 import { useGamesStore } from '../stores/gamesStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
-import { API_BASE } from '../config';
 
 // Module-level variable to pass File object and game details to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
@@ -123,74 +122,10 @@ export function ProjectsScreen({
     }
   }, [gamesVersion, fetchGames]);
 
-  // Listen for extraction completion events via WebSocket (optional feature)
-  // This auto-refreshes the project list when extractions complete
-  useEffect(() => {
-    // Build WebSocket URL - connect directly to backend
-    // In dev: use VITE_API_PORT (default 8000), in prod: use API_BASE or same host
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    let wsUrl;
-    if (API_BASE) {
-      // Production: use API_BASE converted to WebSocket protocol
-      wsUrl = API_BASE.replace(/^http/, 'ws') + '/ws/extractions';
-    } else if (import.meta.env.VITE_API_PORT) {
-      // Development with custom port: connect directly to backend
-      wsUrl = `${wsProtocol}//localhost:${import.meta.env.VITE_API_PORT}/ws/extractions`;
-    } else {
-      // Development default: connect directly to backend on port 8000
-      wsUrl = `${wsProtocol}//localhost:8000/ws/extractions`;
-    }
-    let ws = null;
-    let reconnectTimeout = null;
-    let hasConnected = false;  // Track if we've ever connected successfully
-    let hasWarnedFailure = false;  // Only warn once about connection failure
-
-    const connect = () => {
-      ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        hasConnected = true;
-        hasWarnedFailure = false;
-        console.log('[ProjectsScreen] Connected to extraction WebSocket');
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('[ProjectsScreen] Extraction event:', data);
-          if (data.type === 'extraction_complete' || data.type === 'extraction_failed') {
-            // Refresh projects to get updated extraction status
-            fetchProjects();
-          }
-        } catch (e) {
-          // Ignore non-JSON messages (like pong)
-        }
-      };
-
-      ws.onclose = () => {
-        // Only log if we had a successful connection before (lost connection)
-        if (hasConnected) {
-          console.log('[ProjectsScreen] Extraction WebSocket closed, reconnecting in 5s');
-        }
-        reconnectTimeout = setTimeout(connect, 5000);
-      };
-
-      ws.onerror = () => {
-        // Only warn once about connection failures (not critical functionality)
-        if (!hasWarnedFailure && !hasConnected) {
-          console.debug('[ProjectsScreen] Extraction WebSocket unavailable (auto-refresh disabled)');
-          hasWarnedFailure = true;
-        }
-      };
-    };
-
-    connect();
-
-    return () => {
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (ws) ws.close();
-    };
-  }, [fetchProjects]);
+  // NOTE: Extraction WebSocket removed - was causing browser console errors that can't be suppressed.
+  // The WebSocket endpoint exists on the backend but BaseHTTPMiddleware interferes with connections.
+  // Users can manually refresh the project list after extractions complete.
+  // TODO: Re-enable if we fix the middleware issue or switch to pure ASGI middleware.
 
   // Handle project selection
   const handleSelectProject = useCallback(async (projectId) => {
