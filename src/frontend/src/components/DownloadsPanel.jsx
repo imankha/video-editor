@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, Film, LayoutGrid } from 'lucide-react';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
-import { GalleryVideoPlayer } from './GalleryVideoPlayer';
+import { GalleryVideoPlayer } from './StandaloneVideoPlayer';
 import { useDownloads } from '../hooks/useDownloads';
 import { useGalleryStore } from '../stores/galleryStore';
 
