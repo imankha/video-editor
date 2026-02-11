@@ -1,6 +1,19 @@
 import { create } from 'zustand';
 
 /**
+ * Editor Modes - String constants for mode comparisons
+ *
+ * Use these instead of magic strings like 'framing' or 'overlay'.
+ * This prevents typos and enables IDE autocomplete.
+ */
+export const EDITOR_MODES = {
+  FRAMING: 'framing',
+  OVERLAY: 'overlay',
+  ANNOTATE: 'annotate',
+  PROJECT_MANAGER: 'project-manager',
+};
+
+/**
  * Screen Types - Typed screen definitions for navigation
  *
  * Each screen has:
@@ -13,10 +26,10 @@ import { create } from 'zustand';
  * - Single source of truth for screen metadata
  */
 export const SCREENS = {
-  PROJECT_MANAGER: { type: 'project-manager', label: 'Projects' },
-  FRAMING: { type: 'framing', label: 'Framing' },
-  OVERLAY: { type: 'overlay', label: 'Overlay' },
-  ANNOTATE: { type: 'annotate', label: 'Annotate' },
+  PROJECT_MANAGER: { type: EDITOR_MODES.PROJECT_MANAGER, label: 'Projects' },
+  FRAMING: { type: EDITOR_MODES.FRAMING, label: 'Framing' },
+  OVERLAY: { type: EDITOR_MODES.OVERLAY, label: 'Overlay' },
+  ANNOTATE: { type: EDITOR_MODES.ANNOTATE, label: 'Annotate' },
 };
 
 /**
@@ -47,7 +60,7 @@ export const useEditorStore = create((set, get) => ({
 
   // Editor mode: 'framing' | 'overlay' | 'annotate' | 'project-manager'
   // DEPRECATED: Use screen.type instead. Kept for backward compatibility.
-  editorMode: 'framing',
+  editorMode: EDITOR_MODES.FRAMING,
 
   // Mode switch confirmation dialog
   modeSwitchDialog: {
@@ -127,24 +140,24 @@ export const useEditorStore = create((set, get) => ({
    * Check if currently in framing mode
    * DEPRECATED: Use isScreen(SCREENS.FRAMING) instead
    */
-  isFramingMode: () => get().editorMode === 'framing',
+  isFramingMode: () => get().editorMode === EDITOR_MODES.FRAMING,
 
   /**
    * Check if currently in overlay mode
    * DEPRECATED: Use isScreen(SCREENS.OVERLAY) instead
    */
-  isOverlayMode: () => get().editorMode === 'overlay',
+  isOverlayMode: () => get().editorMode === EDITOR_MODES.OVERLAY,
 
   /**
    * Check if currently in annotate mode
    * DEPRECATED: Use isScreen(SCREENS.ANNOTATE) instead
    */
-  isAnnotateMode: () => get().editorMode === 'annotate',
+  isAnnotateMode: () => get().editorMode === EDITOR_MODES.ANNOTATE,
 
   /**
    * Check if currently in project manager
    */
-  isProjectManager: () => get().editorMode === 'project-manager',
+  isProjectManager: () => get().editorMode === EDITOR_MODES.PROJECT_MANAGER,
 }));
 
 export default useEditorStore;

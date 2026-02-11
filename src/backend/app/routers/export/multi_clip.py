@@ -24,6 +24,7 @@ import ffmpeg
 import shutil
 import hashlib
 import base64
+import math
 import torch
 
 from ...websocket import export_progress, manager
@@ -279,8 +280,10 @@ async def run_local_detection_on_video_file(
     detection_idx = 0
 
     for clip_idx, clip in enumerate(source_clips):
-        region_start = clip['start_time']
-        region_end = min(clip['start_time'] + DEFAULT_HIGHLIGHT_REGION_DURATION, clip['end_time'])
+        # Snap region_start to next frame boundary using ceil to ensure we never start before clip demarcation
+        start_frame = math.ceil(clip['start_time'] * fps)
+        region_start = start_frame / fps
+        region_end = min(region_start + DEFAULT_HIGHLIGHT_REGION_DURATION, clip['end_time'])
 
         if region_end - region_start < 0.5:
             detection_idx += 4
@@ -588,13 +591,14 @@ def build_clip_boundaries_from_input(
     return source_clips
 
 
-def generate_default_highlight_regions(source_clips: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def generate_default_highlight_regions(source_clips: List[Dict[str, Any]], fps: int = 30) -> List[Dict[str, Any]]:
     """
     Generate default highlight regions at the start of each clip.
     Creates a 2-second region at the beginning of each clip in the concatenated video.
 
     Args:
         source_clips: List of clip boundaries from build_clip_boundaries()
+        fps: Frame rate for snapping to frame boundaries (default 30)
 
     Returns:
         List of highlight region objects ready for database storage
@@ -602,8 +606,10 @@ def generate_default_highlight_regions(source_clips: List[Dict[str, Any]]) -> Li
     regions = []
 
     for i, clip in enumerate(source_clips):
-        region_start = clip['start_time']
-        region_end = min(clip['start_time'] + DEFAULT_HIGHLIGHT_REGION_DURATION, clip['end_time'])
+        # Snap region_start to next frame boundary using ceil to ensure we never start before clip demarcation
+        start_frame = math.ceil(clip['start_time'] * fps)
+        region_start = start_frame / fps
+        region_end = min(region_start + DEFAULT_HIGHLIGHT_REGION_DURATION, clip['end_time'])
 
         # Skip if region would be too short (less than 0.5 seconds)
         if region_end - region_start < 0.5:
@@ -655,7 +661,12 @@ def calculate_detection_timestamps(source_clips: List[Dict[str, Any]], fps: int 
         for i in range(4):
             relative_time = (i / 3) * overlay_duration  # 0, 0.33, 0.66, 1.0 × overlay_duration
             absolute_time = clip_start + relative_time
-            frame = int(round(absolute_time * fps))
+            # Use ceil for first frame (i=0) to ensure we never detect before clip boundary
+            # This guarantees the first tracking frame is at or after the clip demarcation
+            if i == 0:
+                frame = math.ceil(absolute_time * fps)
+            else:
+                frame = int(round(absolute_time * fps))
             detection_points.append({
                 'timestamp': absolute_time,
                 'frame': frame,
@@ -753,8 +764,10 @@ async def run_player_detection_for_highlights(
     detection_idx = 0
 
     for clip_idx, clip in enumerate(source_clips):
-        region_start = clip['start_time']
-        region_end = min(clip['start_time'] + DEFAULT_HIGHLIGHT_REGION_DURATION, clip['end_time'])
+        # Snap region_start to next frame boundary using ceil to ensure we never start before clip demarcation
+        start_frame = math.ceil(clip['start_time'] * fps)
+        region_start = start_frame / fps
+        region_end = min(region_start + DEFAULT_HIGHLIGHT_REGION_DURATION, clip['end_time'])
 
         # Skip if region would be too short
         if region_end - region_start < 0.5:

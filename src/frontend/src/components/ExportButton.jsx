@@ -3,7 +3,7 @@ import { Download, Loader, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import { Button, Toggle, ExportProgress, toast } from './shared';
 import { useAppState } from '../contexts';
-import { useExportStore } from '../stores';
+import { useExportStore, EDITOR_MODES } from '../stores';
 import { useExportManager } from '../hooks/useExportManager';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
@@ -186,14 +186,14 @@ const ExportButton = forwardRef(function ExportButton({
   const failExportInStore = useExportStore(state => state.failExport);
 
   // Use props if provided, otherwise fall back to context values
-  const editorMode = editorModeProp ?? contextEditorMode ?? 'framing';
+  const editorMode = editorModeProp ?? contextEditorMode ?? EDITOR_MODES.FRAMING;
   const projectId = projectIdProp ?? selectedProjectId;
   const projectName = projectNameProp ?? selectedProject?.name;
 
   // Derive external exporting state from context if not provided as prop
   const isExternallyExporting = isExternallyExportingProp ?? (
     exportingProject?.projectId === selectedProjectId &&
-    exportingProject?.stage === (editorMode === 'framing' ? 'framing' : 'overlay')
+    exportingProject?.stage === (editorMode === EDITOR_MODES.FRAMING ? EDITOR_MODES.FRAMING : EDITOR_MODES.OVERLAY)
   );
 
   // Use context progress if not provided as prop
@@ -208,7 +208,7 @@ const ExportButton = forwardRef(function ExportButton({
     } else if (setExportingProject) {
       setExportingProject({
         projectId: selectedProjectId,
-        stage: editorMode === 'framing' ? 'framing' : 'overlay',
+        stage: editorMode === EDITOR_MODES.FRAMING ? EDITOR_MODES.FRAMING : EDITOR_MODES.OVERLAY,
         exportId: exportId
       });
     }
@@ -371,8 +371,8 @@ const ExportButton = forwardRef(function ExportButton({
     // 1. Overlay mode with projectId (video from working_video in R2)
     // 2. Framing mode with project clips (videos from working_clips in R2)
     const hasProjectClips = clips && clips.length > 0 && clips.some(c => c.workingClipId);
-    const isBackendAuthoritative = (editorMode === 'overlay' && projectId) ||
-                                   (editorMode === 'framing' && hasProjectClips);
+    const isBackendAuthoritative = (editorMode === EDITOR_MODES.OVERLAY && projectId) ||
+                                   (editorMode === EDITOR_MODES.FRAMING && hasProjectClips);
     if (!videoFile && !isBackendAuthoritative) {
       setError('No video file loaded');
       return;
@@ -384,7 +384,7 @@ const ExportButton = forwardRef(function ExportButton({
       Object.values(activeExports).map(e => `${e.exportId}(${e.status})`).join(', '));
 
     // Mode-specific validation
-    if (editorMode === 'framing') {
+    if (editorMode === EDITOR_MODES.FRAMING) {
       // Framing mode requires crop keyframes
       if (!cropKeyframes || cropKeyframes.length === 0) {
         setError('No crop keyframes defined. Please add at least one crop keyframe.');
@@ -451,7 +451,7 @@ const ExportButton = forwardRef(function ExportButton({
 
       let endpoint;
 
-      if (editorMode === 'framing') {
+      if (editorMode === EDITOR_MODES.FRAMING) {
         // Check if this is a multi-clip export
         const isMultiClip = clips && clips.length > 1;
 
@@ -736,7 +736,7 @@ const ExportButton = forwardRef(function ExportButton({
           headers: {
             'Content-Type': 'multipart/form-data'
           },
-          responseType: editorMode === 'framing' ? 'json' : 'blob',
+          responseType: editorMode === EDITOR_MODES.FRAMING ? 'json' : 'blob',
           onUploadProgress: (progressEvent) => {
             // Only update during upload phase, don't override WebSocket updates
             if (!uploadCompleteRef.current) {
@@ -762,7 +762,7 @@ const ExportButton = forwardRef(function ExportButton({
 
       // In Framing mode, backend now saves working video directly (MVC pattern)
       // We just need to navigate to Overlay mode - it will fetch video from server
-      if (editorMode === 'framing') {
+      if (editorMode === EDITOR_MODES.FRAMING) {
         try {
           // Backend returns JSON with working_video_id (not a blob anymore)
           const result = response.data;
@@ -983,7 +983,7 @@ const ExportButton = forwardRef(function ExportButton({
   }), [isExporting, isCurrentlyExporting]);
 
   // Determine button text based on mode
-  const isFramingMode = editorMode === 'framing';
+  const isFramingMode = editorMode === EDITOR_MODES.FRAMING;
 
   // Check if any clips are still being extracted
   const clipsNotExtracted = clips?.filter(c => c.isExtracted === false) || [];

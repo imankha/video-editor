@@ -58,6 +58,9 @@ export function FramingScreen({
   const projectDataReset = useProjectDataStore(state => state.reset);
   const isProjectLoading = useProjectDataStore(state => state.isLoading);
   const loadingStage = useProjectDataStore(state => state.loadingStage);
+  // Working video and clip metadata are set on export
+  const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
+  const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
 
   // Framing persistent state
   const {
@@ -69,12 +72,8 @@ export function FramingScreen({
     setFramingChangedSinceExport,
   } = useFramingStore();
 
-  // Overlay store - for setting working video on export
-  const {
-    setWorkingVideo,
-    setClipMetadata: setOverlayClipMetadata,
-    reset: resetOverlayStore,
-  } = useOverlayStore();
+  // Overlay store - for resetting overlay state
+  const resetOverlayStore = useOverlayStore(state => state.reset);
 
   // Local state
   const [dragCrop, setDragCrop] = useState(null);

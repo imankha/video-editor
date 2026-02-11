@@ -77,6 +77,7 @@ export function OverlayModeView({
   showPlayerBoxes,
   onTogglePlayerBoxes,
   onEnablePlayerBoxes,
+  onDetectionMarkerClick,
 
   // Zoom
   zoom,
@@ -307,6 +308,7 @@ export function OverlayModeView({
             isFullscreen={isFullscreen}
             showPlayerBoxes={showPlayerBoxes}
             onTogglePlayerBoxes={onTogglePlayerBoxes}
+            onDetectionMarkerClick={onDetectionMarkerClick}
               />
             ) : isLoading ? (
               <div className="animate-pulse">

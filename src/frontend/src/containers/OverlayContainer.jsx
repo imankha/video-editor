@@ -2,6 +2,7 @@ import { useEffect, useCallback, useMemo, useState } from 'react';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from '../modes/overlay';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { API_BASE } from '../config';
+import { EDITOR_MODES } from '../stores';
 
 /**
  * OverlayContainer - Encapsulates all Overlay mode logic and UI
@@ -139,7 +140,7 @@ export function OverlayContainer({
   }, [overlayVideoFile, hasMultipleClips, hasFramingEdits, framingVideoFile]);
 
   // Player detection for click-to-track feature
-  const playerDetectionEnabled = editorMode === 'overlay' && isTimeInEnabledRegion(currentTime);
+  const playerDetectionEnabled = editorMode === EDITOR_MODES.OVERLAY && isTimeInEnabledRegion(currentTime);
 
   // Toggle for showing/hiding player detection boxes (default: visible)
   const [showPlayerBoxes, setShowPlayerBoxes] = useState(true);
@@ -152,9 +153,49 @@ export function OverlayContainer({
     setShowPlayerBoxes(true);
   }, []);
 
+  // CLICKED DETECTION STATE:
+  // When user clicks a green detection marker, we remember which detection they clicked.
+  // This guarantees the boxes show regardless of where the browser's seek lands.
+  // The clicked detection is cleared when the user plays or manually scrubs.
+  const [clickedDetection, setClickedDetection] = useState(null);
+
+  // Handler for when a detection marker is clicked
+  const handleDetectionMarkerClick = useCallback((detection) => {
+    // detection = { regionId, frame, boxes, videoWidth, videoHeight }
+    setClickedDetection(detection);
+  }, []);
+
+  // Clear clicked detection when user starts playing (they're moving away from the marker)
+  useEffect(() => {
+    if (isPlaying && clickedDetection) {
+      setClickedDetection(null);
+    }
+  }, [isPlaying, clickedDetection]);
+
   // Get detection data from the current highlight region (stored during framing export)
   // This replaces the old usePlayerDetection hook that fetched from a per-frame cache
+  //
+  // CLICKED DETECTION PRIORITY:
+  // If user clicked a green detection marker, show that detection DIRECTLY.
+  // This bypasses all timing calculations and guarantees boxes appear.
+  //
+  // FRAME-BASED DETECTION MATCHING (fallback):
+  // We use frame numbers (integers) instead of timestamps (floats) for matching.
+  // This avoids floating-point precision issues and accounts for video seeking
+  // imprecision (browsers seek to nearest keyframe, not exact requested time).
   const regionDetectionData = useMemo(() => {
+    // PRIORITY 1: If user clicked a detection marker, show that detection directly
+    // This is immune to browser seek imprecision - clicking green marker ALWAYS shows boxes
+    if (clickedDetection && clickedDetection.boxes?.length > 0) {
+      return {
+        detections: clickedDetection.boxes,
+        videoWidth: clickedDetection.videoWidth || 0,
+        videoHeight: clickedDetection.videoHeight || 0,
+        hasDetections: true
+      };
+    }
+
+    // PRIORITY 2: Frame-based matching (for scrubbing/playback)
     if (!playerDetectionEnabled || !highlightRegions?.length) {
       return { detections: [], videoWidth: 0, videoHeight: 0, hasDetections: false };
     }
@@ -169,23 +210,37 @@ export function OverlayContainer({
       return { detections: [], videoWidth: 0, videoHeight: 0, hasDetections: false };
     }
 
-    // Find the closest detection timestamp to currentTime
+    // Get fps from region (set during framing export) or use default
+    const fps = currentRegion.fps || highlightRegionsFramerate || 30;
+
+    // Calculate current frame from currentTime (integer comparison is more reliable)
+    const currentFrame = Math.round(currentTime * fps);
+
+    // Find the closest detection by frame number (integer comparison)
     let closestDetection = null;
-    let closestDistance = Infinity;
+    let closestFrameDistance = Infinity;
 
     for (const detection of currentRegion.detections) {
-      const distance = Math.abs(detection.timestamp - currentTime);
-      if (distance < closestDistance) {
-        closestDistance = distance;
+      // Use frame number if available, otherwise calculate from timestamp
+      const detectionFrame = detection.frame !== undefined
+        ? detection.frame
+        : Math.round(detection.timestamp * fps);
+
+      const frameDistance = Math.abs(detectionFrame - currentFrame);
+      if (frameDistance < closestFrameDistance) {
+        closestFrameDistance = frameDistance;
         closestDetection = detection;
       }
     }
 
-    // Only show detections if within ~1 frame of a detection timestamp
-    // This ensures boxes only appear when playhead is exactly at a detection point
-    // (e.g., after clicking a green marker on the timeline)
-    const DETECTION_DISPLAY_THRESHOLD = 0.05; // 50ms ≈ 1.5 frames at 30fps
-    if (!closestDetection || closestDistance > DETECTION_DISPLAY_THRESHOLD) {
+    // FRAME-BASED THRESHOLD: ±2 frame tolerance
+    // This accounts for browser seek imprecision (typically 50-100ms):
+    // - At 30fps: ±2 frames = ±83ms tolerance
+    // - At 60fps: ±2 frames = ±42ms tolerance
+    // This guarantees boxes show when within 2 frames of a detection,
+    // which is visually indistinguishable and handles seek imprecision.
+    const DETECTION_FRAME_THRESHOLD = 2; // ±2 frame tolerance (~83ms at 30fps)
+    if (!closestDetection || closestFrameDistance > DETECTION_FRAME_THRESHOLD) {
       return {
         detections: [],
         videoWidth: currentRegion.videoWidth || 0,
@@ -200,7 +255,7 @@ export function OverlayContainer({
       videoHeight: currentRegion.videoHeight || 0,
       hasDetections: true
     };
-  }, [playerDetectionEnabled, highlightRegions, currentTime]);
+  }, [clickedDetection, playerDetectionEnabled, highlightRegions, currentTime, highlightRegionsFramerate]);
 
   const playerDetections = regionDetectionData.detections;
   const isDetectionLoading = false; // No longer loading from API
@@ -413,6 +468,7 @@ export function OverlayContainer({
     showPlayerBoxes,
     togglePlayerBoxes,
     enablePlayerBoxes,
+    handleDetectionMarkerClick,  // Guarantees boxes show when clicking green markers
 
     // Derived state
     hasFramingEdits,
@@ -529,6 +585,7 @@ export function OverlayTimeline({
   selectedLayer,
   onLayerSelect,
   onSeek,
+  onDetectionMarkerClick,  // Called when user clicks a green detection marker
   sourceTimeToVisualTime,
   visualTimeToSourceTime,
   timelineZoom,
@@ -565,6 +622,7 @@ export function OverlayTimeline({
       selectedLayer={selectedLayer}
       onLayerSelect={onLayerSelect}
       onSeek={onSeek}
+      onDetectionMarkerClick={onDetectionMarkerClick}
       sourceTimeToVisualTime={sourceTimeToVisualTime}
       visualTimeToSourceTime={visualTimeToSourceTime}
       timelineZoom={timelineZoom}

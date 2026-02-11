@@ -50,22 +50,22 @@ export function OverlayScreen({
   // Project context
   const { projectId, project, refresh: refreshProject } = useProject();
 
-  // Overlay store - working video (set by FramingScreen on export)
+  // Project data store - canonical owner for working video and clip metadata
+  const workingVideo = useProjectDataStore(state => state.workingVideo);
+  const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
+  const overlayClipMetadata = useProjectDataStore(state => state.clipMetadata);
+  const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
+  const clips = useProjectDataStore(state => state.clips);
+
+  // Overlay store - for overlay-specific state (loading, effects, changes)
   const {
-    workingVideo,
-    clipMetadata: overlayClipMetadata,
     effectType: highlightEffectType,
     isLoadingWorkingVideo,
     overlayChangedSinceExport,
-    setWorkingVideo,
-    setClipMetadata: setOverlayClipMetadata,
     setEffectType: setHighlightEffectType,
     setIsLoadingWorkingVideo,
     setOverlayChangedSinceExport,
   } = useOverlayStore();
-
-  // Project data store - for framing clips (pass-through mode)
-  const clips = useProjectDataStore(state => state.clips);
   const hasClips = clips && clips.length > 0;
 
   // Get unique tags from all clips for display
@@ -332,11 +332,14 @@ export function OverlayScreen({
   // =========================================
 
   // Reset sync state when project changes
+  // NOTE: Do NOT include overlaySyncState in dependencies - we only want this
+  // to run when projectId changes, not when sync state changes (causes infinite loop)
   useEffect(() => {
     if (projectId !== overlayLoadedProjectId && overlaySyncState !== 'idle') {
       setOverlaySyncState('idle');
     }
-  }, [projectId, overlayLoadedProjectId, overlaySyncState, setOverlaySyncState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, overlayLoadedProjectId, setOverlaySyncState]);
 
   // Load overlay data from backend
   // Skip if we have fresh clip metadata (from framing export) - that takes priority
@@ -545,9 +548,9 @@ export function OverlayScreen({
     overlayVideoMetadata: workingVideo?.metadata,
     overlayClipMetadata,
     isLoadingWorkingVideo,
-    setOverlayVideoFile: (file) => setWorkingVideo(prev => prev ? { ...prev, file } : { file, url: null, metadata: null }),
-    setOverlayVideoUrl: (url) => setWorkingVideo(prev => prev ? { ...prev, url } : { file: null, url, metadata: null }),
-    setOverlayVideoMetadata: (meta) => setWorkingVideo(prev => prev ? { ...prev, metadata: meta } : { file: null, url: null, metadata: meta }),
+    setOverlayVideoFile: (file) => setWorkingVideo(workingVideo ? { ...workingVideo, file } : { file, url: null, metadata: null }),
+    setOverlayVideoUrl: (url) => setWorkingVideo(workingVideo ? { ...workingVideo, url } : { file: null, url, metadata: null }),
+    setOverlayVideoMetadata: (meta) => setWorkingVideo(workingVideo ? { ...workingVideo, metadata: meta } : { file: null, url: null, metadata: meta }),
     setOverlayClipMetadata,
     setIsLoadingWorkingVideo,
     dragHighlight,
@@ -594,6 +597,7 @@ export function OverlayScreen({
     handlePlayerSelect,
     handleHighlightChange,
     handleHighlightComplete,
+    handleDetectionMarkerClick,
   } = overlay;
 
   // =========================================
@@ -669,20 +673,39 @@ export function OverlayScreen({
     const localFallbackUrl = `${API_BASE}/api/projects/${projectId}/working-video`;
 
     try {
-      // Working videos are stored as working_videos/{projectId}.mp4
-      const freshUrl = await forceRefreshUrl('working_videos', `${projectId}.mp4`, localFallbackUrl);
+      // Extract actual filename from current working video URL (format: working_64_abc123.mp4)
+      // The URL might be a presigned R2 URL or a local API URL
+      let filename = null;
+      const currentUrl = workingVideo?.url || project?.working_video_url;
+      if (currentUrl) {
+        // Try to extract filename from URL path (before query params)
+        const urlPath = currentUrl.split('?')[0];
+        const pathParts = urlPath.split('/');
+        const lastPart = pathParts[pathParts.length - 1];
+        if (lastPart && lastPart.endsWith('.mp4')) {
+          filename = lastPart;
+        }
+      }
+
+      // Fallback to projectId-based filename if extraction fails
+      if (!filename) {
+        filename = `${projectId}.mp4`;
+        console.warn('[OverlayScreen] Could not extract filename from URL, using fallback:', filename);
+      }
+
+      const freshUrl = await forceRefreshUrl('working_videos', filename, localFallbackUrl);
       console.log('[OverlayScreen] Got fresh URL:', freshUrl?.substring(0, 60));
 
       if (freshUrl && !freshUrl.startsWith('blob:')) {
         loadVideoFromStreamingUrl(freshUrl, effectiveOverlayMetadata);
       } else {
         // Fallback to blob download
-        await loadVideoFromUrl(freshUrl || localFallbackUrl, `${projectId}.mp4`);
+        await loadVideoFromUrl(freshUrl || localFallbackUrl, filename);
       }
     } catch (err) {
       console.error('[OverlayScreen] Failed to retry video load:', err);
     }
-  }, [projectId, clearError, loadVideoFromStreamingUrl, loadVideoFromUrl, effectiveOverlayMetadata]);
+  }, [projectId, workingVideo, project, clearError, loadVideoFromStreamingUrl, loadVideoFromUrl, effectiveOverlayMetadata]);
 
   const handleSwitchToFraming = useCallback(() => {
     // NOTE: Safety blob save removed - gesture-based actions sync immediately to backend.
@@ -765,6 +788,7 @@ export function OverlayScreen({
       showPlayerBoxes={showPlayerBoxes}
       onTogglePlayerBoxes={togglePlayerBoxes}
       onEnablePlayerBoxes={enablePlayerBoxes}
+      onDetectionMarkerClick={handleDetectionMarkerClick}
       // Zoom
       zoom={zoom}
       panOffset={panOffset}
