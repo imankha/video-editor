@@ -1,6 +1,6 @@
 # T63: Project View Filter Persistence
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** MEDIUM
 **Complexity:** LOW
 **Created:** 2026-02-11
@@ -15,36 +15,35 @@ Project view should:
 
 ## Solution
 
-1. Set initial default filter to "Uncompleted"
-2. Store the user's filter preference in the database when changed
-3. Load the stored preference on app load
+**Already implemented.** The infrastructure was built but needed verification.
 
-## Context
+## Verification (2026-02-11)
 
-### Relevant Files
-- `src/frontend/src/screens/` - Project listing screen
-- `src/frontend/src/stores/` - State management
-- `src/backend/app/` - User preferences endpoint
-- Database schema - User preferences table
+Verified the complete end-to-end flow works:
 
-### Related Tasks
-- May relate to T200 User Management for proper per-user storage
+### Backend
+- `src/backend/app/routers/settings.py` - Settings router with GET/PUT/DELETE at `/api/settings`
+- `src/backend/app/database.py` - `user_settings` table (lines 749-761)
+- `src/backend/app/main.py` - Router registered (line 131)
+- Default: `statusFilter: 'uncompleted'`
 
-### Technical Notes
-- For now, can store in existing user/session storage
-- After T200, migrate to proper user preferences in database
+### Frontend
+- `src/frontend/src/stores/settingsStore.js` - Zustand store with:
+  - `loadSettings()` - Fetches from `/api/settings`
+  - `saveSettings()` - PUTs to `/api/settings`
+  - `setStatusFilter()` - Convenience method for filter changes
+- `src/frontend/src/components/ProjectManager.jsx`:
+  - Calls `loadSettings()` on mount (lines 67-70)
+  - Filter buttons call `setStatusFilter()` directly (line 658)
 
-## Implementation
-
-### Steps
-1. [ ] Find project filter implementation
-2. [ ] Change default from current value to "Uncompleted"
-3. [ ] Add API endpoint to store/retrieve filter preference
-4. [ ] Update frontend to persist filter changes
-5. [ ] Load stored filter on app initialization
+### Test Results
+- Fresh users get `statusFilter: 'uncompleted'` by default
+- Filter changes persist to database
+- Settings are restored on page reload
+- All 378 frontend tests pass
 
 ## Acceptance Criteria
 
-- [ ] Project view defaults to "Uncompleted" filter initially
-- [ ] Filter changes are persisted to database
-- [ ] Stored filter is loaded on subsequent visits
+- [x] Project view defaults to "Uncompleted" filter initially
+- [x] Filter changes are persisted to database
+- [x] Stored filter is loaded on subsequent visits

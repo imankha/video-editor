@@ -37,7 +37,7 @@
 | T60 | [Consolidate Video Controls](tasks/T60-consolidate-video-controls.md) | TODO | MEDIUM | MEDIUM |
 | T61 | [Annotate Default Good](tasks/T61-annotate-default-good.md) | TODO | LOW | LOW |
 | T62 | [Tag Changes](tasks/T62-tag-changes.md) | TODO | LOW | LOW |
-| T63 | [Project Filter Persistence](tasks/T63-project-filter-persistence.md) | TODO | MEDIUM | LOW |
+| T63 | [Project Filter Persistence](tasks/T63-project-filter-persistence.md) | DONE | MEDIUM | LOW |
 | T64 | [Gallery Playback Controls](tasks/T64-gallery-playback-controls.md) | TODO | MEDIUM | MEDIUM |
 | T65 | [Logo from Landing Page](tasks/T65-logo-from-landing-page.md) | TODO | LOW | LOW |
 
