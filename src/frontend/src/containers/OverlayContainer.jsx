@@ -3,6 +3,7 @@ import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from '../modes/
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { API_BASE } from '../config';
 import { EDITOR_MODES } from '../stores';
+import { HighlightEffect } from '../constants/highlightEffects';
 
 /**
  * OverlayContainer - Encapsulates all Overlay mode logic and UI
@@ -72,6 +73,7 @@ export function OverlayContainer({
   setSelectedHighlightKeyframeTime,
   highlightEffectType,
   setHighlightEffectType,
+  highlightColor,  // Global color from store (used in preview)
   pendingOverlaySaveRef,
   // Sync state machine (replaces overlayDataLoadedForProjectRef)
   overlaySyncState,
@@ -280,7 +282,12 @@ export function OverlayContainer({
   const regionHasDetections = regionDetectionData.hasDetections;
 
   // DERIVED STATE: Current highlight state
+  // Uses global highlightColor from store (null = None/brightness boost, color = colored overlay)
   const currentHighlightState = useMemo(() => {
+    // Pass through highlightColor directly - null means "None" (brightness boost)
+    // Don't fall back to yellow, let null propagate to preview/export
+    const effectiveColor = highlightColor;  // Can be null
+
     if (dragHighlight) {
       return {
         x: dragHighlight.x,
@@ -288,7 +295,7 @@ export function OverlayContainer({
         radiusX: dragHighlight.radiusX,
         radiusY: dragHighlight.radiusY,
         opacity: dragHighlight.opacity,
-        color: dragHighlight.color
+        color: effectiveColor
       };
     }
 
@@ -305,9 +312,9 @@ export function OverlayContainer({
       radiusX: highlight.radiusX,
       radiusY: highlight.radiusY,
       opacity: highlight.opacity,
-      color: highlight.color
+      color: effectiveColor
     };
-  }, [dragHighlight, currentTime, isTimeInEnabledRegion, getRegionHighlightAtTime]);
+  }, [dragHighlight, currentTime, isTimeInEnabledRegion, getRegionHighlightAtTime, highlightColor]);
 
   /**
    * Handle player selection from detection overlay
@@ -320,7 +327,8 @@ export function OverlayContainer({
     }
 
     const defaultOpacity = currentHighlightState?.opacity ?? 0.3;
-    const defaultColor = currentHighlightState?.color ?? '#FFFF00';
+    // Use global highlight color (null = None/brightness boost)
+    const defaultColor = highlightColor;  // Can be null
 
     const highlight = {
       x: playerData.x,
@@ -339,7 +347,7 @@ export function OverlayContainer({
     });
 
     addHighlightRegionKeyframe(currentTime, highlight, duration);
-  }, [currentTime, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime]);
+  }, [currentTime, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime, highlightColor]);
 
   /**
    * Handle highlight changes during drag/resize
@@ -423,7 +431,7 @@ export function OverlayContainer({
         const formData = new FormData();
         formData.append('highlights_data', JSON.stringify(data.highlightRegions || []));
         formData.append('text_overlays', JSON.stringify(data.textOverlays || []));
-        formData.append('effect_type', data.effectType || 'dark_overlay');
+        formData.append('effect_type', data.effectType || HighlightEffect.DARK_OVERLAY);
 
         await fetch(`${API_BASE}/api/export/projects/${saveProjectId}/overlay-data`, {
           method: 'PUT',

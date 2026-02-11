@@ -19,11 +19,14 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
   highlightRegions,
   highlightEffectType,
   onHighlightEffectTypeChange,
+  highlightColor,
+  onHighlightColorChange,
   includeAudio,
   onIncludeAudioChange,
   onExportComplete,
   disabled,
 }, ref) {
+
   // Container: all business logic
   const container = ExportButtonContainer({
     videoFile,
@@ -64,9 +67,11 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         includeAudio={includeAudio}
         isHighlightEnabled={highlightRegions.length > 0}
         highlightEffectType={highlightEffectType}
+        highlightColor={highlightColor}
         onExport={container.handleExport}
         onAudioToggle={container.handleAudioToggle}
         onHighlightEffectTypeChange={onHighlightEffectTypeChange}
+        onHighlightColorChange={onHighlightColorChange}
         HIGHLIGHT_EFFECT_LABELS={HIGHLIGHT_EFFECT_LABELS}
         EXPORT_CONFIG={EXPORT_CONFIG}
         handleExportRef={container.handleExportRef}
@@ -138,6 +143,8 @@ export function OverlayModeView({
   onToggleHighlightRegion,
   onSelectedKeyframeChange,
   onHighlightEffectTypeChange,
+  highlightColor,
+  onHighlightColorChange,
 
   // Player detection (auto-detected during framing export)
   playerDetectionEnabled,
@@ -419,6 +426,8 @@ export function OverlayModeView({
             highlightRegions={getRegionsForExport()}
             highlightEffectType={highlightEffectType}
             onHighlightEffectTypeChange={onHighlightEffectTypeChange}
+            highlightColor={highlightColor}
+            onHighlightColorChange={onHighlightColorChange}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onExportComplete={onExportComplete}

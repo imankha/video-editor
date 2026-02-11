@@ -142,6 +142,16 @@ export async function setEffectType(projectId, effectType) {
   return sendAction(projectId, 'set_effect_type', null, { effect_type: effectType });
 }
 
+/**
+ * Set the highlight color for new highlights
+ * @param {number} projectId
+ * @param {string|null} highlightColor - Hex color string or null
+ * @returns {Promise<{success: boolean, version: number}>}
+ */
+export async function setHighlightColor(projectId, highlightColor) {
+  return sendAction(projectId, 'set_highlight_color', null, { highlight_color: highlightColor });
+}
+
 export default {
   createRegion,
   deleteRegion,
@@ -151,4 +161,5 @@ export default {
   updateKeyframe,
   deleteKeyframe,
   setEffectType,
+  setHighlightColor,
 };

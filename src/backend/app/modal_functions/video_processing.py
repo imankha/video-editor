@@ -469,23 +469,53 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     radiusY = lerp(kf_before["radiusY"], kf_after["radiusY"], t)
     opacity = lerp(kf_before.get("opacity", 0.15), kf_after.get("opacity", 0.15), t)
 
-    height, width = frame.shape[:2]
+    # Get color from keyframe (interpolate would be complex, use kf_before's color)
+    color = kf_before.get("color")
 
-    # Create mask for ellipse
-    mask = np.zeros((height, width), dtype=np.uint8)
+    height, width = frame.shape[:2]
     center = (int(x), int(y))
     axes = (int(radiusX), int(radiusY))
-    cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
 
     # Apply effect
     if effect_type == "dark_overlay":
         # Dim everything outside the highlight
+        mask = np.zeros((height, width), dtype=np.uint8)
+        cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
         darkened = (frame * (1 - opacity)).astype(np.uint8)
         frame = np.where(mask[:, :, np.newaxis] > 0, frame, darkened)
     elif effect_type == "brightness_boost":
-        # Brighten inside the highlight
-        brightened = np.clip(frame.astype(np.float32) * (1 + opacity), 0, 255).astype(np.uint8)
-        frame = np.where(mask[:, :, np.newaxis] > 0, brightened, frame)
+        # Check if color is set (not None and not 'none')
+        has_color = color is not None and color != 'none'
+
+        if has_color:
+            # Colored overlay effect (like old "original")
+            # Parse hex color
+            color_hex = color.lstrip('#')
+            if len(color_hex) == 6:
+                r = int(color_hex[0:2], 16)
+                g = int(color_hex[2:4], 16)
+                b = int(color_hex[4:6], 16)
+                color_bgr = (b, g, r)  # OpenCV uses BGR
+            else:
+                color_bgr = (0, 255, 255)  # Default yellow
+
+            # Create colored overlay
+            overlay = frame.copy()
+            cv2.ellipse(overlay, center, axes, 0, 0, 360, color_bgr, -1)
+
+            # Blend with original
+            frame = cv2.addWeighted(overlay, opacity, frame, 1 - opacity, 0)
+
+            # Add thin stroke
+            stroke_overlay = frame.copy()
+            cv2.ellipse(stroke_overlay, center, axes, 0, 0, 360, color_bgr, 1)
+            frame = cv2.addWeighted(stroke_overlay, 0.5, frame, 0.5, 0)
+        else:
+            # No color - pure brightness boost
+            mask = np.zeros((height, width), dtype=np.uint8)
+            cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
+            brightened = np.clip(frame.astype(np.float32) * (1 + opacity * 3), 0, 255).astype(np.uint8)
+            frame = np.where(mask[:, :, np.newaxis] > 0, brightened, frame)
     # effect_type == "original" - no modification
 
     return frame

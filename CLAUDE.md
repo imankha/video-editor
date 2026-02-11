@@ -36,7 +36,11 @@ cd src/backend && pytest tests/test_clips.py -v          # Specific file
 | Classify | Before starting | State complexity: "This is a TRIVIAL/SIMPLE/STANDARD/COMPLEX task" |
 | Branch | Before first change | `git checkout -b feature/T{id}-{description}` (skip for TRIVIAL) |
 | Commit | After implementation | Commit with co-author line |
-| PLAN.md | After commit | Update task status to DONE |
+| PLAN.md | After commit | Update task status to TESTING |
+
+### Task Completion Rule
+
+**AI cannot mark tasks as DONE.** AI can only set status to TESTING. User must say "complete" or "done" to mark a task as DONE in PLAN.md.
 
 ### Skip Based on Complexity
 

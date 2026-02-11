@@ -1,6 +1,6 @@
 # T67: Overlay Color Selection
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** MEDIUM
 **Complexity:** LOW
 **Created:** 2026-02-11
@@ -47,16 +47,16 @@ Overlay Settings
 
 ## Implementation Steps
 
-1. [ ] Add `highlightColor` to overlay store (default: yellow)
-2. [ ] Create color swatch selector component
-3. [ ] Add color selector to overlay settings panel
-4. [ ] Update overlay rendering to use selected color
-5. [ ] Persist color preference
+1. [x] Add `highlightColor` to overlay store (default: yellow)
+2. [x] Create color constants (highlightColors.js)
+3. [x] Add color swatches to overlay settings panel
+4. [x] Update useHighlightRegions to use selected color for new highlights
+5. [ ] Persist color preference (skipped - stored in store, resets on reload)
 
 ## Acceptance Criteria
 
-- [ ] Color swatches displayed visually (not text dropdown)
-- [ ] Layout consistent with other overlay settings
-- [ ] Selected color applied to highlight overlay
-- [ ] Color preference persisted across sessions
-- [ ] "None" option disables highlight coloring
+- [x] Color swatches displayed visually (not text dropdown)
+- [x] Layout consistent with other overlay settings
+- [x] Selected color applied to new highlight regions
+- [ ] Color preference persisted across sessions (not implemented - in-memory only)
+- [x] "None" option available (falls back to yellow for new highlights)

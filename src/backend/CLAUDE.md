@@ -74,3 +74,12 @@ cursor.execute(
 - Don't skip R2 upload for user files
 - Don't send full state blobs (use gesture-based actions)
 - Don't add print() statements in committed code
+- Don't use `.get()` on `sqlite3.Row` - use bracket notation `row['column']` instead
+
+## Modal Functions
+
+When altering any file in `app/modal_functions/`, ask the user if they want to redeploy:
+
+```bash
+cd src/backend && PYTHONUTF8=1 .venv/Scripts/python.exe -m modal deploy app/modal_functions/video_processing.py
+```

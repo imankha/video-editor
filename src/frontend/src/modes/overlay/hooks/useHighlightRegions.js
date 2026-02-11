@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo } from 'react';
 import { timeToFrame, frameToTime } from '../../../utils/videoUtils';
 import { interpolateHighlightSpline } from '../../../utils/splineInterpolation';
+import { useOverlayHighlightColor } from '../../../stores/overlayStore';
+import { HighlightColor } from '../../../constants/highlightColors';
 
 /**
  * useHighlightRegions - Manages highlight regions as self-contained units
@@ -35,6 +37,9 @@ export default function useHighlightRegions(videoMetadata) {
   // Duration and framerate
   const [duration, setDuration] = useState(null);
   const framerate = 30;
+
+  // Get highlight color from store for new highlights
+  const highlightColor = useOverlayHighlightColor();
 
   /**
    * Derived: All boundaries from regions (for compatibility with RegionLayer)
@@ -86,10 +91,14 @@ export default function useHighlightRegions(videoMetadata) {
 
   /**
    * Calculate the default highlight ellipse (centered in video)
+   * Uses the currently selected highlight color from the store
    */
   const calculateDefaultHighlight = useCallback((videoWidth, videoHeight) => {
+    // Use selected color, fallback to yellow if "None" is selected
+    const color = highlightColor || HighlightColor.YELLOW;
+
     if (!videoWidth || !videoHeight) {
-      return { x: 0, y: 0, radiusX: 30, radiusY: 50, opacity: 0.15, color: '#FFFF00' };
+      return { x: 0, y: 0, radiusX: 30, radiusY: 50, opacity: 0.15, color };
     }
 
     const radiusX = Math.round(videoHeight * 0.06);
@@ -103,9 +112,9 @@ export default function useHighlightRegions(videoMetadata) {
       radiusX,
       radiusY,
       opacity: 0.15,
-      color: '#FFFF00'
+      color
     };
-  }, []);
+  }, [highlightColor]);
 
   /**
    * Initialize with video duration

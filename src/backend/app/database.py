@@ -610,6 +610,8 @@ def ensure_database():
             "ALTER TABLE export_jobs ADD COLUMN game_name TEXT",
             # Export jobs: acknowledged_at for preventing duplicate notifications (T12)
             "ALTER TABLE export_jobs ADD COLUMN acknowledged_at TIMESTAMP",
+            # Highlight color preference for overlay mode (T67)
+            "ALTER TABLE working_videos ADD COLUMN highlight_color TEXT DEFAULT NULL",
         ]
 
         for migration in migrations:
