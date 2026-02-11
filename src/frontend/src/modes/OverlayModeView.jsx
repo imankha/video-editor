@@ -1,10 +1,79 @@
+import { forwardRef } from 'react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
-import ExportButton from '../components/ExportButton';
+import ExportButtonView from '../components/ExportButtonView';
+import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from './overlay';
 import { Minimize } from 'lucide-react';
+
+/**
+ * ExportButtonSection - Container+View composition for Overlay mode export
+ *
+ * Follows MVC pattern: Container handles logic, View handles presentation.
+ */
+const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSection({
+  videoFile,
+  videoUrl,
+  highlightRegions,
+  highlightEffectType,
+  onHighlightEffectTypeChange,
+  includeAudio,
+  onIncludeAudioChange,
+  onExportComplete,
+  disabled,
+}, ref) {
+  // Container: all business logic
+  const container = ExportButtonContainer({
+    videoFile,
+    cropKeyframes: [],
+    highlightRegions,
+    isHighlightEnabled: highlightRegions.length > 0,
+    segmentData: null,
+    disabled,
+    includeAudio,
+    onIncludeAudioChange,
+    highlightEffectType,
+    onHighlightEffectTypeChange,
+    onExportComplete,
+  });
+
+  // View: pure presentation
+  return (
+    <div className="mt-6">
+      <ExportButtonView
+        ref={ref}
+        isCurrentlyExporting={container.isCurrentlyExporting}
+        isExporting={container.isExporting}
+        isExternallyExporting={false}
+        displayProgress={container.displayProgress}
+        displayMessage={container.displayMessage}
+        error={container.error}
+        isFramingMode={container.isFramingMode}
+        isDarkOverlay={container.isDarkOverlay}
+        hasUnextractedClips={container.hasUnextractedClips}
+        extractingCount={container.extractingCount}
+        pendingCount={container.pendingCount}
+        hasUnframedClips={container.hasUnframedClips}
+        unframedCount={container.unframedCount}
+        totalExtractedClips={container.totalExtractedClips}
+        isMultiClipMode={container.isMultiClipMode}
+        isButtonDisabled={container.isButtonDisabled}
+        buttonTitle={container.buttonTitle}
+        includeAudio={includeAudio}
+        isHighlightEnabled={highlightRegions.length > 0}
+        highlightEffectType={highlightEffectType}
+        onExport={container.handleExport}
+        onAudioToggle={container.handleAudioToggle}
+        onHighlightEffectTypeChange={onHighlightEffectTypeChange}
+        HIGHLIGHT_EFFECT_LABELS={HIGHLIGHT_EFFECT_LABELS}
+        EXPORT_CONFIG={EXPORT_CONFIG}
+        handleExportRef={container.handleExportRef}
+      />
+    </div>
+  );
+});
 
 /**
  * OverlayModeView - Complete view for Overlay mode
@@ -341,22 +410,18 @@ export function OverlayModeView({
 
         {/* Export Button - hidden in fullscreen */}
         {effectiveOverlayVideoUrl && !isFullscreen && (
-          <div className="mt-6">
-            <ExportButton
-              ref={exportButtonRef}
-              videoFile={effectiveOverlayFile}
-              cropKeyframes={[]}
-              highlightRegions={getRegionsForExport()}
-              isHighlightEnabled={highlightRegions.length > 0}
-              segmentData={null}
-              disabled={!effectiveOverlayFile && !effectiveOverlayVideoUrl}
-              includeAudio={includeAudio}
-              onIncludeAudioChange={onIncludeAudioChange}
-              highlightEffectType={highlightEffectType}
-              onHighlightEffectTypeChange={onHighlightEffectTypeChange}
-              onExportComplete={onExportComplete}
-            />
-          </div>
+          <OverlayExportButtonSection
+            ref={exportButtonRef}
+            videoFile={effectiveOverlayFile}
+            videoUrl={effectiveOverlayVideoUrl}
+            highlightRegions={getRegionsForExport()}
+            highlightEffectType={highlightEffectType}
+            onHighlightEffectTypeChange={onHighlightEffectTypeChange}
+            includeAudio={includeAudio}
+            onIncludeAudioChange={onIncludeAudioChange}
+            onExportComplete={onExportComplete}
+            disabled={!effectiveOverlayFile && !effectiveOverlayVideoUrl}
+          />
         )}
       </div>
     </>
