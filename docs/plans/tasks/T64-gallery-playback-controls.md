@@ -1,6 +1,6 @@
 # T64: Improve Gallery Playback Controls
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** MEDIUM
 **Complexity:** MEDIUM
 **Created:** 2026-02-11

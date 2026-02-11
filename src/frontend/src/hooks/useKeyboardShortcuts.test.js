@@ -7,6 +7,8 @@ describe('useKeyboardShortcuts', () => {
   const mockTogglePlay = vi.fn();
   const mockStepForward = vi.fn();
   const mockStepBackward = vi.fn();
+  const mockSeekForward = vi.fn();
+  const mockSeekBackward = vi.fn();
   const mockSeek = vi.fn();
   const mockOnCopyCrop = vi.fn();
   const mockOnPasteCrop = vi.fn();
@@ -18,6 +20,8 @@ describe('useKeyboardShortcuts', () => {
     togglePlay: mockTogglePlay,
     stepForward: mockStepForward,
     stepBackward: mockStepBackward,
+    seekForward: mockSeekForward,
+    seekBackward: mockSeekBackward,
     seek: mockSeek,
     editorMode: 'framing',
     selectedLayer: 'playhead',
@@ -139,7 +143,7 @@ describe('useKeyboardShortcuts', () => {
   });
 
   describe('arrow keys (playhead layer)', () => {
-    it('steps backward on ArrowLeft in playhead layer', () => {
+    it('seeks backward 5s on ArrowLeft in playhead layer', () => {
       renderHook(() => useKeyboardShortcuts({
         ...defaultProps,
         selectedLayer: 'playhead',
@@ -147,11 +151,11 @@ describe('useKeyboardShortcuts', () => {
 
       simulateKeyDown('ArrowLeft');
 
-      expect(mockStepBackward).toHaveBeenCalledTimes(1);
-      expect(mockStepForward).not.toHaveBeenCalled();
+      expect(mockSeekBackward).toHaveBeenCalledWith(5);
+      expect(mockSeekForward).not.toHaveBeenCalled();
     });
 
-    it('steps forward on ArrowRight in playhead layer', () => {
+    it('seeks forward 5s on ArrowRight in playhead layer', () => {
       renderHook(() => useKeyboardShortcuts({
         ...defaultProps,
         selectedLayer: 'playhead',
@@ -159,11 +163,11 @@ describe('useKeyboardShortcuts', () => {
 
       simulateKeyDown('ArrowRight');
 
-      expect(mockStepForward).toHaveBeenCalledTimes(1);
-      expect(mockStepBackward).not.toHaveBeenCalled();
+      expect(mockSeekForward).toHaveBeenCalledWith(5);
+      expect(mockSeekBackward).not.toHaveBeenCalled();
     });
 
-    it('does not step when no video is loaded', () => {
+    it('does not seek when no video is loaded', () => {
       renderHook(() => useKeyboardShortcuts({
         ...defaultProps,
         hasVideo: false,
@@ -171,7 +175,7 @@ describe('useKeyboardShortcuts', () => {
 
       simulateKeyDown('ArrowRight');
 
-      expect(mockStepForward).not.toHaveBeenCalled();
+      expect(mockSeekForward).not.toHaveBeenCalled();
     });
 
     it('ignores arrow keys when Ctrl is pressed', () => {
@@ -179,7 +183,20 @@ describe('useKeyboardShortcuts', () => {
 
       simulateKeyDown('ArrowRight', { ctrlKey: true });
 
-      expect(mockStepForward).not.toHaveBeenCalled();
+      expect(mockSeekForward).not.toHaveBeenCalled();
+    });
+
+    it('falls back to stepForward when seekForward not provided', () => {
+      renderHook(() => useKeyboardShortcuts({
+        ...defaultProps,
+        selectedLayer: 'playhead',
+        seekForward: undefined,
+        seekBackward: undefined,
+      }));
+
+      simulateKeyDown('ArrowRight');
+
+      expect(mockStepForward).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -288,7 +305,7 @@ describe('useKeyboardShortcuts', () => {
       { id: 'region3', startTime: 10 },
     ];
 
-    it('steps frames in playhead layer', () => {
+    it('seeks 5s in playhead layer', () => {
       renderHook(() => useKeyboardShortcuts({
         ...defaultProps,
         editorMode: 'annotate',
@@ -298,7 +315,7 @@ describe('useKeyboardShortcuts', () => {
 
       simulateKeyDown('ArrowRight');
 
-      expect(mockStepForward).toHaveBeenCalledTimes(1);
+      expect(mockSeekForward).toHaveBeenCalledWith(5);
     });
 
     it('navigates to next clip region on ArrowRight', () => {
