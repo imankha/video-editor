@@ -112,23 +112,44 @@ What does completing this epic achieve?
 
 ---
 
-## Priority: Feedback Velocity
+## Impact & Complexity Scores
 
-Prioritize tasks that maximize **feedback velocity** - the user needs to interact with the software to discover what to do next.
+Use numeric **1-10 scale** for both Impact and Complexity:
+
+| Score | Impact Meaning | Complexity Meaning |
+|-------|----------------|-------------------|
+| 1-3 | Low: Nice to have, minor improvement | Simple: Few files, straightforward |
+| 4-6 | Medium: Noticeable improvement | Medium: Multiple files, some coordination |
+| 7-10 | High: Critical for user experience | Complex: Many files, architectural changes |
+
+### Displaying Tasks
+
+When showing task lists, **always include both scores**:
+
+```
+| ID | Task | Impact | Complexity |
+|----|------|--------|------------|
+| T67 | Overlay Color Selection | 6 | 3 |
+| T66 | Database Split Analysis | 5 | 6 |
+```
 
 ### Priority Formula
 
 ```
-Priority = (User Impact × Simplicity) / Risk
+Priority Score = Impact - (Complexity / 2)
 ```
+
+Higher score = do first. Example:
+- T67: Impact 6, Complexity 3 → Priority = 6 - 1.5 = **4.5**
+- T66: Impact 5, Complexity 6 → Priority = 5 - 3 = **2**
 
 ### Quick Heuristics
 
 | Priority | Characteristics |
 |----------|-----------------|
-| **HIGH** | Simple + High Impact + Low Risk |
-| **MEDIUM** | Complex + High Impact, OR Simple + Medium Impact |
-| **LOW** | Complex + Low Impact |
+| **HIGH (7+)** | Impact 8+ and Complexity < 5 |
+| **MEDIUM (4-6)** | Impact 5-7, OR High Impact + High Complexity |
+| **LOW (1-3)** | Impact < 5 and Complexity > 5 |
 | **BLOCKED** | Depends on incomplete task/epic |
 
 ### Infrastructure Bundling
@@ -154,27 +175,27 @@ Brief description of current work.
 
 ## Active Tasks
 
-| ID | Task | Status | Impact | Notes |
-|----|------|--------|--------|-------|
-| T10 | [Progress bar fix](tasks/T10-progress-bar-fix.md) | IN_PROGRESS | HIGH | - |
-| T20 | [Gallery downloads](tasks/T20-gallery-downloads.md) | TODO | HIGH | - |
+| ID | Task | Status | Impact | Complexity |
+|----|------|--------|--------|------------|
+| T10 | [Progress bar fix](tasks/T10-progress-bar-fix.md) | IN_PROGRESS | 8 | 4 |
+| T20 | [Gallery downloads](tasks/T20-gallery-downloads.md) | TODO | 7 | 3 |
 
 ## Epics
 
 ### Deployment (IN_PROGRESS)
 [tasks/deployment/EPIC.md](tasks/deployment/EPIC.md)
 
-| ID | Task | Status |
-|----|------|--------|
-| T30 | Fly.io backend | DONE |
-| T40 | Cloudflare Pages | IN_PROGRESS |
-| T50 | DNS & SSL | TODO |
+| ID | Task | Status | Impact | Complexity |
+|----|------|--------|--------|------------|
+| T30 | Fly.io backend | DONE | 9 | 6 |
+| T40 | Cloudflare Pages | IN_PROGRESS | 8 | 4 |
+| T50 | DNS & SSL | TODO | 7 | 3 |
 
 ## Backlog
 
 | ID | Task | Impact | Complexity |
 |----|------|--------|------------|
-| T100 | User management | MEDIUM | HIGH |
+| T100 | User management | 6 | 8 |
 
 ## Completed
 - T05 R2 storage - 2026-01-15
@@ -199,8 +220,8 @@ Brief description of current work.
 # T{ID}: {Title}
 
 **Status:** TODO | IN_PROGRESS | BLOCKED | TESTING | DONE
-**Impact:** HIGH | MEDIUM | LOW
-**Complexity:** HIGH | MEDIUM | LOW
+**Impact:** {1-10}
+**Complexity:** {1-10}
 **Created:** YYYY-MM-DD
 **Updated:** YYYY-MM-DD
 
