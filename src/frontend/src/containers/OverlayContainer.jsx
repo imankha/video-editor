@@ -281,10 +281,11 @@ export function OverlayContainer({
   const regionHasDetections = regionDetectionData.hasDetections;
 
   // DERIVED STATE: Current highlight state
-  // Uses global highlightColor from store when available (overrides keyframe color)
+  // Uses global highlightColor from store (null = None/brightness boost, color = colored overlay)
   const currentHighlightState = useMemo(() => {
-    // Use global color if set, otherwise fallback to keyframe color or default yellow
-    const effectiveColor = highlightColor || '#FFFF00';
+    // Pass through highlightColor directly - null means "None" (brightness boost)
+    // Don't fall back to yellow, let null propagate to preview/export
+    const effectiveColor = highlightColor;  // Can be null
 
     if (dragHighlight) {
       return {
@@ -325,8 +326,8 @@ export function OverlayContainer({
     }
 
     const defaultOpacity = currentHighlightState?.opacity ?? 0.3;
-    // Use global highlight color if set
-    const defaultColor = highlightColor || currentHighlightState?.color || '#FFFF00';
+    // Use global highlight color (null = None/brightness boost)
+    const defaultColor = highlightColor;  // Can be null
 
     const highlight = {
       x: playerData.x,

@@ -19,8 +19,8 @@ export const useOverlayStore = create((set) => ({
   // Effect settings (default to dark_overlay, backend loads actual value)
   effectType: HighlightEffect.DARK_OVERLAY,
 
-  // Highlight color for new highlights (null = None/no preference, user hasn't selected yet)
-  highlightColor: null,
+  // Highlight color for new highlights ('none' = brightness boost, color = colored overlay)
+  highlightColor: 'none',
 
   // Loading states
   isLoadingWorkingVideo: false,
@@ -39,7 +39,7 @@ export const useOverlayStore = create((set) => ({
 
   reset: () => set({
     effectType: HighlightEffect.DARK_OVERLAY,
-    highlightColor: null,  // Reset to "no preference"
+    highlightColor: 'none',  // Reset to brightness boost
     isLoadingWorkingVideo: false,
     overlayChangedSinceExport: false,
   }),

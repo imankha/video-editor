@@ -10,7 +10,7 @@ export const HighlightColor = {
   YELLOW: '#FFEB3B',
   PINK: '#FF88CC',  // Pink (more blue than green for distinct pink hue)
   ORANGE: '#FF9800',
-  NONE: null,
+  NONE: 'none',  // Distinct value (not null) for "no color / brightness boost"
 };
 
 /**

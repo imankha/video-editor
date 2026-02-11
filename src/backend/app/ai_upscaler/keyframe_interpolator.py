@@ -265,10 +265,11 @@ class KeyframeInterpolator:
 
         # NEW: Route to different effects
         if effect_type == "brightness_boost":
-            # Check if a color is selected (not None/default yellow means user picked a color)
+            # Check if a color is selected (not None and not 'none' string)
             # If color is selected: use colored overlay (like old "original")
-            # If no color (None was selected): use pure brightness boost
-            has_color = highlight.get('color') is not None
+            # If no color ('none' was selected): use pure brightness boost
+            color_value = highlight.get('color')
+            has_color = color_value is not None and color_value != 'none'
 
             if has_color:
                 # Colored overlay effect - exactly like old "original" but with thin outline

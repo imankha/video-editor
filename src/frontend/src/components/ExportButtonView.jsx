@@ -122,33 +122,37 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             </div>
 
             <div className="flex gap-1.5">
-              {HIGHLIGHT_COLOR_ORDER.map((color) => (
-                <button
-                  key={color ?? 'none'}
-                  onClick={() => onHighlightColorChange?.(color)}
-                  disabled={isCurrentlyExporting || !isHighlightEnabled}
-                  className={`
-                    w-6 h-6 rounded-full border-2 transition-all
-                    flex items-center justify-center
-                    ${highlightColor === color
-                      ? 'border-white ring-2 ring-white/30'
-                      : 'border-gray-600 hover:border-gray-400'}
-                    ${(isCurrentlyExporting || !isHighlightEnabled) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                  `}
-                  style={{
-                    backgroundColor: color || 'transparent',
-                    backgroundImage: color ? 'none' : 'linear-gradient(135deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)'
-                  }}
-                  title={HIGHLIGHT_COLOR_LABELS[color]}
-                >
-                  {highlightColor === color && color && (
-                    <Check size={12} className="text-gray-800" strokeWidth={3} />
-                  )}
-                  {highlightColor === color && !color && (
-                    <Check size={12} className="text-white" strokeWidth={3} />
-                  )}
-                </button>
-              ))}
+              {HIGHLIGHT_COLOR_ORDER.map((color) => {
+                const isNone = color === 'none';
+                const isColorValue = color && !isNone;
+                return (
+                  <button
+                    key={color}
+                    onClick={() => onHighlightColorChange?.(color)}
+                    disabled={isCurrentlyExporting || !isHighlightEnabled}
+                    className={`
+                      w-6 h-6 rounded-full border-2 transition-all
+                      flex items-center justify-center
+                      ${highlightColor === color
+                        ? 'border-white ring-2 ring-white/30'
+                        : 'border-gray-600 hover:border-gray-400'}
+                      ${(isCurrentlyExporting || !isHighlightEnabled) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                    `}
+                    style={{
+                      backgroundColor: isColorValue ? color : 'transparent',
+                      backgroundImage: isNone ? 'linear-gradient(135deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)' : 'none'
+                    }}
+                    title={HIGHLIGHT_COLOR_LABELS[color]}
+                  >
+                    {highlightColor === color && isColorValue && (
+                      <Check size={12} className="text-gray-800" strokeWidth={3} />
+                    )}
+                    {highlightColor === color && isNone && (
+                      <Check size={12} className="text-white" strokeWidth={3} />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

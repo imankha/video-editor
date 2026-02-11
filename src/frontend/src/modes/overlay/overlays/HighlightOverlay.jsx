@@ -329,7 +329,7 @@ export default function HighlightOverlay({
         )}
 
         {/* Brightness boost effect - colored fill or brightness boost */}
-        {effectType === 'brightness_boost' && currentHighlight.color && (
+        {effectType === 'brightness_boost' && currentHighlight.color && currentHighlight.color !== 'none' && (
           /* Color selected: show colored overlay (like old "original") */
           <ellipse
             cx={screenHighlight.x}
@@ -341,7 +341,7 @@ export default function HighlightOverlay({
             className="pointer-events-none"
           />
         )}
-        {effectType === 'brightness_boost' && !currentHighlight.color && (
+        {effectType === 'brightness_boost' && (!currentHighlight.color || currentHighlight.color === 'none') && (
           /* No color (None): pure brightness boost */
           <ellipse
             cx={screenHighlight.x}
