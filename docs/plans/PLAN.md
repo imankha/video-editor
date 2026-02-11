@@ -46,7 +46,7 @@
 | T301 | Refactor editorMode to EDITOR_MODES | 25 | DONE |
 | T311 | Remove workingVideo from overlayStore | 25 | DONE |
 | T312 | Remove clipMetadata from overlayStore | 25 | DONE |
-| T331 | Refactor ExportButton to container | 25 | TODO |
+| T331 | Refactor ExportButton to container | 25 | DONE |
 | T302 | Refactor statusFilter to constants | 16 | TODO |
 | T303 | Refactor keyframe origin to constants | 16 | TODO |
 
