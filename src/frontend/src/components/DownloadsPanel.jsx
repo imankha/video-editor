@@ -113,6 +113,7 @@ export function DownloadsPanel({
     downloadFile,
     downloadingId,
     getDownloadUrl,
+    getStreamingUrl,
     formatFileSize,
     formatDate,
     setFilter
@@ -576,7 +577,7 @@ export function DownloadsPanel({
             {/* Video Player */}
             <div className="flex-1 flex items-center justify-center bg-black overflow-hidden">
               <GalleryVideoPlayer
-                src={getDownloadUrl(playingVideo.id, playingVideo)}
+                src={getStreamingUrl(playingVideo.id, playingVideo)}
                 autoPlay
                 onClose={() => setPlayingVideo(null)}
               />
