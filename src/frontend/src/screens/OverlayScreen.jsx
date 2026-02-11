@@ -60,9 +60,11 @@ export function OverlayScreen({
   // Overlay store - for overlay-specific state (loading, effects, changes)
   const {
     effectType: highlightEffectType,
+    highlightColor,
     isLoadingWorkingVideo,
     overlayChangedSinceExport,
     setEffectType: setHighlightEffectType,
+    setHighlightColor,
     setIsLoadingWorkingVideo,
     setOverlayChangedSinceExport,
   } = useOverlayStore();
@@ -312,6 +314,9 @@ export function OverlayScreen({
           if (data.effect_type) {
             setHighlightEffectType(data.effect_type);
           }
+          if (data.highlight_color !== undefined) {
+            setHighlightColor(data.highlight_color);
+          }
 
           // Transition to ready state - actions will now sync to backend
           setOverlayLoadedProjectId(projectId);
@@ -326,7 +331,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [overlayClipMetadata, effectiveOverlayMetadata, projectId, overlaySyncState, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId]);
+  }, [overlayClipMetadata, effectiveOverlayMetadata, projectId, overlaySyncState, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
@@ -371,6 +376,9 @@ export function OverlayScreen({
           if (data.effect_type) {
             setHighlightEffectType(data.effect_type);
           }
+          if (data.highlight_color !== undefined) {
+            setHighlightColor(data.highlight_color);
+          }
 
           // Transition to ready state - actions will now sync to backend
           setOverlayLoadedProjectId(projectId);
@@ -385,7 +393,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport]);
+  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport]);
 
   // =========================================
   // ACTION-BASED SYNC (replaces full-blob saves)
@@ -488,6 +496,16 @@ export function OverlayScreen({
     }
     setOverlayChangedSinceExport(true);
   }, [setHighlightEffectType, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  // Wrapped handler: Set highlight color
+  const wrappedSetHighlightColor = useCallback((color) => {
+    setHighlightColor(color);
+    if (canSyncActions) {
+      overlayActions.setHighlightColor(projectId, color)
+        .catch(err => console.error('[OverlayScreen] Failed to sync setHighlightColor:', err));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [setHighlightColor, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   // Dismiss "export complete" toast when user makes changes
   // This lets users know they need to re-export after modifying highlights
@@ -782,6 +800,8 @@ export function OverlayScreen({
       onToggleHighlightRegion={wrappedToggleHighlightRegion}
       onSelectedKeyframeChange={setSelectedHighlightKeyframeTime}
       onHighlightEffectTypeChange={wrappedSetHighlightEffectType}
+      highlightColor={highlightColor}
+      onHighlightColorChange={wrappedSetHighlightColor}
       // Player detection
       playerDetectionEnabled={playerDetectionEnabled}
       playerDetections={playerDetections}

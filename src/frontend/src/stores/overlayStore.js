@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 
 import { HighlightEffect } from '../constants/highlightEffects';
-import { HighlightColor } from '../constants/highlightColors';
 
 /**
  * Store for overlay mode UI state
@@ -20,8 +19,8 @@ export const useOverlayStore = create((set) => ({
   // Effect settings (default to dark_overlay, backend loads actual value)
   effectType: HighlightEffect.DARK_OVERLAY,
 
-  // Highlight color for new highlights (default yellow)
-  highlightColor: HighlightColor.YELLOW,
+  // Highlight color for new highlights (null = None/no preference, user hasn't selected yet)
+  highlightColor: null,
 
   // Loading states
   isLoadingWorkingVideo: false,
@@ -40,7 +39,7 @@ export const useOverlayStore = create((set) => ({
 
   reset: () => set({
     effectType: HighlightEffect.DARK_OVERLAY,
-    highlightColor: HighlightColor.YELLOW,
+    highlightColor: null,  // Reset to "no preference"
     isLoadingWorkingVideo: false,
     overlayChangedSinceExport: false,
   }),

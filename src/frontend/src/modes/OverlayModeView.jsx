@@ -7,7 +7,6 @@ import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '.
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from './overlay';
 import { Minimize } from 'lucide-react';
-import { useOverlayHighlightColor, useOverlayStore } from '../stores/overlayStore';
 
 /**
  * ExportButtonSection - Container+View composition for Overlay mode export
@@ -20,14 +19,13 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
   highlightRegions,
   highlightEffectType,
   onHighlightEffectTypeChange,
+  highlightColor,
+  onHighlightColorChange,
   includeAudio,
   onIncludeAudioChange,
   onExportComplete,
   disabled,
 }, ref) {
-  // Get highlight color from store
-  const highlightColor = useOverlayHighlightColor();
-  const setHighlightColor = useOverlayStore(state => state.setHighlightColor);
 
   // Container: all business logic
   const container = ExportButtonContainer({
@@ -73,7 +71,7 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         onExport={container.handleExport}
         onAudioToggle={container.handleAudioToggle}
         onHighlightEffectTypeChange={onHighlightEffectTypeChange}
-        onHighlightColorChange={setHighlightColor}
+        onHighlightColorChange={onHighlightColorChange}
         HIGHLIGHT_EFFECT_LABELS={HIGHLIGHT_EFFECT_LABELS}
         EXPORT_CONFIG={EXPORT_CONFIG}
         handleExportRef={container.handleExportRef}
@@ -145,6 +143,8 @@ export function OverlayModeView({
   onToggleHighlightRegion,
   onSelectedKeyframeChange,
   onHighlightEffectTypeChange,
+  highlightColor,
+  onHighlightColorChange,
 
   // Player detection (auto-detected during framing export)
   playerDetectionEnabled,
@@ -426,6 +426,8 @@ export function OverlayModeView({
             highlightRegions={getRegionsForExport()}
             highlightEffectType={highlightEffectType}
             onHighlightEffectTypeChange={onHighlightEffectTypeChange}
+            highlightColor={highlightColor}
+            onHighlightColorChange={onHighlightColorChange}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onExportComplete={onExportComplete}

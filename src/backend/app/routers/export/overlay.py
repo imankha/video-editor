@@ -88,6 +88,9 @@ class OverlayActionData(BaseModel):
     # Effect type
     effect_type: Optional[str] = None
 
+    # Highlight color
+    highlight_color: Optional[str] = None
+
 
 class OverlayAction(BaseModel):
     """
@@ -102,6 +105,7 @@ class OverlayAction(BaseModel):
     - update_keyframe: Update keyframe properties
     - delete_keyframe: Delete a keyframe
     - set_effect_type: Change the highlight effect type
+    - set_highlight_color: Change the highlight color for new highlights
     """
     action: str
     target: Optional[OverlayActionTarget] = None
@@ -120,10 +124,10 @@ class OverlayActionResponse(BaseModel):
 def _get_overlay_data(cursor, project_id: int) -> tuple:
     """
     Get current overlay data for a project.
-    Returns (highlights_data list, effect_type str, working_video_id int, version int).
+    Returns (highlights_data list, effect_type str, highlight_color str, working_video_id int, version int).
     """
     cursor.execute("""
-        SELECT wv.id, wv.highlights_data, wv.effect_type, wv.overlay_version
+        SELECT wv.id, wv.highlights_data, wv.effect_type, wv.highlight_color, wv.overlay_version
         FROM working_videos wv
         JOIN projects p ON p.working_video_id = wv.id
         WHERE p.id = ?
@@ -131,7 +135,7 @@ def _get_overlay_data(cursor, project_id: int) -> tuple:
     row = cursor.fetchone()
 
     if not row:
-        return None, None, None, None
+        return None, None, None, None, None
 
     highlights = []
     if row['highlights_data']:
@@ -141,18 +145,19 @@ def _get_overlay_data(cursor, project_id: int) -> tuple:
             highlights = []
 
     effect_type = normalize_effect_type(row['effect_type'])
+    highlight_color = row['highlight_color']  # Can be None
     version = row['overlay_version'] or 0
 
-    return highlights, effect_type, row['id'], version
+    return highlights, effect_type, highlight_color, row['id'], version
 
 
-def _save_overlay_data(cursor, working_video_id: int, highlights: list, effect_type: str, new_version: int):
+def _save_overlay_data(cursor, working_video_id: int, highlights: list, effect_type: str, highlight_color: str, new_version: int):
     """Save overlay data back to the working_videos table."""
     cursor.execute("""
         UPDATE working_videos
-        SET highlights_data = ?, effect_type = ?, overlay_version = ?
+        SET highlights_data = ?, effect_type = ?, highlight_color = ?, overlay_version = ?
         WHERE id = ?
-    """, (json.dumps(highlights), effect_type, new_version, working_video_id))
+    """, (json.dumps(highlights), effect_type, highlight_color, new_version, working_video_id))
 
 
 def _find_region_index(highlights: list, region_id: str) -> int:
@@ -189,6 +194,7 @@ async def overlay_action(project_id: int, action: OverlayAction):
     - update_keyframe: target.region_id, target.keyframe_time, data.*
     - delete_keyframe: target.region_id, target.keyframe_time
     - set_effect_type: data.effect_type
+    - set_highlight_color: data.highlight_color
 
     Response:
     - success: boolean
@@ -202,7 +208,7 @@ async def overlay_action(project_id: int, action: OverlayAction):
         cursor = conn.cursor()
 
         # Get current overlay data
-        highlights, effect_type, working_video_id, version = _get_overlay_data(cursor, project_id)
+        highlights, effect_type, highlight_color, working_video_id, version = _get_overlay_data(cursor, project_id)
 
         if working_video_id is None:
             raise HTTPException(status_code=404, detail="Project not found or has no working video")
@@ -395,11 +401,20 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 effect_type = action.data.effect_type
                 logger.info(f"[Overlay Action] Set effect type to {effect_type}")
 
+            elif action.action == "set_highlight_color":
+                # Change highlight color for new highlights
+                if not action.data:
+                    raise ValueError("set_highlight_color requires data")
+
+                # Allow null to clear the color (defaults to None/"no preference")
+                highlight_color = action.data.highlight_color
+                logger.info(f"[Overlay Action] Set highlight color to {highlight_color}")
+
             else:
                 raise ValueError(f"Unknown action: {action.action}")
 
             # Save changes
-            _save_overlay_data(cursor, working_video_id, highlights, effect_type, new_version)
+            _save_overlay_data(cursor, working_video_id, highlights, effect_type, highlight_color, new_version)
             conn.commit()
 
             return JSONResponse({
@@ -1425,6 +1440,7 @@ async def get_overlay_data(project_id: int):
     - highlights_data: Parsed JSON array of highlight regions
     - text_overlays: Parsed JSON array of text overlay configs
     - effect_type: 'brightness_boost' | 'dark_overlay'
+    - highlight_color: Hex color string or null (user's last selected color)
     - has_data: boolean indicating if any data exists
     - from_raw_clip: boolean indicating if data came from raw_clip defaults
     """
@@ -1433,7 +1449,7 @@ async def get_overlay_data(project_id: int):
 
         # Get latest working video's overlay data for this project
         cursor.execute("""
-            SELECT highlights_data, text_overlays, effect_type
+            SELECT highlights_data, text_overlays, effect_type, highlight_color
             FROM working_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -1445,6 +1461,7 @@ async def get_overlay_data(project_id: int):
         highlights = []
         text_overlays = []
         effect_type = DEFAULT_HIGHLIGHT_EFFECT.value
+        highlight_color = None  # Default to None (user hasn't selected a color yet)
         from_raw_clip = False
 
         if result:
@@ -1461,6 +1478,7 @@ async def get_overlay_data(project_id: int):
                     pass
 
             effect_type = normalize_effect_type(result['effect_type'])
+            highlight_color = result['highlight_color']  # Can be None
 
         # If no project-specific highlights, check raw_clips for defaults
         if not highlights:
@@ -1473,6 +1491,7 @@ async def get_overlay_data(project_id: int):
             'highlights_data': highlights,
             'text_overlays': text_overlays,
             'effect_type': effect_type,
+            'highlight_color': highlight_color,
             'has_data': len(highlights) > 0 or len(text_overlays) > 0,
             'from_raw_clip': from_raw_clip
         })
