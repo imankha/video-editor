@@ -33,6 +33,7 @@
 | T55 | [Slow Video Loading](tasks/T55-slow-video-loading.md) | TODO | HIGH | MEDIUM |
 | T56 | [Gallery Show Duration](tasks/T56-gallery-show-duration.md) | TODO | LOW | LOW |
 | T57 | [Stale Tracking Rectangles](tasks/T57-stale-tracking-rectangles.md) | TODO | MEDIUM | MEDIUM |
+| T58 | [Dim Tracking Squares When Disabled](tasks/T58-dim-tracking-squares-when-disabled.md) | TODO | LOW | LOW |
 
 ---
 
