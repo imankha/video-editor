@@ -143,8 +143,14 @@ export function GalleryVideoPlayer({ src, autoPlay = true, onClose }) {
   }, [togglePlay, seekForward, seekBackward, toggleMute, onClose, scheduleHideControls]);
 
   // Video event handlers
-  const handlePlay = () => setIsPlaying(true);
-  const handlePause = () => setIsPlaying(false);
+  const handlePlay = () => {
+    console.log('[GalleryVideoPlayer] Video playing');
+    setIsPlaying(true);
+  };
+  const handlePause = () => {
+    console.log('[GalleryVideoPlayer] Video paused');
+    setIsPlaying(false);
+  };
   const handleTimeUpdate = () => {
     if (videoRef.current) {
       setCurrentTime(videoRef.current.currentTime);
@@ -152,8 +158,15 @@ export function GalleryVideoPlayer({ src, autoPlay = true, onClose }) {
   };
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
+      console.log('[GalleryVideoPlayer] Loaded metadata, duration:', videoRef.current.duration);
       setDuration(videoRef.current.duration);
     }
+  };
+  const handleError = (e) => {
+    console.error('[GalleryVideoPlayer] Video error:', e.target?.error);
+  };
+  const handleLoadStart = () => {
+    console.log('[GalleryVideoPlayer] Load started, src:', src?.substring(0, 60));
   };
 
   // Mouse movement to show controls
@@ -186,10 +199,12 @@ export function GalleryVideoPlayer({ src, autoPlay = true, onClose }) {
         autoPlay={autoPlay}
         className="w-full h-full object-contain"
         style={{ maxHeight: '100%', maxWidth: '100%' }}
+        onLoadStart={handleLoadStart}
         onPlay={handlePlay}
         onPause={handlePause}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
+        onError={handleError}
         onClick={togglePlay}
       >
         Your browser does not support the video tag.
@@ -290,11 +305,14 @@ export function GalleryVideoPlayer({ src, autoPlay = true, onClose }) {
         </div>
       </div>
 
-      {/* Big Play Button (when paused) */}
+      {/* Big Play Button (when paused) - centered, doesn't cover controls */}
       {!isPlaying && showControls && (
         <div
-          className="absolute inset-0 flex items-center justify-center cursor-pointer"
-          onClick={togglePlay}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            togglePlay();
+          }}
         >
           <div className="w-16 h-16 rounded-full bg-purple-600/80 flex items-center justify-center hover:bg-purple-600 transition-colors">
             <Play size={32} className="text-white ml-1" />
