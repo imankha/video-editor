@@ -125,15 +125,19 @@ export function ProjectsScreen({
 
   // Listen for extraction completion events via WebSocket
   useEffect(() => {
-    // Build WebSocket URL - use API_BASE if set, otherwise use current host (Vite proxy)
+    // Build WebSocket URL - connect directly to backend
+    // In dev: use VITE_API_PORT (default 8000), in prod: use API_BASE or same host
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     let wsUrl;
     if (API_BASE) {
-      // Direct connection to backend (production or custom config)
+      // Production: use API_BASE converted to WebSocket protocol
       wsUrl = API_BASE.replace(/^http/, 'ws') + '/ws/extractions';
+    } else if (import.meta.env.VITE_API_PORT) {
+      // Development with custom port: connect directly to backend
+      wsUrl = `${wsProtocol}//localhost:${import.meta.env.VITE_API_PORT}/ws/extractions`;
     } else {
-      // Use Vite proxy (development) - proxy forwards /ws/* to backend
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      wsUrl = `${wsProtocol}//${window.location.host}/ws/extractions`;
+      // Development default: connect directly to backend on port 8000
+      wsUrl = `${wsProtocol}//localhost:8000/ws/extractions`;
     }
     let ws = null;
     let reconnectTimeout = null;
