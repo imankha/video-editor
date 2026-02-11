@@ -224,7 +224,23 @@ async def get_warmup_urls(
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Game videos
+        # Priority 1: Gallery videos (final_videos) - most recent first
+        cursor.execute("""
+            SELECT filename FROM final_videos
+            WHERE filename IS NOT NULL AND filename != ''
+            ORDER BY created_at DESC
+        """)
+        for row in cursor.fetchall():
+            url = generate_presigned_url(
+                user_id=user_id,
+                relative_path=f"final_videos/{row['filename']}",
+                expires_in=expires_in,
+                content_type="video/mp4"
+            )
+            if url:
+                urls.append(url)
+
+        # Priority 2: Game videos
         cursor.execute("""
             SELECT video_filename FROM games
             WHERE video_filename IS NOT NULL AND video_filename != ''
@@ -239,25 +255,13 @@ async def get_warmup_urls(
             if url:
                 urls.append(url)
 
-        # Final videos (gallery)
+        # Priority 3: Working videos only for incomplete projects
+        # (projects that have a framed video but no final video yet)
         cursor.execute("""
-            SELECT filename FROM final_videos
-            WHERE filename IS NOT NULL AND filename != ''
-        """)
-        for row in cursor.fetchall():
-            url = generate_presigned_url(
-                user_id=user_id,
-                relative_path=f"final_videos/{row['filename']}",
-                expires_in=expires_in,
-                content_type="video/mp4"
-            )
-            if url:
-                urls.append(url)
-
-        # Working videos (intermediate exports)
-        cursor.execute("""
-            SELECT filename FROM working_videos
-            WHERE filename IS NOT NULL AND filename != ''
+            SELECT wv.filename FROM working_videos wv
+            JOIN projects p ON p.working_video_id = wv.id
+            WHERE wv.filename IS NOT NULL AND wv.filename != ''
+            AND p.final_video_id IS NULL
         """)
         for row in cursor.fetchall():
             url = generate_presigned_url(

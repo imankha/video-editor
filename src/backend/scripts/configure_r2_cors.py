@@ -39,6 +39,13 @@ def configure_cors():
     """Configure CORS on the R2 bucket."""
     import boto3
     from botocore.config import Config
+    from dotenv import load_dotenv
+
+    # Load .env file from project root
+    env_path = Path(__file__).parent.parent.parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+        print(f"Loaded environment from: {env_path}")
 
     # Load environment variables
     R2_ENDPOINT = os.getenv("R2_ENDPOINT")
