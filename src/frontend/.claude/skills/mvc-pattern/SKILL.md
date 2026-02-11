@@ -58,6 +58,72 @@ Screen (data fetching, hook initialization)
 
 ---
 
+## Component Composition Pattern
+
+When a View needs business logic, compose Container + View explicitly in the parent View:
+
+```jsx
+// 1. Create a section component that composes Container + View
+const ExportButtonSection = forwardRef(function ExportButtonSection({
+  videoFile,
+  cropKeyframes,
+  // ... other props
+}, ref) {
+  // Container: all business logic
+  const container = ExportButtonContainer({
+    videoFile,
+    cropKeyframes,
+    // ... pass through props
+  });
+
+  // View: pure presentation
+  return (
+    <div className="mt-6">
+      <ExportButtonView
+        ref={ref}
+        isExporting={container.isExporting}
+        onExport={container.handleExport}
+        // ... pass container state/handlers to view
+      />
+    </div>
+  );
+});
+
+// 2. Use the section in the parent View
+function FramingModeView({ ...props }) {
+  return (
+    <>
+      {/* ... other UI ... */}
+      <ExportButtonSection
+        videoFile={props.videoFile}
+        cropKeyframes={props.cropKeyframes}
+        // ... pass only what the section needs
+      />
+    </>
+  );
+}
+```
+
+### Why This Pattern?
+
+1. **No wrapper components** - Don't create "smart" wrappers that hide Container+View composition
+2. **Explicit composition** - The parent View explicitly shows Container and View being combined
+3. **Clear data flow** - Props flow: Parent View → Section → Container → View
+4. **Testable** - Container and View can be tested independently
+
+### File Structure
+
+```
+components/
+  ExportButtonView.jsx      # Pure view (props only)
+containers/
+  ExportButtonContainer.jsx # Business logic (hooks, state, handlers)
+modes/
+  FramingModeView.jsx       # Composes ExportButtonSection inline
+```
+
+---
+
 ## Complete Rules
 
 See individual rule files in `rules/` directory.
