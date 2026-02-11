@@ -32,7 +32,7 @@
 | T54 | [Fix useOverlayState Test Failures](tasks/T54-fix-overlay-state-tests.md) | DONE | LOW | LOW |
 | T55 | [Slow Video Loading](tasks/T55-slow-video-loading.md) | DONE | HIGH | MEDIUM |
 | T56 | [Gallery Show Duration](tasks/T56-gallery-show-duration.md) | TODO | LOW | LOW |
-| T57 | [Stale Tracking Rectangles](tasks/T57-stale-tracking-rectangles.md) | TODO | MEDIUM | MEDIUM |
+| T57 | [Stale Tracking Rectangles](tasks/T57-stale-tracking-rectangles.md) | DONE | MEDIUM | MEDIUM |
 | T58 | [Dim Tracking Squares When Disabled](tasks/T58-dim-tracking-squares-when-disabled.md) | TODO | LOW | LOW |
 | T60 | [Consolidate Video Controls](tasks/T60-consolidate-video-controls.md) | TODO | MEDIUM | MEDIUM |
 | T61 | [Annotate Default Good](tasks/T61-annotate-default-good.md) | TODO | LOW | LOW |

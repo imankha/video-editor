@@ -1,9 +1,10 @@
 # T57: Stale Tracking Rectangles When Extending Overlay Region
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** MEDIUM
 **Complexity:** MEDIUM
 **Created:** 2026-02-11
+**Completed:** 2026-02-11
 **Type:** BUG
 
 ## Problem
@@ -18,23 +19,23 @@ See: `screenshots/bad_tracking.png`
 - When extending a region into untracked territory, boxes should not appear (or should show "no detection" state)
 - Each frame should show its own detection data, not stale data from another frame
 
-## Likely Cause
+## Root Cause
 
-When the highlight region is extended, the player detection overlay may be:
-1. Using cached detection data from the last frame that had detections
-2. Not checking if current time is within the detection data range
-3. Not clearing/updating when region boundaries change
+The `clickedDetection` state in `OverlayContainer.jsx` was only cleared when video playback started. When a user:
+1. Clicked a detection marker (setting `clickedDetection`)
+2. Extended the region (without playing)
+3. Scrubbed to the extended area
 
-## Files to Investigate
+...the `clickedDetection` persisted and showed stale boxes because it was never cleared during scrubbing.
 
-```
-src/frontend/src/modes/overlay/PlayerDetectionOverlay.jsx
-src/frontend/src/hooks/usePlayerDetection.js (if exists)
-src/frontend/src/modes/overlay/OverlayMode.jsx
-```
+## Solution
+
+Added an effect in `OverlayContainer.jsx` that clears `clickedDetection` when the user scrubs more than 2 frames away from the clicked detection's frame. This uses the same frame threshold as the `regionDetectionData` logic for consistency.
+
+**File changed:** `src/frontend/src/containers/OverlayContainer.jsx`
 
 ## Acceptance Criteria
 
-- [ ] Tracking rectangles only display for frames with actual detection data
-- [ ] Extending a region does not show stale detection boxes
-- [ ] Detection boxes update correctly when scrubbing through video
+- [x] Tracking rectangles only display for frames with actual detection data
+- [x] Extending a region does not show stale detection boxes
+- [x] Detection boxes update correctly when scrubbing through video
