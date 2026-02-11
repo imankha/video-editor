@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
 
 /**
  * VideoPlayer component - Displays the video element with zoom and pan support
@@ -161,63 +162,6 @@ export function VideoPlayer({
     }
   }, [isPanning, handleMouseMove, handleMouseUp]);
 
-  // Render loading overlay with progress bar
-  const renderLoadingOverlay = () => {
-    // Determine progress state:
-    // - loadingProgress > 0: We have buffer info, show percentage
-    // - loadingProgress === 0: Just started or still fetching metadata
-    // - loadingProgress === null: Indeterminate state
-    const hasProgress = loadingProgress !== null && loadingProgress > 0 && loadingProgress < 100;
-    const isSlowLoad = loadingElapsedSeconds >= 5;
-
-    // T55: Show elapsed time and helpful message for slow loads
-    let statusMessage;
-    if (hasProgress) {
-      statusMessage = `Buffering ${loadingProgress}%`;
-    } else if (isSlowLoad) {
-      statusMessage = `Downloading video... ${loadingElapsedSeconds}s`;
-    } else if (loadingElapsedSeconds > 0) {
-      statusMessage = `Connecting... ${loadingElapsedSeconds}s`;
-    } else {
-      statusMessage = 'Connecting to server...';
-    }
-
-    return (
-      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-40">
-        <div className="text-center w-64">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-gray-600 border-t-purple-500"></div>
-          <p className="mt-4 text-sm text-gray-300">{loadingMessage}</p>
-          <div className="mt-3">
-            <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-              {hasProgress ? (
-                <div
-                  className="h-full bg-purple-500 transition-all duration-300"
-                  style={{ width: `${loadingProgress}%` }}
-                />
-              ) : (
-                // Indeterminate progress - sliding bar animation
-                <div
-                  className="h-full w-1/3 bg-gradient-to-r from-purple-600 via-purple-400 to-purple-600 rounded-full"
-                  style={{
-                    animation: 'slide 1.2s ease-in-out infinite',
-                    transformOrigin: 'left center'
-                  }}
-                />
-              )}
-            </div>
-            <p className="mt-1 text-xs text-gray-500">
-              {statusMessage}
-            </p>
-            {isSlowLoad && (
-              <p className="mt-2 text-xs text-gray-600">
-                First load may be slow. Subsequent loads will be faster.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div
@@ -269,7 +213,13 @@ export function VideoPlayer({
           </div>
 
           {/* Video loading overlay - shown while video element is buffering */}
-          {isVideoElementLoading && !error && renderLoadingOverlay()}
+          {isVideoElementLoading && !error && (
+            <VideoLoadingOverlay
+              message={loadingMessage}
+              progress={loadingProgress}
+              elapsedSeconds={loadingElapsedSeconds}
+            />
+          )}
 
           {/* Render any overlays passed by the mode */}
           {overlays}

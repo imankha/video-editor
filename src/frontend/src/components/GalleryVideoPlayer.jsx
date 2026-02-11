@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Play, Pause, Volume2, VolumeX, Rewind, FastForward, Loader } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Rewind, FastForward } from 'lucide-react';
 import { Button } from './shared/Button';
+import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
 import { formatTime } from '../utils/timeFormat';
 
 /**
@@ -227,11 +228,7 @@ export function GalleryVideoPlayer({ src, autoPlay = true, onClose }) {
       </video>
 
       {/* Loading Indicator */}
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <Loader size={48} className="text-purple-500 animate-spin" />
-        </div>
-      )}
+      {isLoading && <VideoLoadingOverlay simple />}
 
       {/* Controls Overlay */}
       <div
