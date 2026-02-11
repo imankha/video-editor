@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Play, Pause, Volume2, VolumeX, Rewind, FastForward } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Rewind, FastForward, Loader } from 'lucide-react';
 import { Button } from './shared/Button';
 import { formatTime } from '../utils/timeFormat';
 
@@ -22,6 +22,7 @@ export function GalleryVideoPlayer({ src, autoPlay = true, onClose }) {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
@@ -162,11 +163,23 @@ export function GalleryVideoPlayer({ src, autoPlay = true, onClose }) {
       setDuration(videoRef.current.duration);
     }
   };
+  const handleCanPlay = () => {
+    console.log('[GalleryVideoPlayer] Can play');
+    setIsLoading(false);
+  };
+  const handleWaiting = () => {
+    setIsLoading(true);
+  };
+  const handlePlaying = () => {
+    setIsLoading(false);
+  };
   const handleError = (e) => {
     console.error('[GalleryVideoPlayer] Video error:', e.target?.error);
+    setIsLoading(false);
   };
   const handleLoadStart = () => {
     console.log('[GalleryVideoPlayer] Load started, src:', src?.substring(0, 60));
+    setIsLoading(true);
   };
 
   // Mouse movement to show controls
@@ -204,11 +217,21 @@ export function GalleryVideoPlayer({ src, autoPlay = true, onClose }) {
         onPause={handlePause}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
+        onCanPlay={handleCanPlay}
+        onWaiting={handleWaiting}
+        onPlaying={handlePlaying}
         onError={handleError}
         onClick={togglePlay}
       >
         Your browser does not support the video tag.
       </video>
+
+      {/* Loading Indicator */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <Loader size={48} className="text-purple-500 animate-spin" />
+        </div>
+      )}
 
       {/* Controls Overlay */}
       <div
@@ -305,8 +328,8 @@ export function GalleryVideoPlayer({ src, autoPlay = true, onClose }) {
         </div>
       </div>
 
-      {/* Big Play Button (when paused) - centered, doesn't cover controls */}
-      {!isPlaying && showControls && (
+      {/* Big Play Button (when paused and loaded) - centered, doesn't cover controls */}
+      {!isPlaying && !isLoading && showControls && (
         <div
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 cursor-pointer"
           onClick={(e) => {
@@ -320,15 +343,6 @@ export function GalleryVideoPlayer({ src, autoPlay = true, onClose }) {
         </div>
       )}
 
-      {/* Keyboard Hints */}
-      {showControls && (
-        <div className="absolute top-4 right-4 text-xs text-gray-400 space-y-1">
-          <div>Space: Play/Pause</div>
-          <div>← →: Seek 5s</div>
-          <div>M: Mute</div>
-          <div>Esc: Close</div>
-        </div>
-      )}
     </div>
   );
 }
