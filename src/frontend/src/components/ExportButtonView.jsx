@@ -111,8 +111,8 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           </div>
         )}
 
-        {/* Highlight Color - Overlay mode only */}
-        {!isFramingMode && (
+        {/* Highlight Color - Overlay mode with Bright Inside effect only */}
+        {!isFramingMode && !isDarkOverlay && (
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-sm font-medium text-gray-200">Highlight Color</span>

@@ -265,14 +265,41 @@ class KeyframeInterpolator:
 
         # NEW: Route to different effects
         if effect_type == "brightness_boost":
-            # NEW CODE: brightness boost effect
-            mask = np.zeros((frame_h, frame_w), dtype=np.uint8)
-            cv2.ellipse(mask, center=(center_x, center_y), axes=(radius_x, radius_y),
-                       angle=0, startAngle=0, endAngle=360, color=255, thickness=-1)
-            mask_3ch = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR).astype(np.float32) / 255.0
-            result = frame.astype(np.float32)
-            result = result * (1.0 + mask_3ch * 0.5)  # 50% brighter
-            return np.clip(result, 0, 255).astype(np.uint8)
+            # Colored overlay effect - fills ellipse with selected color
+            # Create an overlay for blending
+            overlay = frame.copy()
+
+            # Draw filled ellipse on overlay with selected color
+            cv2.ellipse(
+                overlay,
+                center=(center_x, center_y),
+                axes=(radius_x, radius_y),
+                angle=0,
+                startAngle=0,
+                endAngle=360,
+                color=color_bgr,
+                thickness=-1  # Filled
+            )
+
+            # Blend the overlay with original frame using opacity
+            result = cv2.addWeighted(overlay, opacity, frame, 1 - opacity, 0)
+
+            # Draw thin ellipse stroke (outline) for visibility
+            stroke_opacity = 0.5
+            stroke_overlay = result.copy()
+            cv2.ellipse(
+                stroke_overlay,
+                center=(center_x, center_y),
+                axes=(radius_x, radius_y),
+                angle=0,
+                startAngle=0,
+                endAngle=360,
+                color=color_bgr,
+                thickness=1  # Thin outline
+            )
+            result = cv2.addWeighted(stroke_overlay, stroke_opacity, result, 1 - stroke_opacity, 0)
+
+            return result
 
         elif effect_type == "dark_overlay":
             # NEW CODE: dark overlay effect
