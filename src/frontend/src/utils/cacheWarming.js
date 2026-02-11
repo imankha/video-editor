@@ -6,7 +6,14 @@
  * ensuring faster load times when users actually open videos.
  *
  * T55: Addresses slow video loading (60+ seconds) on cold cache.
+ *
+ * Usage:
+ * - Call warmAllUserVideos() on app init/user login
+ * - This fetches all video URLs from backend and warms them
+ * - Future: Move call to post-login hook when T200 (User Management) is implemented
  */
+
+import { API_BASE } from '../config';
 
 // Track URLs currently being warmed to avoid duplicate requests
 const warmingInProgress = new Set();
@@ -140,4 +147,48 @@ export async function warmGamesCache(games) {
 export function clearWarmingCache() {
   warmedUrls.clear();
   warmingInProgress.clear();
+}
+
+/**
+ * Warm all videos for the current user.
+ *
+ * Fetches all video URLs from the backend and warms them.
+ * Call this on app initialization or user login.
+ *
+ * When T200 (User Management) is implemented, move this call
+ * to the post-login hook instead of app mount.
+ *
+ * @returns {Promise<{warmed: number, total: number}>}
+ */
+export async function warmAllUserVideos() {
+  try {
+    console.log('[CacheWarming] Fetching all user video URLs...');
+
+    const response = await fetch(`${API_BASE}/storage/warmup`);
+    if (!response.ok) {
+      console.warn(`[CacheWarming] Failed to fetch warmup URLs: ${response.status}`);
+      return { warmed: 0, total: 0 };
+    }
+
+    const data = await response.json();
+
+    if (!data.r2_enabled) {
+      console.log('[CacheWarming] R2 not enabled, skipping warmup');
+      return { warmed: 0, total: 0 };
+    }
+
+    if (!data.urls || data.urls.length === 0) {
+      console.log('[CacheWarming] No videos to warm');
+      return { warmed: 0, total: 0 };
+    }
+
+    console.log(`[CacheWarming] Warming ${data.count} videos...`);
+    const warmed = await warmMultipleVideos(data.urls, { concurrency: 5 });
+
+    console.log(`[CacheWarming] Complete: ${warmed}/${data.count} videos warmed`);
+    return { warmed, total: data.count };
+  } catch (err) {
+    console.error('[CacheWarming] Error warming videos:', err);
+    return { warmed: 0, total: 0 };
+  }
 }

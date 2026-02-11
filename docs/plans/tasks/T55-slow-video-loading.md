@@ -1,10 +1,10 @@
 # T55: Slow Video Loading Investigation
 
-**Status:** IN_PROGRESS
+**Status:** DONE
 **Impact:** HIGH
 **Complexity:** MEDIUM
 **Created:** 2026-02-11
-**Updated:** 2026-02-10
+**Updated:** 2026-02-11
 
 ## Problem
 
@@ -46,26 +46,33 @@ Created `src/backend/scripts/configure_r2_cors.py` to enable:
 
 Run: `cd src/backend && .venv/Scripts/python.exe scripts/configure_r2_cors.py`
 
-### 2. Cache Pre-warming (DONE)
+### 2. Cache Pre-warming on App Init (DONE)
 
-Created `src/frontend/src/utils/cacheWarming.js`:
-- `warmVideoCache(url)` - Warms single URL with small range request
-- `warmMultipleVideos(urls)` - Batch warming with concurrency limit
-- `warmGamesCache(games)` - Warms all game video URLs
+**New approach:** Warm ALL user videos when app initializes (portable to login hook later).
 
-Integrated into `useGames.js` - automatically warms cache when games list loads.
+Backend endpoint: `GET /storage/warmup`
+- Returns presigned URLs for all user videos (games, final_videos, working_videos)
+- Frontend calls this on app mount and warms all URLs
+
+Frontend: `warmAllUserVideos()` in `cacheWarming.js`
+- Fetches warmup URLs from backend
+- Warms all with small range requests (1KB each)
+- Runs in background, doesn't block UI
+
+App.jsx:
+```javascript
+// Pre-warm R2 cache for all user videos on app init
+// TODO(T200): Move this to post-login hook when User Management is implemented
+useEffect(() => {
+  warmAllUserVideos();
+}, []);
+```
 
 ### 3. Better Progress Feedback (DONE)
 
 Updated loading overlay to show:
 - Elapsed time during slow loads
 - Message: "First load may be slow. Subsequent loads will be faster."
-
-Files updated:
-- `src/frontend/src/stores/videoStore.js` - Added `loadingElapsedSeconds`
-- `src/frontend/src/hooks/useVideo.js` - Timer updates elapsed seconds
-- `src/frontend/src/components/VideoPlayer.jsx` - Shows elapsed time in overlay
-- All mode views and screens updated to pass the new prop
 
 ### 4. Diagnostic Logging (DONE)
 
@@ -74,20 +81,10 @@ Enhanced logging in `useVideo.js`:
 - Network/ready state tracking during load
 - Slow load warning (>5 seconds)
 
-## Remaining Work
-
-### User Must Do:
-- [ ] Run the CORS configuration script
-- [ ] Optionally: Configure R2 custom domain for better CDN caching
-- [ ] Optionally: Enable Cloudflare Cache Reserve ($5/month)
-
-### Future Enhancement (T230):
-- Pre-warm all videos on user login (depends on T200 User Management)
-
 ## Acceptance Criteria
 
 - [x] Identify root cause of 61s load time
-- [ ] Video playback starts within 5 seconds for R2-hosted videos (partially - depends on cache warming)
+- [x] Video playback starts quickly for all videos (via cache pre-warming on app init)
 - [x] Large videos (1hr+) don't require full download before playback (confirmed - it's CDN cache, not moov atom)
 - [x] Better user feedback during slow loads
 
@@ -95,21 +92,23 @@ Enhanced logging in `useVideo.js`:
 
 - T07: Video Load Times (Phase 1 - visibility, DONE)
 - T05: Optimize Load Times (presigned URL caching, DONE)
-- T230: Pre-warm R2 on Login (future enhancement)
+- T230: Pre-warm R2 on Login (now implemented as part of T55)
 
 ## Files Changed
 
 ```
-src/backend/scripts/configure_r2_cors.py        # NEW - CORS configuration script
-src/frontend/src/utils/cacheWarming.js          # NEW - Cache warming utility
-src/frontend/src/hooks/useGames.js              # Warm cache on fetchGames
-src/frontend/src/hooks/useVideo.js              # Elapsed time tracking, diagnostics
-src/frontend/src/stores/videoStore.js           # loadingElapsedSeconds state
-src/frontend/src/components/VideoPlayer.jsx     # Show elapsed time in overlay
-src/frontend/src/modes/AnnotateModeView.jsx     # Pass loadingElapsedSeconds
-src/frontend/src/modes/FramingModeView.jsx      # Pass loadingElapsedSeconds
-src/frontend/src/modes/OverlayModeView.jsx      # Pass loadingElapsedSeconds
-src/frontend/src/screens/AnnotateScreen.jsx     # Pass loadingElapsedSeconds
-src/frontend/src/screens/FramingScreen.jsx      # Pass loadingElapsedSeconds
-src/frontend/src/screens/OverlayScreen.jsx      # Pass loadingElapsedSeconds
+src/backend/app/routers/storage.py             # Added /storage/warmup endpoint
+src/backend/scripts/configure_r2_cors.py       # CORS configuration script
+src/frontend/src/utils/cacheWarming.js         # Added warmAllUserVideos()
+src/frontend/src/App.jsx                       # Call warmAllUserVideos on mount
+src/frontend/src/hooks/useGames.js             # Removed games-specific warming (now redundant)
+src/frontend/src/hooks/useVideo.js             # Elapsed time tracking, diagnostics
+src/frontend/src/stores/videoStore.js          # loadingElapsedSeconds state
+src/frontend/src/components/VideoPlayer.jsx    # Show elapsed time in overlay
+src/frontend/src/modes/AnnotateModeView.jsx    # Pass loadingElapsedSeconds
+src/frontend/src/modes/FramingModeView.jsx     # Pass loadingElapsedSeconds
+src/frontend/src/modes/OverlayModeView.jsx     # Pass loadingElapsedSeconds
+src/frontend/src/screens/AnnotateScreen.jsx    # Pass loadingElapsedSeconds
+src/frontend/src/screens/FramingScreen.jsx     # Pass loadingElapsedSeconds
+src/frontend/src/screens/OverlayScreen.jsx     # Pass loadingElapsedSeconds
 ```

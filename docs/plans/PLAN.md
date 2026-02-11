@@ -30,7 +30,7 @@
 | T52 | [Annotate Parallelization](tasks/T52-annotate-parallelization.md) | WON'T DO | MEDIUM | MEDIUM |
 | T53 | [Fix Tracking Marker Navigation](tasks/T53-tracking-marker-navigation.md) | DONE | HIGH | LOW |
 | T54 | [Fix useOverlayState Test Failures](tasks/T54-fix-overlay-state-tests.md) | DONE | LOW | LOW |
-| T55 | [Slow Video Loading](tasks/T55-slow-video-loading.md) | IN_PROGRESS | HIGH | MEDIUM |
+| T55 | [Slow Video Loading](tasks/T55-slow-video-loading.md) | DONE | HIGH | MEDIUM |
 | T56 | [Gallery Show Duration](tasks/T56-gallery-show-duration.md) | TODO | LOW | LOW |
 | T57 | [Stale Tracking Rectangles](tasks/T57-stale-tracking-rectangles.md) | TODO | MEDIUM | MEDIUM |
 | T58 | [Dim Tracking Squares When Disabled](tasks/T58-dim-tracking-squares-when-disabled.md) | TODO | LOW | LOW |

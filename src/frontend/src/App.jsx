@@ -1,5 +1,6 @@
-import { useMemo, useRef, useCallback } from 'react';
+import { useMemo, useRef, useCallback, useEffect } from 'react';
 import { Home, Scissors } from 'lucide-react';
+import { warmAllUserVideos } from './utils/cacheWarming';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
@@ -88,6 +89,12 @@ function App() {
 
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
+
+  // Pre-warm R2 cache for all user videos on app init
+  // TODO(T200): Move this to post-login hook when User Management is implemented
+  useEffect(() => {
+    warmAllUserVideos();
+  }, []);
 
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);
