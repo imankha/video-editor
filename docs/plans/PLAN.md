@@ -30,10 +30,16 @@
 | T52 | [Annotate Parallelization](tasks/T52-annotate-parallelization.md) | WON'T DO | MEDIUM | MEDIUM |
 | T53 | [Fix Tracking Marker Navigation](tasks/T53-tracking-marker-navigation.md) | DONE | HIGH | LOW |
 | T54 | [Fix useOverlayState Test Failures](tasks/T54-fix-overlay-state-tests.md) | DONE | LOW | LOW |
-| T55 | [Slow Video Loading](tasks/T55-slow-video-loading.md) | TODO | HIGH | MEDIUM |
+| T55 | [Slow Video Loading](tasks/T55-slow-video-loading.md) | IN_PROGRESS | HIGH | MEDIUM |
 | T56 | [Gallery Show Duration](tasks/T56-gallery-show-duration.md) | TODO | LOW | LOW |
 | T57 | [Stale Tracking Rectangles](tasks/T57-stale-tracking-rectangles.md) | TODO | MEDIUM | MEDIUM |
 | T58 | [Dim Tracking Squares When Disabled](tasks/T58-dim-tracking-squares-when-disabled.md) | TODO | LOW | LOW |
+| T60 | [Consolidate Video Controls](tasks/T60-consolidate-video-controls.md) | TODO | MEDIUM | MEDIUM |
+| T61 | [Annotate Default Good](tasks/T61-annotate-default-good.md) | TODO | LOW | LOW |
+| T62 | [Tag Changes](tasks/T62-tag-changes.md) | TODO | LOW | LOW |
+| T63 | [Project Filter Persistence](tasks/T63-project-filter-persistence.md) | TODO | MEDIUM | LOW |
+| T64 | [Gallery Playback Controls](tasks/T64-gallery-playback-controls.md) | TODO | MEDIUM | MEDIUM |
+| T65 | [Logo from Landing Page](tasks/T65-logo-from-landing-page.md) | TODO | LOW | LOW |
 
 ---
 
@@ -75,6 +81,7 @@
 | T200 | [User Management](tasks/T200-user-management.md) | MEDIUM | HIGH | Auth, multi-tenant |
 | T210 | [Wallet & Payments](tasks/T210-wallet-payments.md) | MEDIUM | HIGH | Stripe integration |
 | T220 | [Future GPU Features](tasks/T220-future-gpu-features.md) | LOW | HIGH | Advanced AI features |
+| T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | MEDIUM | LOW | Depends on T200 |
 
 ---
 

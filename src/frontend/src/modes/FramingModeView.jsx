@@ -104,6 +104,7 @@ export function FramingModeView({
   isLoading,
   isVideoElementLoading = false,
   loadingProgress = null,
+  loadingElapsedSeconds = 0,
   isProjectLoading = false,
   loadingStage = null,
   error,
@@ -313,6 +314,7 @@ export function FramingModeView({
               isLoading={isLoading || isProjectLoading}
               isVideoElementLoading={isVideoElementLoading}
               loadingProgress={loadingProgress}
+              loadingElapsedSeconds={loadingElapsedSeconds}
               error={error}
               isUrlExpiredError={isUrlExpiredError}
               onRetryVideo={onRetryVideo}
