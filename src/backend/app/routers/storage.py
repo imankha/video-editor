@@ -219,12 +219,14 @@ async def get_warmup_urls(
     from ..database import get_db_connection
 
     user_id = get_current_user_id()
-    urls = []
+    gallery_urls = []
+    game_urls = []
+    working_urls = []
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Priority 1: Gallery videos (final_videos) - most recent first
+        # Gallery videos (final_videos) - most recent first
         cursor.execute("""
             SELECT filename FROM final_videos
             WHERE filename IS NOT NULL AND filename != ''
@@ -238,9 +240,9 @@ async def get_warmup_urls(
                 content_type="video/mp4"
             )
             if url:
-                urls.append(url)
+                gallery_urls.append(url)
 
-        # Priority 2: Game videos
+        # Game videos
         cursor.execute("""
             SELECT video_filename FROM games
             WHERE video_filename IS NOT NULL AND video_filename != ''
@@ -253,10 +255,9 @@ async def get_warmup_urls(
                 content_type="video/mp4"
             )
             if url:
-                urls.append(url)
+                game_urls.append(url)
 
-        # Priority 3: Working videos only for incomplete projects
-        # (projects that have a framed video but no final video yet)
+        # Working videos only for incomplete projects
         cursor.execute("""
             SELECT wv.filename FROM working_videos wv
             JOIN projects p ON p.working_video_id = wv.id
@@ -271,12 +272,18 @@ async def get_warmup_urls(
                 content_type="video/mp4"
             )
             if url:
-                urls.append(url)
+                working_urls.append(url)
+
+    # Combined list for backwards compatibility
+    urls = gallery_urls + game_urls + working_urls
 
     return {
         "urls": urls,
         "count": len(urls),
-        "r2_enabled": True
+        "r2_enabled": True,
+        "gallery_urls": gallery_urls,
+        "game_urls": game_urls,
+        "working_urls": working_urls,
     }
 
 

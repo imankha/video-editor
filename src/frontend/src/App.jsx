@@ -1,6 +1,6 @@
 import { useMemo, useRef, useCallback, useEffect } from 'react';
 import { Home, Scissors } from 'lucide-react';
-import { warmAllUserVideos } from './utils/cacheWarming';
+import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
@@ -109,6 +109,7 @@ function App() {
   // Sets pendingGameId in sessionStorage and navigates to annotate mode
   const handleLoadGame = useCallback((gameId) => {
     console.log('[App] Loading game - setting pendingGameId in sessionStorage:', gameId);
+    setWarmupPriority(WARMUP_PRIORITY.GAMES); // Prioritize game video warming
     sessionStorage.setItem('pendingGameId', gameId.toString());
     setEditorMode(EDITOR_MODES.ANNOTATE);
   }, [setEditorMode]);
@@ -121,6 +122,8 @@ function App() {
     // Check both possible field names (clipStore uses gameId, projectDataStore uses game_id)
     const gameId = selectedClipForAnnotate?.gameId || selectedClipForAnnotate?.game_id;
     if (!gameId) return;
+
+    setWarmupPriority(WARMUP_PRIORITY.GAMES); // Prioritize game video warming
 
     // Store navigation intent for AnnotateScreen to pick up
     sessionStorage.setItem('pendingGameId', gameId.toString());
