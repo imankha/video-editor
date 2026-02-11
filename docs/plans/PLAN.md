@@ -43,7 +43,7 @@
 | T64 | [Gallery Playback Controls](tasks/T64-gallery-playback-controls.md) | DONE | MEDIUM | MEDIUM |
 | T65 | [Logo from Landing Page](tasks/T65-logo-from-landing-page.md) | TODO | LOW | LOW |
 | T66 | [Database Completed Projects Split](tasks/T66-database-completed-projects-split.md) | TODO | MEDIUM | MEDIUM |
-| T67 | [Overlay Color Selection](tasks/T67-overlay-color-selection.md) | TODO | MEDIUM | LOW |
+| T67 | [Overlay Color Selection](tasks/T67-overlay-color-selection.md) | DONE | MEDIUM | LOW |
 
 ---
 

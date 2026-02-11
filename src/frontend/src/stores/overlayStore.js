@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { HighlightEffect } from '../constants/highlightEffects';
+import { HighlightColor } from '../constants/highlightColors';
 
 /**
  * Store for overlay mode UI state
@@ -19,6 +20,9 @@ export const useOverlayStore = create((set) => ({
   // Effect settings (default to dark_overlay, backend loads actual value)
   effectType: HighlightEffect.DARK_OVERLAY,
 
+  // Highlight color for new highlights (default yellow)
+  highlightColor: HighlightColor.YELLOW,
+
   // Loading states
   isLoadingWorkingVideo: false,
 
@@ -28,12 +32,15 @@ export const useOverlayStore = create((set) => ({
   // Actions
   setEffectType: (type) => set({ effectType: type }),
 
+  setHighlightColor: (color) => set({ highlightColor: color }),
+
   setIsLoadingWorkingVideo: (loading) => set({ isLoadingWorkingVideo: loading }),
 
   setOverlayChangedSinceExport: (changed) => set({ overlayChangedSinceExport: changed }),
 
   reset: () => set({
     effectType: HighlightEffect.DARK_OVERLAY,
+    highlightColor: HighlightColor.YELLOW,
     isLoadingWorkingVideo: false,
     overlayChangedSinceExport: false,
   }),
@@ -42,5 +49,6 @@ export const useOverlayStore = create((set) => ({
 // Selector hooks
 // NOTE: useOverlayWorkingVideo and useOverlayClipMetadata removed - use projectDataStore
 export const useOverlayEffectType = () => useOverlayStore(state => state.effectType);
+export const useOverlayHighlightColor = () => useOverlayStore(state => state.highlightColor);
 export const useOverlayIsLoading = () => useOverlayStore(state => state.isLoadingWorkingVideo);
 export const useOverlayChangedSinceExport = () => useOverlayStore(state => state.overlayChangedSinceExport);

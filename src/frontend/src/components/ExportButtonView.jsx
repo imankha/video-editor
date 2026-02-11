@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle } from 'react';
-import { Download, Loader, AlertCircle } from 'lucide-react';
+import { Download, Loader, AlertCircle, Check } from 'lucide-react';
 import { Button, Toggle, ExportProgress } from './shared';
+import { HighlightColor, HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 
 /**
  * ExportButtonView - Pure presentational component for export UI
@@ -44,11 +45,13 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   onExport,
   onAudioToggle,
   onHighlightEffectTypeChange,
+  onHighlightColorChange,
 
   // Config/labels
   HIGHLIGHT_EFFECT_LABELS,
   EXPORT_CONFIG,
   highlightEffectType,
+  highlightColor,
 
   // Refs for external triggering
   handleExportRef,
@@ -105,6 +108,48 @@ const ExportButtonView = forwardRef(function ExportButtonView({
               )}
               disabled={isCurrentlyExporting || !isHighlightEnabled}
             />
+          </div>
+        )}
+
+        {/* Highlight Color - Overlay mode only */}
+        {!isFramingMode && (
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-gray-200">Highlight Color</span>
+              <span className="text-xs text-gray-400">
+                {HIGHLIGHT_COLOR_LABELS[highlightColor] || 'Yellow'}
+              </span>
+            </div>
+
+            <div className="flex gap-1.5">
+              {HIGHLIGHT_COLOR_ORDER.map((color) => (
+                <button
+                  key={color ?? 'none'}
+                  onClick={() => onHighlightColorChange?.(color)}
+                  disabled={isCurrentlyExporting || !isHighlightEnabled}
+                  className={`
+                    w-6 h-6 rounded-full border-2 transition-all
+                    flex items-center justify-center
+                    ${highlightColor === color
+                      ? 'border-white ring-2 ring-white/30'
+                      : 'border-gray-600 hover:border-gray-400'}
+                    ${(isCurrentlyExporting || !isHighlightEnabled) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                  `}
+                  style={{
+                    backgroundColor: color || 'transparent',
+                    backgroundImage: color ? 'none' : 'linear-gradient(135deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)'
+                  }}
+                  title={HIGHLIGHT_COLOR_LABELS[color]}
+                >
+                  {highlightColor === color && color && (
+                    <Check size={12} className="text-gray-800" strokeWidth={3} />
+                  )}
+                  {highlightColor === color && !color && (
+                    <Check size={12} className="text-white" strokeWidth={3} />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
