@@ -31,6 +31,7 @@
 | T53 | [Fix Tracking Marker Navigation](tasks/T53-tracking-marker-navigation.md) | DONE | HIGH | LOW |
 | T54 | [Fix useOverlayState Test Failures](tasks/T54-fix-overlay-state-tests.md) | DONE | LOW | LOW |
 | T55 | [Slow Video Loading](tasks/T55-slow-video-loading.md) | TODO | HIGH | MEDIUM |
+| T56 | [Gallery Show Duration](tasks/T56-gallery-show-duration.md) | TODO | LOW | LOW |
 
 ---
 
