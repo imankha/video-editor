@@ -164,8 +164,9 @@ export function AnnotateContainer({
       }, gameDetails);
       console.log('[AnnotateContainer] Game created with ID:', game.id, 'display name:', game.name);
 
-      // Set annotate state with LOCAL video URL and game ID
+      // Set annotate state with LOCAL video URL (blob: URL - already in memory)
       // Use the display name from the API response (generated from game details)
+      console.log('[AnnotateContainer] New game using local blob URL (BLOB - pre-downloaded)');
       setAnnotateVideoFile(file);
       setAnnotateVideoUrl(localVideoUrl);
       setAnnotateVideoMetadata(videoMetadata);
@@ -213,8 +214,10 @@ export function AnnotateContainer({
       console.log('[AnnotateContainer] Loaded game data:', gameData);
 
       // Use presigned R2 URL if available (from gameData.video_url), otherwise local proxy
+      // Both are set directly on video element - browser uses RANGE REQUESTS (streaming)
       const videoUrl = getGameVideoUrl(gameId, gameData);
-      console.log('[AnnotateContainer] Game video URL:', videoUrl, gameData.video_url ? '(R2 presigned)' : '(local proxy)');
+      const urlType = gameData.video_url ? 'R2 presigned - STREAMING' : 'local proxy - STREAMING';
+      console.log(`[AnnotateContainer] Game video URL (${urlType}):`, videoUrl?.substring(0, 60));
 
       // Use stored metadata if available
       let videoMetadata = null;

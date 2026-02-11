@@ -102,7 +102,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * @returns {Promise<File|null>} - The loaded file or null on error
    */
   const loadVideoFromUrl = async (url, filename = 'video.mp4') => {
-    console.log('[useVideo] loadVideoFromUrl called with:', url);
+    console.log('[useVideo] loadVideoFromUrl (FULL DOWNLOAD) called with:', url);
     setError(null);
     setIsLoading(true);
 
@@ -157,7 +157,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * @param {Object} preloadedMetadata - Optional pre-extracted metadata
    */
   const loadVideoFromStreamingUrl = (url, preloadedMetadata = null) => {
-    console.log('[useVideo] loadVideoFromStreamingUrl called with:', url?.substring(0, 60));
+    console.log('[useVideo] loadVideoFromStreamingUrl (RANGE REQUESTS) called with:', url?.substring(0, 60));
     setError(null);
     retryAttemptRef.current = 0; // Reset retry counter on new video load
 
@@ -412,7 +412,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     if (videoRef.current) {
       const video = videoRef.current;
       const urlPreview = video.src?.length > 60 ? `${video.src.substring(0, 60)}...` : video.src;
+      const isBlob = video.src?.startsWith('blob:');
+      const loadMode = isBlob ? 'BLOB (pre-downloaded)' : 'STREAMING (range requests)';
       console.log(`[VIDEO] Loading: ${urlPreview}`);
+      console.log(`[VIDEO] Mode: ${loadMode}`);
       console.log(`[VIDEO] networkState: ${video.networkState}, readyState: ${video.readyState}`);
       // Set loading state - this catches cases where URL is set directly (e.g., Annotate mode)
       useVideoStore.getState().setIsVideoElementLoading(true);
