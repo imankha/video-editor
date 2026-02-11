@@ -578,6 +578,7 @@ export function OverlayScreen({
     setSelectedHighlightKeyframeTime,
     highlightEffectType,
     setHighlightEffectType: wrappedSetHighlightEffectType,  // Use wrapped version
+    highlightColor,  // Global color from store (used in preview)
     pendingOverlaySaveRef,
     // Sync state machine (replaces overlayDataLoadedForProjectRef)
     overlaySyncState,

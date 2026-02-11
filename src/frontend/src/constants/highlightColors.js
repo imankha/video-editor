@@ -8,7 +8,7 @@
  */
 export const HighlightColor = {
   YELLOW: '#FFEB3B',
-  PINK: '#E91E63',
+  PINK: '#FF8080',  // Red moved 50% towards white
   ORANGE: '#FF9800',
   NONE: null,
 };

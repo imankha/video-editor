@@ -72,6 +72,7 @@ export function OverlayContainer({
   setSelectedHighlightKeyframeTime,
   highlightEffectType,
   setHighlightEffectType,
+  highlightColor,  // Global color from store (used in preview)
   pendingOverlaySaveRef,
   // Sync state machine (replaces overlayDataLoadedForProjectRef)
   overlaySyncState,
@@ -280,7 +281,11 @@ export function OverlayContainer({
   const regionHasDetections = regionDetectionData.hasDetections;
 
   // DERIVED STATE: Current highlight state
+  // Uses global highlightColor from store when available (overrides keyframe color)
   const currentHighlightState = useMemo(() => {
+    // Use global color if set, otherwise fallback to keyframe color or default yellow
+    const effectiveColor = highlightColor || '#FFFF00';
+
     if (dragHighlight) {
       return {
         x: dragHighlight.x,
@@ -288,7 +293,7 @@ export function OverlayContainer({
         radiusX: dragHighlight.radiusX,
         radiusY: dragHighlight.radiusY,
         opacity: dragHighlight.opacity,
-        color: dragHighlight.color
+        color: effectiveColor
       };
     }
 
@@ -305,9 +310,9 @@ export function OverlayContainer({
       radiusX: highlight.radiusX,
       radiusY: highlight.radiusY,
       opacity: highlight.opacity,
-      color: highlight.color
+      color: effectiveColor
     };
-  }, [dragHighlight, currentTime, isTimeInEnabledRegion, getRegionHighlightAtTime]);
+  }, [dragHighlight, currentTime, isTimeInEnabledRegion, getRegionHighlightAtTime, highlightColor]);
 
   /**
    * Handle player selection from detection overlay
@@ -320,7 +325,8 @@ export function OverlayContainer({
     }
 
     const defaultOpacity = currentHighlightState?.opacity ?? 0.3;
-    const defaultColor = currentHighlightState?.color ?? '#FFFF00';
+    // Use global highlight color if set
+    const defaultColor = highlightColor || currentHighlightState?.color || '#FFFF00';
 
     const highlight = {
       x: playerData.x,
@@ -339,7 +345,7 @@ export function OverlayContainer({
     });
 
     addHighlightRegionKeyframe(currentTime, highlight, duration);
-  }, [currentTime, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime]);
+  }, [currentTime, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime, highlightColor]);
 
   /**
    * Handle highlight changes during drag/resize

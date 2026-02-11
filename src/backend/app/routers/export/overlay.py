@@ -1596,7 +1596,7 @@ async def render_overlay(request: OverlayRenderRequest):
         cursor.execute("""
             SELECT p.id, p.name, p.working_video_id,
                    wv.filename as working_filename,
-                   wv.highlights_data, wv.effect_type, wv.duration
+                   wv.highlights_data, wv.effect_type, wv.highlight_color, wv.duration
             FROM projects p
             JOIN working_videos wv ON p.working_video_id = wv.id
             WHERE p.id = ?
@@ -1640,6 +1640,15 @@ async def render_overlay(request: OverlayRenderRequest):
             logger.error(f"[Overlay Render] DEBUG - JSON decode error: {e}")
     else:
         logger.warning(f"[Overlay Render] DEBUG - highlights_data is empty/None!")
+
+    # Apply global highlight_color to all keyframes if set
+    # This allows users to change the highlight color without re-editing each keyframe
+    global_highlight_color = project.get('highlight_color')
+    if global_highlight_color:
+        logger.info(f"[Overlay Render] Applying global highlight color: {global_highlight_color}")
+        for region in highlight_regions:
+            for keyframe in region.get('keyframes', []):
+                keyframe['color'] = global_highlight_color
 
     # Use saved effect_type if not specified
     logger.info(f"[Overlay Render] DEBUG - effect_type from request: {effect_type}, from DB: {project['effect_type']}")
