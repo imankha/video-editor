@@ -735,7 +735,9 @@ export default function useHighlightRegions(videoMetadata) {
       // Create default highlight keyframes for start and end
       const defaultHighlight = calculateDefaultHighlight(videoWidth, videoHeight);
 
-      const startFrame = timeToFrame(regionStart, framerate);
+      // Use Math.ceil for start frame to ensure we never start before clip demarcation
+      // This guarantees tracking starts at clip boundary or slightly after, never before
+      const startFrame = Math.ceil(regionStart * framerate);
       const endFrame = timeToFrame(regionEnd, framerate);
 
       // Snap times to exact frame boundaries

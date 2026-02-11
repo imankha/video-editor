@@ -57,6 +57,7 @@ export function OverlayMode({
   selectedLayer,
   onLayerSelect,
   onSeek,
+  onDetectionMarkerClick,  // Called when user clicks a green detection marker
   sourceTimeToVisualTime,
   visualTimeToSourceTime,
   timelineZoom,
@@ -169,6 +170,7 @@ export function OverlayMode({
                   duration={duration}
                   visualDuration={visualDuration || duration}
                   onSeek={onSeek}
+                  onDetectionMarkerClick={onDetectionMarkerClick}
                   sourceTimeToVisualTime={sourceTimeToVisualTime}
                   edgePadding={EDGE_PADDING}
                 />

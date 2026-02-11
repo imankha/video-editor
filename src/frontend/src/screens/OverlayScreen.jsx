@@ -332,11 +332,14 @@ export function OverlayScreen({
   // =========================================
 
   // Reset sync state when project changes
+  // NOTE: Do NOT include overlaySyncState in dependencies - we only want this
+  // to run when projectId changes, not when sync state changes (causes infinite loop)
   useEffect(() => {
     if (projectId !== overlayLoadedProjectId && overlaySyncState !== 'idle') {
       setOverlaySyncState('idle');
     }
-  }, [projectId, overlayLoadedProjectId, overlaySyncState, setOverlaySyncState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, overlayLoadedProjectId, setOverlaySyncState]);
 
   // Load overlay data from backend
   // Skip if we have fresh clip metadata (from framing export) - that takes priority
@@ -594,6 +597,7 @@ export function OverlayScreen({
     handlePlayerSelect,
     handleHighlightChange,
     handleHighlightComplete,
+    handleDetectionMarkerClick,
   } = overlay;
 
   // =========================================
@@ -784,6 +788,7 @@ export function OverlayScreen({
       showPlayerBoxes={showPlayerBoxes}
       onTogglePlayerBoxes={togglePlayerBoxes}
       onEnablePlayerBoxes={enablePlayerBoxes}
+      onDetectionMarkerClick={handleDetectionMarkerClick}
       // Zoom
       zoom={zoom}
       panOffset={panOffset}

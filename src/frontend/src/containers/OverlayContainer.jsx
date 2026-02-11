@@ -153,14 +153,49 @@ export function OverlayContainer({
     setShowPlayerBoxes(true);
   }, []);
 
+  // CLICKED DETECTION STATE:
+  // When user clicks a green detection marker, we remember which detection they clicked.
+  // This guarantees the boxes show regardless of where the browser's seek lands.
+  // The clicked detection is cleared when the user plays or manually scrubs.
+  const [clickedDetection, setClickedDetection] = useState(null);
+
+  // Handler for when a detection marker is clicked
+  const handleDetectionMarkerClick = useCallback((detection) => {
+    // detection = { regionId, frame, boxes, videoWidth, videoHeight }
+    setClickedDetection(detection);
+  }, []);
+
+  // Clear clicked detection when user starts playing (they're moving away from the marker)
+  useEffect(() => {
+    if (isPlaying && clickedDetection) {
+      setClickedDetection(null);
+    }
+  }, [isPlaying, clickedDetection]);
+
   // Get detection data from the current highlight region (stored during framing export)
   // This replaces the old usePlayerDetection hook that fetched from a per-frame cache
   //
-  // FRAME-BASED DETECTION MATCHING:
+  // CLICKED DETECTION PRIORITY:
+  // If user clicked a green detection marker, show that detection DIRECTLY.
+  // This bypasses all timing calculations and guarantees boxes appear.
+  //
+  // FRAME-BASED DETECTION MATCHING (fallback):
   // We use frame numbers (integers) instead of timestamps (floats) for matching.
   // This avoids floating-point precision issues and accounts for video seeking
   // imprecision (browsers seek to nearest keyframe, not exact requested time).
   const regionDetectionData = useMemo(() => {
+    // PRIORITY 1: If user clicked a detection marker, show that detection directly
+    // This is immune to browser seek imprecision - clicking green marker ALWAYS shows boxes
+    if (clickedDetection && clickedDetection.boxes?.length > 0) {
+      return {
+        detections: clickedDetection.boxes,
+        videoWidth: clickedDetection.videoWidth || 0,
+        videoHeight: clickedDetection.videoHeight || 0,
+        hasDetections: true
+      };
+    }
+
+    // PRIORITY 2: Frame-based matching (for scrubbing/playback)
     if (!playerDetectionEnabled || !highlightRegions?.length) {
       return { detections: [], videoWidth: 0, videoHeight: 0, hasDetections: false };
     }
@@ -220,7 +255,7 @@ export function OverlayContainer({
       videoHeight: currentRegion.videoHeight || 0,
       hasDetections: true
     };
-  }, [playerDetectionEnabled, highlightRegions, currentTime, highlightRegionsFramerate]);
+  }, [clickedDetection, playerDetectionEnabled, highlightRegions, currentTime, highlightRegionsFramerate]);
 
   const playerDetections = regionDetectionData.detections;
   const isDetectionLoading = false; // No longer loading from API
@@ -433,6 +468,7 @@ export function OverlayContainer({
     showPlayerBoxes,
     togglePlayerBoxes,
     enablePlayerBoxes,
+    handleDetectionMarkerClick,  // Guarantees boxes show when clicking green markers
 
     // Derived state
     hasFramingEdits,
@@ -549,6 +585,7 @@ export function OverlayTimeline({
   selectedLayer,
   onLayerSelect,
   onSeek,
+  onDetectionMarkerClick,  // Called when user clicks a green detection marker
   sourceTimeToVisualTime,
   visualTimeToSourceTime,
   timelineZoom,
@@ -585,6 +622,7 @@ export function OverlayTimeline({
       selectedLayer={selectedLayer}
       onLayerSelect={onLayerSelect}
       onSeek={onSeek}
+      onDetectionMarkerClick={onDetectionMarkerClick}
       sourceTimeToVisualTime={sourceTimeToVisualTime}
       visualTimeToSourceTime={visualTimeToSourceTime}
       timelineZoom={timelineZoom}

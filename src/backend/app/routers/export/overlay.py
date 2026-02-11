@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import threading
 import json
 import os
 import re
@@ -492,12 +493,25 @@ def _process_frames_to_ffmpeg(
     logger.info(f"[Overlay Export] FFmpeg command: {' '.join(ffmpeg_cmd[:10])}...")
 
     # Start FFmpeg process
+    # IMPORTANT: We use a thread to drain stderr to prevent deadlock!
+    # If stderr buffer fills up, FFmpeg blocks, which blocks stdin, which blocks our write()
     ffmpeg_proc = subprocess.Popen(
         ffmpeg_cmd,
         stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE
     )
+
+    # Drain stderr in a background thread to prevent deadlock
+    stderr_output = []
+    def drain_stderr():
+        try:
+            for line in ffmpeg_proc.stderr:
+                stderr_output.append(line)
+        except Exception:
+            pass
+    stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
+    stderr_thread.start()
 
     # Sort regions by start time for efficient lookup
     sorted_regions = sorted(highlight_regions, key=lambda r: r['start_time'])
@@ -563,11 +577,13 @@ def _process_frames_to_ffmpeg(
             ffmpeg_proc.stdin.close()
 
     # Wait for FFmpeg to finish
-    stdout, stderr = ffmpeg_proc.communicate()
+    ffmpeg_proc.wait()
+    stderr_thread.join(timeout=5.0)  # Wait for stderr drain thread
 
     if ffmpeg_proc.returncode != 0:
-        logger.error(f"[Overlay Export] FFmpeg error: {stderr.decode()}")
-        raise RuntimeError(f"FFmpeg encoding failed: {stderr.decode()[:500]}")
+        stderr_text = b''.join(stderr_output).decode(errors='replace')
+        logger.error(f"[Overlay Export] FFmpeg error: {stderr_text}")
+        raise RuntimeError(f"FFmpeg encoding failed: {stderr_text[:500]}")
 
     logger.info(f"[Overlay Export] Processed {frame_idx} frames via pipe")
     return frame_idx

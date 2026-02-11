@@ -17,6 +17,7 @@ export default function DetectionMarkerLayer({
   duration,
   visualDuration,
   onSeek,
+  onDetectionMarkerClick,  // (regionId, frame, detection) => void - called when marker is clicked
   sourceTimeToVisualTime = (t) => t,
   edgePadding = 20,
 }) {
@@ -48,7 +49,10 @@ export default function DetectionMarkerLayer({
             fps: region.fps,  // May be null if data is from old export
             positionPercent,
             boxCount: detection.boxes.length,
+            boxes: detection.boxes,  // Include boxes for guaranteed display after click
             regionId: region.id,
+            videoWidth: region.videoWidth,
+            videoHeight: region.videoHeight,
           });
         }
       });
@@ -80,13 +84,24 @@ export default function DetectionMarkerLayer({
             style={{ left: `${marker.positionPercent}%` }}
             onClick={(e) => {
               e.stopPropagation();
+
+              // Tell OverlayContainer which detection to display (guarantees boxes show)
+              if (onDetectionMarkerClick) {
+                onDetectionMarkerClick({
+                  regionId: marker.regionId,
+                  frame: marker.frame,
+                  boxes: marker.boxes,
+                  videoWidth: marker.videoWidth,
+                  videoHeight: marker.videoHeight,
+                });
+              }
+
+              // Seek to the detection's timestamp
               if (onSeek) {
-                // Use frame-based seeking for precision (avoids floating-point rounding)
                 if (marker.frame !== undefined && marker.fps) {
                   const preciseTime = frameToTime(marker.frame, marker.fps);
                   onSeek(preciseTime);
                 } else {
-                  // Missing frame/fps data - use timestamp (less precise, may show wrong frame)
                   console.warn(`[DetectionMarkerLayer] Missing frame/fps data for marker at ${marker.timestamp}s - using timestamp. Re-export framing to fix.`);
                   onSeek(marker.timestamp);
                 }
