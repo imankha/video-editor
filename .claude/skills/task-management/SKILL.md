@@ -15,6 +15,7 @@ When the user requests a new task, create it as a standalone file AND add it to 
 - User asks to update task priority
 - User asks to record progress on a task
 - Starting work on an existing task (update context)
+- **User asks "what's next"** → Show TODO tasks sorted by priority
 
 ## Rule Categories
 
@@ -124,14 +125,21 @@ Use numeric **1-10 scale** for both Impact and Complexity:
 
 ### Displaying Tasks
 
-When showing task lists, **always include both scores**:
+When showing task lists:
+
+1. **Always include both scores** (Impact and Complexity)
+2. **Sort by priority** (highest first): `Priority = Impact - (Complexity / 2)`
+3. **Show priority score** so user can see the ranking
 
 ```
-| ID | Task | Impact | Complexity |
-|----|------|--------|------------|
-| T67 | Overlay Color Selection | 6 | 3 |
-| T66 | Database Split Analysis | 5 | 6 |
+| ID | Task | Impact | Cmplx | Priority |
+|----|------|--------|-------|----------|
+| T67 | Overlay Color Selection | 6 | 3 | 4.5 |
+| T56 | Gallery Show Duration | 4 | 2 | 3.0 |
+| T66 | Database Split Analysis | 5 | 6 | 2.0 |
 ```
+
+Best opportunities (high impact, low complexity) float to the top.
 
 ### Priority Formula
 
