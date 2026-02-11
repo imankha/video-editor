@@ -172,6 +172,24 @@ export function OverlayContainer({
     }
   }, [isPlaying, clickedDetection]);
 
+  // Clear clicked detection when user scrubs away from the clicked frame
+  // This prevents stale boxes from showing when extending regions or scrubbing
+  useEffect(() => {
+    if (!clickedDetection) return;
+
+    const fps = highlightRegionsFramerate || 30;
+    const currentFrame = Math.round(currentTime * fps);
+    const clickedFrame = clickedDetection.frame;
+
+    // Use same threshold as regionDetectionData (±2 frames)
+    const DETECTION_FRAME_THRESHOLD = 2;
+    const frameDistance = Math.abs(currentFrame - clickedFrame);
+
+    if (frameDistance > DETECTION_FRAME_THRESHOLD) {
+      setClickedDetection(null);
+    }
+  }, [currentTime, clickedDetection, highlightRegionsFramerate]);
+
   // Get detection data from the current highlight region (stored during framing export)
   // This replaces the old usePlayerDetection hook that fetched from a per-frame cache
   //
