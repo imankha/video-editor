@@ -9,6 +9,7 @@
 | [data-always-ready](.claude/skills/data-always-ready/SKILL.md) | CRITICAL | Parent guards data, children assume it exists |
 | [mvc-pattern](.claude/skills/mvc-pattern/SKILL.md) | CRITICAL | Screen → Container → View separation |
 | [state-management](.claude/skills/state-management/SKILL.md) | CRITICAL | Single store ownership, no duplicate state |
+| [naming](.claude/skills/naming/SKILL.md) | HIGH | Name by behavior, not usage context |
 | [type-safety](.claude/skills/type-safety/SKILL.md) | HIGH | Use `as const` objects, no magic strings |
 | [keyframe-data-model](.claude/skills/keyframe-data-model/SKILL.md) | HIGH | Frame-based keyframes, origins, state machine |
 | [ui-style-guide](.claude/skills/ui-style-guide/SKILL.md) | MEDIUM | Colors, buttons, spacing, components |

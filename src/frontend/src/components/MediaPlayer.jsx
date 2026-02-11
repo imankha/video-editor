@@ -5,25 +5,23 @@ import { VideoControls } from './shared/VideoControls';
 import { useStandaloneVideo } from '../hooks/useStandaloneVideo';
 
 /**
- * StandaloneVideoPlayer - Self-contained video player with built-in controls
+ * MediaPlayer - Video player with built-in controls
  *
- * Uses shared components for consistent UX:
- * - VideoLoadingOverlay (same as editor)
- * - VideoControls (same styling)
- * - useStandaloneVideo (internal state management)
- *
- * Features:
- * - Play/pause, seek, volume controls
+ * Plays video with:
+ * - Play/pause, seek forward/backward, volume controls
+ * - Timeline scrubber
  * - Keyboard shortcuts (Space, arrows, M, Escape)
  * - Auto-hide controls during playback
- * - Big play button overlay
+ * - Loading indicator with progress
+ *
+ * Uses shared components: VideoLoadingOverlay, VideoControls
  *
  * @param {Object} props
  * @param {string} props.src - Video source URL
  * @param {boolean} props.autoPlay - Whether to auto-play on mount
  * @param {Function} props.onClose - Callback when Escape is pressed
  */
-export function StandaloneVideoPlayer({ src, autoPlay = true, onClose }) {
+export function MediaPlayer({ src, autoPlay = true, onClose }) {
   const containerRef = useRef(null);
   const [showControls, setShowControls] = useState(true);
   const hideControlsTimeoutRef = useRef(null);
@@ -179,7 +177,4 @@ export function StandaloneVideoPlayer({ src, autoPlay = true, onClose }) {
   );
 }
 
-// Also export as GalleryVideoPlayer for backwards compatibility
-export const GalleryVideoPlayer = StandaloneVideoPlayer;
-
-export default StandaloneVideoPlayer;
+export default MediaPlayer;

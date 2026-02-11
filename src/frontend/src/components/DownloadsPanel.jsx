@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, Film, LayoutGrid } from 'lucide-react';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
-import { GalleryVideoPlayer } from './StandaloneVideoPlayer';
+import { MediaPlayer } from './MediaPlayer';
 import { useDownloads } from '../hooks/useDownloads';
 import { useGalleryStore } from '../stores/galleryStore';
 
@@ -576,7 +576,7 @@ export function DownloadsPanel({
 
             {/* Video Player */}
             <div className="flex-1 flex items-center justify-center bg-black overflow-hidden">
-              <GalleryVideoPlayer
+              <MediaPlayer
                 src={getStreamingUrl(playingVideo.id, playingVideo)}
                 autoPlay
                 onClose={() => setPlayingVideo(null)}
