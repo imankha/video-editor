@@ -328,8 +328,21 @@ export default function HighlightOverlay({
           />
         )}
 
-        {/* Brightness boost effect - brighter fill inside ellipse */}
-        {effectType === 'brightness_boost' && (
+        {/* Brightness boost effect - colored fill or brightness boost */}
+        {effectType === 'brightness_boost' && currentHighlight.color && (
+          /* Color selected: show colored overlay (like old "original") */
+          <ellipse
+            cx={screenHighlight.x}
+            cy={screenHighlight.y}
+            rx={screenHighlight.radiusX}
+            ry={screenHighlight.radiusY}
+            fill={fillColor}
+            fillOpacity={currentHighlight.opacity || 0.15}
+            className="pointer-events-none"
+          />
+        )}
+        {effectType === 'brightness_boost' && !currentHighlight.color && (
+          /* No color (None): pure brightness boost */
           <ellipse
             cx={screenHighlight.x}
             cy={screenHighlight.y}
