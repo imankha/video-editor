@@ -1,10 +1,85 @@
+import { forwardRef } from 'react';
 import { Minimize } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
-import ExportButton from '../components/ExportButton';
+import ExportButtonView from '../components/ExportButtonView';
+import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { FramingMode, CropOverlay } from './framing';
+
+/**
+ * ExportButtonSection - Container+View composition for Framing mode export
+ *
+ * Follows MVC pattern: Container handles logic, View handles presentation.
+ */
+const ExportButtonSection = forwardRef(function ExportButtonSection({
+  videoFile,
+  cropKeyframes,
+  segmentData,
+  disabled,
+  includeAudio,
+  onIncludeAudioChange,
+  onProceedToOverlay,
+  clips,
+  globalAspectRatio,
+  globalTransition,
+  onExportComplete,
+  saveCurrentClipState,
+}, ref) {
+  // Container: all business logic
+  const container = ExportButtonContainer({
+    videoFile,
+    cropKeyframes,
+    highlightRegions: [],
+    isHighlightEnabled: false,
+    segmentData,
+    disabled,
+    includeAudio,
+    onIncludeAudioChange,
+    onProceedToOverlay,
+    clips,
+    globalAspectRatio,
+    globalTransition,
+    onExportComplete,
+    saveCurrentClipState,
+  });
+
+  // View: pure presentation
+  return (
+    <div className="mt-6">
+      <ExportButtonView
+        ref={ref}
+        isCurrentlyExporting={container.isCurrentlyExporting}
+        isExporting={container.isExporting}
+        isExternallyExporting={false}
+        displayProgress={container.displayProgress}
+        displayMessage={container.displayMessage}
+        error={container.error}
+        isFramingMode={container.isFramingMode}
+        isDarkOverlay={container.isDarkOverlay}
+        hasUnextractedClips={container.hasUnextractedClips}
+        extractingCount={container.extractingCount}
+        pendingCount={container.pendingCount}
+        hasUnframedClips={container.hasUnframedClips}
+        unframedCount={container.unframedCount}
+        totalExtractedClips={container.totalExtractedClips}
+        isMultiClipMode={container.isMultiClipMode}
+        isButtonDisabled={container.isButtonDisabled}
+        buttonTitle={container.buttonTitle}
+        includeAudio={includeAudio}
+        isHighlightEnabled={false}
+        highlightEffectType={null}
+        onExport={container.handleExport}
+        onAudioToggle={container.handleAudioToggle}
+        onHighlightEffectTypeChange={null}
+        HIGHLIGHT_EFFECT_LABELS={HIGHLIGHT_EFFECT_LABELS}
+        EXPORT_CONFIG={EXPORT_CONFIG}
+        handleExportRef={container.handleExportRef}
+      />
+    </div>
+  );
+});
 
 /**
  * FramingModeView - Complete view for Framing mode
@@ -333,25 +408,21 @@ export function FramingModeView({
 
         {/* Export Button - hidden in fullscreen */}
         {videoUrl && !isFullscreen && (
-          <div className="mt-6">
-            <ExportButton
-              ref={exportButtonRef}
-              videoFile={videoFile}
-              cropKeyframes={getFilteredKeyframesForExport}
-              highlightRegions={[]}
-              isHighlightEnabled={false}
-              segmentData={getSegmentExportData()}
-              disabled={!videoUrl}
-              includeAudio={includeAudio}
-              onIncludeAudioChange={onIncludeAudioChange}
-              onProceedToOverlay={onProceedToOverlay}
-              clips={hasClips ? clipsWithCurrentState : null}
-              globalAspectRatio={globalAspectRatio}
-              globalTransition={globalTransition}
-              onExportComplete={onExportComplete}
-              saveCurrentClipState={saveCurrentClipState}
-            />
-          </div>
+          <ExportButtonSection
+            ref={exportButtonRef}
+            videoFile={videoFile}
+            cropKeyframes={getFilteredKeyframesForExport}
+            segmentData={getSegmentExportData()}
+            disabled={!videoUrl}
+            includeAudio={includeAudio}
+            onIncludeAudioChange={onIncludeAudioChange}
+            onProceedToOverlay={onProceedToOverlay}
+            clips={hasClips ? clipsWithCurrentState : null}
+            globalAspectRatio={globalAspectRatio}
+            globalTransition={globalTransition}
+            onExportComplete={onExportComplete}
+            saveCurrentClipState={saveCurrentClipState}
+          />
         )}
       </div>
 

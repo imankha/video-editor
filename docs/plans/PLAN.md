@@ -30,6 +30,10 @@
 | T52 | [Annotate Parallelization](tasks/T52-annotate-parallelization.md) | WON'T DO | MEDIUM | MEDIUM |
 | T53 | [Fix Tracking Marker Navigation](tasks/T53-tracking-marker-navigation.md) | DONE | HIGH | LOW |
 | T54 | [Fix useOverlayState Test Failures](tasks/T54-fix-overlay-state-tests.md) | DONE | LOW | LOW |
+| T55 | [Slow Video Loading](tasks/T55-slow-video-loading.md) | TODO | HIGH | MEDIUM |
+| T56 | [Gallery Show Duration](tasks/T56-gallery-show-duration.md) | TODO | LOW | LOW |
+| T57 | [Stale Tracking Rectangles](tasks/T57-stale-tracking-rectangles.md) | TODO | MEDIUM | MEDIUM |
+| T58 | [Dim Tracking Squares When Disabled](tasks/T58-dim-tracking-squares-when-disabled.md) | TODO | LOW | LOW |
 
 ---
 
@@ -46,7 +50,7 @@
 | T301 | Refactor editorMode to EDITOR_MODES | 25 | DONE |
 | T311 | Remove workingVideo from overlayStore | 25 | DONE |
 | T312 | Remove clipMetadata from overlayStore | 25 | DONE |
-| T331 | Refactor ExportButton to container | 25 | TODO |
+| T331 | Refactor ExportButton to container | 25 | DONE |
 | T302 | Refactor statusFilter to constants | 16 | TODO |
 | T303 | Refactor keyframe origin to constants | 16 | TODO |
 
