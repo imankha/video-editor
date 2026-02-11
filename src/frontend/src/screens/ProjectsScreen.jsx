@@ -123,7 +123,8 @@ export function ProjectsScreen({
     }
   }, [gamesVersion, fetchGames]);
 
-  // Listen for extraction completion events via WebSocket
+  // Listen for extraction completion events via WebSocket (optional feature)
+  // This auto-refreshes the project list when extractions complete
   useEffect(() => {
     // Build WebSocket URL - connect directly to backend
     // In dev: use VITE_API_PORT (default 8000), in prod: use API_BASE or same host
@@ -141,11 +142,15 @@ export function ProjectsScreen({
     }
     let ws = null;
     let reconnectTimeout = null;
+    let hasConnected = false;  // Track if we've ever connected successfully
+    let hasWarnedFailure = false;  // Only warn once about connection failure
 
     const connect = () => {
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
+        hasConnected = true;
+        hasWarnedFailure = false;
         console.log('[ProjectsScreen] Connected to extraction WebSocket');
       };
 
@@ -163,12 +168,19 @@ export function ProjectsScreen({
       };
 
       ws.onclose = () => {
-        console.log('[ProjectsScreen] Extraction WebSocket closed, reconnecting in 5s');
+        // Only log if we had a successful connection before (lost connection)
+        if (hasConnected) {
+          console.log('[ProjectsScreen] Extraction WebSocket closed, reconnecting in 5s');
+        }
         reconnectTimeout = setTimeout(connect, 5000);
       };
 
-      ws.onerror = (err) => {
-        console.warn('[ProjectsScreen] Extraction WebSocket error:', err);
+      ws.onerror = () => {
+        // Only warn once about connection failures (not critical functionality)
+        if (!hasWarnedFailure && !hasConnected) {
+          console.debug('[ProjectsScreen] Extraction WebSocket unavailable (auto-refresh disabled)');
+          hasWarnedFailure = true;
+        }
       };
     };
 
