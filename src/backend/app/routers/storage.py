@@ -194,6 +194,99 @@ async def check_file_exists(file_type: str, filename: str) -> dict:
     return {"exists": exists, "r2_enabled": True}
 
 
+@router.get("/warmup")
+async def get_warmup_urls(
+    expires_in: int = Query(default=3600, ge=60, le=86400)
+) -> dict:
+    """
+    Get all video URLs for the current user to pre-warm CDN cache.
+
+    Returns presigned URLs for:
+    - Game videos (source footage)
+    - Final videos (exported results)
+    - Working videos (intermediate exports)
+
+    Call this on user login/app init to warm Cloudflare edge cache.
+    First access to R2 can be slow (cold cache), but subsequent
+    accesses are fast. Pre-warming ensures videos load quickly.
+
+    Returns:
+        {"urls": [url1, url2, ...], "count": N}
+    """
+    if not R2_ENABLED:
+        return {"urls": [], "count": 0, "r2_enabled": False}
+
+    from ..database import get_db_connection
+
+    user_id = get_current_user_id()
+    gallery_urls = []
+    game_urls = []
+    working_urls = []
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Gallery videos (final_videos) - most recent first
+        cursor.execute("""
+            SELECT filename FROM final_videos
+            WHERE filename IS NOT NULL AND filename != ''
+            ORDER BY created_at DESC
+        """)
+        for row in cursor.fetchall():
+            url = generate_presigned_url(
+                user_id=user_id,
+                relative_path=f"final_videos/{row['filename']}",
+                expires_in=expires_in,
+                content_type="video/mp4"
+            )
+            if url:
+                gallery_urls.append(url)
+
+        # Game videos
+        cursor.execute("""
+            SELECT video_filename FROM games
+            WHERE video_filename IS NOT NULL AND video_filename != ''
+        """)
+        for row in cursor.fetchall():
+            url = generate_presigned_url(
+                user_id=user_id,
+                relative_path=f"games/{row['video_filename']}",
+                expires_in=expires_in,
+                content_type="video/mp4"
+            )
+            if url:
+                game_urls.append(url)
+
+        # Working videos only for incomplete projects
+        cursor.execute("""
+            SELECT wv.filename FROM working_videos wv
+            JOIN projects p ON p.working_video_id = wv.id
+            WHERE wv.filename IS NOT NULL AND wv.filename != ''
+            AND p.final_video_id IS NULL
+        """)
+        for row in cursor.fetchall():
+            url = generate_presigned_url(
+                user_id=user_id,
+                relative_path=f"working_videos/{row['filename']}",
+                expires_in=expires_in,
+                content_type="video/mp4"
+            )
+            if url:
+                working_urls.append(url)
+
+    # Combined list for backwards compatibility
+    urls = gallery_urls + game_urls + working_urls
+
+    return {
+        "urls": urls,
+        "count": len(urls),
+        "r2_enabled": True,
+        "gallery_urls": gallery_urls,
+        "game_urls": game_urls,
+        "working_urls": working_urls,
+    }
+
+
 @router.get("/upload-url/{file_type}/{filename:path}")
 async def get_upload_url(
     file_type: str,

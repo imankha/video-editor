@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 
 /**
  * Gallery Store
@@ -14,7 +15,10 @@ export const useGalleryStore = create((set) => ({
   count: 0,
 
   // Actions
-  open: () => set({ isOpen: true }),
+  open: () => {
+    setWarmupPriority(WARMUP_PRIORITY.GALLERY);
+    set({ isOpen: true });
+  },
   close: () => set({ isOpen: false }),
   toggle: () => set((state) => ({ isOpen: !state.isOpen })),
   setCount: (count) => set({ count }),
