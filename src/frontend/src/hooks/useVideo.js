@@ -38,6 +38,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     isLoading,
     isVideoElementLoading,
     loadingProgress,
+    loadingElapsedSeconds,
     setVideoFile,
     setVideoUrl,
     setMetadata,
@@ -327,6 +328,22 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     }
   };
 
+  // T55: Update elapsed seconds during video loading for better progress feedback
+  // This provides user feedback even when progress events aren't firing (cold cache)
+  useEffect(() => {
+    if (!isVideoElementLoading) return;
+
+    const intervalId = setInterval(() => {
+      const { loadStartTime } = useVideoStore.getState();
+      if (loadStartTime) {
+        const elapsed = Math.floor((performance.now() - loadStartTime) / 1000);
+        useVideoStore.getState().setLoadingElapsedSeconds(elapsed);
+      }
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [isVideoElementLoading]);
+
   // Use requestAnimationFrame for smooth time updates during playback
   // The native timeupdate event only fires ~4 times/second which causes
   // visible lag in overlay positioning. RAF gives us ~60fps updates.
@@ -396,10 +413,28 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       const video = videoRef.current;
       const urlPreview = video.src?.length > 60 ? `${video.src.substring(0, 60)}...` : video.src;
       console.log(`[VIDEO] Loading: ${urlPreview}`);
+      console.log(`[VIDEO] networkState: ${video.networkState}, readyState: ${video.readyState}`);
       // Set loading state - this catches cases where URL is set directly (e.g., Annotate mode)
       useVideoStore.getState().setIsVideoElementLoading(true);
       useVideoStore.getState().setLoadingProgress(0);
       useVideoStore.getState().setLoadStartTime(performance.now());
+
+      // T55: Diagnostic - check if R2 supports range requests (only logs on success)
+      // Note: This will fail with CORS error until R2 CORS is configured
+      if (video.src && !video.src.startsWith('blob:')) {
+        fetch(video.src, { method: 'HEAD', mode: 'cors' })
+          .then(response => {
+            const contentLength = response.headers.get('Content-Length');
+            const acceptRanges = response.headers.get('Accept-Ranges');
+            if (contentLength) {
+              const sizeMB = (parseInt(contentLength) / (1024 * 1024)).toFixed(1);
+              console.log(`[VIDEO] File size: ${sizeMB} MB, Range requests: ${acceptRanges || 'unknown'}`);
+            }
+          })
+          .catch(() => {
+            // CORS error expected if R2 CORS not configured - silently ignore
+          });
+      }
     }
   };
 
@@ -410,7 +445,12 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       const durationStr = video.duration ? video.duration.toFixed(1) : 'unknown';
       const loadStartTime = useVideoStore.getState().loadStartTime;
       const elapsed = loadStartTime ? Math.round(performance.now() - loadStartTime) : 0;
-      console.log(`[VIDEO] Loaded in ${elapsed}ms (${durationStr}s video)`);
+      // T55: Enhanced logging - flag slow loads for investigation
+      if (elapsed > 5000) {
+        console.warn(`[VIDEO] SLOW LOAD: ${elapsed}ms for ${durationStr}s video - check network tab for download size`);
+      } else {
+        console.log(`[VIDEO] Loaded in ${elapsed}ms (${durationStr}s video)`);
+      }
       setVideoElementReady();
     }
   };
@@ -432,8 +472,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         useVideoStore.getState().setLoadingProgress(progress);
       } else {
         // No buffered data yet - for large videos without faststart, browser is fetching metadata
-        // Log progress event count to help debug
-        console.log(`[VIDEO] Downloading metadata... (${elapsed}s elapsed, buffered.length=0)`);
+        // T55: Enhanced diagnostics - log network state to understand what browser is doing
+        const networkStates = ['EMPTY', 'IDLE', 'LOADING', 'NO_SOURCE'];
+        const readyStates = ['HAVE_NOTHING', 'HAVE_METADATA', 'HAVE_CURRENT_DATA', 'HAVE_FUTURE_DATA', 'HAVE_ENOUGH_DATA'];
+        console.log(`[VIDEO] Waiting... (${elapsed}s elapsed, network: ${networkStates[video.networkState]}, ready: ${readyStates[video.readyState]})`);
         // Keep progress at 0 but show elapsed time in UI
         // The UI will show "Loading video metadata..." instead of "Buffering 0%"
       }
@@ -558,6 +600,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     isLoading,
     isVideoElementLoading,
     loadingProgress,
+    loadingElapsedSeconds,
 
     // Actions
     loadVideo,

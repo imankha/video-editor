@@ -104,6 +104,7 @@ export function OverlayModeView({
   isLoading = false,
   isVideoElementLoading = false,
   loadingProgress = null,
+  loadingElapsedSeconds = 0,
   error = null,
   isUrlExpiredError = () => false,
   onRetryVideo,
@@ -299,6 +300,7 @@ export function OverlayModeView({
             isLoading={isLoading}
             isVideoElementLoading={isVideoElementLoading}
             loadingProgress={loadingProgress}
+            loadingElapsedSeconds={loadingElapsedSeconds}
             error={error}
             isUrlExpiredError={isUrlExpiredError}
             onRetryVideo={onRetryVideo}

@@ -9,6 +9,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { API_BASE } from '../config';
 import { useGamesStore } from '../stores';
+import { warmGamesCache } from '../utils/cacheWarming';
 
 export function useGames() {
   const [games, setGames] = useState([]);
@@ -36,8 +37,16 @@ export function useGames() {
         throw new Error(`Failed to fetch games: ${response.status}`);
       }
       const data = await response.json();
-      setGames(data.games || []);
-      return data.games || [];
+      const gamesList = data.games || [];
+      setGames(gamesList);
+
+      // T55: Pre-warm R2 cache for game videos to avoid cold start delays
+      // This runs in background and doesn't block the UI
+      warmGamesCache(gamesList).catch(() => {
+        // Ignore warming errors - this is best-effort
+      });
+
+      return gamesList;
     } catch (err) {
       console.error('[useGames] Failed to fetch games:', err);
       setError(err.message);

@@ -23,6 +23,7 @@ import React, { useState, useRef, useCallback } from 'react';
  * @param {boolean} props.isLoading - Whether hook is loading video URL (pre-element)
  * @param {boolean} props.isVideoElementLoading - Whether video element is buffering
  * @param {number|null} props.loadingProgress - Buffering progress 0-100, null when not loading
+ * @param {number} props.loadingElapsedSeconds - Seconds elapsed since load started (for slow load feedback)
  * @param {string|null} props.error - Video load error message
  * @param {string} props.loadingMessage - Optional loading message to display
  */
@@ -41,6 +42,7 @@ export function VideoPlayer({
   isLoading = false,
   isVideoElementLoading = false,
   loadingProgress = null,
+  loadingElapsedSeconds = 0,
   error = null,
   isUrlExpiredError = () => false,
   onRetryVideo,
@@ -166,7 +168,19 @@ export function VideoPlayer({
     // - loadingProgress === 0: Just started or still fetching metadata
     // - loadingProgress === null: Indeterminate state
     const hasProgress = loadingProgress !== null && loadingProgress > 0 && loadingProgress < 100;
-    const isIndeterminate = loadingProgress === null || loadingProgress === 0;
+    const isSlowLoad = loadingElapsedSeconds >= 5;
+
+    // T55: Show elapsed time and helpful message for slow loads
+    let statusMessage;
+    if (hasProgress) {
+      statusMessage = `Buffering ${loadingProgress}%`;
+    } else if (isSlowLoad) {
+      statusMessage = `Downloading video... ${loadingElapsedSeconds}s`;
+    } else if (loadingElapsedSeconds > 0) {
+      statusMessage = `Connecting... ${loadingElapsedSeconds}s`;
+    } else {
+      statusMessage = 'Connecting to server...';
+    }
 
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-40">
@@ -192,8 +206,13 @@ export function VideoPlayer({
               )}
             </div>
             <p className="mt-1 text-xs text-gray-500">
-              {hasProgress ? `Buffering ${loadingProgress}%` : 'Connecting to server...'}
+              {statusMessage}
             </p>
+            {isSlowLoad && (
+              <p className="mt-2 text-xs text-gray-600">
+                First load may be slow. Subsequent loads will be faster.
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -1,9 +1,10 @@
 # T55: Slow Video Loading Investigation
 
-**Status:** TODO
+**Status:** IN_PROGRESS
 **Impact:** HIGH
 **Complexity:** MEDIUM
 **Created:** 2026-02-11
+**Updated:** 2026-02-10
 
 ## Problem
 
@@ -19,48 +20,96 @@ useVideo.js:413 [VIDEO] Loaded in 61625ms (5362.9s video)
 - 61.6 seconds to load a 5362.9s (89 minute) video
 - Video is served from R2 presigned URL
 
-## Analysis Needed
+## Root Cause Identified
 
-### Potential Causes
+**R2/Cloudflare CDN cold cache** - NOT moov atom position.
 
-1. **Full video download before playback**
-   - Check if `loadVideoFromUrl` downloads entire file
-   - Should use streaming/range requests instead
+Evidence:
+- First load: 68,525ms (68.5 seconds)
+- Second load: 454ms (0.4 seconds) - **150x faster**
 
-2. **Metadata extraction blocking**
-   - `extractVideoMetadataFromUrl` may download significant portion
-   - Check if moov atom is at end of file (requires full download)
+When a video hasn't been accessed recently:
+1. Cloudflare's edge doesn't have it cached
+2. The request goes to R2 origin storage
+3. Large files take a long time to fetch from origin
 
-3. **Video element loading behavior**
-   - Check `preload` attribute setting
-   - May be set to `auto` instead of `metadata`
+Once cached at the edge, subsequent loads are fast.
 
-4. **R2 performance**
-   - First byte latency from Cloudflare
-   - Large file transfer speeds
+## Solution
 
-### Where to Look
+### 1. Configure R2 CORS (DONE)
 
-```
-src/frontend/src/hooks/useVideo.js           # Main video loading logic
-src/frontend/src/utils/videoMetadata.js      # Metadata extraction
-src/frontend/src/components/VideoPlayer.jsx  # Video element setup
-```
+Created `src/backend/scripts/configure_r2_cors.py` to enable:
+- GET/HEAD requests from frontend origins
+- Range header for partial content requests
+- Exposed headers: Accept-Ranges, Content-Range, Content-Length
 
-## Approach
+Run: `cd src/backend && .venv/Scripts/python.exe scripts/configure_r2_cors.py`
 
-1. **Profile the load** - Add timing breakpoints to identify which phase is slow
-2. **Check video loading mode** - Ensure streaming, not full download
-3. **Check metadata extraction** - May need to skip for large files or use backend
-4. **Optimize as needed** - Based on findings
+### 2. Cache Pre-warming (DONE)
+
+Created `src/frontend/src/utils/cacheWarming.js`:
+- `warmVideoCache(url)` - Warms single URL with small range request
+- `warmMultipleVideos(urls)` - Batch warming with concurrency limit
+- `warmGamesCache(games)` - Warms all game video URLs
+
+Integrated into `useGames.js` - automatically warms cache when games list loads.
+
+### 3. Better Progress Feedback (DONE)
+
+Updated loading overlay to show:
+- Elapsed time during slow loads
+- Message: "First load may be slow. Subsequent loads will be faster."
+
+Files updated:
+- `src/frontend/src/stores/videoStore.js` - Added `loadingElapsedSeconds`
+- `src/frontend/src/hooks/useVideo.js` - Timer updates elapsed seconds
+- `src/frontend/src/components/VideoPlayer.jsx` - Shows elapsed time in overlay
+- All mode views and screens updated to pass the new prop
+
+### 4. Diagnostic Logging (DONE)
+
+Enhanced logging in `useVideo.js`:
+- HEAD request to check R2 headers (silently ignores CORS errors)
+- Network/ready state tracking during load
+- Slow load warning (>5 seconds)
+
+## Remaining Work
+
+### User Must Do:
+- [ ] Run the CORS configuration script
+- [ ] Optionally: Configure R2 custom domain for better CDN caching
+- [ ] Optionally: Enable Cloudflare Cache Reserve ($5/month)
+
+### Future Enhancement (T230):
+- Pre-warm all videos on user login (depends on T200 User Management)
 
 ## Acceptance Criteria
 
-- [ ] Identify root cause of 61s load time
-- [ ] Video playback starts within 5 seconds for R2-hosted videos
-- [ ] Large videos (1hr+) don't require full download before playback
+- [x] Identify root cause of 61s load time
+- [ ] Video playback starts within 5 seconds for R2-hosted videos (partially - depends on cache warming)
+- [x] Large videos (1hr+) don't require full download before playback (confirmed - it's CDN cache, not moov atom)
+- [x] Better user feedback during slow loads
 
 ## Related
 
 - T07: Video Load Times (Phase 1 - visibility, DONE)
 - T05: Optimize Load Times (presigned URL caching, DONE)
+- T230: Pre-warm R2 on Login (future enhancement)
+
+## Files Changed
+
+```
+src/backend/scripts/configure_r2_cors.py        # NEW - CORS configuration script
+src/frontend/src/utils/cacheWarming.js          # NEW - Cache warming utility
+src/frontend/src/hooks/useGames.js              # Warm cache on fetchGames
+src/frontend/src/hooks/useVideo.js              # Elapsed time tracking, diagnostics
+src/frontend/src/stores/videoStore.js           # loadingElapsedSeconds state
+src/frontend/src/components/VideoPlayer.jsx     # Show elapsed time in overlay
+src/frontend/src/modes/AnnotateModeView.jsx     # Pass loadingElapsedSeconds
+src/frontend/src/modes/FramingModeView.jsx      # Pass loadingElapsedSeconds
+src/frontend/src/modes/OverlayModeView.jsx      # Pass loadingElapsedSeconds
+src/frontend/src/screens/AnnotateScreen.jsx     # Pass loadingElapsedSeconds
+src/frontend/src/screens/FramingScreen.jsx      # Pass loadingElapsedSeconds
+src/frontend/src/screens/OverlayScreen.jsx      # Pass loadingElapsedSeconds
+```

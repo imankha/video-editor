@@ -26,6 +26,7 @@ export function AnnotateModeView({
   isLoading = false,
   isVideoElementLoading = false,
   loadingProgress = null,
+  loadingElapsedSeconds = 0,
   error = null,
   handlers,
 
@@ -146,6 +147,7 @@ export function AnnotateModeView({
               isLoading={isLoading}
               isVideoElementLoading={isVideoElementLoading}
               loadingProgress={loadingProgress}
+              loadingElapsedSeconds={loadingElapsedSeconds}
               error={error}
               loadingMessage="Loading video..."
               overlays={[

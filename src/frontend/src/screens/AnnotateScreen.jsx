@@ -74,6 +74,7 @@ export function AnnotateScreen({ onClearSelection }) {
     isLoading: isVideoLoading,
     isVideoElementLoading,
     loadingProgress,
+    loadingElapsedSeconds,
     error: videoError,
     togglePlay,
     seek,
@@ -374,6 +375,7 @@ export function AnnotateScreen({ onClearSelection }) {
         isLoading={isVideoLoading || isUploadingGameVideo}
         isVideoElementLoading={isVideoElementLoading}
         loadingProgress={loadingProgress}
+        loadingElapsedSeconds={loadingElapsedSeconds}
         error={videoError}
         handlers={handlers}
         // Fullscreen state

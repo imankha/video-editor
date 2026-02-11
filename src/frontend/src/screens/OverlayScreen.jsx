@@ -137,6 +137,7 @@ export function OverlayScreen({
     isLoading,
     isVideoElementLoading,
     loadingProgress,
+    loadingElapsedSeconds,
     loadVideo,
     loadVideoFromUrl,
     loadVideoFromStreamingUrl,
@@ -750,6 +751,7 @@ export function OverlayScreen({
       isLoading={isLoading || isLoadingWorkingVideo || shouldWaitForWorkingVideo}
       isVideoElementLoading={isVideoElementLoading}
       loadingProgress={loadingProgress}
+      loadingElapsedSeconds={loadingElapsedSeconds}
       error={error}
       isUrlExpiredError={isUrlExpiredError}
       onRetryVideo={handleRetryVideo}

@@ -37,6 +37,7 @@ export const useVideoStore = create((set, get) => ({
   isVideoElementLoading: false,  // true from URL change until onLoadedData
   loadingProgress: null,         // 0-100 during load, null when not loading
   loadStartTime: null,           // performance.now() when load started
+  loadingElapsedSeconds: 0,      // T55: Elapsed seconds for slow load feedback
 
   // State setters (used by useVideo hook)
   setVideoFile: (file) => set({ videoFile: file }),
@@ -52,6 +53,7 @@ export const useVideoStore = create((set, get) => ({
   setIsVideoElementLoading: (isVideoElementLoading) => set({ isVideoElementLoading }),
   setLoadingProgress: (loadingProgress) => set({ loadingProgress }),
   setLoadStartTime: (loadStartTime) => set({ loadStartTime }),
+  setLoadingElapsedSeconds: (loadingElapsedSeconds) => set({ loadingElapsedSeconds }),
 
   // Batch update for video load (URL is set, but video element may still be buffering)
   // Note: Loading state is now set by handleLoadStart when video element starts loading
@@ -72,6 +74,7 @@ export const useVideoStore = create((set, get) => ({
     isVideoElementLoading: false,
     loadingProgress: 100,
     loadStartTime: null,
+    loadingElapsedSeconds: 0,
   }),
 
   // Reset state
@@ -89,6 +92,7 @@ export const useVideoStore = create((set, get) => ({
     isVideoElementLoading: false,
     loadingProgress: null,
     loadStartTime: null,
+    loadingElapsedSeconds: 0,
   }),
 
   // Computed values
