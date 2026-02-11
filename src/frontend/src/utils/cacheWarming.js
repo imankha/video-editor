@@ -21,6 +21,9 @@ const warmingInProgress = new Set();
 // Track URLs that have been warmed this session
 const warmedUrls = new Set();
 
+// Guard against multiple simultaneous warmAllUserVideos calls (React StrictMode double-fires)
+let warmupInProgress = false;
+
 /**
  * Warm the R2 cache for a video URL by requesting a small byte range.
  * This triggers Cloudflare to cache the file at the edge.
@@ -62,7 +65,6 @@ export async function warmVideoCache(url, { force = false } = {}) {
 
     if (response.ok || response.status === 206) {
       warmedUrls.add(url);
-      console.log(`[CacheWarming] Warmed: ${url.substring(0, 50)}...`);
       return true;
     } else {
       console.warn(`[CacheWarming] Failed to warm (${response.status}): ${url.substring(0, 50)}...`);
@@ -71,7 +73,6 @@ export async function warmVideoCache(url, { force = false } = {}) {
   } catch (err) {
     // CORS errors are expected if R2 CORS isn't configured yet
     // The request still warms the cache even if we can't read the response
-    console.log(`[CacheWarming] Request sent (may have warmed cache): ${url.substring(0, 50)}...`);
     warmedUrls.add(url); // Optimistically mark as warmed
     return true;
   } finally {
@@ -161,6 +162,13 @@ export function clearWarmingCache() {
  * @returns {Promise<{warmed: number, total: number}>}
  */
 export async function warmAllUserVideos() {
+  // Guard against multiple simultaneous calls (React StrictMode double-fires effects)
+  if (warmupInProgress) {
+    console.log('[CacheWarming] Warmup already in progress, skipping');
+    return { warmed: 0, total: 0 };
+  }
+  warmupInProgress = true;
+
   try {
     console.log('[CacheWarming] Fetching all user video URLs...');
 
@@ -190,5 +198,7 @@ export async function warmAllUserVideos() {
   } catch (err) {
     console.error('[CacheWarming] Error warming videos:', err);
     return { warmed: 0, total: 0 };
+  } finally {
+    warmupInProgress = false;
   }
 }
