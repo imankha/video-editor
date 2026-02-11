@@ -130,16 +130,23 @@ When showing task lists:
 1. **Always include both scores** (Impact and Complexity)
 2. **Sort by priority** (highest first): `Priority = Impact - (Complexity / 2)`
 3. **Show priority score** so user can see the ranking
+4. **Show blockers** - tasks that can't start yet should show what blocks them
 
 ```
-| ID | Task | Impact | Cmplx | Priority |
-|----|------|--------|-------|----------|
-| T67 | Overlay Color Selection | 6 | 3 | 4.5 |
-| T56 | Gallery Show Duration | 4 | 2 | 3.0 |
-| T66 | Database Split Analysis | 5 | 6 | 2.0 |
+| ID | Task | Impact | Cmplx | Priority | Blocked By |
+|----|------|--------|-------|----------|------------|
+| T67 | Overlay Color Selection | 6 | 3 | 4.5 | - |
+| T40 | Stale Session Detection | 8 | 5 | 5.5 | T100 (Deployment) |
+| T66 | Database Split Analysis | 5 | 6 | 2.0 | - |
 ```
 
-Best opportunities (high impact, low complexity) float to the top.
+**Display order:**
+1. Unblocked tasks first (sorted by priority)
+2. Blocked tasks at bottom (with blocker shown)
+
+**Blocking rule:** A blocked task can NEVER appear above its blocker in the queue, regardless of priority score. If T40 is blocked by T100, T40 must appear after T100 even if T40 has a higher priority score. This reflects the actual execution order.
+
+Best opportunities (high impact, low complexity, unblocked) float to the top.
 
 ### Priority Formula
 
@@ -243,7 +250,8 @@ High-level approach. What will we build?
 
 ## Context
 
-### Relevant Files
+### Relevant Files (REQUIRED)
+List ALL files that will be touched. The Refactor Agent uses this to check for violations before implementation.
 - `src/backend/app/routers/exports.py` - Export endpoints
 - `src/frontend/src/hooks/useExport.js` - Export hook
 

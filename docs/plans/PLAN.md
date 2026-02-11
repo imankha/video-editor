@@ -4,6 +4,8 @@
 
 **Phase: Feedback Velocity** - Modal and R2 infrastructure complete. Prioritizing simple, high-impact tasks.
 
+**Refactoring:** Automated via [Refactor Agent](../../.claude/agents/refactor.md) - runs before each task on affected files.
+
 ---
 
 ## Active Tasks
@@ -46,21 +48,6 @@
 ---
 
 ## Epics
-
-### Refactoring to Standards (SCANS DONE)
-
-[tasks/refactoring-standards/EPIC.md](tasks/refactoring-standards/EPIC.md) - Scan codebase, rate violations, refactor by priority
-
-**Scans Complete** - Found violations, refactor tasks prioritized:
-
-| ID | Task | Priority | Status |
-|----|------|----------|--------|
-| T301 | Refactor editorMode to EDITOR_MODES | 25 | DONE |
-| T311 | Remove workingVideo from overlayStore | 25 | DONE |
-| T312 | Remove clipMetadata from overlayStore | 25 | DONE |
-| T331 | Refactor ExportButton to container | 25 | DONE |
-| T302 | Refactor statusFilter to constants | 16 | TODO |
-| T303 | Refactor keyframe origin to constants | 16 | TODO |
 
 ### Deployment (TODO)
 

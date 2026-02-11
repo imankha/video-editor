@@ -6,58 +6,9 @@ Create a design document focused on **architecture quality**: DRY, minimal code 
 
 ## References
 
+- **[Coding Standards](../references/coding-standards.md)** - All implementation rules (MVC, state, coupling, types, etc.)
 - [Code Smells](../references/code-smells.md) - Fowler's refactoring catalog
 - [Design Patterns](../references/design-patterns.md) - GoF patterns for this project
-
-## Core Principles
-
-### Loose Coupling, Tight Cohesion
-
-**Tight Cohesion**: Each module/class does ONE thing well. All its methods relate to that single purpose.
-```javascript
-// GOOD: Tightly cohesive - all methods relate to video playback
-class VideoPlayer {
-  play() {}
-  pause() {}
-  seek(time) {}
-  getCurrentTime() {}
-}
-
-// BAD: Low cohesion - unrelated responsibilities
-class VideoManager {
-  play() {}
-  uploadToCloud() {}
-  compressFile() {}
-  sendAnalytics() {}
-}
-```
-
-**Loose Coupling**: Modules depend on abstractions, not concrete implementations. Changes in one don't cascade.
-```javascript
-// BAD: Tight coupling - directly depends on concrete
-function ExportButton() {
-  const result = await ModalClient.process(file);  // Tied to Modal
-}
-
-// GOOD: Loose coupling - depends on abstraction
-function ExportButton({ processor }) {
-  const result = await processor.process(file);  // Any processor works
-}
-```
-
-### MVC + Data Always Ready
-
-All designs must follow these patterns:
-
-```
-Screen (data fetching, guards data readiness)
-  └── Container (state logic, event handlers)
-        └── View (presentational only, assumes data exists)
-```
-
-**Data Always Ready**: Parent components guard data, children assume it exists. Views never fetch or check for null - they render what they're given.
-
-**Reactive Updates**: Views respond to state changes via store subscriptions. No imperative "refresh" calls.
 
 ## Primary Concerns
 

@@ -59,6 +59,7 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for c
 |---|-------|----------|-------|-----------|
 | 0 | Task Classification | [0-task-classification.md](.claude/workflows/0-task-classification.md) | - | - |
 | 1 | Task Start | [1-task-start.md](.claude/workflows/1-task-start.md) | Code Expert | - |
+| 1.5 | Refactor | - | Refactor | - |
 | 2 | Architecture | [2-architecture.md](.claude/workflows/2-architecture.md) | Architect | **Approval Required** |
 | 3 | Test First | [3-test-first.md](.claude/workflows/3-test-first.md) | Tester (Phase 1) | - |
 | 4 | Implementation | [4-implementation.md](.claude/workflows/4-implementation.md) | Implementor | - |
@@ -85,6 +86,7 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for c
 | Agent | Purpose | Definition |
 |-------|---------|------------|
 | **Code Expert** | Audit codebase: entry points, data flow, similar patterns | [code-expert.md](.claude/agents/code-expert.md) |
+| **Refactor** | Clean up affected files before implementation; runs after Code Expert | [refactor.md](.claude/agents/refactor.md) |
 | **Architect** | Design with DRY, patterns, code smells; requires approval | [architect.md](.claude/agents/architect.md) |
 | **Tester** | Phase 1: create failing tests. Phase 2: run tests until pass | [tester.md](.claude/agents/tester.md) |
 | **Implementor** | Execute approved design with MVC, no state duplication | [implementor.md](.claude/agents/implementor.md) |
@@ -98,7 +100,8 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for c
 
 | Reference | Content |
 |-----------|---------|
-| [Code Smells](.claude/references/code-smells.md) | Fowler's refactoring catalog with examples |
+| [Coding Standards](.claude/references/coding-standards.md) | **All implementation rules** - MVC, state, types, coupling (single source of truth) |
+| [Code Smells](.claude/references/code-smells.md) | Fowler's refactoring catalog |
 | [Design Patterns](.claude/references/design-patterns.md) | GoF patterns relevant to React + FastAPI |
 | [Testing Matrix](.claude/references/testing-matrix.md) | Coverage guidance by change type |
 | [UI Style Guide](.claude/references/ui-style-guide.md) | Colors, typography, components, patterns |

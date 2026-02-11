@@ -328,3 +328,9 @@ class ClipManager {
 }
 ```
 **Refactoring**: Remove Middle Man - use storage directly
+
+---
+
+## Project-Specific Rules
+
+See **[Coding Standards](coding-standards.md)** for project-specific implementation rules (MVC, state management, type safety, etc.).
