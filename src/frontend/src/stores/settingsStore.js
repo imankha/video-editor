@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import { HighlightEffect } from '../constants/highlightEffects';
 
 /**
  * Settings Store - Persisted user preferences
@@ -27,7 +28,7 @@ const DEFAULT_SETTINGS = {
     defaultTransition: 'cut',
   },
   overlay: {
-    highlightEffectType: 'dark_overlay',
+    highlightEffectType: HighlightEffect.DARK_OVERLAY,
   },
 };
 

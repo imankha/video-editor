@@ -2,6 +2,7 @@ import { forwardRef, useImperativeHandle } from 'react';
 import { Download, Loader, AlertCircle, Check } from 'lucide-react';
 import { Button, Toggle, ExportProgress } from './shared';
 import { HighlightColor, HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
+import { HighlightEffect } from '../constants/highlightEffects';
 
 /**
  * ExportButtonView - Pure presentational component for export UI
@@ -104,7 +105,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             <Toggle
               checked={isDarkOverlay}
               onChange={(checked) => onHighlightEffectTypeChange?.(
-                checked ? 'dark_overlay' : 'brightness_boost'
+                checked ? HighlightEffect.DARK_OVERLAY : HighlightEffect.BRIGHTNESS_BOOST
               )}
               disabled={isCurrentlyExporting || !isHighlightEnabled}
             />

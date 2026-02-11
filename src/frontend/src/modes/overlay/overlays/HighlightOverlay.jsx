@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { HighlightEffect } from '../../../constants/highlightEffects';
 
 /**
  * HighlightOverlay component - renders a draggable/resizable highlight ellipse
@@ -12,7 +13,7 @@ export default function HighlightOverlay({
   onHighlightChange,
   onHighlightComplete,
   isEnabled = false,
-  effectType = 'dark_overlay',  // 'brightness_boost' | 'dark_overlay'
+  effectType = HighlightEffect.DARK_OVERLAY,
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   isFullscreen = false
@@ -315,7 +316,7 @@ export default function HighlightOverlay({
         </defs>
 
         {/* Dark overlay effect - darken everything outside the ellipse */}
-        {effectType === 'dark_overlay' && (
+        {effectType === HighlightEffect.DARK_OVERLAY && (
           <rect
             x="0"
             y="0"
@@ -329,7 +330,7 @@ export default function HighlightOverlay({
         )}
 
         {/* Brightness boost effect - colored fill or brightness boost */}
-        {effectType === 'brightness_boost' && currentHighlight.color && currentHighlight.color !== 'none' && (
+        {effectType === HighlightEffect.BRIGHTNESS_BOOST && currentHighlight.color && currentHighlight.color !== 'none' && (
           /* Color selected: show colored overlay (like old "original") */
           <ellipse
             cx={screenHighlight.x}
@@ -341,7 +342,7 @@ export default function HighlightOverlay({
             className="pointer-events-none"
           />
         )}
-        {effectType === 'brightness_boost' && (!currentHighlight.color || currentHighlight.color === 'none') && (
+        {effectType === HighlightEffect.BRIGHTNESS_BOOST && (!currentHighlight.color || currentHighlight.color === 'none') && (
           /* No color (None): pure brightness boost */
           <ellipse
             cx={screenHighlight.x}

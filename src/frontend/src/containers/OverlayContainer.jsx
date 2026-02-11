@@ -3,6 +3,7 @@ import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from '../modes/
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { API_BASE } from '../config';
 import { EDITOR_MODES } from '../stores';
+import { HighlightEffect } from '../constants/highlightEffects';
 
 /**
  * OverlayContainer - Encapsulates all Overlay mode logic and UI
@@ -430,7 +431,7 @@ export function OverlayContainer({
         const formData = new FormData();
         formData.append('highlights_data', JSON.stringify(data.highlightRegions || []));
         formData.append('text_overlays', JSON.stringify(data.textOverlays || []));
-        formData.append('effect_type', data.effectType || 'dark_overlay');
+        formData.append('effect_type', data.effectType || HighlightEffect.DARK_OVERLAY);
 
         await fetch(`${API_BASE}/api/export/projects/${saveProjectId}/overlay-data`, {
           method: 'PUT',
