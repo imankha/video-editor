@@ -23,6 +23,9 @@ export default function DetectionMarkerLayer({
 }) {
   const timelineDuration = visualDuration || duration;
 
+  // Track which regions have been warned about to avoid spam on every render
+  const warnedRegionsRef = React.useRef(new Set());
+
   // Collect all detection timestamps from all regions
   const detectionMarkers = React.useMemo(() => {
     const markers = [];
@@ -31,8 +34,10 @@ export default function DetectionMarkerLayer({
       if (!region.detections?.length) return;
 
       // Log warning if fps is missing - indicates data issue that needs re-export
-      if (!region.fps) {
+      // Only warn once per region to avoid console spam
+      if (!region.fps && !warnedRegionsRef.current.has(region.id)) {
         console.warn(`[DetectionMarkerLayer] Region ${region.id} missing fps - detection marker navigation may be inaccurate. Re-export framing to fix.`);
+        warnedRegionsRef.current.add(region.id);
       }
 
       region.detections.forEach((detection) => {

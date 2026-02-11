@@ -11,6 +11,7 @@ import { useGalleryStore } from '../stores/galleryStore';
 import { useGamesStore } from '../stores/gamesStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
+import { API_BASE } from '../config';
 
 // Module-level variable to pass File object and game details to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
@@ -124,8 +125,16 @@ export function ProjectsScreen({
 
   // Listen for extraction completion events via WebSocket
   useEffect(() => {
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws/extractions`;
+    // Build WebSocket URL - use API_BASE if set, otherwise use current host (Vite proxy)
+    let wsUrl;
+    if (API_BASE) {
+      // Direct connection to backend (production or custom config)
+      wsUrl = API_BASE.replace(/^http/, 'ws') + '/ws/extractions';
+    } else {
+      // Use Vite proxy (development) - proxy forwards /ws/* to backend
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsUrl = `${wsProtocol}//${window.location.host}/ws/extractions`;
+    }
     let ws = null;
     let reconnectTimeout = null;
 
