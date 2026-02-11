@@ -34,11 +34,11 @@
 | T56 | [Gallery Show Duration](tasks/T56-gallery-show-duration.md) | TODO | LOW | LOW |
 | T57 | [Stale Tracking Rectangles](tasks/T57-stale-tracking-rectangles.md) | DONE | MEDIUM | MEDIUM |
 | T58 | [Dim Tracking Squares When Disabled](tasks/T58-dim-tracking-squares-when-disabled.md) | TODO | LOW | LOW |
-| T60 | [Consolidate Video Controls](tasks/T60-consolidate-video-controls.md) | TODO | MEDIUM | MEDIUM |
+| T60 | [Consolidate Video Controls](tasks/T60-consolidate-video-controls.md) | DONE | MEDIUM | MEDIUM |
 | T61 | [Annotate Default Good](tasks/T61-annotate-default-good.md) | TODO | LOW | LOW |
 | T62 | [Tag Changes](tasks/T62-tag-changes.md) | TODO | LOW | LOW |
 | T63 | [Project Filter Persistence](tasks/T63-project-filter-persistence.md) | DONE | MEDIUM | LOW |
-| T64 | [Gallery Playback Controls](tasks/T64-gallery-playback-controls.md) | TODO | MEDIUM | MEDIUM |
+| T64 | [Gallery Playback Controls](tasks/T64-gallery-playback-controls.md) | DONE | MEDIUM | MEDIUM |
 | T65 | [Logo from Landing Page](tasks/T65-logo-from-landing-page.md) | TODO | LOW | LOW |
 
 ---

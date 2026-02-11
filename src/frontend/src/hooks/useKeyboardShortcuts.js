@@ -8,7 +8,7 @@ import { EDITOR_MODES } from '../stores';
  * - Space bar: Toggle play/pause
  * - Ctrl/Cmd+C: Copy crop keyframe at current time
  * - Ctrl/Cmd+V: Paste crop keyframe at current time
- * - Arrow keys: Layer-specific navigation (playhead, crop, highlight, clips)
+ * - Arrow keys: Layer-specific navigation (playhead uses 5s seek, others navigate keyframes)
  *
  * @param {Object} params - All required dependencies
  * @see APP_REFACTOR_PLAN.md Task 2.1 for refactoring context
@@ -19,6 +19,8 @@ export function useKeyboardShortcuts({
   togglePlay,
   stepForward,
   stepBackward,
+  seekForward,
+  seekBackward,
   seek,
 
   // Mode state
@@ -107,12 +109,12 @@ export function useKeyboardShortcuts({
         event.preventDefault();
         const isLeft = event.code === 'ArrowLeft';
 
-        // Playhead layer: step frames
+        // Playhead layer: seek 5 seconds
         if (annotateSelectedLayer === 'playhead') {
           if (isLeft) {
-            stepBackward();
+            seekBackward?.(5) ?? stepBackward();
           } else {
-            stepForward();
+            seekForward?.(5) ?? stepForward();
           }
           return;
         }
@@ -148,10 +150,11 @@ export function useKeyboardShortcuts({
 
       switch (selectedLayer) {
         case 'playhead': {
+          // Seek 5 seconds with arrow keys
           if (isLeft) {
-            stepBackward();
+            seekBackward?.(5) ?? stepBackward();
           } else {
-            stepForward();
+            seekForward?.(5) ?? stepForward();
           }
           break;
         }
@@ -210,6 +213,8 @@ export function useKeyboardShortcuts({
     isHighlightEnabled,
     stepForward,
     stepBackward,
+    seekForward,
+    seekBackward,
     seek,
     editorMode,
     annotateVideoUrl,

@@ -298,6 +298,30 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     }
   };
 
+  /**
+   * Seek forward by a specified number of seconds
+   * Used for keyboard navigation (arrow keys)
+   * @param {number} seconds - Number of seconds to seek forward (default 5)
+   */
+  const seekForward = (seconds = 5) => {
+    if (videoRef.current && videoRef.current.src) {
+      const newTime = currentTime + seconds;
+      seek(newTime); // seek() handles clamping to valid range
+    }
+  };
+
+  /**
+   * Seek backward by a specified number of seconds
+   * Used for keyboard navigation (arrow keys)
+   * @param {number} seconds - Number of seconds to seek backward (default 5)
+   */
+  const seekBackward = (seconds = 5) => {
+    if (videoRef.current && videoRef.current.src) {
+      const newTime = currentTime - seconds;
+      seek(newTime); // seek() handles clamping to valid range
+    }
+  };
+
   // Video element event handlers
   const handleTimeUpdate = () => {
     if (videoRef.current && !isSeeking) {
@@ -422,22 +446,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       useVideoStore.getState().setLoadingProgress(0);
       useVideoStore.getState().setLoadStartTime(performance.now());
 
-      // T55: Diagnostic - check if R2 supports range requests (only logs on success)
-      // Note: This will fail with CORS error until R2 CORS is configured
-      if (video.src && !video.src.startsWith('blob:')) {
-        fetch(video.src, { method: 'HEAD', mode: 'cors' })
-          .then(response => {
-            const contentLength = response.headers.get('Content-Length');
-            const acceptRanges = response.headers.get('Accept-Ranges');
-            if (contentLength) {
-              const sizeMB = (parseInt(contentLength) / (1024 * 1024)).toFixed(1);
-              console.log(`[VIDEO] File size: ${sizeMB} MB, Range requests: ${acceptRanges || 'unknown'}`);
-            }
-          })
-          .catch(() => {
-            // CORS error expected if R2 CORS not configured - silently ignore
-          });
-      }
+      // Note: HEAD request to check file size/range support removed
+      // It was causing CORS errors in the console even though video loads fine
     }
   };
 
@@ -615,6 +625,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     seek,
     stepForward,
     stepBackward,
+    seekForward,
+    seekBackward,
     restart,
 
     // Error handling

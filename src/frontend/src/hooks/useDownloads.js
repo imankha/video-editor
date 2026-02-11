@@ -125,16 +125,33 @@ export function useDownloads(isOpen = false) {
   }, []);
 
   /**
-   * Get download URL for a file
-   * Always uses backend proxy endpoint to avoid CORS issues with R2 presigned URLs
+   * Get download URL for saving a file to disk
+   * Uses backend proxy endpoint to avoid CORS issues with fetch()
    * @param {number} downloadId - Download ID
    * @param {Object} download - Optional download object (unused, kept for API compatibility)
    */
   const getDownloadUrl = useCallback((downloadId, download = null) => {
-    // Always use backend proxy - it handles R2 streaming internally
+    // Use backend proxy - it handles R2 streaming internally
     // This avoids CORS issues when using fetch() to download files
     const url = `${API_BASE_URL}/downloads/${downloadId}/file`;
     return url;
+  }, []);
+
+  /**
+   * Get streaming URL for video playback
+   * Uses R2 presigned URL directly for fast streaming (browsers handle CORS for video src)
+   * Falls back to backend proxy if R2 URL not available
+   * @param {number} downloadId - Download ID
+   * @param {Object} download - Download object with file_url
+   */
+  const getStreamingUrl = useCallback((downloadId, download = null) => {
+    // Use R2 presigned URL directly for video playback (much faster)
+    // Browsers can load cross-origin video sources without CORS issues
+    if (download?.file_url) {
+      return download.file_url;
+    }
+    // Fallback to backend proxy
+    return `${API_BASE_URL}/downloads/${downloadId}/file`;
   }, []);
 
   /**
@@ -286,6 +303,7 @@ export function useDownloads(isOpen = false) {
     deleteDownload,
     downloadFile,
     getDownloadUrl,
+    getStreamingUrl,
     setFilter,
 
     // Utilities

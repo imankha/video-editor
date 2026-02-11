@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, Film, LayoutGrid } from 'lucide-react';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
+import { MediaPlayer } from './MediaPlayer';
 import { useDownloads } from '../hooks/useDownloads';
 import { useGalleryStore } from '../stores/galleryStore';
 
@@ -112,6 +113,7 @@ export function DownloadsPanel({
     downloadFile,
     downloadingId,
     getDownloadUrl,
+    getStreamingUrl,
     formatFileSize,
     formatDate,
     setFilter
@@ -574,15 +576,11 @@ export function DownloadsPanel({
 
             {/* Video Player */}
             <div className="flex-1 flex items-center justify-center bg-black overflow-hidden">
-              <video
-                src={getDownloadUrl(playingVideo.id, playingVideo)}
-                controls
+              <MediaPlayer
+                src={getStreamingUrl(playingVideo.id, playingVideo)}
                 autoPlay
-                className="w-full h-full object-contain"
-                style={{ maxHeight: '100%', maxWidth: '100%' }}
-              >
-                Your browser does not support the video tag.
-              </video>
+                onClose={() => setPlayingVideo(null)}
+              />
             </div>
           </div>
         </>
