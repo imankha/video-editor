@@ -2,6 +2,9 @@ import React from 'react';
 import { Crosshair } from 'lucide-react';
 import { frameToTime } from '../../../utils/videoUtils';
 
+// Module-level Set to track warned regions - persists across React StrictMode remounts
+const warnedRegions = new Set();
+
 /**
  * DetectionMarkerLayer - Dedicated timeline row for player detection markers
  *
@@ -31,8 +34,10 @@ export default function DetectionMarkerLayer({
       if (!region.detections?.length) return;
 
       // Log warning if fps is missing - indicates data issue that needs re-export
-      if (!region.fps) {
+      // Only warn once per region (module-level tracking persists across StrictMode remounts)
+      if (!region.fps && !warnedRegions.has(region.id)) {
         console.warn(`[DetectionMarkerLayer] Region ${region.id} missing fps - detection marker navigation may be inaccurate. Re-export framing to fix.`);
+        warnedRegions.add(region.id);
       }
 
       region.detections.forEach((detection) => {
