@@ -45,6 +45,7 @@ from ...services.image_extractor import (
     list_highlight_images,
 )
 from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto
+from ...services.project_archive import archive_project, clear_restored_flag
 from ...constants import ExportStatus, HighlightEffect, DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 
 logger = logging.getLogger(__name__)
@@ -1196,6 +1197,9 @@ async def save_overlay_data(
 
         conn.commit()
 
+        # T66: Clear restored_at flag since project was edited
+        clear_restored_flag(project_id)
+
         logger.info(f"[Overlay Data] Saved for working_video {project['working_video_id']}, "
                    f"updated {raw_clips_updated} raw_clips")
 
@@ -1867,6 +1871,16 @@ async def render_overlay(request: OverlayRenderRequest):
         await manager.send_progress(export_id, complete_data)
 
         logger.info(f"[Overlay Render] Complete: final_video_id={final_video_id}, parallel={parallel_used}")
+
+        # T66: Archive completed project to R2 (non-blocking, don't fail export if archive fails)
+        try:
+            user_id = get_current_user_id()
+            if archive_project(project_id, user_id):
+                logger.info(f"[Overlay Render] Archived project {project_id} to R2")
+            else:
+                logger.warning(f"[Overlay Render] Failed to archive project {project_id} (R2 may be disabled)")
+        except Exception as archive_error:
+            logger.error(f"[Overlay Render] Archive error for project {project_id}: {archive_error}")
 
         return JSONResponse({
             'success': True,

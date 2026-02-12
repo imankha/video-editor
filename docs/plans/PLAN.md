@@ -42,9 +42,12 @@
 | T63 | [Project Filter Persistence](tasks/T63-project-filter-persistence.md) | DONE | MEDIUM | LOW |
 | T64 | [Gallery Playback Controls](tasks/T64-gallery-playback-controls.md) | DONE | MEDIUM | MEDIUM |
 | T65 | [Logo from Landing Page](tasks/T65-logo-from-landing-page.md) | TODO | LOW | LOW |
-| T66 | [Database Completed Projects Split](tasks/T66-database-completed-projects-split.md) | TODO | MEDIUM | MEDIUM |
+| T66 | [Database Completed Projects Split](tasks/T66-database-completed-projects-split.md) | DONE | MEDIUM | MEDIUM |
 | T67 | [Overlay Color Selection](tasks/T67-overlay-color-selection.md) | DONE | MEDIUM | LOW |
 | T68 | [Console Error Cleanup](tasks/T68-console-error-cleanup.md) | DONE | LOW | LOW |
+| T69 | [Mode Switch Save Reset](tasks/T69-mode-switch-save-reset.md) | TODO | MEDIUM | MEDIUM |
+| T70 | [Multi-clip Overlay Shows Single Clip](tasks/T70-multiclip-overlay-shows-single-clip.md) | TODO | HIGH | MEDIUM |
+| T71 | [Gallery Show Proper Names](tasks/T71-gallery-show-proper-names.md) | TODO | MEDIUM | LOW |
 
 ---
 

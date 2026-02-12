@@ -27,6 +27,7 @@ from app.database import (
 from app.queries import latest_working_clips_subquery, derive_clip_name
 from app.user_context import get_current_user_id
 from app.storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2
+from app.services.project_archive import clear_restored_flag
 
 logger = logging.getLogger(__name__)
 
@@ -1542,6 +1543,9 @@ async def update_working_clip(
             new_clip_id = cursor.lastrowid
             logger.info(f"Created new clip version: {new_clip_id} (version {new_version})")
 
+            # T66: Clear restored_at flag since project was edited
+            clear_restored_flag(project_id)
+
             # Tell client the new clip ID so it can switch to it
             return {
                 "success": True,
@@ -1572,6 +1576,9 @@ async def update_working_clip(
                 UPDATE working_clips SET {', '.join(updates)} WHERE id = ?
             """, params)
             conn.commit()
+
+            # T66: Clear restored_at flag since project was edited
+            clear_restored_flag(project_id)
 
         # No refresh needed - client already has the data they just sent
         return {"success": True, "refresh_required": False}

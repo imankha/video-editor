@@ -73,16 +73,13 @@ export function ProjectManager({
   const filteredProjects = useMemo(() => {
     return projects.filter(project => {
       // Status filter - matches counting logic
+      // T66: 'complete' and 'uncompleted' removed - completed projects are archived
       if (statusFilter !== 'all') {
-        const isComplete = project.has_final_video;
-        const isUncompleted = !isComplete;
-        const isInOverlay = !isComplete && project.has_working_video;
-        const isEditing = !isComplete && !isInOverlay && project.clips_in_progress > 0;
-        const isExported = !isComplete && !isInOverlay && !isEditing && project.clips_exported > 0;
-        const isNotStarted = !isComplete && !isInOverlay && !isEditing && !isExported;
+        const isInOverlay = project.has_working_video;
+        const isEditing = !isInOverlay && project.clips_in_progress > 0;
+        const isExported = !isInOverlay && !isEditing && project.clips_exported > 0;
+        const isNotStarted = !isInOverlay && !isEditing && !isExported;
 
-        if (statusFilter === 'uncompleted' && !isUncompleted) return false;
-        if (statusFilter === 'complete' && !isComplete) return false;
         if (statusFilter === 'overlay' && !isInOverlay) return false;
         if (statusFilter === 'editing' && !isEditing) return false;
         if (statusFilter === 'exported' && !isExported) return false;
@@ -108,8 +105,7 @@ export function ProjectManager({
   const filterCounts = useMemo(() => {
     const counts = {
       all: projects.length,
-      uncompleted: 0,
-      complete: 0,
+      // T66: 'complete' and 'uncompleted' removed - completed projects are archived
       overlay: 0,
       editing: 0,
       exported: 0,
@@ -121,19 +117,15 @@ export function ProjectManager({
 
     projects.forEach(project => {
       // Status counts - matches ProjectCard display logic
-      if (project.has_final_video) {
-        counts.complete++;
+      // T66: All projects in DB are uncompleted (completed ones are archived)
+      if (project.has_working_video) {
+        counts.overlay++;
+      } else if (project.clips_in_progress > 0) {
+        counts.editing++;
+      } else if (project.clips_exported > 0) {
+        counts.exported++;
       } else {
-        counts.uncompleted++; // All non-complete projects
-        if (project.has_working_video) {
-          counts.overlay++;
-        } else if (project.clips_in_progress > 0) {
-          counts.editing++;
-        } else if (project.clips_exported > 0) {
-          counts.exported++;
-        } else {
-          counts.not_started++;
-        }
+        counts.not_started++;
       }
 
       // Aspect ratio counts
@@ -149,7 +141,7 @@ export function ProjectManager({
     });
 
     // Determine which filters are useful (have more than one distinct value)
-    const statusValuesWithProjects = [counts.complete, counts.overlay, counts.editing, counts.exported, counts.not_started].filter(v => v > 0).length;
+    const statusValuesWithProjects = [counts.overlay, counts.editing, counts.exported, counts.not_started].filter(v => v > 0).length;
     counts.showStatusFilter = statusValuesWithProjects > 1;
     counts.showAspectFilter = Object.keys(counts.aspects).length > 1;
     counts.showCreationFilter = counts.auto > 0 && counts.custom > 0;
@@ -643,24 +635,22 @@ export function ProjectManager({
                     <div className="flex flex-wrap gap-1.5">
                       {[
                         { value: 'all', label: 'All' },
-                        { value: 'uncompleted', label: 'Uncompleted', color: 'orange' },
-                        { value: 'complete', label: 'Complete', color: 'green' },
+                        // T66: 'complete' and 'uncompleted' removed - completed projects are archived
                         { value: 'overlay', label: 'In Overlay', color: 'blue' },
                         { value: 'editing', label: 'Editing', color: 'blue' },
                         { value: 'exported', label: 'Exported', color: 'purple' },
                         { value: 'not_started', label: 'Not Started', color: 'gray' }
                       ].map(opt => {
                         const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];
-                        if (count === 0 && opt.value !== 'all' && opt.value !== 'uncompleted') return null;
+                        if (count === 0 && opt.value !== 'all') return null;
                         return (
                           <button
                             key={opt.value}
                             onClick={() => setStatusFilter(opt.value)}
                             className={`px-2.5 py-1 text-xs rounded transition-colors ${
                               statusFilter === opt.value
-                                ? opt.color === 'green' ? 'bg-green-600 text-white'
-                                  : opt.color === 'blue' ? 'bg-blue-600 text-white'
-                                  : opt.color === 'orange' ? 'bg-orange-600 text-white'
+                                ? opt.color === 'blue' ? 'bg-blue-600 text-white'
+                                  : opt.color === 'gray' ? 'bg-gray-600 text-white'
                                   : 'bg-purple-600 text-white'
                                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                             }`}

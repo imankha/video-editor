@@ -132,6 +132,9 @@ export function DownloadsPanel({
   // State for before/after export
   const [exportingBeforeAfter, setExportingBeforeAfter] = useState(null);
 
+  // State for project restore (T66)
+  const [restoringProjectId, setRestoringProjectId] = useState(null);
+
   if (!isOpen) return null;
 
   const groups = groupedDownloads();
@@ -156,15 +159,33 @@ export function DownloadsPanel({
     setPlayingVideo(download);
   };
 
-  const handleOpenProject = (e, download) => {
+  const handleOpenProject = async (e, download) => {
     e.stopPropagation();
     // For annotated game exports, navigate to the game in annotate mode
     if (download.source_type === 'annotated_game' && download.game_id && onOpenGame) {
       onOpenGame(download.game_id);
       close();
     } else if (onOpenProject && download.project_id && download.project_id !== 0) {
-      onOpenProject(download.project_id);
-      close();
+      // T66: Restore project from archive if needed
+      setRestoringProjectId(download.id);
+      try {
+        const response = await fetch(`/api/downloads/${download.id}/restore-project`, {
+          method: 'POST',
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'Failed to restore project');
+        }
+        const result = await response.json();
+        // Navigate to the project (project_id from response, may differ if restored)
+        onOpenProject(result.project_id);
+        close();
+      } catch (error) {
+        console.error('[DownloadsPanel] Restore project error:', error);
+        alert(`Failed to open project: ${error.message}`);
+      } finally {
+        setRestoringProjectId(null);
+      }
     }
   };
 
@@ -329,10 +350,15 @@ export function DownloadsPanel({
           {canOpenSource(download) && (
             <button
               onClick={(e) => handleOpenProject(e, download)}
-              className="p-2 hover:bg-gray-600 rounded transition-colors"
+              disabled={restoringProjectId === download.id}
+              className="p-2 hover:bg-gray-600 rounded transition-colors disabled:opacity-50"
               title={getOpenSourceTitle(download)}
             >
-              <FolderOpen size={16} className="text-gray-400 hover:text-white" />
+              {restoringProjectId === download.id ? (
+                <Loader size={16} className="text-gray-400 animate-spin" />
+              ) : (
+                <FolderOpen size={16} className="text-gray-400 hover:text-white" />
+              )}
             </button>
           )}
           <button

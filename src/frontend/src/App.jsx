@@ -354,7 +354,11 @@ function App() {
       {/* Downloads Panel */}
       <DownloadsPanel
         onOpenProject={(projectId) => {
-          selectProject(projectId);
+          // Only re-fetch project if it's not already selected
+          if (projectId !== selectedProjectId) {
+            selectProject(projectId);
+          }
+          // Always switch to overlay mode (handles case where user is in annotate)
           setEditorMode(EDITOR_MODES.OVERLAY);
         }}
         onOpenGame={handleLoadGame}
