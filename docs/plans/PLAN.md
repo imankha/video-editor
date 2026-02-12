@@ -34,7 +34,7 @@
 | T58 | [Dim Tracking Squares When Disabled](tasks/T58-dim-tracking-squares-when-disabled.md) | DONE | 3 | 2 | 1.5 |
 | T61 | [Annotate Default Good](tasks/T61-annotate-default-good.md) | TODO | 3 | 2 | 1.5 |
 | T65 | [Logo from Landing Page](tasks/T65-logo-from-landing-page.md) | DONE | 3 | 2 | 1.5 |
-| T73 | [Project Card Clip Count Mismatch](tasks/T73-project-card-clip-count-mismatch.md) | TESTING | 3 | 2 | 1.5 |
+| T73 | [Project Card Clip Count Mismatch](tasks/T73-project-card-clip-count-mismatch.md) | DONE | 3 | 2 | 1.5 |
 | T62 | [Tag Changes](tasks/T62-tag-changes.md) | TODO | 3 | 3 | 1.0 |
 | T69 | [Mode Switch Save Reset](tasks/T69-mode-switch-save-reset.md) | TODO | 5 | 5 | 1.0 |
 

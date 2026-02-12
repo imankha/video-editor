@@ -1,6 +1,6 @@
 # T73: Project Card Shows Wrong Clip Count
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** LOW
 **Complexity:** LOW
 **Created:** 2026-02-12
