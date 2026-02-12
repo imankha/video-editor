@@ -31,15 +31,15 @@ import { getAllTags } from '../constants/soccerTags';
 // Short names are the canonical form used in TSV files
 const ALLOWED_TAGS = new Set([
   // Short names (used in TSV)
-  "Goal", "Assist", "Dribble", "Movement",
-  "Pass", "Chance Creation", "Possession", "Transition",
-  "Tackle", "Interception", "1v1 Defense", "Build-Up",
-  "Save", "Command", "Distribution", "1v1 Save",
+  "Goal", "Assist", "Dribble",
+  "Pass", "Chance Creation", "Control",
+  "Tackle", "Interception", "Build-Up",
+  "Save", "Distribution",
   // Full names (used in UI)
-  "Goals", "Assists", "Dribbling", "Movement Off Ball",
-  "Passing Range", "Possession Play", "Transitions",
+  "Goals", "Assists", "Dribbling",
+  "Passing Range",
   "Tackles", "Interceptions", "Build-Up Passing",
-  "Shot Stopping", "Command of Area", "1v1 Saves",
+  "Saves",
 ]);
 
 // Required TSV columns in order
@@ -239,7 +239,7 @@ const DEFAULT_CLIP_DURATION = 15.0; // seconds
 const MIN_CLIP_DURATION = 1.0; // seconds (enforced)
 const MAX_CLIP_DURATION = 60.0; // seconds (max for slider)
 const MAX_NOTES_LENGTH = 280; // characters (like a tweet)
-const DEFAULT_RATING = 3; // default star rating
+const DEFAULT_RATING = 4; // default star rating ("Good")
 
 // Rating to notation map
 const RATING_NOTATION = {

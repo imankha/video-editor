@@ -17,11 +17,6 @@ export const soccerTags = {
       name: "Dribbling",
       shortName: "Dribble",
       description: "Beating defenders in individual attacking duels."
-    },
-    {
-      name: "Movement Off Ball",
-      shortName: "Movement",
-      description: "Smart runs and positioning that create scoring chances."
     }
   ],
 
@@ -37,14 +32,9 @@ export const soccerTags = {
       description: "Key passes that set up opportunities for teammates."
     },
     {
-      name: "Possession Play",
-      shortName: "Possession",
-      description: "Maintaining control under pressure with good touches."
-    },
-    {
-      name: "Transitions",
-      shortName: "Transition",
-      description: "Quick turnover play in attack or defense."
+      name: "Control",
+      shortName: "Control",
+      description: "Quick turnover play and composure under pressure."
     }
   ],
 
@@ -60,11 +50,6 @@ export const soccerTags = {
       description: "Reading and winning possession before the opponent."
     },
     {
-      name: "1v1 Defense",
-      shortName: "1v1 Defense",
-      description: "Stopping opponents in one-on-one defensive duels."
-    },
-    {
       name: "Build-Up Passing",
       shortName: "Build-Up",
       description: "Accurate passes from the back that start attacks."
@@ -73,24 +58,14 @@ export const soccerTags = {
 
   goalie: [
     {
-      name: "Shot Stopping",
+      name: "Saves",
       shortName: "Save",
-      description: "Saves that prevent goals in close or long-range chances."
-    },
-    {
-      name: "Command of Area",
-      shortName: "Command",
-      description: "Collecting crosses and controlling the penalty area."
+      description: "All shot-stopping and 1v1 saves."
     },
     {
       name: "Distribution",
       shortName: "Distribution",
       description: "Accurate throws and kicks to start counterattacks."
-    },
-    {
-      name: "1v1 Saves",
-      shortName: "1v1 Save",
-      description: "Stopping attackers in one-on-one scenarios."
     }
   ]
 };
