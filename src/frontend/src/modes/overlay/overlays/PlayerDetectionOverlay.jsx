@@ -15,6 +15,7 @@ export default function PlayerDetectionOverlay({
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   isFullscreen = false,
+  isDisabled = false,
 }) {
   const [videoDisplayRect, setVideoDisplayRect] = useState(null);
   const [hoveredIndex, setHoveredIndex] = useState(null);
@@ -169,22 +170,28 @@ export default function PlayerDetectionOverlay({
 
           const isHovered = hoveredIndex === index;
 
+          // Dimmed styling when layer is disabled
+          const boxStroke = isDisabled ? '#6b7280' : (isHovered ? '#3b82f6' : '#22c55e');
+          const boxFill = isDisabled ? 'transparent' : (isHovered ? 'rgba(59, 130, 246, 0.2)' : 'transparent');
+          const labelFill = isDisabled ? '#6b7280' : (isHovered ? '#3b82f6' : '#22c55e');
+          const boxOpacity = isDisabled ? 0.3 : 1;
+
           return (
-            <g key={index}>
-              {/* Detection box - clickable */}
+            <g key={index} opacity={boxOpacity}>
+              {/* Detection box - clickable when enabled */}
               <rect
                 x={screenBox.x}
                 y={screenBox.y}
                 width={screenBox.width}
                 height={screenBox.height}
-                fill={isHovered ? 'rgba(59, 130, 246, 0.2)' : 'transparent'}
-                stroke={isHovered ? '#3b82f6' : '#22c55e'}
-                strokeWidth={isHovered ? 3 : 2}
-                strokeDasharray={isHovered ? 'none' : '5,3'}
-                className="pointer-events-auto cursor-pointer transition-all"
-                onMouseEnter={() => setHoveredIndex(index)}
-                onMouseLeave={() => setHoveredIndex(null)}
-                onClick={(e) => handlePlayerClick(detection, e)}
+                fill={boxFill}
+                stroke={boxStroke}
+                strokeWidth={isHovered && !isDisabled ? 3 : 2}
+                strokeDasharray={isHovered && !isDisabled ? 'none' : '5,3'}
+                className={isDisabled ? 'pointer-events-none' : 'pointer-events-auto cursor-pointer transition-all'}
+                onMouseEnter={() => !isDisabled && setHoveredIndex(index)}
+                onMouseLeave={() => !isDisabled && setHoveredIndex(null)}
+                onClick={(e) => !isDisabled && handlePlayerClick(detection, e)}
               />
 
               {/* Confidence label */}
@@ -193,7 +200,7 @@ export default function PlayerDetectionOverlay({
                 y={screenBox.y - 20}
                 width={50}
                 height={18}
-                fill={isHovered ? '#3b82f6' : '#22c55e'}
+                fill={labelFill}
                 rx={3}
                 className="pointer-events-none"
               />
@@ -209,8 +216,8 @@ export default function PlayerDetectionOverlay({
                 {Math.round(confidence * 100)}%
               </text>
 
-              {/* Click hint on hover */}
-              {isHovered && (
+              {/* Click hint on hover - only when enabled */}
+              {isHovered && !isDisabled && (
                 <>
                   <rect
                     x={screenBox.x + screenBox.width / 2 - 50}
