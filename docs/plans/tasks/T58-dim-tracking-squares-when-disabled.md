@@ -1,6 +1,6 @@
 # T58: Visually Disable Tracking Squares When Layer Off
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** LOW
 **Complexity:** LOW
 **Created:** 2026-02-11
