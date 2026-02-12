@@ -1,6 +1,6 @@
 # T65: Add Logo from Landing Page
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** LOW
 **Complexity:** LOW
 **Created:** 2026-02-11
