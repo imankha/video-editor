@@ -367,10 +367,10 @@ function App() {
       {/* Mode Switch Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={modeSwitchDialog.isOpen}
-        title={modeSwitchDialog.sourceMode === 'overlay' ? 'Unsaved Overlay Changes' : 'Unsaved Framing Changes'}
+        title={modeSwitchDialog.sourceMode === 'overlay' ? 'Uncommitted Overlay Changes' : 'Uncommitted Framing Changes'}
         message={modeSwitchDialog.sourceMode === 'overlay'
-          ? 'You have made overlay edits that haven\'t been saved yet. If you save, you will create a new final video. Would you like to save your edits or discard them?'
-          : 'You have made framing edits that haven\'t been saved yet. If you save, you will lose your previously exported overlay. Would you like to save your edits or discard them?'
+          ? 'You have overlay edits that haven\'t been exported yet.\n\n• Export: Create a new final video (GPU processing), then switch modes\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in overlay mode'
+          : 'You have framing edits that haven\'t been exported yet.\n\n• Export: Re-export clip (GPU processing), then switch modes. This will reset any overlay work.\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in framing mode'
         }
         onClose={handleModeSwitchCancel}
         buttons={[
@@ -380,7 +380,7 @@ function App() {
             variant: 'danger'
           },
           {
-            label: 'Save',
+            label: 'Export',
             onClick: handleModeSwitchExport,
             variant: 'primary'
           }

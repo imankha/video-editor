@@ -43,13 +43,24 @@ export function ConfirmationDialog({ isOpen, title, message, buttons = [], onClo
     >
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 border border-gray-700">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-white">{title}</h3>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white transition-colors p-1 -mr-1"
+              aria-label="Close dialog"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Body */}
         <div className="px-6 py-4">
-          <p className="text-gray-300">{message}</p>
+          <p className="text-gray-300 whitespace-pre-wrap">{message}</p>
         </div>
 
         {/* Footer */}
