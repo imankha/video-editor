@@ -1,6 +1,6 @@
 # T66: Database Completed Projects Split
 
-**Status:** TODO
+**Status:** IN PROGRESS (Architecture)
 **Impact:** MEDIUM
 **Complexity:** MEDIUM
 **Created:** 2026-02-11
@@ -8,115 +8,75 @@
 
 ## Problem
 
-The SQLite database file size grows with all projects (active and completed). Loading the full database on startup may be slower than necessary since completed projects are rarely accessed.
+The SQLite database file size grows with all projects (active and completed). Loading the full database on startup is slower than necessary since completed projects are rarely accessed.
 
 ## Solution
 
-Split completed projects into a separate "archive" database that is not loaded during normal operation. This reduces the active database size and improves startup/sync times.
+Archive completed projects as JSON files in R2 storage. When a project is exported (completed), serialize its data to JSON and remove it from the database. The `final_videos` table keeps the row for gallery listing. Users can restore archived projects via the gallery folder icon.
 
-## Design
+**Design Document:** [T66-design.md](T66-design.md)
 
-### Two Databases
-- **Active database**: Contains in-progress projects and recently-touched completed projects
-- **Archive database**: Contains completed projects that haven't been touched in 48+ hours
+## Validation Results (2026-02-11)
 
-### Project Lifecycle
+| Metric | Value |
+|--------|-------|
+| Original database size | 897 KB |
+| After removing completed | 262 KB |
+| **Reduction** | **70.8%** |
+| Threshold | 30% |
 
-1. **New project** → Active DB
-2. **Project completed** (exported to gallery) → Stays in Active DB initially
-3. **48 hours without being touched** → Moves to Archive DB
-4. **User opens from Gallery** → Moves back to Active DB, timer resets
-5. **User edits project** → Timer resets
+**Decision: GO** - The size reduction significantly exceeds the 30% threshold.
 
-### UI Changes
+Key findings:
+- 29 of 31 projects (93.5%) were completed
+- `highlights_data` column alone contained 453 KB (50%+ of the database)
 
-- **Project filter**: Remove "completed" filter option - completed projects are not accessible from the project list
-- **Gallery folder icon**: Currently "opens game" → Change to "open project"
-  - Clicking moves the project from Archive to Active DB
-  - Opens the project in the editor
-- **Touch tracking**: Record `last_touched_at` timestamp for completed projects in Active DB
+## High-Level Approach
 
-### Background Process
+1. **Archive on export**: When project exports successfully, serialize project/working_clips/working_videos to JSON, upload to R2 at `{user_id}/archive/{project_id}.json`, delete from DB
+2. **Keep final_videos**: The `final_videos` row stays in DB for gallery listing
+3. **Restore from gallery**: User clicks folder icon → restore JSON to DB → navigate to project
+4. **Stale cleanup**: On app startup, re-archive any restored projects that are >48 hours old and haven't been edited
 
-A background job (or on-startup check) moves completed projects from Active → Archive when:
-- Status is "completed"
-- `last_touched_at` is older than 48 hours
+## Database Schema Change
 
-## Validation Phase (Before Implementation)
+```sql
+ALTER TABLE projects ADD COLUMN restored_at TIMESTAMP DEFAULT NULL
+```
 
-**Goal**: Confirm this work will actually reduce Active DB size meaningfully.
-
-### Test Procedure
-
-1. Clone the current database
-2. Delete all completed project data from the clone:
-   - `working_videos` where status = 'completed'
-   - Related `working_clips`, `highlight_regions`, etc. (cascade)
-3. Run `VACUUM` to reclaim space
-4. Compare file sizes
-
-### Success Criteria
-
-- If Active DB would be significantly smaller (e.g., 30%+ reduction), proceed with implementation
-- If minimal savings, reconsider or defer the task
-
-## Implementation Plan (After Validation)
-
-### Backend Changes
-
-1. **Database schema**
-   - Add `last_touched_at` column to `working_videos`
-   - Create archive database with identical schema
-
-2. **Archive service**
-   - `move_to_archive(project_id)` - Move project and related data to archive DB
-   - `restore_from_archive(project_id)` - Move project back to active DB
-   - `check_and_archive_stale()` - Background job to archive stale completed projects
-
-3. **API changes**
-   - `GET /api/gallery/{video_id}/open-project` - Restore from archive if needed, return project
-   - Update project status changes to set `last_touched_at`
-
-4. **R2 sync**
-   - Sync both databases separately
-   - Archive DB syncs less frequently (on change only)
-
-### Frontend Changes
-
-1. **Project filters**
-   - Remove "completed" option from status filter
-   - Update filter UI accordingly
-
-2. **Gallery**
-   - Change folder icon action from "open game" to "open project"
-   - Handle loading state while restoring from archive
-   - Navigate to project after restore
-
-3. **Settings store**
-   - Remove 'completed' from valid filter values
+- Set to current timestamp when project is restored from archive
+- Cleared to NULL when project is edited
+- On startup: re-archive projects where `restored_at` is set and >48 hours old
 
 ## Relevant Files
 
-- `src/backend/app/database.py` - Database setup, migrations
-- `src/backend/app/routers/projects.py` - Project CRUD
-- `src/backend/app/routers/gallery.py` - Gallery endpoints
-- `src/frontend/src/screens/GalleryScreen.jsx` - Gallery UI
-- `src/frontend/src/components/ProjectFilters.jsx` - Filter UI
-- `src/frontend/src/stores/settingsStore.js` - Filter persistence
+See [T66-design.md](T66-design.md) for complete implementation plan.
+
+Key files:
+- `src/backend/app/services/project_archive.py` - New file for archive/restore logic
+- `src/backend/app/database.py` - Add `restored_at` column
+- `src/backend/app/routers/overlay.py` - Trigger archive after export
+- `src/backend/app/routers/gallery.py` - Restore endpoint
+- `src/frontend/src/screens/GalleryScreen.jsx` - Folder icon action
+- `src/frontend/src/components/ProjectFilters.jsx` - Remove completed filter
 
 ## Acceptance Criteria
 
 ### Validation Phase
-- [ ] Current database size measured
-- [ ] Clone created without completed projects
-- [ ] Size comparison documented
-- [ ] Go/no-go decision made
+- [x] Current database size measured (897 KB)
+- [x] Clone created without completed projects (262 KB)
+- [x] Size comparison documented (70.8% reduction)
+- [x] Go/no-go decision made (GO)
 
-### Implementation Phase (if validated)
-- [ ] Archive database schema created
-- [ ] Move/restore logic implemented
-- [ ] 48-hour stale check implemented
-- [ ] Gallery "open project" working
-- [ ] Project filter updated (no "completed" option)
-- [ ] R2 sync handles both databases
+### Implementation Phase
+- [ ] Completing a project archives data to R2 JSON
+- [ ] Archived project data deleted from active DB
+- [ ] `final_videos` row remains in DB (gallery works)
+- [ ] Gallery folder icon restores project to DB and navigates to editor
+- [ ] Archive JSON deleted after restore
+- [ ] Restored project gets `restored_at` timestamp
+- [ ] Any edit clears `restored_at` to NULL
+- [ ] App startup re-archives projects with `restored_at` older than 48 hours
+- [ ] Project filter no longer shows "completed" option
+- [ ] Migration script for existing completed projects
 - [ ] Tests pass
