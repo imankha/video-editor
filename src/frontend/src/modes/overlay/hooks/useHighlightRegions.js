@@ -571,11 +571,16 @@ export default function useHighlightRegions(videoMetadata) {
    */
   const removeKeyframe = useCallback((time) => {
     const frame = timeToFrame(time, framerate);
-    const region = getRegionAtTime(time);
-    if (!region) return;
+
+    // Find region by keyframe frame, not time bounds
+    // This allows deletion of keyframes positioned outside their region's boundaries
+    const regionWithKeyframe = regions.find(r =>
+      r.keyframes?.some(kf => kf.frame === frame)
+    );
+    if (!regionWithKeyframe) return;
 
     setRegions(prev => prev.map(r => {
-      if (r.id !== region.id) return r;
+      if (r.id !== regionWithKeyframe.id) return r;
 
       // Don't remove first or last keyframes (permanent boundaries)
       return {
@@ -585,7 +590,7 @@ export default function useHighlightRegions(videoMetadata) {
         )
       };
     }));
-  }, [framerate, getRegionAtTime]);
+  }, [framerate, regions]);
 
   /**
    * Get keyframe at exact time (if exists)
