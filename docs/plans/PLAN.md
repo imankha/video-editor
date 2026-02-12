@@ -45,6 +45,8 @@
 | T66 | [Database Completed Projects Split](tasks/T66-database-completed-projects-split.md) | TODO | MEDIUM | MEDIUM |
 | T67 | [Overlay Color Selection](tasks/T67-overlay-color-selection.md) | DONE | MEDIUM | LOW |
 | T68 | [Console Error Cleanup](tasks/T68-console-error-cleanup.md) | DONE | LOW | LOW |
+| T69 | [Mode Switch Save Reset](tasks/T69-mode-switch-save-reset.md) | TODO | MEDIUM | MEDIUM |
+| T70 | [Multi-clip Overlay Shows Single Clip](tasks/T70-multiclip-overlay-shows-single-clip.md) | TODO | HIGH | MEDIUM |
 
 ---
 
