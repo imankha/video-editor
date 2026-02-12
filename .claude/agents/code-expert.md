@@ -60,12 +60,41 @@ Identify what else might be affected:
 - Tests that cover this code
 - Other features that share state or utilities
 
-### 5. Recommendations
+### 5. Bug Smells (for bug fix tasks)
+If this is a bug fix, look for architectural red flags:
+
+**Stale Data Smell:**
+- Are there multiple stores holding the same data?
+- Is data being copied instead of referenced?
+- Are there manual sync/refresh mechanisms?
+
+**Sync Smell:**
+- Does the fix require checking if two things match?
+- Would you need to "invalidate" or "reload" data?
+- Are there multiple sources of truth?
+
+**If you detect a bug smell:**
+- Flag it explicitly in your report
+- Identify the architectural root cause
+- Note that a bandaid fix exists but recommend discussing options first
+
+Example flag:
+```
+⚠️ BUG SMELL DETECTED: Stale Data
+- clipStore and projectDataStore both hold clip data
+- Data is COPIED from projectDataStore → clipStore
+- No subscription/sync mechanism between them
+- ROOT CAUSE: Two sources of truth
+- RECOMMEND: Discuss refactor options before implementing bandaid
+```
+
+### 6. Recommendations
 Based on your audit:
 - Suggested implementation approach
 - Code to reuse vs. write new
 - Patterns to follow
 - Potential risks or gotchas
+- **Bug smell flags** (if any detected)
 
 ## Output Format
 

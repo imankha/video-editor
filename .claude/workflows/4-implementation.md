@@ -69,12 +69,97 @@ def send_progress(phase):  # phase is the ONLY input
 
 ---
 
+## Bug Smells: When Bugs Indicate Architecture Problems
+
+Some bugs are simple mistakes. Others are **symptoms of deeper architectural issues**. Recognizing "bug smells" prevents wasted effort on bandaid fixes that don't address the root cause.
+
+### What is a Bug Smell?
+
+A bug smell is when the "obvious fix" requires:
+- Adding sync/refresh logic between two data sources
+- Checking if data is "stale" and reloading
+- Comparing two things that "should" be the same
+- Adding defensive code for "impossible" states
+
+**If your fix involves keeping two things in sync, you have two sources of truth. That's the real bug.**
+
+### Common Bug Smells
+
+| Symptom | Bug Smell | Real Problem |
+|---------|-----------|--------------|
+| "Stale data" after navigation | Data copied between stores | Should have ONE store, derive the rest |
+| "Out of sync" between components | Multiple sources of truth | Should subscribe to single source |
+| "Race condition" on load | Imperative data fetching | Should use reactive data flow |
+| "Wrong state" after mode switch | State not scoped to context | Should reset or scope state properly |
+| "Cache invalidation" bugs | Caching derived data | Should compute on-the-fly |
+
+### Correct Response to Bug Smells
+
+**DON'T** implement a bandaid fix (sync checks, cache invalidation, refresh calls).
+
+**DO** pause and present options to the user:
+
+```markdown
+## Architecture Issue Detected
+
+The bug symptom is [X], but the root cause is [architectural problem].
+
+**Bandaid fix:** Add sync check between Store A and Store B
+- Pro: Quick, minimal changes
+- Con: Treats symptom, not cause; will have similar bugs
+
+**Proper fix:** Eliminate Store B, derive from Store A
+- Pro: Single source of truth, no sync issues
+- Con: Requires refactoring [list affected files]
+
+**Middle ground:** Make Store B subscribe to Store A
+- Pro: Auto-sync, moderate effort
+- Con: Still two stores, but coupled
+
+Which approach do you prefer?
+```
+
+### Example: Stale Data Bug
+
+**Bug:** "After switching modes, component shows old data"
+
+**Bandaid fix (WRONG):**
+```javascript
+// Check if data matches and reload if not
+if (storeA.id !== storeB.id) {
+  reloadFromStoreA();
+}
+```
+
+**Proper fix (RIGHT):**
+```javascript
+// Eliminate storeB, derive from storeA
+const derivedData = useMemo(() =>
+  transformForUI(storeA.data),
+  [storeA.data]
+);
+```
+
+### When It's NOT a Bug Smell
+
+Simple bugs that ARE appropriate to fix directly:
+- Off-by-one errors
+- Typos in field names
+- Missing null checks at boundaries
+- Incorrect boolean logic
+- Wrong API endpoint
+
+These don't indicate architectural problems—just fix them.
+
+---
+
 ## Implementation Checklist
 
 Before writing code, verify:
 - [ ] Design document approved (Stage 2)
 - [ ] Failing tests created (Stage 3)
 - [ ] Understand the pseudo code from design doc
+- [ ] **Check for bug smells** - is this a symptom of a deeper issue?
 
 While writing code:
 - [ ] Follow the approved design exactly
