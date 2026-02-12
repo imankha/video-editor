@@ -16,6 +16,7 @@ When the user requests a new task, create it as a standalone file AND add it to 
 - User asks to record progress on a task
 - Starting work on an existing task (update context)
 - **User asks "what's next"** → Show TODO tasks sorted by priority
+- **User asks for a prompt/handoff for a task** → Generate task prompt (see below)
 
 ## Rule Categories
 
@@ -304,6 +305,105 @@ Update the task file when:
 - Hitting blockers (document in Progress Log)
 - Completing steps (check off Implementation steps)
 - Ending session (log current state and what's next)
+
+---
+
+## Generating Task Prompts
+
+When user asks for a prompt to hand off a task to another AI:
+
+1. **Read the task doc** - Understand the task scope
+2. **Fill in the classification** - Analyze and provide concrete values (stack layers, file count, LOC estimate, test scope, agent decisions with justifications)
+3. **Do NOT give placeholders** - The prompt must be ready to use, not a template
+
+**IMPORTANT:** Never return `{placeholders}` or `~{n}`. Always analyze the task and fill in real values.
+
+### Prompt Structure (fill in all values, no placeholders)
+
+```
+Implement T{ID}: {Title}
+
+## Task Documentation
+Read: docs/plans/tasks/{task-file}.md
+
+## Classification
+
+**Stack Layers:** {actual layers from task analysis}
+**Files Affected:** {estimated count}
+**LOC Estimate:** {estimated range}
+**Test Scope:** {which test suites apply}
+
+### Agent Workflow
+| Agent | Include? | Justification |
+|-------|----------|---------------|
+| Code Expert | {Yes/No} | {specific reason for this task} |
+| Architect | {Yes/No} | {specific reason for this task} |
+| Tester | {Yes/No} | {specific reason for this task} |
+| Reviewer | {Yes/No} | {specific reason for this task} |
+
+### Skipped Stages
+{List specific stages being skipped with reasons, or "None - full workflow"}
+
+## Workflow
+
+{List only the stages that apply, with task-specific details for each step}
+
+## Key Rules
+
+{Any task-specific constraints, e.g., "Run only frontend tests"}
+- See CLAUDE.md and .claude/workflows/0-task-classification.md for full details
+```
+
+### Example
+
+User: "Give me a prompt for T70"
+
+AI should:
+1. Read `docs/plans/tasks/T70-multiclip-overlay-shows-single-clip.md`
+2. Analyze the task scope from the Relevant Files and Problem sections
+3. Fill in concrete values based on analysis
+
+Response:
+```
+Implement T70: Multi-clip Overlay Shows Only Single Clip After Framing Edit
+
+## Task Documentation
+Read: docs/plans/tasks/T70-multiclip-overlay-shows-single-clip.md
+
+## Classification
+
+**Stack Layers:** Frontend (+ Backend for reference only)
+**Files Affected:** ~3-4 files
+**LOC Estimate:** ~30-50 lines
+**Test Scope:** Frontend Unit + Frontend E2E
+
+### Agent Workflow
+| Agent | Include? | Justification |
+|-------|----------|---------------|
+| Code Expert | Yes | 3+ files affected, need to trace framing→overlay transition flow |
+| Architect | No | Bug fix following existing patterns, no new architecture needed |
+| Tester | Yes | Behavior change - must verify multi-clip scenarios work |
+| Reviewer | No | Architect not included |
+
+### Skipped Stages
+- Architecture: Bug fix, not introducing new patterns
+- Review: No architectural decisions to verify
+
+## Workflow
+
+1. **Branch** - `git checkout -b feature/T70-multiclip-overlay`
+2. **Code Expert** - Trace the framing→overlay transition in App.jsx, OverlayScreen.jsx, and useOverlayState.js to find where clip filtering occurs
+3. **Test First** - Write failing test for multi-clip overlay loading after framing edit
+4. **Implement** - Fix the state/filtering logic so all project clips load
+5. **Automated Testing** - Run frontend unit tests for useOverlayState + E2E for overlay workflow
+6. **Manual Testing** - Provide steps to verify with a real multi-clip project
+7. **Complete** - Update PLAN.md status to TESTING
+
+## Key Rules
+
+- Run only frontend tests (no backend tests needed)
+- See CLAUDE.md and .claude/workflows/0-task-classification.md for full details
+```
 
 ---
 

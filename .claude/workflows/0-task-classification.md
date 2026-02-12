@@ -2,168 +2,235 @@
 
 ## Purpose
 
-Determine the appropriate workflow based on task complexity. Not every task needs the full 7-stage process.
-
-## Classification Matrix
-
-| Complexity | Criteria | Workflow |
-|------------|----------|----------|
-| **Trivial** | Single file, < 10 lines, no state changes | Direct → Test → Done |
-| **Simple** | 1-3 files, follows existing patterns | Skip Architecture |
-| **Standard** | Multiple files, new patterns, state changes | Full 7-stage |
-| **Complex** | Cross-cutting, major refactoring, new systems | Full + Extra Review |
+Analyze task scope to determine which agents add value and which tests to run. Default to the full workflow; skip stages only with explicit justification.
 
 ---
 
-## How to Classify
+## Classification Output
 
-### Trivial Tasks
-**Skip to**: Direct implementation → Manual test → Done
+Before starting any task, produce this classification:
 
-**Examples**:
-- Fix typo in UI text
-- Change color/spacing
-- Update static content
-- Add/remove CSS class
-
-**Criteria** (ALL must be true):
-- [ ] Single file change
-- [ ] Less than 10 lines modified
-- [ ] No state changes
-- [ ] No new dependencies
-- [ ] Pattern already exists in codebase
-
-**Workflow**:
 ```
-1. Make the change
-2. Verify it works (manual check)
-3. Commit and done
+## Task Classification: T{id}
+
+**Stack Layers:** [Frontend | Backend | Modal | Database]
+**Files Affected:** ~{n} files
+**LOC Estimate:** ~{n} lines
+**Test Scope:** [Frontend Unit | Frontend E2E | Backend | None]
+
+### Agent Workflow
+| Agent | Include | Justification |
+|-------|---------|---------------|
+| Code Expert | Yes/No | {reason} |
+| Architect | Yes/No | {reason} |
+| Tester | Yes/No | {reason} |
+| Reviewer | Yes/No | {reason} |
+
+### Skipped Stages
+{List any skipped stages with justification, or "None - full workflow"}
 ```
 
 ---
 
-### Simple Tasks
-**Skip to**: Stage 3 (Test First) - skip Architecture
+## Stack Layer Definitions
 
-**Examples**:
-- Add button that calls existing handler
-- Move component to different location
-- Add prop to existing component
-- Simple refactor within one file
+| Layer | Scope | Test Commands |
+|-------|-------|---------------|
+| **Frontend** | React components, hooks, stores, styles | `cd src/frontend && npm test` (unit), `npm run test:e2e` (E2E) |
+| **Backend** | FastAPI routes, services, models | `cd src/backend && pytest tests/ -v` |
+| **Modal** | GPU functions, cloud processing | Backend tests + manual Modal verification |
+| **Database** | Schema changes, migrations | Backend tests + migration verification |
 
-**Criteria** (ALL must be true):
-- [ ] 1-3 files modified
-- [ ] Follows existing patterns (no new architecture)
-- [ ] No new state management
-- [ ] Clear, unambiguous requirements
+### Common Layer Combinations
 
-**Workflow**:
+| Combination | Typical Scope | Test Scope |
+|-------------|---------------|------------|
+| Frontend only | UI changes, state, components | Frontend unit + E2E |
+| Backend only | API endpoints, data processing | Backend only |
+| Frontend + Backend | Feature with API integration | All tests |
+| Backend + Modal | GPU pipeline changes | Backend + Modal logs |
+| Full stack | End-to-end feature | All tests |
+
+---
+
+## Agent Inclusion Criteria
+
+### Code Expert
+
+**Include when:**
+- Unfamiliar area of codebase
+- 3+ files affected
+- Cross-layer changes
+- Need to understand existing patterns
+
+**Skip when:**
+- Single file change in familiar area
+- Exact same pattern exists elsewhere (can reference directly)
+- Pure styling/copy changes
+
+### Architect
+
+**Include when:**
+- New patterns or abstractions needed
+- State management changes
+- API contract changes
+- 5+ files affected
+- Uncertainty about approach
+
+**Skip when:**
+- Implementation approach is obvious
+- Following existing pattern exactly
+- No new abstractions needed
+- Single-layer, localized change
+
+### Tester
+
+**Include when:**
+- Behavior changes (always)
+- New functionality (always)
+- Bug fixes (write regression test)
+
+**Skip when:**
+- Pure styling changes (colors, spacing)
+- Copy/text changes only
+- No behavior change
+
+### Reviewer
+
+**Include when:**
+- Architect was included (verify design adherence)
+- 5+ files changed
+- Complex logic introduced
+
+**Skip when:**
+- Trivial changes
+- No architectural decisions made
+
+---
+
+## Test Scope Selection
+
+The Tester agent should run only tests relevant to affected layers:
+
+| Affected Layers | Tests to Run |
+|-----------------|--------------|
+| Frontend only | Frontend unit tests for changed files, relevant E2E |
+| Backend only | Backend tests for changed modules |
+| Frontend + Backend | Frontend unit + E2E + Backend integration |
+| Modal changes | Backend tests + Modal function verification |
+| Database schema | Backend tests + migration verification |
+
+### Test Selection Commands
+
+```bash
+# Frontend - specific test files
+cd src/frontend && npm test -- src/hooks/useOverlay.test.js
+
+# Frontend - E2E specific specs
+cd src/frontend && npm run test:e2e -- tests/overlay.spec.js
+
+# Backend - specific test modules
+cd src/backend && pytest tests/test_clips.py tests/test_exports.py -v
+
+# Backend - tests matching pattern
+cd src/backend && pytest -k "overlay" -v
 ```
-1. Task Start (Code Expert - quick audit)
-2. Test First (if testable)
+
+---
+
+## Scope-Based Workflow Selection
+
+### Minimal Scope (1-2 files, <20 LOC, single layer)
+
+```
+Files: 1-2 | LOC: <20 | Layers: 1
+```
+
+**Default workflow:**
+1. Classification (this stage)
+2. Implementation
+3. Targeted tests (affected layer only)
+4. Manual verification
+5. Commit
+
+**Agent inclusion:**
+- Code Expert: Skip (small scope)
+- Architect: Skip (no design decisions)
+- Tester: Include if behavior changes
+- Reviewer: Skip
+
+### Moderate Scope (3-5 files, 20-100 LOC, 1-2 layers)
+
+```
+Files: 3-5 | LOC: 20-100 | Layers: 1-2
+```
+
+**Default workflow:**
+1. Classification
+2. Code Expert (quick audit of affected files)
 3. Implementation
-4. Automated Testing
-5. Manual Testing
-6. Task Complete
-```
+4. Targeted tests
+5. Manual verification
+6. Commit
 
----
+**Agent inclusion:**
+- Code Expert: Include (understand context)
+- Architect: Skip unless new patterns needed
+- Tester: Include
+- Reviewer: Optional
 
-### Standard Tasks
-**Use**: Full 7-stage workflow
-
-**Examples**:
-- New feature with UI + state
-- Modify existing feature behavior
-- Add new API endpoint
-- Integrate new library
-
-**Criteria** (ANY true):
-- [ ] 4+ files modified
-- [ ] New state management needed
-- [ ] New patterns introduced
-- [ ] Multiple components affected
-- [ ] Backend + frontend changes
-
-**Workflow**: Full 7 stages
-```
-1. Task Start (Code Expert)
-2. Architecture (Architect) - APPROVAL GATE
-3. Test First (Tester)
-4. Implementation (Implementor)
-5. Automated Testing (Tester)
-6. Manual Testing - APPROVAL GATE
-7. Task Complete
-```
-
----
-
-### Complex Tasks
-**Use**: Full workflow + additional review
-
-**Examples**:
-- Major refactoring across codebase
-- New subsystem or module
-- Database schema changes
-- Breaking API changes
-- Performance optimization
-
-**Criteria** (ANY true):
-- [ ] Touches 10+ files
-- [ ] Changes core architecture
-- [ ] Requires migration
-- [ ] Affects multiple features
-- [ ] High risk of regression
-
-**Workflow**: Full 7 stages + extras
-```
-1. Task Start (Code Expert - thorough)
-2. Architecture (Architect) - APPROVAL GATE
-   → Consider breaking into smaller tasks
-3. Test First (Tester - comprehensive)
-4. Implementation (Implementor)
-4.5 Review (Reviewer) - verify against design
-5. Automated Testing (Tester)
-6. Manual Testing - APPROVAL GATE
-   → Extended testing period
-7. Task Complete
-```
-
----
-
-## Quick Decision Tree
+### Large Scope (6+ files, 100+ LOC, or 3+ layers)
 
 ```
-Start
-  │
-  ├─ Single file, < 10 lines, no state? → TRIVIAL
-  │
-  ├─ 1-3 files, existing patterns? → SIMPLE
-  │
-  ├─ New patterns OR state OR 4+ files? → STANDARD
-  │
-  └─ 10+ files OR core changes OR migrations? → COMPLEX
+Files: 6+ | LOC: 100+ | Layers: 3+
 ```
+
+**Default workflow (full):**
+1. Classification
+2. Code Expert (thorough audit)
+3. Architect (design doc, approval gate)
+4. Test First (failing tests)
+5. Implementation
+6. Review (verify design adherence)
+7. Automated Testing
+8. Manual Testing (approval gate)
+9. Commit
+
+**Agent inclusion:**
+- All agents included
+- Consider breaking into smaller tasks
 
 ---
 
 ## Classification Examples
 
-| Task | Classification | Reason |
-|------|---------------|--------|
-| "Fix button color" | Trivial | Single CSS change |
-| "Add tooltip to icon" | Trivial | Single component, existing pattern |
-| "Move toggle to layer icon" (T06) | Simple | 2 files, existing state |
-| "Add progress bar to export" | Standard | New UI + state + WebSocket |
-| "Refactor all exports to use unified interface" | Complex | Cross-cutting, many files |
+| Task | Layers | Files | LOC | Agents | Test Scope |
+|------|--------|-------|-----|--------|------------|
+| Fix button color | Frontend | 1 | 5 | None | None (no behavior) |
+| Add tooltip | Frontend | 1 | 15 | Tester | Frontend unit |
+| Fix overlay keyframe delete | Frontend | 2-3 | 30 | Code Expert, Tester | Frontend unit + E2E |
+| Add API endpoint | Backend | 2-3 | 50 | Code Expert, Tester | Backend |
+| Multi-clip overlay bug | Frontend + Backend | 4-6 | 80 | All except Architect | Frontend + Backend |
+| New export format | Full stack | 8+ | 200+ | All | All |
 
 ---
 
-## After Classification
+## Quick Reference
 
-| Complexity | Next Step |
-|------------|-----------|
-| Trivial | Just do it, then commit |
-| Simple | Go to [1-task-start.md](1-task-start.md), skip Architecture |
-| Standard | Go to [1-task-start.md](1-task-start.md), full workflow |
-| Complex | Go to [1-task-start.md](1-task-start.md), consider splitting first |
+### Must Always Do
+- Classify before starting
+- Create branch (except <10 LOC single-file)
+- Commit with co-author
+- Update PLAN.md to TESTING
+
+### Must Justify Skipping
+- Code Expert (scope < 3 files AND familiar area)
+- Architect (no new patterns AND obvious approach)
+- Tester (no behavior change)
+- Reviewer (Architect was skipped AND < 5 files)
+
+### Never Skip
+- Classification
+- Implementation
+- Final commit
+- PLAN.md update

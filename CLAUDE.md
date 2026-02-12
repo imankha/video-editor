@@ -33,8 +33,8 @@ cd src/backend && pytest tests/test_clips.py -v          # Specific file
 
 | Step | When | Action |
 |------|------|--------|
-| Classify | Before starting | State complexity: "This is a TRIVIAL/SIMPLE/STANDARD/COMPLEX task" |
-| Branch | Before first change | `git checkout -b feature/T{id}-{description}` (skip for TRIVIAL) |
+| Classify | Before starting | Determine stack layers, files, LOC, test scope, agent inclusion |
+| Branch | Before first change | `git checkout -b feature/T{id}-{description}` (skip for <10 LOC single-file) |
 | Commit | After implementation | Commit with co-author line |
 | PLAN.md | After commit | Update task status to TESTING |
 
@@ -42,16 +42,25 @@ cd src/backend && pytest tests/test_clips.py -v          # Specific file
 
 **AI cannot mark tasks as DONE.** AI can only set status to TESTING. User must say "complete" or "done" to mark a task as DONE in PLAN.md.
 
-### Skip Based on Complexity
+### Classification Output (Required)
 
-| Complexity | Skip These Stages |
-|------------|-------------------|
-| TRIVIAL | All stages - just fix, test manually, commit |
-| SIMPLE | Architecture (Stage 2), Code Expert deep dive |
-| STANDARD | Nothing - full workflow |
-| COMPLEX | Nothing - full workflow + extra review |
+Before starting any task, produce:
 
-See [0-task-classification.md](.claude/workflows/0-task-classification.md) for classification criteria.
+```
+**Stack Layers:** [Frontend | Backend | Modal | Database]
+**Files Affected:** ~{n} files
+**LOC Estimate:** ~{n} lines
+**Test Scope:** [Frontend Unit | Frontend E2E | Backend | None]
+
+| Agent | Include? | Justification |
+|-------|----------|---------------|
+| Code Expert | Yes/No | {reason} |
+| Architect | Yes/No | {reason} |
+| Tester | Yes/No | {reason} |
+| Reviewer | Yes/No | {reason} |
+```
+
+See [0-task-classification.md](.claude/workflows/0-task-classification.md) for full classification criteria and agent inclusion rules.
 
 ---
 
@@ -72,7 +81,7 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for c
 | 6 | Manual Testing | [6-manual-testing.md](.claude/workflows/6-manual-testing.md) | - | **Approval Required** |
 | 7 | Task Complete | [7-task-complete.md](.claude/workflows/7-task-complete.md) | - | - |
 
-**Note**: Trivial/Simple tasks skip some stages. See [0-task-classification.md](.claude/workflows/0-task-classification.md).
+**Note**: Classification determines which agents to include based on scope (stack layers, files, LOC). Default to full workflow; skip stages only with explicit justification. See [0-task-classification.md](.claude/workflows/0-task-classification.md).
 
 ## Stage Detection Rules
 
