@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronDown, FolderOpen } from 'lucide-react';
+import { Logo } from './Logo';
 
 /**
  * ProjectHeader - Shows selected project name with dropdown to switch
@@ -15,7 +16,12 @@ export function ProjectHeader({
   if (!selectedProject) return null;
 
   return (
-    <div className="relative">
+    <div className="flex items-center gap-4">
+      {/* Logo */}
+      <Logo size={32} />
+
+      {/* Project selector */}
+      <div className="relative">
       <button
         onClick={() => setShowDropdown(!showDropdown)}
         className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition-colors"
@@ -72,6 +78,7 @@ export function ProjectHeader({
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }

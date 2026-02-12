@@ -284,8 +284,8 @@ export function OverlayModeView({
                   isFullscreen={isFullscreen}
                 />
               ),
-              // PlayerDetectionOverlay - AI-detected player boxes (toggleable)
-              effectiveOverlayMetadata && playerDetectionEnabled && showPlayerBoxes && playerDetections?.length > 0 && (
+              // PlayerDetectionOverlay - AI-detected player boxes (dimmed when layer disabled)
+              effectiveOverlayMetadata && playerDetectionEnabled && playerDetections?.length > 0 && (
                 <PlayerDetectionOverlay
                   key="player-detection"
                   videoRef={videoRef}
@@ -296,6 +296,7 @@ export function OverlayModeView({
                   zoom={zoom}
                   panOffset={panOffset}
                   isFullscreen={isFullscreen}
+                  isDisabled={!showPlayerBoxes}
                 />
               ),
             ].filter(Boolean)}
