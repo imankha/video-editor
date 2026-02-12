@@ -22,10 +22,18 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.database import get_db_connection, ensure_database
+# Load .env file from project root
+from dotenv import load_dotenv
+env_path = Path(__file__).parent.parent.parent.parent / ".env"
+load_dotenv(env_path)
+
+from app.database import (
+    get_db_connection, ensure_database, get_database_path,
+    get_local_db_version, set_local_db_version
+)
 from app.user_context import set_current_user_id
 from app.services.project_archive import archive_project
-from app.storage import R2_ENABLED
+from app.storage import R2_ENABLED, sync_database_to_r2_with_version
 
 
 def main():
@@ -110,8 +118,25 @@ def main():
     print(f"  Failed:   {failed_count}")
 
     if archived_count > 0:
-        print("\nRun VACUUM to reclaim disk space:")
-        print(f"  sqlite3 user_data/{args.user_id}/database.sqlite 'VACUUM'")
+        # VACUUM to reclaim disk space
+        print("\nRunning VACUUM to reclaim disk space...")
+        db_path = get_database_path()
+        with get_db_connection() as conn:
+            conn.execute("VACUUM")
+        print(f"  Database size: {db_path.stat().st_size / 1024:.1f} KB")
+
+        # Sync updated database to R2
+        if R2_ENABLED:
+            print("\nSyncing updated database to R2...")
+            current_version = get_local_db_version(args.user_id)
+            success, new_version = sync_database_to_r2_with_version(
+                args.user_id, db_path, current_version
+            )
+            if success and new_version is not None:
+                set_local_db_version(args.user_id, new_version)
+                print(f"  Sync complete! (version {current_version} -> {new_version})")
+            else:
+                print("  WARNING: Sync to R2 failed. Run manually or app may restore old data.")
 
     return 0 if failed_count == 0 else 1
 
