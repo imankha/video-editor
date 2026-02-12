@@ -291,32 +291,27 @@ async def list_projects():
             FROM projects p
             LEFT JOIN (
                 -- Subquery for clip counts per project (latest version only)
-                -- Uses NOT EXISTS pattern which is faster than window functions
+                -- Uses ROW_NUMBER to handle duplicate clips at same version level
+                -- Identity: COALESCE(rc.end_time, wc.uploaded_filename) - matches queries.py
                 SELECT
-                    wc.project_id,
+                    project_id,
                     COUNT(*) as total,
-                    SUM(CASE WHEN wc.exported_at IS NOT NULL THEN 1 ELSE 0 END) as exported,
-                    SUM(CASE WHEN wc.exported_at IS NULL AND (
-                        wc.crop_data IS NOT NULL OR
-                        wc.segments_data IS NOT NULL OR
-                        wc.timing_data IS NOT NULL
+                    SUM(CASE WHEN exported_at IS NOT NULL THEN 1 ELSE 0 END) as exported,
+                    SUM(CASE WHEN exported_at IS NULL AND (
+                        crop_data IS NOT NULL OR
+                        segments_data IS NOT NULL OR
+                        timing_data IS NOT NULL
                     ) THEN 1 ELSE 0 END) as in_progress
-                FROM working_clips wc
-                LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-                WHERE NOT EXISTS (
-                    -- Exclude if there's a newer version of this same clip
-                    SELECT 1 FROM working_clips wc2
-                    LEFT JOIN raw_clips rc2 ON wc2.raw_clip_id = rc2.id
-                    WHERE wc2.project_id = wc.project_id
-                      AND wc2.version > wc.version
-                      AND (
-                          -- Same raw clip (identified by end_time)
-                          (rc2.end_time IS NOT NULL AND rc.end_time IS NOT NULL AND rc2.end_time = rc.end_time)
-                          -- OR same uploaded file
-                          OR (wc2.raw_clip_id IS NULL AND wc.raw_clip_id IS NULL AND wc2.uploaded_filename = wc.uploaded_filename)
-                      )
-                )
-                GROUP BY wc.project_id
+                FROM (
+                    SELECT wc.*, ROW_NUMBER() OVER (
+                        PARTITION BY wc.project_id, COALESCE(rc.end_time, wc.uploaded_filename)
+                        ORDER BY wc.version DESC, wc.id DESC
+                    ) as rn
+                    FROM working_clips wc
+                    LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+                ) latest_clips
+                WHERE rn = 1
+                GROUP BY project_id
             ) clip_stats ON p.id = clip_stats.project_id
             LEFT JOIN working_videos wv ON p.working_video_id = wv.id
             LEFT JOIN final_videos fv ON p.final_video_id = fv.id
