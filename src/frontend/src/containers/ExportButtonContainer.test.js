@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { buildClipMetadata, calculateEffectiveDuration } from './ExportButtonContainer';
-import { useClipStore } from '../stores/clipStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 
 describe('ExportButtonContainer', () => {
@@ -151,41 +150,41 @@ describe('ExportButtonContainer', () => {
  * This test verifies that when a user returns to framing mode from overlay,
  * edits one clip, and exports, ALL clips are included in the transition to overlay.
  *
- * The bug was that only the edited clip appeared in overlay mode after the export.
+ * The bug was caused by having two sources of truth (clipStore and projectDataStore).
+ * The fix was to use a SINGLE store (projectDataStore) for all clip data.
  */
 describe('T70: Multi-clip Overlay After Framing Edit', () => {
   beforeEach(() => {
     // Reset stores before each test
-    useClipStore.getState().reset();
     useProjectDataStore.getState().reset();
   });
 
-  describe('clipStore and projectDataStore sync', () => {
+  describe('projectDataStore single source of truth', () => {
     it('projectDataStore.clips persists through mode changes', () => {
-      // Simulate initial project load with 3 clips
+      // Simulate initial project load with 3 clips (already in UI format from useProjectLoader)
       const projectClips = [
-        { id: 1, filename: 'clip1.mp4', url: 'http://example.com/1' },
-        { id: 2, filename: 'clip2.mp4', url: 'http://example.com/2' },
-        { id: 3, filename: 'clip3.mp4', url: 'http://example.com/3' }
+        { id: 'clip_1', workingClipId: 1, fileName: 'clip1.mp4', duration: 10 },
+        { id: 'clip_2', workingClipId: 2, fileName: 'clip2.mp4', duration: 15 },
+        { id: 'clip_3', workingClipId: 3, fileName: 'clip3.mp4', duration: 20 }
       ];
 
       // Set clips in projectDataStore (simulating useProjectLoader)
-      useProjectDataStore.getState().setClips(projectClips);
+      useProjectDataStore.getState().setProjectClips({ clips: projectClips, aspectRatio: '9:16' });
 
       // Verify all clips are stored
       expect(useProjectDataStore.getState().clips).toHaveLength(3);
 
       // Simulate mode changes (framing -> overlay -> framing)
-      // These don't modify projectDataStore.clips
+      // projectDataStore.clips persists because it's the SINGLE source of truth
 
       // Verify clips are still all present after "mode changes"
       expect(useProjectDataStore.getState().clips).toHaveLength(3);
-      expect(useProjectDataStore.getState().clips[0].id).toBe(1);
-      expect(useProjectDataStore.getState().clips[1].id).toBe(2);
-      expect(useProjectDataStore.getState().clips[2].id).toBe(3);
+      expect(useProjectDataStore.getState().clips[0].id).toBe('clip_1');
+      expect(useProjectDataStore.getState().clips[1].id).toBe('clip_2');
+      expect(useProjectDataStore.getState().clips[2].id).toBe('clip_3');
     });
 
-    it('clipStore should have all clips when returning to framing', () => {
+    it('projectDataStore should have all clips when returning to framing', () => {
       // This test verifies the scenario where user returns to framing from overlay
       // and all clips should be available for export
 
@@ -195,20 +194,20 @@ describe('T70: Multi-clip Overlay After Framing Edit', () => {
         { id: 'clip3', fileName: 'clip3.mp4', duration: 20, cropKeyframes: [] }
       ];
 
-      // Simulate clips being loaded into clipStore
-      useClipStore.getState().setClips(clips);
+      // Simulate clips being loaded into projectDataStore
+      useProjectDataStore.getState().setProjectClips({ clips, aspectRatio: '9:16' });
 
-      // Verify all clips are in clipStore
-      expect(useClipStore.getState().clips).toHaveLength(3);
+      // Verify all clips are in projectDataStore
+      expect(useProjectDataStore.getState().clips).toHaveLength(3);
 
       // User selects clip2 to edit (simulating what happens in framing mode)
-      useClipStore.getState().setSelectedClipId('clip2');
+      useProjectDataStore.getState().setSelectedClipId('clip2');
 
       // Verify that after selecting one clip, ALL clips are still available
-      expect(useClipStore.getState().clips).toHaveLength(3);
+      expect(useProjectDataStore.getState().clips).toHaveLength(3);
 
       // This is what would be passed to buildClipMetadata during export
-      const allClips = useClipStore.getState().clips;
+      const allClips = useProjectDataStore.getState().clips;
       const metadata = buildClipMetadata(allClips);
 
       // CRITICAL: metadata must include ALL clips, not just the selected one
@@ -227,8 +226,8 @@ describe('T70: Multi-clip Overlay After Framing Edit', () => {
         { id: 'clip3', fileName: 'clip3.mp4', duration: 20, cropKeyframes: [{ time: 0, x: 0, y: 0 }] }
       ];
 
-      useClipStore.getState().setClips(clips);
-      useClipStore.getState().setSelectedClipId('clip2'); // User selected clip2 to edit
+      useProjectDataStore.getState().setProjectClips({ clips, aspectRatio: '9:16' });
+      useProjectDataStore.getState().setSelectedClipId('clip2'); // User selected clip2 to edit
 
       // When export happens, it should use ALL clips
       const clipMetadata = buildClipMetadata(clips);

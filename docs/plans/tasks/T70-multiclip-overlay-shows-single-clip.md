@@ -18,44 +18,47 @@ Expected: All clips should be visible in overlay mode, not just the one that was
 
 ## Root Cause Analysis
 
-The bug was in `FramingScreen.jsx` initialization effect (line 376). The condition:
+The bug was caused by **two sources of truth** for clip data:
 
-```javascript
-if (!initialLoadDoneRef.current && loadedClips.length > 0 && clips.length === 0)
-```
+1. `projectDataStore.clips` - Backend format with raw JSON strings
+2. `clipStore.clips` - UI format with parsed/transformed data
 
-Only loaded clips from `projectDataStore` into `clipStore` when `clipStore` was empty. However, when returning to framing mode from overlay:
+Data was COPIED from projectDataStore to clipStore in FramingScreen's initialization effect. When returning to framing mode from overlay:
 
-1. FramingScreen remounts (gets a fresh `initialLoadDoneRef` with `current = false`)
-2. `loadedClips` from `projectDataStore` has all clips
-3. BUT `clips` from `clipStore` might still have cached clips from previous visit
-4. If `clips.length > 0`, initialization doesn't run
-5. The cached `clipStore` data is used, which might be stale or have incorrect clip data
+1. FramingScreen remounts
+2. clipStore might have stale cached data from previous visit
+3. Initialization only ran when clipStore was empty
+4. Stale clipStore data was used, causing incorrect clipMetadata
 
-This caused `clipsWithCurrentState` (passed to ExportButtonContainer) to have incomplete/incorrect data, which then built incorrect `clipMetadata` for overlay mode.
+**This is a "bug smell"** - sync issues between two stores indicate an architectural problem. The bandaid fix (sync check) would treat the symptom, not the cause.
 
-## Solution
+## Solution: Single Source of Truth
 
-Modified the initialization effect condition to also verify clipStore clips match projectDataStore clips by comparing backend IDs:
+Refactored to use `projectDataStore` as the **single source of truth**:
 
-```javascript
-const clipStoreIsEmpty = clips.length === 0;
-const clipStoreMismatch = clips.length > 0 && loadedClips.length > 0 && (
-  clips.length !== loadedClips.length ||
-  !clips.every((clip, index) => {
-    const loadedClip = loadedClips[index];
-    return clip.workingClipId === loadedClip?.id;
-  })
-);
-const needsReload = clipStoreIsEmpty || clipStoreMismatch;
-```
-
-This ensures clips are reloaded when returning to framing mode if the clipStore data is stale.
+1. **Extended projectDataStore** with clip management features (selectedClipId, globalTransition, CRUD operations)
+2. **Transform clips on load** in useProjectLoader to UI format (parsed JSON, client IDs)
+3. **Updated useClipManager** to use projectDataStore instead of clipStore
+4. **Simplified FramingScreen** - no more copying/syncing between stores
+5. **Deprecated clipStore** - kept for backwards compatibility
 
 ## Files Changed
 
-- `src/frontend/src/screens/FramingScreen.jsx` - Added clipStore sync verification in initialization effect
-- `src/frontend/src/containers/ExportButtonContainer.test.js` - Added tests for multi-clip metadata building
+- `src/frontend/src/stores/projectDataStore.js` - Extended with clip management features
+- `src/frontend/src/stores/clipStore.js` - Marked as deprecated
+- `src/frontend/src/stores/index.js` - Updated exports
+- `src/frontend/src/hooks/useClipManager.js` - Now uses projectDataStore
+- `src/frontend/src/hooks/useProjectLoader.js` - Transforms clips to UI format on load
+- `src/frontend/src/screens/FramingScreen.jsx` - Simplified initialization, removed sync logic
+- `src/frontend/src/App.jsx` - Updated to use projectDataStore only
+- `src/frontend/src/containers/ExportButtonContainer.test.js` - Updated tests for single store
+
+## Bug Smells Documentation Added
+
+Added "Bug Smells" guidance to prevent future bandaid fixes:
+
+- `.claude/agents/code-expert.md` - Section 5 for detecting bug smells during audits
+- `.claude/workflows/4-implementation.md` - Full Bug Smells section with examples
 
 ## Manual Testing Instructions
 

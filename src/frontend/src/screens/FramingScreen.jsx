@@ -53,9 +53,7 @@ export function FramingScreen({
   // Project context
   const { projectId, project, aspectRatio: projectAspectRatio, refresh: refreshProject } = useProject();
 
-  // Loaded project data from ProjectsScreen
-  const loadedClips = useProjectDataStore(state => state.clips);
-  const projectDataReset = useProjectDataStore(state => state.reset);
+  // Project data store state
   const isProjectLoading = useProjectDataStore(state => state.isLoading);
   const loadingStage = useProjectDataStore(state => state.loadingStage);
   // Working video and clip metadata are set on export
@@ -102,7 +100,6 @@ export function FramingScreen({
     globalTransition,
     addClip,
     addClipFromProject,
-    loadProjectClips,
     clearClips,
     deleteClip,
     selectClip,
@@ -371,119 +368,57 @@ export function FramingScreen({
     saveCurrentClipState: framingSaveCurrentClipState,
   } = framing;
 
-  // Initialize from loaded project data (from ProjectsScreen)
-  // Also re-sync if clipStore has stale data (different clips than projectDataStore)
+  // Initialize video playback when entering framing mode
+  // With single-store architecture, clips are already in projectDataStore (UI format)
+  // useClipManager reads directly from projectDataStore, so we just need to load the video
   useEffect(() => {
-    // Check if clipStore clips match projectDataStore clips
-    // projectDataStore.clips have `id` (backend working_clips.id)
-    // clipStore clips have `workingClipId` (same backend ID)
-    const clipStoreIsEmpty = clips.length === 0;
-    const clipStoreMismatch = clips.length > 0 && loadedClips.length > 0 && (
-      clips.length !== loadedClips.length ||
-      !clips.every((clip, index) => {
-        const loadedClip = loadedClips[index];
-        // Compare backend IDs to detect stale clipStore data
-        return clip.workingClipId === loadedClip?.id;
-      })
-    );
+    // Skip if already loaded or no clips
+    if (initialLoadDoneRef.current || clips.length === 0) return;
 
-    const needsReload = clipStoreIsEmpty || clipStoreMismatch;
+    initialLoadDoneRef.current = true;
+    const firstClip = clips[0];
 
-    if (!initialLoadDoneRef.current && loadedClips.length > 0 && needsReload) {
-      if (clipStoreMismatch) {
-        console.log('[FramingScreen] ClipStore out of sync with projectDataStore, reloading clips');
-      }
-      console.log('[FramingScreen] Initializing from loaded clips:', loadedClips.length);
-      initialLoadDoneRef.current = true;
+    console.log('[FramingScreen] Initializing video for first clip:', firstClip?.id);
 
-      // Load clips into clip manager
-      const loadClipsAsync = async () => {
-        const getMetadataFromUrl = async (url) => await extractVideoMetadataFromUrl(url);
-        const getClipUrl = (clipId) => getClipFileUrl(clipId, projectId);
-
-        const createdClipIds = await loadProjectClips(
-          loadedClips.map(c => ({
-            id: c.id,
-            filename: c.filename,
-            name: c.name,  // Human-readable name from raw_clips
-            notes: c.notes,  // Notes from raw_clips
-            duration: c.duration,
-            segments_data: c.segments_data,
-            crop_data: c.crop_data,
-            file_url: c.file_url,  // Presigned R2 URL (if available)
-            is_extracted: c.is_extracted !== false,  // Default true for clips with file_url
-            extraction_status: c.extraction_status,
-            // Annotate navigation fields
-            game_id: c.game_id,
-            start_time: c.start_time,
-            end_time: c.end_time,
-            tags: c.tags,
-            rating: c.rating,
-          })),
-          getClipUrl,
-          getMetadataFromUrl,
-          projectAspectRatio || '9:16'
-        );
-
-        // Set previousClipIdRef immediately to prevent clip switching effect from double-loading
-        // loadProjectClips returns created clip IDs, and the first one will be auto-selected
-        if (createdClipIds.length > 0) {
-          previousClipIdRef.current = createdClipIds[0];
-        }
-
-        // Load first clip video (prefer presigned R2 URL if available)
-        const firstClip = loadedClips[0];
-        console.log('[FramingScreen] First clip data:', { id: firstClip?.id, file_url: firstClip?.file_url, url: firstClip?.url, hasMetadata: !!firstClip?.metadata });
-        const firstClipUrl = firstClip?.fileUrl || firstClip?.file_url || firstClip?.url;
-        if (firstClipUrl) {
-          console.log('[FramingScreen] Loading first clip video:', firstClipUrl);
-
-          // Get metadata first (before loading video) so we can restore state before useEffect runs
-          // IMPORTANT: Restore crop/segment state BEFORE setting video metadata to avoid
-          // the useCrop useEffect re-initializing keyframes before we restore them
-          const clipMetadata = firstClip.metadata || await extractVideoMetadataFromUrl(firstClipUrl);
-
-          // Restore framing state BEFORE loading video (prevents useEffect race condition)
-          if (firstClip.segments_data) {
-            try {
-              const savedSegments = JSON.parse(firstClip.segments_data);
-              console.log('[FramingScreen] Restoring segments_data:', JSON.stringify(savedSegments), 'clipDuration:', clipMetadata?.duration);
-              restoreSegmentState(savedSegments, clipMetadata?.duration || 0);
-            } catch (e) {
-              console.warn('[FramingScreen] Failed to parse segments_data:', e);
-            }
-          }
-
-          if (firstClip.crop_data) {
-            try {
-              const savedCropKeyframes = JSON.parse(firstClip.crop_data);
-              if (savedCropKeyframes.length > 0) {
-                const endFrame = Math.round((clipMetadata?.duration || 0) * (clipMetadata?.framerate || 30));
-                console.log('[FramingScreen] Restoring crop keyframes BEFORE video load:', savedCropKeyframes.length, 'keyframes');
-                restoreCropState(savedCropKeyframes, endFrame);
-              }
-            } catch (e) {
-              console.warn('[FramingScreen] Failed to parse crop_data:', e);
-            }
-          }
-
-          // NOW load video (with metadata that was already extracted)
-          // Use streaming for presigned R2 URLs (non-blob) to avoid CORS issues
-          if (!firstClipUrl.startsWith('blob:')) {
-            console.log('[FramingScreen] Using streaming mode for first clip');
-            loadVideoFromStreamingUrl(firstClipUrl, clipMetadata);
-          } else {
-            const file = await loadVideoFromUrl(firstClipUrl, firstClip.filename || 'clip.mp4');
-            if (file) {
-              setVideoFile(file);
-            }
-          }
-        }
-      };
-
-      loadClipsAsync();
+    // Set previousClipIdRef to prevent clip switching effect from double-loading
+    if (firstClip?.id) {
+      previousClipIdRef.current = firstClip.id;
     }
-  }, [loadedClips, clips.length, projectId, projectAspectRatio, loadProjectClips, getClipFileUrl, loadVideoFromUrl, loadVideoFromStreamingUrl, restoreSegmentState, restoreCropState]);
+
+    const loadFirstClipVideo = async () => {
+      const clipUrl = firstClip?.fileUrl || firstClip?.url;
+      if (!clipUrl) {
+        console.warn('[FramingScreen] First clip has no URL');
+        return;
+      }
+
+      // Clips already have parsed data (segments, cropKeyframes) from useProjectLoader
+      // Restore framing state BEFORE loading video to prevent race conditions
+      if (firstClip.segments) {
+        console.log('[FramingScreen] Restoring segments:', JSON.stringify(firstClip.segments));
+        restoreSegmentState(firstClip.segments, firstClip.duration || 0);
+      }
+
+      if (firstClip.cropKeyframes && firstClip.cropKeyframes.length > 0) {
+        const endFrame = Math.round((firstClip.duration || 0) * (firstClip.framerate || 30));
+        console.log('[FramingScreen] Restoring crop keyframes:', firstClip.cropKeyframes.length, 'keyframes');
+        restoreCropState(firstClip.cropKeyframes, endFrame);
+      }
+
+      // Load video (with metadata already available from useProjectLoader)
+      console.log('[FramingScreen] Loading first clip video:', clipUrl);
+      if (!clipUrl.startsWith('blob:')) {
+        loadVideoFromStreamingUrl(clipUrl, firstClip.metadata || null);
+      } else {
+        const file = await loadVideoFromUrl(clipUrl, firstClip.fileName || 'clip.mp4');
+        if (file) {
+          setVideoFile(file);
+        }
+      }
+    };
+
+    loadFirstClipVideo();
+  }, [clips, loadVideoFromUrl, loadVideoFromStreamingUrl, restoreSegmentState, restoreCropState]);
 
   // Set aspect ratio from project (only if different to avoid loops)
   useEffect(() => {
@@ -1013,10 +948,11 @@ export function FramingScreen({
   }, [addClipFromLibrary, fetchProjectClips, getClipFileUrl, projectId, addClipFromProject]);
 
   // Determine if we're in a loading state (project data being fetched)
-  const isLoadingProjectData = isProjectLoading || (loadedClips.length > 0 && !hasClips);
+  // With single-store architecture, clips from useClipManager ARE the projectDataStore clips
+  const isLoadingProjectData = isProjectLoading;
 
   // Only show FileUpload when truly empty (not loading and no project/clips)
-  // If we have a projectId or loadedClips, show the UI skeleton with loading states instead
+  // If we have a projectId, show the UI skeleton with loading states instead
   if (!hasClips && !videoUrl && !isLoadingProjectData && !projectId) {
     return (
       <div className="flex-1 flex items-center justify-center">

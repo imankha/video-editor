@@ -1,18 +1,15 @@
 import { create } from 'zustand';
 
 /**
+ * @deprecated Use projectDataStore instead - this store is kept for backwards compatibility only.
+ *
  * Clip Store - Multi-clip management state
  *
- * This store holds the shared clip state that multiple components need to access.
- * The useClipManager hook uses this store internally and adds helper functions.
+ * MIGRATION: The single source of truth for clip data is now projectDataStore.
+ * useClipManager now uses projectDataStore directly. This store is deprecated
+ * and will be removed in a future version.
  *
- * Components can:
- * 1. Use useClipManager() for full functionality (helpers, effects)
- * 2. Use useClipStore() for read-only state access (clips, selectedClipId)
- *
- * This enables containers to access clip state without prop drilling through App.jsx.
- *
- * @see APP_REFACTOR_PLAN.md for refactoring context
+ * @see stores/projectDataStore.js for the single source of truth
  */
 export const useClipStore = create((set, get) => ({
   // Array of clip objects
