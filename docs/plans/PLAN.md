@@ -36,7 +36,7 @@
 | T65 | [Logo from Landing Page](tasks/T65-logo-from-landing-page.md) | DONE | 3 | 2 | 1.5 |
 | T73 | [Project Card Clip Count Mismatch](tasks/T73-project-card-clip-count-mismatch.md) | DONE | 3 | 2 | 1.5 |
 | T62 | [Tag Changes](tasks/T62-tag-changes.md) | TODO | 3 | 3 | 1.0 |
-| T69 | [Mode Switch Save Reset](tasks/T69-mode-switch-save-reset.md) | TESTING | 5 | 5 | 1.0 |
+| T69 | [Mode Switch Save Reset](tasks/T69-mode-switch-save-reset.md) | DONE | 5 | 5 | 1.0 |
 
 ### Completed
 

@@ -1,6 +1,6 @@
 # T69: Mode Switch Dialog - Clarify Options
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 5
 **Created:** 2026-02-11
