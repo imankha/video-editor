@@ -1,6 +1,6 @@
 # T71: Gallery Shows File Names Instead of Proper Names
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-02-11

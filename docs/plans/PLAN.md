@@ -30,9 +30,7 @@
 
 | ID | Task | Status | Imp | Cpx | Pri |
 |----|------|--------|-----|-----|-----|
-| T71 | [Gallery Show Proper Names](tasks/T71-gallery-show-proper-names.md) | TESTING | 5 | 3 | 1.7 |
 | T72 | [Overlay Keyframe Delete Bug](tasks/T72-overlay-keyframe-delete-bug.md) | TODO | 5 | 3 | 1.7 |
-| T56 | [Gallery Show Duration](tasks/T56-gallery-show-duration.md) | TESTING | 3 | 2 | 1.5 |
 | T58 | [Dim Tracking Squares When Disabled](tasks/T58-dim-tracking-squares-when-disabled.md) | TODO | 3 | 2 | 1.5 |
 | T61 | [Annotate Default Good](tasks/T61-annotate-default-good.md) | TODO | 3 | 2 | 1.5 |
 | T65 | [Logo from Landing Page](tasks/T65-logo-from-landing-page.md) | TODO | 3 | 2 | 1.5 |
@@ -57,6 +55,8 @@
 | T67 | [Overlay Color Selection](tasks/T67-overlay-color-selection.md) | 5 | 3 |
 | T68 | [Console Error Cleanup](tasks/T68-console-error-cleanup.md) | 3 | 3 |
 | T70 | [Multi-clip Overlay Shows Single Clip](tasks/T70-multiclip-overlay-shows-single-clip.md) | 7 | 4 |
+| T71 | [Gallery Show Proper Names](tasks/T71-gallery-show-proper-names.md) | 5 | 3 |
+| T56 | [Gallery Show Duration](tasks/T56-gallery-show-duration.md) | 3 | 2 |
 
 ### Won't Do
 

@@ -1,6 +1,6 @@
 # T56: Gallery Show Duration Instead of "Unknown size"
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** LOW
 **Complexity:** LOW
 **Created:** 2026-02-11
