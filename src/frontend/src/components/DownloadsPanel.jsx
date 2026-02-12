@@ -5,6 +5,7 @@ import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { MediaPlayer } from './MediaPlayer';
 import { useDownloads } from '../hooks/useDownloads';
 import { useGalleryStore } from '../stores/galleryStore';
+import { SourceType, getSourceTypeLabel } from '../constants/sourceTypes';
 
 // Rating notation symbols (chess-inspired) - matches NotesOverlay
 const RATING_NOTATION = {
@@ -36,9 +37,9 @@ const RATING_FIELDS = [
 // Filter options for gallery source types (icon-only with tooltips)
 const FILTER_OPTIONS = [
   { value: null, label: 'All', icon: LayoutGrid, color: 'text-gray-400' },
-  { value: 'brilliant_clip', label: 'Brilliant Clips', icon: Star, color: 'text-yellow-400' },
-  { value: 'custom_project', label: 'Custom Projects', icon: Folder, color: 'text-purple-400' },
-  { value: 'annotated_game', label: 'Annotated Games', icon: Film, color: 'text-green-400' },
+  { value: SourceType.BRILLIANT_CLIP, label: 'Brilliant Clips', icon: Star, color: 'text-yellow-400' },
+  { value: SourceType.CUSTOM_PROJECT, label: 'Custom Projects', icon: Folder, color: 'text-purple-400' },
+  { value: SourceType.ANNOTATED_GAME, label: 'Annotated Games', icon: Film, color: 'text-green-400' },
 ];
 
 /**
@@ -115,6 +116,7 @@ export function DownloadsPanel({
     getDownloadUrl,
     getStreamingUrl,
     formatFileSize,
+    formatDuration,
     formatDate,
     setFilter
   } = useDownloads(isOpen);
@@ -162,7 +164,7 @@ export function DownloadsPanel({
   const handleOpenProject = async (e, download) => {
     e.stopPropagation();
     // For annotated game exports, navigate to the game in annotate mode
-    if (download.source_type === 'annotated_game' && download.game_id && onOpenGame) {
+    if (download.source_type === SourceType.ANNOTATED_GAME && download.game_id && onOpenGame) {
       onOpenGame(download.game_id);
       close();
     } else if (onOpenProject && download.project_id && download.project_id !== 0) {
@@ -191,7 +193,7 @@ export function DownloadsPanel({
 
   // Check if folder button should be shown for a download
   const canOpenSource = (download) => {
-    if (download.source_type === 'annotated_game' && download.game_id && onOpenGame) {
+    if (download.source_type === SourceType.ANNOTATED_GAME && download.game_id && onOpenGame) {
       return true;
     }
     if (download.project_id && download.project_id !== 0 && onOpenProject) {
@@ -202,7 +204,7 @@ export function DownloadsPanel({
 
   // Get appropriate title for the folder button
   const getOpenSourceTitle = (download) => {
-    if (download.source_type === 'annotated_game') {
+    if (download.source_type === SourceType.ANNOTATED_GAME) {
       return 'Open game';
     }
     return 'Open project';
@@ -260,15 +262,7 @@ export function DownloadsPanel({
            /^working_\d+_[a-f0-9]+\.mp4$/i.test(filename);
   };
 
-  // Get human-readable source type label
-  const getSourceTypeLabel = (sourceType) => {
-    switch (sourceType) {
-      case 'brilliant_clip': return 'Brilliant Clip';
-      case 'custom_project': return 'Custom Project';
-      case 'annotated_game': return 'Annotated Game';
-      default: return null;
-    }
-  };
+  // getSourceTypeLabel imported from constants/sourceTypes.js
 
   // Render a single download item card
   const renderDownloadCard = (download) => {
@@ -304,10 +298,10 @@ export function DownloadsPanel({
             )}
           <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
             <span>{formatDate(download.created_at)}</span>
-            <span>{formatFileSize(download.file_size)}</span>
+            {formatDuration(download.duration) && <span>{formatDuration(download.duration)}</span>}
           </div>
           {/* Rating counts for annotated games */}
-          {download.source_type === 'annotated_game' && download.rating_counts && (
+          {download.source_type === SourceType.ANNOTATED_GAME && download.rating_counts && (
             <RatingCountsBadges ratingCounts={download.rating_counts} />
           )}
         </div>

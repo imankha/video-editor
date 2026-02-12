@@ -20,6 +20,7 @@ from app.queries import latest_final_videos_subquery
 from app.user_context import get_current_user_id
 from app.storage import R2_ENABLED, generate_presigned_url, file_exists_in_r2
 from app.services.project_archive import restore_project, is_project_archived
+from app.constants import SourceType
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +185,7 @@ class DownloadItem(BaseModel):
     file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
     created_at: str
     file_size: Optional[int]  # Size in bytes
+    duration: Optional[float] = None  # Duration in seconds (T56)
     source_type: Optional[str]  # 'brilliant_clip' | 'custom_project' | 'annotated_game' | None
     game_id: Optional[int]  # For annotated_game exports, the source game ID
     rating_counts: Optional[RatingCounts] = None  # Rating breakdown for annotated games
@@ -316,6 +318,48 @@ async def list_downloads(source_type: Optional[str] = None):
                     project_games[project_id]['game_names'].append(display_name)
                     project_games[project_id]['game_dates'].append(game_row['game_date'] or '')
 
+        # T56: Batch fetch durations from working_videos (latest version per project)
+        project_durations = {}
+        if project_ids_to_fetch:
+            placeholders = ','.join(['?' for _ in project_ids_to_fetch])
+            cursor.execute(f"""
+                SELECT project_id, duration FROM (
+                    SELECT project_id, duration, ROW_NUMBER() OVER (
+                        PARTITION BY project_id ORDER BY version DESC
+                    ) as rn
+                    FROM working_videos
+                    WHERE project_id IN ({placeholders}) AND duration IS NOT NULL
+                ) WHERE rn = 1
+            """, list(project_ids_to_fetch))
+            for dur_row in cursor.fetchall():
+                project_durations[dur_row['project_id']] = dur_row['duration']
+
+            # Fallback: for brilliant clips without working_videos, get from raw_clips.auto_project_id
+            missing_ids = [pid for pid in project_ids_to_fetch if pid not in project_durations]
+            if missing_ids:
+                placeholders = ','.join(['?' for _ in missing_ids])
+                cursor.execute(f"""
+                    SELECT auto_project_id, (end_time - start_time) as duration
+                    FROM raw_clips
+                    WHERE auto_project_id IN ({placeholders})
+                """, missing_ids)
+                for dur_row in cursor.fetchall():
+                    if dur_row['auto_project_id'] not in project_durations:
+                        project_durations[dur_row['auto_project_id']] = dur_row['duration']
+
+        # T56: Batch fetch durations for annotated game exports (sum of rated clip durations)
+        game_durations = {}
+        if game_ids_to_fetch:
+            placeholders = ','.join(['?' for _ in game_ids_to_fetch])
+            cursor.execute(f"""
+                SELECT game_id, SUM(end_time - start_time) as total_duration
+                FROM raw_clips
+                WHERE game_id IN ({placeholders}) AND rating >= 3
+                GROUP BY game_id
+            """, list(game_ids_to_fetch))
+            for dur_row in cursor.fetchall():
+                game_durations[dur_row['game_id']] = dur_row['total_duration']
+
         downloads = []
         for row in rows:
             # Get file size if file exists
@@ -326,7 +370,7 @@ async def list_downloads(source_type: Optional[str] = None):
 
             # Parse stored rating counts for annotated games (frozen at export time)
             rating_counts = None
-            if row['source_type'] == 'annotated_game' and row['rating_counts']:
+            if row['source_type'] == SourceType.ANNOTATED_GAME.value and row['rating_counts']:
                 try:
                     c = json.loads(row['rating_counts'])
                     brilliant = c.get('brilliant', 0)
@@ -354,7 +398,7 @@ async def list_downloads(source_type: Optional[str] = None):
             game_names = []
             game_dates = []
 
-            if row['source_type'] == 'annotated_game' and row['game_id']:
+            if row['source_type'] == SourceType.ANNOTATED_GAME.value and row['game_id']:
                 # Annotated export: single game from game_id
                 game_info = games_info.get(row['game_id'])
                 if game_info:
@@ -378,8 +422,33 @@ async def list_downloads(source_type: Optional[str] = None):
                 except (ValueError, AttributeError):
                     group_key = "Other"
 
-            # Fallback name: use filename without _final.mp4 suffix, cleaned up
-            fallback_name = row['filename'].replace('_final.mp4', '').replace('_', ' ').strip() if row['filename'] else f"Video {row['id']}"
+            # T71: Determine display name with proper fallback chain
+            # For annotated games: prefer generated game name over stored name (which may be filename)
+            # For projects: prefer stored project_name, then game name, then source type label
+            display_name = None
+            if row['source_type'] == SourceType.ANNOTATED_GAME.value and game_names:
+                # Annotated games: generated game name is more readable than stored name
+                display_name = game_names[0]
+            if not display_name:
+                display_name = row['project_name']
+            if not display_name and game_names:
+                # Use first game name as fallback (e.g., "Vs Lakers Dec 6")
+                display_name = game_names[0]
+            if not display_name:
+                # Last resort: use source type's display label
+                try:
+                    source_type_enum = SourceType(row['source_type'])
+                    display_name = source_type_enum.display_label
+                except (ValueError, TypeError):
+                    display_name = f"Video {row['id']}"
+
+            # T56: Calculate duration on the fly (not stored - derivable data)
+            if row['source_type'] == SourceType.ANNOTATED_GAME.value and row['game_id']:
+                # Annotated game: sum of rated clip durations
+                duration = game_durations.get(row['game_id'])
+            else:
+                # Project: duration from working_video
+                duration = project_durations.get(row['project_id'])
 
             # Append 'Z' to indicate UTC so JavaScript parses correctly
             # SQLite stores as 'YYYY-MM-DD HH:MM:SS' but JS needs timezone info
@@ -391,11 +460,12 @@ async def list_downloads(source_type: Optional[str] = None):
             downloads.append(DownloadItem(
                 id=row['id'],
                 project_id=row['project_id'],
-                project_name=row['project_name'] or fallback_name,
+                project_name=display_name,
                 filename=row['filename'],
                 file_url=get_download_file_url(row['filename']),
                 created_at=created_at_utc,
                 file_size=file_size,
+                duration=duration,
                 source_type=row['source_type'],
                 game_id=row['game_id'],
                 rating_counts=rating_counts,
