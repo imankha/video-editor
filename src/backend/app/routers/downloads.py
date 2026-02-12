@@ -19,6 +19,7 @@ from app.database import get_db_connection, get_final_videos_path
 from app.queries import latest_final_videos_subquery
 from app.user_context import get_current_user_id
 from app.storage import R2_ENABLED, generate_presigned_url, file_exists_in_r2
+from app.services.project_archive import restore_project, is_project_archived
 
 logger = logging.getLogger(__name__)
 
@@ -577,3 +578,57 @@ async def get_download_count():
         row = cursor.fetchone()
 
         return {"count": row['count'] if row else 0}
+
+
+@router.post("/{download_id}/restore-project")
+async def restore_project_from_archive(download_id: int):
+    """
+    Restore a project from archive (T66).
+
+    When a project is exported, it gets archived to R2 and removed from the DB.
+    This endpoint restores the project back to the DB so the user can edit it.
+
+    Args:
+        download_id: The final_video ID (used as download_id in gallery)
+
+    Returns:
+        project_id for navigation to the project
+    """
+    user_id = get_current_user_id()
+
+    # Get the project_id from the final_video
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT project_id FROM final_videos WHERE id = ?
+        """, (download_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Download not found")
+
+        project_id = row['project_id']
+
+        # Check if project already exists in DB (not archived)
+        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
+        if cursor.fetchone():
+            # Project is already in DB, just return its ID
+            logger.info(f"Project {project_id} already in DB, no restore needed")
+            return {"project_id": project_id, "restored": False}
+
+    # Check if archive exists
+    if not is_project_archived(project_id, user_id):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project archive not found. Project {project_id} may not have been archived."
+        )
+
+    # Restore from archive
+    if not restore_project(project_id, user_id):
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to restore project from archive"
+        )
+
+    logger.info(f"Restored project {project_id} from archive for user {user_id}")
+    return {"project_id": project_id, "restored": True}

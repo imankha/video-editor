@@ -612,6 +612,8 @@ def ensure_database():
             "ALTER TABLE export_jobs ADD COLUMN acknowledged_at TIMESTAMP",
             # Highlight color preference for overlay mode (T67)
             "ALTER TABLE working_videos ADD COLUMN highlight_color TEXT DEFAULT NULL",
+            # T66: Track when project was restored from archive (for stale cleanup)
+            "ALTER TABLE projects ADD COLUMN restored_at TIMESTAMP DEFAULT NULL",
         ]
 
         for migration in migrations:
@@ -768,6 +770,17 @@ def ensure_database():
 
     finally:
         conn.close()
+
+    # T66: Cleanup stale restored projects on first access for this user
+    # This must be after conn.close() and after _initialized_users.add()
+    # to avoid recursion when cleanup_stale_restored_projects() calls get_db_connection()
+    try:
+        from app.services.project_archive import cleanup_stale_restored_projects
+        archived_count = cleanup_stale_restored_projects(user_id)
+        if archived_count > 0:
+            logger.info(f"T66: Re-archived {archived_count} stale restored projects for user {user_id}")
+    except Exception as e:
+        logger.error(f"T66: Failed to cleanup stale restored projects: {e}")
 
 
 @contextmanager

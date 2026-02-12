@@ -644,7 +644,7 @@ export function ProjectManager({
                       {[
                         { value: 'all', label: 'All' },
                         { value: 'uncompleted', label: 'Uncompleted', color: 'orange' },
-                        { value: 'complete', label: 'Complete', color: 'green' },
+                        // T66: 'complete' removed - completed projects are now archived and accessed via Gallery
                         { value: 'overlay', label: 'In Overlay', color: 'blue' },
                         { value: 'editing', label: 'Editing', color: 'blue' },
                         { value: 'exported', label: 'Exported', color: 'purple' },
