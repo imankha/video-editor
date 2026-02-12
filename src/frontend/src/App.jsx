@@ -13,7 +13,7 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useClipStore, useProjectDataStore, EDITOR_MODES } from './stores';
+import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, EDITOR_MODES } from './stores';
 
 /**
  * App.jsx - Main application shell
@@ -60,22 +60,19 @@ function App() {
   const isLoadingWorkingVideo = useOverlayStore(state => state.isLoadingWorkingVideo);
   const overlayChangedSinceExport = useOverlayStore(state => state.overlayChangedSinceExport);
 
-  // Clip data for "Edit in Annotate" button - try clipStore first, then projectDataStore
-  // Use proper selectors (not method calls) to ensure Zustand tracks dependencies correctly
-  const clipStoreSelectedId = useClipStore(state => state.selectedClipId);
-  const clipStoreClips = useClipStore(state => state.clips);
-  const projectDataClips = useProjectDataStore(state => state.clips);
+  // Clip data for "Edit in Annotate" button - single source of truth from projectDataStore
+  const selectedClipId = useProjectDataStore(state => state.selectedClipId);
+  const clips = useProjectDataStore(state => state.clips);
 
   // Derive selected clip - memoized to avoid recalculation
   const selectedClipForAnnotate = useMemo(() => {
-    // First try clipStore's selected clip
-    if (clipStoreSelectedId && clipStoreClips.length > 0) {
-      const clip = clipStoreClips.find(c => c.id === clipStoreSelectedId);
+    if (selectedClipId && clips.length > 0) {
+      const clip = clips.find(c => c.id === selectedClipId);
       if (clip) return clip;
     }
-    // Fall back to first clip from projectDataStore
-    return projectDataClips?.[0] ?? null;
-  }, [clipStoreSelectedId, clipStoreClips, projectDataClips]);
+    // Fall back to first clip if nothing selected
+    return clips?.[0] ?? null;
+  }, [selectedClipId, clips]);
 
   // Project management
   const {

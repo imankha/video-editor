@@ -2,9 +2,54 @@
 
 ## Purpose
 
-Manage automated testing throughout the task lifecycle. Runs twice:
-1. **Pre-Implementation**: Find existing coverage, create failing tests for new functionality
-2. **Post-Implementation**: Run relevant tests, report failures, iterate until passing
+Manage automated testing throughout the task lifecycle. Responsible for:
+1. **Determining test scope** based on affected stack layers
+2. **Pre-Implementation**: Find existing coverage, create failing tests for new functionality
+3. **Post-Implementation**: Run targeted tests, report failures, iterate until passing
+
+---
+
+## Test Scope Selection
+
+**Critical:** Run only tests relevant to the affected layers. Do not run all tests for every change.
+
+### Layer-to-Test Mapping
+
+| Affected Layer | Tests to Run | Command |
+|----------------|--------------|---------|
+| Frontend only | Unit tests for changed files + relevant E2E | `npm test -- {files}` |
+| Backend only | Backend tests for changed modules | `pytest tests/{modules} -v` |
+| Frontend + Backend | Frontend unit + E2E + Backend | Both |
+| Modal | Backend integration + Modal logs | `pytest -k "modal"` |
+| Database | Backend + migration verification | Full backend suite |
+
+### Identifying Affected Tests
+
+1. **By file path**: Find test files that import or test the changed modules
+2. **By pattern**: Use `-k` flag for pytest or filename patterns for vitest
+3. **By E2E coverage**: Check which E2E specs exercise the changed functionality
+
+```bash
+# Frontend - find tests for a specific hook
+cd src/frontend && npm test -- src/hooks/useOverlay.test.js
+
+# Frontend - run tests matching pattern
+cd src/frontend && npm test -- --grep "overlay"
+
+# Frontend - specific E2E spec
+cd src/frontend && npm run test:e2e -- tests/overlay.spec.js
+
+# Backend - specific test file
+cd src/backend && pytest tests/test_clips.py -v
+
+# Backend - tests matching pattern
+cd src/backend && pytest -k "overlay" -v
+
+# Backend - tests for a specific router
+cd src/backend && pytest tests/test_exports.py tests/test_clips.py -v
+```
+
+---
 
 ## When to Invoke
 
@@ -26,32 +71,43 @@ You are the Tester agent (Pre-Implementation phase) for task T{id}: {task_title}
 ## Task Context
 {paste task description and acceptance criteria}
 
+## Classification
+**Stack Layers:** {layers from classification}
+**Test Scope:** {test scope from classification}
+
 ## Code Expert Findings
-{paste entry points and relevant files from Code Expert}
+{paste entry points and relevant files from Code Expert, if available}
 
 ## Your Mission
 
-### 1. Find Existing Test Coverage
+### 1. Determine Test Scope
+
+Based on the stack layers affected:
+- Identify which test suites are relevant
+- Find specific test files that cover the changed code
+- Do NOT plan to run unrelated tests
+
+### 2. Find Existing Test Coverage
 
 Search for tests that already cover the code we'll modify:
 
-**Frontend tests** (Vitest):
+**Frontend tests** (if Frontend layer affected):
 - Location: `src/frontend/src/**/*.test.{js,jsx}`
-- Command: `cd src/frontend && npm test -- --reporter=verbose`
+- Find tests that import or test the affected files
 
-**E2E tests** (Playwright):
+**E2E tests** (if user-facing behavior changes):
 - Location: `src/frontend/tests/**/*.spec.js`
-- Command: `cd src/frontend && npm run test:e2e`
+- Find specs that exercise the affected functionality
 
-**Backend tests** (pytest):
+**Backend tests** (if Backend layer affected):
 - Location: `src/backend/tests/**/*.py`
-- Command: `cd src/backend && .venv/Scripts/python.exe run_tests.py`
+- Find tests for affected routers/services
 
 For each relevant test file, note:
 - What it tests
 - Whether it will need updates for our changes
 
-### 2. Design New Tests
+### 3. Design New Tests
 
 Based on acceptance criteria, design tests that will:
 - **Fail now** (feature doesn't exist yet)
@@ -63,26 +119,27 @@ For each acceptance criterion, specify:
 - Test case description
 - Key assertions
 
-### 3. Write Failing Tests
+### 4. Write Failing Tests
 
 Create the test files/cases. They should:
 - Be minimal but complete
 - Test the acceptance criteria specifically
 - Follow existing test patterns in the codebase
 
-### 4. Verify Tests Fail
+### 5. Verify Tests Fail
 
-Run the new tests and confirm they fail for the right reasons:
+Run ONLY the new/affected tests and confirm they fail for the right reasons:
 - Not because of syntax errors
 - But because the feature doesn't exist yet
 
 ## Output Format
 
 Return:
-1. List of existing tests that provide coverage
-2. New test files/cases created (with file paths)
-3. Confirmation that new tests fail appropriately
-4. Summary of what "passing" looks like
+1. **Test scope**: Which test suites/files will be run
+2. **Existing coverage**: Tests that already cover this area
+3. **New tests created**: File paths and descriptions
+4. **Failure confirmation**: Tests fail appropriately
+5. **Commands to run**: Exact commands for post-implementation verification
 ```
 
 ---
@@ -97,24 +154,22 @@ You are the Tester agent (Post-Implementation phase) for task T{id}: {task_title
 ## Task Context
 {paste task description and acceptance criteria}
 
-## Tests to Run
-{paste test files from Pre-Implementation phase}
+## Test Scope (from Classification)
+**Stack Layers:** {layers}
+**Tests to Run:** {specific test files/patterns}
+
+## Tests from Pre-Implementation
+{paste test files and commands from Pre-Implementation phase}
 
 ## Your Mission
 
-### 1. Run All Relevant Tests
+### 1. Run ONLY Relevant Tests
 
-Execute tests that cover the changed code:
+Execute the targeted tests identified during classification:
 
 ```bash
-# Frontend unit tests (specific files)
-cd src/frontend && npm test -- {test_files}
-
-# E2E tests (specific specs)
-cd src/frontend && npm run test:e2e -- {spec_files}
-
-# Backend tests (specific files)
-cd src/backend && pytest tests/{test_files} -v
+# Example - do NOT run all tests, only affected ones
+{specific commands from pre-implementation}
 ```
 
 ### 2. Analyze Failures
@@ -132,21 +187,23 @@ Report failures to the main AI with:
 - Expected vs actual behavior
 - Suggested fix
 
-Continue until all tests pass.
+Continue until all targeted tests pass.
 
 ### 4. Final Report
 
-Once all tests pass, provide:
-- Summary of tests run
+Once targeted tests pass, provide:
+- Summary of tests run (with counts)
 - Any tests that were updated (and why)
 - Confirmation of coverage for acceptance criteria
+- Note: Did NOT run {list of unaffected test suites}
 
 ## Output Format
 
 Return:
-1. Test execution results (pass/fail counts)
-2. Details on any failures with fix suggestions
-3. OR confirmation all tests pass
+1. **Tests executed**: List with pass/fail status
+2. **Failures**: Details with fix suggestions (if any)
+3. **Success confirmation**: All targeted tests pass
+4. **Scope note**: Which tests were intentionally skipped and why
 ```
 
 ---
@@ -154,15 +211,27 @@ Return:
 ## Integration with Main AI
 
 ### Pre-Implementation Flow
-1. Main AI spawns Tester agent (Phase 1)
-2. Tester finds coverage, writes failing tests
-3. Main AI reviews tests, commits them
-4. Main AI proceeds to implementation
+1. Classification determines test scope
+2. Main AI spawns Tester agent (Phase 1) with scope
+3. Tester finds coverage, writes failing tests for affected areas only
+4. Main AI reviews tests, commits them
+5. Main AI proceeds to implementation
 
 ### Post-Implementation Flow
 1. Main AI thinks implementation is complete
-2. Main AI spawns Tester agent (Phase 2)
-3. Tester runs tests, reports failures
+2. Main AI spawns Tester agent (Phase 2) with same scope
+3. Tester runs targeted tests only, reports failures
 4. Main AI fixes code based on feedback
-5. Repeat until all tests pass
+5. Repeat until targeted tests pass
 6. Main AI proceeds to Manual Testing stage
+
+---
+
+## Anti-Patterns to Avoid
+
+| Anti-Pattern | Correct Approach |
+|--------------|------------------|
+| Running full test suite for frontend-only change | Run frontend unit + relevant E2E only |
+| Running backend tests for CSS change | Skip testing (no behavior change) |
+| Running all E2E for backend API fix | Run backend tests + E2E that calls that API |
+| Writing tests for unchanged code | Only test new/changed behavior |

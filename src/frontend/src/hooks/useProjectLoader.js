@@ -2,12 +2,99 @@ import { useCallback } from 'react';
 import { API_BASE } from '../config';
 import { useNavigationStore } from '../stores/navigationStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
-import { useClipStore } from '../stores/clipStore';
 import { useFramingStore } from '../stores/framingStore';
 import { useOverlayStore } from '../stores/overlayStore';
 import { useVideoStore } from '../stores/videoStore';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { getClipDisplayName } from '../utils/clipDisplayName';
+
+/**
+ * Generate a unique client-side clip ID
+ */
+function generateClipId() {
+  return 'clip_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+}
+
+/**
+ * Transform a backend clip to UI format
+ * Parses JSON fields and adds client-side fields
+ */
+function transformClipToUIFormat(backendClip, metadata, clipUrl, presignedUrl) {
+  const id = generateClipId();
+  const fileName = backendClip.filename || 'clip.mp4';
+  const fileNameDisplay = fileName.replace(/\.[^/.]+$/, '');
+
+  // Parse saved framing edits if they exist
+  let cropKeyframes = [];
+  let segments = null;
+  let trimRange = null;
+
+  if (backendClip.crop_data) {
+    try {
+      cropKeyframes = JSON.parse(backendClip.crop_data);
+    } catch (e) {
+      console.warn('[useProjectLoader] Failed to parse crop_data:', e);
+    }
+  }
+
+  if (backendClip.segments_data) {
+    try {
+      segments = JSON.parse(backendClip.segments_data);
+    } catch (e) {
+      console.warn('[useProjectLoader] Failed to parse segments_data:', e);
+    }
+  }
+
+  if (backendClip.timing_data) {
+    try {
+      const timingData = JSON.parse(backendClip.timing_data);
+      trimRange = timingData.trimRange || null;
+    } catch (e) {
+      console.warn('[useProjectLoader] Failed to parse timing_data:', e);
+    }
+  }
+
+  return {
+    // Client-side ID
+    id,
+    // Backend ID for API calls
+    workingClipId: backendClip.id,
+    // File references
+    file: null, // No File object for project clips
+    fileUrl: presignedUrl || clipUrl,
+    url: clipUrl,
+    // Display names
+    fileName,
+    fileNameDisplay,
+    // Video metadata
+    duration: metadata?.duration || 0,
+    sourceWidth: metadata?.width || 0,
+    sourceHeight: metadata?.height || 0,
+    framerate: metadata?.framerate || 30,
+    metadata,
+    // Clip annotations from backend
+    annotateName: backendClip.name || null,
+    annotateNotes: backendClip.notes || null,
+    annotateStartTime: backendClip.start_time || null,
+    annotateEndTime: backendClip.end_time || null,
+    gameId: backendClip.game_id || null,
+    tags: backendClip.tags || [],
+    rating: backendClip.rating || null,
+    // Extraction status
+    isExtracted: backendClip.is_extracted !== false,
+    isExtracting: backendClip.is_extracting || false,
+    extractionStatus: backendClip.extraction_status || null,
+    // Parsed framing data (UI-ready)
+    segments: segments || {
+      boundaries: [0, metadata?.duration || 0],
+      userSplits: [],
+      trimRange: null,
+      segmentSpeeds: {}
+    },
+    cropKeyframes,
+    trimRange,
+  };
+}
 
 /**
  * Helper to calculate effective duration for a clip (accounting for speed changes)
@@ -72,14 +159,13 @@ function buildClipMetadata(clipsData) {
 export function useProjectLoader() {
   const { setProjectId, navigate } = useNavigationStore();
   const {
-    setClips,
+    setProjectClips,
     setWorkingVideo,
     setAspectRatio,
     setClipMetadata,
     setLoading,
     reset: resetProjectData,
   } = useProjectDataStore();
-  const resetClipStore = useClipStore(state => state.reset);
   const resetFramingStore = useFramingStore(state => state.reset);
   const resetOverlayStore = useOverlayStore(state => state.reset);
   const resetVideoStore = useVideoStore(state => state.reset);
@@ -104,7 +190,6 @@ export function useProjectLoader() {
     try {
       // Reset all stores for new project to clear stale data
       resetProjectData();
-      resetClipStore();
       resetFramingStore();
       resetOverlayStore();
       resetVideoStore();
@@ -137,7 +222,7 @@ export function useProjectLoader() {
 
       console.log('[useProjectLoader] Fetched clips:', clipsData.length, 'first clip file_url:', clipsData[0]?.file_url);
 
-      // Load clip metadata (URLs and video metadata)
+      // Load clip metadata and transform to UI format
       // Use presigned R2 URLs (file_url) when available for streaming, otherwise fall back to proxy
       const clipsWithMetadata = await Promise.all(
         clipsData.map(async (clip) => {
@@ -145,26 +230,18 @@ export function useProjectLoader() {
           const clipUrl = clip.file_url || `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/file`;
           try {
             const metadata = await extractVideoMetadataFromUrl(clipUrl);
-            return {
-              ...clip,
-              url: clipUrl,
-              fileUrl: clip.file_url, // Store presigned URL separately for streaming
-              metadata,
-              // Copy key metadata fields to top level for easy access
-              duration: metadata.duration,
-              width: metadata.width,
-              height: metadata.height,
-              framerate: metadata.framerate,
-            };
+            // Transform to UI format with parsed JSON fields and client-side IDs
+            return transformClipToUIFormat(clip, metadata, clipUrl, clip.file_url);
           } catch (err) {
             console.warn(`[useProjectLoader] Failed to load metadata for clip ${clip.id}:`, err);
-            return { ...clip, url: clipUrl, fileUrl: clip.file_url, metadata: null };
+            // Return transformed clip with null metadata
+            return transformClipToUIFormat(clip, null, clipUrl, clip.file_url);
           }
         })
       );
 
-      // Store clips in project data store
-      setClips(clipsWithMetadata);
+      // Store clips in project data store with first clip selected
+      setProjectClips({ clips: clipsWithMetadata, aspectRatio: projectAspectRatio });
 
       // Calculate clip metadata for overlay mode (used to auto-generate highlight regions)
       // Note: Only store in projectDataStore here. The overlayStore.clipMetadata should
@@ -239,7 +316,7 @@ export function useProjectLoader() {
       setLoading(false);
       throw err;
     }
-  }, [setProjectId, navigate, resetProjectData, resetClipStore, resetFramingStore, resetOverlayStore, resetVideoStore, setClips, setWorkingVideo, setAspectRatio, setClipMetadata, setLoading]);
+  }, [setProjectId, navigate, resetProjectData, resetFramingStore, resetOverlayStore, resetVideoStore, setProjectClips, setWorkingVideo, setAspectRatio, setClipMetadata, setLoading]);
 
   return { loadProject };
 }

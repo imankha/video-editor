@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useEffect } from 'react';
-import { useClipStore } from '../stores';
+import { useProjectDataStore } from '../stores';
 
 /**
  * useClipManager - Manages the list of clips and their metadata
  *
- * Uses useClipStore internally for shared state management.
- * This enables other components to access clip state without prop drilling.
+ * Uses useProjectDataStore internally for shared state management.
+ * This is the SINGLE source of truth for clip data.
  *
  * Each clip stores:
  * - id: unique identifier (local or from backend working_clip_id)
@@ -25,27 +25,26 @@ import { useClipStore } from '../stores';
  * - globalAspectRatio: shared aspect ratio across all clips
  * - globalTransition: transition settings between clips
  *
- * @see stores/clipStore.js for the underlying state store
- * @see APP_REFACTOR_PLAN.md for refactoring context
+ * @see stores/projectDataStore.js for the underlying state store
  */
 export function useClipManager() {
-  // Get state and actions from the store
+  // Get state and actions from the store (single source of truth)
   const {
     clips,
     selectedClipId,
-    globalAspectRatio,
+    aspectRatio: globalAspectRatio,
     globalTransition,
     setClips,
     setSelectedClipId,
-    setGlobalAspectRatioState,
+    setAspectRatio: setGlobalAspectRatioState,
     setGlobalTransition,
-    addClipToStore,
-    deleteClipFromStore,
-    updateClipInStore,
-    reorderClipsInStore,
-    clearAllClips,
+    addClip: addClipToStore,
+    deleteClip: deleteClipFromStore,
+    updateClip: updateClipInStore,
+    reorderClips: reorderClipsInStore,
+    clearClips: clearAllClips,
     setProjectClips,
-  } = useClipStore();
+  } = useProjectDataStore();
 
   /**
    * Generate a unique clip ID

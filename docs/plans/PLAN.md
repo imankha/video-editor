@@ -46,8 +46,10 @@
 | T67 | [Overlay Color Selection](tasks/T67-overlay-color-selection.md) | DONE | MEDIUM | LOW |
 | T68 | [Console Error Cleanup](tasks/T68-console-error-cleanup.md) | DONE | LOW | LOW |
 | T69 | [Mode Switch Save Reset](tasks/T69-mode-switch-save-reset.md) | TODO | MEDIUM | MEDIUM |
-| T70 | [Multi-clip Overlay Shows Single Clip](tasks/T70-multiclip-overlay-shows-single-clip.md) | TODO | HIGH | MEDIUM |
+| T70 | [Multi-clip Overlay Shows Single Clip](tasks/T70-multiclip-overlay-shows-single-clip.md) | DONE | HIGH | MEDIUM |
 | T71 | [Gallery Show Proper Names](tasks/T71-gallery-show-proper-names.md) | TODO | MEDIUM | LOW |
+| T72 | [Overlay Keyframe Delete Bug](tasks/T72-overlay-keyframe-delete-bug.md) | TODO | MEDIUM | LOW |
+| T73 | [Project Card Clip Count Mismatch](tasks/T73-project-card-clip-count-mismatch.md) | TODO | LOW | LOW |
 
 ---
 
@@ -71,6 +73,7 @@
 | ID | Task | Impact | Complexity | Notes |
 |----|------|--------|------------|-------|
 | T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | HIGH | MEDIUM | After staging; not feeling the pinch yet |
+| T74 | [Incremental Framing Export](tasks/T74-incremental-framing-export.md) | MEDIUM | MEDIUM | Cache rendered clips, only re-process changed ones |
 | T200 | [User Management](tasks/T200-user-management.md) | MEDIUM | HIGH | Auth, multi-tenant |
 | T210 | [Wallet & Payments](tasks/T210-wallet-payments.md) | MEDIUM | HIGH | Stripe integration |
 | T220 | [Future GPU Features](tasks/T220-future-gpu-features.md) | LOW | HIGH | Advanced AI features |
