@@ -372,8 +372,27 @@ export function FramingScreen({
   } = framing;
 
   // Initialize from loaded project data (from ProjectsScreen)
+  // Also re-sync if clipStore has stale data (different clips than projectDataStore)
   useEffect(() => {
-    if (!initialLoadDoneRef.current && loadedClips.length > 0 && clips.length === 0) {
+    // Check if clipStore clips match projectDataStore clips
+    // projectDataStore.clips have `id` (backend working_clips.id)
+    // clipStore clips have `workingClipId` (same backend ID)
+    const clipStoreIsEmpty = clips.length === 0;
+    const clipStoreMismatch = clips.length > 0 && loadedClips.length > 0 && (
+      clips.length !== loadedClips.length ||
+      !clips.every((clip, index) => {
+        const loadedClip = loadedClips[index];
+        // Compare backend IDs to detect stale clipStore data
+        return clip.workingClipId === loadedClip?.id;
+      })
+    );
+
+    const needsReload = clipStoreIsEmpty || clipStoreMismatch;
+
+    if (!initialLoadDoneRef.current && loadedClips.length > 0 && needsReload) {
+      if (clipStoreMismatch) {
+        console.log('[FramingScreen] ClipStore out of sync with projectDataStore, reloading clips');
+      }
       console.log('[FramingScreen] Initializing from loaded clips:', loadedClips.length);
       initialLoadDoneRef.current = true;
 

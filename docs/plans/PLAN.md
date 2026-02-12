@@ -46,8 +46,9 @@
 | T67 | [Overlay Color Selection](tasks/T67-overlay-color-selection.md) | DONE | MEDIUM | LOW |
 | T68 | [Console Error Cleanup](tasks/T68-console-error-cleanup.md) | DONE | LOW | LOW |
 | T69 | [Mode Switch Save Reset](tasks/T69-mode-switch-save-reset.md) | TODO | MEDIUM | MEDIUM |
-| T70 | [Multi-clip Overlay Shows Single Clip](tasks/T70-multiclip-overlay-shows-single-clip.md) | TODO | HIGH | MEDIUM |
+| T70 | [Multi-clip Overlay Shows Single Clip](tasks/T70-multiclip-overlay-shows-single-clip.md) | TESTING | HIGH | MEDIUM |
 | T71 | [Gallery Show Proper Names](tasks/T71-gallery-show-proper-names.md) | TODO | MEDIUM | LOW |
+| T72 | [Overlay Keyframe Delete Bug](tasks/T72-overlay-keyframe-delete-bug.md) | TODO | MEDIUM | LOW |
 
 ---
 
