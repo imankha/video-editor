@@ -47,6 +47,7 @@
 | T68 | [Console Error Cleanup](tasks/T68-console-error-cleanup.md) | DONE | LOW | LOW |
 | T69 | [Mode Switch Save Reset](tasks/T69-mode-switch-save-reset.md) | TODO | MEDIUM | MEDIUM |
 | T70 | [Multi-clip Overlay Shows Single Clip](tasks/T70-multiclip-overlay-shows-single-clip.md) | TODO | HIGH | MEDIUM |
+| T71 | [Gallery Show Proper Names](tasks/T71-gallery-show-proper-names.md) | TODO | MEDIUM | LOW |
 
 ---
 
