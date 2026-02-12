@@ -131,6 +131,8 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
                 f"Archived project {project_id}: deleted {clips_deleted} working_clips, "
                 f"{videos_deleted} working_videos from DB"
             )
+            # VACUUM to reclaim disk space - keeps DB small for R2 sync
+            conn.execute("VACUUM")
             return True
 
     except Exception as e:
