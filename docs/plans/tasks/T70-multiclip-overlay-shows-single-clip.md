@@ -1,6 +1,6 @@
 # T70: Multi-clip Overlay Shows Only Single Clip After Framing Edit
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-02-11
