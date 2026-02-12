@@ -14,6 +14,7 @@ const RATING_NOTATION = {
 const DEFAULT_CLIP_DURATION = 15;
 const MIN_CLIP_DURATION = 1;
 const MAX_CLIP_DURATION = 60;
+const DEFAULT_RATING = 4; // "Good"
 
 /**
  * Format seconds to MM:SS.s for display
@@ -121,7 +122,7 @@ export function AnnotateFullscreenOverlay({
 }) {
   const isEditMode = !!existingClip;
 
-  const [rating, setRating] = useState(3);
+  const [rating, setRating] = useState(DEFAULT_RATING);
   const [selectedTags, setSelectedTags] = useState([]);
   const [clipName, setClipName] = useState('');
   const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
@@ -132,14 +133,14 @@ export function AnnotateFullscreenOverlay({
   // Reset form when existingClip changes (switching between create/edit mode)
   useEffect(() => {
     if (existingClip) {
-      setRating(existingClip.rating || 3);
+      setRating(existingClip.rating || DEFAULT_RATING);
       setSelectedTags(existingClip.tags || []);
       setClipName(existingClip.name || '');
       setIsNameManuallyEdited(!!existingClip.name);
       setDuration(existingClip.endTime - existingClip.startTime);
       setNotes(existingClip.notes || '');
     } else {
-      setRating(3);
+      setRating(DEFAULT_RATING);
       setSelectedTags([]);
       setClipName('');
       setIsNameManuallyEdited(false);
