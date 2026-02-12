@@ -128,21 +128,21 @@ Use numeric **1-10 scale** for both Impact and Complexity:
 
 When showing task lists:
 
-1. **Always include both scores** (Impact and Complexity)
-2. **Sort by priority** (highest first): `Priority = Impact - (Complexity / 2)`
-3. **Show priority score** so user can see the ranking
+1. **Always include both scores** (Impact and Complexity as 1-10)
+2. **Calculate Priority**: `Priority = Impact / Complexity` (rounded to 1 decimal)
+3. **Sort by priority** (highest first)
 4. **Show blockers** - tasks that can't start yet should show what blocks them
 
 ```
-| ID | Task | Impact | Cmplx | Priority | Blocked By |
-|----|------|--------|-------|----------|------------|
-| T67 | Overlay Color Selection | 6 | 3 | 4.5 | - |
-| T40 | Stale Session Detection | 8 | 5 | 5.5 | T100 (Deployment) |
-| T66 | Database Split Analysis | 5 | 6 | 2.0 | - |
+| ID | Task | Impact | Cmplx | Pri | Blocked By |
+|----|------|--------|-------|-----|------------|
+| T67 | Overlay Color Selection | 6 | 3 | 2.0 | - |
+| T40 | Stale Session Detection | 8 | 5 | 1.6 | T100 |
+| T66 | Database Split Analysis | 5 | 6 | 0.8 | - |
 ```
 
 **Display order:**
-1. Unblocked tasks first (sorted by priority)
+1. Unblocked tasks first (sorted by priority descending)
 2. Blocked tasks at bottom (with blocker shown)
 
 **Blocking rule:** A blocked task can NEVER appear above its blocker in the queue, regardless of priority score. If T40 is blocked by T100, T40 must appear after T100 even if T40 has a higher priority score. This reflects the actual execution order.
@@ -152,20 +152,23 @@ Best opportunities (high impact, low complexity, unblocked) float to the top.
 ### Priority Formula
 
 ```
-Priority Score = Impact - (Complexity / 2)
+Priority = Impact / Complexity
 ```
 
-Higher score = do first. Example:
-- T67: Impact 6, Complexity 3 → Priority = 6 - 1.5 = **4.5**
-- T66: Impact 5, Complexity 6 → Priority = 5 - 3 = **2**
+Higher score = do first. Examples:
+- Impact 8, Complexity 2 → Priority = **4.0** (excellent opportunity)
+- Impact 6, Complexity 3 → Priority = **2.0** (good opportunity)
+- Impact 5, Complexity 6 → Priority = **0.8** (lower priority)
+- Impact 3, Complexity 9 → Priority = **0.3** (deprioritize)
 
 ### Quick Heuristics
 
 | Priority | Characteristics |
 |----------|-----------------|
-| **HIGH (7+)** | Impact 8+ and Complexity < 5 |
-| **MEDIUM (4-6)** | Impact 5-7, OR High Impact + High Complexity |
-| **LOW (1-3)** | Impact < 5 and Complexity > 5 |
+| **> 2.0** | Excellent: High impact, low effort - do first |
+| **1.0 - 2.0** | Good: Worth doing soon |
+| **0.5 - 1.0** | Medium: Do when higher priority items are done |
+| **< 0.5** | Low: Consider if it's worth doing at all |
 | **BLOCKED** | Depends on incomplete task/epic |
 
 ### Infrastructure Bundling

@@ -211,6 +211,34 @@ def normalize_effect_type(effect_type: str | None) -> str:
 
 
 # =============================================================================
+# Export Source Types
+# =============================================================================
+
+class SourceType(str, Enum):
+    """
+    Source type for final video exports.
+
+    Indicates where the export originated from:
+    - BRILLIANT_CLIP: Auto-generated from a brilliant-rated clip
+    - CUSTOM_PROJECT: User-created project with custom clip selection
+    - ANNOTATED_GAME: Full game export from annotate mode
+    """
+    BRILLIANT_CLIP = "brilliant_clip"
+    CUSTOM_PROJECT = "custom_project"
+    ANNOTATED_GAME = "annotated_game"
+
+    @property
+    def display_label(self) -> str:
+        """Human-readable label for UI display."""
+        labels = {
+            SourceType.BRILLIANT_CLIP: "Brilliant Clip",
+            SourceType.CUSTOM_PROJECT: "Custom Project",
+            SourceType.ANNOTATED_GAME: "Annotated Game",
+        }
+        return labels.get(self, f"Video")
+
+
+# =============================================================================
 # Video Processing Constants
 # =============================================================================
 
