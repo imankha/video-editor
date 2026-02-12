@@ -173,6 +173,7 @@ export function OverlayMode({
                   onDetectionMarkerClick={onDetectionMarkerClick}
                   sourceTimeToVisualTime={sourceTimeToVisualTime}
                   edgePadding={EDGE_PADDING}
+                  isDisabled={!showPlayerBoxes}
                 />
               </div>
             )}

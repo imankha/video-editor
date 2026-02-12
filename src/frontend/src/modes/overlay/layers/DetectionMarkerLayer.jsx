@@ -23,6 +23,7 @@ export default function DetectionMarkerLayer({
   onDetectionMarkerClick,  // (regionId, frame, detection) => void - called when marker is clicked
   sourceTimeToVisualTime = (t) => t,
   edgePadding = 20,
+  isDisabled = false,
 }) {
   const timelineDuration = visualDuration || duration;
 
@@ -85,10 +86,13 @@ export default function DetectionMarkerLayer({
         {detectionMarkers.map((marker, index) => (
           <button
             key={`${marker.regionId}-${marker.timestamp}-${index}`}
-            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5 group cursor-pointer transition-transform hover:scale-110"
+            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5 group transition-transform ${
+              isDisabled ? 'cursor-default opacity-30' : 'cursor-pointer hover:scale-110'
+            }`}
             style={{ left: `${marker.positionPercent}%` }}
             onClick={(e) => {
               e.stopPropagation();
+              if (isDisabled) return;
 
               // Tell OverlayContainer which detection to display (guarantees boxes show)
               if (onDetectionMarkerClick) {
@@ -112,14 +116,22 @@ export default function DetectionMarkerLayer({
                 }
               }
             }}
-            title={`${marker.boxCount} player${marker.boxCount > 1 ? 's' : ''} detected at frame ${marker.frame ?? Math.round(marker.timestamp * 30)} - Click to jump`}
+            title={isDisabled ? 'Player tracking disabled' : `${marker.boxCount} player${marker.boxCount > 1 ? 's' : ''} detected at frame ${marker.frame ?? Math.round(marker.timestamp * 30)} - Click to jump`}
           >
-            {/* Green marker with icon */}
-            <div className="w-6 h-6 rounded bg-green-600 group-hover:bg-green-500 flex items-center justify-center shadow-lg border border-green-400">
+            {/* Marker with icon - gray when disabled */}
+            <div className={`w-6 h-6 rounded flex items-center justify-center shadow-lg border ${
+              isDisabled
+                ? 'bg-gray-600 border-gray-500'
+                : 'bg-green-600 group-hover:bg-green-500 border-green-400'
+            }`}>
               <Crosshair size={14} className="text-white" />
             </div>
             {/* Player count badge */}
-            <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-green-500 text-white text-[10px] font-bold flex items-center justify-center border border-green-300">
+            <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full text-white text-[10px] font-bold flex items-center justify-center border ${
+              isDisabled
+                ? 'bg-gray-500 border-gray-400'
+                : 'bg-green-500 border-green-300'
+            }`}>
               {marker.boxCount}
             </div>
           </button>
