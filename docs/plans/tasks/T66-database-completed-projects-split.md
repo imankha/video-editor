@@ -1,6 +1,6 @@
 # T66: Database Completed Projects Split
 
-**Status:** IN PROGRESS (Architecture)
+**Status:** TESTING
 **Impact:** MEDIUM
 **Complexity:** MEDIUM
 **Created:** 2026-02-11
@@ -55,10 +55,12 @@ See [T66-design.md](T66-design.md) for complete implementation plan.
 Key files:
 - `src/backend/app/services/project_archive.py` - New file for archive/restore logic
 - `src/backend/app/database.py` - Add `restored_at` column
-- `src/backend/app/routers/overlay.py` - Trigger archive after export
-- `src/backend/app/routers/gallery.py` - Restore endpoint
-- `src/frontend/src/screens/GalleryScreen.jsx` - Folder icon action
-- `src/frontend/src/components/ProjectFilters.jsx` - Remove completed filter
+- `src/backend/app/routers/export/overlay.py` - Trigger archive after export
+- `src/backend/app/routers/downloads.py` - Restore endpoint
+- `src/backend/app/routers/clips.py` - Clear restored_at on edit
+- `src/frontend/src/components/DownloadsPanel.jsx` - Folder icon action
+- `src/frontend/src/components/ProjectManager.jsx` - Remove completed filter
+- `src/backend/scripts/archive_completed_projects.py` - Migration script
 
 ## Acceptance Criteria
 
@@ -69,14 +71,14 @@ Key files:
 - [x] Go/no-go decision made (GO)
 
 ### Implementation Phase
-- [ ] Completing a project archives data to R2 JSON
-- [ ] Archived project data deleted from active DB
-- [ ] `final_videos` row remains in DB (gallery works)
-- [ ] Gallery folder icon restores project to DB and navigates to editor
-- [ ] Archive JSON deleted after restore
-- [ ] Restored project gets `restored_at` timestamp
-- [ ] Any edit clears `restored_at` to NULL
-- [ ] App startup re-archives projects with `restored_at` older than 48 hours
-- [ ] Project filter no longer shows "completed" option
-- [ ] Migration script for existing completed projects
-- [ ] Tests pass
+- [x] Completing a project archives data to R2 JSON
+- [x] Archived project data deleted from active DB
+- [x] `final_videos` row remains in DB (gallery works)
+- [x] Gallery folder icon restores project to DB and navigates to editor
+- [x] Archive JSON deleted after restore
+- [x] Restored project gets `restored_at` timestamp
+- [x] Any edit clears `restored_at` to NULL
+- [x] App startup re-archives projects with `restored_at` older than 48 hours
+- [x] Project filter no longer shows "completed" option
+- [x] Migration script for existing completed projects
+- [x] Tests pass (333 backend, 378/379 frontend - 1 pre-existing failure)
