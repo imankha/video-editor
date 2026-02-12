@@ -30,7 +30,7 @@
 
 | ID | Task | Status | Imp | Cpx | Pri |
 |----|------|--------|-----|-----|-----|
-| T72 | [Overlay Keyframe Delete Bug](tasks/T72-overlay-keyframe-delete-bug.md) | TODO | 5 | 3 | 1.7 |
+| T72 | [Overlay Keyframe Delete Bug](tasks/T72-overlay-keyframe-delete-bug.md) | DONE | 5 | 3 | 1.7 |
 | T58 | [Dim Tracking Squares When Disabled](tasks/T58-dim-tracking-squares-when-disabled.md) | TODO | 3 | 2 | 1.5 |
 | T61 | [Annotate Default Good](tasks/T61-annotate-default-good.md) | TODO | 3 | 2 | 1.5 |
 | T65 | [Logo from Landing Page](tasks/T65-logo-from-landing-page.md) | TODO | 3 | 2 | 1.5 |

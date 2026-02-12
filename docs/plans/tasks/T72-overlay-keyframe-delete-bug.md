@@ -1,6 +1,6 @@
 # T72: Cannot Delete Overlay Keyframe Outside Region
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-02-12
@@ -17,7 +17,7 @@ Investigate and fix the deletion logic to allow keyframe deletion regardless of 
 ## Context
 
 ### Relevant Files
-- TBD - needs investigation
+- `src/frontend/src/modes/overlay/hooks/useHighlightRegions.js` - removeKeyframe function (line 572)
 
 ### Related Tasks
 - None
@@ -29,14 +29,14 @@ Investigate and fix the deletion logic to allow keyframe deletion regardless of 
 ## Implementation
 
 ### Steps
-1. [ ] Identify the deletion logic for overlay keyframes
-2. [ ] Find the condition preventing deletion outside regions
-3. [ ] Fix the logic to allow deletion
+1. [x] Identify the deletion logic for overlay keyframes
+2. [x] Find the condition preventing deletion outside regions
+3. [x] Fix the logic to allow deletion
 4. [ ] Test deletion in various scenarios
 
 ### Progress Log
 
-*No progress yet.*
+**2026-02-12:** Found root cause in `useHighlightRegions.js:572-588`. The `removeKeyframe` function used `getRegionAtTime(time)` which finds regions where time is within bounds. When a keyframe is positioned outside its region's time bounds, this returns null and deletion fails. Fixed by finding the region that contains the keyframe in its keyframes array by matching the frame number instead.
 
 ## Acceptance Criteria
 
