@@ -1,60 +1,67 @@
-# T69: Mode Switch "Save" Should Reset Instead of Auto-Export
+# T69: Mode Switch Dialog - Clarify Options
 
 **Status:** TODO
-**Impact:** 6
+**Impact:** 5
 **Complexity:** 5
 **Created:** 2026-02-11
-**Updated:** 2026-02-11
+**Updated:** 2026-02-12
 
 ## Problem
 
-When a user has already framed and overlayed a project, then makes changes to framing and tries to leave framing mode:
+When a user has uncommitted changes (framing or overlay) and tries to switch modes, a confirmation dialog appears with "Save" and "Discard" options. The "Save" label is confusing because:
 
-1. App correctly shows confirmation dialog asking to "save or discard"
-2. If user clicks "save" and leaves, the app tries to automatically frame (auto-export)
-
-This auto-export behavior is confusing and potentially wasteful (GPU time). The user may just want to preserve their intent to re-frame, not immediately trigger an export.
+1. All edits are already auto-saved to the backend
+2. "Save" actually triggers an export (GPU processing)
+3. Users may not realize clicking "Save" will start an expensive export
 
 ## Solution
 
-When user clicks "save" in the mode switch confirmation dialog:
+Rename and clarify the dialog options:
 
-1. **Do NOT auto-export/auto-frame**
-2. Instead, reset the project to the state it would have been before framing:
-   - Remove existing overlay data (working_video)
-   - Remove existing framing data (or mark as needing re-export)
-3. User will manually frame and overlay when ready
+| Button | Action |
+|--------|--------|
+| **Export** | Trigger export now, then switch modes |
+| **Discard** | Throw away changes, switch modes |
+| **X (close)** | Cancel - stay in current mode, no action taken |
 
-This gives the user control over when exports happen rather than triggering expensive GPU operations automatically.
+This makes it explicit that:
+- "Export" means GPU processing will happen
+- "Discard" means changes are lost
+- X lets user back out without committing to either
 
 ## Context
 
 ### Relevant Files
-- `src/frontend/src/App.jsx` - Mode switch confirmation dialog and handlers
-- `src/frontend/src/components/ConfirmationDialog.jsx` - Dialog component
+- `src/frontend/src/App.jsx` - Mode switch confirmation dialog and handlers (`handleModeSwitchExport`, `handleModeSwitchDiscard`, `handleModeSwitchCancel`)
+- `src/frontend/src/components/shared/ConfirmationDialog.jsx` - Dialog component
 - `src/frontend/src/stores/editorStore.js` - Mode switch dialog state
-- `src/backend/app/routers/projects.py` - May need endpoint to reset project state
 
-### Technical Notes
-- The confirmation dialog is triggered when leaving framing mode with uncommitted changes
-- Currently "save" triggers some form of auto-export
-- Need to understand the current "save" flow before implementing the reset behavior
+### Current Flow
+The dialog is triggered in `App.jsx` when:
+- Leaving framing mode with `framingChangedSinceExport && hasOverlayVideo`
+- Leaving overlay mode with `overlayChangedSinceExport && selectedProject?.has_final_video`
+
+Current buttons are configured in `App.jsx` around line 373:
+```jsx
+buttons={[
+  { label: 'Discard', onClick: handleModeSwitchDiscard, variant: 'danger' },
+  { label: 'Save', onClick: handleModeSwitchExport, variant: 'primary' }
+]}
+```
 
 ## Implementation
 
 ### Steps
-1. [ ] Trace the current "save" button flow in mode switch dialog
-2. [ ] Understand what "save" currently does (auto-export?)
-3. [ ] Implement reset behavior instead:
-   - Clear working_video if exists
-   - Mark framing as needing re-export
-4. [ ] Update confirmation dialog messaging if needed
-5. [ ] Test the flow end-to-end
+1. [ ] Change button label from "Save" to "Export" in App.jsx
+2. [ ] Ensure ConfirmationDialog has a close X button that calls `onClose`
+3. [ ] Verify `handleModeSwitchCancel` (onClose) keeps user in current mode
+4. [ ] Update dialog message to clarify what each option does
+5. [ ] Test both framing and overlay mode switch scenarios
 
 ## Acceptance Criteria
 
-- [ ] Clicking "save" when leaving framing does NOT trigger auto-export
-- [ ] Existing overlay data is removed/reset
-- [ ] User must manually trigger framing export
-- [ ] User must manually trigger overlay export after framing
-- [ ] Dialog messaging is clear about what will happen
+- [ ] Dialog shows "Export" button instead of "Save"
+- [ ] Dialog has X close button that cancels the action
+- [ ] Clicking X keeps user in current mode with changes intact
+- [ ] Dialog message clearly explains the three options
+- [ ] Works for both framing→overlay and overlay→framing transitions
