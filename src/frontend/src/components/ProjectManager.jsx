@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag } from 'lucide-react';
+import { Logo } from './Logo';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores/exportStore';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -404,7 +405,7 @@ export function ProjectManager({
 
       {/* Header */}
       <div className="text-center mb-6">
-        <FolderOpen size={48} className="mx-auto mb-4 text-purple-400" />
+        <Logo size={48} className="mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-white mb-2">Reel Ballers</h1>
         <p className="text-gray-400">Manage your games and projects</p>
       </div>
