@@ -747,3 +747,407 @@ def list_r2_files(user_id: str, prefix: str = "") -> list:
     except Exception as e:
         logger.error(f"Failed to list R2 files: {e}")
         return []
+
+
+# ==============================================================================
+# Global Storage Functions (for deduplicated games)
+# ==============================================================================
+
+def r2_global_key(path: str) -> str:
+    """
+    Generate R2 object key without user prefix (for global storage).
+    Used for deduplicated game storage: games/{blake3_hash}.mp4
+    """
+    # Normalize path separators for R2
+    return path.replace("\\", "/")
+
+
+def r2_head_object_global(key: str) -> Optional[dict]:
+    """
+    Check if a global object exists in R2 and return its metadata.
+
+    Args:
+        key: Global R2 key (e.g., "games/{hash}.mp4")
+
+    Returns:
+        Dict with ContentLength, Metadata, etc. if exists, None otherwise
+    """
+    client = get_r2_client()
+    if not client:
+        return None
+
+    try:
+        response = client.head_object(Bucket=R2_BUCKET, Key=key)
+        return {
+            'ContentLength': response.get('ContentLength'),
+            'Metadata': response.get('Metadata', {}),
+            'ContentType': response.get('ContentType'),
+            'LastModified': response.get('LastModified'),
+        }
+    except Exception as e:
+        logger.debug(f"Object not found in R2: {key} - {e}")
+        return None
+
+
+def r2_delete_object_global(key: str) -> bool:
+    """
+    Delete a global object from R2.
+
+    Args:
+        key: Global R2 key (e.g., "games/{hash}.mp4")
+
+    Returns:
+        True if deleted successfully, False otherwise
+    """
+    client = get_r2_client()
+    if not client:
+        return False
+
+    try:
+        client.delete_object(Bucket=R2_BUCKET, Key=key)
+        logger.info(f"Deleted global object from R2: {key}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to delete global object from R2: {key} - {e}")
+        return False
+
+
+# ==============================================================================
+# R2 Multipart Upload Functions
+# ==============================================================================
+
+def r2_create_multipart_upload(key: str, content_type: str = "video/mp4") -> Optional[str]:
+    """
+    Initiate a multipart upload to R2.
+
+    Args:
+        key: R2 object key
+        content_type: Content type for the object
+
+    Returns:
+        Upload ID string if successful, None otherwise
+    """
+    client = get_r2_client()
+    if not client:
+        return None
+
+    try:
+        response = client.create_multipart_upload(
+            Bucket=R2_BUCKET,
+            Key=key,
+            ContentType=content_type
+        )
+        upload_id = response.get('UploadId')
+        logger.info(f"Created multipart upload: {key}, upload_id: {upload_id}")
+        return upload_id
+    except Exception as e:
+        logger.error(f"Failed to create multipart upload: {key} - {e}")
+        return None
+
+
+def r2_complete_multipart_upload(
+    key: str,
+    upload_id: str,
+    parts: list,
+    metadata: Optional[dict] = None
+) -> bool:
+    """
+    Complete a multipart upload to R2.
+
+    Args:
+        key: R2 object key
+        upload_id: Upload ID from create_multipart_upload
+        parts: List of dicts with 'PartNumber' and 'ETag' for each part
+        metadata: Optional metadata to set on the completed object
+
+    Returns:
+        True if successful, False otherwise
+    """
+    client = get_r2_client()
+    if not client:
+        return False
+
+    try:
+        # Sort parts by part number
+        sorted_parts = sorted(parts, key=lambda p: p['PartNumber'])
+
+        response = client.complete_multipart_upload(
+            Bucket=R2_BUCKET,
+            Key=key,
+            UploadId=upload_id,
+            MultipartUpload={'Parts': sorted_parts}
+        )
+        logger.info(f"Completed multipart upload: {key}")
+
+        # Set metadata if provided (R2 requires copy-in-place for metadata)
+        if metadata:
+            r2_set_object_metadata_global(key, metadata)
+
+        return True
+    except Exception as e:
+        logger.error(f"Failed to complete multipart upload: {key} - {e}")
+        return False
+
+
+def r2_abort_multipart_upload(key: str, upload_id: str) -> bool:
+    """
+    Abort a multipart upload (cleanup incomplete uploads).
+
+    Args:
+        key: R2 object key
+        upload_id: Upload ID from create_multipart_upload
+
+    Returns:
+        True if aborted successfully, False otherwise
+    """
+    client = get_r2_client()
+    if not client:
+        return False
+
+    try:
+        client.abort_multipart_upload(
+            Bucket=R2_BUCKET,
+            Key=key,
+            UploadId=upload_id
+        )
+        logger.info(f"Aborted multipart upload: {key}, upload_id: {upload_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to abort multipart upload: {key} - {e}")
+        return False
+
+
+def generate_presigned_part_url(
+    key: str,
+    upload_id: str,
+    part_number: int,
+    expires_in: int = 14400  # 4 hours default
+) -> Optional[str]:
+    """
+    Generate a presigned URL for uploading a specific part.
+
+    Args:
+        key: R2 object key
+        upload_id: Upload ID from create_multipart_upload
+        part_number: Part number (1-indexed)
+        expires_in: URL expiration in seconds (default 4 hours)
+
+    Returns:
+        Presigned URL string, or None if failed
+    """
+    client = get_r2_client()
+    if not client:
+        return None
+
+    try:
+        url = client.generate_presigned_url(
+            'upload_part',
+            Params={
+                'Bucket': R2_BUCKET,
+                'Key': key,
+                'UploadId': upload_id,
+                'PartNumber': part_number
+            },
+            ExpiresIn=expires_in
+        )
+        return url
+    except Exception as e:
+        logger.error(f"Failed to generate presigned part URL: {key} part {part_number} - {e}")
+        return None
+
+
+def generate_multipart_urls(
+    key: str,
+    upload_id: str,
+    file_size: int,
+    part_size: int = 100 * 1024 * 1024,  # 100MB default
+    expires_in: int = 14400  # 4 hours default
+) -> list:
+    """
+    Generate presigned URLs for all parts of a multipart upload.
+
+    Args:
+        key: R2 object key
+        upload_id: Upload ID from create_multipart_upload
+        file_size: Total file size in bytes
+        part_size: Size of each part in bytes (default 100MB)
+        expires_in: URL expiration in seconds (default 4 hours)
+
+    Returns:
+        List of dicts with part_number, presigned_url, start_byte, end_byte
+    """
+    parts = []
+    part_number = 1
+    offset = 0
+
+    while offset < file_size:
+        end_byte = min(offset + part_size - 1, file_size - 1)
+
+        presigned_url = generate_presigned_part_url(
+            key, upload_id, part_number, expires_in
+        )
+
+        if presigned_url:
+            parts.append({
+                'part_number': part_number,
+                'presigned_url': presigned_url,
+                'start_byte': offset,
+                'end_byte': end_byte
+            })
+
+        offset += part_size
+        part_number += 1
+
+    logger.info(f"Generated {len(parts)} presigned URLs for multipart upload: {key}")
+    return parts
+
+
+# ==============================================================================
+# R2 Object Metadata Functions (for ref_count tracking)
+# ==============================================================================
+
+def r2_get_object_metadata_global(key: str) -> Optional[dict]:
+    """
+    Get metadata for a global R2 object.
+
+    Args:
+        key: Global R2 key
+
+    Returns:
+        Metadata dict if object exists, None otherwise
+    """
+    head_result = r2_head_object_global(key)
+    if head_result:
+        return head_result.get('Metadata', {})
+    return None
+
+
+def r2_set_object_metadata_global(key: str, metadata: dict) -> bool:
+    """
+    Set metadata on a global R2 object (using copy-in-place).
+
+    R2/S3 doesn't support updating metadata directly - you must copy the object
+    to itself with new metadata.
+
+    Args:
+        key: Global R2 key
+        metadata: Dict of metadata to set (keys will be lowercased by S3)
+
+    Returns:
+        True if successful, False otherwise
+    """
+    client = get_r2_client()
+    if not client:
+        return False
+
+    try:
+        # Copy object to itself with new metadata
+        client.copy_object(
+            Bucket=R2_BUCKET,
+            CopySource={'Bucket': R2_BUCKET, 'Key': key},
+            Key=key,
+            Metadata=metadata,
+            MetadataDirective='REPLACE'
+        )
+        logger.debug(f"Set metadata on global object: {key}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to set metadata on global object: {key} - {e}")
+        return False
+
+
+def increment_ref_count(key: str) -> int:
+    """
+    Increment the ref_count metadata on a global R2 object.
+
+    Args:
+        key: Global R2 key (e.g., "games/{hash}.mp4")
+
+    Returns:
+        New ref_count value, or -1 if failed
+    """
+    metadata = r2_get_object_metadata_global(key)
+    if metadata is None:
+        logger.error(f"Cannot increment ref_count: object not found: {key}")
+        return -1
+
+    try:
+        current_count = int(metadata.get('ref_count', '0'))
+    except (ValueError, TypeError):
+        current_count = 0
+
+    new_count = current_count + 1
+
+    # Copy all existing metadata and update ref_count
+    new_metadata = dict(metadata)
+    new_metadata['ref_count'] = str(new_count)
+
+    if r2_set_object_metadata_global(key, new_metadata):
+        logger.info(f"Incremented ref_count: {key} -> {new_count}")
+        return new_count
+    return -1
+
+
+def decrement_ref_count(key: str) -> int:
+    """
+    Decrement the ref_count metadata on a global R2 object.
+
+    Args:
+        key: Global R2 key (e.g., "games/{hash}.mp4")
+
+    Returns:
+        New ref_count value (0 means object should be deleted), or -1 if failed
+    """
+    metadata = r2_get_object_metadata_global(key)
+    if metadata is None:
+        logger.warning(f"Cannot decrement ref_count: object not found: {key}")
+        return 0  # Treat as 0 so caller can clean up
+
+    try:
+        current_count = int(metadata.get('ref_count', '1'))
+    except (ValueError, TypeError):
+        current_count = 1
+
+    new_count = max(0, current_count - 1)
+
+    # Copy all existing metadata and update ref_count
+    new_metadata = dict(metadata)
+    new_metadata['ref_count'] = str(new_count)
+
+    if r2_set_object_metadata_global(key, new_metadata):
+        logger.info(f"Decremented ref_count: {key} -> {new_count}")
+        return new_count
+
+    logger.error(f"Failed to decrement ref_count: {key}")
+    return -1
+
+
+def generate_presigned_url_global(
+    key: str,
+    expires_in: int = 14400  # 4 hours default
+) -> Optional[str]:
+    """
+    Generate a presigned URL for a global R2 object (no user prefix).
+
+    Args:
+        key: Global R2 key (e.g., "games/{hash}.mp4")
+        expires_in: URL expiration in seconds (default 4 hours)
+
+    Returns:
+        Presigned URL string, or None if failed
+    """
+    client = get_r2_client()
+    if not client:
+        return None
+
+    try:
+        url = client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": R2_BUCKET, "Key": key},
+            ExpiresIn=expires_in
+        )
+        logger.debug(f"Generated presigned URL for global object: {key}")
+        return url
+    except Exception as e:
+        logger.error(f"Failed to generate presigned URL for {key}: {e}")
+        return None

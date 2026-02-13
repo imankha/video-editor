@@ -758,6 +758,38 @@ def ensure_database():
             )
         """)
 
+        # T80: User's link to globally-deduplicated games
+        # Games are stored globally in R2 at games/{blake3_hash}.mp4
+        # This table links users to games they have access to
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                blake3_hash TEXT NOT NULL UNIQUE,
+                original_filename TEXT NOT NULL,
+                display_name TEXT,
+                file_size INTEGER NOT NULL,
+                duration REAL,
+                width INTEGER,
+                height INTEGER,
+                fps REAL,
+                added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # T80: Track in-progress multipart uploads
+        # Allows resuming interrupted uploads
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pending_uploads (
+                id TEXT PRIMARY KEY,
+                blake3_hash TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                original_filename TEXT NOT NULL,
+                r2_upload_id TEXT NOT NULL,
+                parts_json TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # Initialize settings row if not exists
         cursor.execute("""
             INSERT OR IGNORE INTO user_settings (id, settings_json)

@@ -9,6 +9,7 @@ This package contains FastAPI routers organized by functionality:
 - projects.py: Project CRUD endpoints
 - clips.py: Clip library and working clips endpoints
 - games.py: Game storage and management endpoints
+- games_upload.py: T80 - Deduplicated game upload with multipart support
 - downloads.py: Final video downloads management
 - auth.py: User login for test isolation
 - storage.py: Presigned URL generation for R2 direct access
@@ -21,9 +22,10 @@ from .annotate import router as annotate_router
 from .projects import router as projects_router
 from .clips import router as clips_router
 from .games import router as games_router
+from .games_upload import router as games_upload_router
 from .downloads import router as downloads_router
 from .auth import router as auth_router
 from .storage import router as storage_router
 from .settings import router as settings_router
 
-__all__ = ['health_router', 'export_router', 'detection_router', 'annotate_router', 'projects_router', 'clips_router', 'games_router', 'downloads_router', 'auth_router', 'storage_router', 'settings_router']
+__all__ = ['health_router', 'export_router', 'detection_router', 'annotate_router', 'projects_router', 'clips_router', 'games_router', 'games_upload_router', 'downloads_router', 'auth_router', 'storage_router', 'settings_router']
