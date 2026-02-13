@@ -239,6 +239,13 @@ export function AnnotateScreen({ onClearSelection }) {
         return;
       }
 
+      // 'A' key: Add clip (opens overlay) - works in both normal and fullscreen mode
+      if ((event.key === 'a' || event.key === 'A') && annotateVideoUrl && !showAnnotateOverlay) {
+        event.preventDefault();
+        handleAddClipFromButton();
+        return;
+      }
+
       // Arrow keys: Navigate playhead or clips
       if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
         if (!annotateVideoUrl) return;
@@ -292,6 +299,8 @@ export function AnnotateScreen({ onClearSelection }) {
     stepForward,
     stepBackward,
     seek,
+    showAnnotateOverlay,
+    handleAddClipFromButton,
   ]);
 
   // NOTE: We intentionally do NOT clear state on unmount.

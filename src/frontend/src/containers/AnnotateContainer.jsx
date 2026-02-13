@@ -737,15 +737,10 @@ export function AnnotateContainer({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [annotateFullscreen, setAnnotateFullscreen]);
 
-  // Effect: Show overlay when TRANSITIONING from playing to paused while in fullscreen
+  // Track playing state for other effects that may need it
   useEffect(() => {
-    const justPaused = wasPlayingRef.current && !isPlaying;
     wasPlayingRef.current = isPlaying;
-
-    if (annotateFullscreen && justPaused) {
-      setShowAnnotateOverlay(true);
-    }
-  }, [annotateFullscreen, isPlaying]);
+  }, [isPlaying]);
 
   // Effect: Auto-save annotations when they change
   useEffect(() => {

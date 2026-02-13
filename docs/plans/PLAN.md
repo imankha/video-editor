@@ -30,6 +30,7 @@
 
 | ID | Task | Status | Imp | Cpx | Pri |
 |----|------|--------|-----|-----|-----|
+| T75 | [Annotate Fullscreen Add Clip Button](tasks/T75-annotate-fullscreen-add-clip-button.md) | TESTING | 5 | 2 | 2.5 |
 | T72 | [Overlay Keyframe Delete Bug](tasks/T72-overlay-keyframe-delete-bug.md) | DONE | 5 | 3 | 1.7 |
 | T58 | [Dim Tracking Squares When Disabled](tasks/T58-dim-tracking-squares-when-disabled.md) | DONE | 3 | 2 | 1.5 |
 | T61 | [Annotate Default Good](tasks/T61-annotate-default-good.md) | DONE | 3 | 2 | 1.5 |
