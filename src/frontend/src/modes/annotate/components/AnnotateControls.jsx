@@ -65,7 +65,7 @@ function SpeedControl({ speed, onSpeedChange }) {
  * - Play/pause, step forward/backward, restart
  * - Time display
  * - Playback speed control (YouTube style)
- * - Add Clip button (non-fullscreen only)
+ * - Add Clip button (visible when not in fullscreen, or when paused in fullscreen)
  * - Fullscreen toggle button
  */
 export function AnnotateControls({
@@ -135,14 +135,14 @@ export function AnnotateControls({
 
       {/* Right side controls */}
       <div className="flex items-center gap-2">
-        {/* Add Clip button - only show when not in fullscreen */}
-        {!isFullscreen && onAddClip && (
+        {/* Add Clip button - show when not in fullscreen, or when paused in fullscreen */}
+        {((!isFullscreen) || (isFullscreen && !isPlaying)) && onAddClip && (
           <Button
             variant="success"
             size="sm"
             icon={Plus}
             onClick={onAddClip}
-            title="Add clip ending at current time"
+            title="Add clip ending at current time (A)"
           >
             Add Clip
           </Button>
