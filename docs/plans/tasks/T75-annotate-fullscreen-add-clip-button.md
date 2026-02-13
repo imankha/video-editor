@@ -1,6 +1,6 @@
 # T75: Annotate Fullscreen Add Clip Button
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-02-12

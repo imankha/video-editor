@@ -1,19 +1,21 @@
-# Task 10: Fly.io Backend Deployment
+# T100: Fly.io Staging Backend
 
 ## Overview
-Deploy the FastAPI backend to Fly.io. This task creates BOTH staging and production apps.
+Deploy the FastAPI backend to Fly.io **staging only**. Uses scale-to-zero for minimal cost during testing.
+
+Production deployment is separate (T105) to allow proper capacity planning.
 
 ## Owner
 **Claude** - Configuration and deployment setup
 
 ## Prerequisites
-- Task 09 complete (Modal integration tested locally)
+- Modal integration tested locally
 - Fly.io account created (free)
+- `flyctl` CLI installed and logged in
 
 ## Testability
 **After this task**:
 - Staging: `reel-ballers-api-staging.fly.dev` works
-- Production: `reel-ballers-api.fly.dev` works (custom domain in Task 12)
 
 ---
 
@@ -21,9 +23,8 @@ Deploy the FastAPI backend to Fly.io. This task creates BOTH staging and product
 
 | Resource | Purpose |
 |----------|---------|
-| `reel-ballers-api-staging` | Staging backend (test before prod) |
-| `reel-ballers-api` | Production backend |
-| `fly.toml` | Fly.io configuration |
+| `reel-ballers-api-staging` | Staging backend (scale-to-zero) |
+| `fly.staging.toml` | Staging Fly.io configuration |
 | `Dockerfile` | Production container |
 
 ---
@@ -49,13 +50,12 @@ curl -L https://fly.io/install.sh | sh
 fly auth login
 ```
 
-### 3. Create fly.toml
+### 3. Create fly.staging.toml
 
-Create `src/backend/fly.toml`:
+Create `src/backend/fly.staging.toml`:
 
 ```toml
-# NOTE: App name is set via --app flag, not here
-# This allows same config for staging and production
+app = "reel-ballers-api-staging"
 primary_region = "ord"  # Chicago - adjust to your region
 
 [build]
@@ -126,7 +126,7 @@ fly secrets set --app reel-ballers-api-staging \
   MODAL_TOKEN_SECRET=xxx
 
 # Deploy to staging
-fly deploy --app reel-ballers-api-staging
+fly deploy --config fly.staging.toml
 ```
 
 ### 6. Test Staging
@@ -142,57 +142,19 @@ fly logs --app reel-ballers-api-staging
 curl https://reel-ballers-api-staging.fly.dev/api/health
 ```
 
-### 7. Create Production App
-
-```bash
-# Create the production app
-fly apps create reel-ballers-api
-
-# Set production secrets (same R2/Modal, different Stripe later)
-fly secrets set --app reel-ballers-api \
-  R2_ACCESS_KEY_ID=xxx \
-  R2_SECRET_ACCESS_KEY=xxx \
-  R2_ENDPOINT_URL=https://xxx.r2.cloudflarestorage.com \
-  R2_BUCKET_NAME=reel-ballers-users \
-  MODAL_ENABLED=true \
-  MODAL_TOKEN_ID=xxx \
-  MODAL_TOKEN_SECRET=xxx
-
-# Deploy to production
-fly deploy --app reel-ballers-api
-```
-
-### 8. Test Production
-
-```bash
-curl https://reel-ballers-api.fly.dev/api/health
-```
-
----
-
-## Environment Differences
-
-| Setting | Staging | Production |
-|---------|---------|------------|
-| App name | reel-ballers-api-staging | reel-ballers-api |
-| Domain | *.fly.dev | api.reelballers.com |
-| Stripe | sk_test_xxx (later) | sk_live_xxx (later) |
-| R2 Bucket | Same | Same |
-| Modal | Same | Same |
-
-**Why same R2/Modal?** User data is isolated by user ID prefix. Modal functions are stateless. No need for separate resources.
-
 ---
 
 ## Deployment Workflow
 
 ```bash
-# After testing locally, deploy to staging first
-fly deploy --app reel-ballers-api-staging
+# After testing locally, deploy to staging
+fly deploy --config fly.staging.toml
 
-# Test on staging, then deploy to production
-fly deploy --app reel-ballers-api
+# View logs
+fly logs --app reel-ballers-api-staging
 ```
+
+Production deployment is handled separately in T105.
 
 ---
 
@@ -217,11 +179,10 @@ fly certs add api.reelballers.com --app reel-ballers-api
 
 | Item | Description |
 |------|-------------|
-| fly.toml | Fly.io configuration |
-| Dockerfile | Production container |
+| fly.staging.toml | Staging Fly.io configuration (scale-to-zero) |
+| Dockerfile | Container for deployment |
 | Staging app | reel-ballers-api-staging.fly.dev |
-| Production app | reel-ballers-api.fly.dev |
-| Secrets configured | R2 + Modal credentials on both |
+| Secrets configured | R2 + Modal credentials on staging |
 
 ---
 
@@ -249,11 +210,10 @@ Expected when scaled to zero. First request wakes the machine.
 
 | App | Usage | Monthly Cost |
 |-----|-------|--------------|
-| Staging | Occasional testing | ~$0-2 |
-| Production (low traffic) | Scale to zero | ~$0-5 |
-| Production (moderate) | 1000 req/day | ~$5-7 |
+| Staging | Scale-to-zero, occasional testing | ~$0-2 |
 
 ---
 
-## Next Step
-Task 11 - Cloudflare Pages Frontend (deploy React app)
+## Next Steps
+- T105 - Production Backend Scaling (capacity planning)
+- T110 - Cloudflare Pages Frontend (deploy React app)

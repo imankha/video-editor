@@ -2,142 +2,174 @@
 
 ## Current Focus
 
-**Phase: Feedback Velocity** - Modal and R2 infrastructure complete. Prioritizing simple, high-impact tasks.
+**Phase: Deployment** - All feature tasks complete. Now deploying to staging, then adding auth/payments before production.
 
-**Refactoring:** Automated via [Refactor Agent](../../.claude/agents/refactor.md) - runs before each task on affected files.
-
----
-
-## Active Tasks
-
-*All active tasks are complete. See Upcoming Tasks for next work.*
-
-| ID | Task | Status | Imp | Cpx |
-|----|------|--------|-----|-----|
-| T05 | [Optimize Load Times](tasks/T05-optimize-load-times.md) | DONE | 8 | 5 |
-| T06 | [Move Tracking Toggle to Layer Icon](tasks/T06-remove-player-tracking-button.md) | DONE | 3 | 3 |
-| T07 | [Video Load Times](tasks/T07-video-load-times.md) | DONE | 5 | 3 |
-| T10 | [Progress Bar Improvements](tasks/T10-progress-bar.md) | DONE | 8 | 5 |
-| T11 | [Local GPU Progress Bar](tasks/T11-local-gpu-progress.md) | DONE | 5 | 3 |
-| T12 | [Progress State Recovery](tasks/T12-progress-state-recovery.md) | DONE | 8 | 5 |
-| T20 | [E2E Test Reliability](tasks/T20-e2e-test-reliability.md) | DONE | 5 | 5 |
+**Landing Page:** Already live at `reelballers.com`
 
 ---
 
-## Upcoming Tasks
+## CRITICAL: Pre-Deployment Blockers
 
-*Priority = Impact / Complexity. Higher = do first.*
+These tasks MUST be completed before deployment to avoid storage waste and re-migration.
 
-| ID | Task | Status | Imp | Cpx | Pri |
-|----|------|--------|-----|-----|-----|
-| T75 | [Annotate Fullscreen Add Clip Button](tasks/T75-annotate-fullscreen-add-clip-button.md) | TESTING | 5 | 2 | 2.5 |
-| T72 | [Overlay Keyframe Delete Bug](tasks/T72-overlay-keyframe-delete-bug.md) | DONE | 5 | 3 | 1.7 |
-| T58 | [Dim Tracking Squares When Disabled](tasks/T58-dim-tracking-squares-when-disabled.md) | DONE | 3 | 2 | 1.5 |
-| T61 | [Annotate Default Good](tasks/T61-annotate-default-good.md) | DONE | 3 | 2 | 1.5 |
-| T65 | [Logo from Landing Page](tasks/T65-logo-from-landing-page.md) | DONE | 3 | 2 | 1.5 |
-| T73 | [Project Card Clip Count Mismatch](tasks/T73-project-card-clip-count-mismatch.md) | DONE | 3 | 2 | 1.5 |
-| T62 | [Tag Changes](tasks/T62-tag-changes.md) | DONE | 3 | 3 | 1.0 |
-| T69 | [Mode Switch Save Reset](tasks/T69-mode-switch-save-reset.md) | DONE | 5 | 5 | 1.0 |
+| ID | Task | Status | Notes |
+|----|------|--------|-------|
+| **T80** | [**Global Game Deduplication + 4GB Uploads**](tasks/T80-global-game-deduplication.md) | **TODO** | Games to global storage, multipart uploads |
+| **T85** | [**Multi-Athlete Profiles**](tasks/T85-multi-athlete-profiles.md) | **TODO** | Per-athlete data isolation (depends on T80) |
 
-### Completed
+**Why these block deployment:**
+- **T80:** Per-user game storage wastes R2 costs, 4GB uploads needed
+- **T85:** Storage structure changes significantly, easier before real users
+- Both involve migrations that are painful after users have data
 
-| ID | Task | Imp | Cpx |
-|----|------|-----|-----|
-| T30 | [Performance Profiling](tasks/T30-performance-profiling.md) | 5 | 5 |
-| T50 | [Modal Cost Optimization](tasks/T50-modal-cost-optimization.md) | 5 | 5 |
-| T53 | [Fix Tracking Marker Navigation](tasks/T53-tracking-marker-navigation.md) | 8 | 3 |
-| T54 | [Fix useOverlayState Test Failures](tasks/T54-fix-overlay-state-tests.md) | 3 | 3 |
-| T55 | [Slow Video Loading](tasks/T55-slow-video-loading.md) | 8 | 5 |
-| T57 | [Stale Tracking Rectangles](tasks/T57-stale-tracking-rectangles.md) | 5 | 5 |
-| T60 | [Consolidate Video Controls](tasks/T60-consolidate-video-controls.md) | 5 | 5 |
-| T63 | [Project Filter Persistence](tasks/T63-project-filter-persistence.md) | 5 | 3 |
-| T64 | [Gallery Playback Controls](tasks/T64-gallery-playback-controls.md) | 5 | 5 |
-| T66 | [Database Completed Projects Split](tasks/T66-database-completed-projects-split.md) | 5 | 5 |
-| T67 | [Overlay Color Selection](tasks/T67-overlay-color-selection.md) | 5 | 3 |
-| T68 | [Console Error Cleanup](tasks/T68-console-error-cleanup.md) | 3 | 3 |
-| T70 | [Multi-clip Overlay Shows Single Clip](tasks/T70-multiclip-overlay-shows-single-clip.md) | 7 | 4 |
-| T71 | [Gallery Show Proper Names](tasks/T71-gallery-show-proper-names.md) | 5 | 3 |
-| T56 | [Gallery Show Duration](tasks/T56-gallery-show-duration.md) | 3 | 2 |
+---
+
+## Deployment Roadmap
+
+### Phase 1: Staging Infrastructure
+
+Get the app running on staging URLs for testing.
+
+| ID | Task | Status | Notes |
+|----|------|--------|-------|
+| T100 | [Fly.io Staging Backend](tasks/deployment/T100-flyio-backend.md) | TODO | Scale-to-zero, ~$0-2/mo |
+| T110 | [Cloudflare Pages Staging](tasks/deployment/T110-cloudflare-pages.md) | TODO | Frontend at `*.pages.dev` |
+
+**Staging URLs:**
+- API: `reel-ballers-api-staging.fly.dev`
+- App: `reel-ballers-staging.pages.dev`
+
+### Phase 2: Staging Features
+
+Test auth and payments with Stripe test mode before production.
+
+| ID | Task | Status | Notes |
+|----|------|--------|-------|
+| T200 | [User Management](tasks/T200-user-management.md) | TODO | Email magic link auth |
+| T210 | [Wallet & Payments](tasks/T210-wallet-payments.md) | TODO | Stripe test keys |
+
+### Phase 3: Production Infrastructure
+
+Deploy to production domains with proper scaling.
+
+| ID | Task | Status | Notes |
+|----|------|--------|-------|
+| T105 | [Production Backend Scaling](tasks/deployment/T105-production-backend-scaling.md) | TODO | Capacity planning |
+| T115 | [Cloudflare Pages Production](tasks/deployment/T115-cloudflare-pages-production.md) | TODO | `app.reelballers.com` |
+| T120 | [DNS & SSL](tasks/deployment/T120-dns-ssl.md) | TODO | Custom domains |
+
+**Production URLs:**
+- Landing: `reelballers.com` (already live)
+- App: `app.reelballers.com`
+- API: `api.reelballers.com`
+
+### Phase 4: Post-Launch Polish
+
+Improvements after real user traffic.
+
+| ID | Task | Status | Notes |
+|----|------|--------|-------|
+| T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | TODO | Multi-tab conflict handling |
+| T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | Faster video loads (needs T200) |
+| T74 | [Incremental Framing Export](tasks/T74-incremental-framing-export.md) | TODO | Cache rendered clips |
+| T220 | [Future GPU Features](tasks/T220-future-gpu-features.md) | TODO | Advanced AI features |
+
+---
+
+## Environment Configuration
+
+### Credentials (Found)
+
+**R2 Storage** (in `.env`):
+```
+R2_ENABLED=true
+R2_ACCESS_KEY_ID=4f5febce8beb63be044414984aa7a3b4
+R2_SECRET_ACCESS_KEY=***
+R2_ENDPOINT=https://e41331ed286b9433ed5b8a9fb5ac8a72.r2.cloudflarestorage.com
+R2_BUCKET=reel-ballers-users
+```
+
+**Modal GPU** (in `~/.modal.toml`):
+```
+token_id=ak-Gr72Vz5gr7MYVpcUowSeDB
+token_secret=***
+```
+
+### Fly.io Secrets (for T100)
+
+```bash
+fly secrets set --app reel-ballers-api-staging \
+  R2_ENABLED=true \
+  R2_ACCESS_KEY_ID=4f5febce8beb63be044414984aa7a3b4 \
+  R2_SECRET_ACCESS_KEY=<from .env> \
+  R2_ENDPOINT=https://e41331ed286b9433ed5b8a9fb5ac8a72.r2.cloudflarestorage.com \
+  R2_BUCKET=reel-ballers-users \
+  MODAL_ENABLED=true \
+  MODAL_TOKEN_ID=ak-Gr72Vz5gr7MYVpcUowSeDB \
+  MODAL_TOKEN_SECRET=<from ~/.modal.toml> \
+  ENV=staging
+```
+
+---
+
+## Completed Tasks
+
+### Pre-Deployment Features (All DONE)
+
+| ID | Task |
+|----|------|
+| T75 | Annotate Fullscreen Add Clip Button |
+| T72 | Overlay Keyframe Delete Bug |
+| T73 | Project Card Clip Count Mismatch |
+| T69 | Mode Switch Save Reset |
+| T58 | Dim Tracking Squares When Disabled |
+| T61 | Annotate Default Good |
+| T62 | Tag Changes |
+| T65 | Logo from Landing Page |
+
+### Earlier Completed
+
+| ID | Task |
+|----|------|
+| T05 | Optimize Load Times |
+| T06 | Move Tracking Toggle to Layer Icon |
+| T07 | Video Load Times |
+| T10 | Progress Bar Improvements |
+| T11 | Local GPU Progress Bar |
+| T12 | Progress State Recovery |
+| T20 | E2E Test Reliability |
+| T30 | Performance Profiling |
+| T50 | Modal Cost Optimization |
+| T53 | Fix Tracking Marker Navigation |
+| T54 | Fix useOverlayState Test Failures |
+| T55 | Slow Video Loading |
+| T57 | Stale Tracking Rectangles |
+| T60 | Consolidate Video Controls |
+| T63 | Project Filter Persistence |
+| T64 | Gallery Playback Controls |
+| T66 | Database Completed Projects Split |
+| T67 | Overlay Color Selection |
+| T68 | Console Error Cleanup |
+| T70 | Multi-clip Overlay Shows Single Clip |
+| T71 | Gallery Show Proper Names |
+| T56 | Gallery Show Duration |
 
 ### Won't Do
 
 | ID | Task | Reason |
 |----|------|--------|
-| T51 | [Overlay Parallelization](tasks/T51-overlay-parallelization.md) | Analysis showed parallel costs more |
-| T52 | [Annotate Parallelization](tasks/T52-annotate-parallelization.md) | CPU-bound, won't help |
-
----
-
-## Epics
-
-### Deployment (TODO)
-
-[tasks/deployment/EPIC.md](tasks/deployment/EPIC.md) - Deploy to production
-
-| ID | Task | Status |
-|----|------|--------|
-| T100 | [Fly.io Backend](tasks/deployment/T100-flyio-backend.md) | TODO |
-| T110 | [Cloudflare Pages](tasks/deployment/T110-cloudflare-pages.md) | TODO |
-| T120 | [DNS & SSL](tasks/deployment/T120-dns-ssl.md) | TODO |
-| T130 | [Modal Production Workspace](tasks/deployment/T130-modal-production-workspace.md) | TODO |
-
----
-
-## Backlog
-
-| ID | Task | Imp | Cpx | Pri | Notes |
-|----|------|-----|-----|-----|-------|
-| T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | 5 | 3 | 1.7 | Blocked by T200 |
-| T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | 7 | 5 | 1.4 | After staging |
-| T74 | [Incremental Framing Export](tasks/T74-incremental-framing-export.md) | 5 | 5 | 1.0 | Cache rendered clips |
-| T200 | [User Management](tasks/T200-user-management.md) | 6 | 8 | 0.8 | Auth, multi-tenant |
-| T210 | [Wallet & Payments](tasks/T210-wallet-payments.md) | 5 | 8 | 0.6 | Stripe integration |
-| T220 | [Future GPU Features](tasks/T220-future-gpu-features.md) | 4 | 9 | 0.4 | Advanced AI features |
-
----
-
-## Completed
-
-### Performance Analysis (2026-02)
-- T51: [Modal Parallelization Analysis](tasks/T51-modal-parallelization-analysis.md) - **DONE**
-  - Overlay: E7 showed parallel costs 62-248% MORE (25ms/frame too low)
-  - Detection: Batch API already exists and is used during export
-  - Annotate: CPU-bound FFmpeg, parallelization won't help
-  - Model loading: Already baked into Modal images (no runtime downloads)
-
-### Infrastructure: Modal Integration (2026-01)
-- Modal account setup
-- GPU functions deployed (framing, overlay, detection)
-- Backend Modal integration with progress callbacks
-- Frontend export updates with WebSocket progress
-- Multi-clip Modal migration
-- Modal job recovery (Phase 1)
-
-### Infrastructure: R2 Storage (2026-01)
-- Cloudflare account setup
-- R2 bucket setup with CORS
-- R2 storage integration with presigned URLs
-- Database sync with version tracking
-
-### UX Polish (2026-01)
-- Player detection keyframes
-- Auto player detection after framing
-- Logging cleanup for production
-- Project filter persistence
-- Project status regression fix
-- Framing export validation UX
-- Overlay video sync fix
-- Gallery download fix
-- Framing→Annotate navigation
+| T51 | Overlay Parallelization | Analysis showed parallel costs more |
+| T52 | Annotate Parallelization | CPU-bound, won't help |
+| T130 | Modal Production Workspace | Not needed - personal workspace is fine |
 
 ---
 
 ## Task ID Reference
 
 IDs use gaps of 10 to allow insertions:
-- `T10, T20, T30...` - Active/upcoming tasks
-- `T100, T110, T120...` - Deployment epic
-- `T200, T210, T220...` - Backlog
-- Insert `T15` between `T10` and `T20`
+- `T10-T79` - Feature tasks (complete)
+- `T80-T99` - Pre-deployment blockers
+- `T100-T199` - Deployment epic
+- `T200-T299` - Post-launch features
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
