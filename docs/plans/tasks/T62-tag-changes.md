@@ -1,6 +1,6 @@
 # T62: Tag Changes
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 3
 **Complexity:** 3
 **Created:** 2026-02-11

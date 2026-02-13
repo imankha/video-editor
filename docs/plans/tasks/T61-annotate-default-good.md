@@ -1,6 +1,6 @@
 # T61: Annotate Mode Default to "Good"
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-02-11
