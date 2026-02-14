@@ -180,13 +180,11 @@ export function AnnotateContainer({
       console.log('[AnnotateContainer] Set up with game ID:', game.id, 'display name:', game.name);
 
       // Upload video to server in background with progress tracking
-      // T80: Use deduplication upload for large files (>500MB) to save bandwidth
-      const DEDUP_THRESHOLD = 500 * 1024 * 1024; // 500MB
-      const useDedup = uploadGameVideoDedupe && file.size > DEDUP_THRESHOLD;
+      // T80: Use deduplication upload when available (saves bandwidth for duplicate files)
+      const useDedup = !!uploadGameVideoDedupe;
 
       console.log('[AnnotateContainer] Starting background video upload...', {
         fileSize: file.size,
-        threshold: DEDUP_THRESHOLD,
         usingDedup: useDedup
       });
       setIsUploadingGameVideo(true);
