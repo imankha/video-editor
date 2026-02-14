@@ -16,6 +16,7 @@
     "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
+    "@noble/hashes": "^2.0.1",
     "axios": "^1.6.0",
     "lucide-react": "^0.294.0",
     "react": "^18.2.0",
