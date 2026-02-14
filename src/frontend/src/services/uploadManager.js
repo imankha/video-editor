@@ -182,9 +182,17 @@ async function uploadParts(file, parts, onProgress, concurrency = 3) {
  *
  * @param {File} file - Video file to upload
  * @param {function} onProgress - Progress callback: ({ phase, percent, message }) => void
- * @returns {Promise<Object>} - Result with status, game_id, etc.
+ * @param {Object} options - Optional game details and metadata
+ * @param {string} options.opponentName - Opponent team name
+ * @param {string} options.gameDate - Game date (YYYY-MM-DD)
+ * @param {string} options.gameType - 'home', 'away', or 'tournament'
+ * @param {string} options.tournamentName - Tournament name
+ * @param {number} options.videoDuration - Video duration in seconds
+ * @param {number} options.videoWidth - Video width in pixels
+ * @param {number} options.videoHeight - Video height in pixels
+ * @returns {Promise<Object>} - Result with status, game_id, name, video_url, etc.
  */
-export async function uploadGame(file, onProgress) {
+export async function uploadGame(file, onProgress, options = {}) {
   const notify = (phase, percent, message) => {
     if (onProgress) {
       onProgress({ phase, percent, message });
@@ -208,6 +216,15 @@ export async function uploadGame(file, onProgress) {
         blake3_hash: hash,
         file_size: file.size,
         original_filename: file.name,
+        // Game details for display name
+        opponent_name: options.opponentName || null,
+        game_date: options.gameDate || null,
+        game_type: options.gameType || null,
+        tournament_name: options.tournamentName || null,
+        // Video metadata
+        video_duration: options.videoDuration || null,
+        video_width: options.videoWidth || null,
+        video_height: options.videoHeight || null,
       }),
     });
 
@@ -224,6 +241,8 @@ export async function uploadGame(file, onProgress) {
       return {
         status: 'already_owned',
         game_id: prepareData.game_id,
+        name: prepareData.name,
+        video_url: prepareData.video_url,
         deduplicated: true,
       };
     }
@@ -233,6 +252,8 @@ export async function uploadGame(file, onProgress) {
       return {
         status: 'linked',
         game_id: prepareData.game_id,
+        name: prepareData.name,
+        video_url: prepareData.video_url,
         deduplicated: true,
         message: prepareData.message,
       };
@@ -260,6 +281,15 @@ export async function uploadGame(file, onProgress) {
           part_number: p.part_number,
           etag: p.etag,
         })),
+        // Game details for display name
+        opponent_name: options.opponentName || null,
+        game_date: options.gameDate || null,
+        game_type: options.gameType || null,
+        tournament_name: options.tournamentName || null,
+        // Video metadata
+        video_duration: options.videoDuration || null,
+        video_width: options.videoWidth || null,
+        video_height: options.videoHeight || null,
       }),
     });
 
@@ -274,6 +304,8 @@ export async function uploadGame(file, onProgress) {
     return {
       status: 'uploaded',
       game_id: finalizeData.game_id,
+      name: finalizeData.name,
+      video_url: finalizeData.video_url,
       blake3_hash: finalizeData.blake3_hash,
       file_size: finalizeData.file_size,
       deduplicated: false,

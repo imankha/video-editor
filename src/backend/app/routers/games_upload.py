@@ -19,6 +19,7 @@ from fastapi import APIRouter, HTTPException, Body
 from pydantic import BaseModel, Field
 
 from app.database import get_db_connection
+from app.routers.games import generate_game_display_name
 from app.storage import (
     R2_ENABLED,
     r2_global_key,
@@ -67,6 +68,15 @@ class PrepareUploadRequest(BaseModel):
     blake3_hash: str = Field(..., description="BLAKE3 hash of the file (64 hex chars)")
     file_size: int = Field(..., description="File size in bytes")
     original_filename: str = Field(..., description="Original filename")
+    # Optional game details for display name generation
+    opponent_name: Optional[str] = Field(None, description="Opponent team name")
+    game_date: Optional[str] = Field(None, description="Game date (YYYY-MM-DD)")
+    game_type: Optional[str] = Field(None, description="home, away, or tournament")
+    tournament_name: Optional[str] = Field(None, description="Tournament name if type is tournament")
+    # Video metadata (optional, from frontend extraction)
+    video_duration: Optional[float] = Field(None, description="Video duration in seconds")
+    video_width: Optional[int] = Field(None, description="Video width in pixels")
+    video_height: Optional[int] = Field(None, description="Video height in pixels")
 
 
 class PartInfo(BaseModel):
@@ -77,6 +87,15 @@ class PartInfo(BaseModel):
 class FinalizeUploadRequest(BaseModel):
     upload_session_id: str = Field(..., description="Session ID from prepare-upload")
     parts: List[PartInfo] = Field(..., description="List of uploaded parts with ETags")
+    # Optional game details for display name generation
+    opponent_name: Optional[str] = Field(None, description="Opponent team name")
+    game_date: Optional[str] = Field(None, description="Game date (YYYY-MM-DD)")
+    game_type: Optional[str] = Field(None, description="home, away, or tournament")
+    tournament_name: Optional[str] = Field(None, description="Tournament name if type is tournament")
+    # Video metadata (optional, from frontend extraction)
+    video_duration: Optional[float] = Field(None, description="Video duration in seconds")
+    video_width: Optional[int] = Field(None, description="Video width in pixels")
+    video_height: Optional[int] = Field(None, description="Video height in pixels")
 
 
 # ==============================================================================
@@ -130,11 +149,21 @@ async def prepare_upload(request: PrepareUploadRequest):
             existing = cursor.fetchone()
 
             if existing:
-                # User already owns this game
+                # User already owns this game - get full details
+                cursor.execute(
+                    "SELECT display_name, original_filename FROM user_games WHERE id = ?",
+                    (existing['id'],)
+                )
+                game_details = cursor.fetchone()
+                game_name = (game_details['display_name'] or game_details['original_filename']) if game_details else request.original_filename
+                video_url = generate_presigned_url_global(r2_key, expires_in=14400)
+
                 logger.info(f"Game already owned: {blake3_hash}")
                 return {
                     "status": "already_owned",
-                    "game_id": existing['id']
+                    "game_id": existing['id'],
+                    "name": game_name,
+                    "video_url": video_url
                 }
 
             # Link game to user's account
@@ -153,15 +182,25 @@ async def prepare_upload(request: PrepareUploadRequest):
             except (ValueError, TypeError):
                 pass
 
+            # Generate display name from game details
+            display_name = generate_game_display_name(
+                request.opponent_name,
+                request.game_date,
+                request.game_type,
+                request.tournament_name,
+                request.original_filename.rsplit('.', 1)[0]  # filename without extension
+            )
+
             cursor.execute("""
                 INSERT INTO user_games (
-                    blake3_hash, original_filename, file_size,
+                    blake3_hash, original_filename, display_name, file_size,
                     duration, width, height, fps
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 blake3_hash,
                 request.original_filename,
+                display_name,
                 request.file_size,
                 duration,
                 width,
@@ -174,10 +213,14 @@ async def prepare_upload(request: PrepareUploadRequest):
             # Increment ref_count
             increment_ref_count(r2_key)
 
+            video_url = generate_presigned_url_global(r2_key, expires_in=14400)
+
             logger.info(f"Linked existing game to user: {blake3_hash}, game_id: {game_id}")
             return {
                 "status": "linked",
                 "game_id": game_id,
+                "name": display_name,
+                "video_url": video_url,
                 "message": "Game already exists, linked to your account"
             }
 
@@ -301,26 +344,46 @@ async def finalize_upload(request: FinalizeUploadRequest):
                 detail=f"File size mismatch: expected {expected_size}, got {actual_size}"
             )
 
+        # Generate display name from game details
+        display_name = generate_game_display_name(
+            request.opponent_name,
+            request.game_date,
+            request.game_type,
+            request.tournament_name,
+            pending['original_filename'].rsplit('.', 1)[0]  # filename without extension
+        )
+
         # Set initial metadata (ref_count = 1)
-        # Video metadata will be extracted asynchronously or by frontend
         initial_metadata = {
             'ref_count': '1',
             'original_filename': pending['original_filename'],
             'created_at': datetime.utcnow().isoformat() + 'Z'
         }
+        # Add video metadata if provided
+        if request.video_duration:
+            initial_metadata['duration'] = str(request.video_duration)
+        if request.video_width:
+            initial_metadata['width'] = str(request.video_width)
+        if request.video_height:
+            initial_metadata['height'] = str(request.video_height)
 
         r2_set_object_metadata_global(r2_key, initial_metadata)
 
         # Insert into user_games
         cursor.execute("""
             INSERT INTO user_games (
-                blake3_hash, original_filename, file_size
+                blake3_hash, original_filename, display_name, file_size,
+                duration, width, height
             )
-            VALUES (?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             blake3_hash,
             pending['original_filename'],
-            pending['file_size']
+            display_name,
+            pending['file_size'],
+            request.video_duration,
+            request.video_width,
+            request.video_height
         ))
         conn.commit()
         game_id = cursor.lastrowid
@@ -337,11 +400,16 @@ async def finalize_upload(request: FinalizeUploadRequest):
             f"size: {actual_size / (1024*1024):.1f}MB"
         )
 
+        # Generate presigned URL for immediate playback
+        video_url = generate_presigned_url_global(r2_key, expires_in=14400)
+
         return {
             "status": "success",
             "game_id": game_id,
+            "name": display_name,
             "blake3_hash": blake3_hash,
-            "file_size": actual_size
+            "file_size": actual_size,
+            "video_url": video_url
         }
 
 

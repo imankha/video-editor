@@ -34,9 +34,7 @@ export function AnnotateContainer({
   seek,
 
   // Game management
-  createGame,
-  uploadGameVideo,
-  uploadGameVideoDedupe, // T80: Deduplicated upload for large files
+  uploadGameVideo, // T80: Unified upload with deduplication
   getGame,
   getGameVideoUrl,
   saveAnnotationsDebounced,
@@ -128,6 +126,11 @@ export function AnnotateContainer({
    * Handle game video selection for Annotate mode
    * Transitions to annotate mode where user can extract clips from full game footage.
    *
+   * T80: Uses unified upload flow with deduplication.
+   * - Transitions immediately with local blob URL
+   * - Game ID is set when upload completes (not before)
+   * - Clips saved during upload are queued via annotations
+   *
    * @param {File} file - Video file to process
    * @param {Object} gameDetails - Optional game details for display name generation
    * @param {string} gameDetails.opponentName - Opponent team name
@@ -153,87 +156,70 @@ export function AnnotateContainer({
         URL.revokeObjectURL(annotateVideoUrl);
       }
 
-      // Create game row IMMEDIATELY (just name, no video yet)
-      // Use file name as fallback if no game details provided
+      // Generate temporary display name from file or game details
       const rawGameName = file.name.replace(/\.[^/.]+$/, '');
-      console.log('[AnnotateContainer] Creating game row:', rawGameName, 'with details:', gameDetails);
-      const game = await createGame(rawGameName, {
-        duration: videoMetadata.duration,
-        width: videoMetadata.width,
-        height: videoMetadata.height,
-        size: videoMetadata.size,
-      }, gameDetails);
-      console.log('[AnnotateContainer] Game created with ID:', game.id, 'display name:', game.name);
+      let displayName = rawGameName;
+      if (gameDetails?.opponentName) {
+        // Simple display name generation (backend will do full generation)
+        const prefix = gameDetails.gameType === 'away' ? 'at' : 'Vs';
+        displayName = `${prefix} ${gameDetails.opponentName}`;
+      }
 
       // Set annotate state with LOCAL video URL (blob: URL - already in memory)
-      // Use the display name from the API response (generated from game details)
+      // Game ID will be set after upload completes
       console.log('[AnnotateContainer] New game using local blob URL (BLOB - pre-downloaded)');
       setAnnotateVideoFile(file);
       setAnnotateVideoUrl(localVideoUrl);
       setAnnotateVideoMetadata(videoMetadata);
-      setAnnotateGameId(game.id);
-      setAnnotateGameName(game.name); // Use display name from API
+      setAnnotateGameId(null); // Will be set after upload
+      setAnnotateGameName(displayName);
 
       // Transition to annotate mode IMMEDIATELY
       setEditorMode('annotate');
 
-      console.log('[AnnotateContainer] Set up with game ID:', game.id, 'display name:', game.name);
+      console.log('[AnnotateContainer] Transitioning to annotate mode (game ID pending upload)');
 
       // Upload video to server in background with progress tracking
-      // T80: Use deduplication upload when available (saves bandwidth for duplicate files)
-      const useDedup = !!uploadGameVideoDedupe;
-
+      // T80: Unified upload with deduplication - creates game entry on completion
       console.log('[AnnotateContainer] Starting background video upload...', {
-        fileSize: file.size,
-        usingDedup: useDedup
+        fileSize: file.size
       });
       setIsUploadingGameVideo(true);
       setUploadProgress({ loaded: 0, total: file.size, percent: 0 });
 
-      if (useDedup) {
-        // T80: Deduplicated upload for large files
-        uploadGameVideoDedupe(file, (progress) => {
-          // Map dedup progress to standard progress format
-          setUploadProgress({
-            loaded: Math.round((progress.percent / 100) * file.size),
-            total: file.size,
-            percent: progress.percent
-          });
+      uploadGameVideo(file, gameDetails, videoMetadata, (progress) => {
+        // Map progress to standard format
+        setUploadProgress({
+          loaded: Math.round((progress.percent / 100) * file.size),
+          total: file.size,
+          percent: progress.percent,
+          phase: progress.phase,
+          message: progress.message
+        });
+      })
+        .then((result) => {
+          // Set game ID now that upload is complete
+          setAnnotateGameId(result.game_id);
+          setAnnotateGameName(result.name);
+
+          if (result.deduplicated) {
+            console.log('[AnnotateContainer] DEDUPLICATION: Saved bandwidth! File already existed on server.', {
+              gameId: result.game_id,
+              status: result.status
+            });
+          } else {
+            console.log('[AnnotateContainer] Upload complete, game created:', result.game_id);
+          }
+
+          setIsUploadingGameVideo(false);
+          setUploadProgress(null);
         })
-          .then((result) => {
-            if (result.deduplicated) {
-              console.log('[AnnotateContainer] DEDUPLICATION: Saved bandwidth! File already existed on server.', {
-                gameId: game.id,
-                hash: result.blake3_hash,
-                status: result.status
-              });
-            } else {
-              console.log('[AnnotateContainer] Background video upload complete (dedup path):', game.id);
-            }
-            setIsUploadingGameVideo(false);
-            setUploadProgress(null);
-          })
-          .catch((uploadErr) => {
-            console.error('[AnnotateContainer] Deduplicated video upload failed:', uploadErr);
-            setIsUploadingGameVideo(false);
-            setUploadProgress(null);
-          });
-      } else {
-        // Standard upload for smaller files
-        uploadGameVideo(game.id, file, (loaded, total, percent) => {
-          setUploadProgress({ loaded, total, percent });
-        })
-          .then(() => {
-            console.log('[AnnotateContainer] Background video upload complete for game:', game.id);
-            setIsUploadingGameVideo(false);
-            setUploadProgress(null);
-          })
-          .catch((uploadErr) => {
-            console.error('[AnnotateContainer] Background video upload failed:', uploadErr);
-            setIsUploadingGameVideo(false);
-            setUploadProgress(null);
-          });
-      }
+        .catch((uploadErr) => {
+          console.error('[AnnotateContainer] Video upload failed:', uploadErr);
+          setIsUploadingGameVideo(false);
+          setUploadProgress(null);
+          // Keep local playback working even if upload fails
+        });
 
     } catch (err) {
       console.error('[AnnotateContainer] Failed to process game video:', err);

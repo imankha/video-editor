@@ -40,8 +40,7 @@ export function AnnotateScreen({ onClearSelection }) {
 
   // Games - OWNED BY THIS SCREEN
   const {
-    createGame,
-    uploadGameVideo,
+    uploadGameVideo, // T80: Unified upload with deduplication
     getGame,
     getGameVideoUrl,
     saveAnnotationsDebounced,
@@ -122,8 +121,7 @@ export function AnnotateScreen({ onClearSelection }) {
     stepBackward,
     restart,
     seek,
-    createGame,
-    uploadGameVideo,
+    uploadGameVideo, // T80: Unified upload with deduplication
     getGame,
     getGameVideoUrl,
     saveAnnotationsDebounced,
