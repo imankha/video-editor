@@ -14,7 +14,7 @@
  *   };
  */
 
-import { blake3 } from '@noble/hashes/blake3';
+import { blake3 } from '@noble/hashes/blake3.js';
 
 // 8MB chunks for good progress granularity
 const CHUNK_SIZE = 8 * 1024 * 1024;

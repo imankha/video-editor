@@ -4,11 +4,15 @@
  * Manages games state and API interactions.
  * Games store annotated game footage for later project creation.
  * Annotations are stored in separate JSON files (not in the database).
+ *
+ * T80: Now supports deduplicated uploads via BLAKE3 hashing.
+ * Large files (4GB+) use multipart upload to R2.
  */
 
 import { useState, useCallback, useRef } from 'react';
 import { API_BASE } from '../config';
 import { useGamesStore } from '../stores';
+import { uploadGame as uploadGameDedupe, UPLOAD_PHASE } from '../services/uploadManager';
 
 export function useGames() {
   const [games, setGames] = useState([]);
@@ -516,6 +520,47 @@ export function useGames() {
     }
   }, []);
 
+  /**
+   * Upload game video with deduplication support (T80)
+   *
+   * This function uses BLAKE3 hashing to check if the video already exists
+   * globally. If it does, the video is linked to the user's account without
+   * re-uploading (instant).
+   *
+   * For new videos, uses multipart upload to R2 for 4GB+ file support.
+   *
+   * Progress callback receives: { phase, percent, message }
+   * Phases: 'hashing', 'preparing', 'uploading', 'finalizing', 'complete', 'error'
+   *
+   * @param {File} videoFile - Video file to upload
+   * @param {function} onProgress - Progress callback: ({ phase, percent, message }) => void
+   * @returns {Promise<Object>} - Result with status, game_id, deduplicated flag
+   */
+  const uploadGameVideoDedupe = useCallback(async (videoFile, onProgress) => {
+    const fileSizeMB = (videoFile.size / (1024 * 1024)).toFixed(1);
+    console.log('[useGames] Starting deduplicated upload - size:', fileSizeMB, 'MB');
+
+    try {
+      const result = await uploadGameDedupe(videoFile, (progress) => {
+        console.log('[useGames] Dedupe upload progress:', progress.phase, progress.percent + '%');
+        if (onProgress) {
+          onProgress(progress);
+        }
+      });
+
+      console.log('[useGames] Dedupe upload complete:', result);
+
+      // Notify other components
+      invalidateGames();
+
+      return result;
+    } catch (err) {
+      console.error('[useGames] Dedupe upload failed:', err);
+      setError(err.message);
+      throw err;
+    }
+  }, [invalidateGames]);
+
   return {
     // State
     games,
@@ -528,6 +573,7 @@ export function useGames() {
     fetchGames,
     createGame,
     uploadGameVideo,
+    uploadGameVideoDedupe, // T80: New deduplicated upload
     getGame,
     updateGame,
     deleteGame,
