@@ -14,7 +14,7 @@ These tasks MUST be completed before deployment to avoid storage waste and re-mi
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| **T80** | [**Global Game Deduplication + 4GB Uploads**](tasks/T80-global-game-deduplication.md) | **TODO** | Games to global storage, multipart uploads |
+| **T80** | [**Global Game Deduplication + 4GB Uploads**](tasks/T80-global-game-deduplication.md) | **TESTING** | Games to global storage, multipart uploads |
 | **T85** | [**Multi-Athlete Profiles**](tasks/T85-multi-athlete-profiles.md) | **TODO** | Per-athlete data isolation (depends on T80) |
 
 **Why these block deployment:**
