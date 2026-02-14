@@ -36,6 +36,7 @@ export function AnnotateContainer({
   // Game management
   createGame,
   uploadGameVideo,
+  uploadGameVideoDedupe, // T80: Deduplicated upload for large files
   getGame,
   getGameVideoUrl,
   saveAnnotationsDebounced,
@@ -179,23 +180,62 @@ export function AnnotateContainer({
       console.log('[AnnotateContainer] Set up with game ID:', game.id, 'display name:', game.name);
 
       // Upload video to server in background with progress tracking
-      console.log('[AnnotateContainer] Starting background video upload...');
+      // T80: Use deduplication upload for large files (>500MB) to save bandwidth
+      const DEDUP_THRESHOLD = 500 * 1024 * 1024; // 500MB
+      const useDedup = uploadGameVideoDedupe && file.size > DEDUP_THRESHOLD;
+
+      console.log('[AnnotateContainer] Starting background video upload...', {
+        fileSize: file.size,
+        threshold: DEDUP_THRESHOLD,
+        usingDedup: useDedup
+      });
       setIsUploadingGameVideo(true);
       setUploadProgress({ loaded: 0, total: file.size, percent: 0 });
 
-      uploadGameVideo(game.id, file, (loaded, total, percent) => {
-        setUploadProgress({ loaded, total, percent });
-      })
-        .then(() => {
-          console.log('[AnnotateContainer] Background video upload complete for game:', game.id);
-          setIsUploadingGameVideo(false);
-          setUploadProgress(null);
+      if (useDedup) {
+        // T80: Deduplicated upload for large files
+        uploadGameVideoDedupe(file, (progress) => {
+          // Map dedup progress to standard progress format
+          setUploadProgress({
+            loaded: Math.round((progress.percent / 100) * file.size),
+            total: file.size,
+            percent: progress.percent
+          });
         })
-        .catch((uploadErr) => {
-          console.error('[AnnotateContainer] Background video upload failed:', uploadErr);
-          setIsUploadingGameVideo(false);
-          setUploadProgress(null);
-        });
+          .then((result) => {
+            if (result.deduplicated) {
+              console.log('[AnnotateContainer] DEDUPLICATION: Saved bandwidth! File already existed on server.', {
+                gameId: game.id,
+                hash: result.blake3_hash,
+                status: result.status
+              });
+            } else {
+              console.log('[AnnotateContainer] Background video upload complete (dedup path):', game.id);
+            }
+            setIsUploadingGameVideo(false);
+            setUploadProgress(null);
+          })
+          .catch((uploadErr) => {
+            console.error('[AnnotateContainer] Deduplicated video upload failed:', uploadErr);
+            setIsUploadingGameVideo(false);
+            setUploadProgress(null);
+          });
+      } else {
+        // Standard upload for smaller files
+        uploadGameVideo(game.id, file, (loaded, total, percent) => {
+          setUploadProgress({ loaded, total, percent });
+        })
+          .then(() => {
+            console.log('[AnnotateContainer] Background video upload complete for game:', game.id);
+            setIsUploadingGameVideo(false);
+            setUploadProgress(null);
+          })
+          .catch((uploadErr) => {
+            console.error('[AnnotateContainer] Background video upload failed:', uploadErr);
+            setIsUploadingGameVideo(false);
+            setUploadProgress(null);
+          });
+      }
 
     } catch (err) {
       console.error('[AnnotateContainer] Failed to process game video:', err);
