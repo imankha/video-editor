@@ -17,12 +17,39 @@ import os
 import logging
 import json
 
+from datetime import datetime
 from app.database import get_db_connection, get_raw_clips_path, ensure_directories
-from app.storage import generate_presigned_url_global
+from app.storage import (
+    generate_presigned_url_global,
+    r2_get_object_metadata_global,
+    r2_set_object_metadata_global,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/games", tags=["games"])
+
+
+def update_global_access_time(blake3_hash: str) -> None:
+    """
+    Update last_accessed_at in R2 object metadata.
+
+    This tracks global access time across all users - enables future
+    cleanup cron to identify truly unused games (not accessed by ANY user).
+    """
+    if not blake3_hash:
+        return
+
+    r2_key = f"games/{blake3_hash}.mp4"
+    try:
+        # Get existing metadata to preserve other fields
+        existing = r2_get_object_metadata_global(r2_key) or {}
+        existing['last_accessed_at'] = datetime.utcnow().isoformat() + 'Z'
+        r2_set_object_metadata_global(r2_key, existing)
+        logger.debug(f"Updated global access time for {blake3_hash}")
+    except Exception as e:
+        # Non-fatal - don't fail the request if metadata update fails
+        logger.warning(f"Failed to update global access time for {blake3_hash}: {e}")
 
 # Import rating constants from shared module (single source of truth)
 from app.constants import (
@@ -197,12 +224,15 @@ async def get_game(game_id: int):
         if not row:
             raise HTTPException(status_code=404, detail="Game not found")
 
-        # Update last_accessed_at
+        # Update last_accessed_at (local + global)
         cursor.execute(
             "UPDATE games SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?",
             (game_id,)
         )
         conn.commit()
+
+        # Update global access time in R2 metadata (for cross-user cleanup)
+        update_global_access_time(row['blake3_hash'])
 
         annotations = load_annotations_from_db(game_id)
 
@@ -317,12 +347,15 @@ async def get_game_video(game_id: int):
         if not row:
             raise HTTPException(status_code=404, detail="Game not found")
 
-        # Update last_accessed_at
+        # Update last_accessed_at (local + global)
         cursor.execute(
             "UPDATE games SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?",
             (game_id,)
         )
         conn.commit()
+
+        # Update global access time in R2 metadata (for cross-user cleanup)
+        update_global_access_time(row['blake3_hash'])
 
         presigned_url = generate_presigned_url_global(
             f"games/{row['blake3_hash']}.mp4",

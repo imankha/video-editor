@@ -18,6 +18,7 @@ import {
   listDedupeGames,
   deleteDedupeGame,
   getDedupeGameUrl,
+  listPendingUploads,
   UPLOAD_PHASE,
 } from '../services/uploadManager';
 import { useGamesStore } from '../stores';
@@ -35,6 +36,9 @@ export function useGameUpload() {
   // Deduplicated games list
   const [dedupeGames, setDedupeGames] = useState([]);
   const [isLoadingGames, setIsLoadingGames] = useState(false);
+
+  // Pending uploads (for resume)
+  const [pendingUploads, setPendingUploads] = useState([]);
 
   // Upload session for cancellation
   const uploadSessionRef = useRef(null);
@@ -124,6 +128,21 @@ export function useGameUpload() {
   }, []);
 
   /**
+   * Fetch pending uploads (for resume support)
+   */
+  const fetchPendingUploads = useCallback(async () => {
+    try {
+      const uploads = await listPendingUploads();
+      setPendingUploads(uploads);
+      return uploads;
+    } catch (err) {
+      // Non-fatal - just means we can't show resumable uploads
+      console.warn('Failed to fetch pending uploads:', err);
+      return [];
+    }
+  }, []);
+
+  /**
    * Delete a deduplicated game
    * @param {number} gameId - Game ID
    */
@@ -183,11 +202,15 @@ export function useGameUpload() {
     dedupeGames,
     isLoadingGames,
 
+    // Pending uploads (resume support)
+    pendingUploads,
+
     // Actions
     upload,
     cancel,
     reset,
     fetchDedupeGames,
+    fetchPendingUploads,
     deleteGame,
     getGameUrl,
   };

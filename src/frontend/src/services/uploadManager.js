@@ -112,31 +112,76 @@ async function uploadPart(file, part, onProgress) {
 }
 
 /**
- * Upload all parts with parallel execution
- * @param {File} file - Source file
- * @param {Array} parts - Array of part info from prepare-upload
- * @param {function} onProgress - Progress callback: (percent) => void
- * @param {number} concurrency - Max concurrent uploads (default 3)
- * @returns {Promise<Array>} - Array of { part_number, etag }
+ * Save completed parts to backend for resume support
+ * @param {string} sessionId - Upload session ID
+ * @param {Array} parts - Array of { part_number, etag }
  */
-async function uploadParts(file, parts, onProgress, concurrency = 3) {
-  const results = [];
+async function saveCompletedParts(sessionId, parts) {
+  try {
+    await fetch(`${API_BASE}/api/games/upload/${sessionId}/parts`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parts }),
+    });
+  } catch (e) {
+    // Non-fatal - just means resume won't work if browser crashes
+    console.warn('Failed to save completed parts:', e);
+  }
+}
+
+/**
+ * Upload all parts with parallel execution and resume support
+ * @param {File} file - Source file
+ * @param {Array} parts - Array of part info from prepare-upload (remaining parts only)
+ * @param {function} onProgress - Progress callback: (percent) => void
+ * @param {string} sessionId - Upload session ID for saving progress
+ * @param {Array} completedParts - Already completed parts (for resume)
+ * @param {number} totalBytes - Total bytes including completed parts
+ * @param {number} concurrency - Max concurrent uploads (default 3)
+ * @returns {Promise<Array>} - Array of { part_number, etag } (all parts including completed)
+ */
+async function uploadParts(
+  file,
+  parts,
+  onProgress,
+  sessionId = null,
+  completedParts = [],
+  totalBytes = null,
+  concurrency = 3
+) {
+  const results = [...completedParts]; // Start with already completed parts
   const partProgress = new Map(); // Track progress per part
 
-  // Calculate total bytes for progress
-  const totalBytes = parts.reduce(
+  // Calculate total bytes for progress (including already completed)
+  const remainingBytes = parts.reduce(
     (sum, p) => sum + (p.end_byte - p.start_byte + 1),
     0
   );
+  const completedBytes = completedParts.reduce((sum, p) => {
+    // Estimate completed part sizes (100MB each except possibly last)
+    return sum + 100 * 1024 * 1024;
+  }, 0);
+  const total = totalBytes || remainingBytes + completedBytes;
+
+  // Initialize progress with completed parts
+  let baseProgress = completedBytes;
 
   const updateTotalProgress = () => {
-    const uploadedBytes = Array.from(partProgress.values()).reduce(
-      (sum, p) => sum + p,
-      0
-    );
-    const percent = Math.round((uploadedBytes / totalBytes) * 100);
+    const uploadedBytes =
+      baseProgress +
+      Array.from(partProgress.values()).reduce((sum, p) => sum + p, 0);
+    const percent = Math.min(100, Math.round((uploadedBytes / total) * 100));
     if (onProgress) onProgress(percent);
   };
+
+  // Report initial progress if resuming
+  if (completedParts.length > 0) {
+    updateTotalProgress();
+  }
+
+  // Parts to save in batches (save every 3 parts to reduce requests)
+  const partsToSave = [];
+  const SAVE_BATCH_SIZE = 3;
 
   // Upload parts with concurrency limit
   const queue = [...parts];
@@ -153,12 +198,19 @@ async function uploadParts(file, parts, onProgress, concurrency = 3) {
       })
         .then((result) => {
           results.push(result);
+          partsToSave.push(result);
           partProgress.set(
             part.part_number,
             part.end_byte - part.start_byte + 1
           );
           updateTotalProgress();
           executing.delete(promise);
+
+          // Save completed parts in batches for resume support
+          if (sessionId && partsToSave.length >= SAVE_BATCH_SIZE) {
+            const batch = partsToSave.splice(0, partsToSave.length);
+            saveCompletedParts(sessionId, batch);
+          }
         })
         .catch((error) => {
           executing.delete(promise);
@@ -172,6 +224,11 @@ async function uploadParts(file, parts, onProgress, concurrency = 3) {
     if (executing.size > 0) {
       await Promise.race(executing);
     }
+  }
+
+  // Save any remaining parts
+  if (sessionId && partsToSave.length > 0) {
+    await saveCompletedParts(sessionId, partsToSave);
   }
 
   return results;
@@ -264,10 +321,29 @@ export async function uploadGame(file, onProgress, options = {}) {
       throw new Error(`Unexpected status: ${prepareData.status}`);
     }
 
-    notify(UPLOAD_PHASE.UPLOADING, 0, 'Uploading...');
-    const parts = await uploadParts(file, prepareData.parts, (p) => {
-      notify(UPLOAD_PHASE.UPLOADING, p, `Uploading... ${p}%`);
-    });
+    const isResume = prepareData.is_resume === true;
+    const completedParts = prepareData.completed_parts || [];
+
+    if (isResume && completedParts.length > 0) {
+      notify(
+        UPLOAD_PHASE.UPLOADING,
+        0,
+        `Resuming upload... (${completedParts.length} parts already uploaded)`
+      );
+    } else {
+      notify(UPLOAD_PHASE.UPLOADING, 0, 'Uploading...');
+    }
+
+    const parts = await uploadParts(
+      file,
+      prepareData.parts,
+      (p) => {
+        notify(UPLOAD_PHASE.UPLOADING, p, `Uploading... ${p}%`);
+      },
+      prepareData.upload_session_id,
+      completedParts,
+      file.size
+    );
     notify(UPLOAD_PHASE.UPLOADING, 100, 'Upload complete');
 
     // Phase 4: Finalize
@@ -381,4 +457,20 @@ export async function listDedupeGames() {
 
   const data = await response.json();
   return data.games;
+}
+
+/**
+ * List pending uploads that can be resumed
+ * @returns {Promise<Array>} - Array of pending upload objects
+ */
+export async function listPendingUploads() {
+  const response = await fetch(`${API_BASE}/api/games/pending-uploads`);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `List failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.pending_uploads;
 }

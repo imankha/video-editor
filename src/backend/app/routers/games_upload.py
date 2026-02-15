@@ -11,6 +11,7 @@ The blake3_hash is stored in the games table for lookup.
 
 import re
 import uuid
+import json
 import logging
 from typing import Optional, List
 from datetime import datetime
@@ -91,6 +92,11 @@ class FinalizeUploadRequest(BaseModel):
     video_duration: Optional[float] = Field(None, description="Video duration in seconds")
     video_width: Optional[int] = Field(None, description="Video width in pixels")
     video_height: Optional[int] = Field(None, description="Video height in pixels")
+
+
+class SavePartsRequest(BaseModel):
+    """Request to save completed parts for resume support."""
+    parts: List[PartInfo] = Field(..., description="List of completed parts with ETags")
 
 
 # ==============================================================================
@@ -210,7 +216,53 @@ async def prepare_upload(request: PrepareUploadRequest):
                 "message": "Game already exists, linked to your account"
             }
 
-    # Game doesn't exist - create multipart upload
+    # Check for existing pending upload with same hash (resume support)
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, r2_upload_id, parts_json FROM pending_uploads WHERE blake3_hash = ?",
+            (blake3_hash,)
+        )
+        existing_pending = cursor.fetchone()
+
+        if existing_pending:
+            # Resume existing upload - return remaining parts
+            session_id = existing_pending['id']
+            upload_id = existing_pending['r2_upload_id']
+            completed_parts = []
+            if existing_pending['parts_json']:
+                try:
+                    completed_parts = json.loads(existing_pending['parts_json'])
+                except json.JSONDecodeError:
+                    completed_parts = []
+
+            # Generate presigned URLs for ALL parts (4 hour expiry)
+            all_parts = generate_multipart_urls(
+                key=r2_key,
+                upload_id=upload_id,
+                file_size=request.file_size,
+                part_size=PART_SIZE,
+                expires_in=14400  # 4 hours
+            )
+
+            # Filter to only remaining parts
+            completed_part_numbers = {p['part_number'] for p in completed_parts}
+            remaining_parts = [p for p in all_parts if p['part_number'] not in completed_part_numbers]
+
+            logger.info(
+                f"Resuming upload: {blake3_hash}, session: {session_id}, "
+                f"completed: {len(completed_parts)}, remaining: {len(remaining_parts)}"
+            )
+
+            return {
+                "status": "upload_required",
+                "upload_session_id": session_id,
+                "parts": remaining_parts,
+                "completed_parts": completed_parts,
+                "is_resume": True
+            }
+
+    # Game doesn't exist and no pending upload - create new multipart upload
     upload_id = r2_create_multipart_upload(r2_key)
     if not upload_id:
         raise HTTPException(
@@ -255,7 +307,8 @@ async def prepare_upload(request: PrepareUploadRequest):
     return {
         "status": "upload_required",
         "upload_session_id": session_id,
-        "parts": parts
+        "parts": parts,
+        "is_resume": False
     }
 
 
@@ -399,6 +452,106 @@ async def finalize_upload(request: FinalizeUploadRequest):
             "file_size": actual_size,
             "video_url": video_url
         }
+
+
+@router.patch("/upload/{session_id}/parts")
+async def save_upload_parts(session_id: str, request: SavePartsRequest):
+    """
+    Save completed parts for resume support.
+
+    Call this after each part upload succeeds. If the browser crashes/closes,
+    the upload can be resumed from where it left off.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT parts_json FROM pending_uploads WHERE id = ?",
+            (session_id,)
+        )
+        pending = cursor.fetchone()
+
+        if not pending:
+            raise HTTPException(
+                status_code=404,
+                detail="Upload session not found"
+            )
+
+        # Merge new parts with existing
+        existing_parts = []
+        if pending['parts_json']:
+            try:
+                existing_parts = json.loads(pending['parts_json'])
+            except json.JSONDecodeError:
+                existing_parts = []
+
+        # Create a map of existing parts by part_number
+        parts_map = {p['part_number']: p for p in existing_parts}
+
+        # Add/update with new parts
+        for part in request.parts:
+            parts_map[part.part_number] = {
+                'part_number': part.part_number,
+                'etag': part.etag
+            }
+
+        # Convert back to list sorted by part_number
+        merged_parts = sorted(parts_map.values(), key=lambda p: p['part_number'])
+
+        # Save to database
+        cursor.execute(
+            "UPDATE pending_uploads SET parts_json = ? WHERE id = ?",
+            (json.dumps(merged_parts), session_id)
+        )
+        conn.commit()
+
+        logger.debug(f"Saved {len(request.parts)} parts for session {session_id}, total: {len(merged_parts)}")
+
+        return {
+            "status": "saved",
+            "parts_count": len(merged_parts)
+        }
+
+
+@router.get("/pending-uploads")
+async def list_pending_uploads():
+    """
+    List pending uploads for the current user.
+
+    Used by frontend to detect and resume interrupted uploads.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, blake3_hash, file_size, original_filename, parts_json, created_at
+            FROM pending_uploads
+            ORDER BY created_at DESC
+        """)
+        rows = cursor.fetchall()
+
+        uploads = []
+        for row in rows:
+            completed_parts = []
+            if row['parts_json']:
+                try:
+                    completed_parts = json.loads(row['parts_json'])
+                except json.JSONDecodeError:
+                    pass
+
+            # Calculate total parts based on file size
+            total_parts = (row['file_size'] + PART_SIZE - 1) // PART_SIZE
+
+            uploads.append({
+                'session_id': row['id'],
+                'blake3_hash': row['blake3_hash'],
+                'file_size': row['file_size'],
+                'original_filename': row['original_filename'],
+                'completed_parts': len(completed_parts),
+                'total_parts': total_parts,
+                'progress_percent': round(len(completed_parts) / total_parts * 100) if total_parts > 0 else 0,
+                'created_at': row['created_at']
+            })
+
+        return {'pending_uploads': uploads}
 
 
 @router.delete("/upload/{session_id}")
