@@ -465,7 +465,8 @@ def ensure_database():
             CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                blake3_hash TEXT NOT NULL,
+                video_filename TEXT,
+                blake3_hash TEXT,
                 clip_count INTEGER DEFAULT 0,
                 brilliant_count INTEGER DEFAULT 0,
                 good_count INTEGER DEFAULT 0,
@@ -474,7 +475,15 @@ def ensure_database():
                 blunder_count INTEGER DEFAULT 0,
                 aggregate_score INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                video_duration REAL,
+                video_width INTEGER,
+                video_height INTEGER,
+                video_size INTEGER,
+                opponent_name TEXT,
+                game_date TEXT,
+                game_type TEXT,
+                tournament_name TEXT
             )
         """)
 

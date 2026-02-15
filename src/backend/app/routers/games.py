@@ -21,9 +21,11 @@ from datetime import datetime
 from app.database import get_db_connection, get_raw_clips_path, ensure_directories
 from app.storage import (
     generate_presigned_url_global,
+    generate_presigned_url,
     r2_get_object_metadata_global,
     r2_set_object_metadata_global,
 )
+from app.user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,33 @@ def update_global_access_time(blake3_hash: str) -> None:
     except Exception as e:
         # Non-fatal - don't fail the request if metadata update fails
         logger.warning(f"Failed to update global access time for {blake3_hash}: {e}")
+
+
+def get_game_video_url(blake3_hash: str, video_filename: str) -> str:
+    """
+    Get presigned URL for a game video, supporting both old and new storage.
+
+    New storage (T80): games/{blake3_hash}.mp4 (global)
+    Old storage: {user_id}/games/{video_filename} (per-user)
+
+    Returns presigned URL or None if video not available.
+    """
+    if blake3_hash:
+        # New global storage
+        return generate_presigned_url_global(
+            f"games/{blake3_hash}.mp4",
+            expires_in=14400
+        )
+    elif video_filename:
+        # Old per-user storage (pre-T80 migration)
+        user_id = get_current_user_id()
+        return generate_presigned_url(
+            user_id=user_id,
+            relative_path=f"games/{video_filename}",
+            expires_in=14400,
+            content_type="video/mp4"
+        )
+    return None
 
 # Import rating constants from shared module (single source of truth)
 from app.constants import (
@@ -142,7 +171,7 @@ async def list_games():
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT id, name, blake3_hash, created_at,
+            SELECT id, name, blake3_hash, video_filename, created_at,
                    clip_count, brilliant_count, good_count, interesting_count,
                    mistake_count, blunder_count, aggregate_score,
                    opponent_name, game_date, game_type, tournament_name
@@ -161,10 +190,8 @@ async def list_games():
                 row['name']
             )
 
-            video_url = generate_presigned_url_global(
-                f"games/{row['blake3_hash']}.mp4",
-                expires_in=14400
-            )
+            # Support both new (blake3_hash) and old (video_filename) storage
+            video_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
 
             games.append({
                 'id': row['id'],
@@ -213,7 +240,7 @@ async def get_game(game_id: int):
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT id, name, blake3_hash, created_at,
+            SELECT id, name, blake3_hash, video_filename, created_at,
                    video_duration, video_width, video_height, video_size,
                    opponent_name, game_date, game_type, tournament_name
             FROM games
@@ -232,7 +259,9 @@ async def get_game(game_id: int):
         conn.commit()
 
         # Update global access time in R2 metadata (for cross-user cleanup)
-        update_global_access_time(row['blake3_hash'])
+        # Only for new global storage (blake3_hash)
+        if row['blake3_hash']:
+            update_global_access_time(row['blake3_hash'])
 
         annotations = load_annotations_from_db(game_id)
 
@@ -244,10 +273,8 @@ async def get_game(game_id: int):
             row['name']
         )
 
-        video_url = generate_presigned_url_global(
-            f"games/{row['blake3_hash']}.mp4",
-            expires_in=14400
-        )
+        # Support both new (blake3_hash) and old (video_filename) storage
+        video_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
 
         return {
             'id': row['id'],
@@ -341,7 +368,7 @@ async def get_game_video(game_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("SELECT blake3_hash FROM games WHERE id = ?", (game_id,))
+        cursor.execute("SELECT blake3_hash, video_filename FROM games WHERE id = ?", (game_id,))
         row = cursor.fetchone()
 
         if not row:
@@ -355,15 +382,15 @@ async def get_game_video(game_id: int):
         conn.commit()
 
         # Update global access time in R2 metadata (for cross-user cleanup)
-        update_global_access_time(row['blake3_hash'])
+        # Only for new global storage (blake3_hash)
+        if row['blake3_hash']:
+            update_global_access_time(row['blake3_hash'])
 
-        presigned_url = generate_presigned_url_global(
-            f"games/{row['blake3_hash']}.mp4",
-            expires_in=14400
-        )
+        # Support both new (blake3_hash) and old (video_filename) storage
+        presigned_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
         if presigned_url:
             return RedirectResponse(url=presigned_url, status_code=302)
-        raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+        raise HTTPException(status_code=404, detail="Video not available")
 
 
 # ============================================================================
