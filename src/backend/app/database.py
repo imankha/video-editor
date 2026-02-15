@@ -466,6 +466,7 @@ def ensure_database():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 video_filename TEXT,
+                blake3_hash TEXT,
                 clip_count INTEGER DEFAULT 0,
                 brilliant_count INTEGER DEFAULT 0,
                 good_count INTEGER DEFAULT 0,
@@ -614,6 +615,8 @@ def ensure_database():
             "ALTER TABLE working_videos ADD COLUMN highlight_color TEXT DEFAULT NULL",
             # T66: Track when project was restored from archive (for stale cleanup)
             "ALTER TABLE projects ADD COLUMN restored_at TIMESTAMP DEFAULT NULL",
+            # T80: Global game deduplication - store BLAKE3 hash for global storage
+            "ALTER TABLE games ADD COLUMN blake3_hash TEXT",
         ]
 
         for migration in migrations:

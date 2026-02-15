@@ -144,64 +144,16 @@ async def list_games():
     """
     List all saved games.
 
-    T80: Now reads from user_games table (global dedup storage).
-    Falls back to games table for backward compatibility.
+    T80: Games with blake3_hash use global dedup storage (games/{hash}.mp4).
+    Games with video_filename use per-user storage (legacy).
     """
     ensure_directories()
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Try user_games first (T80: global deduplicated storage)
         cursor.execute("""
-            SELECT id, blake3_hash, display_name, original_filename,
-                   file_size, duration, width, height, added_at
-            FROM user_games
-            ORDER BY added_at DESC
-        """)
-        rows = cursor.fetchall()
-
-        if rows:
-            # Use user_games (new global storage)
-            games = []
-            for row in rows:
-                # Get clip counts from games table if available (for backward compat)
-                cursor.execute("""
-                    SELECT clip_count, brilliant_count, good_count, interesting_count,
-                           mistake_count, blunder_count, aggregate_score
-                    FROM games WHERE id = ?
-                """, (row['id'],))
-                counts = cursor.fetchone()
-
-                # Generate presigned URL for global storage
-                video_url = None
-                if R2_ENABLED and row['blake3_hash']:
-                    video_url = generate_presigned_url_global(
-                        f"games/{row['blake3_hash']}.mp4",
-                        expires_in=14400
-                    )
-
-                games.append({
-                    'id': row['id'],
-                    'name': row['display_name'] or row['original_filename'],
-                    'raw_name': row['original_filename'],
-                    'blake3_hash': row['blake3_hash'],
-                    'video_url': video_url,
-                    'clip_count': counts['clip_count'] if counts else 0,
-                    'brilliant_count': counts['brilliant_count'] if counts else 0,
-                    'good_count': counts['good_count'] if counts else 0,
-                    'interesting_count': counts['interesting_count'] if counts else 0,
-                    'mistake_count': counts['mistake_count'] if counts else 0,
-                    'blunder_count': counts['blunder_count'] if counts else 0,
-                    'aggregate_score': counts['aggregate_score'] if counts else 0,
-                    'created_at': row['added_at'],
-                })
-
-            return {'games': games}
-
-        # Fallback to old games table
-        cursor.execute("""
-            SELECT id, name, video_filename, created_at,
+            SELECT id, name, video_filename, blake3_hash, created_at,
                    clip_count, brilliant_count, good_count, interesting_count,
                    mistake_count, blunder_count, aggregate_score,
                    opponent_name, game_date, game_type, tournament_name
@@ -220,12 +172,26 @@ async def list_games():
                 row['tournament_name'],
                 row['name']
             )
+
+            # Generate video URL based on storage type
+            video_url = None
+            if row['blake3_hash'] and R2_ENABLED:
+                # Global dedup storage
+                video_url = generate_presigned_url_global(
+                    f"games/{row['blake3_hash']}.mp4",
+                    expires_in=14400
+                )
+            elif row['video_filename']:
+                # Legacy per-user storage
+                video_url = get_game_video_url(row['video_filename'])
+
             games.append({
                 'id': row['id'],
                 'name': display_name,
                 'raw_name': row['name'],
+                'blake3_hash': row['blake3_hash'],
                 'video_filename': row['video_filename'],
-                'video_url': get_game_video_url(row['video_filename']),
+                'video_url': video_url,
                 'clip_count': row['clip_count'] or 0,
                 'brilliant_count': row['brilliant_count'] or 0,
                 'good_count': row['good_count'] or 0,
@@ -568,51 +534,13 @@ async def get_game(game_id: int):
     """
     Get game details including full annotations from database and video metadata.
 
-    T80: Now checks user_games first (global dedup storage), falls back to games table.
+    T80: Games with blake3_hash use global dedup storage (games/{hash}.mp4).
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Try user_games first (T80: global deduplicated storage)
         cursor.execute("""
-            SELECT id, blake3_hash, display_name, original_filename,
-                   file_size, duration, width, height, added_at
-            FROM user_games
-            WHERE id = ?
-        """, (game_id,))
-        user_game = cursor.fetchone()
-
-        if user_game:
-            # Load annotations from database
-            annotations = load_annotations_from_db(game_id)
-
-            # Generate presigned URL for global storage
-            video_url = None
-            if R2_ENABLED and user_game['blake3_hash']:
-                video_url = generate_presigned_url_global(
-                    f"games/{user_game['blake3_hash']}.mp4",
-                    expires_in=14400  # 4 hours
-                )
-
-            return {
-                'id': user_game['id'],
-                'name': user_game['display_name'] or user_game['original_filename'],
-                'raw_name': user_game['original_filename'],
-                'blake3_hash': user_game['blake3_hash'],
-                'video_url': video_url,
-                'annotations': annotations,
-                'clip_count': len(annotations),
-                'created_at': user_game['added_at'],
-                # Video metadata
-                'video_duration': user_game['duration'],
-                'video_width': user_game['width'],
-                'video_height': user_game['height'],
-                'video_size': user_game['file_size'],
-            }
-
-        # Fallback to old games table
-        cursor.execute("""
-            SELECT id, name, video_filename, created_at,
+            SELECT id, name, video_filename, blake3_hash, created_at,
                    video_duration, video_width, video_height, video_size,
                    opponent_name, game_date, game_type, tournament_name
             FROM games
@@ -635,12 +563,25 @@ async def get_game(game_id: int):
             row['name']
         )
 
+        # Generate video URL based on storage type
+        video_url = None
+        if row['blake3_hash'] and R2_ENABLED:
+            # Global dedup storage
+            video_url = generate_presigned_url_global(
+                f"games/{row['blake3_hash']}.mp4",
+                expires_in=14400
+            )
+        elif row['video_filename']:
+            # Legacy per-user storage
+            video_url = get_game_video_url(row['video_filename'])
+
         return {
             'id': row['id'],
             'name': display_name,
             'raw_name': row['name'],
+            'blake3_hash': row['blake3_hash'],
             'video_filename': row['video_filename'],
-            'video_url': get_game_video_url(row['video_filename']),  # Presigned R2 URL or None
+            'video_url': video_url,
             'annotations': annotations,
             'clip_count': len(annotations),
             'created_at': row['created_at'],
@@ -743,7 +684,7 @@ async def get_game_video(game_id: int, request: Request):
     """
     Stream the game video file. Redirects to R2 when enabled.
 
-    T80: Checks user_games first for global storage, falls back to games table.
+    T80: Games with blake3_hash use global dedup storage.
 
     When R2 is enabled, redirects to presigned URL (R2 handles range requests).
     When local, supports HTTP Range requests (206 Partial Content) for efficient
@@ -754,31 +695,26 @@ async def get_game_video(game_id: int, request: Request):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Try user_games first (T80: global deduplicated storage)
-        cursor.execute("SELECT blake3_hash FROM user_games WHERE id = ?", (game_id,))
-        user_game = cursor.fetchone()
+        cursor.execute("SELECT blake3_hash, video_filename FROM games WHERE id = ?", (game_id,))
+        row = cursor.fetchone()
 
-        if user_game and user_game['blake3_hash']:
-            # Global storage - redirect to presigned URL
+        if not row:
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        # Check for global dedup storage first
+        if row['blake3_hash']:
             if R2_ENABLED:
                 presigned_url = generate_presigned_url_global(
-                    f"games/{user_game['blake3_hash']}.mp4",
+                    f"games/{row['blake3_hash']}.mp4",
                     expires_in=14400
                 )
                 if presigned_url:
                     return RedirectResponse(url=presigned_url, status_code=302)
                 raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
             else:
-                # Local mode not supported for global storage
                 raise HTTPException(status_code=404, detail="R2 required for global game storage")
 
-        # Fallback to old games table
-        cursor.execute("SELECT video_filename FROM games WHERE id = ?", (game_id,))
-        row = cursor.fetchone()
-
-        if not row:
-            raise HTTPException(status_code=404, detail="Game not found")
-
+        # Legacy per-user storage
         video_filename = row['video_filename']
         if not video_filename:
             raise HTTPException(status_code=404, detail="Video not yet uploaded")

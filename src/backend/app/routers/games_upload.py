@@ -6,7 +6,7 @@ This router handles deduplicated game uploads:
 - POST /api/games/finalize-upload - Complete multipart upload
 
 Games are stored globally in R2 at games/{blake3_hash}.mp4 for deduplication.
-Users link to games via the user_games table.
+The blake3_hash is stored in the games table for lookup.
 """
 
 import re
@@ -143,42 +143,34 @@ async def prepare_upload(request: PrepareUploadRequest):
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT id FROM user_games WHERE blake3_hash = ?",
+                "SELECT id, name FROM games WHERE blake3_hash = ?",
                 (blake3_hash,)
             )
             existing = cursor.fetchone()
 
             if existing:
-                # User already owns this game - get full details
-                cursor.execute(
-                    "SELECT display_name, original_filename FROM user_games WHERE id = ?",
-                    (existing['id'],)
-                )
-                game_details = cursor.fetchone()
-                game_name = (game_details['display_name'] or game_details['original_filename']) if game_details else request.original_filename
+                # User already owns this game
                 video_url = generate_presigned_url_global(r2_key, expires_in=14400)
 
                 logger.info(f"Game already owned: {blake3_hash}")
                 return {
                     "status": "already_owned",
                     "game_id": existing['id'],
-                    "name": game_name,
+                    "name": existing['name'],
                     "video_url": video_url
                 }
 
-            # Link game to user's account
+            # Link game to user's account (create new games entry with same hash)
             metadata = head_result.get('Metadata', {})
 
             # Get video metadata from R2 object
             duration = None
             width = None
             height = None
-            fps = None
             try:
                 duration = float(metadata.get('duration', 0)) or None
                 width = int(metadata.get('width', 0)) or None
                 height = int(metadata.get('height', 0)) or None
-                fps = float(metadata.get('fps', 0)) or None
             except (ValueError, TypeError):
                 pass
 
@@ -192,20 +184,22 @@ async def prepare_upload(request: PrepareUploadRequest):
             )
 
             cursor.execute("""
-                INSERT INTO user_games (
-                    blake3_hash, original_filename, display_name, file_size,
-                    duration, width, height, fps
+                INSERT INTO games (
+                    name, blake3_hash, video_duration, video_width, video_height, video_size,
+                    opponent_name, game_date, game_type, tournament_name
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                blake3_hash,
-                request.original_filename,
                 display_name,
-                request.file_size,
+                blake3_hash,
                 duration,
                 width,
                 height,
-                fps
+                request.file_size,
+                request.opponent_name,
+                request.game_date,
+                request.game_type,
+                request.tournament_name
             ))
             conn.commit()
             game_id = cursor.lastrowid
@@ -369,21 +363,24 @@ async def finalize_upload(request: FinalizeUploadRequest):
 
         r2_set_object_metadata_global(r2_key, initial_metadata)
 
-        # Insert into user_games
+        # Insert into games table (with blake3_hash for global storage)
         cursor.execute("""
-            INSERT INTO user_games (
-                blake3_hash, original_filename, display_name, file_size,
-                duration, width, height
+            INSERT INTO games (
+                name, blake3_hash, video_duration, video_width, video_height, video_size,
+                opponent_name, game_date, game_type, tournament_name
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            blake3_hash,
-            pending['original_filename'],
             display_name,
-            pending['file_size'],
+            blake3_hash,
             request.video_duration,
             request.video_width,
-            request.video_height
+            request.video_height,
+            pending['file_size'],
+            request.opponent_name,
+            request.game_date,
+            request.game_type,
+            request.tournament_name
         ))
         conn.commit()
         game_id = cursor.lastrowid
@@ -459,8 +456,6 @@ async def cancel_upload(session_id: str):
 async def get_dedupe_game_url(game_id: int):
     """
     Get a presigned URL for a deduplicated game video.
-
-    This endpoint is for the new global game storage (user_games table).
     """
     if not R2_ENABLED:
         raise HTTPException(
@@ -471,7 +466,7 @@ async def get_dedupe_game_url(game_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT blake3_hash FROM user_games WHERE id = ?",
+            "SELECT blake3_hash FROM games WHERE id = ?",
             (game_id,)
         )
         game = cursor.fetchone()
@@ -480,6 +475,12 @@ async def get_dedupe_game_url(game_id: int):
             raise HTTPException(
                 status_code=404,
                 detail="Game not found"
+            )
+
+        if not game['blake3_hash']:
+            raise HTTPException(
+                status_code=400,
+                detail="Game does not use global storage"
             )
 
         r2_key = f"games/{game['blake3_hash']}.mp4"
@@ -497,7 +498,7 @@ async def get_dedupe_game_url(game_id: int):
 @router.delete("/dedupe/{game_id}")
 async def delete_dedupe_game(game_id: int):
     """
-    Delete a deduplicated game from user's library.
+    Delete a game that uses global dedup storage.
 
     This decrements the ref_count on the global game object.
     When ref_count reaches 0, the actual R2 object is deleted.
@@ -511,7 +512,7 @@ async def delete_dedupe_game(game_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT blake3_hash FROM user_games WHERE id = ?",
+            "SELECT blake3_hash FROM games WHERE id = ?",
             (game_id,)
         )
         game = cursor.fetchone()
@@ -523,6 +524,12 @@ async def delete_dedupe_game(game_id: int):
             )
 
         blake3_hash = game['blake3_hash']
+        if not blake3_hash:
+            raise HTTPException(
+                status_code=400,
+                detail="Game does not use global storage"
+            )
+
         r2_key = f"games/{blake3_hash}.mp4"
 
         # Decrement ref_count
@@ -535,13 +542,13 @@ async def delete_dedupe_game(game_id: int):
 
         # Remove from user's library
         cursor.execute(
-            "DELETE FROM user_games WHERE id = ?",
+            "DELETE FROM games WHERE id = ?",
             (game_id,)
         )
         conn.commit()
 
         logger.info(
-            f"Removed game from user library: game_id={game_id}, "
+            f"Removed game: game_id={game_id}, "
             f"hash={blake3_hash}, new_ref_count={new_count}"
         )
 
@@ -555,17 +562,18 @@ async def delete_dedupe_game(game_id: int):
 @router.get("/dedupe")
 async def list_dedupe_games():
     """
-    List all deduplicated games in user's library.
+    List games that use global dedup storage (have blake3_hash).
 
-    Returns games from the user_games table (new global dedup storage).
+    Note: This is mostly for debugging. Use /api/games for the main list.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, blake3_hash, original_filename, display_name,
-                   file_size, duration, width, height, fps, added_at
-            FROM user_games
-            ORDER BY added_at DESC
+            SELECT id, blake3_hash, name, video_size, video_duration,
+                   video_width, video_height, created_at
+            FROM games
+            WHERE blake3_hash IS NOT NULL
+            ORDER BY created_at DESC
         """)
         rows = cursor.fetchall()
 
@@ -580,15 +588,13 @@ async def list_dedupe_games():
             games.append({
                 'id': row['id'],
                 'blake3_hash': row['blake3_hash'],
-                'name': row['display_name'] or row['original_filename'],
-                'original_filename': row['original_filename'],
-                'file_size': row['file_size'],
-                'duration': row['duration'],
-                'width': row['width'],
-                'height': row['height'],
-                'fps': row['fps'],
+                'name': row['name'],
+                'file_size': row['video_size'],
+                'duration': row['video_duration'],
+                'width': row['video_width'],
+                'height': row['video_height'],
                 'video_url': video_url,
-                'added_at': row['added_at']
+                'created_at': row['created_at']
             })
 
         return {'games': games}
