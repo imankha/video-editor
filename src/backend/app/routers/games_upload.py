@@ -22,16 +22,11 @@ from app.database import get_db_connection
 from app.routers.games import generate_game_display_name
 from app.storage import (
     R2_ENABLED,
-    r2_global_key,
     r2_head_object_global,
-    r2_delete_object_global,
     r2_create_multipart_upload,
     r2_complete_multipart_upload,
     r2_abort_multipart_upload,
-    r2_get_object_metadata_global,
     r2_set_object_metadata_global,
-    increment_ref_count,
-    decrement_ref_count,
     generate_multipart_urls,
     generate_presigned_url_global,
 )
@@ -204,9 +199,6 @@ async def prepare_upload(request: PrepareUploadRequest):
             conn.commit()
             game_id = cursor.lastrowid
 
-            # Increment ref_count
-            increment_ref_count(r2_key)
-
             video_url = generate_presigned_url_global(r2_key, expires_in=14400)
 
             logger.info(f"Linked existing game to user: {blake3_hash}, game_id: {game_id}")
@@ -347,9 +339,8 @@ async def finalize_upload(request: FinalizeUploadRequest):
             pending['original_filename'].rsplit('.', 1)[0]  # filename without extension
         )
 
-        # Set initial metadata (ref_count = 1)
+        # Set metadata on the R2 object
         initial_metadata = {
-            'ref_count': '1',
             'original_filename': pending['original_filename'],
             'created_at': datetime.utcnow().isoformat() + 'Z'
         }
@@ -498,64 +489,30 @@ async def get_dedupe_game_url(game_id: int):
 @router.delete("/dedupe/{game_id}")
 async def delete_dedupe_game(game_id: int):
     """
-    Delete a game that uses global dedup storage.
+    Delete a game from user's database.
 
-    This decrements the ref_count on the global game object.
-    When ref_count reaches 0, the actual R2 object is deleted.
+    Global video is NOT deleted - it may be shared by other users.
+    Uses "never delete" approach for storage (cleanup via future cron job).
     """
-    if not R2_ENABLED:
-        raise HTTPException(
-            status_code=503,
-            detail="R2 storage not enabled"
-        )
-
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT blake3_hash FROM games WHERE id = ?",
-            (game_id,)
-        )
-        game = cursor.fetchone()
+        cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
 
-        if not game:
+        if not cursor.fetchone():
             raise HTTPException(
                 status_code=404,
                 detail="Game not found"
             )
 
-        blake3_hash = game['blake3_hash']
-        if not blake3_hash:
-            raise HTTPException(
-                status_code=400,
-                detail="Game does not use global storage"
-            )
-
-        r2_key = f"games/{blake3_hash}.mp4"
-
-        # Decrement ref_count
-        new_count = decrement_ref_count(r2_key)
-
-        # If ref_count is 0, delete the actual file
-        if new_count == 0:
-            r2_delete_object_global(r2_key)
-            logger.info(f"Deleted global game object (ref_count=0): {blake3_hash}")
-
-        # Remove from user's library
-        cursor.execute(
-            "DELETE FROM games WHERE id = ?",
-            (game_id,)
-        )
+        # Remove from user's library only (global video stays)
+        cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
         conn.commit()
 
-        logger.info(
-            f"Removed game: game_id={game_id}, "
-            f"hash={blake3_hash}, new_ref_count={new_count}"
-        )
+        logger.info(f"Removed game from user's library: game_id={game_id}")
 
         return {
             "status": "deleted",
-            "game_id": game_id,
-            "ref_count_remaining": max(0, new_count)
+            "game_id": game_id
         }
 
 

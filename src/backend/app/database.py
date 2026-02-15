@@ -457,16 +457,15 @@ def ensure_database():
             )
         """)
 
-        # Games - store annotated game footage for later project creation
-        # video_filename is NULL until video is uploaded (allows instant game creation)
-        # Aggregate columns cache annotation counts for fast listing without parsing
+        # Games - store annotated game footage
+        # Videos stored globally in R2 at games/{blake3_hash}.mp4
+        # Aggregate columns cache annotation counts for fast listing
         # Clip annotations are stored in raw_clips table (linked by game_id)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                video_filename TEXT,
-                blake3_hash TEXT,
+                blake3_hash TEXT NOT NULL,
                 clip_count INTEGER DEFAULT 0,
                 brilliant_count INTEGER DEFAULT 0,
                 good_count INTEGER DEFAULT 0,
@@ -474,7 +473,8 @@ def ensure_database():
                 mistake_count INTEGER DEFAULT 0,
                 blunder_count INTEGER DEFAULT 0,
                 aggregate_score INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
@@ -617,6 +617,8 @@ def ensure_database():
             "ALTER TABLE projects ADD COLUMN restored_at TIMESTAMP DEFAULT NULL",
             # T80: Global game deduplication - store BLAKE3 hash for global storage
             "ALTER TABLE games ADD COLUMN blake3_hash TEXT",
+            # T80: Track last access time for future cleanup of unused games
+            "ALTER TABLE games ADD COLUMN last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         ]
 
         for migration in migrations:
