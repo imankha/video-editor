@@ -233,7 +233,7 @@ async def list_tournaments():
     return {'tournaments': tournaments}
 
 
-@router.get("/{game_id}")
+@router.get("/{game_id:int}")
 async def get_game(game_id: int):
     """Get game details including annotations. Updates last_accessed_at."""
     with get_db_connection() as conn:
@@ -292,7 +292,7 @@ async def get_game(game_id: int):
         }
 
 
-@router.put("/{game_id}")
+@router.put("/{game_id:int}")
 async def update_game(
     game_id: int,
     name: Optional[str] = Form(None)
@@ -316,7 +316,7 @@ async def update_game(
         return {'success': True}
 
 
-@router.put("/{game_id}/annotations")
+@router.put("/{game_id:int}/annotations")
 async def update_annotations(
     game_id: int,
     annotations: List = Body(...)
@@ -343,7 +343,7 @@ async def update_annotations(
     }
 
 
-@router.delete("/{game_id}")
+@router.delete("/{game_id:int}")
 async def delete_game(game_id: int):
     """Delete a game from user's database. Global video is NOT deleted (may be shared)."""
     with get_db_connection() as conn:
@@ -360,7 +360,7 @@ async def delete_game(game_id: int):
         return {'success': True}
 
 
-@router.get("/{game_id}/video")
+@router.get("/{game_id:int}/video")
 async def get_game_video(game_id: int):
     """Redirect to presigned R2 URL for game video. Updates last_accessed_at."""
     from fastapi.responses import RedirectResponse
@@ -634,7 +634,7 @@ def _delete_auto_project_if_unmodified(cursor, project_id: int) -> bool:
     return True
 
 
-@router.post("/{game_id}/finish-annotation")
+@router.post("/{game_id:int}/finish-annotation")
 async def finish_annotation(game_id: int):
     """
     Called when user leaves annotation mode for a game.
