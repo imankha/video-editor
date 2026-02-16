@@ -59,7 +59,7 @@ export function ProjectManager({
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const gameFileInputRef = useRef(null);
   const resumeFileInputRef = useRef(null);
-  const [resumingUploadHash, setResumingUploadHash] = useState(null); // Track which upload we're resuming
+  const [resumingUploadFilename, setResumingUploadFilename] = useState(null); // Track which upload we're resuming
 
   // Project filter state - persisted via settings store
   const {
@@ -343,17 +343,17 @@ export function ProjectManager({
   // Handle file selection for resuming upload
   const handleResumeFileChange = useCallback((event) => {
     const file = event.target.files?.[0];
-    if (file && onResumeUpload && resumingUploadHash) {
-      onResumeUpload(file, resumingUploadHash);
+    if (file && onResumeUpload) {
+      onResumeUpload(file, resumingUploadFilename);
     }
     // Reset state
-    setResumingUploadHash(null);
+    setResumingUploadFilename(null);
     event.target.value = '';
-  }, [onResumeUpload, resumingUploadHash]);
+  }, [onResumeUpload, resumingUploadFilename]);
 
   // Trigger file picker for resume
-  const handleResumeClick = useCallback((blake3Hash) => {
-    setResumingUploadHash(blake3Hash);
+  const handleResumeClick = useCallback((originalFilename) => {
+    setResumingUploadFilename(originalFilename);
     resumeFileInputRef.current?.click();
   }, []);
 
@@ -630,7 +630,7 @@ export function ProjectManager({
                     <PendingUploadCard
                       key={upload.session_id}
                       upload={upload}
-                      onResume={() => handleResumeClick(upload.blake3_hash)}
+                      onResume={() => handleResumeClick(upload.original_filename)}
                       onCancel={() => onCancelPendingUpload(upload.session_id)}
                       isResuming={uploadProgress !== null}
                       uploadProgress={uploadProgress}

@@ -231,28 +231,22 @@ export function ProjectsScreen({
   }, [setEditorMode]);
 
   // Handle resuming a pending upload
-  // The file is selected by the user, we hash it first to verify it matches
-  // the expected hash before continuing the upload
-  const handleResumeUpload = useCallback(async (file, expectedHash) => {
-    console.log('[ProjectsScreen] Resuming upload:', file.name, 'expected hash:', expectedHash?.slice(0, 16) + '...');
+  // We don't pre-verify the hash (would require hashing 3GB+ twice).
+  // Instead, the backend handles it: same hash = resume, different hash = new upload.
+  const handleResumeUpload = useCallback(async (file, expectedFilename) => {
+    console.log('[ProjectsScreen] Resuming upload:', file.name);
+
+    // Warn if filename doesn't match (quick check, not hash)
+    if (expectedFilename && file.name !== expectedFilename) {
+      const proceed = window.confirm(
+        `The selected file "${file.name}" has a different name than the original "${expectedFilename}".\n\n` +
+        `If this is the same video file (just renamed), click OK to continue.\n` +
+        `If this is a different file, click Cancel and select the correct file.`
+      );
+      if (!proceed) return;
+    }
+
     try {
-      // Import hash function
-      const { hashFile } = await import('../services/uploadManager');
-
-      // Hash the file first to verify it matches
-      console.log('[ProjectsScreen] Hashing file to verify...');
-      const actualHash = await hashFile(file, (percent) => {
-        // Could show hashing progress here if needed
-      });
-
-      if (actualHash !== expectedHash) {
-        const errorMsg = `File mismatch: This is not the same file that was being uploaded.\n\nExpected: ${expectedHash?.slice(0, 16)}...\nGot: ${actualHash.slice(0, 16)}...\n\nPlease select the original file to resume.`;
-        console.error('[ProjectsScreen] Hash mismatch:', errorMsg);
-        alert(errorMsg);
-        return;
-      }
-
-      console.log('[ProjectsScreen] Hash verified, resuming upload');
       await resumeUpload(file);
       // After successful upload, refresh games and pending uploads
       await fetchGames();
