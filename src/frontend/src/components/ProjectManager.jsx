@@ -961,7 +961,6 @@ function PendingUploadCard({ upload, onResume, onCancel }) {
             icon={X}
             iconOnly
             onClick={handleCancel}
-            disabled={isResuming}
             className={!showCancelConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
             title={showCancelConfirm ? 'Click again to confirm' : 'Cancel upload'}
           />
