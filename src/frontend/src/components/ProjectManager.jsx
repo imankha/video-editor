@@ -906,17 +906,16 @@ function PendingUploadCard({ upload, onResume, onCancel, isResuming, uploadProgr
   };
 
   // Format date
+  // Format as "Jan 15, 2:30 PM" or "Jan 15" if different day
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
     const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    const isToday = date.toDateString() === now.toDateString();
 
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${diffDays}d ago`;
+    if (isToday) {
+      return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
   return (
@@ -932,7 +931,7 @@ function PendingUploadCard({ upload, onResume, onCancel, isResuming, uploadProgr
             <span>•</span>
             <span>{upload.completed_parts} / {upload.total_parts} parts</span>
             <span>•</span>
-            <span>{formatDate(upload.created_at)}</span>
+            <span>Started {formatDate(upload.created_at)}</span>
           </div>
 
           {/* Progress bar */}
