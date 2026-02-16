@@ -534,18 +534,29 @@ async def list_pending_uploads():
     List pending uploads for the current user.
 
     Used by frontend to detect and resume interrupted uploads.
+    Validates each R2 session and auto-cleans stale ones.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, blake3_hash, file_size, original_filename, parts_json, created_at
+            SELECT id, blake3_hash, file_size, original_filename, parts_json, created_at, r2_upload_id
             FROM pending_uploads
             ORDER BY created_at DESC
         """)
         rows = cursor.fetchall()
 
         uploads = []
+        stale_ids = []
+
         for row in rows:
+            # Validate R2 session is still valid
+            r2_key = f"games/{row['blake3_hash']}.mp4"
+            if not r2_is_multipart_upload_valid(r2_key, row['r2_upload_id']):
+                # Mark for cleanup
+                stale_ids.append(row['id'])
+                logger.info(f"Stale pending upload detected: {row['id']}, cleaning up")
+                continue
+
             completed_parts = []
             if row['parts_json']:
                 try:
@@ -566,6 +577,15 @@ async def list_pending_uploads():
                 'progress_percent': round(len(completed_parts) / total_parts * 100) if total_parts > 0 else 0,
                 'created_at': row['created_at']
             })
+
+        # Clean up stale records
+        if stale_ids:
+            cursor.executemany(
+                "DELETE FROM pending_uploads WHERE id = ?",
+                [(id,) for id in stale_ids]
+            )
+            conn.commit()
+            logger.info(f"Cleaned up {len(stale_ids)} stale pending uploads")
 
         return {'pending_uploads': uploads}
 
