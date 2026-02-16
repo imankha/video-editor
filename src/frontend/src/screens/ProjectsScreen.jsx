@@ -3,6 +3,7 @@ import { ProjectManager } from '../components/ProjectManager';
 import { DownloadsPanel } from '../components/DownloadsPanel';
 import { useProjects } from '../hooks/useProjects';
 import { useGames } from '../hooks/useGames';
+import { useGameUpload } from '../hooks/useGameUpload';
 import { useProjectLoader } from '../hooks/useProjectLoader';
 import { useNavigationStore } from '../stores/navigationStore';
 import { useEditorStore } from '../stores/editorStore';
@@ -77,6 +78,18 @@ export function ProjectsScreen({
     deleteGame,
   } = useGames();
 
+  // Upload management hook (for pending uploads)
+  const {
+    pendingUploads,
+    fetchPendingUploads,
+    upload: resumeUpload,
+    cancel: cancelPendingUpload,
+    phase: uploadPhase,
+    percent: uploadPercent,
+    message: uploadMessage,
+    isUploading,
+  } = useGameUpload();
+
   // Watch for games version changes from other components (e.g., AnnotateContainer)
   const gamesVersion = useGamesStore(state => state.gamesVersion);
 
@@ -121,6 +134,11 @@ export function ProjectsScreen({
       fetchGames();
     }
   }, [gamesVersion, fetchGames]);
+
+  // Fetch pending uploads on mount
+  useEffect(() => {
+    fetchPendingUploads();
+  }, [fetchPendingUploads]);
 
   // NOTE: Extraction WebSocket removed - was causing browser console errors that can't be suppressed.
   // The WebSocket endpoint exists on the backend but BaseHTTPMiddleware interferes with connections.
@@ -212,6 +230,33 @@ export function ProjectsScreen({
     setEditorMode('annotate');
   }, [setEditorMode]);
 
+  // Handle resuming a pending upload
+  // The file is selected by the user, we pass it to the upload hook
+  // which will hash it and call prepare-upload (backend detects resume)
+  const handleResumeUpload = useCallback(async (file) => {
+    console.log('[ProjectsScreen] Resuming upload:', file.name);
+    try {
+      await resumeUpload(file);
+      // After successful upload, refresh games and pending uploads
+      await fetchGames();
+      await fetchPendingUploads();
+    } catch (err) {
+      console.error('[ProjectsScreen] Resume upload failed:', err);
+    }
+  }, [resumeUpload, fetchGames, fetchPendingUploads]);
+
+  // Handle cancelling a pending upload
+  const handleCancelPendingUpload = useCallback(async (sessionId) => {
+    console.log('[ProjectsScreen] Cancelling upload:', sessionId);
+    try {
+      const { cancelUpload } = await import('../services/uploadManager');
+      await cancelUpload(sessionId);
+      await fetchPendingUploads();
+    } catch (err) {
+      console.error('[ProjectsScreen] Cancel upload failed:', err);
+    }
+  }, [fetchPendingUploads]);
+
   // Compute exporting project from the global activeExports store
   // Find first actively processing export to display in the UI
   const activeExportingProject = (() => {
@@ -264,6 +309,11 @@ export function ProjectsScreen({
           onDeleteGame={deleteGame}
           onFetchGames={fetchGames}
           onOpenDownloads={openGallery}
+          // Pending uploads props
+          pendingUploads={pendingUploads}
+          onResumeUpload={handleResumeUpload}
+          onCancelPendingUpload={handleCancelPendingUpload}
+          uploadProgress={isUploading ? { phase: uploadPhase, percent: uploadPercent, message: uploadMessage } : null}
         />
 
         {/* Downloads Panel */}

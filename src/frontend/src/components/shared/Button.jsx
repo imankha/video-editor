@@ -76,6 +76,12 @@ export function Button({
       'focus:ring-red-500',
     ].filter(Boolean).join(' '),
 
+    warning: [
+      'bg-yellow-600 text-white',
+      !disabled && !loading && 'hover:bg-yellow-700',
+      'focus:ring-yellow-500',
+    ].filter(Boolean).join(' '),
+
     ghost: [
       'bg-transparent text-gray-300',
       !disabled && !loading && 'hover:bg-gray-700 hover:text-white',
