@@ -27,6 +27,7 @@ from app.storage import (
     r2_create_multipart_upload,
     r2_complete_multipart_upload,
     r2_abort_multipart_upload,
+    r2_is_multipart_upload_valid,
     r2_set_object_metadata_global,
     generate_multipart_urls,
     generate_presigned_url_global,
@@ -226,41 +227,56 @@ async def prepare_upload(request: PrepareUploadRequest):
         existing_pending = cursor.fetchone()
 
         if existing_pending:
-            # Resume existing upload - return remaining parts
             session_id = existing_pending['id']
             upload_id = existing_pending['r2_upload_id']
-            completed_parts = []
-            if existing_pending['parts_json']:
-                try:
-                    completed_parts = json.loads(existing_pending['parts_json'])
-                except json.JSONDecodeError:
-                    completed_parts = []
 
-            # Generate presigned URLs for ALL parts (4 hour expiry)
-            all_parts = generate_multipart_urls(
-                key=r2_key,
-                upload_id=upload_id,
-                file_size=request.file_size,
-                part_size=PART_SIZE,
-                expires_in=14400  # 4 hours
-            )
+            # Validate that the R2 multipart upload session is still valid
+            if r2_is_multipart_upload_valid(r2_key, upload_id):
+                # Resume existing upload - return remaining parts
+                completed_parts = []
+                if existing_pending['parts_json']:
+                    try:
+                        completed_parts = json.loads(existing_pending['parts_json'])
+                    except json.JSONDecodeError:
+                        completed_parts = []
 
-            # Filter to only remaining parts
-            completed_part_numbers = {p['part_number'] for p in completed_parts}
-            remaining_parts = [p for p in all_parts if p['part_number'] not in completed_part_numbers]
+                # Generate presigned URLs for ALL parts (4 hour expiry)
+                all_parts = generate_multipart_urls(
+                    key=r2_key,
+                    upload_id=upload_id,
+                    file_size=request.file_size,
+                    part_size=PART_SIZE,
+                    expires_in=14400  # 4 hours
+                )
 
-            logger.info(
-                f"Resuming upload: {blake3_hash}, session: {session_id}, "
-                f"completed: {len(completed_parts)}, remaining: {len(remaining_parts)}"
-            )
+                # Filter to only remaining parts
+                completed_part_numbers = {p['part_number'] for p in completed_parts}
+                remaining_parts = [p for p in all_parts if p['part_number'] not in completed_part_numbers]
 
-            return {
-                "status": "upload_required",
-                "upload_session_id": session_id,
-                "parts": remaining_parts,
-                "completed_parts": completed_parts,
-                "is_resume": True
-            }
+                logger.info(
+                    f"Resuming upload: {blake3_hash}, session: {session_id}, "
+                    f"completed: {len(completed_parts)}, remaining: {len(remaining_parts)}"
+                )
+
+                return {
+                    "status": "upload_required",
+                    "upload_session_id": session_id,
+                    "parts": remaining_parts,
+                    "completed_parts": completed_parts,
+                    "is_resume": True
+                }
+            else:
+                # R2 session expired/invalid - delete stale pending upload
+                logger.warning(
+                    f"Stale upload session detected: {session_id}, upload_id: {upload_id}. "
+                    f"Cleaning up and starting fresh."
+                )
+                cursor.execute(
+                    "DELETE FROM pending_uploads WHERE id = ?",
+                    (session_id,)
+                )
+                conn.commit()
+                # Fall through to create new upload below
 
     # Game doesn't exist and no pending upload - create new multipart upload
     upload_id = r2_create_multipart_upload(r2_key)

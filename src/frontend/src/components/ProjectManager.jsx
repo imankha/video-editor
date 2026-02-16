@@ -46,7 +46,6 @@ export function ProjectManager({
   pendingUploads = [],
   onResumeUpload,
   onCancelPendingUpload,
-  uploadProgress = null,
 }) {
   // Get downloads and export state from context
   const { downloadsCount: contextDownloadsCount, exportingProject: contextExportingProject } = useAppState();
@@ -632,8 +631,6 @@ export function ProjectManager({
                       upload={upload}
                       onResume={() => handleResumeClick(upload.original_filename)}
                       onCancel={() => onCancelPendingUpload(upload.session_id)}
-                      isResuming={uploadProgress !== null}
-                      uploadProgress={uploadProgress}
                     />
                   ))}
                 </div>
@@ -883,8 +880,9 @@ export function ProjectManager({
 
 /**
  * PendingUploadCard - Shows a paused/pending upload with resume option
+ * Clicking the card or Resume button opens file picker, then navigates to Annotate
  */
-function PendingUploadCard({ upload, onResume, onCancel, isResuming, uploadProgress }) {
+function PendingUploadCard({ upload, onResume, onCancel }) {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const handleCancel = (e) => {
@@ -905,7 +903,6 @@ function PendingUploadCard({ upload, onResume, onCancel, isResuming, uploadProgr
     return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
   };
 
-  // Format date
   // Format as "Jan 15, 2:30 PM" or "Jan 15" if different day
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
@@ -919,7 +916,10 @@ function PendingUploadCard({ upload, onResume, onCancel, isResuming, uploadProgr
   };
 
   return (
-    <div className="group relative p-4 bg-yellow-900/20 hover:bg-yellow-900/30 rounded-lg border border-yellow-600/50 transition-all">
+    <div
+      onClick={onResume}
+      className="group relative p-4 bg-yellow-900/20 hover:bg-yellow-900/30 rounded-lg border border-yellow-600/50 hover:border-yellow-500 cursor-pointer transition-all"
+    >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -929,7 +929,7 @@ function PendingUploadCard({ upload, onResume, onCancel, isResuming, uploadProgr
           <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
             <span>{formatSize(upload.file_size)}</span>
             <span>•</span>
-            <span>{upload.completed_parts} / {upload.total_parts} parts</span>
+            <span>{upload.completed_parts} / {upload.total_parts} parts uploaded</span>
             <span>•</span>
             <span>Started {formatDate(upload.created_at)}</span>
           </div>
@@ -937,20 +937,10 @@ function PendingUploadCard({ upload, onResume, onCancel, isResuming, uploadProgr
           {/* Progress bar */}
           <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
             <div
-              className={`h-full transition-all duration-300 ${
-                isResuming ? 'bg-yellow-500 animate-pulse' : 'bg-yellow-600'
-              }`}
-              style={{ width: `${isResuming && uploadProgress ? uploadProgress.percent : upload.progress_percent}%` }}
+              className="h-full bg-yellow-600 transition-all duration-300"
+              style={{ width: `${upload.progress_percent}%` }}
             />
           </div>
-
-          {/* Upload progress message when resuming */}
-          {isResuming && uploadProgress && (
-            <div className="mt-1 text-xs text-yellow-400 flex items-center gap-1">
-              <RefreshCw size={10} className="animate-spin" />
-              {uploadProgress.message}
-            </div>
-          )}
         </div>
 
         <div className="flex items-center gap-2 ml-4">
@@ -959,10 +949,9 @@ function PendingUploadCard({ upload, onResume, onCancel, isResuming, uploadProgr
             variant="warning"
             size="sm"
             icon={Upload}
-            onClick={onResume}
-            disabled={isResuming}
+            onClick={(e) => { e.stopPropagation(); onResume(); }}
           >
-            {isResuming ? 'Uploading...' : 'Resume'}
+            Resume
           </Button>
 
           {/* Cancel button */}

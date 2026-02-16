@@ -78,16 +78,10 @@ export function ProjectsScreen({
     deleteGame,
   } = useGames();
 
-  // Upload management hook (for pending uploads)
+  // Upload management hook (for pending uploads list)
   const {
     pendingUploads,
     fetchPendingUploads,
-    upload: resumeUpload,
-    cancel: cancelPendingUpload,
-    phase: uploadPhase,
-    percent: uploadPercent,
-    message: uploadMessage,
-    isUploading,
   } = useGameUpload();
 
   // Watch for games version changes from other components (e.g., AnnotateContainer)
@@ -231,10 +225,10 @@ export function ProjectsScreen({
   }, [setEditorMode]);
 
   // Handle resuming a pending upload
-  // We don't pre-verify the hash (would require hashing 3GB+ twice).
-  // Instead, the backend handles it: same hash = resume, different hash = new upload.
-  const handleResumeUpload = useCallback(async (file, expectedFilename) => {
-    console.log('[ProjectsScreen] Resuming upload:', file.name);
+  // Navigate to Annotate mode with the file - same flow as new upload
+  // The backend handles resume detection: same hash = resume, different hash = new upload
+  const handleResumeUpload = useCallback((file, expectedFilename) => {
+    console.log('[ProjectsScreen] Resuming upload, navigating to Annotate:', file.name);
 
     // Warn if filename doesn't match (quick check, not hash)
     if (expectedFilename && file.name !== expectedFilename) {
@@ -246,16 +240,11 @@ export function ProjectsScreen({
       if (!proceed) return;
     }
 
-    try {
-      await resumeUpload(file);
-      // After successful upload, refresh games and pending uploads
-      await fetchGames();
-      await fetchPendingUploads();
-    } catch (err) {
-      console.error('[ProjectsScreen] Resume upload failed:', err);
-      alert(`Resume failed: ${err.message}`);
-    }
-  }, [resumeUpload, fetchGames, fetchPendingUploads]);
+    // Navigate to Annotate mode with the file - same as new upload flow
+    // AnnotateScreen will handle the upload and show progress
+    pendingGameData = { file };
+    setEditorMode('annotate');
+  }, [setEditorMode]);
 
   // Handle cancelling a pending upload
   const handleCancelPendingUpload = useCallback(async (sessionId) => {
@@ -325,7 +314,6 @@ export function ProjectsScreen({
           pendingUploads={pendingUploads}
           onResumeUpload={handleResumeUpload}
           onCancelPendingUpload={handleCancelPendingUpload}
-          uploadProgress={isUploading ? { phase: uploadPhase, percent: uploadPercent, message: uploadMessage } : null}
         />
 
         {/* Downloads Panel */}

@@ -917,6 +917,42 @@ def r2_abort_multipart_upload(key: str, upload_id: str) -> bool:
         return False
 
 
+def r2_is_multipart_upload_valid(key: str, upload_id: str) -> bool:
+    """
+    Check if a multipart upload session is still valid.
+
+    Uses list_parts to verify the upload exists. R2/S3 will return
+    an error if the upload has expired or been aborted.
+
+    Args:
+        key: R2 object key
+        upload_id: Upload ID from create_multipart_upload
+
+    Returns:
+        True if upload is valid and can be resumed, False otherwise
+    """
+    client = get_r2_client()
+    if not client:
+        return False
+
+    try:
+        # list_parts will fail if the upload doesn't exist
+        client.list_parts(
+            Bucket=R2_BUCKET,
+            Key=key,
+            UploadId=upload_id,
+            MaxParts=1  # We just need to check if it exists
+        )
+        return True
+    except client.exceptions.NoSuchUpload:
+        logger.info(f"Multipart upload no longer exists: {key}, upload_id: {upload_id}")
+        return False
+    except Exception as e:
+        # Any other error (network, etc.) - assume invalid to be safe
+        logger.warning(f"Error checking multipart upload validity: {key} - {e}")
+        return False
+
+
 def generate_presigned_part_url(
     key: str,
     upload_id: str,
