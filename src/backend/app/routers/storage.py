@@ -15,6 +15,7 @@ from ..user_context import get_current_user_id
 from ..storage import (
     R2_ENABLED,
     generate_presigned_url,
+    generate_presigned_url_global,
     generate_presigned_upload_url,
     file_exists_in_r2,
 )
@@ -242,18 +243,28 @@ async def get_warmup_urls(
             if url:
                 gallery_urls.append(url)
 
-        # Game videos
+        # Game videos - use blake3_hash (global) or video_filename (legacy)
         cursor.execute("""
-            SELECT video_filename FROM games
-            WHERE video_filename IS NOT NULL AND video_filename != ''
+            SELECT blake3_hash, video_filename FROM games
+            WHERE blake3_hash IS NOT NULL OR video_filename IS NOT NULL
         """)
         for row in cursor.fetchall():
-            url = generate_presigned_url(
-                user_id=user_id,
-                relative_path=f"games/{row['video_filename']}",
-                expires_in=expires_in,
-                content_type="video/mp4"
-            )
+            if row['blake3_hash']:
+                # New global storage
+                url = generate_presigned_url_global(
+                    f"games/{row['blake3_hash']}.mp4",
+                    expires_in=expires_in
+                )
+            elif row['video_filename']:
+                # Legacy per-user storage
+                url = generate_presigned_url(
+                    user_id=user_id,
+                    relative_path=f"games/{row['video_filename']}",
+                    expires_in=expires_in,
+                    content_type="video/mp4"
+                )
+            else:
+                url = None
             if url:
                 game_urls.append(url)
 
