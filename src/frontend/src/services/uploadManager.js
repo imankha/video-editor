@@ -31,45 +31,57 @@ export const UPLOAD_STATUS = {
   UPLOAD_REQUIRED: 'upload_required',
 };
 
+// Lazy-loaded WASM hasher
+let createBLAKE3 = null;
+
+async function getHasher() {
+  if (!createBLAKE3) {
+    const hashWasm = await import('hash-wasm');
+    createBLAKE3 = hashWasm.createBLAKE3;
+  }
+  return createBLAKE3();
+}
+
+// 8MB chunks - good balance of progress updates and efficiency
+const HASH_CHUNK_SIZE = 8 * 1024 * 1024;
+
 /**
- * Hash a file using BLAKE3 in a web worker
+ * Hash a file using BLAKE3 (WASM-accelerated)
+ * Processes in chunks with async yielding to keep UI responsive.
+ *
  * @param {File} file - File to hash
  * @param {function} onProgress - Progress callback: (percent) => void
  * @returns {Promise<string>} - BLAKE3 hash as hex string
  */
-export function hashFile(file, onProgress) {
-  return new Promise((resolve, reject) => {
-    // Create worker with module type for ES imports
-    const worker = new Worker(
-      new URL('../workers/hashWorker.js', import.meta.url),
-      { type: 'module' }
-    );
+export async function hashFile(file, onProgress) {
+  const hasher = await getHasher();
 
-    worker.onmessage = (e) => {
-      const { type, percent, hash, error } = e.data;
+  let offset = 0;
+  let lastProgressSent = -1;
 
-      switch (type) {
-        case 'progress':
-          if (onProgress) onProgress(percent);
-          break;
-        case 'complete':
-          worker.terminate();
-          resolve(hash);
-          break;
-        case 'error':
-          worker.terminate();
-          reject(new Error(error));
-          break;
-      }
-    };
+  while (offset < file.size) {
+    // Read chunk
+    const end = Math.min(offset + HASH_CHUNK_SIZE, file.size);
+    const chunk = file.slice(offset, end);
+    const buffer = await chunk.arrayBuffer();
 
-    worker.onerror = (e) => {
-      worker.terminate();
-      reject(new Error(`Worker error: ${e.message}`));
-    };
+    // Update hash
+    hasher.update(new Uint8Array(buffer));
 
-    worker.postMessage({ file });
-  });
+    // Calculate and report progress
+    offset = end;
+    const percent = Math.round((offset / file.size) * 100);
+
+    if (percent !== lastProgressSent) {
+      lastProgressSent = percent;
+      if (onProgress) onProgress(percent);
+    }
+
+    // Yield to event loop every chunk to keep UI responsive
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  return hasher.digest('hex');
 }
 
 /**
