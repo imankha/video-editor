@@ -343,13 +343,13 @@ export function ProjectManager({
   // Handle file selection for resuming upload
   const handleResumeFileChange = useCallback((event) => {
     const file = event.target.files?.[0];
-    if (file && onResumeUpload) {
-      onResumeUpload(file);
+    if (file && onResumeUpload && resumingUploadHash) {
+      onResumeUpload(file, resumingUploadHash);
     }
     // Reset state
     setResumingUploadHash(null);
     event.target.value = '';
-  }, [onResumeUpload]);
+  }, [onResumeUpload, resumingUploadHash]);
 
   // Trigger file picker for resume
   const handleResumeClick = useCallback((blake3Hash) => {
