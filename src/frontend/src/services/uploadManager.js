@@ -31,16 +31,7 @@ export const UPLOAD_STATUS = {
   UPLOAD_REQUIRED: 'upload_required',
 };
 
-// Lazy-loaded WASM hasher
-let createBLAKE3 = null;
-
-async function getHasher() {
-  if (!createBLAKE3) {
-    const hashWasm = await import('hash-wasm');
-    createBLAKE3 = hashWasm.createBLAKE3;
-  }
-  return createBLAKE3();
-}
+import { createBLAKE3 } from 'hash-wasm';
 
 // 8MB chunks - good balance of progress updates and efficiency
 const HASH_CHUNK_SIZE = 8 * 1024 * 1024;
@@ -54,7 +45,7 @@ const HASH_CHUNK_SIZE = 8 * 1024 * 1024;
  * @returns {Promise<string>} - BLAKE3 hash as hex string
  */
 export async function hashFile(file, onProgress) {
-  const hasher = await getHasher();
+  const hasher = await createBLAKE3();
 
   let offset = 0;
   let lastProgressSent = -1;
