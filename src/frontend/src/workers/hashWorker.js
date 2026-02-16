@@ -1,8 +1,11 @@
 /**
- * Hash Worker - BLAKE3 file hashing in a Web Worker
+ * Hash Worker - BLAKE3 file hashing in a Web Worker (WASM-accelerated)
  *
  * This worker computes BLAKE3 hashes of large files without blocking the main thread.
- * Used for game deduplication: same hash = same file = no need to re-upload.
+ * Uses hash-wasm for ~20x faster hashing than pure JavaScript.
+ *
+ * The worker itself is lazy-loaded (created only when hashing is needed),
+ * so the WASM module only loads when the first hash is requested.
  *
  * Usage from main thread:
  *   const worker = new Worker(new URL('./workers/hashWorker.js', import.meta.url), { type: 'module' });
@@ -14,17 +17,19 @@
  *   };
  */
 
-import { blake3 } from '@noble/hashes/blake3.js';
+import { createBLAKE3 } from 'hash-wasm';
 
-// 8MB chunks for good progress granularity
+// 8MB chunks for good progress granularity and efficient WASM processing
 const CHUNK_SIZE = 8 * 1024 * 1024;
 
 /**
- * Hash a file using BLAKE3 with progress updates
+ * Hash a file using BLAKE3 (WASM) with progress updates
  * @param {File} file - File to hash
  */
 async function hashFile(file) {
-  const hasher = blake3.create({});
+  // Initialize WASM hasher
+  const hasher = await createBLAKE3();
+
   let offset = 0;
   let lastProgressSent = -1;
 
@@ -54,12 +59,7 @@ async function hashFile(file) {
   }
 
   // Compute final hash
-  const hash = hasher.digest();
-
-  // Convert to hex string
-  const hashHex = Array.from(hash)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+  const hashHex = hasher.digest('hex');
 
   return hashHex;
 }
