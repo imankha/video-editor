@@ -253,7 +253,31 @@ async def list_downloads(source_type: Optional[str] = None):
             if row['project_id'] and row['project_id'] != 0:
                 project_ids_to_fetch.add(row['project_id'])
 
-        # Fetch game info for annotated exports (direct game_id lookup)
+        # Fetch raw_clip data for brilliant_clip exports
+        # For brilliant_clips, raw_clip.name IS the source of truth (project.name is a copy)
+        # Also need game_id for grouping since brilliant_clips don't have working_clips
+        brilliant_clip_data = {}
+        brilliant_project_ids = [
+            row['project_id'] for row in rows
+            if row['source_type'] == SourceType.BRILLIANT_CLIP.value
+            and row['project_id'] and row['project_id'] != 0
+        ]
+        if brilliant_project_ids:
+            placeholders = ','.join(['?' for _ in brilliant_project_ids])
+            cursor.execute(f"""
+                SELECT auto_project_id, name, game_id
+                FROM raw_clips
+                WHERE auto_project_id IN ({placeholders})
+            """, brilliant_project_ids)
+            for rc_row in cursor.fetchall():
+                brilliant_clip_data[rc_row['auto_project_id']] = {
+                    'name': rc_row['name'],
+                    'game_id': rc_row['game_id']
+                }
+                if rc_row['game_id']:
+                    game_ids_to_fetch.add(rc_row['game_id'])
+
+        # Fetch game info for annotated exports AND brilliant_clip game associations
         # Include all detail columns for proper display name generation
         games_info = {}
         if game_ids_to_fetch:
@@ -405,8 +429,17 @@ async def list_downloads(source_type: Optional[str] = None):
                     game_ids = [row['game_id']]
                     game_names = [game_info['name']]
                     game_dates = [game_info['date']]
+            elif row['source_type'] == SourceType.BRILLIANT_CLIP.value:
+                # For brilliant_clips, get game info from raw_clip (no working_clips exist)
+                bc_data = brilliant_clip_data.get(row['project_id'])
+                if bc_data and bc_data['game_id']:
+                    game_info = games_info.get(bc_data['game_id'])
+                    if game_info:
+                        game_ids = [bc_data['game_id']]
+                        game_names = [game_info['name']]
+                        game_dates = [game_info['date']]
             elif row['project_id'] and row['project_id'] != 0:
-                # Project export: games from project's clips
+                # Custom project export: games from project's working_clips
                 pg = project_games.get(row['project_id'], {})
                 game_ids = pg.get('game_ids', [])
                 game_names = pg.get('game_names', [])
@@ -422,25 +455,34 @@ async def list_downloads(source_type: Optional[str] = None):
                 except (ValueError, AttributeError):
                     group_key = "Other"
 
-            # T71: Determine display name with proper fallback chain
-            # For annotated games: prefer generated game name over stored name (which may be filename)
-            # For projects: prefer stored project_name, then game name, then source type label
+            # Determine display name
             display_name = None
+
             if row['source_type'] == SourceType.ANNOTATED_GAME.value and game_names:
-                # Annotated games: generated game name is more readable than stored name
+                # Annotated games: use generated game name
                 display_name = game_names[0]
-            if not display_name:
+            elif row['source_type'] == SourceType.BRILLIANT_CLIP.value:
+                # For brilliant_clips, raw_clip.name IS the source of truth
+                bc_data = brilliant_clip_data.get(row['project_id'])
+                if bc_data and bc_data['name']:
+                    display_name = bc_data['name']
+                elif row['project_name']:
+                    # Fallback to project name if raw_clip not found
+                    display_name = row['project_name']
+            elif row['project_name']:
+                # Custom projects: use project name
                 display_name = row['project_name']
-            if not display_name and game_names:
-                # Use first game name as fallback (e.g., "Vs Lakers Dec 6")
-                display_name = game_names[0]
+
+            # Final fallbacks if no name found
             if not display_name:
-                # Last resort: use source type's display label
-                try:
-                    source_type_enum = SourceType(row['source_type'])
-                    display_name = source_type_enum.display_label
-                except (ValueError, TypeError):
-                    display_name = f"Video {row['id']}"
+                if game_names:
+                    display_name = game_names[0]
+                else:
+                    try:
+                        source_type_enum = SourceType(row['source_type'])
+                        display_name = source_type_enum.display_label
+                    except (ValueError, TypeError):
+                        display_name = f"Video {row['id']}"
 
             # T56: Calculate duration on the fly (not stored - derivable data)
             if row['source_type'] == SourceType.ANNOTATED_GAME.value and row['game_id']:
@@ -474,6 +516,20 @@ async def list_downloads(source_type: Optional[str] = None):
                 game_dates=game_dates,
                 group_key=group_key
             ))
+
+        # Log single warning for missing projects (data integrity issue from past R2 sync bug)
+        missing_project_ids = [
+            row['project_id'] for row in rows
+            if row['source_type'] == SourceType.BRILLIANT_CLIP.value
+            and row['project_id'] and row['project_id'] != 0
+            and not row['project_name']
+        ]
+        if missing_project_ids:
+            logger.warning(
+                f"[Downloads] {len(missing_project_ids)} brilliant_clip exports have missing projects "
+                f"(project_ids: {missing_project_ids[:5]}{'...' if len(missing_project_ids) > 5 else ''}). "
+                f"This is a historical data integrity issue."
+            )
 
         return DownloadListResponse(
             downloads=downloads,

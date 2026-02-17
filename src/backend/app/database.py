@@ -211,18 +211,83 @@ def check_database_size(db_path: Path) -> None:
 
 
 def get_local_db_version(user_id: str) -> Optional[int]:
-    """Get the locally cached database version for a user."""
+    """
+    Get the locally cached database version for a user.
+
+    First checks in-memory cache, then falls back to reading from the
+    database file itself. This ensures version survives process restarts.
+    """
     with _db_version_lock:
-        return _user_db_versions.get(user_id)
+        cached = _user_db_versions.get(user_id)
+        if cached is not None:
+            return cached
+
+    # Not in cache - try to read from database file
+    db_path = USER_DATA_BASE / user_id / "database.sqlite"
+    if not db_path.exists():
+        return None
+
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=5)
+        cursor = conn.cursor()
+        # Check if db_version table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
+        if not cursor.fetchone():
+            conn.close()
+            return None
+        cursor.execute("SELECT version FROM db_version WHERE id = 1")
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            version = row[0]
+            # Cache it for future lookups
+            with _db_version_lock:
+                _user_db_versions[user_id] = version
+            return version
+    except Exception as e:
+        logger.debug(f"Could not read db_version from {db_path}: {e}")
+
+    return None
 
 
 def set_local_db_version(user_id: str, version: Optional[int]) -> None:
-    """Set the locally cached database version for a user."""
+    """
+    Set the locally cached database version for a user.
+
+    Persists to both in-memory cache AND database file, so version
+    survives process restarts.
+    """
     with _db_version_lock:
         if version is None:
             _user_db_versions.pop(user_id, None)
         else:
             _user_db_versions[user_id] = version
+
+    # Also persist to database file
+    if version is not None:
+        db_path = USER_DATA_BASE / user_id / "database.sqlite"
+        if db_path.exists():
+            try:
+                conn = sqlite3.connect(str(db_path), timeout=5)
+                cursor = conn.cursor()
+                # Create table if not exists
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS db_version (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        version INTEGER NOT NULL,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                # Upsert version
+                cursor.execute("""
+                    INSERT OR REPLACE INTO db_version (id, version, updated_at)
+                    VALUES (1, ?, CURRENT_TIMESTAMP)
+                """, (version,))
+                conn.commit()
+                conn.close()
+                logger.debug(f"Persisted db_version {version} to {db_path}")
+            except Exception as e:
+                logger.warning(f"Could not persist db_version to {db_path}: {e}")
 
 
 def init_request_context() -> None:
@@ -783,6 +848,16 @@ def ensure_database():
                 r2_upload_id TEXT NOT NULL,
                 parts_json TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # T80: Database version tracking for R2 sync
+        # Stored in DB so version survives process restarts
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS db_version (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                version INTEGER NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 

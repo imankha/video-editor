@@ -33,7 +33,7 @@ from pathlib import Path
 from app.database import get_db_connection, get_raw_clips_path, get_games_path
 from app.services.modal_client import modal_enabled, call_modal_extract_clip
 from app.services.ffmpeg_service import extract_clip as ffmpeg_extract_clip
-from app.storage import R2_ENABLED, download_from_r2, upload_to_r2
+from app.storage import R2_ENABLED, download_from_r2, download_from_r2_global, upload_to_r2
 from app.websocket import broadcast_extraction_event
 
 logger = logging.getLogger(__name__)
@@ -271,10 +271,20 @@ async def _extract_clip_local(
                 input_path = tmp_input.name
 
             logger.info(f"[LocalExtract] Downloading {input_key} from R2")
-            success = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: download_from_r2(user_id, input_key, Path(input_path))
-            )
+
+            # Games are stored globally (no user prefix) for deduplication
+            # Raw clips are stored per-user
+            if input_key.startswith("games/"):
+                success = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: download_from_r2_global(input_key, Path(input_path))
+                )
+            else:
+                success = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: download_from_r2(user_id, input_key, Path(input_path))
+                )
+
             if not success:
                 return {"status": "error", "error": f"Failed to download {input_key} from R2"}
         else:

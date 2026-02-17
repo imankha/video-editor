@@ -185,15 +185,18 @@ async def prepare_upload(request: PrepareUploadRequest):
                 request.original_filename.rsplit('.', 1)[0]  # filename without extension
             )
 
+            # video_filename is set to the R2 key filename for extraction compatibility
+            video_filename = f"{blake3_hash}.mp4"
             cursor.execute("""
                 INSERT INTO games (
-                    name, blake3_hash, video_duration, video_width, video_height, video_size,
+                    name, blake3_hash, video_filename, video_duration, video_width, video_height, video_size,
                     opponent_name, game_date, game_type, tournament_name
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 display_name,
                 blake3_hash,
+                video_filename,
                 duration,
                 width,
                 height,
@@ -424,15 +427,18 @@ async def finalize_upload(request: FinalizeUploadRequest):
         r2_set_object_metadata_global(r2_key, initial_metadata)
 
         # Insert into games table (with blake3_hash for global storage)
+        # video_filename is set to the R2 key filename for extraction compatibility
+        video_filename = f"{blake3_hash}.mp4"
         cursor.execute("""
             INSERT INTO games (
-                name, blake3_hash, video_duration, video_width, video_height, video_size,
+                name, blake3_hash, video_filename, video_duration, video_width, video_height, video_size,
                 opponent_name, game_date, game_type, tournament_name
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             display_name,
             blake3_hash,
+            video_filename,
             request.video_duration,
             request.video_width,
             request.video_height,

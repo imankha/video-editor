@@ -85,10 +85,11 @@ def configure_cors():
                     'https://reelballers.com',    # Production
                     'https://www.reelballers.com', # Production with www
                 ],
-                # Allow GET for video streaming, HEAD for metadata checks
-                'AllowedMethods': ['GET', 'HEAD'],
+                # Allow GET for video streaming, HEAD for metadata checks, PUT for uploads
+                'AllowedMethods': ['GET', 'HEAD', 'PUT'],
                 # Allow Range header for partial content requests (streaming)
-                'AllowedHeaders': ['Range', 'Content-Type', 'Authorization'],
+                # Content-Type for uploads, x-amz-* for S3 compatibility
+                'AllowedHeaders': ['Range', 'Content-Type', 'Authorization', 'x-amz-*'],
                 # Expose headers needed for video streaming
                 # - Accept-Ranges: tells browser server supports range requests
                 # - Content-Range: tells browser which bytes are being returned

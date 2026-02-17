@@ -1187,3 +1187,32 @@ def generate_presigned_url_global(
     except Exception as e:
         logger.error(f"Failed to generate presigned URL for {key}: {e}")
         return None
+
+
+def download_from_r2_global(key: str, local_path: Path) -> bool:
+    """
+    Download a global R2 object (no user prefix) to local filesystem.
+
+    Args:
+        key: Global R2 key (e.g., "games/{hash}.mp4")
+        local_path: Local path to save the file
+
+    Returns:
+        True if download succeeded, False otherwise
+    """
+    client = get_r2_client()
+    if not client:
+        return False
+
+    try:
+        # Ensure parent directory exists
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        client.download_file(R2_BUCKET, key, str(local_path))
+        logger.debug(f"Downloaded global object from R2: {key} -> {local_path}")
+        return True
+    except client.exceptions.NoSuchKey:
+        logger.debug(f"Global file not found in R2: {key}")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to download global object from R2: {key} - {e}")
+        return False
