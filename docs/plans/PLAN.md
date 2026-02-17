@@ -15,12 +15,15 @@ These tasks MUST be completed before deployment to avoid storage waste and re-mi
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
 | **T80** | [**Global Game Deduplication + 4GB Uploads**](tasks/T80-global-game-deduplication.md) | **TESTING** | Games to global storage, multipart uploads |
+| **T81** | [Faster Upload Hash](tasks/T81-faster-upload-hash.md) | TODO | Sample-based hashing instead of full file (depends on T80) |
+| **T82** | [Multi-Video Games](tasks/T82-multi-video-games.md) | TODO | First half/second half support (depends on T80) |
 | **T85** | [**Multi-Athlete Profiles**](tasks/T85-multi-athlete-profiles.md) | **TODO** | Per-athlete data isolation (depends on T80) |
 
 **Why these block deployment:**
 - **T80:** Per-user game storage wastes R2 costs, 4GB uploads needed
+- **T82:** Game-to-video schema change (1:many) easier before real users have data
 - **T85:** Storage structure changes significantly, easier before real users
-- Both involve migrations that are painful after users have data
+- These involve migrations that are painful after users have data
 
 ---
 
@@ -73,6 +76,10 @@ Improvements after real user traffic.
 | T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | Faster video loads (needs T200) |
 | T74 | [Incremental Framing Export](tasks/T74-incremental-framing-export.md) | TODO | Cache rendered clips |
 | T220 | [Future GPU Features](tasks/T220-future-gpu-features.md) | TODO | Advanced AI features |
+| T240 | [Consistent Logo Placement](tasks/T240-consistent-logo-placement.md) | TODO | Logo in all modes, non-clickable position |
+| T241 | [Annotate Arrow Key Seek](tasks/T241-annotate-arrow-key-seek.md) | TODO | Forward/backward arrows should seek 4s |
+| T242 | [Rename Project from Card](tasks/T242-rename-project-from-card.md) | TODO | Easy inline rename on project card |
+| T243 | [Archive DB Not Reducing Size](tasks/T243-archive-db-not-reducing-size.md) | TODO | Main DB at 776KB, archive not working |
 
 ---
 
