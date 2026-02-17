@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Download, Loader, Upload, Settings } from 'lucide-react';
 import { useAnnotateState, useAnnotate, AnnotateMode, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from '../modes/annotate';
 import { FileUpload } from '../components/FileUpload';
 import { toast } from '../components/shared';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore } from '../stores';
+import { useUploadStore } from '../stores/uploadStore';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { API_BASE } from '../config';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
@@ -66,10 +67,8 @@ export function AnnotateContainer({
     setIsCreatingAnnotatedVideo,
     isImportingToProjects,
     setIsImportingToProjects,
-    isUploadingGameVideo,
-    setIsUploadingGameVideo,
-    uploadProgress,
-    setUploadProgress,
+    // Note: isUploadingGameVideo and uploadProgress from local state are NOT used
+    // We use uploadStore instead for persistence across page navigation
     annotatePlaybackSpeed,
     setAnnotatePlaybackSpeed,
     annotateFullscreen,
@@ -112,12 +111,46 @@ export function AnnotateContainer({
 
   // Export state from Zustand store
   const {
-    exportProgress,
+    exportProgress: globalExportProgress,
     setExportProgress,
     setExportCompleteToastId,
     dismissExportCompleteToast,
     startExport: startExportInStore,
   } = useExportStore();
+
+  // Filter export progress to only show progress for current game (not other projects)
+  const exportProgress = useMemo(() => {
+    if (!globalExportProgress) return null;
+    // Only show progress if it's an annotate export for the current game
+    if (globalExportProgress.type !== 'annotate') return null;
+    if (globalExportProgress.gameId && annotateGameId && globalExportProgress.gameId !== annotateGameId) return null;
+    return globalExportProgress;
+  }, [globalExportProgress, annotateGameId]);
+
+  // Upload state from Zustand store (persists across page navigation)
+  const uploadStore = useUploadStore();
+  const activeUpload = uploadStore.activeUpload;
+
+  // Derive upload progress from store for UI display
+  const storeUploadProgress = activeUpload ? {
+    percent: activeUpload.progress,
+    message: activeUpload.message,
+  } : null;
+
+  // Derive isUploading from store
+  const isUploadingFromStore = uploadStore.isUploading();
+
+  // Restore video state from active upload if navigating back from Games screen
+  // This allows users to click on the uploading game card and return to annotation
+  useEffect(() => {
+    if (activeUpload?.blobUrl && !annotateVideoUrl) {
+      console.log('[AnnotateContainer] Restoring video from active upload:', activeUpload.gameName);
+      setAnnotateVideoUrl(activeUpload.blobUrl);
+      setAnnotateVideoMetadata(activeUpload.videoMetadata);
+      setAnnotateGameName(activeUpload.gameName);
+      setAnnotateGameId(null); // Will be set when upload completes
+    }
+  }, [activeUpload, annotateVideoUrl, setAnnotateVideoUrl, setAnnotateVideoMetadata, setAnnotateGameName, setAnnotateGameId]);
 
   // Ref to track previous isPlaying state for detecting pause transitions
   const wasPlayingRef = useRef(false);
@@ -179,26 +212,18 @@ export function AnnotateContainer({
 
       console.log('[AnnotateContainer] Transitioning to annotate mode (game ID pending upload)');
 
-      // Upload video to server in background with progress tracking
+      // Start upload via global store (persists across page navigation)
       // T80: Unified upload with deduplication - creates game entry on completion
-      console.log('[AnnotateContainer] Starting background video upload...', {
+      console.log('[AnnotateContainer] Starting background video upload via store...', {
         fileSize: file.size
       });
-      setIsUploadingGameVideo(true);
-      setUploadProgress({ loaded: 0, total: file.size, percent: 0 });
 
-      uploadGameVideo(file, gameDetails, videoMetadata, (progress) => {
-        // Map progress to standard format
-        setUploadProgress({
-          loaded: Math.round((progress.percent / 100) * file.size),
-          total: file.size,
-          percent: progress.percent,
-          phase: progress.phase,
-          message: progress.message
-        });
-      })
-        .then((result) => {
-          // Set game ID now that upload is complete
+      uploadStore.startUpload(
+        file,
+        gameDetails,
+        videoMetadata,
+        (result) => {
+          // Completion callback - set game ID
           setAnnotateGameId(result.game_id);
           setAnnotateGameName(result.name);
 
@@ -210,16 +235,10 @@ export function AnnotateContainer({
           } else {
             console.log('[AnnotateContainer] Upload complete, game created:', result.game_id);
           }
-
-          setIsUploadingGameVideo(false);
-          setUploadProgress(null);
-        })
-        .catch((uploadErr) => {
-          console.error('[AnnotateContainer] Video upload failed:', uploadErr);
-          setIsUploadingGameVideo(false);
-          setUploadProgress(null);
-          // Keep local playback working even if upload fails
-        });
+        },
+        // Display info for resuming annotation view when navigating back from Games screen
+        { blobUrl: localVideoUrl, gameName: displayName }
+      );
 
     } catch (err) {
       console.error('[AnnotateContainer] Failed to process game video:', err);
@@ -526,7 +545,7 @@ export function AnnotateContainer({
       seek(newRegion.startTime);
 
       // Save to backend if we have a game ID and video is uploaded
-      if (annotateGameId && !isUploadingGameVideo) {
+      if (annotateGameId && !isUploadingFromStore) {
         const result = await saveClip(annotateGameId, {
           start_time: newRegion.startTime,
           end_time: newRegion.endTime,
@@ -544,12 +563,12 @@ export function AnnotateContainer({
             console.log('[AnnotateContainer] Auto-created 5-star project:', result.project_id);
           }
         }
-      } else if (isUploadingGameVideo) {
+      } else if (isUploadingFromStore) {
         console.log('[AnnotateContainer] Video still uploading, clip will be saved when annotations sync');
       }
     }
     setShowAnnotateOverlay(false);
-  }, [addClipRegion, seek, annotateGameId, isUploadingGameVideo, saveClip, setRawClipId]);
+  }, [addClipRegion, seek, annotateGameId, isUploadingFromStore, saveClip, setRawClipId]);
 
   /**
    * Update a clip region - syncs to backend
@@ -567,7 +586,7 @@ export function AnnotateContainer({
     updateClipRegion(regionId, updates);
 
     // Skip backend sync if video is still uploading or no game ID
-    if (!annotateGameId || isUploadingGameVideo) {
+    if (!annotateGameId || isUploadingFromStore) {
       console.log('[AnnotateContainer] Skipping backend sync - video uploading or no game ID');
       return;
     }
@@ -622,7 +641,7 @@ export function AnnotateContainer({
         }
       }
     }
-  }, [clipRegions, updateClipRegion, annotateGameId, isUploadingGameVideo, saveClip, updateClipRemote, setRawClipId]);
+  }, [clipRegions, updateClipRegion, annotateGameId, isUploadingFromStore, saveClip, updateClipRemote, setRawClipId]);
 
   /**
    * Handle updating an existing clip from fullscreen overlay
@@ -854,8 +873,8 @@ export function AnnotateContainer({
     annotateFileInputRef,
     isCreatingAnnotatedVideo,
     isImportingToProjects, // Kept for backwards compatibility, may be removed later
-    isUploadingGameVideo,
-    uploadProgress,
+    isUploadingFromStore: isUploadingFromStore, // From global store (persists across navigation)
+    uploadProgress: storeUploadProgress, // From global store
     isClipSaving, // Real-time clip save in progress
     hasAnnotateClips,
     exportProgress,
@@ -1068,7 +1087,7 @@ export function AnnotateExportPanel({
   hasClips,
   isCreatingAnnotatedVideo,
   isImportingToProjects,
-  isUploadingGameVideo,
+  isUploadingFromStore,
   exportProgress,
   onCreateAnnotatedVideo,
   onImportIntoProjects,
@@ -1124,14 +1143,14 @@ export function AnnotateExportPanel({
           {/* Create Annotated Video - stays on screen */}
           <button
             onClick={() => onCreateAnnotatedVideo(getExportData())}
-            disabled={!hasClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo}
+            disabled={!hasClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingFromStore}
             className={`w-full px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-              !hasClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo
+              !hasClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingFromStore
                 ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                 : 'bg-green-600 hover:bg-green-700 text-white'
             }`}
           >
-            {isUploadingGameVideo ? (
+            {isUploadingFromStore ? (
               <>
                 <Loader className="animate-spin" size={18} />
                 <span>Uploading video...</span>
@@ -1153,9 +1172,9 @@ export function AnnotateExportPanel({
           <div className="flex gap-2">
             <button
               onClick={() => onImportIntoProjects(getExportData())}
-              disabled={!hasClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo}
+              disabled={!hasClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingFromStore}
               className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                !hasClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingGameVideo
+                !hasClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingFromStore
                   ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700 text-white'
               }`}

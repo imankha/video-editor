@@ -10,6 +10,7 @@ import useZoom from '../hooks/useZoom';
 import { useGames } from '../hooks/useGames';
 import { useProjects } from '../hooks/useProjects';
 import { useEditorStore } from '../stores/editorStore';
+import { useUploadStore } from '../stores/uploadStore';
 import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from './ProjectsScreen';
 
 /**
@@ -55,9 +56,12 @@ export function AnnotateScreen({ onClearSelection }) {
   // Track pending seek time for navigation from Framing mode
   const [pendingSeekTime, setPendingSeekTime] = useState(null);
 
-  // Check on mount if we're loading a game or file, set loading flag to prevent redirect
+  // Get active upload from store (for restoring annotation after navigating back from Games)
+  const activeUpload = useUploadStore(state => state.activeUpload);
+
+  // Check on mount if we're loading a game or file or have an active upload, set loading flag to prevent redirect
   useState(() => {
-    if (sessionStorage.getItem('pendingGameId') || getPendingGameFile()) {
+    if (sessionStorage.getItem('pendingGameId') || getPendingGameFile() || useUploadStore.getState().activeUpload?.blobUrl) {
       isLoadingRef.current = true;
     }
   });
@@ -308,14 +312,15 @@ export function AnnotateScreen({ onClearSelection }) {
   // - After importing clips to projects (in handleImportIntoProjects)
   // - When loading a new game (state is reset before loading new data)
 
-  // Redirect to projects if no video and not loading
+  // Redirect to projects if no video and not loading and no active upload to restore
   useEffect(() => {
-    console.log('[AnnotateScreen] Redirect check - videoUrl:', !!annotateVideoUrl, 'isLoading:', isLoadingRef.current, 'isUploading:', isUploadingGameVideo);
-    if (!annotateVideoUrl && !isLoadingRef.current && !isUploadingGameVideo) {
+    const hasActiveUploadToRestore = activeUpload?.blobUrl;
+    console.log('[AnnotateScreen] Redirect check - videoUrl:', !!annotateVideoUrl, 'isLoading:', isLoadingRef.current, 'isUploading:', isUploadingGameVideo, 'hasActiveUpload:', !!hasActiveUploadToRestore);
+    if (!annotateVideoUrl && !isLoadingRef.current && !isUploadingGameVideo && !hasActiveUploadToRestore) {
       console.log('[AnnotateScreen] No video and not loading, redirecting to projects');
       setEditorMode('projects');
     }
-  }, [annotateVideoUrl, isUploadingGameVideo, setEditorMode]);
+  }, [annotateVideoUrl, isUploadingGameVideo, setEditorMode, activeUpload]);
 
   // If no video loaded but we're loading, render nothing (loading is fast)
   if (!annotateVideoUrl) {
