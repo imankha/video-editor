@@ -105,6 +105,7 @@ export function OverlayScreen({
   const exportButtonRef = externalExportButtonRef || internalExportButtonRef;
   const fullscreenContainerRef = useRef(null);
   const videoLoadedFromUrlRef = useRef(null); // Track which URL we've loaded to prevent infinite loops
+  const workingVideoFetchUrlRef = useRef(null); // Track which presigned URL we've started fetching
 
   // =========================================
   // DETERMINE EFFECTIVE VIDEO SOURCE
@@ -226,7 +227,9 @@ export function OverlayScreen({
 
   useEffect(() => {
     // If no working video in store but project has presigned URL, use it directly (streaming)
-    if (!workingVideo && project?.working_video_url && !isLoadingWorkingVideo) {
+    // Use ref to prevent duplicate fetches (allows loading even if isLoadingWorkingVideo was pre-set)
+    if (!workingVideo && project?.working_video_url && workingVideoFetchUrlRef.current !== project.working_video_url) {
+      workingVideoFetchUrlRef.current = project.working_video_url;
       setIsLoadingWorkingVideo(true);
 
       (async () => {
@@ -240,12 +243,13 @@ export function OverlayScreen({
           setWorkingVideo({ file: null, url: project.working_video_url, metadata: meta });
         } catch (err) {
           console.error('[OverlayScreen] Failed to extract working video metadata:', err);
+          workingVideoFetchUrlRef.current = null; // Allow retry on error
         } finally {
           setIsLoadingWorkingVideo(false);
         }
       })();
     }
-  }, [workingVideo, project?.working_video_url, isLoadingWorkingVideo, setIsLoadingWorkingVideo, setWorkingVideo]);
+  }, [workingVideo, project?.working_video_url, setIsLoadingWorkingVideo, setWorkingVideo]);
 
   // Load video into useVideo hook when effectiveOverlayVideoUrl is available
   // Uses a ref to track the source URL to prevent infinite loops (blob URLs are always unique)

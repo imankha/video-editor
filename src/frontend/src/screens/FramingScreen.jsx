@@ -71,8 +71,9 @@ export function FramingScreen({
     setFramingChangedSinceExport,
   } = useFramingStore();
 
-  // Overlay store - for resetting overlay state
+  // Overlay store - for resetting overlay state and signaling working video load
   const resetOverlayStore = useOverlayStore(state => state.reset);
+  const setIsLoadingWorkingVideo = useOverlayStore(state => state.setIsLoadingWorkingVideo);
 
   // Local state
   const [dragCrop, setDragCrop] = useState(null);
@@ -905,8 +906,10 @@ export function FramingScreen({
       }
     } else {
       // MVC flow: blob is null, working video saved on server
-      // Clear any stale in-memory video so OverlayScreen fetches from server
-      console.log('[FramingScreen] MVC flow: working video on server, clearing in-memory video');
+      // Signal that OverlayScreen should wait for server working video
+      // This prevents race condition where OverlayScreen loads raw clip before project refreshes
+      setIsLoadingWorkingVideo(true);
+      console.log('[FramingScreen] MVC flow: working video on server, signaling OverlayScreen to wait');
       setWorkingVideo(null);
 
       // Refresh project data so OverlayScreen sees the new working_video_id
@@ -940,7 +943,7 @@ export function FramingScreen({
     } else {
       console.error('[FramingScreen] Cannot navigate to overlay - working video not set');
     }
-  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio, refreshProject, projectId, onExportComplete]);
+  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo]);
 
   // Derive game name for selected clip
   const selectedClipGameName = useMemo(() => {
