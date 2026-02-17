@@ -80,9 +80,9 @@ function transformClipToUIFormat(backendClip, metadata, clipUrl, presignedUrl) {
     gameId: backendClip.game_id || null,
     tags: backendClip.tags || [],
     rating: backendClip.rating || null,
-    // Extraction status
-    isExtracted: backendClip.is_extracted !== false,
-    isExtracting: backendClip.is_extracting || false,
+    // Extraction status - derive isExtracted from file_url presence
+    isExtracted: !!backendClip.file_url,
+    isExtracting: backendClip.extraction_status === 'processing',
     extractionStatus: backendClip.extraction_status || null,
     // Parsed framing data (UI-ready)
     segments: segments || {
@@ -226,6 +226,12 @@ export function useProjectLoader() {
       // Use presigned R2 URLs (file_url) when available for streaming, otherwise fall back to proxy
       const clipsWithMetadata = await Promise.all(
         clipsData.map(async (clip) => {
+          // If clip has no file_url, it's not extracted yet - skip metadata loading
+          if (!clip.file_url) {
+            console.log('[useProjectLoader] Clip not extracted yet:', clip.id, 'status:', clip.extraction_status);
+            return transformClipToUIFormat(clip, null, null, null);
+          }
+
           // Prefer presigned R2 URL for streaming, fall back to proxy URL
           const clipUrl = clip.file_url || `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/file`;
           try {

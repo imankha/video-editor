@@ -251,7 +251,9 @@ export function AnnotateModeView({
               {uploadProgress && (
                 <div className="bg-gray-800 rounded-lg p-3 mb-2">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-300">Uploading video to server...</span>
+                    <span className="text-sm text-gray-300">
+                      {uploadProgress.message || 'Uploading video...'}
+                    </span>
                     <span className="text-xs text-gray-500">
                       {uploadProgress.percent}%
                     </span>
@@ -261,9 +263,6 @@ export function AnnotateModeView({
                       className="h-full bg-blue-500 transition-all duration-300"
                       style={{ width: `${uploadProgress.percent}%` }}
                     />
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {(uploadProgress.loaded / (1024 * 1024)).toFixed(1)} MB / {(uploadProgress.total / (1024 * 1024)).toFixed(1)} MB
                   </div>
                 </div>
               )}
