@@ -185,6 +185,13 @@ async def prepare_upload(request: PrepareUploadRequest):
                 request.original_filename.rsplit('.', 1)[0]  # filename without extension
             )
 
+            # Warn if game details are missing (helps debug upload issues)
+            if not request.opponent_name or not request.game_date or not request.game_type:
+                logger.warning(
+                    f"Creating game with missing details: opponent={request.opponent_name}, "
+                    f"date={request.game_date}, type={request.game_type}, file={request.original_filename}"
+                )
+
             # video_filename is set to the R2 key filename for extraction compatibility
             video_filename = f"{blake3_hash}.mp4"
             cursor.execute("""
@@ -425,6 +432,13 @@ async def finalize_upload(request: FinalizeUploadRequest):
             initial_metadata['height'] = str(request.video_height)
 
         r2_set_object_metadata_global(r2_key, initial_metadata)
+
+        # Warn if game details are missing (helps debug upload issues)
+        if not request.opponent_name or not request.game_date or not request.game_type:
+            logger.warning(
+                f"Finalizing game with missing details: opponent={request.opponent_name}, "
+                f"date={request.game_date}, type={request.game_type}, file={pending['original_filename']}"
+            )
 
         # Insert into games table (with blake3_hash for global storage)
         # video_filename is set to the R2 key filename for extraction compatibility

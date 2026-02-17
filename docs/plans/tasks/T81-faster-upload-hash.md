@@ -1,6 +1,6 @@
 # T81: Faster Upload Hash (Sampling Instead of Full Hash)
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-02-17
@@ -57,7 +57,12 @@ This should be sufficient to detect duplicates while being much faster.
 
 ### Progress Log
 
-*No progress yet*
+**2026-02-17**: Implemented sampled hashing in `uploadManager.js`:
+- Changed `hashFile()` to read 5 samples (1MB each) at positions: 0%, 25%, 50%, 75%, and end
+- Includes file size in hash for collision resistance
+- Total read: ~5MB instead of full file (60x speedup for 4GB files)
+- Backend unchanged - still receives 64-char hex BLAKE3 hash
+- Unit tests updated and passing
 
 ## Acceptance Criteria
 

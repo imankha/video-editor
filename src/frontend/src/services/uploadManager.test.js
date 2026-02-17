@@ -259,12 +259,8 @@ describe('uploadManager', () => {
 });
 
 describe('hashFile', () => {
-  beforeEach(() => {
-    global.Worker = MockWorker;
-  });
-
-  it('should hash file and return hex string', async () => {
-    const mockFile = new File(['test content'], 'test.mp4', {
+  it('should hash file and return 64-char hex string', async () => {
+    const mockFile = new File(['test content for hashing'], 'test.mp4', {
       type: 'video/mp4',
     });
     const progressUpdates = [];
@@ -273,40 +269,60 @@ describe('hashFile', () => {
       progressUpdates.push(percent);
     });
 
-    // MockWorker returns 'a'.repeat(64)
-    expect(hash).toBe('a'.repeat(64));
+    // Should return a valid 64-char hex hash
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+
+    // Should have progress updates (5 samples = 5 updates at 20%, 40%, 60%, 80%, 100%)
+    expect(progressUpdates.length).toBeGreaterThan(0);
+    expect(progressUpdates[progressUpdates.length - 1]).toBe(100);
   });
 
-  it('should handle worker errors', async () => {
-    // Create a worker that sends error
-    class ErrorWorker {
-      constructor() {
-        this.onmessage = null;
-        this.onerror = null;
-      }
+  it('should produce same hash for same file content', async () => {
+    const content = 'same content';
+    const file1 = new File([content], 'file1.mp4', { type: 'video/mp4' });
+    const file2 = new File([content], 'file2.mp4', { type: 'video/mp4' });
 
-      postMessage() {
-        setTimeout(() => {
-          if (this.onmessage) {
-            this.onmessage({
-              data: {
-                type: 'error',
-                error: 'Hash computation failed',
-              },
-            });
-          }
-        }, 0);
-      }
+    const hash1 = await hashFile(file1, () => {});
+    const hash2 = await hashFile(file2, () => {});
 
-      terminate() {}
-    }
+    expect(hash1).toBe(hash2);
+  });
 
-    global.Worker = ErrorWorker;
-
-    const mockFile = new File(['test'], 'test.mp4', { type: 'video/mp4' });
-
-    await expect(hashFile(mockFile, () => {})).rejects.toThrow(
-      'Hash computation failed'
+  it('should produce different hash for different file content', async () => {
+    // Use clearly different content with different sizes to ensure distinct hashes
+    const file1 = new File(['first file with some content'], 'test.mp4', {
+      type: 'video/mp4',
+    });
+    const file2 = new File(
+      ['second file with completely different content here'],
+      'test.mp4',
+      { type: 'video/mp4' }
     );
+
+    const hash1 = await hashFile(file1, () => {});
+    const hash2 = await hashFile(file2, () => {});
+
+    expect(hash1).not.toBe(hash2);
+  });
+
+  it('should produce different hash for same content but different sizes', async () => {
+    // Two files with same sample content but different sizes
+    // (important for collision resistance)
+    const file1 = new File(['A'], 'test.mp4', { type: 'video/mp4' });
+    const file2 = new File(['AA'], 'test.mp4', { type: 'video/mp4' });
+
+    const hash1 = await hashFile(file1, () => {});
+    const hash2 = await hashFile(file2, () => {});
+
+    expect(hash1).not.toBe(hash2);
+  });
+
+  it('should handle empty file', async () => {
+    const emptyFile = new File([], 'empty.mp4', { type: 'video/mp4' });
+
+    const hash = await hashFile(emptyFile, () => {});
+
+    // Should still return a valid hash (of the file size = 0)
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
   });
 });
