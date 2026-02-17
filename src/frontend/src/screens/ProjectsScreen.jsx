@@ -10,6 +10,7 @@ import { useEditorStore } from '../stores/editorStore';
 import { useExportStore } from '../stores/exportStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useGamesStore } from '../stores/gamesStore';
+import { useUploadStore } from '../stores/uploadStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
@@ -83,6 +84,9 @@ export function ProjectsScreen({
     pendingUploads,
     fetchPendingUploads,
   } = useGameUpload();
+
+  // Active upload from uploadStore (in-progress upload that persists across navigation)
+  const activeUpload = useUploadStore(state => state.activeUpload);
 
   // Watch for games version changes from other components (e.g., AnnotateContainer)
   const gamesVersion = useGamesStore(state => state.gamesVersion);
@@ -275,6 +279,12 @@ export function ProjectsScreen({
     }
   }, [fetchPendingUploads]);
 
+  // Handle clicking the active upload - navigate back to annotate mode
+  const handleClickActiveUpload = useCallback(() => {
+    console.log('[ProjectsScreen] Clicking active upload, navigating to annotate');
+    setEditorMode('annotate');
+  }, [setEditorMode]);
+
   // Compute exporting project from the global activeExports store
   // Find first actively processing export to display in the UI
   const activeExportingProject = (() => {
@@ -331,6 +341,9 @@ export function ProjectsScreen({
           pendingUploads={pendingUploads}
           onResumeUpload={handleResumeUpload}
           onCancelPendingUpload={handleCancelPendingUpload}
+          // Active upload props (in-progress upload)
+          activeUpload={activeUpload}
+          onClickActiveUpload={handleClickActiveUpload}
         />
 
         {/* Downloads Panel */}

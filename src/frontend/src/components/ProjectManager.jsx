@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores/exportStore';
@@ -46,6 +46,9 @@ export function ProjectManager({
   pendingUploads = [],
   onResumeUpload,
   onCancelPendingUpload,
+  // Active upload props (in-progress upload from uploadStore)
+  activeUpload = null, // { fileName, progress, phase, message }
+  onClickActiveUpload, // Navigate back to annotate mode
 }) {
   // Get downloads and export state from context
   const { downloadsCount: contextDownloadsCount, exportingProject: contextExportingProject } = useAppState();
@@ -610,14 +613,28 @@ export function ProjectManager({
               Retry
             </Button>
           </div>
-        ) : games.length === 0 && pendingUploads.length === 0 ? (
+        ) : games.length === 0 && pendingUploads.length === 0 && !activeUpload ? (
           <div className="text-gray-500 text-center">
             <p className="mb-2">No games yet</p>
             <p className="text-sm">Add a game to annotate your footage</p>
           </div>
         ) : (
           <div className="w-full max-w-2xl">
-            {/* Pending Uploads Section */}
+            {/* Active Upload Section - Currently uploading */}
+            {activeUpload && (
+              <div className="mb-6">
+                <h2 className="text-sm font-semibold text-green-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  Uploading
+                </h2>
+                <ActiveUploadCard
+                  upload={activeUpload}
+                  onClick={onClickActiveUpload}
+                />
+              </div>
+            )}
+
+            {/* Pending Uploads Section - Paused/interrupted uploads */}
             {pendingUploads.length > 0 && (
               <div className="mb-6">
                 <h2 className="text-sm font-semibold text-yellow-400 uppercase tracking-wide mb-3 flex items-center gap-2">
@@ -964,6 +981,65 @@ function PendingUploadCard({ upload, onResume, onCancel }) {
             className={!showCancelConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
             title={showCancelConfirm ? 'Click again to confirm' : 'Cancel upload'}
           />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/**
+ * ActiveUploadCard - Shows an in-progress upload with progress bar
+ * Clicking navigates back to annotate mode
+ */
+function ActiveUploadCard({ upload, onClick }) {
+  // Format file size
+  const formatSize = (bytes) => {
+    if (!bytes) return '';
+    if (bytes >= 1024 * 1024 * 1024) {
+      return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+  };
+
+  return (
+    <div
+      onClick={onClick}
+      className="group relative p-4 bg-green-900/20 hover:bg-green-900/30 rounded-lg border border-green-600/50 hover:border-green-500 cursor-pointer transition-all"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <FileVideo size={18} className="text-green-400" />
+            <h3 className="text-white font-medium truncate">{upload.fileName}</h3>
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
+            {upload.fileSize && <span>{formatSize(upload.fileSize)}</span>}
+            {upload.fileSize && upload.message && <span>•</span>}
+            <span>{upload.message || 'Uploading...'}</span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-green-600 transition-all duration-300"
+              style={{ width: `${upload.progress || 0}%` }}
+            />
+          </div>
+          <div className="mt-1 text-xs text-gray-500 text-right">
+            {upload.progress || 0}%
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 ml-4">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={PlayCircle}
+            onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+          >
+            Continue
+          </Button>
         </div>
       </div>
     </div>
