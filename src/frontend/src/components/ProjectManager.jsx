@@ -634,25 +634,31 @@ export function ProjectManager({
               </div>
             )}
 
-            {/* Pending Uploads Section - Paused/interrupted uploads */}
-            {pendingUploads.length > 0 && (
-              <div className="mb-6">
-                <h2 className="text-sm font-semibold text-yellow-400 uppercase tracking-wide mb-3 flex items-center gap-2">
-                  <Upload size={14} />
-                  Pending Uploads
-                </h2>
-                <div className="space-y-2">
-                  {pendingUploads.map(upload => (
-                    <PendingUploadCard
-                      key={upload.session_id}
-                      upload={upload}
-                      onResume={() => handleResumeClick(upload.original_filename)}
-                      onCancel={() => onCancelPendingUpload(upload.session_id)}
-                    />
-                  ))}
+            {/* Pending Uploads Section - Paused/interrupted uploads (exclude active upload) */}
+            {(() => {
+              // Filter out the currently uploading file from pending list to avoid duplication
+              const filteredPending = activeUpload
+                ? pendingUploads.filter(p => p.original_filename !== activeUpload.fileName)
+                : pendingUploads;
+              return filteredPending.length > 0 && (
+                <div className="mb-6">
+                  <h2 className="text-sm font-semibold text-yellow-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                    <Upload size={14} />
+                    Pending Uploads
+                  </h2>
+                  <div className="space-y-2">
+                    {filteredPending.map(upload => (
+                      <PendingUploadCard
+                        key={upload.session_id}
+                        upload={upload}
+                        onResume={() => handleResumeClick(upload.original_filename)}
+                        onCancel={() => onCancelPendingUpload(upload.session_id)}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Your Games Section */}
             {games.length > 0 && (

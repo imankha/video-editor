@@ -315,9 +315,7 @@ export function AnnotateScreen({ onClearSelection }) {
   // Redirect to projects if no video and not loading and no active upload to restore
   useEffect(() => {
     const hasActiveUploadToRestore = activeUpload?.blobUrl;
-    console.log('[AnnotateScreen] Redirect check - videoUrl:', !!annotateVideoUrl, 'isLoading:', isLoadingRef.current, 'isUploading:', isUploadingGameVideo, 'hasActiveUpload:', !!hasActiveUploadToRestore);
     if (!annotateVideoUrl && !isLoadingRef.current && !isUploadingGameVideo && !hasActiveUploadToRestore) {
-      console.log('[AnnotateScreen] No video and not loading, redirecting to projects');
       setEditorMode('projects');
     }
   }, [annotateVideoUrl, isUploadingGameVideo, setEditorMode, activeUpload]);
