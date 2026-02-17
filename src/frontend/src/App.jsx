@@ -6,6 +6,7 @@ import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
+import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { useProjects } from './hooks/useProjects';
 import { useExportRecovery } from './hooks/useExportRecovery';
 import { Breadcrumb, Button, ConfirmationDialog, ModeSwitcher, ToastContainer } from './components/shared';
@@ -261,6 +262,8 @@ function App() {
           />
         {/* Global Export Indicator - shows progress on ProjectsScreen too */}
         <GlobalExportIndicator />
+        {/* Upload Progress Indicator - shows upload progress on all screens */}
+        <UploadProgressIndicator />
       </>
     );
   }
@@ -350,6 +353,9 @@ function App() {
 
       {/* Global Export Indicator - shows progress across all screens */}
       <GlobalExportIndicator />
+
+      {/* Upload Progress Indicator - shows upload progress on all screens */}
+      <UploadProgressIndicator />
 
       {/* Downloads Panel */}
       <DownloadsPanel

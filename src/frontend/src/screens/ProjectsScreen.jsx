@@ -1,14 +1,16 @@
-import { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { ProjectManager } from '../components/ProjectManager';
 import { DownloadsPanel } from '../components/DownloadsPanel';
 import { useProjects } from '../hooks/useProjects';
 import { useGames } from '../hooks/useGames';
+import { useGameUpload } from '../hooks/useGameUpload';
 import { useProjectLoader } from '../hooks/useProjectLoader';
 import { useNavigationStore } from '../stores/navigationStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useExportStore } from '../stores/exportStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useGamesStore } from '../stores/gamesStore';
+import { useUploadStore } from '../stores/uploadStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
@@ -77,6 +79,15 @@ export function ProjectsScreen({
     deleteGame,
   } = useGames();
 
+  // Upload management hook (for pending uploads list)
+  const {
+    pendingUploads,
+    fetchPendingUploads,
+  } = useGameUpload();
+
+  // Active upload from uploadStore (in-progress upload that persists across navigation)
+  const activeUpload = useUploadStore(state => state.activeUpload);
+
   // Watch for games version changes from other components (e.g., AnnotateContainer)
   const gamesVersion = useGamesStore(state => state.gamesVersion);
 
@@ -122,10 +133,14 @@ export function ProjectsScreen({
     }
   }, [gamesVersion, fetchGames]);
 
-  // NOTE: Extraction WebSocket removed - was causing browser console errors that can't be suppressed.
-  // The WebSocket endpoint exists on the backend but BaseHTTPMiddleware interferes with connections.
-  // Users can manually refresh the project list after extractions complete.
-  // TODO: Re-enable if we fix the middleware issue or switch to pure ASGI middleware.
+  // Fetch pending uploads on mount
+  useEffect(() => {
+    fetchPendingUploads();
+  }, [fetchPendingUploads]);
+
+  // NOTE: Projects are always clickable now - no need to poll for extraction completion
+  // Users can open and edit projects while extraction runs in the background
+  // TODO: Re-enable extraction WebSocket for real-time status updates (prefer WebSocket over polling)
 
   // Handle project selection
   const handleSelectProject = useCallback(async (projectId) => {
@@ -212,6 +227,64 @@ export function ProjectsScreen({
     setEditorMode('annotate');
   }, [setEditorMode]);
 
+  // Ref to prevent multiple resume triggers
+  const isResumingRef = useRef(false);
+
+  // Handle resuming a pending upload
+  // Navigate to Annotate mode with the file - same flow as new upload
+  // The backend handles resume detection: same hash = resume, different hash = new upload
+  const handleResumeUpload = useCallback((file, expectedFilename) => {
+    // Prevent multiple triggers (double-click, re-render, etc.)
+    if (isResumingRef.current) {
+      console.log('[ProjectsScreen] Resume already in progress, ignoring');
+      return;
+    }
+    isResumingRef.current = true;
+
+    console.log('[ProjectsScreen] Resuming upload, navigating to Annotate:', file.name);
+
+    // Warn if filename doesn't match (quick check, not hash)
+    if (expectedFilename && file.name !== expectedFilename) {
+      const proceed = window.confirm(
+        `The selected file "${file.name}" has a different name than the original "${expectedFilename}".\n\n` +
+        `If this is the same video file (just renamed), click OK to continue.\n` +
+        `If this is a different file, click Cancel and select the correct file.`
+      );
+      if (!proceed) {
+        isResumingRef.current = false;
+        return;
+      }
+    }
+
+    // Navigate to Annotate mode with the file - same as new upload flow
+    // AnnotateScreen will handle the upload and show progress
+    pendingGameData = { file };
+    setEditorMode('annotate');
+
+    // Reset after a short delay to allow navigation to complete
+    setTimeout(() => {
+      isResumingRef.current = false;
+    }, 1000);
+  }, [setEditorMode]);
+
+  // Handle cancelling a pending upload
+  const handleCancelPendingUpload = useCallback(async (sessionId) => {
+    console.log('[ProjectsScreen] Cancelling upload:', sessionId);
+    try {
+      const { cancelUpload } = await import('../services/uploadManager');
+      await cancelUpload(sessionId);
+      await fetchPendingUploads();
+    } catch (err) {
+      console.error('[ProjectsScreen] Cancel upload failed:', err);
+    }
+  }, [fetchPendingUploads]);
+
+  // Handle clicking the active upload - navigate back to annotate mode
+  const handleClickActiveUpload = useCallback(() => {
+    console.log('[ProjectsScreen] Clicking active upload, navigating to annotate');
+    setEditorMode('annotate');
+  }, [setEditorMode]);
+
   // Compute exporting project from the global activeExports store
   // Find first actively processing export to display in the UI
   const activeExportingProject = (() => {
@@ -264,6 +337,13 @@ export function ProjectsScreen({
           onDeleteGame={deleteGame}
           onFetchGames={fetchGames}
           onOpenDownloads={openGallery}
+          // Pending uploads props
+          pendingUploads={pendingUploads}
+          onResumeUpload={handleResumeUpload}
+          onCancelPendingUpload={handleCancelPendingUpload}
+          // Active upload props (in-progress upload)
+          activeUpload={activeUpload}
+          onClickActiveUpload={handleClickActiveUpload}
         />
 
         {/* Downloads Panel */}

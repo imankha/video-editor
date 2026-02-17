@@ -663,16 +663,6 @@ export function useSegments() {
     // If no trim range, we're done
     if (!trimRange) return clampedTime;
 
-    // Debug log when clamping is actually applied
-    if (clampedTime < trimRange.start || clampedTime > trimRange.end) {
-      console.log('[useSegments] clampToVisibleRange clamping:', {
-        inputTime: time,
-        duration,
-        trimRange,
-        clampedTime: clampedTime < trimRange.start ? trimRange.start : trimRange.end
-      });
-    }
-
     // Clamp to trim range boundaries
     // If time is before visible range, snap to start
     if (clampedTime < trimRange.start) {

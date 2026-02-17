@@ -4,11 +4,19 @@
  * Manages games state and API interactions.
  * Games store annotated game footage for later project creation.
  * Annotations are stored in separate JSON files (not in the database).
+ *
+ * T80: Uses deduplicated uploads via BLAKE3 hashing.
+ * Large files (4GB+) use multipart upload to R2.
+ * Games are stored globally at games/{hash}.mp4 for deduplication.
  */
 
 import { useState, useCallback, useRef } from 'react';
 import { API_BASE } from '../config';
 import { useGamesStore } from '../stores';
+import { uploadGame as uploadGameService, UPLOAD_PHASE } from '../services/uploadManager';
+
+// Re-export UPLOAD_PHASE for consumers
+export { UPLOAD_PHASE };
 
 export function useGames() {
   const [games, setGames] = useState([]);
@@ -134,179 +142,77 @@ export function useGames() {
   }, [fetchGames, invalidateGames]);
 
   /**
-   * Upload video to an existing game.
-   * This is called after createGame to upload the video in the background.
+   * Upload a game video with deduplication support.
    *
-   * Uses direct R2 upload when available (roughly 2x faster for large files):
-   * 1. Get presigned URL from backend
-   * 2. Upload directly to R2
-   * 3. Confirm upload with backend
+   * This is the unified upload flow that:
+   * 1. Computes BLAKE3 hash of the file
+   * 2. Checks if file already exists globally (deduplication)
+   * 3. If new, uploads via multipart to R2
+   * 4. Returns game_id, name, and video_url
    *
-   * Falls back to traditional upload through backend if R2 is disabled.
+   * Progress callback receives: { phase, percent, message }
+   * Phases: 'hashing', 'preparing', 'uploading', 'finalizing', 'complete', 'error'
    *
-   * @param {number} gameId - Game ID to upload video to
    * @param {File} videoFile - Video file to upload
-   * @param {function} onProgress - Optional callback for progress updates: (loaded, total, percent) => void
+   * @param {Object} gameDetails - Optional game details for display name
+   * @param {string} gameDetails.opponentName - Opponent team name
+   * @param {string} gameDetails.gameDate - Game date (YYYY-MM-DD)
+   * @param {string} gameDetails.gameType - 'home', 'away', or 'tournament'
+   * @param {string} gameDetails.tournamentName - Tournament name
+   * @param {Object} videoMetadata - Optional video metadata
+   * @param {number} videoMetadata.duration - Video duration in seconds
+   * @param {number} videoMetadata.width - Video width in pixels
+   * @param {number} videoMetadata.height - Video height in pixels
+   * @param {function} onProgress - Progress callback: ({ phase, percent, message }) => void
+   * @returns {Promise<Object>} - Result with game_id, name, video_url, deduplicated flag
    */
-  const uploadGameVideo = useCallback(async (gameId, videoFile, onProgress) => {
+  const uploadGameVideo = useCallback(async (videoFile, gameDetails = null, videoMetadata = null, onProgress = null) => {
     const fileSizeMB = (videoFile.size / (1024 * 1024)).toFixed(1);
-    console.log('[useGames] Starting video upload for game', gameId, '- size:', fileSizeMB, 'MB');
-
-    // Try to get presigned URL for direct R2 upload
-    let useDirectUpload = false;
-    let uploadUrl = null;
-    let videoFilename = null;
+    console.log('[useGames] Starting upload - size:', fileSizeMB, 'MB');
 
     try {
-      const urlResponse = await fetch(
-        `${API_BASE}/api/games/${gameId}/upload-url?filename=${encodeURIComponent(videoFile.name)}`
-      );
-      if (urlResponse.ok) {
-        const urlData = await urlResponse.json();
-        if (urlData.r2_enabled && urlData.upload_url) {
-          useDirectUpload = true;
-          uploadUrl = urlData.upload_url;
-          videoFilename = urlData.video_filename;
-          console.log('[useGames] Using direct R2 upload for faster transfer');
-        }
+      // Build options for uploadGameService
+      const options = {};
+
+      if (gameDetails) {
+        options.opponentName = gameDetails.opponentName;
+        options.gameDate = gameDetails.gameDate;
+        options.gameType = gameDetails.gameType;
+        options.tournamentName = gameDetails.tournamentName;
       }
-    } catch (e) {
-      console.log('[useGames] Could not get presigned URL, falling back to traditional upload');
-    }
 
-    if (useDirectUpload) {
-      // Direct R2 upload (faster - bypasses backend)
-      return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('PUT', uploadUrl);
-        xhr.setRequestHeader('Content-Type', 'video/mp4');
+      if (videoMetadata) {
+        options.videoDuration = videoMetadata.duration;
+        options.videoWidth = videoMetadata.width;
+        options.videoHeight = videoMetadata.height;
+      }
 
-        // Track upload progress
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable && onProgress) {
-            const percent = Math.round((event.loaded / event.total) * 100);
-            onProgress(event.loaded, event.total, percent);
-            if (percent % 10 === 0) {
-              console.log('[useGames] Direct R2 upload progress:', percent + '%');
-            }
-          }
-        };
+      const result = await uploadGameService(videoFile, (progress) => {
+        if (onProgress) {
+          onProgress(progress);
+        }
+      }, options);
 
-        xhr.onload = async () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            console.log('[useGames] Direct R2 upload complete, confirming with backend...');
-
-            // Confirm upload with backend
-            try {
-              const formData = new FormData();
-              formData.append('video_filename', videoFilename);
-              formData.append('video_size', videoFile.size);
-
-              const confirmResponse = await fetch(
-                `${API_BASE}/api/games/${gameId}/confirm-video`,
-                { method: 'POST', body: formData }
-              );
-
-              if (!confirmResponse.ok) {
-                const errorData = await confirmResponse.json().catch(() => ({}));
-                throw new Error(errorData.detail || 'Failed to confirm upload');
-              }
-
-              const data = await confirmResponse.json();
-              console.log('[useGames] Video upload confirmed for game', gameId, '- size:', data.size_mb, 'MB');
-
-              // Log if any pending clips were extracted (clips saved during upload)
-              if (data.pending_clips_extracted > 0) {
-                console.log('[useGames] Extracted', data.pending_clips_extracted, 'pending clips,', data.pending_projects_created, 'projects created');
-              }
-
-              // Notify other components and refresh games list
-              invalidateGames();
-              fetchGames();
-              resolve(data);
-            } catch (e) {
-              console.error('[useGames] Failed to confirm upload:', e);
-              setError(e.message);
-              reject(e);
-            }
-          } else {
-            const errorMsg = `Direct R2 upload failed: ${xhr.status}`;
-            console.error('[useGames]', errorMsg);
-            setError(errorMsg);
-            reject(new Error(errorMsg));
-          }
-        };
-
-        xhr.onerror = () => {
-          const errorMsg = 'Network error during direct R2 upload';
-          console.error('[useGames]', errorMsg);
-          setError(errorMsg);
-          reject(new Error(errorMsg));
-        };
-
-        // Send the raw file directly to R2
-        xhr.send(videoFile);
+      console.log('[useGames] Upload complete:', {
+        game_id: result.game_id,
+        name: result.name,
+        deduplicated: result.deduplicated
       });
+
+      if (result.deduplicated) {
+        console.log('[useGames] DEDUPLICATION: Saved bandwidth! File already existed on server.');
+      }
+
+      // Notify other components
+      invalidateGames();
+
+      return result;
+    } catch (err) {
+      console.error('[useGames] Upload failed:', err);
+      setError(err.message);
+      throw err;
     }
-
-    // Traditional upload through backend (fallback)
-    console.log('[useGames] Using traditional upload through backend');
-    return new Promise((resolve, reject) => {
-      const formData = new FormData();
-      formData.append('video', videoFile);
-
-      const xhr = new XMLHttpRequest();
-      xhr.open('PUT', `${API_BASE}/api/games/${gameId}/video`);
-
-      // Track upload progress
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable && onProgress) {
-          const percent = Math.round((event.loaded / event.total) * 100);
-          onProgress(event.loaded, event.total, percent);
-          console.log('[useGames] Upload progress:', percent + '%');
-        }
-      };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const data = JSON.parse(xhr.responseText);
-            console.log('[useGames] Video uploaded for game', gameId, '- size:', data.size_mb, 'MB');
-
-            // Log if any pending clips were extracted (clips saved during upload)
-            if (data.pending_clips_extracted > 0) {
-              console.log('[useGames] Extracted', data.pending_clips_extracted, 'pending clips,', data.pending_projects_created, 'projects created');
-            }
-
-            // Notify other components and refresh games list
-            invalidateGames();
-            fetchGames();
-            resolve(data);
-          } catch (e) {
-            reject(new Error('Failed to parse response'));
-          }
-        } else {
-          let errorMsg = `Failed to upload video: ${xhr.status}`;
-          try {
-            const errorData = JSON.parse(xhr.responseText);
-            errorMsg = errorData.detail || errorMsg;
-          } catch (e) {}
-          console.error('[useGames] Failed to upload video:', errorMsg);
-          setError(errorMsg);
-          reject(new Error(errorMsg));
-        }
-      };
-
-      xhr.onerror = () => {
-        const errorMsg = 'Network error during upload';
-        console.error('[useGames] Failed to upload video:', errorMsg);
-        setError(errorMsg);
-        reject(new Error(errorMsg));
-      };
-
-      xhr.send(formData);
-    });
-  }, [fetchGames, invalidateGames]);
+  }, [invalidateGames]);
 
   /**
    * Get full game details including annotations from file
@@ -526,8 +432,8 @@ export function useGames() {
 
     // Actions
     fetchGames,
-    createGame,
-    uploadGameVideo,
+    createGame, // Deprecated: Use uploadGameVideo which creates the game
+    uploadGameVideo, // T80: Unified upload with deduplication
     getGame,
     updateGame,
     deleteGame,

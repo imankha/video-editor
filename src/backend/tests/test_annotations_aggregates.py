@@ -53,16 +53,26 @@ def client():
 
 @pytest.fixture
 def empty_game(client):
-    """Create a game with no annotations."""
-    response = client.post(
-        "/api/games",
-        data={"name": "Empty Test Game"}
-    )
+    """Create a game with no annotations directly in database."""
+    from app.database import get_db_connection
+
+    # Create game directly in database (no video upload needed for these tests)
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO games (name, blake3_hash)
+            VALUES (?, ?)
+        """, ("Empty Test Game", "test_hash_" + uuid.uuid4().hex[:32]))
+        conn.commit()
+        game_id = cursor.lastrowid
+
+    # Fetch the game via API to get the full structure
+    response = client.get(f"/api/games/{game_id}")
     assert response.status_code == 200
-    game = response.json()["game"]
+    game = response.json()
     yield game
     # Cleanup
-    client.delete(f"/api/games/{game['id']}")
+    client.delete(f"/api/games/{game_id}")
 
 
 class TestGameAggregates:

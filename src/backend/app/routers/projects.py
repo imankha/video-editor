@@ -883,6 +883,11 @@ async def delete_project(project_id: int):
             DELETE FROM final_videos WHERE project_id = ?
         """, (project_id,))
 
+        # Clear auto_project_id from any raw_clips pointing to this project
+        cursor.execute("""
+            UPDATE raw_clips SET auto_project_id = NULL WHERE auto_project_id = ?
+        """, (project_id,))
+
         # Delete project
         cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         conn.commit()

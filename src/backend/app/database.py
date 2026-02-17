@@ -211,18 +211,83 @@ def check_database_size(db_path: Path) -> None:
 
 
 def get_local_db_version(user_id: str) -> Optional[int]:
-    """Get the locally cached database version for a user."""
+    """
+    Get the locally cached database version for a user.
+
+    First checks in-memory cache, then falls back to reading from the
+    database file itself. This ensures version survives process restarts.
+    """
     with _db_version_lock:
-        return _user_db_versions.get(user_id)
+        cached = _user_db_versions.get(user_id)
+        if cached is not None:
+            return cached
+
+    # Not in cache - try to read from database file
+    db_path = USER_DATA_BASE / user_id / "database.sqlite"
+    if not db_path.exists():
+        return None
+
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=5)
+        cursor = conn.cursor()
+        # Check if db_version table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
+        if not cursor.fetchone():
+            conn.close()
+            return None
+        cursor.execute("SELECT version FROM db_version WHERE id = 1")
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            version = row[0]
+            # Cache it for future lookups
+            with _db_version_lock:
+                _user_db_versions[user_id] = version
+            return version
+    except Exception as e:
+        logger.debug(f"Could not read db_version from {db_path}: {e}")
+
+    return None
 
 
 def set_local_db_version(user_id: str, version: Optional[int]) -> None:
-    """Set the locally cached database version for a user."""
+    """
+    Set the locally cached database version for a user.
+
+    Persists to both in-memory cache AND database file, so version
+    survives process restarts.
+    """
     with _db_version_lock:
         if version is None:
             _user_db_versions.pop(user_id, None)
         else:
             _user_db_versions[user_id] = version
+
+    # Also persist to database file
+    if version is not None:
+        db_path = USER_DATA_BASE / user_id / "database.sqlite"
+        if db_path.exists():
+            try:
+                conn = sqlite3.connect(str(db_path), timeout=5)
+                cursor = conn.cursor()
+                # Create table if not exists
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS db_version (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        version INTEGER NOT NULL,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                # Upsert version
+                cursor.execute("""
+                    INSERT OR REPLACE INTO db_version (id, version, updated_at)
+                    VALUES (1, ?, CURRENT_TIMESTAMP)
+                """, (version,))
+                conn.commit()
+                conn.close()
+                logger.debug(f"Persisted db_version {version} to {db_path}")
+            except Exception as e:
+                logger.warning(f"Could not persist db_version to {db_path}: {e}")
 
 
 def init_request_context() -> None:
@@ -457,15 +522,16 @@ def ensure_database():
             )
         """)
 
-        # Games - store annotated game footage for later project creation
-        # video_filename is NULL until video is uploaded (allows instant game creation)
-        # Aggregate columns cache annotation counts for fast listing without parsing
+        # Games - store annotated game footage
+        # Videos stored globally in R2 at games/{blake3_hash}.mp4
+        # Aggregate columns cache annotation counts for fast listing
         # Clip annotations are stored in raw_clips table (linked by game_id)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 video_filename TEXT,
+                blake3_hash TEXT,
                 clip_count INTEGER DEFAULT 0,
                 brilliant_count INTEGER DEFAULT 0,
                 good_count INTEGER DEFAULT 0,
@@ -473,7 +539,16 @@ def ensure_database():
                 mistake_count INTEGER DEFAULT 0,
                 blunder_count INTEGER DEFAULT 0,
                 aggregate_score INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                video_duration REAL,
+                video_width INTEGER,
+                video_height INTEGER,
+                video_size INTEGER,
+                opponent_name TEXT,
+                game_date TEXT,
+                game_type TEXT,
+                tournament_name TEXT
             )
         """)
 
@@ -614,6 +689,10 @@ def ensure_database():
             "ALTER TABLE working_videos ADD COLUMN highlight_color TEXT DEFAULT NULL",
             # T66: Track when project was restored from archive (for stale cleanup)
             "ALTER TABLE projects ADD COLUMN restored_at TIMESTAMP DEFAULT NULL",
+            # T80: Global game deduplication - store BLAKE3 hash for global storage
+            "ALTER TABLE games ADD COLUMN blake3_hash TEXT",
+            # T80: Track last access time for future cleanup of unused games
+            "ALTER TABLE games ADD COLUMN last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         ]
 
         for migration in migrations:
@@ -754,6 +833,30 @@ def ensure_database():
             CREATE TABLE IF NOT EXISTS user_settings (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 settings_json TEXT NOT NULL DEFAULT '{}',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # T80: Track in-progress multipart uploads
+        # Allows resuming interrupted uploads
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pending_uploads (
+                id TEXT PRIMARY KEY,
+                blake3_hash TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                original_filename TEXT NOT NULL,
+                r2_upload_id TEXT NOT NULL,
+                parts_json TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # T80: Database version tracking for R2 sync
+        # Stored in DB so version survives process restarts
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS db_version (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                version INTEGER NOT NULL,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)

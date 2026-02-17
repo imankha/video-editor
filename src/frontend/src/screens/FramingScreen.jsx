@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import extractionWebSocketManager from '../services/ExtractionWebSocketManager';
 import { FramingModeView } from '../modes';
 import { FramingContainer } from '../containers';
 import { useCrop, useSegments } from '../modes/framing';
@@ -70,8 +71,9 @@ export function FramingScreen({
     setFramingChangedSinceExport,
   } = useFramingStore();
 
-  // Overlay store - for resetting overlay state
+  // Overlay store - for resetting overlay state and signaling working video load
   const resetOverlayStore = useOverlayStore(state => state.reset);
+  const setIsLoadingWorkingVideo = useOverlayStore(state => state.setIsLoadingWorkingVideo);
 
   // Local state
   const [dragCrop, setDragCrop] = useState(null);
@@ -125,6 +127,55 @@ export function FramingScreen({
 
   // Games hook (for game name display and library filters)
   const { games, fetchGames } = useGames();
+
+  // Extraction state - calculated from clips
+  const extractionState = useMemo(() => {
+    if (!clips || clips.length === 0) {
+      return { allExtracting: false, anyExtracting: false, extractedCount: 0, totalCount: 0 };
+    }
+    const extractedClips = clips.filter(c => c.isExtracted);
+    const extractingClips = clips.filter(c => c.isExtracting);
+    const pendingClips = clips.filter(c => !c.isExtracted && !c.isExtracting);
+    return {
+      allExtracting: extractedClips.length === 0 && (extractingClips.length > 0 || pendingClips.length > 0),
+      anyExtracting: extractingClips.length > 0 || pendingClips.length > 0,
+      extractedCount: extractedClips.length,
+      totalCount: clips.length,
+      extractingCount: extractingClips.length,
+      pendingCount: pendingClips.length,
+    };
+  }, [clips]);
+
+  // Listen for extraction completion via WebSocket
+  useEffect(() => {
+    if (!extractionState.anyExtracting || !projectId) return;
+
+    console.log('[FramingScreen] Starting extraction WebSocket listener -', extractionState);
+
+    // Connect to extraction WebSocket
+    extractionWebSocketManager.connect();
+
+    // Listen for extraction events
+    const unsubComplete = extractionWebSocketManager.addEventListener('extraction_complete', (data) => {
+      console.log('[FramingScreen] Extraction complete:', data);
+      // Refresh clips when our project's clip completes
+      if (data.project_id === projectId || !data.project_id) {
+        fetchProjectClips();
+      }
+    });
+
+    const unsubFailed = extractionWebSocketManager.addEventListener('extraction_failed', (data) => {
+      console.log('[FramingScreen] Extraction failed:', data);
+      if (data.project_id === projectId || !data.project_id) {
+        fetchProjectClips();
+      }
+    });
+
+    return () => {
+      unsubComplete();
+      unsubFailed();
+    };
+  }, [extractionState.anyExtracting, projectId, fetchProjectClips]);
 
   // Fetch games on mount
   useEffect(() => {
@@ -368,17 +419,34 @@ export function FramingScreen({
     saveCurrentClipState: framingSaveCurrentClipState,
   } = framing;
 
+  // Track the last loaded URL to detect when extraction completes
+  const lastLoadedUrlRef = useRef(null);
+
   // Initialize video playback when entering framing mode
   // With single-store architecture, clips are already in projectDataStore (UI format)
   // useClipManager reads directly from projectDataStore, so we just need to load the video
   useEffect(() => {
-    // Skip if already loaded or no clips
-    if (initialLoadDoneRef.current || clips.length === 0) return;
+    // Skip if no clips
+    if (clips.length === 0) return;
 
-    initialLoadDoneRef.current = true;
     const firstClip = clips[0];
+    const clipUrl = firstClip?.fileUrl || firstClip?.url;
+
+    // Skip if no URL yet (still extracting) or already loaded this URL
+    if (!clipUrl) {
+      if (!initialLoadDoneRef.current) {
+        console.log('[FramingScreen] First clip has no URL yet (extraction pending)');
+        initialLoadDoneRef.current = true; // Mark as "attempted" to avoid log spam
+      }
+      return;
+    }
+
+    // Skip if we already loaded this exact URL
+    if (lastLoadedUrlRef.current === clipUrl) return;
 
     console.log('[FramingScreen] Initializing video for first clip:', firstClip?.id);
+    lastLoadedUrlRef.current = clipUrl;
+    initialLoadDoneRef.current = true;
 
     // Set previousClipIdRef to prevent clip switching effect from double-loading
     if (firstClip?.id) {
@@ -386,11 +454,6 @@ export function FramingScreen({
     }
 
     const loadFirstClipVideo = async () => {
-      const clipUrl = firstClip?.fileUrl || firstClip?.url;
-      if (!clipUrl) {
-        console.warn('[FramingScreen] First clip has no URL');
-        return;
-      }
 
       // Clips already have parsed data (segments, cropKeyframes) from useProjectLoader
       // Restore framing state BEFORE loading video to prevent race conditions
@@ -843,8 +906,10 @@ export function FramingScreen({
       }
     } else {
       // MVC flow: blob is null, working video saved on server
-      // Clear any stale in-memory video so OverlayScreen fetches from server
-      console.log('[FramingScreen] MVC flow: working video on server, clearing in-memory video');
+      // Signal that OverlayScreen should wait for server working video
+      // This prevents race condition where OverlayScreen loads raw clip before project refreshes
+      setIsLoadingWorkingVideo(true);
+      console.log('[FramingScreen] MVC flow: working video on server, signaling OverlayScreen to wait');
       setWorkingVideo(null);
 
       // Refresh project data so OverlayScreen sees the new working_video_id
@@ -878,7 +943,7 @@ export function FramingScreen({
     } else {
       console.error('[FramingScreen] Cannot navigate to overlay - working video not set');
     }
-  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio, refreshProject, projectId, onExportComplete]);
+  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo]);
 
   // Derive game name for selected clip
   const selectedClipGameName = useMemo(() => {
@@ -993,6 +1058,28 @@ export function FramingScreen({
 
       {/* Main content */}
       <div className="flex-1">
+        {/* Show extraction progress when all clips are extracting */}
+        {extractionState.allExtracting ? (
+          <div className="flex-1 flex flex-col items-center justify-center h-full text-center px-8">
+            <div className="max-w-md">
+              <div className="mb-4">
+                <svg className="animate-spin h-12 w-12 text-purple-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              </div>
+              <h3 className="text-xl font-medium text-white mb-2">Extracting Clip{extractionState.totalCount > 1 ? 's' : ''}</h3>
+              <p className="text-gray-400 mb-4">
+                {extractionState.extractingCount > 0
+                  ? `Processing ${extractionState.extractingCount} clip${extractionState.extractingCount > 1 ? 's' : ''}...`
+                  : `${extractionState.pendingCount} clip${extractionState.pendingCount > 1 ? 's' : ''} waiting in queue`}
+              </p>
+              <p className="text-gray-500 text-sm">
+                This page will automatically refresh when extraction completes.
+              </p>
+            </div>
+          </div>
+        ) : (
         <FramingModeView
       // Video state - now owned by this screen
       videoRef={videoRef}
@@ -1093,6 +1180,7 @@ export function FramingScreen({
       // Context
       cropContextValue={cropContextValue}
     />
+        )}
       </div>
 
       {/* Outdated Clips Dialog */}
