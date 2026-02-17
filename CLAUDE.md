@@ -170,6 +170,30 @@ const fps = region.fps;  // May be null, caller handles appropriately
 
 This keeps failures visible and debuggable rather than silently producing wrong results.
 
+### No Defensive Fixes for Internal Bugs
+
+**Don't add defensive code to work around bugs in code we control.** Defensive fixes mask underlying issues and make bugs harder to find. Reserve defensive strategies for code/behavior outside our control (external APIs, user input, third-party libraries).
+
+**Bad:**
+```python
+# "Defensive" fix that hides a bug in delete_project
+if auto_project_id:
+    cursor.execute("SELECT id FROM projects WHERE id = ?", (auto_project_id,))
+    if not cursor.fetchone():
+        # Silently clean up stale reference - masks the real bug
+        cursor.execute("UPDATE raw_clips SET auto_project_id = NULL WHERE id = ?", (clip_id,))
+        auto_project_id = None
+```
+
+**Good:**
+```python
+# Fix the root cause in delete_project instead
+cursor.execute("UPDATE raw_clips SET auto_project_id = NULL WHERE auto_project_id = ?", (project_id,))
+cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+```
+
+When the system encounters an invalid state, it should log appropriately and fail visibly - not silently "fix" itself. If you find yourself writing code to handle "impossible" states from your own codebase, fix the source of those states instead.
+
 ## Resources
 - [src/frontend/CLAUDE.md](src/frontend/CLAUDE.md) - Frontend skills and patterns
 - [src/backend/CLAUDE.md](src/backend/CLAUDE.md) - Backend skills and patterns

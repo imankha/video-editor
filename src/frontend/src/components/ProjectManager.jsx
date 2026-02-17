@@ -1254,7 +1254,9 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
   const clipsPendingExtraction = project.clips_pending_extraction ?? 0;
   const isAnyExtracting = clipsExtracting > 0 || clipsPendingExtraction > 0;
   const hasExtractedClips = clipsExtracted > 0;
-  const canOpen = hasExtractedClips || project.clip_count === 0;
+  // Always allow opening projects - users should be able to see/edit clips while extraction runs
+  // Backend tracks extraction state via modal_tasks and won't double-trigger
+  const canOpen = true;
 
   const handleDelete = (e) => {
     e.stopPropagation();
@@ -1296,7 +1298,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
           ? 'hover:bg-gray-750 cursor-pointer border-gray-700 hover:border-purple-500'
           : 'cursor-not-allowed border-gray-700 opacity-75'
       }`}
-      title={!canOpen ? 'Waiting for clips to be extracted...' : undefined}
+      title={!canOpen ? 'Extraction in progress...' : undefined}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">

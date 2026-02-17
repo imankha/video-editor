@@ -203,13 +203,16 @@ async def get_warmup_urls(
     Get all video URLs for the current user to pre-warm CDN cache.
 
     Returns presigned URLs for:
-    - Game videos (source footage)
+    - Game videos (source footage) - includes size for tail warming
     - Final videos (exported results)
     - Working videos (intermediate exports)
 
     Call this on user login/app init to warm Cloudflare edge cache.
     First access to R2 can be slow (cold cache), but subsequent
     accesses are fast. Pre-warming ensures videos load quickly.
+
+    For large game videos, the frontend should warm BOTH the start
+    AND the end of the file (where moov atom often lives for non-faststart MP4s).
 
     Returns:
         {"urls": [url1, url2, ...], "count": N}
@@ -244,8 +247,9 @@ async def get_warmup_urls(
                 gallery_urls.append(url)
 
         # Game videos - use blake3_hash (global) or video_filename (legacy)
+        # Include video_size for tail warming of large non-faststart videos
         cursor.execute("""
-            SELECT blake3_hash, video_filename FROM games
+            SELECT blake3_hash, video_filename, video_size FROM games
             WHERE blake3_hash IS NOT NULL OR video_filename IS NOT NULL
         """)
         for row in cursor.fetchall():
@@ -266,7 +270,11 @@ async def get_warmup_urls(
             else:
                 url = None
             if url:
-                game_urls.append(url)
+                # Include size so frontend can warm the tail for large videos
+                game_urls.append({
+                    "url": url,
+                    "size": row['video_size']
+                })
 
         # Working videos only for incomplete projects
         cursor.execute("""
@@ -285,15 +293,16 @@ async def get_warmup_urls(
             if url:
                 working_urls.append(url)
 
-    # Combined list for backwards compatibility
-    urls = gallery_urls + game_urls + working_urls
+    # Combined list for backwards compatibility (flatten game_urls)
+    flat_game_urls = [g['url'] if isinstance(g, dict) else g for g in game_urls]
+    urls = gallery_urls + flat_game_urls + working_urls
 
     return {
         "urls": urls,
         "count": len(urls),
         "r2_enabled": True,
         "gallery_urls": gallery_urls,
-        "game_urls": game_urls,
+        "game_urls": game_urls,  # Now includes {url, size} for tail warming
         "working_urls": working_urls,
     }
 

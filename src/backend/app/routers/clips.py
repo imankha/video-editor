@@ -141,7 +141,7 @@ class WorkingClipResponse(BaseModel):
     project_id: int
     raw_clip_id: Optional[int]
     uploaded_filename: Optional[str]
-    filename: str
+    filename: Optional[str] = None  # May be None if extraction not complete
     file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
     name: Optional[str] = None
     notes: Optional[str] = None
@@ -156,6 +156,8 @@ class WorkingClipResponse(BaseModel):
     end_time: Optional[float] = None
     tags: Optional[List[str]] = None
     rating: Optional[int] = None
+    # Extraction status: 'pending', 'processing', 'completed', 'failed', or None if no extraction needed
+    extraction_status: Optional[str] = None
 
 
 class WorkingClipUpdate(BaseModel):
@@ -776,7 +778,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
                     clip_id
                 ))
 
-            # Handle 5-star project sync
+            # Handle 5-star project sync (extraction triggered when user opens project, not here)
             old_rating = existing['rating']
             new_rating = clip_data.rating
             project_created = False
@@ -789,22 +791,8 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
                 _delete_auto_project(cursor, project_id, clip_id)
                 project_id = None
 
-            # Get game video filename if we need to trigger extraction
-            video_filename = None
-            if project_created and not existing['filename']:
-                cursor.execute("SELECT video_filename FROM games WHERE id = ?", (clip_data.game_id,))
-                game = cursor.fetchone()
-                video_filename = game['video_filename'] if game else None
-
             conn.commit()
             logger.info(f"Updated clip {clip_id} for game {clip_data.game_id}")
-
-            # Trigger extraction if auto-project was created and clip not yet extracted
-            if project_created and video_filename:
-                await _trigger_extraction_for_auto_project(
-                    clip_id, project_id, clip_data.game_id, video_filename,
-                    clip_data.start_time, clip_data.end_time, background_tasks
-                )
 
             return RawClipSaveResponse(
                 raw_clip_id=clip_id,
@@ -821,27 +809,15 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
               clip_data.notes, clip_data.start_time, clip_data.end_time, clip_data.game_id))
         raw_clip_id = cursor.lastrowid
 
-        # Handle 5-star project creation
+        # Handle 5-star project creation (extraction triggered when user opens project, not here)
         project_created = False
         project_id = None
-        video_filename = None
         if clip_data.rating == 5:
             project_id = _create_auto_project_for_clip(cursor, raw_clip_id, clip_data.name)
             project_created = True
-            # Get game video filename for extraction
-            cursor.execute("SELECT video_filename FROM games WHERE id = ?", (clip_data.game_id,))
-            game = cursor.fetchone()
-            video_filename = game['video_filename'] if game else None
 
         conn.commit()
         logger.info(f"Saved pending clip {raw_clip_id} for game {clip_data.game_id}")
-
-        # Trigger extraction if auto-project was created
-        if project_created and video_filename:
-            await _trigger_extraction_for_auto_project(
-                raw_clip_id, project_id, clip_data.game_id, video_filename,
-                clip_data.start_time, clip_data.end_time, background_tasks
-            )
 
         return RawClipSaveResponse(
             raw_clip_id=raw_clip_id,
@@ -857,12 +833,10 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
     Update a raw clip's metadata.
 
     Handles 5-star sync:
-    - If rating changed TO 5: Create auto-project and trigger extraction
+    - If rating changed TO 5: Create auto-project (extraction when user opens project)
     - If rating changed FROM 5: Delete auto-project (if unmodified)
     - If duration changed: Increment boundaries_version (extraction on user request)
     """
-    extraction_info = None  # Will hold info if we need to trigger extraction
-
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -889,36 +863,20 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
         new_end = update.end_time if update.end_time is not None else old_end
         auto_project_id = clip['auto_project_id']
 
-        # Debug logging to diagnose boundaries_version not incrementing
-        logger.info(f"[UpdateRawClip] clip_id={clip_id}, update request fields: start_time={update.start_time}, end_time={update.end_time}")
-        logger.info(f"[UpdateRawClip] old values: start={old_start}, end={old_end}")
-        logger.info(f"[UpdateRawClip] new values: start={new_start}, end={new_end}")
-
-        # Check if duration changed - if so, clear filename to mark for re-extraction
+        # Check if duration changed
         duration_changed = (new_start != old_start or new_end != old_end)
-        logger.info(f"[UpdateRawClip] duration_changed={duration_changed}")
 
         # Handle rating change: 5 -> non-5
         if old_rating == 5 and new_rating != 5 and auto_project_id:
             _delete_auto_project(cursor, auto_project_id, clip_id)
             auto_project_id = None
 
-        # Handle rating change: non-5 -> 5
+        # Handle rating change: non-5 -> 5 (extraction triggered when user opens project, not here)
         project_created = False
         if old_rating != 5 and new_rating == 5 and not auto_project_id:
             clip_name = update.name if update.name is not None else clip['name']
             auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name)
             project_created = True
-            # Collect extraction info if clip not yet extracted and has game video
-            if not clip['filename'] and clip['game_id'] and clip['video_filename']:
-                extraction_info = {
-                    'clip_id': clip_id,
-                    'project_id': auto_project_id,
-                    'game_id': clip['game_id'],
-                    'video_filename': clip['video_filename'],
-                    'start_time': new_start,
-                    'end_time': new_end,
-                }
 
         # Build update query
         updates = []
@@ -960,15 +918,6 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
 
         conn.commit()
         logger.info(f"Updated raw clip {clip_id}")
-
-    # Trigger extraction if auto-project was created and clip needs extraction
-    if extraction_info:
-        await _trigger_extraction_for_auto_project(
-            extraction_info['clip_id'], extraction_info['project_id'],
-            extraction_info['game_id'], extraction_info['video_filename'],
-            extraction_info['start_time'], extraction_info['end_time'],
-            background_tasks
-        )
 
     return {
         "success": True,
@@ -1039,8 +988,11 @@ async def delete_raw_clip(clip_id: int):
 # ============ WORKING CLIPS (PROJECT CLIPS) ============
 
 @router.get("/projects/{project_id}/clips", response_model=List[WorkingClipResponse])
-async def list_project_clips(project_id: int):
-    """List all working clips for a project."""
+async def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
+    """List all working clips for a project.
+
+    Also triggers extraction for any clips that haven't been extracted yet.
+    """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -1078,20 +1030,57 @@ async def list_project_clips(project_id: int):
         """, (project_id, project_id))
         clips = cursor.fetchall()
 
+        # Collect raw_clip_ids that need extraction status lookup
+        raw_clip_ids_needing_status = [
+            clip['raw_clip_id'] for clip in clips
+            if clip['raw_clip_id'] and not clip['raw_filename'] and not clip['uploaded_filename']
+        ]
+
+        # Look up extraction status for clips that need it
+        extraction_statuses = {}
+        if raw_clip_ids_needing_status:
+            placeholders = ','.join('?' * len(raw_clip_ids_needing_status))
+            cursor.execute(f"""
+                SELECT raw_clip_id, status
+                FROM modal_tasks
+                WHERE task_type = 'clip_extraction'
+                AND raw_clip_id IN ({placeholders})
+                ORDER BY created_at DESC
+            """, raw_clip_ids_needing_status)
+            # Use latest status for each raw_clip_id
+            for row in cursor.fetchall():
+                if row['raw_clip_id'] not in extraction_statuses:
+                    extraction_statuses[row['raw_clip_id']] = row['status']
+
         result = []
         for clip in clips:
             tags = json.loads(clip['raw_tags']) if clip['raw_tags'] else []
             rating = clip['raw_rating'] or 3
-            filename = clip['raw_filename'] or clip['uploaded_filename'] or 'unknown'
-            # Determine source type for presigned URL
-            source_type = 'upload' if clip['uploaded_filename'] else 'raw'
+            raw_filename = clip['raw_filename']
+            uploaded_filename = clip['uploaded_filename']
+
+            # Determine if clip is extracted
+            if raw_filename:
+                filename = raw_filename
+                file_url = get_working_clip_url(filename, 'raw')
+                extraction_status = None  # Already extracted
+            elif uploaded_filename:
+                filename = uploaded_filename
+                file_url = get_working_clip_url(filename, 'upload')
+                extraction_status = None  # Direct upload, no extraction needed
+            else:
+                # Clip not yet extracted - don't return invalid URL
+                filename = None
+                file_url = None
+                extraction_status = extraction_statuses.get(clip['raw_clip_id'], 'pending')
+
             result.append(WorkingClipResponse(
                 id=clip['id'],
                 project_id=clip['project_id'],
                 raw_clip_id=clip['raw_clip_id'],
-                uploaded_filename=clip['uploaded_filename'],
+                uploaded_filename=uploaded_filename,
                 filename=filename,
-                file_url=get_working_clip_url(filename, source_type),
+                file_url=file_url,
                 name=derive_clip_name(clip['raw_name'], rating, tags),
                 notes=clip['raw_notes'],
                 exported_at=clip['exported_at'],
@@ -1103,9 +1092,74 @@ async def list_project_clips(project_id: int):
                 start_time=clip['raw_start_time'],
                 end_time=clip['raw_end_time'],
                 tags=tags,
-                rating=rating
+                rating=rating,
+                extraction_status=extraction_status
             ))
-        return result
+
+    # Trigger extraction for clips that need it (outside DB connection)
+    # This enables on-demand extraction when user opens a project
+    clips_needing_extraction = [
+        clip for clip in clips
+        if not clip['raw_filename'] and not clip['uploaded_filename']
+        and clip['raw_clip_id'] and clip['raw_game_id']
+    ]
+
+    if clips_needing_extraction:
+        from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+        user_id = get_current_user_id()
+
+        # Get game video filenames for extraction
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            game_ids = list(set(c['raw_game_id'] for c in clips_needing_extraction))
+            placeholders = ','.join('?' * len(game_ids))
+            cursor.execute(f"""
+                SELECT id, video_filename FROM games WHERE id IN ({placeholders})
+            """, game_ids)
+            game_filenames = {row['id']: row['video_filename'] for row in cursor.fetchall()}
+
+        # Check which clips already have extraction tasks
+        raw_clip_ids = [c['raw_clip_id'] for c in clips_needing_extraction]
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            placeholders = ','.join('?' * len(raw_clip_ids))
+            cursor.execute(f"""
+                SELECT raw_clip_id FROM modal_tasks
+                WHERE raw_clip_id IN ({placeholders})
+                AND task_type = 'clip_extraction'
+                AND status IN ('pending', 'running')
+            """, raw_clip_ids)
+            already_queued = {row['raw_clip_id'] for row in cursor.fetchall()}
+
+        clips_to_enqueue = []
+        for clip in clips_needing_extraction:
+            if clip['raw_clip_id'] in already_queued:
+                continue  # Already has a pending/running task
+            video_filename = game_filenames.get(clip['raw_game_id'])
+            if video_filename:
+                clips_to_enqueue.append({
+                    'clip_id': clip['raw_clip_id'],
+                    'game_id': clip['raw_game_id'],
+                    'video_filename': video_filename,
+                    'start_time': clip['raw_start_time'],
+                    'end_time': clip['raw_end_time'],
+                })
+
+        if clips_to_enqueue:
+            for clip_info in clips_to_enqueue:
+                enqueue_clip_extraction(
+                    clip_id=clip_info['clip_id'],
+                    project_id=project_id,
+                    game_id=clip_info['game_id'],
+                    video_filename=clip_info['video_filename'],
+                    start_time=clip_info['start_time'],
+                    end_time=clip_info['end_time'],
+                    user_id=user_id,
+                )
+            background_tasks.add_task(run_queue_processor_sync)
+            logger.info(f"Enqueued {len(clips_to_enqueue)} clips for extraction for project {project_id}")
+
+    return result
 
 
 @router.post("/projects/{project_id}/clips", response_model=WorkingClipResponse)

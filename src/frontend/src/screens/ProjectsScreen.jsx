@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { ProjectManager } from '../components/ProjectManager';
 import { DownloadsPanel } from '../components/DownloadsPanel';
 import { useProjects } from '../hooks/useProjects';
@@ -134,10 +134,9 @@ export function ProjectsScreen({
     fetchPendingUploads();
   }, [fetchPendingUploads]);
 
-  // NOTE: Extraction WebSocket removed - was causing browser console errors that can't be suppressed.
-  // The WebSocket endpoint exists on the backend but BaseHTTPMiddleware interferes with connections.
-  // Users can manually refresh the project list after extractions complete.
-  // TODO: Re-enable if we fix the middleware issue or switch to pure ASGI middleware.
+  // NOTE: Projects are always clickable now - no need to poll for extraction completion
+  // Users can open and edit projects while extraction runs in the background
+  // TODO: Re-enable extraction WebSocket for real-time status updates (prefer WebSocket over polling)
 
   // Handle project selection
   const handleSelectProject = useCallback(async (projectId) => {
@@ -224,10 +223,20 @@ export function ProjectsScreen({
     setEditorMode('annotate');
   }, [setEditorMode]);
 
+  // Ref to prevent multiple resume triggers
+  const isResumingRef = useRef(false);
+
   // Handle resuming a pending upload
   // Navigate to Annotate mode with the file - same flow as new upload
   // The backend handles resume detection: same hash = resume, different hash = new upload
   const handleResumeUpload = useCallback((file, expectedFilename) => {
+    // Prevent multiple triggers (double-click, re-render, etc.)
+    if (isResumingRef.current) {
+      console.log('[ProjectsScreen] Resume already in progress, ignoring');
+      return;
+    }
+    isResumingRef.current = true;
+
     console.log('[ProjectsScreen] Resuming upload, navigating to Annotate:', file.name);
 
     // Warn if filename doesn't match (quick check, not hash)
@@ -237,13 +246,21 @@ export function ProjectsScreen({
         `If this is the same video file (just renamed), click OK to continue.\n` +
         `If this is a different file, click Cancel and select the correct file.`
       );
-      if (!proceed) return;
+      if (!proceed) {
+        isResumingRef.current = false;
+        return;
+      }
     }
 
     // Navigate to Annotate mode with the file - same as new upload flow
     // AnnotateScreen will handle the upload and show progress
     pendingGameData = { file };
     setEditorMode('annotate');
+
+    // Reset after a short delay to allow navigation to complete
+    setTimeout(() => {
+      isResumingRef.current = false;
+    }, 1000);
   }, [setEditorMode]);
 
   // Handle cancelling a pending upload

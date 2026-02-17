@@ -29,7 +29,7 @@ export const WARMUP_PRIORITY = Object.freeze({
 // Track URLs that have been warmed this session
 const warmedUrls = new Set();
 
-// Priority queues
+// Priority queues - games queue now contains {url, size, warmTail} objects
 let gamesQueue = [];
 let galleryQueue = [];
 let workingQueue = [];
@@ -44,6 +44,11 @@ let warmupInProgress = false;
 // Concurrency settings
 const CONCURRENCY = 5;
 
+// Threshold for tail warming (100MB) - videos larger than this likely have moov at end
+const TAIL_WARM_SIZE_THRESHOLD = 100 * 1024 * 1024;
+// Size of tail to warm (5MB) - moov atom is typically a few MB
+const TAIL_WARM_SIZE = 5 * 1024 * 1024;
+
 /**
  * Set the warmup priority. Call this when user navigates.
  * @param {'games' | 'gallery'} priority
@@ -56,35 +61,46 @@ export function setWarmupPriority(priority) {
 }
 
 /**
- * Get the next URL to warm based on current priority.
- * Returns null if all queues are empty.
+ * Get the next item to warm based on current priority.
+ * Returns {url, size, warmTail} object or null if all queues are empty.
+ * Games queue items have size info; other queues just have URL strings.
  */
-function getNextUrl() {
+function getNextItem() {
   // Priority queue first
   const priorityQueue = currentPriority === WARMUP_PRIORITY.GAMES ? gamesQueue : galleryQueue;
   const secondaryQueue = currentPriority === WARMUP_PRIORITY.GAMES ? galleryQueue : gamesQueue;
 
   // Try priority queue
   while (priorityQueue.length > 0) {
-    const url = priorityQueue.shift();
+    const item = priorityQueue.shift();
+    // Handle both object format (games) and string format (other queues)
+    const url = typeof item === 'object' ? item.url : item;
     if (url && !warmedUrls.has(url)) {
-      return url;
+      if (typeof item === 'object') {
+        return { url, size: item.size, warmTail: true };
+      }
+      return { url };
     }
   }
 
   // Try secondary queue
   while (secondaryQueue.length > 0) {
-    const url = secondaryQueue.shift();
+    const item = secondaryQueue.shift();
+    const url = typeof item === 'object' ? item.url : item;
     if (url && !warmedUrls.has(url)) {
-      return url;
+      if (typeof item === 'object') {
+        return { url, size: item.size, warmTail: true };
+      }
+      return { url };
     }
   }
 
   // Try working queue last
   while (workingQueue.length > 0) {
-    const url = workingQueue.shift();
+    const item = workingQueue.shift();
+    const url = typeof item === 'object' ? item.url : item;
     if (url && !warmedUrls.has(url)) {
-      return url;
+      return { url };
     }
   }
 
@@ -92,26 +108,52 @@ function getNextUrl() {
 }
 
 /**
- * Warm a single video URL.
+ * Warm a single video URL with optional tail warming.
+ * @param {string} url - The URL to warm
+ * @param {Object} options - Optional warming options
+ * @param {number} options.size - File size for tail warming
+ * @param {boolean} options.warmTail - Whether to warm the tail of the file
  */
-async function warmUrl(url) {
+async function warmUrl(url, options = {}) {
   if (!url || url.startsWith('blob:') || warmedUrls.has(url)) {
     return false;
   }
 
+  const { size, warmTail } = options;
+
   try {
-    const response = await fetch(url, {
+    // Always warm the start
+    const startResponse = await fetch(url, {
       method: 'GET',
       headers: { 'Range': 'bytes=0-1023' },
       mode: 'cors',
       credentials: 'omit',
     });
 
-    if (response.ok || response.status === 206) {
-      warmedUrls.add(url);
-      return true;
+    if (!startResponse.ok && startResponse.status !== 206) {
+      return false;
     }
-    return false;
+
+    // For large videos, also warm the tail where moov atom often lives
+    if (warmTail && size && size > TAIL_WARM_SIZE_THRESHOLD) {
+      const tailStart = Math.max(0, size - TAIL_WARM_SIZE);
+      const tailEnd = size - 1;
+      try {
+        await fetch(url, {
+          method: 'GET',
+          headers: { 'Range': `bytes=${tailStart}-${tailEnd}` },
+          mode: 'cors',
+          credentials: 'omit',
+        });
+        console.log(`[CacheWarming] Warmed tail of large video (${Math.round(size / 1024 / 1024)}MB)`);
+      } catch (tailErr) {
+        // Tail warming failure is non-fatal
+        console.log(`[CacheWarming] Tail warm failed (CORS ok): ${tailErr.message}`);
+      }
+    }
+
+    warmedUrls.add(url);
+    return true;
   } catch (err) {
     // CORS errors still warm the cache
     warmedUrls.add(url);
@@ -126,10 +168,13 @@ async function worker(workerId) {
   let warmed = 0;
 
   while (true) {
-    const url = getNextUrl();
-    if (!url) break;
+    const item = getNextItem();
+    if (!item) break;
 
-    const success = await warmUrl(url);
+    const success = await warmUrl(item.url, {
+      size: item.size,
+      warmTail: item.warmTail
+    });
     if (success) warmed++;
   }
 
@@ -203,7 +248,11 @@ export async function warmAllUserVideos() {
 
     // Populate queues (filter already-warmed URLs)
     galleryQueue = (data.gallery_urls || []).filter(url => url && !warmedUrls.has(url));
-    gamesQueue = (data.game_urls || []).filter(url => url && !warmedUrls.has(url));
+    // game_urls is now an array of {url, size} objects for tail warming support
+    gamesQueue = (data.game_urls || []).filter(item => {
+      const url = typeof item === 'object' ? item.url : item;
+      return url && !warmedUrls.has(url);
+    });
     workingQueue = (data.working_urls || []).filter(url => url && !warmedUrls.has(url));
 
     const total = galleryQueue.length + gamesQueue.length + workingQueue.length;
@@ -213,7 +262,11 @@ export async function warmAllUserVideos() {
       return { warmed: 0, total: 0 };
     }
 
-    console.log(`[CacheWarming] Queued: ${gamesQueue.length} games, ${galleryQueue.length} gallery, ${workingQueue.length} working`);
+    // Count large games that will have tail warming
+    const largeGames = gamesQueue.filter(item =>
+      typeof item === 'object' && item.size && item.size > TAIL_WARM_SIZE_THRESHOLD
+    ).length;
+    console.log(`[CacheWarming] Queued: ${gamesQueue.length} games (${largeGames} large with tail warm), ${galleryQueue.length} gallery, ${workingQueue.length} working`);
 
     // Start workers (non-blocking)
     runWorkers();

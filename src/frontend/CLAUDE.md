@@ -42,9 +42,15 @@ keyframe = {
 - **Screen-owned hooks**: Each screen initializes `useVideo`, `useCrop`, etc.
 - **No prop drilling from App.jsx**: Screens are self-contained
 
+## Real-time Updates
+- **Prefer WebSockets over polling** for real-time status updates
+- WebSocket connections are managed via service classes (e.g., `ExportWebSocketManager`)
+- Polling should only be used as a fallback when WebSockets aren't feasible
+
 ## Don't
 - Don't add console.logs in committed code
 - Don't fetch data in View components
 - Don't render components without data guards
 - Don't use localStorage (all persistence via SQLite + R2)
 - Don't use time in seconds for keyframes (use frame numbers)
+- Don't use polling when WebSockets are available
