@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, PlayCircle, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2 } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores/exportStore';
@@ -1037,16 +1037,6 @@ function ActiveUploadCard({ upload, onClick }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 ml-4">
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={PlayCircle}
-            onClick={(e) => { e.stopPropagation(); onClick?.(); }}
-          >
-            Continue
-          </Button>
-        </div>
       </div>
     </div>
   );
@@ -1087,28 +1077,16 @@ function GameCard({ game, onLoad, onDelete }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Load button */}
-          <Button
-            variant="success"
-            size="sm"
-            icon={PlayCircle}
-            onClick={(e) => { e.stopPropagation(); onLoad(); }}
-          >
-            Load
-          </Button>
-
-          {/* Delete button */}
-          <Button
-            variant={showDeleteConfirm ? 'danger' : 'ghost'}
-            size="sm"
-            icon={Trash2}
-            iconOnly
-            onClick={handleDelete}
-            className={!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
-            title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
-          />
-        </div>
+        {/* Delete button - shown on hover */}
+        <Button
+          variant={showDeleteConfirm ? 'danger' : 'ghost'}
+          size="sm"
+          icon={Trash2}
+          iconOnly
+          onClick={handleDelete}
+          className={!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
+          title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
+        />
       </div>
     </div>
   );
