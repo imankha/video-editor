@@ -182,6 +182,13 @@ async def list_games():
 
         games = []
         for row in rows:
+            # Warn about games missing expected details (helps identify data issues)
+            if not row['opponent_name'] or not row['game_date'] or not row['game_type']:
+                logger.warning(
+                    f"Game {row['id']} missing details: opponent={row['opponent_name']}, "
+                    f"date={row['game_date']}, type={row['game_type']}, name={row['name']}"
+                )
+
             display_name = generate_game_display_name(
                 row['opponent_name'],
                 row['game_date'],
