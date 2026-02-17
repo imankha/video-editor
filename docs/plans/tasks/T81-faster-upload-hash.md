@@ -1,6 +1,6 @@
 # T81: Faster Upload Hash (Sampling Instead of Full Hash)
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-02-17
