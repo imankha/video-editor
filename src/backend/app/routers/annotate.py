@@ -662,30 +662,40 @@ async def run_annotate_export_processing(export_id: str, config: dict):
             await update_progress(5, 100, ExportPhase.DOWNLOAD, 'Using uploaded video...')
 
         elif game_id and is_multi_video:
-            # T82: Multi-video game - download each video from R2
-            logger.info(f"[AnnotateExport] {export_id}: Multi-video game with {len(game_videos)} videos")
-            for vi, gv in enumerate(game_videos):
-                gv_filename = f"{gv['blake3_hash']}.mp4"
-                if R2_ENABLED:
-                    local_path = os.path.join(temp_dir, gv_filename)
-                    r2_key = f"games/{gv_filename}"
-                    dl_msg = f"Downloading video {vi+1}/{len(game_videos)}..."
-                    await update_progress(int(2 + (vi / len(game_videos)) * 13), 100, ExportPhase.DOWNLOAD, dl_msg)
-                    if not await download_from_r2_with_progress(
-                        user_id, r2_key, Path(local_path),
-                        export_id=export_id, export_type='annotate',
-                        global_path=True,
-                    ):
-                        raise Exception(f"Failed to download video {vi+1} from R2: {r2_key}")
-                    multi_video_paths[gv['blake3_hash']] = local_path
-                else:
-                    local_path = str(get_games_path() / gv_filename)
-                    multi_video_paths[gv['blake3_hash']] = local_path
+            # T82: Multi-video game
+            # For burned-in mode with Modal, skip local download (Modal downloads from R2)
+            use_modal_multi = modal_enabled() and not save_to_db and R2_ENABLED
+            logger.info(f"[AnnotateExport] {export_id}: Multi-video game with {len(game_videos)} videos (modal={use_modal_multi})")
+
+            if use_modal_multi:
+                # Modal will download videos itself - just set metadata
+                await update_progress(5, 100, ExportPhase.DOWNLOAD, 'Preparing multi-video export...')
+            else:
+                # Download locally for save_to_db mode or local processing
+                for vi, gv in enumerate(game_videos):
+                    gv_filename = f"{gv['blake3_hash']}.mp4"
+                    if R2_ENABLED:
+                        local_path = os.path.join(temp_dir, gv_filename)
+                        r2_key = f"games/{gv_filename}"
+                        dl_msg = f"Downloading video {vi+1}/{len(game_videos)}..."
+                        await update_progress(int(2 + (vi / len(game_videos)) * 13), 100, ExportPhase.DOWNLOAD, dl_msg)
+                        if not await download_from_r2_with_progress(
+                            user_id, r2_key, Path(local_path),
+                            export_id=export_id, export_type='annotate',
+                            global_path=True,
+                        ):
+                            raise Exception(f"Failed to download video {vi+1} from R2: {r2_key}")
+                        multi_video_paths[gv['blake3_hash']] = local_path
+                    else:
+                        local_path = str(get_games_path() / gv_filename)
+                        multi_video_paths[gv['blake3_hash']] = local_path
+                if not R2_ENABLED:
+                    await update_progress(15, 100, ExportPhase.DOWNLOAD, 'Using local videos...')
+
             # Use first video as default source_path for backward compat (TSV, etc.)
-            source_path = multi_video_paths[game_videos[0]['blake3_hash']]
+            if multi_video_paths:
+                source_path = multi_video_paths[game_videos[0]['blake3_hash']]
             original_filename = game_name + ".mp4" if game_name else "game.mp4"
-            if not R2_ENABLED:
-                await update_progress(15, 100, ExportPhase.DOWNLOAD, 'Using local videos...')
 
         elif game_id and video_filename:
             # Single-video game - download from R2 or use local
@@ -861,28 +871,33 @@ async def run_annotate_export_processing(export_id: str, config: dict):
             # Download-only mode - create burned-in compilation
             logger.info(f"[AnnotateExport] {export_id}: Creating burned-in compilation ({len(all_clips)} clips)")
 
-            # T82: Multi-video burned-in compilation not yet supported
-            if is_multi_video:
-                raise Exception("Burned-in compilation is not yet supported for multi-video games. Use 'Save to Library' mode instead.")
-
-            # Use unified interface - call_modal_annotate_compilation handles Modal or local fallback
-            # Progress scale: 20-85% for processing (after download at 15%, TSV at 17%)
-            await update_progress(20, 100, ExportPhase.PROCESSING, 'Starting video processing...')
-
             # Generate output filename (UUID-based for final_videos storage)
             final_filename = f"{uuid.uuid4().hex[:12]}.mp4"
+
+            # Use unified interface - handles Modal or local fallback
+            # Progress scale: 20-85% for processing (after download at 15%, TSV at 17%)
+            await update_progress(20, 100, ExportPhase.PROCESSING, 'Starting video processing...')
 
             # Create progress callback for unified interface (maps 0-100% to 20-85%)
             async def unified_progress_callback(progress: float, message: str, phase: str = "processing"):
                 await update_progress(int(20 + progress * 0.65), 100, phase, message)
 
+            # Build input_keys for multi-video (video_sequence -> R2 key)
+            multi_input_keys = None
+            if is_multi_video:
+                multi_input_keys = {
+                    gv['sequence']: f"games/{gv['blake3_hash']}.mp4"
+                    for gv in game_videos
+                }
+
             result = await call_modal_annotate_compilation(
                 job_id=export_id,
                 user_id=user_id,
-                input_key=f"games/{video_filename}",
+                input_key=f"games/{video_filename}" if video_filename else None,
                 output_key=f"final_videos/{final_filename}",
                 clips=all_clips,
                 progress_callback=unified_progress_callback,
+                input_keys=multi_input_keys,
             )
 
             if result.get('status') == 'success':

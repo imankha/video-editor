@@ -2322,6 +2322,7 @@ def create_annotated_compilation(
     output_key: str,
     clips: list,
     gallery_output_key: str = None,
+    input_keys: dict = None,
 ):
     """
     Create a video compilation with burned-in text annotations on Modal.
@@ -2330,7 +2331,7 @@ def create_annotated_compilation(
     Use .remote_gen() to consume progress, final yield has status="success".
 
     This function:
-    1. Downloads game video from R2
+    1. Downloads game video(s) from R2
     2. For each clip: extracts segment with burned-in text overlay
     3. Concatenates all clips into one video
     4. Uploads result to R2
@@ -2339,6 +2340,7 @@ def create_annotated_compilation(
         job_id: Unique job identifier for logging
         user_id: User folder in R2 (e.g., "a")
         input_key: R2 key for source game video (e.g., "games/abc123.mp4")
+            Used for single-video games. Ignored when input_keys is provided.
         output_key: R2 key for output compilation (e.g., "downloads/compilation.mp4")
         clips: List of clip data
         gallery_output_key: Optional secondary R2 key for gallery (e.g., "final_videos/abc.mp4")
@@ -2349,10 +2351,13 @@ def create_annotated_compilation(
                     "name": "Brilliant Goal",
                     "notes": "Amazing finish",
                     "rating": 5,
-                    "tags": ["Goal", "Dribble"]
+                    "tags": ["Goal", "Dribble"],
+                    "video_sequence": 1
                 },
                 ...
             ]
+        input_keys: Optional dict mapping video_sequence (int) to R2 key for multi-video games.
+            e.g., {1: "games/abc.mp4", 2: "games/def.mp4"}
 
     Yields:
         Progress dicts: {"progress": 0-100, "phase": "...", "message": "..."}
@@ -2372,14 +2377,29 @@ def create_annotated_compilation(
         bucket = os.environ["R2_BUCKET_NAME"]
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Download source video from R2
-            input_path = os.path.join(temp_dir, "source.mp4")
-            full_input_key = f"{user_id}/{input_key}"
-            logger.info(f"[{job_id}] Downloading {full_input_key}")
+            # Download source video(s) from R2
+            # source_paths maps video_sequence -> local path (or None -> single video path)
+            source_paths = {}
+            is_multi = input_keys is not None and len(input_keys) > 1
 
-            yield {"progress": 5, "phase": "downloading", "message": "Downloading source video..."}
-            r2.download_file(bucket, full_input_key, input_path)
-            yield {"progress": 15, "phase": "downloading", "message": "Download complete"}
+            if is_multi:
+                total_videos = len(input_keys)
+                for vi, (seq, r2_key) in enumerate(sorted(input_keys.items())):
+                    local_path = os.path.join(temp_dir, f"source_{seq}.mp4")
+                    # Game videos are stored globally (no user prefix)
+                    logger.info(f"[{job_id}] Downloading video {vi+1}/{total_videos}: {r2_key}")
+                    yield {"progress": int(2 + (vi / total_videos) * 13), "phase": "downloading", "message": f"Downloading video {vi+1}/{total_videos}..."}
+                    r2.download_file(bucket, r2_key, local_path)
+                    source_paths[seq] = local_path
+                yield {"progress": 15, "phase": "downloading", "message": "Downloads complete"}
+            else:
+                input_path = os.path.join(temp_dir, "source.mp4")
+                full_input_key = f"{user_id}/{input_key}"
+                logger.info(f"[{job_id}] Downloading {full_input_key}")
+                yield {"progress": 5, "phase": "downloading", "message": "Downloading source video..."}
+                r2.download_file(bucket, full_input_key, input_path)
+                yield {"progress": 15, "phase": "downloading", "message": "Download complete"}
+                source_paths[None] = input_path
 
             # Process each clip with burned-in text
             clip_paths = []
@@ -2400,6 +2420,16 @@ def create_annotated_compilation(
                 start_time = clip['start_time']
                 end_time = clip['end_time']
                 duration = end_time - start_time
+
+                # Resolve source video path for this clip
+                if is_multi:
+                    clip_seq = clip.get('video_sequence')
+                    clip_source = source_paths.get(clip_seq)
+                    if not clip_source:
+                        logger.error(f"[{job_id}] Clip {idx} has video_sequence={clip_seq} but no matching source")
+                        continue
+                else:
+                    clip_source = source_paths[None]
 
                 logger.info(f"[{job_id}] Processing clip {idx+1}/{len(clips)}: {clip_name}")
 
@@ -2457,7 +2487,7 @@ def create_annotated_compilation(
                 cmd = [
                     "ffmpeg", "-y",
                     "-ss", str(start_time),
-                    "-i", input_path,
+                    "-i", clip_source,
                     "-t", str(duration),
                     "-vf", filter_str,
                     "-c:v", "libx264",

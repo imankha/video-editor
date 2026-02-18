@@ -1237,6 +1237,7 @@ async def call_modal_annotate_compilation(
     clips: list,
     gallery_output_key: str = None,
     progress_callback = None,
+    input_keys: dict = None,
 ) -> dict:
     """
     Call Modal create_annotated_compilation function.
@@ -1251,10 +1252,12 @@ async def call_modal_annotate_compilation(
         job_id: Unique job identifier
         user_id: User folder in R2 (e.g., "a")
         input_key: R2 key for source game video (e.g., "games/abc123.mp4")
+            Used for single-video games. Ignored when input_keys is provided.
         output_key: R2 key for output compilation (e.g., "downloads/compilation.mp4")
         clips: List of clip data with timestamps, names, ratings, tags, notes
         gallery_output_key: Optional secondary R2 key for gallery
         progress_callback: Optional async callable(progress: float, message: str)
+        input_keys: Optional dict mapping video_sequence (int) to R2 key for multi-video games.
 
     Returns:
         {"status": "success", "output_key": "...", "gallery_filename": "...", "clips_processed": N} or
@@ -1271,6 +1274,7 @@ async def call_modal_annotate_compilation(
             output_key=output_key,
             clips=clips,
             progress_callback=progress_callback,
+            input_keys=input_keys,
         )
 
     create_annotated_compilation = _get_create_annotated_compilation_fn()
@@ -1295,6 +1299,7 @@ async def call_modal_annotate_compilation(
                 output_key=output_key,
                 clips=clips,
                 gallery_output_key=gallery_output_key,
+                input_keys=input_keys,
             )
 
         # Get the generator in executor (Modal API is sync)
