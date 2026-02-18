@@ -6,6 +6,9 @@ This router handles health checks, status endpoints, and the hello world endpoin
 
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 from ..models import HelloResponse
 from ..websocket import export_progress
@@ -82,6 +85,7 @@ async def retry_sync():
         return {"success": True, "message": "R2 not enabled, no sync needed"}
 
     user_id = get_current_user_id()
+    logger.info(f"[SYNC] Manual retry requested by user {user_id}")
     success = sync_db_to_cloud()
 
     if success:

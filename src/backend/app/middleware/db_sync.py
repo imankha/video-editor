@@ -45,10 +45,15 @@ def is_sync_failed(user_id: str) -> bool:
 
 def set_sync_failed(user_id: str, failed: bool) -> None:
     """Set or clear the sync failure flag for a user."""
+    was_failed = _sync_failed.get(user_id, False)
     if failed:
         _sync_failed[user_id] = True
+        if not was_failed:
+            logger.warning(f"[SYNC] User {user_id} entered degraded state — R2 sync failed")
     else:
         _sync_failed.pop(user_id, None)
+        if was_failed:
+            logger.info(f"[SYNC] User {user_id} recovered — R2 sync succeeded")
 
 
 class DatabaseSyncMiddleware(BaseHTTPMiddleware):
