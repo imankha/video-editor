@@ -79,9 +79,10 @@ describe('uploadManager', () => {
 
   describe('UPLOAD_STATUS constants', () => {
     it('should have all required statuses', () => {
-      expect(UPLOAD_STATUS.ALREADY_OWNED).toBe('already_owned');
-      expect(UPLOAD_STATUS.LINKED).toBe('linked');
+      expect(UPLOAD_STATUS.EXISTS).toBe('exists');
       expect(UPLOAD_STATUS.UPLOAD_REQUIRED).toBe('upload_required');
+      expect(UPLOAD_STATUS.ALREADY_OWNED).toBe('already_owned');
+      expect(UPLOAD_STATUS.CREATED).toBe('created');
     });
   });
 
@@ -187,13 +188,23 @@ describe('uploadManager', () => {
   });
 
   describe('uploadGame integration', () => {
-    it('should handle already_owned status', async () => {
-      // Mock prepare-upload returning already_owned
+    it('should handle dedup (video exists in R2, game already owned)', async () => {
+      // Step 1: prepare-upload returns 'exists' (video already in R2)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status: 'exists',
+          blake3_hash: 'a'.repeat(64),
+          file_size: 1024,
+        }),
+      });
+      // Step 2: POST /api/games returns 'already_owned'
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           status: 'already_owned',
           game_id: 123,
+          name: 'Test Game',
         }),
       });
 
@@ -213,14 +224,23 @@ describe('uploadManager', () => {
       expect(progressUpdates.some((p) => p.phase === 'complete')).toBe(true);
     });
 
-    it('should handle linked status', async () => {
-      // Mock prepare-upload returning linked
+    it('should handle dedup (video exists in R2, new game created)', async () => {
+      // Step 1: prepare-upload returns 'exists' (video already in R2)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          status: 'linked',
+          status: 'exists',
+          blake3_hash: 'a'.repeat(64),
+          file_size: 1024,
+        }),
+      });
+      // Step 2: POST /api/games returns 'created'
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status: 'created',
           game_id: 456,
-          message: 'Game already exists, linked to your account',
+          name: 'New Game',
         }),
       });
 
@@ -231,9 +251,11 @@ describe('uploadManager', () => {
         progressUpdates.push(progress);
       });
 
-      expect(result.status).toBe('linked');
       expect(result.game_id).toBe(456);
-      expect(result.deduplicated).toBe(true);
+      expect(result.deduplicated).toBe(true); // Video was already in R2
+
+      expect(progressUpdates.some((p) => p.phase === 'hashing')).toBe(true);
+      expect(progressUpdates.some((p) => p.phase === 'complete')).toBe(true);
     });
 
     it('should handle prepare-upload error', async () => {

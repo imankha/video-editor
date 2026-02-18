@@ -480,6 +480,7 @@ async def export_clips(
     game_id_int = None
     game_name = None
     video_filename = None
+    game_video_rows = []  # T82: multi-video info (empty for single-video/uploaded)
     staged_video_path = None
 
     if game_id:
@@ -495,14 +496,28 @@ async def export_clips(
 
             if not row:
                 raise HTTPException(status_code=404, detail="Game not found")
-            if not row['video_filename']:
-                raise HTTPException(status_code=400, detail="Game has no video uploaded")
 
             game_name = row['name']
             video_filename = row['video_filename']
 
+            # T82: Check for multi-video game
+            cursor.execute("""
+                SELECT blake3_hash, sequence, duration
+                FROM game_videos WHERE game_id = ? ORDER BY sequence
+            """, (game_id_int,))
+            game_video_rows = [dict(r) for r in cursor.fetchall()]
+
+            if not video_filename and not game_video_rows:
+                raise HTTPException(status_code=400, detail="Game has no video uploaded")
+
+            # For single-video games without game_videos, use video_filename
+            # For games with game_videos, video_filename may be null (multi-video)
+            if not video_filename and game_video_rows:
+                # Use first video's hash as primary video_filename for backward compat
+                video_filename = f"{game_video_rows[0]['blake3_hash']}.mp4"
+
             # Verify video exists locally if not using R2
-            if not R2_ENABLED:
+            if not R2_ENABLED and video_filename:
                 local_path = get_games_path() / video_filename
                 if not os.path.exists(local_path):
                     raise HTTPException(status_code=404, detail="Game video file not found")
@@ -548,6 +563,7 @@ async def export_clips(
         'game_id': game_id_int,
         'game_name': game_name,
         'video_filename': video_filename,  # R2 path for game video
+        'game_videos': game_video_rows if game_id_int else [],  # T82: multi-video info
         'staged_video_path': staged_video_path,  # Local path for uploaded video
         'user_id': user_id,
     }
@@ -596,8 +612,10 @@ async def run_annotate_export_processing(export_id: str, config: dict):
     game_id = config.get('game_id')
     game_name = config.get('game_name')
     video_filename = config.get('video_filename')  # R2 path
+    game_videos = config.get('game_videos', [])  # T82: multi-video info
     staged_video_path = config.get('staged_video_path')  # Local uploaded video
     user_id = config.get('user_id')
+    is_multi_video = len(game_videos) > 1
 
     # Mark job as started
     update_job_started(export_id)
@@ -633,6 +651,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
         # Determine video source
         use_modal = modal_enabled() and game_id and video_filename and not save_to_db
         source_path = None
+        # T82: Map of blake3_hash -> local path for multi-video games
+        multi_video_paths = {}
 
         if staged_video_path:
             # Uploaded video - already staged
@@ -641,8 +661,44 @@ async def run_annotate_export_processing(export_id: str, config: dict):
             logger.info(f"[AnnotateExport] {export_id}: Using staged video: {source_path}")
             await update_progress(5, 100, ExportPhase.DOWNLOAD, 'Using uploaded video...')
 
+        elif game_id and is_multi_video:
+            # T82: Multi-video game
+            # For burned-in mode with Modal, skip local download (Modal downloads from R2)
+            use_modal_multi = modal_enabled() and not save_to_db and R2_ENABLED
+            logger.info(f"[AnnotateExport] {export_id}: Multi-video game with {len(game_videos)} videos (modal={use_modal_multi})")
+
+            if use_modal_multi:
+                # Modal will download videos itself - just set metadata
+                await update_progress(5, 100, ExportPhase.DOWNLOAD, 'Preparing multi-video export...')
+            else:
+                # Download locally for save_to_db mode or local processing
+                for vi, gv in enumerate(game_videos):
+                    gv_filename = f"{gv['blake3_hash']}.mp4"
+                    if R2_ENABLED:
+                        local_path = os.path.join(temp_dir, gv_filename)
+                        r2_key = f"games/{gv_filename}"
+                        dl_msg = f"Downloading video {vi+1}/{len(game_videos)}..."
+                        await update_progress(int(2 + (vi / len(game_videos)) * 13), 100, ExportPhase.DOWNLOAD, dl_msg)
+                        if not await download_from_r2_with_progress(
+                            user_id, r2_key, Path(local_path),
+                            export_id=export_id, export_type='annotate',
+                            global_path=True,
+                        ):
+                            raise Exception(f"Failed to download video {vi+1} from R2: {r2_key}")
+                        multi_video_paths[gv['blake3_hash']] = local_path
+                    else:
+                        local_path = str(get_games_path() / gv_filename)
+                        multi_video_paths[gv['blake3_hash']] = local_path
+                if not R2_ENABLED:
+                    await update_progress(15, 100, ExportPhase.DOWNLOAD, 'Using local videos...')
+
+            # Use first video as default source_path for backward compat (TSV, etc.)
+            if multi_video_paths:
+                source_path = multi_video_paths[game_videos[0]['blake3_hash']]
+            original_filename = game_name + ".mp4" if game_name else "game.mp4"
+
         elif game_id and video_filename:
-            # Game video - download from R2 or use local
+            # Single-video game - download from R2 or use local
             if R2_ENABLED and not use_modal:
                 source_path = os.path.join(temp_dir, f"game_{uuid.uuid4().hex[:8]}.mp4")
                 r2_key = f"games/{video_filename}"
@@ -650,7 +706,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
 
                 if not await download_from_r2_with_progress(
                     user_id, r2_key, Path(source_path),
-                    export_id=export_id, export_type='annotate'
+                    export_id=export_id, export_type='annotate',
+                    global_path=True,
                 ):
                     raise Exception("Failed to download game video from R2")
 
@@ -722,11 +779,31 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                 extract_progress = int(20 + (i / num_clips) * 60)
                 await update_progress(extract_progress, 100, 'extract', f"Extracting clip {i+1}/{len(good_clips)}...")
 
+                # T82: For multi-video games, look up source video by video_sequence
+                # Timestamps are already relative to the individual video
+                if is_multi_video:
+                    clip_seq = clip.get('video_sequence')
+                    if clip_seq is None:
+                        logger.error(f"[AnnotateExport] {export_id}: Clip {i} missing video_sequence for multi-video game")
+                        continue
+                    # Find the game_video matching this sequence
+                    matched_gv = next((gv for gv in game_videos if gv['sequence'] == clip_seq), None)
+                    if matched_gv is None:
+                        logger.error(f"[AnnotateExport] {export_id}: No video found for sequence {clip_seq}")
+                        continue
+                    clip_source_path = multi_video_paths[matched_gv['blake3_hash']]
+                    clip_start = clip['start_time']
+                    clip_end = clip['end_time']
+                else:
+                    clip_source_path = source_path
+                    clip_start = clip['start_time']
+                    clip_end = clip['end_time']
+
                 success = await extract_clip_to_file(
-                    source_path=source_path,
+                    source_path=clip_source_path,
                     output_path=os.path.join(temp_dir, f"clip_{i}.mp4"),
-                    start_time=clip['start_time'],
-                    end_time=clip['end_time'],
+                    start_time=clip_start,
+                    end_time=clip_end,
                     clip_name=clip.get('name', ''),
                     clip_notes=clip.get('notes', '')
                 )
@@ -741,8 +818,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                     with get_db_connection() as conn:
                         cursor = conn.cursor()
                         cursor.execute("""
-                            INSERT INTO raw_clips (game_id, start_time, end_time, name, notes, rating, tags, filename)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO raw_clips (game_id, start_time, end_time, name, notes, rating, tags, filename, video_sequence)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
                             game_id,
                             clip['start_time'],
@@ -751,7 +828,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                             clip.get('notes', ''),
                             clip.get('rating', 3),
                             json.dumps(clip.get('tags', [])),
-                            clip_filename
+                            clip_filename,
+                            clip.get('video_sequence'),
                         ))
                         raw_clip_id = cursor.lastrowid
                         conn.commit()
@@ -793,24 +871,33 @@ async def run_annotate_export_processing(export_id: str, config: dict):
             # Download-only mode - create burned-in compilation
             logger.info(f"[AnnotateExport] {export_id}: Creating burned-in compilation ({len(all_clips)} clips)")
 
-            # Use unified interface - call_modal_annotate_compilation handles Modal or local fallback
-            # Progress scale: 20-85% for processing (after download at 15%, TSV at 17%)
-            await update_progress(20, 100, ExportPhase.PROCESSING, 'Starting video processing...')
-
             # Generate output filename (UUID-based for final_videos storage)
             final_filename = f"{uuid.uuid4().hex[:12]}.mp4"
+
+            # Use unified interface - handles Modal or local fallback
+            # Progress scale: 20-85% for processing (after download at 15%, TSV at 17%)
+            await update_progress(20, 100, ExportPhase.PROCESSING, 'Starting video processing...')
 
             # Create progress callback for unified interface (maps 0-100% to 20-85%)
             async def unified_progress_callback(progress: float, message: str, phase: str = "processing"):
                 await update_progress(int(20 + progress * 0.65), 100, phase, message)
 
+            # Build input_keys for multi-video (video_sequence -> R2 key)
+            multi_input_keys = None
+            if is_multi_video:
+                multi_input_keys = {
+                    gv['sequence']: f"games/{gv['blake3_hash']}.mp4"
+                    for gv in game_videos
+                }
+
             result = await call_modal_annotate_compilation(
                 job_id=export_id,
                 user_id=user_id,
-                input_key=f"games/{video_filename}",
+                input_key=f"games/{video_filename}" if video_filename else None,
                 output_key=f"final_videos/{final_filename}",
                 clips=all_clips,
                 progress_callback=unified_progress_callback,
+                input_keys=multi_input_keys,
             )
 
             if result.get('status') == 'success':

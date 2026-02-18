@@ -239,6 +239,36 @@ class SourceType(str, Enum):
 
 
 # =============================================================================
+# Game Constants
+# =============================================================================
+
+class GameType(str, Enum):
+    """Game type indicating venue/context."""
+    HOME = "home"
+    AWAY = "away"
+    TOURNAMENT = "tournament"
+
+
+class VideoMode(str, Enum):
+    """How video files are organized for a game."""
+    PER_GAME = "per_game"
+    PER_HALF = "per_half"
+
+
+class UploadStatus(str, Enum):
+    """Status returned from prepare-upload / finalize-upload (R2 layer)."""
+    EXISTS = "exists"
+    UPLOAD_REQUIRED = "upload_required"
+    SUCCESS = "success"
+
+
+class GameCreateStatus(str, Enum):
+    """Status returned from POST /api/games (game management layer)."""
+    ALREADY_OWNED = "already_owned"
+    CREATED = "created"
+
+
+# =============================================================================
 # Video Processing Constants
 # =============================================================================
 

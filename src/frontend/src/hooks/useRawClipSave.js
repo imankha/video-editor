@@ -54,7 +54,8 @@ export function useRawClipSave() {
           name: clipData.name || '',
           rating: clipData.rating || 3,
           tags: clipData.tags || [],
-          notes: clipData.notes || ''
+          notes: clipData.notes || '',
+          ...(clipData.video_sequence != null && { video_sequence: clipData.video_sequence }),
         })
       });
 

@@ -636,9 +636,17 @@ export function ProjectManager({
 
             {/* Pending Uploads Section - Paused/interrupted uploads (exclude active upload) */}
             {(() => {
-              // Filter out the currently uploading file from pending list to avoid duplication
+              // Filter out files being actively uploaded from pending list to avoid duplication
+              // For multi-video uploads, check against all individual file names
               const filteredPending = activeUpload
-                ? pendingUploads.filter(p => p.original_filename !== activeUpload.fileName)
+                ? pendingUploads.filter(p => {
+                    if (p.original_filename === activeUpload.fileName) return false;
+                    // Multi-video: filter out any file that's part of the active upload
+                    if (activeUpload.files) {
+                      return !activeUpload.files.some(f => f.name === p.original_filename);
+                    }
+                    return true;
+                  })
                 : pendingUploads;
               return filteredPending.length > 0 && (
                 <div className="mb-6">
@@ -947,6 +955,7 @@ function PendingUploadCard({ upload, onResume, onCancel }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <FileVideo size={18} className="text-yellow-400" />
+            {upload.label && <span className="text-yellow-400 text-sm font-medium shrink-0">{upload.label}:</span>}
             <h3 className="text-white font-medium truncate">{upload.original_filename}</h3>
           </div>
           <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">

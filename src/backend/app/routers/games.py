@@ -2,13 +2,14 @@
 Games endpoints for the Video Editor API.
 
 This router handles game storage and management:
-- /api/games - List all games
-- /api/games - Create a game (POST with video)
-- /api/games/{id} - Get game details (including annotations from file)
-- /api/games/{id} - Update game name
-- /api/games/{id} - Delete a game
-- /api/games/{id}/video - Stream game video
-- /api/games/{id}/annotations - Update annotations (saves to file)
+- POST /api/games - Create a game with 0-N video references
+- GET /api/games - List all games
+- GET /api/games/{id} - Get game details (including annotations)
+- PUT /api/games/{id} - Update game name
+- DELETE /api/games/{id} - Delete a game
+- POST /api/games/{id}/videos - Add video(s) to existing game
+- GET /api/games/{id}/video - Stream game video
+- PUT /api/games/{id}/annotations - Update annotations
 """
 
 from fastapi import APIRouter, Form, HTTPException, Body
@@ -18,12 +19,16 @@ import logging
 import json
 
 from datetime import datetime
+from pydantic import BaseModel, Field
+
 from app.database import get_db_connection, get_raw_clips_path, ensure_directories
+from app.constants import GameType, GameCreateStatus
 from app.storage import (
     generate_presigned_url_global,
     generate_presigned_url,
     r2_get_object_metadata_global,
     r2_set_object_metadata_global,
+    r2_head_object_global,
 )
 from app.user_context import get_current_user_id
 
@@ -148,9 +153,9 @@ def generate_game_display_name(
                 date_str = game_date
 
     # Build the name based on game type
-    if game_type == 'tournament' and tournament_name:
+    if game_type == GameType.TOURNAMENT and tournament_name:
         prefix = f"{tournament_name}: Vs"
-    elif game_type == 'away':
+    elif game_type == GameType.AWAY:
         prefix = "at"
     else:  # home or default
         prefix = "Vs"
@@ -160,6 +165,264 @@ def generate_game_display_name(
         parts.append(date_str)
 
     return " ".join(parts)
+
+
+# ==============================================================================
+# Request/Response Models
+# ==============================================================================
+
+class VideoReference(BaseModel):
+    blake3_hash: str = Field(..., description="BLAKE3 hash of the video file")
+    sequence: int = Field(..., description="Video sequence number (1-based)")
+    duration: Optional[float] = Field(None, description="Video duration in seconds")
+    width: Optional[int] = Field(None, description="Video width in pixels")
+    height: Optional[int] = Field(None, description="Video height in pixels")
+    file_size: Optional[int] = Field(None, description="File size in bytes")
+
+
+class CreateGameRequest(BaseModel):
+    opponent_name: Optional[str] = Field(None, description="Opponent team name")
+    game_date: Optional[str] = Field(None, description="Game date (YYYY-MM-DD)")
+    game_type: Optional[str] = Field(None, description="home, away, or tournament")
+    tournament_name: Optional[str] = Field(None, description="Tournament name")
+    videos: List[VideoReference] = Field(default_factory=list, description="Video references (0-N)")
+
+
+class AddVideosRequest(BaseModel):
+    videos: List[VideoReference] = Field(..., description="Video references to add")
+
+
+# ==============================================================================
+# Game Management Endpoints
+# ==============================================================================
+
+def _validate_video_in_r2(blake3_hash: str) -> None:
+    """Validate that a video exists in R2. Raises HTTPException if not found."""
+    r2_key = f"games/{blake3_hash}.mp4"
+    if not r2_head_object_global(r2_key):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Video {blake3_hash} not found in R2. Upload it first."
+        )
+
+
+def _insert_game_videos(cursor, game_id: int, videos: List[VideoReference]) -> None:
+    """Insert game_videos rows for a game. Shared by create and add-videos."""
+    for video in videos:
+        cursor.execute("""
+            INSERT INTO game_videos (game_id, blake3_hash, sequence, duration,
+                                     video_width, video_height, video_size)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            game_id,
+            video.blake3_hash.lower(),
+            video.sequence,
+            video.duration,
+            video.width,
+            video.height,
+            video.file_size,
+        ))
+
+
+def _get_game_videos_response(cursor, game_id: int) -> list:
+    """Get game_videos as response dicts with presigned URLs."""
+    cursor.execute("""
+        SELECT blake3_hash, sequence, duration, video_width, video_height, video_size
+        FROM game_videos WHERE game_id = ? ORDER BY sequence
+    """, (game_id,))
+    rows = cursor.fetchall()
+
+    videos = []
+    for row in rows:
+        video_url = generate_presigned_url_global(
+            f"games/{row['blake3_hash']}.mp4", expires_in=14400
+        )
+        videos.append({
+            'sequence': row['sequence'],
+            'blake3_hash': row['blake3_hash'],
+            'duration': row['duration'],
+            'video_url': video_url,
+            'video_width': row['video_width'],
+            'video_height': row['video_height'],
+        })
+    return videos
+
+
+@router.post("")
+async def create_game(request: CreateGameRequest):
+    """
+    Create a new game with 0, 1, or N video references.
+
+    Videos must already exist in R2 (uploaded via prepare-upload/finalize-upload).
+    Each video is referenced by its blake3_hash.
+
+    For single-video games: videos has 1 entry.
+    For multi-video games (e.g., halves): videos has 2+ entries.
+    For games without video yet: videos is empty.
+    """
+    # Validate all video hashes exist in R2
+    for video in request.videos:
+        _validate_video_in_r2(video.blake3_hash.lower())
+
+    # Check if user already has a game with same video(s)
+    if len(request.videos) == 1:
+        blake3_hash = request.videos[0].blake3_hash.lower()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            # Check games.blake3_hash (legacy single-video)
+            cursor.execute("SELECT id, name FROM games WHERE blake3_hash = ?", (blake3_hash,))
+            existing = cursor.fetchone()
+            if existing:
+                video_url = generate_presigned_url_global(
+                    f"games/{blake3_hash}.mp4", expires_in=14400
+                )
+                return {
+                    "status": GameCreateStatus.ALREADY_OWNED,
+                    "game_id": existing['id'],
+                    "name": existing['name'],
+                    "video_url": video_url,
+                }
+            # Also check game_videos table
+            cursor.execute("""
+                SELECT gv.game_id, g.name FROM game_videos gv
+                JOIN games g ON g.id = gv.game_id
+                WHERE gv.blake3_hash = ?
+            """, (blake3_hash,))
+            existing = cursor.fetchone()
+            if existing:
+                video_url = generate_presigned_url_global(
+                    f"games/{blake3_hash}.mp4", expires_in=14400
+                )
+                return {
+                    "status": GameCreateStatus.ALREADY_OWNED,
+                    "game_id": existing['game_id'],
+                    "name": existing['name'],
+                    "video_url": video_url,
+                }
+
+    # Generate display name
+    fallback = "New Game"
+    display_name = generate_game_display_name(
+        request.opponent_name,
+        request.game_date,
+        request.game_type,
+        request.tournament_name,
+        fallback
+    )
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # For single-video, also set blake3_hash on games table (legacy compat)
+        single_hash = request.videos[0].blake3_hash.lower() if len(request.videos) == 1 else None
+        single_filename = f"{single_hash}.mp4" if single_hash else None
+
+        # Compute total duration and use first video's dimensions
+        total_duration = None
+        video_width = None
+        video_height = None
+        total_size = None
+        if request.videos:
+            durations = [v.duration for v in request.videos if v.duration]
+            total_duration = sum(durations) if durations else None
+            video_width = request.videos[0].width
+            video_height = request.videos[0].height
+            sizes = [v.file_size for v in request.videos if v.file_size]
+            total_size = sum(sizes) if sizes else None
+
+        cursor.execute("""
+            INSERT INTO games (
+                name, blake3_hash, video_filename,
+                video_duration, video_width, video_height, video_size,
+                opponent_name, game_date, game_type, tournament_name
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            display_name,
+            single_hash,
+            single_filename,
+            total_duration,
+            video_width,
+            video_height,
+            total_size,
+            request.opponent_name,
+            request.game_date,
+            request.game_type,
+            request.tournament_name,
+        ))
+        game_id = cursor.lastrowid
+
+        # Insert game_videos rows (for ALL games, including single-video)
+        _insert_game_videos(cursor, game_id, request.videos)
+
+        conn.commit()
+
+    logger.info(f"Created game {game_id}: {display_name} with {len(request.videos)} video(s)")
+
+    # Build response with video URLs
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        videos_response = _get_game_videos_response(cursor, game_id)
+
+    # For single-video, include video_url at top level for backward compat
+    video_url = videos_response[0]['video_url'] if videos_response else None
+
+    return {
+        "status": GameCreateStatus.CREATED,
+        "game_id": game_id,
+        "name": display_name,
+        "video_url": video_url,
+        "videos": videos_response,
+    }
+
+
+@router.post("/{game_id:int}/videos")
+async def add_game_videos(game_id: int, request: AddVideosRequest):
+    """
+    Add video(s) to an existing game.
+
+    Videos must already exist in R2.
+    Use this to add a second half to an existing game, for example.
+    """
+    if not request.videos:
+        raise HTTPException(status_code=400, detail="No videos provided")
+
+    # Validate all videos exist in R2
+    for video in request.videos:
+        _validate_video_in_r2(video.blake3_hash.lower())
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Check game exists
+        cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        # Insert new game_videos rows
+        _insert_game_videos(cursor, game_id, request.videos)
+
+        # Update total duration on games table
+        cursor.execute("""
+            SELECT SUM(duration) as total_duration FROM game_videos WHERE game_id = ?
+        """, (game_id,))
+        total = cursor.fetchone()
+        if total and total['total_duration']:
+            cursor.execute(
+                "UPDATE games SET video_duration = ? WHERE id = ?",
+                (total['total_duration'], game_id)
+            )
+
+        conn.commit()
+
+        videos_response = _get_game_videos_response(cursor, game_id)
+
+    logger.info(f"Added {len(request.videos)} video(s) to game {game_id}")
+    return {
+        "game_id": game_id,
+        "videos_added": len(request.videos),
+        "videos": videos_response,
+    }
 
 
 @router.get("")
@@ -280,8 +543,21 @@ async def get_game(game_id: int):
             row['name']
         )
 
-        # Support both new (blake3_hash) and old (video_filename) storage
-        video_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
+        # Check for game_videos (T82: multi-video support)
+        videos = _get_game_videos_response(cursor, game_id)
+
+        if videos:
+            # Use game_videos as source of truth
+            video_url = videos[0]['video_url'] if videos else None
+            total_duration = sum(v['duration'] for v in videos if v['duration'])
+            video_width = videos[0].get('video_width') or row['video_width']
+            video_height = videos[0].get('video_height') or row['video_height']
+        else:
+            # Legacy single-video (no game_videos rows)
+            video_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
+            total_duration = row['video_duration']
+            video_width = row['video_width']
+            video_height = row['video_height']
 
         return {
             'id': row['id'],
@@ -289,12 +565,13 @@ async def get_game(game_id: int):
             'raw_name': row['name'],
             'blake3_hash': row['blake3_hash'],
             'video_url': video_url,
+            'videos': videos,
             'annotations': annotations,
             'clip_count': len(annotations),
             'created_at': row['created_at'],
-            'video_duration': row['video_duration'],
-            'video_width': row['video_width'],
-            'video_height': row['video_height'],
+            'video_duration': total_duration,
+            'video_width': video_width,
+            'video_height': video_height,
             'video_size': row['video_size'],
         }
 
@@ -483,10 +760,10 @@ def load_annotations_from_db(game_id: int) -> list:
         cursor = conn.cursor()
         # Query raw_clips as the single source of truth for clip annotations
         cursor.execute("""
-            SELECT id, start_time, end_time, name, rating, tags, notes
+            SELECT id, start_time, end_time, name, rating, tags, notes, video_sequence
             FROM raw_clips
             WHERE game_id = ?
-            ORDER BY end_time
+            ORDER BY video_sequence, end_time
         """, (game_id,))
         rows = cursor.fetchall()
 
@@ -508,7 +785,8 @@ def load_annotations_from_db(game_id: int) -> list:
                 'name': name,
                 'rating': row['rating'],
                 'tags': tags,
-                'notes': row['notes'] or ''
+                'notes': row['notes'] or '',
+                'video_sequence': row['video_sequence'],  # T82: which video (null = single-video)
             })
 
         return annotations
@@ -518,7 +796,7 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
     """
     Save annotations to raw_clips table, syncing with existing records.
 
-    Uses natural key (game_id, end_time) to match annotations with raw_clips.
+    Uses natural key (game_id, end_time, video_sequence) to match annotations with raw_clips.
     - Updates existing clips' metadata (name, rating, tags, notes, start_time)
     - Deletes clips that are no longer in the annotations list
     - New clips are expected to be created via real-time save (with FFmpeg extraction)
@@ -526,20 +804,22 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get existing raw_clips for this game (using end_time as natural key)
+        # Get existing raw_clips for this game (using (end_time, video_sequence) as natural key)
         cursor.execute("""
-            SELECT id, end_time, filename, auto_project_id
+            SELECT id, end_time, video_sequence, filename, auto_project_id
             FROM raw_clips
             WHERE game_id = ?
         """, (game_id,))
-        existing_clips = {row['end_time']: dict(row) for row in cursor.fetchall()}
+        existing_clips = {(row['end_time'], row['video_sequence']): dict(row) for row in cursor.fetchall()}
 
-        # Track which end_times are still present in annotations
-        annotation_end_times = set()
+        # Track which keys are still present in annotations
+        annotation_keys = set()
 
         for ann in annotations:
             end_time = ann.get('end_time', ann.get('start_time', 0))
-            annotation_end_times.add(end_time)
+            video_sequence = ann.get('video_sequence')
+            clip_key = (end_time, video_sequence)
+            annotation_keys.add(clip_key)
 
             tags = ann.get('tags', [])
             tags_json = json.dumps(tags)
@@ -551,7 +831,7 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
             if name == default_name:
                 name = ''
 
-            if end_time in existing_clips:
+            if clip_key in existing_clips:
                 # Update existing raw_clip metadata
                 cursor.execute("""
                     UPDATE raw_clips
@@ -563,14 +843,14 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
                     rating,
                     tags_json,
                     ann.get('notes', ''),
-                    existing_clips[end_time]['id']
+                    existing_clips[clip_key]['id']
                 ))
             else:
                 # Create new raw_clip with empty filename (pending extraction)
                 # This is a fallback if real-time save failed
                 cursor.execute("""
-                    INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id, video_sequence)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     '',  # empty filename = pending extraction
                     rating,
@@ -579,13 +859,14 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
                     ann.get('notes', ''),
                     ann.get('start_time', 0),
                     end_time,
-                    game_id
+                    game_id,
+                    video_sequence,
                 ))
-                logger.info(f"Created pending raw_clip for game {game_id} at end_time {end_time}")
+                logger.info(f"Created pending raw_clip for game {game_id} at end_time {end_time} video_sequence {video_sequence}")
 
         # Delete raw_clips that are no longer in annotations
-        for end_time, clip_data in existing_clips.items():
-            if end_time not in annotation_end_times:
+        for clip_key, clip_data in existing_clips.items():
+            if clip_key not in annotation_keys:
                 clip_id = clip_data['id']
                 filename = clip_data['filename']
                 auto_project_id = clip_data['auto_project_id']

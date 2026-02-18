@@ -44,7 +44,6 @@ export function AnnotateScreen({ onClearSelection }) {
     uploadGameVideo, // T80: Unified upload with deduplication
     getGame,
     getGameVideoUrl,
-    saveAnnotationsDebounced,
     finishAnnotation,
   } = useGames();
 
@@ -61,7 +60,9 @@ export function AnnotateScreen({ onClearSelection }) {
 
   // Check on mount if we're loading a game or file or have an active upload, set loading flag to prevent redirect
   useState(() => {
-    if (sessionStorage.getItem('pendingGameId') || getPendingGameFile() || useUploadStore.getState().activeUpload?.blobUrl) {
+    const pendingDetails = getPendingGameDetails();
+    const hasMultiVideo = pendingDetails?.files?.length > 0;
+    if (sessionStorage.getItem('pendingGameId') || getPendingGameFile() || hasMultiVideo || useUploadStore.getState().activeUpload?.blobUrl) {
       isLoadingRef.current = true;
     }
   });
@@ -128,7 +129,6 @@ export function AnnotateScreen({ onClearSelection }) {
     uploadGameVideo, // T80: Unified upload with deduplication
     getGame,
     getGameVideoUrl,
-    saveAnnotationsDebounced,
     fetchProjects,
     onBackToProjects: handleBackToProjects,
     setEditorMode,
@@ -176,6 +176,13 @@ export function AnnotateScreen({ onClearSelection }) {
     selectAnnotateRegion,
     // Cleanup
     clearAnnotateState,
+    // T82: Multi-video
+    gameVideos,
+    activeVideoIndex,
+    isMultiVideo,
+    handleVideoTabSwitch,
+    filteredClipRegions,
+    filteredRegionsWithLayout,
   } = annotate;
 
   // Keep gameIdRef updated for handleBackToProjects
@@ -204,12 +211,15 @@ export function AnnotateScreen({ onClearSelection }) {
   }, [handleLoadGame, annotateVideoUrl]);
 
   // Handle pending game file from ProjectsScreen (when "Add Game" was clicked)
+  // Supports both single-video (file) and multi-video (files array in details)
   useEffect(() => {
     const pendingFile = getPendingGameFile();
     const pendingDetails = getPendingGameDetails();
-    if (pendingFile && !annotateVideoUrl) {
+    const hasMultiVideo = pendingDetails?.files?.length > 0;
+    if ((pendingFile || hasMultiVideo) && !annotateVideoUrl) {
       isLoadingRef.current = true;
       clearPendingGameFile();
+      // For multi-video, pendingFile is null - handleGameVideoSelect reads files from details
       handleGameVideoSelect(pendingFile, pendingDetails);
     }
   }, [handleGameVideoSelect, annotateVideoUrl]);
@@ -268,8 +278,9 @@ export function AnnotateScreen({ onClearSelection }) {
         }
 
         // Clips layer: navigate between annotated clips
-        if (clipRegions.length > 0) {
-          const sortedRegions = [...clipRegions].sort((a, b) => a.startTime - b.startTime);
+        const activeClips = isMultiVideo ? filteredClipRegions : clipRegions;
+        if (activeClips.length > 0) {
+          const sortedRegions = [...activeClips].sort((a, b) => a.startTime - b.startTime);
 
           let currentIndex = sortedRegions.findIndex(r => r.id === annotateSelectedRegionId);
           if (currentIndex === -1) {
@@ -295,6 +306,8 @@ export function AnnotateScreen({ onClearSelection }) {
     annotateVideoUrl,
     annotateSelectedLayer,
     clipRegions,
+    filteredClipRegions,
+    isMultiVideo,
     annotateSelectedRegionId,
     selectAnnotateRegion,
     togglePlay,
@@ -334,14 +347,14 @@ export function AnnotateScreen({ onClearSelection }) {
     <>
       {/* Sidebar - Clips list and TSV import */}
       <ClipsSidePanel
-        clipRegions={clipRegions}
+        clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
         selectedRegionId={annotateSelectedRegionId}
         onSelectRegion={handleSelectAnnotateRegion}
         onUpdateRegion={updateClipRegion}
         onDeleteRegion={deleteClipRegion}
         onImportAnnotations={importAnnotations}
         maxNotesLength={ANNOTATE_MAX_NOTES_LENGTH}
-        clipCount={annotateClipCount}
+        clipCount={isMultiVideo ? filteredClipRegions.length : annotateClipCount}
         videoDuration={annotateVideoMetadata?.duration}
         isLoading={isLoadingAnnotations}
         isVideoUploading={isUploadingGameVideo}
@@ -373,6 +386,30 @@ export function AnnotateScreen({ onClearSelection }) {
               </div>
             </div>
           </div>
+          {/* T82: Video switcher tabs for multi-video games */}
+          {isMultiVideo && gameVideos && (
+            <div className="flex gap-2 mb-4">
+              {gameVideos.map((video, index) => {
+                const label = gameVideos.length === 2
+                  ? (index === 0 ? 'First Half' : 'Second Half')
+                  : `Part ${index + 1}`;
+                const isActive = index === activeVideoIndex;
+                return (
+                  <button
+                    key={video.sequence}
+                    onClick={() => handleVideoTabSwitch(index)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <AnnotateModeView
         // Video state
         videoRef={videoRef}
@@ -400,9 +437,9 @@ export function AnnotateScreen({ onClearSelection }) {
         annotatePlaybackSpeed={annotatePlaybackSpeed}
         onSpeedChange={setAnnotatePlaybackSpeed}
         // Clips/regions
-        annotateRegionsWithLayout={annotateRegionsWithLayout}
+        annotateRegionsWithLayout={isMultiVideo ? filteredRegionsWithLayout : annotateRegionsWithLayout}
         annotateSelectedRegionId={annotateSelectedRegionId}
-        hasAnnotateClips={hasAnnotateClips}
+        hasAnnotateClips={isMultiVideo ? filteredClipRegions.length > 0 : hasAnnotateClips}
         // Handlers
         onSelectRegion={handleSelectAnnotateRegion}
         onDeleteRegion={deleteClipRegion}

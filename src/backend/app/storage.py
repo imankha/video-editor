@@ -140,6 +140,7 @@ async def download_from_r2_with_progress(
     project_name: str = None,
     progress_start: int = 5,
     progress_end: int = 15,
+    global_path: bool = False,
 ) -> bool:
     """
     Download a file from R2 with WebSocket progress updates.
@@ -149,7 +150,7 @@ async def download_from_r2_with_progress(
 
     Args:
         user_id: User namespace
-        relative_path: Path relative to user_data/<user_id>/
+        relative_path: Path relative to user_data/<user_id>/ (or global if global_path=True)
         local_path: Local path to save the file
         export_id: Export ID for WebSocket progress
         export_type: 'annotate', 'framing', or 'overlay'
@@ -157,6 +158,7 @@ async def download_from_r2_with_progress(
         project_name: Optional project name for progress data
         progress_start: Starting progress percentage (default 5%)
         progress_end: Ending progress percentage (default 15%)
+        global_path: If True, relative_path is used as-is (no user_id prefix)
 
     Returns:
         True if download succeeded, False otherwise
@@ -165,7 +167,10 @@ async def download_from_r2_with_progress(
     from app.websocket import manager
 
     # Get file size for progress calculation
-    total_size = get_r2_file_size(user_id, relative_path)
+    if global_path:
+        total_size = get_r2_file_size_global(relative_path)
+    else:
+        total_size = get_r2_file_size(user_id, relative_path)
 
     # Send initial progress
     progress_data = {
@@ -215,14 +220,24 @@ async def download_from_r2_with_progress(
                     pass
 
         # Run sync download in thread pool
-        success = await asyncio.to_thread(
-            download_from_r2, user_id, relative_path, local_path, download_callback
-        )
+        if global_path:
+            success = await asyncio.to_thread(
+                download_from_r2_global, relative_path, local_path, download_callback
+            )
+        else:
+            success = await asyncio.to_thread(
+                download_from_r2, user_id, relative_path, local_path, download_callback
+            )
     else:
         # No file size available - just do simple download
-        success = await asyncio.to_thread(
-            download_from_r2, user_id, relative_path, local_path
-        )
+        if global_path:
+            success = await asyncio.to_thread(
+                download_from_r2_global, relative_path, local_path
+            )
+        else:
+            success = await asyncio.to_thread(
+                download_from_r2, user_id, relative_path, local_path
+            )
 
     if success:
         # Send download complete
@@ -1189,13 +1204,27 @@ def generate_presigned_url_global(
         return None
 
 
-def download_from_r2_global(key: str, local_path: Path) -> bool:
+def get_r2_file_size_global(key: str) -> Optional[int]:
+    """Get the size of a global R2 object (no user prefix)."""
+    client = get_r2_client()
+    if not client:
+        return None
+    try:
+        response = client.head_object(Bucket=R2_BUCKET, Key=key)
+        return response.get('ContentLength')
+    except Exception as e:
+        logger.debug(f"Could not get global file size from R2: {key} - {e}")
+        return None
+
+
+def download_from_r2_global(key: str, local_path: Path, progress_callback=None) -> bool:
     """
     Download a global R2 object (no user prefix) to local filesystem.
 
     Args:
         key: Global R2 key (e.g., "games/{hash}.mp4")
         local_path: Local path to save the file
+        progress_callback: Optional callback(bytes_transferred) for download progress
 
     Returns:
         True if download succeeded, False otherwise
@@ -1207,7 +1236,10 @@ def download_from_r2_global(key: str, local_path: Path) -> bool:
     try:
         # Ensure parent directory exists
         local_path.parent.mkdir(parents=True, exist_ok=True)
-        client.download_file(R2_BUCKET, key, str(local_path))
+        if progress_callback:
+            client.download_file(R2_BUCKET, key, str(local_path), Callback=progress_callback)
+        else:
+            client.download_file(R2_BUCKET, key, str(local_path))
         logger.debug(f"Downloaded global object from R2: {key} -> {local_path}")
         return True
     except client.exceptions.NoSuchKey:

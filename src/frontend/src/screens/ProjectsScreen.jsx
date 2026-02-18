@@ -19,16 +19,20 @@ import exportWebSocketManager from '../services/ExportWebSocketManager';
 let pendingGameData = null;
 
 export function getPendingGameFile() {
+  // For multi-video (per_half), files array is set instead of file
   return pendingGameData?.file || null;
 }
 
 export function getPendingGameDetails() {
-  return pendingGameData ? {
+  if (!pendingGameData) return null;
+  return {
     opponentName: pendingGameData.opponentName,
     gameDate: pendingGameData.gameDate,
     gameType: pendingGameData.gameType,
     tournamentName: pendingGameData.tournamentName,
-  } : null;
+    videoMode: pendingGameData.videoMode || undefined,
+    files: pendingGameData.files || undefined,
+  };
 }
 
 export function clearPendingGameFile() {

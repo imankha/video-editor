@@ -16,7 +16,7 @@ These tasks MUST be completed before deployment to avoid storage waste and re-mi
 |----|------|--------|-------|
 | **T80** | [**Global Game Deduplication + 4GB Uploads**](tasks/T80-global-game-deduplication.md) | **DONE** | Games to global storage, multipart uploads |
 | **T81** | [Faster Upload Hash](tasks/T81-faster-upload-hash.md) | **DONE** | Sample-based hashing instead of full file (depends on T80) |
-| **T82** | [Multi-Video Games](tasks/T82-multi-video-games.md) | TODO | First half/second half support (depends on T80) |
+| **T82** | [Multi-Video Games](tasks/T82-multi-video-games.md) | **TESTING** | First half/second half support (depends on T80) |
 | **T85** | [**Multi-Athlete Profiles**](tasks/T85-multi-athlete-profiles.md) | **TODO** | Per-athlete data isolation (depends on T80) |
 
 **Why these block deployment:**
@@ -80,6 +80,7 @@ Improvements after real user traffic.
 | T241 | [Annotate Arrow Key Seek](tasks/T241-annotate-arrow-key-seek.md) | TODO | Forward/backward arrows should seek 4s |
 | T242 | [Rename Project from Card](tasks/T242-rename-project-from-card.md) | TODO | Easy inline rename on project card |
 | T243 | [Archive DB Not Reducing Size](tasks/T243-archive-db-not-reducing-size.md) | TODO | Main DB at 776KB, archive not working |
+| T245 | [Fix Highlight Regions Test](tasks/T245-fix-highlight-regions-test.md) | TODO | Pre-existing: calculateDefaultHighlight color assertion |
 
 ---
 

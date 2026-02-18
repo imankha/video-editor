@@ -112,6 +112,7 @@ class RawClipCreate(BaseModel):
     rating: int = 3
     tags: List[str] = []
     notes: str = ""
+    video_sequence: Optional[int] = None  # T82: which video in multi-video game (1-based)
 
 
 class RawClipUpdate(BaseModel):
@@ -122,6 +123,7 @@ class RawClipUpdate(BaseModel):
     notes: Optional[str] = None
     start_time: Optional[float] = None
     end_time: Optional[float] = None
+    video_sequence: Optional[int] = None
 
 
 class RawClipSaveResponse(BaseModel):
@@ -721,6 +723,32 @@ def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
 # 2. process_modal_queue() - processes pending tasks (called after enqueue and on startup)
 
 
+def _refresh_game_aggregates(cursor, game_id: int) -> None:
+    """Recalculate and update game aggregate columns from raw_clips."""
+    cursor.execute("""
+        SELECT rating, COUNT(*) as cnt
+        FROM raw_clips WHERE game_id = ?
+        GROUP BY rating
+    """, (game_id,))
+    rating_counts = {row['rating']: row['cnt'] for row in cursor.fetchall()}
+
+    clip_count = sum(rating_counts.values())
+    brilliant = rating_counts.get(5, 0)
+    good = rating_counts.get(4, 0)
+    interesting = rating_counts.get(3, 0)
+    mistake = rating_counts.get(2, 0)
+    blunder = rating_counts.get(1, 0)
+    score = brilliant * 10 + good * 5 + interesting * 2 + mistake * -2 + blunder * -5
+
+    cursor.execute("""
+        UPDATE games SET
+            clip_count = ?, brilliant_count = ?, good_count = ?,
+            interesting_count = ?, mistake_count = ?, blunder_count = ?,
+            aggregate_score = ?
+        WHERE id = ?
+    """, (clip_count, brilliant, good, interesting, mistake, blunder, score, game_id))
+
+
 @router.post("/raw/save", response_model=RawClipSaveResponse)
 async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTasks):
     """
@@ -730,17 +758,23 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
     If the clip is rated 5 stars, automatically creates a 9:16 project for it
     AND triggers extraction (since creating a project should extract its clips).
 
-    Idempotent: If a clip with the same game_id + end_time already exists,
+    Idempotent: If a clip with the same game_id + end_time + video_sequence already exists,
     updates that clip instead of creating a duplicate.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Check if clip already exists (lookup by game_id + end_time as natural key)
-        cursor.execute("""
-            SELECT id, filename, rating, auto_project_id, start_time FROM raw_clips
-            WHERE game_id = ? AND end_time = ?
-        """, (clip_data.game_id, clip_data.end_time))
+        # Check if clip already exists (natural key: game_id + end_time + video_sequence)
+        if clip_data.video_sequence is not None:
+            cursor.execute("""
+                SELECT id, filename, rating, auto_project_id, start_time FROM raw_clips
+                WHERE game_id = ? AND end_time = ? AND video_sequence = ?
+            """, (clip_data.game_id, clip_data.end_time, clip_data.video_sequence))
+        else:
+            cursor.execute("""
+                SELECT id, filename, rating, auto_project_id, start_time FROM raw_clips
+                WHERE game_id = ? AND end_time = ? AND video_sequence IS NULL
+            """, (clip_data.game_id, clip_data.end_time))
         existing = cursor.fetchone()
 
         if existing:
@@ -791,6 +825,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
                 _delete_auto_project(cursor, project_id, clip_id)
                 project_id = None
 
+            _refresh_game_aggregates(cursor, clip_data.game_id)
             conn.commit()
             logger.info(f"Updated clip {clip_id} for game {clip_data.game_id}")
 
@@ -803,10 +838,11 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
 
         # New clip - create as pending (no extraction yet)
         cursor.execute("""
-            INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id, video_sequence)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, ('', clip_data.rating, json.dumps(clip_data.tags), clip_data.name,
-              clip_data.notes, clip_data.start_time, clip_data.end_time, clip_data.game_id))
+              clip_data.notes, clip_data.start_time, clip_data.end_time, clip_data.game_id,
+              clip_data.video_sequence))
         raw_clip_id = cursor.lastrowid
 
         # Handle 5-star project creation (extraction triggered when user opens project, not here)
@@ -816,6 +852,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
             project_id = _create_auto_project_for_clip(cursor, raw_clip_id, clip_data.name)
             project_created = True
 
+        _refresh_game_aggregates(cursor, clip_data.game_id)
         conn.commit()
         logger.info(f"Saved pending clip {raw_clip_id} for game {clip_data.game_id}")
 
@@ -900,6 +937,9 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
         if update.end_time is not None:
             updates.append("end_time = ?")
             params.append(update.end_time)
+        if update.video_sequence is not None:
+            updates.append("video_sequence = ?")
+            params.append(update.video_sequence)
 
         # If duration changed, increment boundaries_version so we can detect if framing used an older version
         # NOTE: We do NOT clear filename here - the existing extracted clip is still valid for its original boundaries.
@@ -916,6 +956,7 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
                 UPDATE raw_clips SET {', '.join(updates)} WHERE id = ?
             """, params)
 
+        _refresh_game_aggregates(cursor, clip['game_id'])
         conn.commit()
         logger.info(f"Updated raw clip {clip_id}")
 
@@ -941,7 +982,7 @@ async def delete_raw_clip(clip_id: int):
 
         # Get clip data
         cursor.execute("""
-            SELECT filename, auto_project_id FROM raw_clips WHERE id = ?
+            SELECT filename, auto_project_id, game_id FROM raw_clips WHERE id = ?
         """, (clip_id,))
         clip = cursor.fetchone()
 
@@ -957,6 +998,10 @@ async def delete_raw_clip(clip_id: int):
 
         # Delete the raw clip record
         cursor.execute("DELETE FROM raw_clips WHERE id = ?", (clip_id,))
+
+        # Update game aggregates after deletion
+        if clip['game_id']:
+            _refresh_game_aggregates(cursor, clip['game_id'])
 
         conn.commit()
 

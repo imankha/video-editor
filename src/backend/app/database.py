@@ -456,6 +456,7 @@ def ensure_database():
                 game_id INTEGER,
                 auto_project_id INTEGER,
                 default_highlight_regions TEXT,
+                video_sequence INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (game_id) REFERENCES games(id),
                 FOREIGN KEY (auto_project_id) REFERENCES projects(id)
@@ -693,6 +694,10 @@ def ensure_database():
             "ALTER TABLE games ADD COLUMN blake3_hash TEXT",
             # T80: Track last access time for future cleanup of unused games
             "ALTER TABLE games ADD COLUMN last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            # T82: Track which video a clip belongs to in multi-video games (1-based sequence)
+            "ALTER TABLE raw_clips ADD COLUMN video_sequence INTEGER",
+            # T82: Replace unique index to include video_sequence (allows same end_time on different videos)
+            "DROP INDEX IF EXISTS idx_raw_clips_game_end_time",
         ]
 
         for migration in migrations:
@@ -785,10 +790,10 @@ def ensure_database():
                 CREATE INDEX IF NOT EXISTS idx_raw_clips_game_id
                 ON raw_clips(game_id)
             """)
-            # Composite index for natural key lookup (game_id + end_time)
+            # Composite index for natural key lookup (game_id + end_time + video_sequence)
             cursor.execute("""
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_clips_game_end_time
-                ON raw_clips(game_id, end_time)
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_clips_game_end_time_seq
+                ON raw_clips(game_id, end_time, video_sequence)
             """)
         except sqlite3.OperationalError:
             # Index already exists, ignore
@@ -837,6 +842,30 @@ def ensure_database():
             )
         """)
 
+        # T82: Multi-video games - track individual video files per game
+        # Single-video games use games.blake3_hash directly (no game_videos rows)
+        # Multi-video games set games.blake3_hash = NULL and use game_videos rows
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS game_videos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+                blake3_hash TEXT NOT NULL,
+                sequence INTEGER NOT NULL,
+                duration REAL,
+                video_width INTEGER,
+                video_height INTEGER,
+                video_size INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(game_id, sequence)
+            )
+        """)
+
+        # Index for game_videos lookup by game
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_game_videos_game
+            ON game_videos(game_id)
+        """)
+
         # T80: Track in-progress multipart uploads
         # Allows resuming interrupted uploads
         cursor.execute("""
@@ -847,6 +876,7 @@ def ensure_database():
                 original_filename TEXT NOT NULL,
                 r2_upload_id TEXT NOT NULL,
                 parts_json TEXT,
+                label TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)

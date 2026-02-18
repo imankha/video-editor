@@ -300,6 +300,7 @@ async def local_annotate_compilation(
     output_key: str,
     clips: list,
     progress_callback=None,
+    input_keys: dict = None,
 ) -> dict:
     """
     Local fallback for Modal create_annotated_compilation.
@@ -307,11 +308,13 @@ async def local_annotate_compilation(
     Same interface as call_modal_annotate_compilation - takes R2 keys, returns same format.
     Downloads from R2, extracts clips with burned-in text, concatenates, uploads result to R2.
     """
-    from app.storage import download_from_r2, upload_to_r2
+    from app.storage import download_from_r2, download_from_r2_global, upload_to_r2
     from app.routers.annotate import create_clip_with_burned_text, concatenate_videos
 
+    is_multi = input_keys is not None and len(input_keys) > 1
+
     logger.info(f"[LocalProcessor] Annotate compilation job {job_id} starting")
-    logger.info(f"[LocalProcessor] User: {user_id}, Input: {input_key} -> Output: {output_key}")
+    logger.info(f"[LocalProcessor] User: {user_id}, Input: {input_key} -> Output: {output_key}, multi={is_multi}")
     logger.info(f"[LocalProcessor] Clips: {len(clips)}")
 
     start_time = time.time()
@@ -324,12 +327,24 @@ async def local_annotate_compilation(
 
     try:
         with tempfile.TemporaryDirectory(prefix="annotate_") as temp_dir:
-            input_path = os.path.join(temp_dir, "input.mp4")
             output_path = os.path.join(temp_dir, "output.mp4")
 
-            # Download from R2
-            if not await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path)):
-                return {"status": "error", "error": "Failed to download from R2"}
+            # Download source video(s) from R2
+            # source_paths maps video_sequence -> local path (or None -> single)
+            source_paths = {}
+
+            if is_multi:
+                # Game videos are stored globally (no user prefix)
+                for seq, r2_key in sorted(input_keys.items()):
+                    local_path = os.path.join(temp_dir, f"input_{seq}.mp4")
+                    if not await asyncio.to_thread(download_from_r2_global, r2_key, Path(local_path)):
+                        return {"status": "error", "error": f"Failed to download video sequence {seq} from R2"}
+                    source_paths[seq] = local_path
+            else:
+                input_path = os.path.join(temp_dir, "input.mp4")
+                if not await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path)):
+                    return {"status": "error", "error": "Failed to download from R2"}
+                source_paths[None] = input_path
 
             download_time = time.time() - start_time
             logger.info(f"[LocalProcessor] Downloaded in {download_time:.1f}s")
@@ -346,9 +361,19 @@ async def local_annotate_compilation(
                     except Exception as e:
                         logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
+                # Resolve source path for this clip
+                if is_multi:
+                    clip_seq = clip.get('video_sequence')
+                    clip_source = source_paths.get(clip_seq)
+                    if not clip_source:
+                        logger.error(f"[LocalProcessor] Clip {i} has video_sequence={clip_seq} but no matching source")
+                        continue
+                else:
+                    clip_source = source_paths[None]
+
                 clip_path = os.path.join(temp_dir, f"burned_{i}.mp4")
                 success = await create_clip_with_burned_text(
-                    source_path=input_path,
+                    source_path=clip_source,
                     output_path=clip_path,
                     start_time=clip['start_time'],
                     end_time=clip['end_time'],
