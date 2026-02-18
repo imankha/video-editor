@@ -16,26 +16,28 @@
 4. **Pre-deployment blockers** - Structural changes (T85) that must happen before real users
 5. **New features** - Only after the above are clear
 
+**Bug prioritization within a tier:** Rank by **infrastructure depth** — the deeper the bug (more systems depend on the affected layer), the higher the priority. A silent sync failure is worse than a slow sync, which is worse than a broken test.
+
 When suggesting the next task, always check the Bug Fix Sprint section first. Do not recommend feature work while bugs remain open.
 
 ---
 
 ## Bug Fix Sprint (Before T85)
 
-Fix data integrity and sync issues before making structural changes. Ordered by priority (impact / complexity).
+Fix data integrity and sync issues before making structural changes. Ordered by **infrastructure depth** — the deeper the bug (more systems depend on it), the higher the priority.
 
-| ID | Task | Status | Impact | Cmplx | Pri | Notes |
-|----|------|--------|--------|-------|-----|-------|
-| T86 | [FK Cascades on raw_clips](tasks/T86-raw-clips-fk-cascade.md) | TESTING | 6 | 2 | 3.0 | Orphaned records on game/project delete |
-| T243 | [Archive DB Not Reducing Size](tasks/T243-archive-db-not-reducing-size.md) | TODO | 7 | 4 | 1.8 | DB at 776KB, slow syncs, archive broken |
-| T87 | [Sync Connection Loss Handling](tasks/T87-sync-connection-loss.md) | TODO | 7 | 4 | 1.8 | Failed R2 sync causes permanent divergence |
-| T245 | [Fix Highlight Regions Test](tasks/T245-fix-highlight-regions-test.md) | TODO | 3 | 2 | 1.5 | Pre-existing test failure on all branches |
+| ID | Task | Status | Depth | Cmplx | Notes |
+|----|------|--------|-------|-------|-------|
+| T86 | [FK Cascades on raw_clips](tasks/T86-raw-clips-fk-cascade.md) | TESTING | Schema | 2 | Orphaned records on game/project delete |
+| T87 | [Sync Connection Loss Handling](tasks/T87-sync-connection-loss.md) | TODO | Sync | 4 | Failed R2 sync causes permanent divergence |
+| T243 | [Archive DB Not Reducing Size](tasks/T243-archive-db-not-reducing-size.md) | TODO | Storage | 4 | DB at 776KB, slow syncs, archive broken |
+| T245 | [Fix Highlight Regions Test](tasks/T245-fix-highlight-regions-test.md) | TODO | Test | 2 | Pre-existing test failure on all branches |
 
-**Why fix these first:**
-- T86: Schema fix is simpler before T85 adds more tables/FKs
-- T243: Large DB = slow syncs = more sync failures. Fix before T87 compounds with it.
-- T87: Sync reliability is critical before multi-athlete (T85) adds per-athlete DB sync
-- T245: Clean test baseline before more changes
+**Priority rationale (infrastructure depth):**
+- T86: Schema integrity — FK enforcement is the foundation all CRUD operations sit on
+- T87: Sync reliability — every write depends on sync for persistence. Silent failure = silent data loss. Deepest runtime bug.
+- T243: Storage efficiency — large DB makes syncs slower and more failure-prone, compounding T87
+- T245: Test baseline — no user impact, but clean tests needed before more changes
 
 ---
 
