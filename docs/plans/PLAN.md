@@ -2,9 +2,42 @@
 
 ## Current Focus
 
-**Phase: Deployment** - All feature tasks complete. Now deploying to staging, then adding auth/payments before production.
+**Phase: Bug Fixes & Stability** - Clear out sync/data integrity bugs before T85 and deployment.
 
 **Landing Page:** Already live at `reelballers.com`
+
+## Priority Policy
+
+**Bugs are always the first priority, especially infrastructure bugs (sync, data integrity, schema).** New features and structural changes should not begin until known bugs are resolved. The order is:
+
+1. **Infrastructure bugs** - Sync failures, data loss, orphaned records, schema issues
+2. **Test failures** - Broken tests indicate regressions; fix before adding more code
+3. **UI/UX bugs** - Visible issues that affect the user experience
+4. **Pre-deployment blockers** - Structural changes (T85) that must happen before real users
+5. **New features** - Only after the above are clear
+
+**Bug prioritization within a tier:** Rank by **infrastructure depth** — the deeper the bug (more systems depend on the affected layer), the higher the priority. A silent sync failure is worse than a slow sync, which is worse than a broken test.
+
+When suggesting the next task, always check the Bug Fix Sprint section first. Do not recommend feature work while bugs remain open.
+
+---
+
+## Bug Fix Sprint (Before T85)
+
+Fix data integrity and sync issues before making structural changes. Ordered by **infrastructure depth** — the deeper the bug (more systems depend on it), the higher the priority.
+
+| ID | Task | Status | Depth | Cmplx | Notes |
+|----|------|--------|-------|-------|-------|
+| T86 | [FK Cascades on raw_clips](tasks/T86-raw-clips-fk-cascade.md) | TESTING | Schema | 2 | Orphaned records on game/project delete |
+| T87 | [Sync Connection Loss Handling](tasks/T87-sync-connection-loss.md) | TODO | Sync | 4 | Failed R2 sync causes permanent divergence |
+| T243 | [Archive DB Not Reducing Size](tasks/T243-archive-db-not-reducing-size.md) | TODO | Storage | 4 | DB at 776KB, slow syncs, archive broken |
+| T245 | [Fix Highlight Regions Test](tasks/T245-fix-highlight-regions-test.md) | TODO | Test | 2 | Pre-existing test failure on all branches |
+
+**Priority rationale (infrastructure depth):**
+- T86: Schema integrity — FK enforcement is the foundation all CRUD operations sit on
+- T87: Sync reliability — every write depends on sync for persistence. Silent failure = silent data loss. Deepest runtime bug.
+- T243: Storage efficiency — large DB makes syncs slower and more failure-prone, compounding T87
+- T245: Test baseline — no user impact, but clean tests needed before more changes
 
 ---
 
@@ -17,7 +50,7 @@ These tasks MUST be completed before deployment to avoid storage waste and re-mi
 | **T80** | [**Global Game Deduplication + 4GB Uploads**](tasks/T80-global-game-deduplication.md) | **DONE** | Games to global storage, multipart uploads |
 | **T81** | [Faster Upload Hash](tasks/T81-faster-upload-hash.md) | **DONE** | Sample-based hashing instead of full file (depends on T80) |
 | **T82** | [Multi-Video Games](tasks/T82-multi-video-games.md) | **DONE** | First half/second half support (depends on T80) |
-| **T85** | [**Multi-Athlete Profiles**](tasks/T85-multi-athlete-profiles.md) | **TODO** | Per-athlete data isolation (depends on T80) |
+| **T85** | [**Multi-Athlete Profiles**](tasks/T85-multi-athlete-profiles.md) | **TODO** | Per-athlete data isolation (depends on T80, blocked by bug sprint) |
 
 **Why these block deployment:**
 - **T80:** Per-user game storage wastes R2 costs, 4GB uploads needed
@@ -79,8 +112,7 @@ Improvements after real user traffic.
 | T240 | [Consistent Logo Placement](tasks/T240-consistent-logo-placement.md) | TODO | Logo in all modes, non-clickable position |
 | T241 | [Annotate Arrow Key Seek](tasks/T241-annotate-arrow-key-seek.md) | TODO | Forward/backward arrows should seek 4s |
 | T242 | [Rename Project from Card](tasks/T242-rename-project-from-card.md) | TODO | Easy inline rename on project card |
-| T243 | [Archive DB Not Reducing Size](tasks/T243-archive-db-not-reducing-size.md) | TODO | Main DB at 776KB, archive not working |
-| T245 | [Fix Highlight Regions Test](tasks/T245-fix-highlight-regions-test.md) | TODO | Pre-existing: calculateDefaultHighlight color assertion |
+| T244 | [Game Card Clip Stats & View Progress](tasks/T244-game-card-clip-stats.md) | TODO | Brilliant/good counts, composite score, viewed indicator |
 
 ---
 
@@ -176,7 +208,7 @@ fly secrets set --app reel-ballers-api-staging \
 
 IDs use gaps of 10 to allow insertions:
 - `T10-T79` - Feature tasks (complete)
-- `T80-T99` - Pre-deployment blockers
+- `T80-T99` - Pre-deployment blockers + bug fix sprint
 - `T100-T199` - Deployment epic
 - `T200-T299` - Post-launch features
 

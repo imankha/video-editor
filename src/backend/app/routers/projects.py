@@ -868,6 +868,11 @@ async def delete_project(project_id: int):
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Project not found")
 
+        # Unlink FK references on project before deleting related records
+        cursor.execute("""
+            UPDATE projects SET working_video_id = NULL, final_video_id = NULL WHERE id = ?
+        """, (project_id,))
+
         # Delete working clips (all versions for this project)
         cursor.execute("""
             DELETE FROM working_clips WHERE project_id = ?

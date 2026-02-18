@@ -659,15 +659,15 @@ async def delete_download(download_id: int, remove_file: bool = False):
         if not row:
             raise HTTPException(status_code=404, detail="Download not found")
 
-        # Delete the record from database
-        cursor.execute("""
-            DELETE FROM final_videos WHERE id = ?
-        """, (download_id,))
-
-        # Clear the project's final_video_id reference if it points to this video
+        # Clear the project's final_video_id reference before deleting (FK constraint)
         cursor.execute("""
             UPDATE projects SET final_video_id = NULL
             WHERE final_video_id = ?
+        """, (download_id,))
+
+        # Delete the record from database
+        cursor.execute("""
+            DELETE FROM final_videos WHERE id = ?
         """, (download_id,))
 
         conn.commit()

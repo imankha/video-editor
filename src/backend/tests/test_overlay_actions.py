@@ -44,7 +44,8 @@ def test_project_with_working_video():
 
         yield project_id
 
-        # Cleanup
+        # Cleanup - unlink FK before deleting to avoid constraint violation
+        cursor.execute("UPDATE projects SET working_video_id = NULL WHERE id = ?", (project_id,))
         cursor.execute("DELETE FROM working_videos WHERE project_id = ?", (project_id,))
         cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         conn.commit()

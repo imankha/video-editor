@@ -161,6 +161,20 @@ Higher score = do first. Examples:
 - Impact 5, Complexity 6 → Priority = **0.8** (lower priority)
 - Impact 3, Complexity 9 → Priority = **0.3** (deprioritize)
 
+### Infrastructure Depth (Bug Prioritization)
+
+**For bugs, prioritize by infrastructure depth** — the deeper the bug sits in the stack (the more systems depend on the affected layer), the higher the priority. A bug in a foundational layer silently corrupts everything above it.
+
+Depth ranking (deepest first):
+1. **Schema/Data integrity** — FK constraints, data model correctness. Everything reads/writes through this.
+2. **Sync/Persistence** — R2 sync, database backup. If sync fails silently, all user data is at risk.
+3. **Storage/Performance** — DB size, query speed. Affects reliability of layers above (e.g., slow sync = more sync failures).
+4. **API/Business logic** — Endpoint bugs, incorrect behavior. Visible but contained.
+5. **UI/UX** — Display bugs, interaction issues. User-facing but no data risk.
+6. **Tests** — Broken tests. No user impact but blocks confidence in changes.
+
+When two bugs have similar Impact/Complexity scores, **depth breaks the tie**. A silent sync failure (depth 2) is always higher priority than a slow query (depth 3), even if the slow query has higher impact score.
+
 ### Quick Heuristics
 
 | Priority | Characteristics |
