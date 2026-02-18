@@ -1012,7 +1012,7 @@ def reset_initialized_flag():
     _initialized_users.discard(user_id)
 
 
-def sync_db_to_cloud():
+def sync_db_to_cloud() -> bool:
     """
     Sync the current user's database to R2 storage with version tracking.
     Call this after database modifications to persist changes to the cloud.
@@ -1024,16 +1024,16 @@ def sync_db_to_cloud():
 
     Also checks database size and logs migration recommendations.
 
-    This is a no-op if R2 is not enabled.
+    Returns True if sync succeeded (or R2 not enabled), False on failure.
     """
     if not R2_ENABLED:
-        return
+        return True
 
     user_id = get_current_user_id()
     db_path = get_database_path()
 
     if not db_path.exists():
-        return
+        return True
 
     # Check database size and log warnings if approaching threshold
     check_database_size(db_path)
@@ -1047,20 +1047,27 @@ def sync_db_to_cloud():
     if success and new_version is not None:
         set_local_db_version(user_id, new_version)
         logger.debug(f"Database synced to R2 for user: {user_id}, version: {new_version}")
+        return True
     elif not success:
         logger.warning(f"Failed to sync database to R2 for user: {user_id}")
+        return False
+
+    return True
 
 
-def sync_db_to_cloud_if_writes():
+def sync_db_to_cloud_if_writes() -> bool:
     """
     Sync database to R2 only if writes occurred during this request.
     Called by middleware at end of request.
 
     This enables batched syncing - multiple writes in a single request
     result in only one R2 upload.
+
+    Returns True if sync succeeded (or no writes/R2 disabled), False on failure.
     """
     if not R2_ENABLED:
-        return
+        return True
 
     if get_request_has_writes():
-        sync_db_to_cloud()
+        return sync_db_to_cloud()
+    return True

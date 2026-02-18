@@ -7,6 +7,7 @@ import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
+import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useProjects } from './hooks/useProjects';
 import { useExportRecovery } from './hooks/useExportRecovery';
 import { Breadcrumb, Button, ConfirmationDialog, ModeSwitcher, ToastContainer } from './components/shared';
@@ -264,6 +265,8 @@ function App() {
         <GlobalExportIndicator />
         {/* Upload Progress Indicator - shows upload progress on all screens */}
         <UploadProgressIndicator />
+        {/* Sync Status Indicator - shows when R2 sync has failed */}
+        <SyncStatusIndicator />
       </>
     );
   }
@@ -356,6 +359,9 @@ function App() {
 
       {/* Upload Progress Indicator - shows upload progress on all screens */}
       <UploadProgressIndicator />
+
+      {/* Sync Status Indicator - shows when R2 sync has failed */}
+      <SyncStatusIndicator />
 
       {/* Downloads Panel */}
       <DownloadsPanel

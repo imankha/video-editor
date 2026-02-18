@@ -62,6 +62,43 @@ def get_r2_client():
         return None
 
 
+@lru_cache(maxsize=1)
+def get_r2_sync_client():
+    """Get boto3 S3 client with short timeouts for database sync.
+
+    Database sync runs in the middleware request path — long timeouts
+    block the HTTP response. This client fails fast (3s connect, 10s read)
+    so the user sees sync failure quickly instead of waiting 20s+.
+    """
+    if not R2_ENABLED:
+        return None
+
+    try:
+        import boto3
+        from botocore.config import Config
+
+        client = boto3.client(
+            "s3",
+            endpoint_url=R2_ENDPOINT,
+            aws_access_key_id=R2_ACCESS_KEY_ID,
+            aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+            config=Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "path"},
+                connect_timeout=3,
+                read_timeout=10,
+                retries={"max_attempts": 0},
+            ),
+            region_name="auto"
+        )
+        return client
+    except ImportError:
+        return None
+    except Exception as e:
+        logger.error(f"Failed to initialize R2 sync client: {e}")
+        return None
+
+
 def r2_key(user_id: str, path: str) -> str:
     """Generate R2 object key from user ID and relative path."""
     # Normalize path separators for R2
@@ -393,14 +430,19 @@ def file_exists_in_r2(user_id: str, relative_path: str) -> bool:
 _request_context = threading.local()
 
 
-def get_db_version_from_r2(user_id: str) -> Optional[int]:
+def get_db_version_from_r2(user_id: str, client=None) -> Optional[int]:
     """
     Get the version number of the database in R2.
 
     Version is stored as custom metadata 'x-amz-meta-db-version'.
     Returns None if R2 is disabled, file doesn't exist, or no version set.
+
+    Args:
+        user_id: User namespace
+        client: Optional boto3 client override (e.g. fast-timeout sync client)
     """
-    client = get_r2_client()
+    if client is None:
+        client = get_r2_client()
     if not client:
         return None
 
@@ -491,12 +533,14 @@ def sync_database_to_r2_with_version(
     if not local_db_path.exists():
         return False, None
 
-    client = get_r2_client()
+    # Use the fast-timeout sync client so network failures are detected
+    # quickly (~3s) instead of blocking the HTTP response for 20s+
+    client = get_r2_sync_client()
     if not client:
         return False, None
 
     # Check for conflicts (another request may have written)
-    r2_version = get_db_version_from_r2(user_id)
+    r2_version = get_db_version_from_r2(user_id, client=client)
 
     # If R2 has a newer version than what we loaded, we have a conflict
     if r2_version is not None and current_version is not None and r2_version > current_version:
