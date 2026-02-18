@@ -696,6 +696,8 @@ def ensure_database():
             "ALTER TABLE games ADD COLUMN last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
             # T82: Track which video a clip belongs to in multi-video games (1-based sequence)
             "ALTER TABLE raw_clips ADD COLUMN video_sequence INTEGER",
+            # T82: Replace unique index to include video_sequence (allows same end_time on different videos)
+            "DROP INDEX IF EXISTS idx_raw_clips_game_end_time",
         ]
 
         for migration in migrations:
@@ -788,10 +790,10 @@ def ensure_database():
                 CREATE INDEX IF NOT EXISTS idx_raw_clips_game_id
                 ON raw_clips(game_id)
             """)
-            # Composite index for natural key lookup (game_id + end_time)
+            # Composite index for natural key lookup (game_id + end_time + video_sequence)
             cursor.execute("""
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_clips_game_end_time
-                ON raw_clips(game_id, end_time)
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_clips_game_end_time_seq
+                ON raw_clips(game_id, end_time, video_sequence)
             """)
         except sqlite3.OperationalError:
             # Index already exists, ignore
