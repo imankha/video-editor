@@ -338,6 +338,65 @@ def cleanup_stale_restored_projects(user_id: Optional[str] = None) -> int:
         return archived_count
 
 
+def cleanup_database_bloat() -> dict:
+    """
+    Clean up data that accumulates and bloats the database over time.
+
+    Two sources of bloat:
+    1. Old working_video versions: Each framing export creates a new version,
+       but only the latest is ever read. Old versions with large highlights_data
+       JSON waste significant space.
+    2. Completed export_jobs: Historical export jobs with input_data blobs
+       are never cleaned up. Keep only the last 7 days.
+
+    Called on app startup (from ensure_database) to keep the DB small for R2 sync.
+
+    Returns:
+        Dict with counts of deleted rows per category.
+    """
+    result = {"working_videos_pruned": 0, "export_jobs_pruned": 0}
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # 1. Delete old working_video versions (keep only latest per project)
+            cursor.execute("""
+                DELETE FROM working_videos
+                WHERE id NOT IN (
+                    SELECT wv1.id FROM working_videos wv1
+                    WHERE wv1.version = (
+                        SELECT MAX(wv2.version) FROM working_videos wv2
+                        WHERE wv2.project_id = wv1.project_id
+                    )
+                )
+            """)
+            result["working_videos_pruned"] = cursor.rowcount
+
+            # 2. Delete completed/errored export_jobs older than 7 days
+            cursor.execute("""
+                DELETE FROM export_jobs
+                WHERE status IN ('complete', 'error')
+                AND completed_at < datetime('now', '-7 days')
+            """)
+            result["export_jobs_pruned"] = cursor.rowcount
+
+            if result["working_videos_pruned"] > 0 or result["export_jobs_pruned"] > 0:
+                conn.commit()
+                # VACUUM to reclaim disk space after deletes
+                conn.execute("VACUUM")
+                logger.info(
+                    f"Database cleanup: pruned {result['working_videos_pruned']} old working_video versions, "
+                    f"{result['export_jobs_pruned']} old export_jobs"
+                )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Failed to cleanup database bloat: {e}", exc_info=True)
+        return result
+
+
 def is_project_archived(project_id: int, user_id: Optional[str] = None) -> bool:
     """
     Check if a project has an archive in R2.
