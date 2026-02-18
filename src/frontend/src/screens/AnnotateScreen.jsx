@@ -44,7 +44,6 @@ export function AnnotateScreen({ onClearSelection }) {
     uploadGameVideo, // T80: Unified upload with deduplication
     getGame,
     getGameVideoUrl,
-    saveAnnotationsDebounced,
     finishAnnotation,
   } = useGames();
 
@@ -130,7 +129,6 @@ export function AnnotateScreen({ onClearSelection }) {
     uploadGameVideo, // T80: Unified upload with deduplication
     getGame,
     getGameVideoUrl,
-    saveAnnotationsDebounced,
     fetchProjects,
     onBackToProjects: handleBackToProjects,
     setEditorMode,

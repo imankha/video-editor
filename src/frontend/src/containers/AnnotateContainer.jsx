@@ -39,7 +39,6 @@ export function AnnotateContainer({
   uploadGameVideo, // T80: Unified upload with deduplication
   getGame,
   getGameVideoUrl,
-  saveAnnotationsDebounced,
 
   // Project management
   fetchProjects,
@@ -861,21 +860,6 @@ export function AnnotateContainer({
     wasPlayingRef.current = isPlaying;
   }, [isPlaying]);
 
-  // Effect: Auto-save annotations when they change
-  useEffect(() => {
-    if (annotateGameId && clipRegions.length > 0) {
-      const annotationsForSave = clipRegions.map(region => ({
-        start_time: region.startTime,
-        end_time: region.endTime,
-        name: region.name,
-        tags: region.tags || [],
-        notes: region.notes || '',
-        rating: region.rating || 3,
-        video_sequence: region.videoSequence || null,
-      }));
-      saveAnnotationsDebounced(annotateGameId, annotationsForSave);
-    }
-  }, [annotateGameId, clipRegions, saveAnnotationsDebounced]);
 
   // Computed: Effective duration
   const effectiveDuration = annotateVideoMetadata?.duration || videoDuration || 0;
