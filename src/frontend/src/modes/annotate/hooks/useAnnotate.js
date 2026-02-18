@@ -27,20 +27,11 @@ import { getAllTags } from '../constants/soccerTags';
  * - 5 star -> !!
  */
 
-// Allowed tags - includes both short names and full names for flexibility
-// Short names are the canonical form used in TSV files
-const ALLOWED_TAGS = new Set([
-  // Short names (used in TSV)
-  "Goal", "Assist", "Dribble",
-  "Pass", "Chance Creation", "Control",
-  "Tackle", "Interception", "Build-Up",
-  "Save", "Distribution",
-  // Full names (used in UI)
-  "Goals", "Assists", "Dribbling",
-  "Passing Range",
-  "Tackles", "Interceptions", "Build-Up Passing",
-  "Saves",
-]);
+// Derive allowed tags from soccerTags.js (single source of truth)
+// Includes both full names and short names for flexibility during TSV import
+const ALLOWED_TAGS = new Set(
+  getAllTags().flatMap(tag => [tag.name, tag.shortName])
+);
 
 // Required TSV columns in order
 const REQUIRED_COLUMNS = ['start_time', 'rating', 'tags', 'clip_name', 'clip_duration', 'notes'];

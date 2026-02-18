@@ -88,9 +88,7 @@ def get_game_video_url(blake3_hash: str, video_filename: str) -> str:
 # Import rating constants from shared module (single source of truth)
 from app.constants import (
     RATING_ADJECTIVES,
-    TAG_SHORT_NAMES,
     get_rating_adjective,
-    get_tag_short_name,
 )
 
 
@@ -98,20 +96,18 @@ def generate_clip_name(rating: int, tags: list) -> str:
     """
     Generate a default clip name based on rating and tags.
     Must match frontend generateClipName() in soccerTags.js.
+    Tags are already stored as short names in the DB.
     """
     if not tags:
         return ''
 
     adjective = get_rating_adjective(rating)
 
-    # Convert tag names to short names
-    short_names = [get_tag_short_name(tag) for tag in tags]
-
-    # Join with "and" for multiple tags
-    if len(short_names) == 1:
-        tag_part = short_names[0]
+    # Tags are already short names (stored that way by the frontend)
+    if len(tags) == 1:
+        tag_part = tags[0]
     else:
-        tag_part = ', '.join(short_names[:-1]) + ' and ' + short_names[-1]
+        tag_part = ', '.join(tags[:-1]) + ' and ' + tags[-1]
 
     return f"{adjective} {tag_part}"
 
