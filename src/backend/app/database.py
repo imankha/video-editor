@@ -43,9 +43,9 @@ _initialized_users: set = set()
 _user_db_versions: dict = {}  # user_id -> version number
 _db_version_lock = threading.Lock()
 
-# Database size thresholds for Durable Objects migration
-DB_SIZE_WARNING_THRESHOLD = 512 * 1024  # 512KB - start warning
-DB_SIZE_MIGRATION_THRESHOLD = 1024 * 1024  # 1MB - recommend migration
+# Database size thresholds (archive system targets <400KB)
+DB_SIZE_WARNING_THRESHOLD = 400 * 1024  # 400KB - archive target exceeded
+DB_SIZE_CRITICAL_THRESHOLD = 768 * 1024  # 768KB - sync performance degrades
 
 # Query timing threshold for slow query warnings (in seconds)
 SLOW_QUERY_THRESHOLD = 0.1  # 100ms - warn if query takes this long
@@ -184,11 +184,10 @@ class TrackedConnection:
 
 def check_database_size(db_path: Path) -> None:
     """
-    Log warning if database is approaching migration threshold.
+    Log warning if database size exceeds archive target.
 
     Call this periodically (e.g., after sync) to monitor database growth.
-    When the database exceeds 1MB, a warning recommends migrating to
-    Durable Objects for archived data.
+    The archive system (T66) targets keeping the DB under 400KB.
     """
     if not db_path.exists():
         return
@@ -196,15 +195,14 @@ def check_database_size(db_path: Path) -> None:
     try:
         size = db_path.stat().st_size
 
-        if size > DB_SIZE_MIGRATION_THRESHOLD:
+        if size > DB_SIZE_CRITICAL_THRESHOLD:
             logger.warning(
-                f"DATABASE MIGRATION RECOMMENDED: Database size ({size / 1024:.1f}KB) exceeds 1MB. "
-                f"Consider migrating archived data to Durable Objects for better performance. "
-                f"Path: {db_path}"
+                f"Database size critical: {size / 1024:.1f}KB exceeds {DB_SIZE_CRITICAL_THRESHOLD // 1024}KB. "
+                f"Sync performance may degrade. Check if cleanup_database_bloat is running."
             )
         elif size > DB_SIZE_WARNING_THRESHOLD:
             logger.info(
-                f"Database size notice: {size / 1024:.1f}KB - approaching 1MB migration threshold"
+                f"Database size: {size / 1024:.1f}KB (target: <{DB_SIZE_WARNING_THRESHOLD // 1024}KB)"
             )
     except Exception as e:
         logger.debug(f"Could not check database size: {e}")
@@ -914,6 +912,13 @@ def ensure_database():
             logger.info(f"T66: Re-archived {archived_count} stale restored projects for user {user_id}")
     except Exception as e:
         logger.error(f"T66: Failed to cleanup stale restored projects: {e}")
+
+    # T243: Prune old working_video versions and stale export_jobs to keep DB small
+    try:
+        from app.services.project_archive import cleanup_database_bloat
+        cleanup_database_bloat()
+    except Exception as e:
+        logger.error(f"T243: Failed to cleanup database bloat: {e}")
 
 
 @contextmanager
