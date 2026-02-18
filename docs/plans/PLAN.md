@@ -16,7 +16,7 @@ These tasks MUST be completed before deployment to avoid storage waste and re-mi
 |----|------|--------|-------|
 | **T80** | [**Global Game Deduplication + 4GB Uploads**](tasks/T80-global-game-deduplication.md) | **DONE** | Games to global storage, multipart uploads |
 | **T81** | [Faster Upload Hash](tasks/T81-faster-upload-hash.md) | **DONE** | Sample-based hashing instead of full file (depends on T80) |
-| **T82** | [Multi-Video Games](tasks/T82-multi-video-games.md) | **TESTING** | First half/second half support (depends on T80) |
+| **T82** | [Multi-Video Games](tasks/T82-multi-video-games.md) | **DONE** | First half/second half support (depends on T80) |
 | **T85** | [**Multi-Athlete Profiles**](tasks/T85-multi-athlete-profiles.md) | **TODO** | Per-athlete data isolation (depends on T80) |
 
 **Why these block deployment:**
