@@ -80,6 +80,7 @@ Improvements after real user traffic.
 | T241 | [Annotate Arrow Key Seek](tasks/T241-annotate-arrow-key-seek.md) | TODO | Forward/backward arrows should seek 4s |
 | T242 | [Rename Project from Card](tasks/T242-rename-project-from-card.md) | TODO | Easy inline rename on project card |
 | T243 | [Archive DB Not Reducing Size](tasks/T243-archive-db-not-reducing-size.md) | TODO | Main DB at 776KB, archive not working |
+| T245 | [Fix Highlight Regions Test](tasks/T245-fix-highlight-regions-test.md) | TODO | Pre-existing: calculateDefaultHighlight color assertion |
 
 ---
 
