@@ -20,3 +20,4 @@ export { useOverlayStore, useOverlayEffectType, useOverlayIsLoading } from './ov
 export { useGalleryStore, useGalleryIsOpen, useGalleryCount, useGalleryActions } from './galleryStore';
 export { useGamesStore } from './gamesStore';
 export { useSettingsStore, useProjectFilters, useFramingSettings, useOverlaySettings, useSettingsLoading, useSettingsInitialized } from './settingsStore';
+export { useSyncStore, checkSyncStatus } from './syncStore';

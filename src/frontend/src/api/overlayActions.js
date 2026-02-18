@@ -11,6 +11,7 @@
  */
 
 import { API_BASE } from '../config';
+import { checkSyncStatus } from '../stores/syncStore';
 
 /**
  * Send an overlay action to the backend
@@ -34,6 +35,7 @@ async function sendAction(projectId, action, target = null, data = null, expecte
       body: JSON.stringify(payload),
     });
 
+    checkSyncStatus(response);
     const result = await response.json();
 
     if (!response.ok) {

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { API_BASE } from '../config';
+import { checkSyncStatus } from '../stores/syncStore';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -28,6 +29,7 @@ export function useProjects() {
     setError(null);
     try {
       const response = await fetch(`${API_BASE_URL}/projects`);
+      checkSyncStatus(response);
       if (!response.ok) throw new Error('Failed to fetch projects');
       const data = await response.json();
       setProjects(data);
@@ -50,6 +52,7 @@ export function useProjects() {
     try {
       // Add cache-busting to ensure fresh data
       const response = await fetch(`${API_BASE_URL}/projects/${projectId}?_t=${Date.now()}`);
+      checkSyncStatus(response);
       if (!response.ok) throw new Error('Failed to fetch project');
       const data = await response.json();
       console.log(`[useProjects] fetchProject(${projectId}): working_video_id=${data.working_video_id}, final_video_id=${data.final_video_id}`);

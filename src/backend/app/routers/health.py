@@ -9,7 +9,10 @@ from datetime import datetime
 
 from ..models import HelloResponse
 from ..websocket import export_progress
-from ..database import is_database_initialized, get_database_path, get_user_data_path
+from ..database import is_database_initialized, get_database_path, get_user_data_path, sync_db_to_cloud
+from ..middleware.db_sync import is_sync_failed, set_sync_failed
+from ..user_context import get_current_user_id
+from ..storage import R2_ENABLED
 
 router = APIRouter(tags=["health"])
 
@@ -65,6 +68,27 @@ async def health_check():
         "db_path": str(get_database_path()),
         "user_data_path": str(get_user_data_path())
     }
+
+
+@router.post("/api/retry-sync")
+async def retry_sync():
+    """
+    Manually retry syncing the local database to R2.
+
+    Called by frontend when user clicks the sync failure indicator.
+    Returns success/failure so the UI can update accordingly.
+    """
+    if not R2_ENABLED:
+        return {"success": True, "message": "R2 not enabled, no sync needed"}
+
+    user_id = get_current_user_id()
+    success = sync_db_to_cloud()
+
+    if success:
+        set_sync_failed(user_id, False)
+        return {"success": True}
+    else:
+        return {"success": False, "message": "Sync to R2 failed"}
 
 
 @router.get("/api/export/progress/{export_id}")

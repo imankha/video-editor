@@ -7,6 +7,9 @@ Handles database synchronization at request boundaries:
 
 This enables batched syncing - multiple database writes in a single request
 result in only one R2 upload, reducing latency and API calls.
+
+Also tracks sync failure state per user and surfaces it via X-Sync-Status header
+so the frontend can show a warning indicator (T87).
 """
 
 import logging
@@ -22,12 +25,30 @@ from ..database import (
     get_request_has_writes,
 )
 from ..storage import R2_ENABLED
+from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
 # Thresholds for slow request warnings (in seconds)
 SLOW_SYNC_THRESHOLD = 0.5  # 500ms - warn if DB sync takes this long
 SLOW_REQUEST_THRESHOLD = 0.2  # 200ms - warn if total request takes this long (profiling target)
+
+# In-memory sync failure tracking per user.
+# Set to True when R2 upload fails; cleared on next successful sync.
+_sync_failed: dict[str, bool] = {}
+
+
+def is_sync_failed(user_id: str) -> bool:
+    """Check if the given user has a pending sync failure."""
+    return _sync_failed.get(user_id, False)
+
+
+def set_sync_failed(user_id: str, failed: bool) -> None:
+    """Set or clear the sync failure flag for a user."""
+    if failed:
+        _sync_failed[user_id] = True
+    else:
+        _sync_failed.pop(user_id, None)
 
 
 class DatabaseSyncMiddleware(BaseHTTPMiddleware):
@@ -44,6 +65,9 @@ class DatabaseSyncMiddleware(BaseHTTPMiddleware):
     - Multiple writes in a request = single R2 upload
     - No sync overhead for read-only requests
     - Consistent state across requests
+
+    Additionally tracks sync failures per user and returns X-Sync-Status: failed
+    header when the user's database is out of sync with R2.
     """
 
     # Skip sync for these path prefixes (static files, health checks, etc.)
@@ -82,8 +106,16 @@ class DatabaseSyncMiddleware(BaseHTTPMiddleware):
             had_writes = get_request_has_writes()
             if had_writes:
                 sync_start = time.perf_counter()
-                sync_db_to_cloud_if_writes()
+                sync_success = sync_db_to_cloud_if_writes()
                 sync_duration = time.perf_counter() - sync_start
+
+                user_id = get_current_user_id()
+                set_sync_failed(user_id, not sync_success)
+
+            # Add X-Sync-Status header if this user has a pending sync failure
+            user_id = get_current_user_id()
+            if is_sync_failed(user_id):
+                response.headers["X-Sync-Status"] = "failed"
 
             return response
 
@@ -93,8 +125,11 @@ class DatabaseSyncMiddleware(BaseHTTPMiddleware):
                 had_writes = get_request_has_writes()
                 if had_writes:
                     sync_start = time.perf_counter()
-                    sync_db_to_cloud_if_writes()
+                    sync_success = sync_db_to_cloud_if_writes()
                     sync_duration = time.perf_counter() - sync_start
+
+                    user_id = get_current_user_id()
+                    set_sync_failed(user_id, not sync_success)
             except Exception as sync_error:
                 logger.error(f"Failed to sync database after error: {sync_error}")
 
