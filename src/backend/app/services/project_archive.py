@@ -117,6 +117,9 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
 
             # 7. Delete from DB (order matters for FK constraints)
             # Note: final_videos stays - we only delete project-related data
+            # Unlink FK references on project before deleting related records
+            cursor.execute("UPDATE projects SET working_video_id = NULL, final_video_id = NULL WHERE id = ?", (project_id,))
+
             cursor.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
             clips_deleted = cursor.rowcount
 

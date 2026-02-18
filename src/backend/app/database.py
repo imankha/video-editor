@@ -458,8 +458,8 @@ def ensure_database():
                 default_highlight_regions TEXT,
                 video_sequence INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (game_id) REFERENCES games(id),
-                FOREIGN KEY (auto_project_id) REFERENCES projects(id)
+                FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+                FOREIGN KEY (auto_project_id) REFERENCES projects(id) ON DELETE SET NULL
             )
         """)
 
@@ -939,6 +939,8 @@ def get_db_connection() -> TrackedConnection:
     raw_conn.execute("PRAGMA journal_mode=WAL")
     # Wait up to 30 seconds for lock instead of failing immediately
     raw_conn.execute("PRAGMA busy_timeout=30000")
+    # T86: Enable foreign key enforcement (required for ON DELETE CASCADE/SET NULL)
+    raw_conn.execute("PRAGMA foreign_keys=ON")
 
     conn = TrackedConnection(raw_conn)
     try:
