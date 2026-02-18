@@ -146,13 +146,20 @@ export function AnnotateContainer({
   // Derive isUploading from store
   const isUploadingFromStore = uploadStore.isUploading();
 
+  // Track whether we initiated the upload from this component (vs navigating back)
+  const uploadInitiatedHereRef = useRef(false);
+
   // Restore video state from active upload if navigating back from Games screen
   // This allows users to click on the uploading game card and return to annotation
+  // Skip if we just started the upload from this same mount (not a navigation back)
   useEffect(() => {
-    if (activeUpload?.blobUrl && !annotateVideoUrl) {
+    if (activeUpload?.blobUrl && !annotateVideoUrl && !uploadInitiatedHereRef.current) {
       console.log('[AnnotateContainer] Restoring video from active upload:', activeUpload.gameName);
       setAnnotateVideoUrl(activeUpload.blobUrl);
-      setAnnotateVideoMetadata(activeUpload.videoMetadata);
+      // For multi-video, videoMetadata is an array - don't override with it
+      if (activeUpload.videoMetadata && !Array.isArray(activeUpload.videoMetadata)) {
+        setAnnotateVideoMetadata(activeUpload.videoMetadata);
+      }
       setAnnotateGameName(activeUpload.gameName);
       setAnnotateGameId(null); // Will be set when upload completes
     }
@@ -232,6 +239,9 @@ export function AnnotateContainer({
       }
 
       setEditorMode('annotate');
+
+      // Mark that we initiated the upload here (prevents restore effect from firing)
+      uploadInitiatedHereRef.current = true;
 
       // Start upload
       if (isMultiVideo) {
@@ -794,8 +804,11 @@ export function AnnotateContainer({
   }, [clipRegions, dismissExportCompleteToast]);
 
   // Effect: Update metadata from video element when it loads
+  // For multi-video games, skip this - combined metadata is set by handleGameVideoSelect
   useEffect(() => {
     if (!annotateVideoUrl || !videoRef.current) return;
+    // Don't override metadata for multi-video games (combined duration is already set)
+    if (gameVideos) return;
 
     const video = videoRef.current;
 
@@ -821,7 +834,7 @@ export function AnnotateContainer({
       video.addEventListener('loadedmetadata', handleLoadedMetadata);
       return () => video.removeEventListener('loadedmetadata', handleLoadedMetadata);
     }
-  }, [annotateVideoUrl, annotateVideoMetadata, videoRef]);
+  }, [annotateVideoUrl, annotateVideoMetadata, videoRef, gameVideos]);
 
   // Effect: Handle Escape key to exit fullscreen
   useEffect(() => {

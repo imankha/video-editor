@@ -636,9 +636,17 @@ export function ProjectManager({
 
             {/* Pending Uploads Section - Paused/interrupted uploads (exclude active upload) */}
             {(() => {
-              // Filter out the currently uploading file from pending list to avoid duplication
+              // Filter out files being actively uploaded from pending list to avoid duplication
+              // For multi-video uploads, check against all individual file names
               const filteredPending = activeUpload
-                ? pendingUploads.filter(p => p.original_filename !== activeUpload.fileName)
+                ? pendingUploads.filter(p => {
+                    if (p.original_filename === activeUpload.fileName) return false;
+                    // Multi-video: filter out any file that's part of the active upload
+                    if (activeUpload.files) {
+                      return !activeUpload.files.some(f => f.name === p.original_filename);
+                    }
+                    return true;
+                  })
                 : pendingUploads;
               return filteredPending.length > 0 && (
                 <div className="mb-6">
