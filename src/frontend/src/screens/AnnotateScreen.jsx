@@ -61,7 +61,9 @@ export function AnnotateScreen({ onClearSelection }) {
 
   // Check on mount if we're loading a game or file or have an active upload, set loading flag to prevent redirect
   useState(() => {
-    if (sessionStorage.getItem('pendingGameId') || getPendingGameFile() || useUploadStore.getState().activeUpload?.blobUrl) {
+    const pendingDetails = getPendingGameDetails();
+    const hasMultiVideo = pendingDetails?.files?.length > 0;
+    if (sessionStorage.getItem('pendingGameId') || getPendingGameFile() || hasMultiVideo || useUploadStore.getState().activeUpload?.blobUrl) {
       isLoadingRef.current = true;
     }
   });
@@ -204,12 +206,15 @@ export function AnnotateScreen({ onClearSelection }) {
   }, [handleLoadGame, annotateVideoUrl]);
 
   // Handle pending game file from ProjectsScreen (when "Add Game" was clicked)
+  // Supports both single-video (file) and multi-video (files array in details)
   useEffect(() => {
     const pendingFile = getPendingGameFile();
     const pendingDetails = getPendingGameDetails();
-    if (pendingFile && !annotateVideoUrl) {
+    const hasMultiVideo = pendingDetails?.files?.length > 0;
+    if ((pendingFile || hasMultiVideo) && !annotateVideoUrl) {
       isLoadingRef.current = true;
       clearPendingGameFile();
+      // For multi-video, pendingFile is null - handleGameVideoSelect reads files from details
       handleGameVideoSelect(pendingFile, pendingDetails);
     }
   }, [handleGameVideoSelect, annotateVideoUrl]);
