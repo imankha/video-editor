@@ -329,6 +329,7 @@ export default function useAnnotate(videoMetadata) {
           tags: annotation.tags || [],
           notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),
           rating: Math.max(1, Math.min(5, annotation.rating || DEFAULT_RATING)),
+          videoSequence: annotation.videoSequence ?? annotation.video_sequence ?? null,
           color,
           createdAt: new Date()
         };
@@ -406,8 +407,8 @@ export default function useAnnotate(videoMetadata) {
    * @param {Array} tags - Optional array of tag names
    * @param {string} name - Optional clip name (auto-generated if not provided)
    */
-  const addClipRegion = useCallback((startTime, customDuration = DEFAULT_CLIP_DURATION, notes = '', rating = DEFAULT_RATING, position = '', tags = [], name = '') => {
-    console.log('[useAnnotate] addClipRegion called with startTime:', startTime, 'duration:', duration, 'notes:', notes, 'rating:', rating, 'position:', position, 'tags:', tags, 'name:', name);
+  const addClipRegion = useCallback((startTime, customDuration = DEFAULT_CLIP_DURATION, notes = '', rating = DEFAULT_RATING, position = '', tags = [], name = '', videoSequence = null) => {
+    console.log('[useAnnotate] addClipRegion called with startTime:', startTime, 'duration:', duration, 'notes:', notes, 'rating:', rating, 'position:', position, 'tags:', tags, 'name:', name, 'videoSequence:', videoSequence);
     if (!duration) {
       console.warn('[useAnnotate] Cannot add clip region - no duration set');
       return null;
@@ -438,6 +439,7 @@ export default function useAnnotate(videoMetadata) {
       tags: tags || [],
       notes: notes || '',
       rating: rating || DEFAULT_RATING,
+      videoSequence: videoSequence,
       color,
       createdAt: new Date()
     };
@@ -631,7 +633,8 @@ export default function useAnnotate(videoMetadata) {
       // NOTE: position removed - not used by backend
       tags: region.tags || [],
       notes: region.notes || '',
-      rating: region.rating || 3
+      rating: region.rating || 3,
+      video_sequence: region.videoSequence || null,
     }));
   }, [clipRegions]);
 
@@ -684,6 +687,7 @@ export default function useAnnotate(videoMetadata) {
         tags: annotation.tags || [],
         notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),
         rating: Math.max(1, Math.min(5, annotation.rating || DEFAULT_RATING)),
+        videoSequence: annotation.videoSequence ?? annotation.video_sequence ?? null,
         color,
         createdAt: new Date()
       };

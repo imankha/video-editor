@@ -45,46 +45,6 @@ def get_annotate_staging_path() -> Path:
     return staging_dir
 
 
-def determine_source_video(game_videos: list, start_time: float, end_time: float) -> dict:
-    """
-    T82: Given absolute timestamps and a list of game_videos (ordered by sequence),
-    determine which video file contains the clip.
-
-    For clips that span a boundary, uses the video where the clip starts.
-
-    Returns: {
-        'blake3_hash': str,
-        'relative_start': float,
-        'relative_end': float,
-        'video_filename': str,
-    }
-    """
-    offset = 0.0
-    for video in game_videos:
-        video_end = offset + (video['duration'] or 0)
-        if start_time >= offset and start_time < video_end:
-            return {
-                'blake3_hash': video['blake3_hash'],
-                'relative_start': start_time - offset,
-                'relative_end': min(end_time - offset, video['duration'] or (end_time - offset)),
-                'video_filename': f"{video['blake3_hash']}.mp4",
-            }
-        offset = video_end
-
-    # Fallback: use last video (clip may be at very end)
-    if game_videos:
-        last = game_videos[-1]
-        last_offset = sum((v['duration'] or 0) for v in game_videos[:-1])
-        return {
-            'blake3_hash': last['blake3_hash'],
-            'relative_start': max(0, start_time - last_offset),
-            'relative_end': min(end_time - last_offset, last['duration'] or 0),
-            'video_filename': f"{last['blake3_hash']}.mp4",
-        }
-
-    return None
-
-
 def sanitize_filename(name: str) -> str:
     """Sanitize clip name for use as filename."""
     sanitized = name.replace(':', '-')
@@ -807,16 +767,21 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                 extract_progress = int(20 + (i / num_clips) * 60)
                 await update_progress(extract_progress, 100, 'extract', f"Extracting clip {i+1}/{len(good_clips)}...")
 
-                # T82: Resolve source video and timestamps for multi-video games
+                # T82: For multi-video games, look up source video by video_sequence
+                # Timestamps are already relative to the individual video
                 if is_multi_video:
-                    resolved = determine_source_video(game_videos, clip['start_time'], clip['end_time'])
-                    if resolved is None:
-                        logger.error(f"[AnnotateExport] {export_id}: Could not resolve source video for clip {i} "
-                                     f"(start={clip['start_time']}, end={clip['end_time']})")
+                    clip_seq = clip.get('video_sequence')
+                    if clip_seq is None:
+                        logger.error(f"[AnnotateExport] {export_id}: Clip {i} missing video_sequence for multi-video game")
                         continue
-                    clip_source_path = multi_video_paths[resolved['blake3_hash']]
-                    clip_start = resolved['relative_start']
-                    clip_end = resolved['relative_end']
+                    # Find the game_video matching this sequence
+                    matched_gv = next((gv for gv in game_videos if gv['sequence'] == clip_seq), None)
+                    if matched_gv is None:
+                        logger.error(f"[AnnotateExport] {export_id}: No video found for sequence {clip_seq}")
+                        continue
+                    clip_source_path = multi_video_paths[matched_gv['blake3_hash']]
+                    clip_start = clip['start_time']
+                    clip_end = clip['end_time']
                 else:
                     clip_source_path = source_path
                     clip_start = clip['start_time']
@@ -841,8 +806,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                     with get_db_connection() as conn:
                         cursor = conn.cursor()
                         cursor.execute("""
-                            INSERT INTO raw_clips (game_id, start_time, end_time, name, notes, rating, tags, filename)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO raw_clips (game_id, start_time, end_time, name, notes, rating, tags, filename, video_sequence)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
                             game_id,
                             clip['start_time'],
@@ -851,7 +816,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                             clip.get('notes', ''),
                             clip.get('rating', 3),
                             json.dumps(clip.get('tags', [])),
-                            clip_filename
+                            clip_filename,
+                            clip.get('video_sequence'),
                         ))
                         raw_clip_id = cursor.lastrowid
                         conn.commit()

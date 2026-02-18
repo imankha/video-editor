@@ -456,6 +456,7 @@ def ensure_database():
                 game_id INTEGER,
                 auto_project_id INTEGER,
                 default_highlight_regions TEXT,
+                video_sequence INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (game_id) REFERENCES games(id),
                 FOREIGN KEY (auto_project_id) REFERENCES projects(id)
@@ -693,6 +694,8 @@ def ensure_database():
             "ALTER TABLE games ADD COLUMN blake3_hash TEXT",
             # T80: Track last access time for future cleanup of unused games
             "ALTER TABLE games ADD COLUMN last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            # T82: Track which video a clip belongs to in multi-video games (1-based sequence)
+            "ALTER TABLE raw_clips ADD COLUMN video_sequence INTEGER",
         ]
 
         for migration in migrations:

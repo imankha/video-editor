@@ -760,10 +760,10 @@ def load_annotations_from_db(game_id: int) -> list:
         cursor = conn.cursor()
         # Query raw_clips as the single source of truth for clip annotations
         cursor.execute("""
-            SELECT id, start_time, end_time, name, rating, tags, notes
+            SELECT id, start_time, end_time, name, rating, tags, notes, video_sequence
             FROM raw_clips
             WHERE game_id = ?
-            ORDER BY end_time
+            ORDER BY video_sequence, end_time
         """, (game_id,))
         rows = cursor.fetchall()
 
@@ -785,7 +785,8 @@ def load_annotations_from_db(game_id: int) -> list:
                 'name': name,
                 'rating': row['rating'],
                 'tags': tags,
-                'notes': row['notes'] or ''
+                'notes': row['notes'] or '',
+                'video_sequence': row['video_sequence'],  # T82: which video (null = single-video)
             })
 
         return annotations
@@ -795,7 +796,7 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
     """
     Save annotations to raw_clips table, syncing with existing records.
 
-    Uses natural key (game_id, end_time) to match annotations with raw_clips.
+    Uses natural key (game_id, end_time, video_sequence) to match annotations with raw_clips.
     - Updates existing clips' metadata (name, rating, tags, notes, start_time)
     - Deletes clips that are no longer in the annotations list
     - New clips are expected to be created via real-time save (with FFmpeg extraction)
@@ -803,20 +804,22 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get existing raw_clips for this game (using end_time as natural key)
+        # Get existing raw_clips for this game (using (end_time, video_sequence) as natural key)
         cursor.execute("""
-            SELECT id, end_time, filename, auto_project_id
+            SELECT id, end_time, video_sequence, filename, auto_project_id
             FROM raw_clips
             WHERE game_id = ?
         """, (game_id,))
-        existing_clips = {row['end_time']: dict(row) for row in cursor.fetchall()}
+        existing_clips = {(row['end_time'], row['video_sequence']): dict(row) for row in cursor.fetchall()}
 
-        # Track which end_times are still present in annotations
-        annotation_end_times = set()
+        # Track which keys are still present in annotations
+        annotation_keys = set()
 
         for ann in annotations:
             end_time = ann.get('end_time', ann.get('start_time', 0))
-            annotation_end_times.add(end_time)
+            video_sequence = ann.get('video_sequence')
+            clip_key = (end_time, video_sequence)
+            annotation_keys.add(clip_key)
 
             tags = ann.get('tags', [])
             tags_json = json.dumps(tags)
@@ -828,7 +831,7 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
             if name == default_name:
                 name = ''
 
-            if end_time in existing_clips:
+            if clip_key in existing_clips:
                 # Update existing raw_clip metadata
                 cursor.execute("""
                     UPDATE raw_clips
@@ -840,14 +843,14 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
                     rating,
                     tags_json,
                     ann.get('notes', ''),
-                    existing_clips[end_time]['id']
+                    existing_clips[clip_key]['id']
                 ))
             else:
                 # Create new raw_clip with empty filename (pending extraction)
                 # This is a fallback if real-time save failed
                 cursor.execute("""
-                    INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id, video_sequence)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     '',  # empty filename = pending extraction
                     rating,
@@ -856,13 +859,14 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
                     ann.get('notes', ''),
                     ann.get('start_time', 0),
                     end_time,
-                    game_id
+                    game_id,
+                    video_sequence,
                 ))
-                logger.info(f"Created pending raw_clip for game {game_id} at end_time {end_time}")
+                logger.info(f"Created pending raw_clip for game {game_id} at end_time {end_time} video_sequence {video_sequence}")
 
         # Delete raw_clips that are no longer in annotations
-        for end_time, clip_data in existing_clips.items():
-            if end_time not in annotation_end_times:
+        for clip_key, clip_data in existing_clips.items():
+            if clip_key not in annotation_keys:
                 clip_id = clip_data['id']
                 filename = clip_data['filename']
                 auto_project_id = clip_data['auto_project_id']

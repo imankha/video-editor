@@ -87,6 +87,9 @@ export function AnnotateContainer({
   // [{ sequence, url, duration, width, height, serverUrl? }]
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
 
+  // Current video's sequence number (1-based, for clip tagging)
+  const currentVideoSequence = gameVideos ? gameVideos[activeVideoIndex]?.sequence : null;
+
   // Annotate clip management hook
   const {
     clipRegions,
@@ -207,13 +210,10 @@ export function AnnotateContainer({
         displayName = `${prefix} ${gameDetails.opponentName}`;
       }
 
-      // For multi-video, compute total duration
-      const totalDuration = metadataList.reduce((sum, m) => sum + (m.duration || 0), 0);
-
-      // Build combined metadata using first video's dimensions + total duration
+      // Build metadata - use first video's dimensions and duration
+      // For multi-video, each video has its own timeline (no combined duration)
       const combinedMetadata = {
         ...metadataList[0],
-        duration: isMultiVideo ? totalDuration : metadataList[0].duration,
       };
 
       // Set annotate state - start with first video
@@ -302,13 +302,12 @@ export function AnnotateContainer({
       let videoMetadata = null;
 
       if (isMultiVideo) {
-        // Multi-video game: load first video, store all video info
+        // Multi-video game: load first video, each video has its own timeline
         console.log('[AnnotateContainer] Multi-video game:', gameData.videos.length, 'videos');
         videoUrl = gameData.videos[0].video_url;
 
-        const totalDuration = gameData.videos.reduce((sum, v) => sum + (v.duration || 0), 0);
         videoMetadata = {
-          duration: totalDuration,
+          duration: gameData.videos[0].duration,
           width: gameData.videos[0].video_width || gameData.video_width,
           height: gameData.videos[0].video_height || gameData.video_height,
           size: gameData.video_size,
@@ -369,7 +368,10 @@ export function AnnotateContainer({
 
       // Import saved annotations if they exist
       if (gameData.annotations && gameData.annotations.length > 0) {
-        const gameDuration = videoMetadata?.duration || gameData.video_duration;
+        // For multi-video, use the max video duration for clamping (each video's clips are relative to their own video)
+        const gameDuration = isMultiVideo
+          ? Math.max(...gameData.videos.map(v => v.duration || 0))
+          : (videoMetadata?.duration || gameData.video_duration);
         console.log('[AnnotateContainer] Importing', gameData.annotations.length, 'saved annotations with duration:', gameDuration);
 
         const annotationsWithoutRawClips = gameData.annotations.filter(a => !a.id);
@@ -383,7 +385,8 @@ export function AnnotateContainer({
                 name: annotation.name || '',
                 rating: annotation.rating || 3,
                 tags: annotation.tags || [],
-                notes: annotation.notes || ''
+                notes: annotation.notes || '',
+                video_sequence: annotation.video_sequence || null,
               });
 
               if (result) {
@@ -480,7 +483,8 @@ export function AnnotateContainer({
       name: clip.name,
       notes: clip.notes || '',
       rating: clip.rating || 3,
-      tags: clip.tags || []
+      tags: clip.tags || [],
+      video_sequence: clip.video_sequence || null,
     }));
 
     formData.append('clips_json', JSON.stringify(clipsForApi));
@@ -605,7 +609,8 @@ export function AnnotateContainer({
       clipData.rating,
       '',
       clipData.tags,
-      clipData.name
+      clipData.name,
+      currentVideoSequence,
     );
     if (newRegion) {
       seek(newRegion.startTime);
@@ -618,7 +623,8 @@ export function AnnotateContainer({
           name: newRegion.name,
           rating: newRegion.rating,
           tags: newRegion.tags,
-          notes: newRegion.notes
+          notes: newRegion.notes,
+          video_sequence: currentVideoSequence,
         });
 
         if (result?.raw_clip_id) {
@@ -634,7 +640,7 @@ export function AnnotateContainer({
       }
     }
     setShowAnnotateOverlay(false);
-  }, [addClipRegion, seek, annotateGameId, isUploadingFromStore, saveClip, setRawClipId]);
+  }, [addClipRegion, seek, annotateGameId, isUploadingFromStore, saveClip, setRawClipId, currentVideoSequence]);
 
   /**
    * Update a clip region - syncs to backend
@@ -668,7 +674,8 @@ export function AnnotateContainer({
         name: updates.name ?? region.name,
         rating: updates.rating ?? region.rating,
         tags: updates.tags ?? region.tags,
-        notes: updates.notes ?? region.notes
+        notes: updates.notes ?? region.notes,
+        video_sequence: region.videoSequence ?? currentVideoSequence,
       };
 
       const result = await saveClip(annotateGameId, clipData);
@@ -707,7 +714,7 @@ export function AnnotateContainer({
         }
       }
     }
-  }, [clipRegions, updateClipRegion, annotateGameId, isUploadingFromStore, saveClip, updateClipRemote, setRawClipId]);
+  }, [clipRegions, updateClipRegion, annotateGameId, isUploadingFromStore, saveClip, updateClipRemote, setRawClipId, currentVideoSequence]);
 
   /**
    * Handle updating an existing clip from fullscreen overlay
@@ -807,7 +814,7 @@ export function AnnotateContainer({
   // For multi-video games, skip this - combined metadata is set by handleGameVideoSelect
   useEffect(() => {
     if (!annotateVideoUrl || !videoRef.current) return;
-    // Don't override metadata for multi-video games (combined duration is already set)
+    // Don't override metadata for multi-video games (duration is set per-video by tab switch)
     if (gameVideos) return;
 
     const video = videoRef.current;
@@ -904,7 +911,8 @@ export function AnnotateContainer({
               name: annotation.name || '',
               rating: annotation.rating || 3,
               tags: annotation.tags || [],
-              notes: annotation.notes || ''
+              notes: annotation.notes || '',
+              video_sequence: annotation.videoSequence ?? annotation.video_sequence ?? null,
             });
 
             if (result) {
@@ -929,29 +937,11 @@ export function AnnotateContainer({
     return count;
   }, [annotateGameId, importAnnotations, saveClip]);
 
-  // T82: Multi-video switching logic
-  // Compute cumulative offsets for each video segment
-  const videoOffsets = useMemo(() => {
-    if (!gameVideos) return null;
-    let offset = 0;
-    return gameVideos.map(v => {
-      const start = offset;
-      offset += v.duration || 0;
-      return { ...v, offset: start, end: offset };
-    });
-  }, [gameVideos]);
-
-  // Compute absolute current time (offset + relative video time)
-  const absoluteCurrentTime = useMemo(() => {
-    if (!videoOffsets) return currentTime;
-    const offset = videoOffsets[activeVideoIndex]?.offset || 0;
-    return offset + currentTime;
-  }, [videoOffsets, activeVideoIndex, currentTime]);
-
-  // Switch to a specific video by index, optionally seek to absolute time
-  const switchToVideo = useCallback((index, absoluteTime = null) => {
+  // T82: Simple tab-based video switching
+  // Each video is independent with its own timeline (no virtual absolute timeline)
+  const handleVideoTabSwitch = useCallback((index) => {
     if (!gameVideos || index < 0 || index >= gameVideos.length) return;
-    if (index === activeVideoIndex && absoluteTime == null) return;
+    if (index === activeVideoIndex) return;
 
     const video = gameVideos[index];
     const newUrl = video.url || video.serverUrl;
@@ -959,60 +949,26 @@ export function AnnotateContainer({
     console.log(`[AnnotateContainer] Switching to video ${index + 1} (sequence ${video.sequence})`);
     setActiveVideoIndex(index);
     setAnnotateVideoUrl(newUrl);
+    // Update metadata to this video's duration
+    setAnnotateVideoMetadata(prev => ({
+      ...prev,
+      duration: video.duration,
+      width: video.width || prev?.width,
+      height: video.height || prev?.height,
+    }));
+  }, [gameVideos, activeVideoIndex, setAnnotateVideoUrl, setAnnotateVideoMetadata]);
 
-    if (videoRef.current && absoluteTime != null && videoOffsets) {
-      const relativeTime = absoluteTime - videoOffsets[index].offset;
-      // Wait for video source to change, then seek
-      const handleCanPlay = () => {
-        videoRef.current.currentTime = Math.max(0, relativeTime);
-        videoRef.current.removeEventListener('canplay', handleCanPlay);
-      };
-      videoRef.current.addEventListener('canplay', handleCanPlay);
-    }
-  }, [gameVideos, activeVideoIndex, videoRef, videoOffsets, setAnnotateVideoUrl]);
+  // Filter clip regions to only show clips for the current video
+  const filteredClipRegions = useMemo(() => {
+    if (!gameVideos) return clipRegions; // single-video: show all
+    return clipRegions.filter(r => r.videoSequence === currentVideoSequence);
+  }, [clipRegions, gameVideos, currentVideoSequence]);
 
-  // Multi-video seek: determine which video and seek within it
-  const multiVideoSeek = useCallback((absoluteTime) => {
-    if (!videoOffsets) {
-      seek(absoluteTime);
-      return;
-    }
-
-    // Find which video contains this absolute time
-    for (let i = 0; i < videoOffsets.length; i++) {
-      if (absoluteTime < videoOffsets[i].end || i === videoOffsets.length - 1) {
-        if (i !== activeVideoIndex) {
-          switchToVideo(i, absoluteTime);
-        } else {
-          const relativeTime = absoluteTime - videoOffsets[i].offset;
-          seek(relativeTime);
-        }
-        return;
-      }
-    }
-  }, [videoOffsets, activeVideoIndex, switchToVideo, seek]);
-
-  // Auto-switch to next video when current one ends during playback
-  useEffect(() => {
-    if (!gameVideos || !videoRef.current) return;
-
-    const handleEnded = () => {
-      const videoEl = videoRef.current;
-      if (!videoEl) return;
-      // Only auto-switch if the video actually played to near its end
-      // (ignore spurious 'ended' events from source changes)
-      if (videoEl.duration > 0 && videoEl.currentTime >= videoEl.duration - 0.5) {
-        if (activeVideoIndex < gameVideos.length - 1) {
-          switchToVideo(activeVideoIndex + 1);
-          setTimeout(() => videoRef.current?.play(), 100);
-        }
-      }
-    };
-
-    const videoEl = videoRef.current;
-    videoEl.addEventListener('ended', handleEnded);
-    return () => videoEl.removeEventListener('ended', handleEnded);
-  }, [gameVideos, activeVideoIndex, switchToVideo, videoRef]);
+  // Filtered regions with layout (for timeline display)
+  const filteredRegionsWithLayout = useMemo(() => {
+    if (!gameVideos) return annotateRegionsWithLayout;
+    return annotateRegionsWithLayout.filter(r => r.videoSequence === currentVideoSequence);
+  }, [annotateRegionsWithLayout, gameVideos, currentVideoSequence]);
 
   return {
     // State
@@ -1069,9 +1025,12 @@ export function AnnotateContainer({
     // T82: Multi-video state
     gameVideos,
     activeVideoIndex,
-    absoluteCurrentTime,
     isMultiVideo: !!gameVideos,
-    multiVideoSeek,
+    handleVideoTabSwitch,
+    currentVideoSequence,
+    // Filtered clip regions for current video (multi-video only)
+    filteredClipRegions,
+    filteredRegionsWithLayout,
 
     // Game ID (for finish-annotation call when leaving)
     annotateGameId,

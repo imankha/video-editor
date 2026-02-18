@@ -112,6 +112,7 @@ class RawClipCreate(BaseModel):
     rating: int = 3
     tags: List[str] = []
     notes: str = ""
+    video_sequence: Optional[int] = None  # T82: which video in multi-video game (1-based)
 
 
 class RawClipUpdate(BaseModel):
@@ -122,6 +123,7 @@ class RawClipUpdate(BaseModel):
     notes: Optional[str] = None
     start_time: Optional[float] = None
     end_time: Optional[float] = None
+    video_sequence: Optional[int] = None
 
 
 class RawClipSaveResponse(BaseModel):
@@ -803,10 +805,11 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
 
         # New clip - create as pending (no extraction yet)
         cursor.execute("""
-            INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id, video_sequence)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, ('', clip_data.rating, json.dumps(clip_data.tags), clip_data.name,
-              clip_data.notes, clip_data.start_time, clip_data.end_time, clip_data.game_id))
+              clip_data.notes, clip_data.start_time, clip_data.end_time, clip_data.game_id,
+              clip_data.video_sequence))
         raw_clip_id = cursor.lastrowid
 
         # Handle 5-star project creation (extraction triggered when user opens project, not here)
@@ -900,6 +903,9 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
         if update.end_time is not None:
             updates.append("end_time = ?")
             params.append(update.end_time)
+        if update.video_sequence is not None:
+            updates.append("video_sequence = ?")
+            params.append(update.video_sequence)
 
         # If duration changed, increment boundaries_version so we can detect if framing used an older version
         # NOTE: We do NOT clear filename here - the existing extracted clip is still valid for its original boundaries.
