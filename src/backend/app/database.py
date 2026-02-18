@@ -871,6 +871,7 @@ def ensure_database():
                 original_filename TEXT NOT NULL,
                 r2_upload_id TEXT NOT NULL,
                 parts_json TEXT,
+                label TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)

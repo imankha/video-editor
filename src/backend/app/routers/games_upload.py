@@ -64,6 +64,7 @@ class PrepareUploadRequest(BaseModel):
     blake3_hash: str = Field(..., description="BLAKE3 hash of the file (64 hex chars)")
     file_size: int = Field(..., description="File size in bytes")
     original_filename: str = Field(..., description="Original filename")
+    label: Optional[str] = Field(None, description="Display label (e.g. 'First Half')")
 
 
 class PartInfo(BaseModel):
@@ -212,15 +213,16 @@ async def prepare_upload(request: PrepareUploadRequest):
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO pending_uploads (
-                id, blake3_hash, file_size, original_filename, r2_upload_id
+                id, blake3_hash, file_size, original_filename, r2_upload_id, label
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
         """, (
             session_id,
             blake3_hash,
             request.file_size,
             request.original_filename,
-            upload_id
+            upload_id,
+            request.label,
         ))
         conn.commit()
 
@@ -421,7 +423,7 @@ async def list_pending_uploads():
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, blake3_hash, file_size, original_filename, parts_json, created_at, r2_upload_id
+            SELECT id, blake3_hash, file_size, original_filename, parts_json, created_at, r2_upload_id, label
             FROM pending_uploads
             ORDER BY created_at DESC
         """)
@@ -454,6 +456,7 @@ async def list_pending_uploads():
                 'blake3_hash': row['blake3_hash'],
                 'file_size': row['file_size'],
                 'original_filename': row['original_filename'],
+                'label': row['label'] if 'label' in row.keys() else None,
                 'completed_parts': len(completed_parts),
                 'total_parts': total_parts,
                 'progress_percent': round(len(completed_parts) / total_parts * 100) if total_parts > 0 else 0,

@@ -955,6 +955,7 @@ function PendingUploadCard({ upload, onResume, onCancel }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <FileVideo size={18} className="text-yellow-400" />
+            {upload.label && <span className="text-yellow-400 text-sm font-medium shrink-0">{upload.label}:</span>}
             <h3 className="text-white font-medium truncate">{upload.original_filename}</h3>
           </div>
           <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">

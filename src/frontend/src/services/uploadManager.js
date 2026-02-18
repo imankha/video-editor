@@ -281,14 +281,18 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
 
   // Phase 2: Prepare (check R2 for dedup)
   notify(UPLOAD_PHASE.PREPARING, 0, 'Checking for existing file...');
+  const prepareBody = {
+    blake3_hash: hash,
+    file_size: file.size,
+    original_filename: file.name,
+  };
+  if (options.label) {
+    prepareBody.label = options.label;
+  }
   const prepareRes = await fetch(`${API_BASE}/api/games/prepare-upload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      blake3_hash: hash,
-      file_size: file.size,
-      original_filename: file.name,
-    }),
+    body: JSON.stringify(prepareBody),
   });
 
   if (!prepareRes.ok) {
@@ -482,18 +486,21 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       const fileWeight = 1 / fileCount;
       const basePercent = i * fileWeight * 100;
 
+      const halfLabel = fileCount === 2 ? (i === 0 ? 'First Half' : 'Second Half') : `Part ${sequence}`;
+
       const r2Result = await ensureVideoInR2(file, (progress) => {
         // Map per-file progress to overall progress
         const overallPercent = Math.round(basePercent + progress.percent * fileWeight);
         notify(
           progress.phase,
           overallPercent,
-          `Half ${sequence}: ${progress.message}`
+          `${halfLabel}: ${progress.message}`
         );
       }, {
         videoDuration: metadata.duration || null,
         videoWidth: metadata.width || null,
         videoHeight: metadata.height || null,
+        label: halfLabel,
       });
 
       videoRefs.push({
