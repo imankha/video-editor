@@ -11,7 +11,6 @@
  */
 
 import { API_BASE } from '../config';
-import { checkSyncStatus } from '../stores/syncStore';
 
 /**
  * Send a framing action to the backend
@@ -34,7 +33,6 @@ async function sendAction(projectId, clipId, action, target = null, data = null)
       body: JSON.stringify(payload),
     });
 
-    checkSyncStatus(response);
     const result = await response.json();
 
     if (!response.ok) {

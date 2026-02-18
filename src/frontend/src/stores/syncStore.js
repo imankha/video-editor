@@ -5,14 +5,14 @@
  * The backend sets X-Sync-Status: failed header on all responses
  * when the user's local DB is out of sync with R2.
  *
- * This store is updated by checkSyncStatus() which should be called
- * after fetch responses in API action modules.
+ * Uses a global fetch interceptor installed at import time so every API
+ * response is automatically checked — no per-call-site instrumentation needed.
  */
 
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 
-export const useSyncStore = create((set, get) => ({
+export const useSyncStore = create((set) => ({
   syncFailed: false,
   isRetrying: false,
 
@@ -21,7 +21,7 @@ export const useSyncStore = create((set, get) => ({
   retrySyncToR2: async () => {
     set({ isRetrying: true });
     try {
-      const response = await fetch(`${API_BASE}/api/retry-sync`, {
+      const response = await _originalFetch(`${API_BASE}/api/retry-sync`, {
         method: 'POST',
       });
       const data = await response.json();
@@ -39,7 +39,6 @@ export const useSyncStore = create((set, get) => ({
 
 /**
  * Check the X-Sync-Status header on a fetch Response and update the sync store.
- * Call this after any fetch() to keep the indicator in sync.
  *
  * @param {Response} response - The fetch Response object
  */
@@ -59,3 +58,16 @@ export function checkSyncStatus(response) {
     }
   }
 }
+
+// --- Global fetch interceptor ---
+// Wraps window.fetch so every response is automatically checked for the
+// X-Sync-Status header. This is infrastructure-level: no individual API
+// call sites need to know about sync status.
+
+const _originalFetch = window.fetch.bind(window);
+
+window.fetch = async function (...args) {
+  const response = await _originalFetch(...args);
+  checkSyncStatus(response);
+  return response;
+};

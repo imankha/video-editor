@@ -106,7 +106,11 @@ class DatabaseSyncMiddleware(BaseHTTPMiddleware):
             had_writes = get_request_has_writes()
             if had_writes:
                 sync_start = time.perf_counter()
-                sync_success = sync_db_to_cloud_if_writes()
+                try:
+                    sync_success = sync_db_to_cloud_if_writes()
+                except Exception as sync_error:
+                    logger.error(f"Sync to R2 raised exception: {sync_error}")
+                    sync_success = False
                 sync_duration = time.perf_counter() - sync_start
 
                 user_id = get_current_user_id()
@@ -125,13 +129,17 @@ class DatabaseSyncMiddleware(BaseHTTPMiddleware):
                 had_writes = get_request_has_writes()
                 if had_writes:
                     sync_start = time.perf_counter()
-                    sync_success = sync_db_to_cloud_if_writes()
+                    try:
+                        sync_success = sync_db_to_cloud_if_writes()
+                    except Exception as sync_error:
+                        logger.error(f"Sync to R2 raised exception after request error: {sync_error}")
+                        sync_success = False
                     sync_duration = time.perf_counter() - sync_start
 
                     user_id = get_current_user_id()
                     set_sync_failed(user_id, not sync_success)
-            except Exception as sync_error:
-                logger.error(f"Failed to sync database after error: {sync_error}")
+            except Exception as tracking_error:
+                logger.error(f"Failed to track sync state after error: {tracking_error}")
 
             # Re-raise the original exception
             raise
