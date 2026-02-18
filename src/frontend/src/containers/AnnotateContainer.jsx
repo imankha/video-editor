@@ -8,6 +8,7 @@ import { useExportStore } from '../stores';
 import { useUploadStore } from '../stores/uploadStore';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { API_BASE } from '../config';
+import { VideoMode, GameType } from '../constants/gameConstants';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
 /**
@@ -80,6 +81,11 @@ export function AnnotateContainer({
     annotateContainerRef,
     annotateFileInputRef,
   } = useAnnotateState();
+
+  // T82: Multi-video state (null = single video, array = multi-video)
+  const [gameVideos, setGameVideos] = useState(null);
+  // [{ sequence, url, duration, width, height, serverUrl? }]
+  const [activeVideoIndex, setActiveVideoIndex] = useState(0);
 
   // Annotate clip management hook
   const {
@@ -157,88 +163,110 @@ export function AnnotateContainer({
 
   /**
    * Handle game video selection for Annotate mode
-   * Transitions to annotate mode where user can extract clips from full game footage.
+   * Supports both single-video and multi-video (per-half) games.
    *
-   * T80: Uses unified upload flow with deduplication.
-   * - Transitions immediately with local blob URL
-   * - Game ID is set when upload completes (not before)
-   * - Clips saved during upload are queued via annotations
-   *
-   * @param {File} file - Video file to process
-   * @param {Object} gameDetails - Optional game details for display name generation
-   * @param {string} gameDetails.opponentName - Opponent team name
-   * @param {string} gameDetails.gameDate - Game date (ISO format: YYYY-MM-DD)
-   * @param {string} gameDetails.gameType - 'home', 'away', or 'tournament'
-   * @param {string} gameDetails.tournamentName - Tournament name (if gameType is 'tournament')
+   * @param {File} file - Video file (single-video mode) or first file of multi-video
+   * @param {Object} gameDetails - Game details including videoMode and optional files array
    */
   const handleGameVideoSelect = async (file, gameDetails = null) => {
-    if (!file) return;
+    const isMultiVideo = gameDetails?.videoMode === VideoMode.PER_HALF && gameDetails?.files;
+    const files = isMultiVideo ? gameDetails.files : [file];
+
+    if (!files[0]) return;
 
     try {
-      console.log('[AnnotateContainer] handleGameVideoSelect: Processing', file.name);
+      console.log('[AnnotateContainer] handleGameVideoSelect:', isMultiVideo ? `${files.length} files (per half)` : files[0].name);
 
-      // Extract video metadata (fast, local operation)
-      const videoMetadata = await extractVideoMetadata(file);
-      console.log('[AnnotateContainer] Extracted game video metadata:', videoMetadata);
+      // Extract metadata for all files
+      const metadataList = [];
+      for (const f of files) {
+        const meta = await extractVideoMetadata(f);
+        metadataList.push(meta);
+      }
 
-      // Create local object URL for IMMEDIATE playback
-      const localVideoUrl = URL.createObjectURL(file);
+      // Create blob URLs for immediate playback
+      const blobUrls = files.map(f => URL.createObjectURL(f));
 
-      // Clean up any existing annotate video URL (only if it was an object URL)
+      // Clean up existing blob URL
       if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
         URL.revokeObjectURL(annotateVideoUrl);
       }
 
-      // Generate temporary display name from file or game details
-      const rawGameName = file.name.replace(/\.[^/.]+$/, '');
+      // Generate display name
+      const rawGameName = files[0].name.replace(/\.[^/.]+$/, '');
       let displayName = rawGameName;
       if (gameDetails?.opponentName) {
-        // Simple display name generation (backend will do full generation)
-        const prefix = gameDetails.gameType === 'away' ? 'at' : 'Vs';
+        const prefix = gameDetails.gameType === GameType.AWAY ? 'at' : 'Vs';
         displayName = `${prefix} ${gameDetails.opponentName}`;
       }
 
-      // Set annotate state with LOCAL video URL (blob: URL - already in memory)
-      // Game ID will be set after upload completes
-      console.log('[AnnotateContainer] New game using local blob URL (BLOB - pre-downloaded)');
-      setAnnotateVideoFile(file);
-      setAnnotateVideoUrl(localVideoUrl);
-      setAnnotateVideoMetadata(videoMetadata);
-      setAnnotateGameId(null); // Will be set after upload
+      // For multi-video, compute total duration
+      const totalDuration = metadataList.reduce((sum, m) => sum + (m.duration || 0), 0);
+
+      // Build combined metadata using first video's dimensions + total duration
+      const combinedMetadata = {
+        ...metadataList[0],
+        duration: isMultiVideo ? totalDuration : metadataList[0].duration,
+      };
+
+      // Set annotate state - start with first video
+      setAnnotateVideoFile(files[0]);
+      setAnnotateVideoUrl(blobUrls[0]);
+      setAnnotateVideoMetadata(combinedMetadata);
+      setAnnotateGameId(null);
       setAnnotateGameName(displayName);
 
-      // Transition to annotate mode IMMEDIATELY
+      // Store multi-video info for video switching (T82)
+      if (isMultiVideo) {
+        setGameVideos(metadataList.map((meta, i) => ({
+          sequence: i + 1,
+          url: blobUrls[i],
+          duration: meta.duration,
+          width: meta.width,
+          height: meta.height,
+        })));
+        setActiveVideoIndex(0);
+      } else {
+        setGameVideos(null);
+        setActiveVideoIndex(0);
+      }
+
       setEditorMode('annotate');
 
-      console.log('[AnnotateContainer] Transitioning to annotate mode (game ID pending upload)');
-
-      // Start upload via global store (persists across page navigation)
-      // T80: Unified upload with deduplication - creates game entry on completion
-      console.log('[AnnotateContainer] Starting background video upload via store...', {
-        fileSize: file.size
-      });
-
-      uploadStore.startUpload(
-        file,
-        gameDetails,
-        videoMetadata,
-        (result) => {
-          // Completion callback - set game ID
-          setAnnotateGameId(result.game_id);
-          setAnnotateGameName(result.name);
-
-          if (result.deduplicated) {
-            console.log('[AnnotateContainer] DEDUPLICATION: Saved bandwidth! File already existed on server.', {
-              gameId: result.game_id,
-              status: result.status
-            });
-          } else {
-            console.log('[AnnotateContainer] Upload complete, game created:', result.game_id);
-          }
-        },
-        // Display info for resuming annotation view when navigating back from Games screen
-        { blobUrl: localVideoUrl, gameName: displayName }
-      );
+      // Start upload
+      if (isMultiVideo) {
+        uploadStore.startUpload(
+          files,
+          gameDetails,
+          metadataList,
+          (result) => {
+            setAnnotateGameId(result.game_id);
+            setAnnotateGameName(result.name);
+            // Update game_videos with presigned URLs from server
+            if (result.videos) {
+              setGameVideos(prev => prev?.map((v, i) => ({
+                ...v,
+                serverUrl: result.videos[i]?.video_url,
+              })));
+            }
+          },
+          { blobUrl: blobUrls[0], gameName: displayName }
+        );
+      } else {
+        uploadStore.startUpload(
+          files[0],
+          gameDetails,
+          metadataList[0],
+          (result) => {
+            setAnnotateGameId(result.game_id);
+            setAnnotateGameName(result.name);
+            if (result.deduplicated) {
+              console.log('[AnnotateContainer] DEDUPLICATION: File already existed on server.');
+            }
+          },
+          { blobUrl: blobUrls[0], gameName: displayName }
+        );
+      }
 
     } catch (err) {
       console.error('[AnnotateContainer] Failed to process game video:', err);
@@ -248,6 +276,7 @@ export function AnnotateContainer({
 
   /**
    * Handle loading a saved game into annotate mode
+   * Supports both single-video and multi-video games.
    */
   const handleLoadGame = useCallback(async (gameId) => {
     console.log('[AnnotateContainer] Loading game:', gameId);
@@ -256,25 +285,45 @@ export function AnnotateContainer({
       const gameData = await getGame(gameId);
       console.log('[AnnotateContainer] Loaded game data:', gameData);
 
-      // Use presigned R2 URL if available (from gameData.video_url), otherwise local proxy
-      // Both are set directly on video element - browser uses RANGE REQUESTS (streaming)
-      const videoUrl = getGameVideoUrl(gameId, gameData);
-      const urlType = gameData.video_url ? 'R2 presigned - STREAMING' : 'local proxy - STREAMING';
-      console.log(`[AnnotateContainer] Game video URL (${urlType}):`, videoUrl?.substring(0, 60));
+      // T82: Check if multi-video game
+      const isMultiVideo = gameData.videos && gameData.videos.length > 1;
 
-      // Use stored metadata if available
+      let videoUrl;
       let videoMetadata = null;
-      if (gameData.video_duration && gameData.video_width && gameData.video_height) {
-        console.log('[AnnotateContainer] Using stored video metadata (instant load)');
+
+      if (isMultiVideo) {
+        // Multi-video game: load first video, store all video info
+        console.log('[AnnotateContainer] Multi-video game:', gameData.videos.length, 'videos');
+        videoUrl = gameData.videos[0].video_url;
+
+        const totalDuration = gameData.videos.reduce((sum, v) => sum + (v.duration || 0), 0);
         videoMetadata = {
-          duration: gameData.video_duration,
-          width: gameData.video_width,
-          height: gameData.video_height,
+          duration: totalDuration,
+          width: gameData.videos[0].video_width || gameData.video_width,
+          height: gameData.videos[0].video_height || gameData.video_height,
           size: gameData.video_size,
-          aspectRatio: gameData.video_width / gameData.video_height,
+          aspectRatio: (gameData.videos[0].video_width || gameData.video_width) /
+                       (gameData.videos[0].video_height || gameData.video_height),
           fileName: gameData.name,
           format: 'mp4',
         };
+      } else {
+        // Single-video game (legacy or single game_videos row)
+        videoUrl = gameData.videos?.[0]?.video_url || getGameVideoUrl(gameId, gameData);
+        const urlType = gameData.video_url ? 'R2 presigned - STREAMING' : 'local proxy - STREAMING';
+        console.log(`[AnnotateContainer] Game video URL (${urlType}):`, videoUrl?.substring(0, 60));
+
+        if (gameData.video_duration && gameData.video_width && gameData.video_height) {
+          videoMetadata = {
+            duration: gameData.video_duration,
+            width: gameData.video_width,
+            height: gameData.video_height,
+            size: gameData.video_size,
+            aspectRatio: gameData.video_width / gameData.video_height,
+            fileName: gameData.name,
+            format: 'mp4',
+          };
+        }
       }
 
       // Clean up any existing annotate video URL
@@ -292,19 +341,30 @@ export function AnnotateContainer({
       setAnnotateGameId(gameId);
       setAnnotateGameName(gameData.name);
 
+      // Set multi-video state
+      if (isMultiVideo) {
+        setGameVideos(gameData.videos.map(v => ({
+          sequence: v.sequence,
+          url: v.video_url,
+          serverUrl: v.video_url,
+          duration: v.duration,
+          width: v.video_width,
+          height: v.video_height,
+        })));
+        setActiveVideoIndex(0);
+      } else {
+        setGameVideos(null);
+        setActiveVideoIndex(0);
+      }
+
       // Import saved annotations if they exist
-      // Pass duration directly to avoid race condition with state updates
       if (gameData.annotations && gameData.annotations.length > 0) {
         const gameDuration = videoMetadata?.duration || gameData.video_duration;
         console.log('[AnnotateContainer] Importing', gameData.annotations.length, 'saved annotations with duration:', gameDuration);
 
-        // Check for annotations that don't have raw_clips yet (id is the raw_clip id)
         const annotationsWithoutRawClips = gameData.annotations.filter(a => !a.id);
 
         if (annotationsWithoutRawClips.length > 0) {
-          console.log('[AnnotateContainer] Found', annotationsWithoutRawClips.length, 'annotations without raw_clips, creating them...');
-
-          // Create raw_clips for annotations that don't have them
           for (const annotation of annotationsWithoutRawClips) {
             try {
               const result = await saveClip(gameId, {
@@ -317,9 +377,7 @@ export function AnnotateContainer({
               });
 
               if (result) {
-                // Update the annotation with the new raw_clip id
                 annotation.id = result.raw_clip_id;
-                console.log('[AnnotateContainer] Created raw_clip', result.raw_clip_id, 'for annotation at', annotation.end_time);
               }
             } catch (err) {
               console.error('[AnnotateContainer] Failed to create raw_clip for annotation:', err);
@@ -330,9 +388,7 @@ export function AnnotateContainer({
         importAnnotations(gameData.annotations, gameDuration);
       }
 
-      // Transition to annotate mode
       setEditorMode('annotate');
-
       console.log('[AnnotateContainer] Successfully loaded game:', gameId);
     } catch (err) {
       console.error('[AnnotateContainer] Failed to load game:', err);
@@ -860,6 +916,86 @@ export function AnnotateContainer({
     return count;
   }, [annotateGameId, importAnnotations, saveClip]);
 
+  // T82: Multi-video switching logic
+  // Compute cumulative offsets for each video segment
+  const videoOffsets = useMemo(() => {
+    if (!gameVideos) return null;
+    let offset = 0;
+    return gameVideos.map(v => {
+      const start = offset;
+      offset += v.duration || 0;
+      return { ...v, offset: start, end: offset };
+    });
+  }, [gameVideos]);
+
+  // Compute absolute current time (offset + relative video time)
+  const absoluteCurrentTime = useMemo(() => {
+    if (!videoOffsets) return currentTime;
+    const offset = videoOffsets[activeVideoIndex]?.offset || 0;
+    return offset + currentTime;
+  }, [videoOffsets, activeVideoIndex, currentTime]);
+
+  // Switch to a specific video by index, optionally seek to absolute time
+  const switchToVideo = useCallback((index, absoluteTime = null) => {
+    if (!gameVideos || index < 0 || index >= gameVideos.length) return;
+    if (index === activeVideoIndex && absoluteTime == null) return;
+
+    const video = gameVideos[index];
+    const newUrl = video.url || video.serverUrl;
+
+    console.log(`[AnnotateContainer] Switching to video ${index + 1} (sequence ${video.sequence})`);
+    setActiveVideoIndex(index);
+    setAnnotateVideoUrl(newUrl);
+
+    if (videoRef.current && absoluteTime != null && videoOffsets) {
+      const relativeTime = absoluteTime - videoOffsets[index].offset;
+      // Wait for video source to change, then seek
+      const handleCanPlay = () => {
+        videoRef.current.currentTime = Math.max(0, relativeTime);
+        videoRef.current.removeEventListener('canplay', handleCanPlay);
+      };
+      videoRef.current.addEventListener('canplay', handleCanPlay);
+    }
+  }, [gameVideos, activeVideoIndex, videoRef, videoOffsets, setAnnotateVideoUrl]);
+
+  // Multi-video seek: determine which video and seek within it
+  const multiVideoSeek = useCallback((absoluteTime) => {
+    if (!videoOffsets) {
+      seek(absoluteTime);
+      return;
+    }
+
+    // Find which video contains this absolute time
+    for (let i = 0; i < videoOffsets.length; i++) {
+      if (absoluteTime < videoOffsets[i].end || i === videoOffsets.length - 1) {
+        if (i !== activeVideoIndex) {
+          switchToVideo(i, absoluteTime);
+        } else {
+          const relativeTime = absoluteTime - videoOffsets[i].offset;
+          seek(relativeTime);
+        }
+        return;
+      }
+    }
+  }, [videoOffsets, activeVideoIndex, switchToVideo, seek]);
+
+  // Auto-switch to next video when current one ends
+  useEffect(() => {
+    if (!gameVideos || !videoRef.current) return;
+
+    const handleEnded = () => {
+      if (activeVideoIndex < gameVideos.length - 1) {
+        switchToVideo(activeVideoIndex + 1);
+        // Auto-play next video
+        setTimeout(() => videoRef.current?.play(), 100);
+      }
+    };
+
+    const videoEl = videoRef.current;
+    videoEl.addEventListener('ended', handleEnded);
+    return () => videoEl.removeEventListener('ended', handleEnded);
+  }, [gameVideos, activeVideoIndex, switchToVideo, videoRef]);
+
   return {
     // State
     annotateVideoUrl,
@@ -912,6 +1048,13 @@ export function AnnotateContainer({
     // Computed
     effectiveDuration,
 
+    // T82: Multi-video state
+    gameVideos,
+    activeVideoIndex,
+    absoluteCurrentTime,
+    isMultiVideo: !!gameVideos,
+    multiVideoSeek,
+
     // Game ID (for finish-annotation call when leaving)
     annotateGameId,
 
@@ -924,7 +1067,8 @@ export function AnnotateContainer({
       setAnnotateVideoUrl(null);
       setAnnotateVideoMetadata(null);
       setAnnotateGameId(null);
-      setIsUploadingGameVideo(false);
+      setGameVideos(null);
+      setActiveVideoIndex(0);
       resetAnnotate();
     }, [annotateVideoUrl, resetAnnotate]),
   };

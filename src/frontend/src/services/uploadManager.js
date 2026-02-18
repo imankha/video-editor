@@ -12,6 +12,7 @@
  */
 
 import { API_BASE } from '../config';
+import { GameCreateStatus } from '../constants/gameConstants';
 
 // Upload phases for progress tracking
 export const UPLOAD_PHASE = {
@@ -24,11 +25,13 @@ export const UPLOAD_PHASE = {
   ERROR: 'error',
 };
 
-// Upload status returned from prepare-upload
+// R2 upload status returned from prepare-upload / finalize-upload
 export const UPLOAD_STATUS = {
-  ALREADY_OWNED: 'already_owned',
-  LINKED: 'linked',
+  EXISTS: 'exists',
   UPLOAD_REQUIRED: 'upload_required',
+  // Re-export game create statuses for backward compatibility
+  ALREADY_OWNED: GameCreateStatus.ALREADY_OWNED,
+  CREATED: GameCreateStatus.CREATED,
 };
 
 import { createBLAKE3 } from 'hash-wasm';
@@ -254,18 +257,157 @@ async function uploadParts(
 }
 
 /**
- * Upload a game with deduplication support
+ * Ensure a video is in R2 (hash, dedup check, upload if needed).
+ * This is the R2 upload layer - it does NOT create games.
+ *
+ * @param {File} file - Video file to upload to R2
+ * @param {function} onProgress - Progress callback: ({ phase, percent, message }) => void
+ * @param {Object} options - Video metadata for R2 object
+ * @returns {Promise<Object>} - { blake3_hash, file_size, uploaded }
+ */
+export async function ensureVideoInR2(file, onProgress, options = {}) {
+  const notify = (phase, percent, message) => {
+    if (onProgress) {
+      onProgress({ phase, percent, message });
+    }
+  };
+
+  // Phase 1: Hash
+  notify(UPLOAD_PHASE.HASHING, 0, 'Computing file hash...');
+  const hash = await hashFile(file, (p) => {
+    notify(UPLOAD_PHASE.HASHING, p, `Computing hash... ${p}%`);
+  });
+  notify(UPLOAD_PHASE.HASHING, 100, 'Hash complete');
+
+  // Phase 2: Prepare (check R2 for dedup)
+  notify(UPLOAD_PHASE.PREPARING, 0, 'Checking for existing file...');
+  const prepareRes = await fetch(`${API_BASE}/api/games/prepare-upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      blake3_hash: hash,
+      file_size: file.size,
+      original_filename: file.name,
+    }),
+  });
+
+  if (!prepareRes.ok) {
+    const error = await prepareRes.json().catch(() => ({}));
+    throw new Error(error.detail || `Prepare failed: ${prepareRes.status}`);
+  }
+
+  const prepareData = await prepareRes.json();
+
+  // Video already exists in R2 - skip upload
+  if (prepareData.status === UPLOAD_STATUS.EXISTS) {
+    notify(UPLOAD_PHASE.COMPLETE, 100, 'Video already uploaded');
+    return {
+      blake3_hash: hash,
+      file_size: prepareData.file_size || file.size,
+      uploaded: false,
+    };
+  }
+
+  // Phase 3: Upload parts
+  if (prepareData.status !== UPLOAD_STATUS.UPLOAD_REQUIRED) {
+    throw new Error(`Unexpected status: ${prepareData.status}`);
+  }
+
+  const isResume = prepareData.is_resume === true;
+  const completedParts = prepareData.completed_parts || [];
+
+  if (isResume && completedParts.length > 0) {
+    notify(
+      UPLOAD_PHASE.UPLOADING,
+      0,
+      `Resuming upload... (${completedParts.length} parts already uploaded)`
+    );
+  } else {
+    notify(UPLOAD_PHASE.UPLOADING, 0, 'Uploading...');
+  }
+
+  const parts = await uploadParts(
+    file,
+    prepareData.parts,
+    (p) => {
+      notify(UPLOAD_PHASE.UPLOADING, p, `Uploading... ${p}%`);
+    },
+    prepareData.upload_session_id,
+    completedParts,
+    file.size
+  );
+  notify(UPLOAD_PHASE.UPLOADING, 100, 'Upload complete');
+
+  // Phase 4: Finalize R2 multipart
+  notify(UPLOAD_PHASE.FINALIZING, 0, 'Finalizing upload...');
+  const finalizeRes = await fetch(`${API_BASE}/api/games/finalize-upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      upload_session_id: prepareData.upload_session_id,
+      parts: parts.map((p) => ({
+        part_number: p.part_number,
+        etag: p.etag,
+      })),
+      video_duration: options.videoDuration || null,
+      video_width: options.videoWidth || null,
+      video_height: options.videoHeight || null,
+    }),
+  });
+
+  if (!finalizeRes.ok) {
+    const error = await finalizeRes.json().catch(() => ({}));
+    throw new Error(error.detail || `Finalize failed: ${finalizeRes.status}`);
+  }
+
+  const finalizeData = await finalizeRes.json();
+  notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
+
+  return {
+    blake3_hash: finalizeData.blake3_hash,
+    file_size: finalizeData.file_size,
+    uploaded: true,
+  };
+}
+
+/**
+ * Create a game via POST /api/games
+ *
+ * @param {Object} options - Game details
+ * @param {Array<Object>} videos - Video references [{ blake3_hash, sequence, duration, width, height, file_size }]
+ * @returns {Promise<Object>} - { status, game_id, name, video_url, videos }
+ */
+async function createGame(options, videos) {
+  const res = await fetch(`${API_BASE}/api/games`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      opponent_name: options.opponentName || null,
+      game_date: options.gameDate || null,
+      game_type: options.gameType || null,
+      tournament_name: options.tournamentName || null,
+      videos,
+    }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.detail || `Create game failed: ${res.status}`);
+  }
+
+  return await res.json();
+}
+
+/**
+ * Upload a game with deduplication support (single video)
+ *
+ * Flow:
+ * 1. Hash file → check R2 → upload if needed (ensureVideoInR2)
+ * 2. Create game via POST /api/games with video reference
  *
  * @param {File} file - Video file to upload
  * @param {function} onProgress - Progress callback: ({ phase, percent, message }) => void
- * @param {Object} options - Optional game details and metadata
- * @param {string} options.opponentName - Opponent team name
- * @param {string} options.gameDate - Game date (YYYY-MM-DD)
- * @param {string} options.gameType - 'home', 'away', or 'tournament'
- * @param {string} options.tournamentName - Tournament name
- * @param {number} options.videoDuration - Video duration in seconds
- * @param {number} options.videoWidth - Video width in pixels
- * @param {number} options.videoHeight - Video height in pixels
+ * @param {Object} options - Game details and video metadata
  * @returns {Promise<Object>} - Result with status, game_id, name, video_url, etc.
  */
 export async function uploadGame(file, onProgress, options = {}) {
@@ -276,133 +418,106 @@ export async function uploadGame(file, onProgress, options = {}) {
   };
 
   try {
-    // Phase 1: Hash
-    notify(UPLOAD_PHASE.HASHING, 0, 'Computing file hash...');
-    const hash = await hashFile(file, (p) => {
-      notify(UPLOAD_PHASE.HASHING, p, `Computing hash... ${p}%`);
-    });
-    notify(UPLOAD_PHASE.HASHING, 100, 'Hash complete');
+    // Step 1: Ensure video is in R2 (hash + dedup + upload)
+    const r2Result = await ensureVideoInR2(file, onProgress, options);
 
-    // Phase 2: Prepare
-    notify(UPLOAD_PHASE.PREPARING, 0, 'Checking for existing file...');
-    const prepareRes = await fetch(`${API_BASE}/api/games/prepare-upload`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        blake3_hash: hash,
-        file_size: file.size,
-        original_filename: file.name,
-        // Game details for display name
-        opponent_name: options.opponentName || null,
-        game_date: options.gameDate || null,
-        game_type: options.gameType || null,
-        tournament_name: options.tournamentName || null,
-        // Video metadata
-        video_duration: options.videoDuration || null,
-        video_width: options.videoWidth || null,
-        video_height: options.videoHeight || null,
-      }),
-    });
+    // Step 2: Create game with video reference
+    notify(UPLOAD_PHASE.FINALIZING, 90, 'Creating game...');
+    const gameResult = await createGame(options, [{
+      blake3_hash: r2Result.blake3_hash,
+      sequence: 1,
+      duration: options.videoDuration || null,
+      width: options.videoWidth || null,
+      height: options.videoHeight || null,
+      file_size: r2Result.file_size || file.size,
+    }]);
 
-    if (!prepareRes.ok) {
-      const error = await prepareRes.json().catch(() => ({}));
-      throw new Error(error.detail || `Prepare failed: ${prepareRes.status}`);
+    const deduplicated = !r2Result.uploaded || gameResult.status === UPLOAD_STATUS.ALREADY_OWNED;
+
+    notify(UPLOAD_PHASE.COMPLETE, 100, deduplicated ? 'Game linked' : 'Upload complete');
+
+    return {
+      status: gameResult.status,
+      game_id: gameResult.game_id,
+      name: gameResult.name,
+      video_url: gameResult.video_url,
+      blake3_hash: r2Result.blake3_hash,
+      file_size: r2Result.file_size,
+      deduplicated,
+    };
+  } catch (error) {
+    notify(UPLOAD_PHASE.ERROR, 0, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Upload multiple videos for one game (e.g., first half + second half)
+ *
+ * Each video goes through full BLAKE3 hash + R2 dedup independently.
+ * After all videos are in R2, creates game with all video references.
+ *
+ * @param {File[]} files - Array of video files (in order)
+ * @param {function} onProgress - Progress callback
+ * @param {Object} options - Game details and per-video metadata
+ * @param {Array<Object>} options.videoMetadataList - Per-video metadata [{ duration, width, height }]
+ * @returns {Promise<Object>} - Result with game_id, videos array
+ */
+export async function uploadMultiVideoGame(files, onProgress, options = {}) {
+  const notify = (phase, percent, message) => {
+    if (onProgress) {
+      onProgress({ phase, percent, message });
+    }
+  };
+
+  try {
+    const videoRefs = [];
+    const fileCount = files.length;
+
+    // Step 1: Upload each video to R2 sequentially
+    for (let i = 0; i < fileCount; i++) {
+      const file = files[i];
+      const sequence = i + 1;
+      const metadata = options.videoMetadataList?.[i] || {};
+      const fileWeight = 1 / fileCount;
+      const basePercent = i * fileWeight * 100;
+
+      const r2Result = await ensureVideoInR2(file, (progress) => {
+        // Map per-file progress to overall progress
+        const overallPercent = Math.round(basePercent + progress.percent * fileWeight);
+        notify(
+          progress.phase,
+          overallPercent,
+          `Half ${sequence}: ${progress.message}`
+        );
+      }, {
+        videoDuration: metadata.duration || null,
+        videoWidth: metadata.width || null,
+        videoHeight: metadata.height || null,
+      });
+
+      videoRefs.push({
+        blake3_hash: r2Result.blake3_hash,
+        sequence,
+        duration: metadata.duration || null,
+        width: metadata.width || null,
+        height: metadata.height || null,
+        file_size: r2Result.file_size || file.size,
+      });
     }
 
-    const prepareData = await prepareRes.json();
+    // Step 2: Create game with all video references
+    notify(UPLOAD_PHASE.FINALIZING, 95, 'Creating game...');
+    const gameResult = await createGame(options, videoRefs);
 
-    // Check if we can skip upload (deduplication)
-    if (prepareData.status === UPLOAD_STATUS.ALREADY_OWNED) {
-      notify(UPLOAD_PHASE.COMPLETE, 100, 'You already have this game');
-      return {
-        status: 'already_owned',
-        game_id: prepareData.game_id,
-        name: prepareData.name,
-        video_url: prepareData.video_url,
-        deduplicated: true,
-      };
-    }
-
-    if (prepareData.status === UPLOAD_STATUS.LINKED) {
-      notify(UPLOAD_PHASE.COMPLETE, 100, 'Game linked to your account');
-      return {
-        status: 'linked',
-        game_id: prepareData.game_id,
-        name: prepareData.name,
-        video_url: prepareData.video_url,
-        deduplicated: true,
-        message: prepareData.message,
-      };
-    }
-
-    // Phase 3: Upload parts
-    if (prepareData.status !== UPLOAD_STATUS.UPLOAD_REQUIRED) {
-      throw new Error(`Unexpected status: ${prepareData.status}`);
-    }
-
-    const isResume = prepareData.is_resume === true;
-    const completedParts = prepareData.completed_parts || [];
-
-    if (isResume && completedParts.length > 0) {
-      notify(
-        UPLOAD_PHASE.UPLOADING,
-        0,
-        `Resuming upload... (${completedParts.length} parts already uploaded)`
-      );
-    } else {
-      notify(UPLOAD_PHASE.UPLOADING, 0, 'Uploading...');
-    }
-
-    const parts = await uploadParts(
-      file,
-      prepareData.parts,
-      (p) => {
-        notify(UPLOAD_PHASE.UPLOADING, p, `Uploading... ${p}%`);
-      },
-      prepareData.upload_session_id,
-      completedParts,
-      file.size
-    );
-    notify(UPLOAD_PHASE.UPLOADING, 100, 'Upload complete');
-
-    // Phase 4: Finalize
-    notify(UPLOAD_PHASE.FINALIZING, 0, 'Finalizing upload...');
-    const finalizeRes = await fetch(`${API_BASE}/api/games/finalize-upload`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        upload_session_id: prepareData.upload_session_id,
-        parts: parts.map((p) => ({
-          part_number: p.part_number,
-          etag: p.etag,
-        })),
-        // Game details for display name
-        opponent_name: options.opponentName || null,
-        game_date: options.gameDate || null,
-        game_type: options.gameType || null,
-        tournament_name: options.tournamentName || null,
-        // Video metadata
-        video_duration: options.videoDuration || null,
-        video_width: options.videoWidth || null,
-        video_height: options.videoHeight || null,
-      }),
-    });
-
-    if (!finalizeRes.ok) {
-      const error = await finalizeRes.json().catch(() => ({}));
-      throw new Error(error.detail || `Finalize failed: ${finalizeRes.status}`);
-    }
-
-    const finalizeData = await finalizeRes.json();
     notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
 
     return {
-      status: 'uploaded',
-      game_id: finalizeData.game_id,
-      name: finalizeData.name,
-      video_url: finalizeData.video_url,
-      blake3_hash: finalizeData.blake3_hash,
-      file_size: finalizeData.file_size,
+      status: gameResult.status,
+      game_id: gameResult.game_id,
+      name: gameResult.name,
+      video_url: gameResult.video_url,
+      videos: gameResult.videos,
       deduplicated: false,
     };
   } catch (error) {

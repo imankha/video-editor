@@ -1,29 +1,31 @@
 import { create } from 'zustand';
-import { uploadGame, UPLOAD_PHASE } from '../services/uploadManager';
+import { uploadGame, uploadMultiVideoGame, UPLOAD_PHASE } from '../services/uploadManager';
 
 /**
  * Upload Store - Manages game video uploads that persist across page navigation
  *
  * The upload runs at the app level, not tied to any specific component.
  * This allows users to navigate freely while uploads continue in background.
+ *
+ * Supports both single-video and multi-video (e.g., halves) uploads.
  */
 export const useUploadStore = create((set, get) => ({
   // Active upload state
-  activeUpload: null, // { id, file, fileName, fileSize, progress, phase, message, startedAt, blobUrl, gameName }
+  activeUpload: null, // { id, file/files, fileName, fileSize, progress, phase, message, startedAt, blobUrl, gameName, isMultiVideo }
 
   // Callbacks to notify when upload completes
   onCompleteCallbacks: [],
 
   /**
-   * Start uploading a game video
-   * @param {File} file - Video file to upload
+   * Start uploading a game video (single or multi-video)
+   * @param {File|File[]} fileOrFiles - Single video file or array of files (halves)
    * @param {Object} gameDetails - { opponentName, gameDate, gameType, tournamentName }
-   * @param {Object} videoMetadata - { duration, width, height }
+   * @param {Object|Object[]} videoMetadata - Single metadata or array for multi-video
    * @param {Function} onComplete - Callback when upload completes: (result) => void
    * @param {Object} displayInfo - { blobUrl, gameName } - Info for resuming annotation view
    * @returns {string} - Upload ID
    */
-  startUpload: (file, gameDetails = null, videoMetadata = null, onComplete = null, displayInfo = null) => {
+  startUpload: (fileOrFiles, gameDetails = null, videoMetadata = null, onComplete = null, displayInfo = null) => {
     const state = get();
 
     // Don't start if already uploading
@@ -32,25 +34,31 @@ export const useUploadStore = create((set, get) => ({
       return null;
     }
 
+    const isMultiVideo = Array.isArray(fileOrFiles);
+    const files = isMultiVideo ? fileOrFiles : [fileOrFiles];
+    const primaryFile = files[0];
+
     const uploadId = `upload_${Date.now()}`;
-    console.log('[UploadStore] Starting upload:', uploadId, file.name);
+    console.log('[UploadStore] Starting upload:', uploadId, isMultiVideo ? `${files.length} files` : primaryFile.name);
 
     // Set initial state
     set({
       activeUpload: {
         id: uploadId,
-        file,
-        fileName: file.name,
-        fileSize: file.size,
+        file: isMultiVideo ? null : primaryFile,
+        files: isMultiVideo ? files : null,
+        fileName: isMultiVideo ? `${files[0].name} + ${files[1].name}` : primaryFile.name,
+        fileSize: files.reduce((sum, f) => sum + f.size, 0),
         progress: 0,
         phase: UPLOAD_PHASE.HASHING,
-        message: 'Computing file hash...',
+        message: isMultiVideo ? 'Hashing first half...' : 'Computing file hash...',
         startedAt: new Date().toISOString(),
         gameDetails,
         videoMetadata,
+        isMultiVideo,
         // Display info for resuming annotation view
         blobUrl: displayInfo?.blobUrl || null,
-        gameName: displayInfo?.gameName || file.name,
+        gameName: displayInfo?.gameName || primaryFile.name,
       },
       onCompleteCallbacks: onComplete ? [onComplete] : [],
     });
@@ -63,16 +71,10 @@ export const useUploadStore = create((set, get) => ({
       options.gameType = gameDetails.gameType;
       options.tournamentName = gameDetails.tournamentName;
     }
-    if (videoMetadata) {
-      options.videoDuration = videoMetadata.duration;
-      options.videoWidth = videoMetadata.width;
-      options.videoHeight = videoMetadata.height;
-    }
 
-    // Start the upload
-    uploadGame(file, (progress) => {
-      // Map phase progress to single continuous progress bar
-      // Hashing: 0-15%, Preparing: 15%, Uploading: 15-98%, Finalizing: 98-100%
+    // Map progress to single continuous progress bar
+    // Hashing: 0-15%, Preparing: 15%, Uploading: 15-98%, Finalizing: 98-100%
+    const progressHandler = (progress) => {
       let overallPercent = 0;
       if (progress.phase === UPLOAD_PHASE.HASHING) {
         overallPercent = Math.round(progress.percent * 0.15);
@@ -94,35 +96,53 @@ export const useUploadStore = create((set, get) => ({
           message: progress.message,
         } : null,
       }));
-    }, options)
-      .then((result) => {
-        console.log('[UploadStore] Upload complete:', result);
+    };
 
-        // Get callbacks before clearing state
-        const callbacks = get().onCompleteCallbacks;
-
-        // Clear upload state
-        set({ activeUpload: null, onCompleteCallbacks: [] });
-
-        // Notify all callbacks
-        callbacks.forEach(cb => {
-          try {
-            cb(result);
-          } catch (e) {
-            console.error('[UploadStore] Callback error:', e);
-          }
-        });
-      })
-      .catch((error) => {
-        console.error('[UploadStore] Upload failed:', error);
-        set((state) => ({
-          activeUpload: state.activeUpload ? {
-            ...state.activeUpload,
-            phase: UPLOAD_PHASE.ERROR,
-            message: error.message || 'Upload failed',
-          } : null,
-        }));
+    // Completion handler (shared for single and multi)
+    const onUploadComplete = (result) => {
+      console.log('[UploadStore] Upload complete:', result);
+      const callbacks = get().onCompleteCallbacks;
+      set({ activeUpload: null, onCompleteCallbacks: [] });
+      callbacks.forEach(cb => {
+        try {
+          cb(result);
+        } catch (e) {
+          console.error('[UploadStore] Callback error:', e);
+        }
       });
+    };
+
+    const onUploadError = (error) => {
+      console.error('[UploadStore] Upload failed:', error);
+      set((state) => ({
+        activeUpload: state.activeUpload ? {
+          ...state.activeUpload,
+          phase: UPLOAD_PHASE.ERROR,
+          message: error.message || 'Upload failed',
+        } : null,
+      }));
+    };
+
+    if (isMultiVideo) {
+      // Multi-video upload
+      const metadataList = Array.isArray(videoMetadata) ? videoMetadata : [];
+      uploadMultiVideoGame(files, progressHandler, {
+        ...options,
+        videoMetadataList: metadataList,
+      })
+        .then(onUploadComplete)
+        .catch(onUploadError);
+    } else {
+      // Single-video upload
+      if (videoMetadata && !Array.isArray(videoMetadata)) {
+        options.videoDuration = videoMetadata.duration;
+        options.videoWidth = videoMetadata.width;
+        options.videoHeight = videoMetadata.height;
+      }
+      uploadGame(primaryFile, progressHandler, options)
+        .then(onUploadComplete)
+        .catch(onUploadError);
+    }
 
     return uploadId;
   },

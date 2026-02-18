@@ -45,6 +45,46 @@ def get_annotate_staging_path() -> Path:
     return staging_dir
 
 
+def determine_source_video(game_videos: list, start_time: float, end_time: float) -> dict:
+    """
+    T82: Given absolute timestamps and a list of game_videos (ordered by sequence),
+    determine which video file contains the clip.
+
+    For clips that span a boundary, uses the video where the clip starts.
+
+    Returns: {
+        'blake3_hash': str,
+        'relative_start': float,
+        'relative_end': float,
+        'video_filename': str,
+    }
+    """
+    offset = 0.0
+    for video in game_videos:
+        video_end = offset + (video['duration'] or 0)
+        if start_time >= offset and start_time < video_end:
+            return {
+                'blake3_hash': video['blake3_hash'],
+                'relative_start': start_time - offset,
+                'relative_end': min(end_time - offset, video['duration'] or (end_time - offset)),
+                'video_filename': f"{video['blake3_hash']}.mp4",
+            }
+        offset = video_end
+
+    # Fallback: use last video (clip may be at very end)
+    if game_videos:
+        last = game_videos[-1]
+        last_offset = sum((v['duration'] or 0) for v in game_videos[:-1])
+        return {
+            'blake3_hash': last['blake3_hash'],
+            'relative_start': max(0, start_time - last_offset),
+            'relative_end': min(end_time - last_offset, last['duration'] or 0),
+            'video_filename': f"{last['blake3_hash']}.mp4",
+        }
+
+    return None
+
+
 def sanitize_filename(name: str) -> str:
     """Sanitize clip name for use as filename."""
     sanitized = name.replace(':', '-')
@@ -480,6 +520,7 @@ async def export_clips(
     game_id_int = None
     game_name = None
     video_filename = None
+    game_video_rows = []  # T82: multi-video info (empty for single-video/uploaded)
     staged_video_path = None
 
     if game_id:
@@ -495,14 +536,28 @@ async def export_clips(
 
             if not row:
                 raise HTTPException(status_code=404, detail="Game not found")
-            if not row['video_filename']:
-                raise HTTPException(status_code=400, detail="Game has no video uploaded")
 
             game_name = row['name']
             video_filename = row['video_filename']
 
+            # T82: Check for multi-video game
+            cursor.execute("""
+                SELECT blake3_hash, sequence, duration
+                FROM game_videos WHERE game_id = ? ORDER BY sequence
+            """, (game_id_int,))
+            game_video_rows = [dict(r) for r in cursor.fetchall()]
+
+            if not video_filename and not game_video_rows:
+                raise HTTPException(status_code=400, detail="Game has no video uploaded")
+
+            # For single-video games without game_videos, use video_filename
+            # For games with game_videos, video_filename may be null (multi-video)
+            if not video_filename and game_video_rows:
+                # Use first video's hash as primary video_filename for backward compat
+                video_filename = f"{game_video_rows[0]['blake3_hash']}.mp4"
+
             # Verify video exists locally if not using R2
-            if not R2_ENABLED:
+            if not R2_ENABLED and video_filename:
                 local_path = get_games_path() / video_filename
                 if not os.path.exists(local_path):
                     raise HTTPException(status_code=404, detail="Game video file not found")
@@ -548,6 +603,7 @@ async def export_clips(
         'game_id': game_id_int,
         'game_name': game_name,
         'video_filename': video_filename,  # R2 path for game video
+        'game_videos': game_video_rows if game_id_int else [],  # T82: multi-video info
         'staged_video_path': staged_video_path,  # Local path for uploaded video
         'user_id': user_id,
     }
@@ -596,8 +652,10 @@ async def run_annotate_export_processing(export_id: str, config: dict):
     game_id = config.get('game_id')
     game_name = config.get('game_name')
     video_filename = config.get('video_filename')  # R2 path
+    game_videos = config.get('game_videos', [])  # T82: multi-video info
     staged_video_path = config.get('staged_video_path')  # Local uploaded video
     user_id = config.get('user_id')
+    is_multi_video = len(game_videos) > 1
 
     # Mark job as started
     update_job_started(export_id)
@@ -633,6 +691,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
         # Determine video source
         use_modal = modal_enabled() and game_id and video_filename and not save_to_db
         source_path = None
+        # T82: Map of blake3_hash -> local path for multi-video games
+        multi_video_paths = {}
 
         if staged_video_path:
             # Uploaded video - already staged
@@ -641,8 +701,33 @@ async def run_annotate_export_processing(export_id: str, config: dict):
             logger.info(f"[AnnotateExport] {export_id}: Using staged video: {source_path}")
             await update_progress(5, 100, ExportPhase.DOWNLOAD, 'Using uploaded video...')
 
+        elif game_id and is_multi_video:
+            # T82: Multi-video game - download each video from R2
+            logger.info(f"[AnnotateExport] {export_id}: Multi-video game with {len(game_videos)} videos")
+            for vi, gv in enumerate(game_videos):
+                gv_filename = f"{gv['blake3_hash']}.mp4"
+                if R2_ENABLED:
+                    local_path = os.path.join(temp_dir, gv_filename)
+                    r2_key = f"games/{gv_filename}"
+                    dl_msg = f"Downloading video {vi+1}/{len(game_videos)}..."
+                    await update_progress(int(2 + (vi / len(game_videos)) * 13), 100, ExportPhase.DOWNLOAD, dl_msg)
+                    if not await download_from_r2_with_progress(
+                        user_id, r2_key, Path(local_path),
+                        export_id=export_id, export_type='annotate'
+                    ):
+                        raise Exception(f"Failed to download video {vi+1} from R2: {r2_key}")
+                    multi_video_paths[gv['blake3_hash']] = local_path
+                else:
+                    local_path = str(get_games_path() / gv_filename)
+                    multi_video_paths[gv['blake3_hash']] = local_path
+            # Use first video as default source_path for backward compat (TSV, etc.)
+            source_path = multi_video_paths[game_videos[0]['blake3_hash']]
+            original_filename = game_name + ".mp4" if game_name else "game.mp4"
+            if not R2_ENABLED:
+                await update_progress(15, 100, ExportPhase.DOWNLOAD, 'Using local videos...')
+
         elif game_id and video_filename:
-            # Game video - download from R2 or use local
+            # Single-video game - download from R2 or use local
             if R2_ENABLED and not use_modal:
                 source_path = os.path.join(temp_dir, f"game_{uuid.uuid4().hex[:8]}.mp4")
                 r2_key = f"games/{video_filename}"
@@ -722,11 +807,26 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                 extract_progress = int(20 + (i / num_clips) * 60)
                 await update_progress(extract_progress, 100, 'extract', f"Extracting clip {i+1}/{len(good_clips)}...")
 
+                # T82: Resolve source video and timestamps for multi-video games
+                if is_multi_video:
+                    resolved = determine_source_video(game_videos, clip['start_time'], clip['end_time'])
+                    if resolved is None:
+                        logger.error(f"[AnnotateExport] {export_id}: Could not resolve source video for clip {i} "
+                                     f"(start={clip['start_time']}, end={clip['end_time']})")
+                        continue
+                    clip_source_path = multi_video_paths[resolved['blake3_hash']]
+                    clip_start = resolved['relative_start']
+                    clip_end = resolved['relative_end']
+                else:
+                    clip_source_path = source_path
+                    clip_start = clip['start_time']
+                    clip_end = clip['end_time']
+
                 success = await extract_clip_to_file(
-                    source_path=source_path,
+                    source_path=clip_source_path,
                     output_path=os.path.join(temp_dir, f"clip_{i}.mp4"),
-                    start_time=clip['start_time'],
-                    end_time=clip['end_time'],
+                    start_time=clip_start,
+                    end_time=clip_end,
                     clip_name=clip.get('name', ''),
                     clip_notes=clip.get('notes', '')
                 )
@@ -792,6 +892,10 @@ async def run_annotate_export_processing(export_id: str, config: dict):
         else:
             # Download-only mode - create burned-in compilation
             logger.info(f"[AnnotateExport] {export_id}: Creating burned-in compilation ({len(all_clips)} clips)")
+
+            # T82: Multi-video burned-in compilation not yet supported
+            if is_multi_video:
+                raise Exception("Burned-in compilation is not yet supported for multi-video games. Use 'Save to Library' mode instead.")
 
             # Use unified interface - call_modal_annotate_compilation handles Modal or local fallback
             # Progress scale: 20-85% for processing (after download at 15%, TSV at 17%)

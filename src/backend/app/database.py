@@ -837,6 +837,30 @@ def ensure_database():
             )
         """)
 
+        # T82: Multi-video games - track individual video files per game
+        # Single-video games use games.blake3_hash directly (no game_videos rows)
+        # Multi-video games set games.blake3_hash = NULL and use game_videos rows
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS game_videos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+                blake3_hash TEXT NOT NULL,
+                sequence INTEGER NOT NULL,
+                duration REAL,
+                video_width INTEGER,
+                video_height INTEGER,
+                video_size INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(game_id, sequence)
+            )
+        """)
+
+        # Index for game_videos lookup by game
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_game_videos_game
+            ON game_videos(game_id)
+        """)
+
         # T80: Track in-progress multipart uploads
         # Allows resuming interrupted uploads
         cursor.execute("""

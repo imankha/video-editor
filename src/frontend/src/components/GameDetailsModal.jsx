@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Upload, Gamepad2, Calendar, MapPin, Trophy, ChevronDown } from 'lucide-react';
 import { Button } from './shared/Button';
+import { GameType, VideoMode } from '../constants/gameConstants';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -17,13 +18,16 @@ const API_BASE = import.meta.env.VITE_API_URL || '';
 export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const [opponentName, setOpponentName] = useState('');
   const [gameDate, setGameDate] = useState('');
-  const [gameType, setGameType] = useState('home'); // 'home', 'away', 'tournament'
+  const [gameType, setGameType] = useState(GameType.HOME);
   const [tournamentName, setTournamentName] = useState('');
   const [existingTournaments, setExistingTournaments] = useState([]);
   const [showTournamentDropdown, setShowTournamentDropdown] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [videoMode, setVideoMode] = useState(VideoMode.PER_GAME);
+  const [halfFiles, setHalfFiles] = useState([null, null]); // [firstHalf, secondHalf]
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef(null);
+  const halfFileInputRefs = [useRef(null), useRef(null)];
   const tournamentInputRef = useRef(null);
   const dropdownRef = useRef(null);
 
@@ -66,50 +70,80 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     }
   }, []);
 
+  const handleHalfFileSelect = useCallback((index, event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setHalfFiles(prev => {
+        const updated = [...prev];
+        updated[index] = file;
+        return updated;
+      });
+    }
+  }, []);
+
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
 
-    if (!opponentName.trim() || !gameDate || !selectedFile) {
+    const hasVideo = videoMode === VideoMode.PER_GAME
+      ? selectedFile
+      : (halfFiles[0] && halfFiles[1]);
+
+    if (!opponentName.trim() || !gameDate || !hasVideo) {
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      await onCreateGame({
+      const gameDetails = {
         opponentName: opponentName.trim(),
         gameDate,
         gameType,
-        tournamentName: gameType === 'tournament' ? tournamentName.trim() : null,
-        file: selectedFile,
-      });
+        tournamentName: gameType === GameType.TOURNAMENT ? tournamentName.trim() : null,
+        videoMode,
+      };
+
+      if (videoMode === VideoMode.PER_HALF) {
+        gameDetails.files = halfFiles;
+      } else {
+        gameDetails.file = selectedFile;
+      }
+
+      await onCreateGame(gameDetails);
 
       // Reset form
       setOpponentName('');
       setGameDate('');
-      setGameType('home');
+      setGameType(GameType.HOME);
       setTournamentName('');
       setShowTournamentDropdown(false);
       setSelectedFile(null);
+      setVideoMode(VideoMode.PER_GAME);
+      setHalfFiles([null, null]);
       onClose();
     } finally {
       setIsSubmitting(false);
     }
-  }, [opponentName, gameDate, gameType, tournamentName, selectedFile, onCreateGame, onClose]);
+  }, [opponentName, gameDate, gameType, tournamentName, selectedFile, videoMode, halfFiles, onCreateGame, onClose]);
 
   const handleClose = useCallback(() => {
     if (!isSubmitting) {
       setOpponentName('');
       setGameDate('');
-      setGameType('home');
+      setGameType(GameType.HOME);
       setTournamentName('');
       setShowTournamentDropdown(false);
       setSelectedFile(null);
+      setVideoMode(VideoMode.PER_GAME);
+      setHalfFiles([null, null]);
       onClose();
     }
   }, [isSubmitting, onClose]);
 
-  const isValid = opponentName.trim() && gameDate && selectedFile;
+  const hasVideo = videoMode === VideoMode.PER_GAME
+    ? selectedFile
+    : (halfFiles[0] && halfFiles[1]);
+  const isValid = opponentName.trim() && gameDate && hasVideo;
 
   if (!isOpen) return null;
 
@@ -181,9 +215,9 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
             </label>
             <div className="flex gap-2">
               {[
-                { value: 'home', label: 'Home' },
-                { value: 'away', label: 'Away' },
-                { value: 'tournament', label: 'Tournament' },
+                { value: GameType.HOME, label: 'Home' },
+                { value: GameType.AWAY, label: 'Away' },
+                { value: GameType.TOURNAMENT, label: 'Tournament' },
               ].map((option) => (
                 <button
                   key={option.value}
@@ -203,7 +237,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
           </div>
 
           {/* Tournament Name (conditional) */}
-          {gameType === 'tournament' && (
+          {gameType === GameType.TOURNAMENT && (
             <div className="relative">
               <label className="block text-sm font-medium text-gray-300 mb-1.5">
                 <Trophy size={14} className="inline mr-1.5" />
@@ -270,44 +304,115 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
             </div>
           )}
 
+          {/* Video Format */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              Video Format *
+            </label>
+            <div className="flex gap-2">
+              {[
+                { value: VideoMode.PER_GAME, label: 'Full Game' },
+                { value: VideoMode.PER_HALF, label: 'Per Half' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setVideoMode(option.value)}
+                  disabled={isSubmitting}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    videoMode === option.value
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  } disabled:opacity-50`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Video Upload */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Game Video *
+              {videoMode === VideoMode.PER_HALF ? 'Game Videos *' : 'Game Video *'}
             </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="video/mp4,video/quicktime,video/webm"
-              onChange={handleFileSelect}
-              className="hidden"
-              disabled={isSubmitting}
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isSubmitting}
-              className={`w-full px-4 py-3 border-2 border-dashed rounded-lg transition-colors ${
-                selectedFile
-                  ? 'border-green-500 bg-green-900/20'
-                  : 'border-gray-600 hover:border-gray-500 bg-gray-900/50'
-              } disabled:opacity-50`}
-            >
-              {selectedFile ? (
-                <div className="text-center">
-                  <p className="text-green-400 font-medium truncate">{selectedFile.name}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB
-                  </p>
-                </div>
-              ) : (
-                <div className="text-center text-gray-400">
-                  <Upload size={24} className="mx-auto mb-2" />
-                  <p className="font-medium">Click to upload video</p>
-                  <p className="text-xs text-gray-500 mt-1">MP4, MOV, or WebM</p>
-                </div>
-              )}
-            </button>
+
+            {videoMode === VideoMode.PER_GAME ? (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="video/mp4,video/quicktime,video/webm"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  disabled={isSubmitting}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSubmitting}
+                  className={`w-full px-4 py-3 border-2 border-dashed rounded-lg transition-colors ${
+                    selectedFile
+                      ? 'border-green-500 bg-green-900/20'
+                      : 'border-gray-600 hover:border-gray-500 bg-gray-900/50'
+                  } disabled:opacity-50`}
+                >
+                  {selectedFile ? (
+                    <div className="text-center">
+                      <p className="text-green-400 font-medium truncate">{selectedFile.name}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-400">
+                      <Upload size={24} className="mx-auto mb-2" />
+                      <p className="font-medium">Click to upload video</p>
+                      <p className="text-xs text-gray-500 mt-1">MP4, MOV, or WebM</p>
+                    </div>
+                  )}
+                </button>
+              </>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {['First Half', 'Second Half'].map((label, index) => (
+                  <div key={label}>
+                    <input
+                      ref={halfFileInputRefs[index]}
+                      type="file"
+                      accept="video/mp4,video/quicktime,video/webm"
+                      onChange={(e) => handleHalfFileSelect(index, e)}
+                      className="hidden"
+                      disabled={isSubmitting}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => halfFileInputRefs[index].current?.click()}
+                      disabled={isSubmitting}
+                      className={`w-full px-3 py-3 border-2 border-dashed rounded-lg transition-colors ${
+                        halfFiles[index]
+                          ? 'border-green-500 bg-green-900/20'
+                          : 'border-gray-600 hover:border-gray-500 bg-gray-900/50'
+                      } disabled:opacity-50`}
+                    >
+                      {halfFiles[index] ? (
+                        <div className="text-center">
+                          <p className="text-green-400 text-xs font-medium truncate">{halfFiles[index].name}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {(halfFiles[index].size / (1024 * 1024)).toFixed(1)} MB
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-center text-gray-400">
+                          <Upload size={18} className="mx-auto mb-1" />
+                          <p className="text-xs font-medium">{label}</p>
+                        </div>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Submit Button */}
