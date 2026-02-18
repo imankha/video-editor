@@ -5,8 +5,8 @@ import { soccerTags, positions } from '../../modes/annotate/constants/soccerTags
  * TagSelector - Multi-select tags grouped by position
  * Shows all tags from all positions, allowing selection from multiple positions
  *
- * @param {string[]} selectedTags - Array of selected tag short names
- * @param {function} onTagToggle - Callback when tag is toggled (receives tag shortName)
+ * @param {string[]} selectedTags - Array of selected tag names
+ * @param {function} onTagToggle - Callback when tag is toggled (receives tag name)
  * @param {boolean} compact - Use compact layout (default false)
  */
 export function TagSelector({ selectedTags = [], onTagToggle, compact = false }) {
@@ -21,11 +21,11 @@ export function TagSelector({ selectedTags = [], onTagToggle, compact = false })
             </div>
             <div className="flex flex-wrap gap-1">
               {positionTags.map((tag) => {
-                const isSelected = selectedTags.includes(tag.shortName);
+                const isSelected = selectedTags.includes(tag.name);
                 return (
                   <button
-                    key={tag.shortName}
-                    onClick={() => onTagToggle(tag.shortName)}
+                    key={tag.name}
+                    onClick={() => onTagToggle(tag.name)}
                     className={`flex items-center gap-1 px-2 py-1 ${compact ? 'text-[10px]' : 'text-xs'} rounded transition-colors ${
                       isSelected
                         ? 'bg-green-600 text-white'
@@ -35,7 +35,7 @@ export function TagSelector({ selectedTags = [], onTagToggle, compact = false })
                     type="button"
                   >
                     {isSelected && <Check size={compact ? 10 : 12} />}
-                    {tag.shortName}
+                    {tag.name}
                   </button>
                 );
               })}

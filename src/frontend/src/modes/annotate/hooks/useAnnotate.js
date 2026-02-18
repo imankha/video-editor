@@ -28,38 +28,13 @@ import { getAllTags } from '../constants/soccerTags';
  */
 
 // Derive allowed tags from soccerTags.js (single source of truth)
-// Includes both full names and short names for flexibility during TSV import
-const ALLOWED_TAGS = new Set(
-  getAllTags().flatMap(tag => [tag.name, tag.shortName])
-);
+const ALLOWED_TAGS = new Set(getAllTags().map(tag => tag.name));
 
 // Required TSV columns in order
 const REQUIRED_COLUMNS = ['start_time', 'rating', 'tags', 'clip_name', 'clip_duration', 'notes'];
 
 // Time format regex: M:SS or MM:SS
 const TIME_REGEX = /^\d{1,2}:\d{2}$/;
-
-// Build name-to-shortName mapping from soccerTags
-// This allows exporting with full names or short names and getting consistent TSV output
-const NAME_TO_SHORT_NAME = (() => {
-  const map = {};
-  for (const tag of getAllTags()) {
-    // Map full name to short name
-    map[tag.name] = tag.shortName;
-    // Also map short name to itself (for tags already in short form)
-    map[tag.shortName] = tag.shortName;
-  }
-  return map;
-})();
-
-/**
- * Convert a tag name to its TSV-compatible short name
- * @param {string} tagName - Full tag name or short name
- * @returns {string} Short name for TSV
- */
-function toShortName(tagName) {
-  return NAME_TO_SHORT_NAME[tagName] || tagName;
-}
 
 /**
  * Parse time string (M:SS or MM:SS) to seconds
@@ -98,8 +73,7 @@ export function generateTsvContent(clipRegions) {
   const rows = sorted.map(region => {
     const startTime = formatSecondsForTsv(region.startTime);
     const rating = region.rating || DEFAULT_RATING;
-    // Convert tags to short names for TSV compatibility
-    const tags = (region.tags || []).map(toShortName).join(',');
+    const tags = (region.tags || []).join(',');
     const clipName = region.name || '';
     // Calculate duration with 1 decimal precision
     const duration = ((region.endTime - region.startTime) || DEFAULT_CLIP_DURATION).toFixed(1);
