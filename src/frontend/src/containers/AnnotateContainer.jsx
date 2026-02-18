@@ -870,7 +870,8 @@ export function AnnotateContainer({
         name: region.name,
         tags: region.tags || [],
         notes: region.notes || '',
-        rating: region.rating || 3
+        rating: region.rating || 3,
+        video_sequence: region.videoSequence || null,
       }));
       saveAnnotationsDebounced(annotateGameId, annotationsForSave);
     }

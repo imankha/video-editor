@@ -673,7 +673,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                     await update_progress(int(2 + (vi / len(game_videos)) * 13), 100, ExportPhase.DOWNLOAD, dl_msg)
                     if not await download_from_r2_with_progress(
                         user_id, r2_key, Path(local_path),
-                        export_id=export_id, export_type='annotate'
+                        export_id=export_id, export_type='annotate',
+                        global_path=True,
                     ):
                         raise Exception(f"Failed to download video {vi+1} from R2: {r2_key}")
                     multi_video_paths[gv['blake3_hash']] = local_path
@@ -695,7 +696,8 @@ async def run_annotate_export_processing(export_id: str, config: dict):
 
                 if not await download_from_r2_with_progress(
                     user_id, r2_key, Path(source_path),
-                    export_id=export_id, export_type='annotate'
+                    export_id=export_id, export_type='annotate',
+                    global_path=True,
                 ):
                     raise Exception("Failed to download game video from R2")
 
