@@ -992,15 +992,20 @@ export function AnnotateContainer({
     }
   }, [videoOffsets, activeVideoIndex, switchToVideo, seek]);
 
-  // Auto-switch to next video when current one ends
+  // Auto-switch to next video when current one ends during playback
   useEffect(() => {
     if (!gameVideos || !videoRef.current) return;
 
     const handleEnded = () => {
-      if (activeVideoIndex < gameVideos.length - 1) {
-        switchToVideo(activeVideoIndex + 1);
-        // Auto-play next video
-        setTimeout(() => videoRef.current?.play(), 100);
+      const videoEl = videoRef.current;
+      if (!videoEl) return;
+      // Only auto-switch if the video actually played to near its end
+      // (ignore spurious 'ended' events from source changes)
+      if (videoEl.duration > 0 && videoEl.currentTime >= videoEl.duration - 0.5) {
+        if (activeVideoIndex < gameVideos.length - 1) {
+          switchToVideo(activeVideoIndex + 1);
+          setTimeout(() => videoRef.current?.play(), 100);
+        }
       }
     };
 
