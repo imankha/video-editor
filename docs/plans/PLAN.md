@@ -32,14 +32,16 @@ Fix data integrity and sync issues before making structural changes. Ordered by 
 | T87 | [Sync Connection Loss Handling](tasks/T87-sync-connection-loss.md) | TESTING | Sync | 4 | Failed R2 sync causes permanent divergence |
 | T243 | [Archive DB Not Reducing Size](tasks/T243-archive-db-not-reducing-size.md) | TESTING | Storage | 4 | Prune old working_video versions + stale export_jobs on startup |
 | T245 | [Fix Highlight Regions Test](tasks/T245-fix-highlight-regions-test.md) | TODO | Test | 2 | Pre-existing test failure on all branches |
-| T246 | [Fix E2E TSV Import Failures](tasks/T246-fix-e2e-tsv-import-failures.md) | TODO | Test | 4 | 15 E2E tests fail: invalid tags in TSV fixture + upload network error |
+| T246 | [Fix E2E TSV Import Failures](tasks/T246-fix-e2e-tsv-import-failures.md) | DONE | Test | 4 | Fixed: invalid tags in TSV fixture (10/15 tests resolved) |
+| T247 | [Fix E2E Clip Extraction Timeout](tasks/T247-e2e-clip-extraction-timeout.md) | TODO | Test | 4 | 5 E2E tests fail: FFmpeg clip extraction never completes in test env |
 
 **Priority rationale (infrastructure depth):**
 - T86: Schema integrity — FK enforcement is the foundation all CRUD operations sit on
 - T87: Sync reliability — every write depends on sync for persistence. Silent failure = silent data loss. Deepest runtime bug.
 - T243: Storage efficiency — large DB makes syncs slower and more failure-prone, compounding T87
 - T245: Test baseline — no user impact, but clean tests needed before more changes
-- T246: Test baseline — 15/24 E2E tests broken by stale fixture data + upload errors
+- T246: (DONE) Test baseline — fixed stale fixture tags, resolved 10/15 failures
+- T247: Test baseline — remaining 5 E2E tests blocked on FFmpeg clip extraction in test env
 
 ---
 
