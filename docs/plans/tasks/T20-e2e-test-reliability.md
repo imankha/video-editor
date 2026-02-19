@@ -1,89 +1,163 @@
-# T20: E2E Test Reliability
+# T20: E2E Test Reliability — Mock Export Mode
 
 ## Status: TODO
 
 ## Problem Statement
 
-Two E2E tests fail consistently (not flaky - they fail every run):
+The E2E @full test suite is blocked by a single failing test ("Framing: export creates working video") which causes **8 cascading skips**. The root cause is that the framing export runs **local Real-ESRGAN AI upscaling on every frame** (~2700 frames for a 1.5-min test video), taking ~10+ minutes, and then fails to persist the working video (sync failure).
 
-1. **regression-tests.spec.js:2287** — "Framing: open automatically created project @full"
-2. **full-workflow.spec.js:316** — "6. Create project from clips"
+Running real GPU processing in E2E tests is fundamentally wrong for iteration speed. We need a mock export mode that returns pre-canned videos instantly, so we can validate the full test suite without waiting 10+ minutes per run.
 
-### Context: What T247 Fixed
+## Decision: Mock Export Strategy
 
-T247 fixed the root cause for 6 smoke test failures: `setExtraHTTPHeaders({ 'X-User-ID': ... })` added the header to ALL requests including R2 presigned URL PUTs, triggering CORS preflight failures. After T247, the E2E test suite results are:
+**Do not run real video processing in E2E tests.** Instead:
+1. Create a mock/test mode for the framing export endpoint that returns a pre-canned working video
+2. Get all E2E tests passing with mocks first
+3. Real export pipeline bugs (sync failure, etc.) tracked separately in T248
 
-| Suite | Pass | Fail | Notes |
-|-------|------|------|-------|
-| Regression @smoke | 6/6 | 0 | All fixed by T247 |
-| Regression @full | 9/10 | 1 | "open automatically created project" |
-| Full workflow | 15/16 | 1 | "Create project from clips" |
+## Current Test Results (Feb 19, 2026)
 
-## Failing Test 1: "Framing: open automatically created project @full"
+| Suite | Pass | Fail | Skip | Notes |
+|-------|------|------|------|-------|
+| Regression @smoke | 6/6 | 0 | 0 | All passing |
+| Regression @full | 1/10 | 1 | 8 | "export creates working video" fails → cascading skips |
+| Full workflow | 15/16 | 0 | 1 | "Create project from clips" — needs investigation |
 
-**File:** `src/frontend/e2e/regression-tests.spec.js:2287`
+## Root Cause Analysis
 
-**Symptom:** Test navigates to a project but fails waiting for a mode indicator to become visible within 30s.
+### Why the export test fails
 
-```
-Error: Timeout 30000ms exceeded while waiting on the predicate
-  at regression-tests.spec.js:2338
-```
+1. **Framing export uses Real-ESRGAN on EVERY frame** regardless of `export_mode`. The "fast" vs "quality" setting only affects FFmpeg encoding (single-pass vs 2-pass), NOT the AI upscaling step. For 1.5 min @ 30fps = ~2700 frames × Real-ESRGAN = ~10+ minutes on local GPU.
 
-**Error context (from page snapshot):** The page IS loaded in a project view with:
-- Overlay Settings panel visible
-- "Highlight Region 1/2/3" visible
-- "Exporting..." button visible with "Overlay Export... 0%"
-- Detection data showing "13 players detected"
+2. **After export completes, `has_working_video` is false.** The WebSocket reports `{progress: 100, status: complete}`, but `GET /api/projects` shows no project with `has_working_video=true`. Screenshot shows **"Sync failed — click to retry"** and **"Loading working video..."**. This is a real backend bug tracked in T248.
 
-**Root Cause:** The preceding test ("Full Pipeline: Annotate -> Framing -> Overlay -> Final Export") leaves an export running that auto-switches the UI to Overlay mode. When this test opens the same project, it's already in Overlay mode but the test's mode detection logic (line 2338) can't find the expected mode indicator element.
+### Key code paths
 
-The test at line 2336-2338:
+**Frontend export trigger** (`ExportButtonContainer.jsx`):
 ```javascript
-await expect(async () => {
-  await expect(modeIndicator).toBeVisible();
-}).toPass({ timeout: 30000, intervals: [1000, 2000, 5000] });
+export const EXPORT_CONFIG = {
+  targetFps: 30,
+  exportMode: 'fast',  // Only affects FFmpeg, NOT AI upscaling
+};
+// Sends POST /api/export/render with {project_id, export_id, export_mode, target_fps}
 ```
 
-**Likely Fix:** The test needs to handle the case where the previous test's export leaves the project in Overlay mode. Options:
-1. Check what `modeIndicator` locator is - it may need to match both Framing and Overlay mode indicators
-2. Ensure the test navigates to a DIFFERENT project than the one used by the full pipeline test
-3. Cancel/wait-for any in-progress exports before asserting mode
+**Backend routing** (`modal_client.py:374`):
+```python
+if not _modal_enabled:  # MODAL_ENABLED=false in .env
+    from app.services.local_processors import local_framing
+    return await local_framing(...)  # Uses Real-ESRGAN locally
+```
 
-## Failing Test 2: "6. Create project from clips"
+**Local processor** (`local_processors.py:209`):
+```python
+upscaler = AIVideoUpscaler(device='cuda', export_mode=export_mode, ...)
+result = await asyncio.to_thread(upscaler.process_video_with_upscale, ...)
+# Processes ALL 2700 frames through Real-ESRGAN, then uploads to R2
+```
 
-**File:** `src/frontend/e2e/full-workflow.spec.js:316`
+**Post-export DB write** (`framing.py:785-820`):
+```python
+# Insert working_videos record
+# UPDATE projects SET working_video_id = ?
+# conn.commit()
+# → THEN send WebSocket complete
+```
 
-**Symptom:** `POST /api/projects` returns a non-OK response when called from the Playwright `request` fixture.
+**has_working_video query** (`projects.py:279`):
+```sql
+CASE WHEN wv.id IS NOT NULL THEN 1 ELSE 0 END as has_working_video
+-- Joins working_videos via projects.working_video_id
+```
 
+### Why 8 tests are skipped
+
+The @full test suite uses `test.describe.serial()` — tests run in order and later tests depend on earlier ones having a working video. When "export creates working video" fails, everything after it is skipped:
+- Overlay: video loads after framing export
+- Overlay: highlight region initializes
+- Framing: video auto-loads when opening existing project
+- Framing: keyframe data persists after reload
+- Framing: export progress advances properly
+- Framing: per-clip edits persist after switching clips and reloading
+- Full Pipeline: Annotate → Framing → Overlay → Final Export
+- Framing: open automatically created project
+
+## Implementation Plan
+
+### Step 1: Create a pre-canned test working video
+
+Generate a short (5-10 second) 810x1440 MP4 file that can serve as a mock framing export output. Store it in `src/frontend/e2e/fixtures/` or similar test data directory.
+
+### Step 2: Mock the framing export in E2E tests
+
+Options (choose the cleanest):
+
+**Option A: Backend test mode endpoint**
+- Add a `?mock=true` query param or `X-Test-Mode` header to `POST /api/export/render`
+- When detected, skip Real-ESRGAN and instead: copy the pre-canned video to R2, insert working_video record, set working_video_id on project, return success immediately
+- Pro: Tests the full DB write path. Con: Requires backend change.
+
+**Option B: Playwright route interception**
+- Use `page.route()` to intercept the export API call
+- Return a mock response and directly insert the working video via API calls
+- Pro: No backend changes. Con: Skips the DB write path entirely (which is where the real bug is).
+
+**Option C: Backend E2E test helper endpoint**
+- Add a dedicated `POST /api/test/create-working-video` endpoint (only available when `ENV=test` or similar)
+- E2E test calls this instead of triggering the real export
+- Pro: Clean separation. Con: New endpoint.
+
+**Recommendation: Option A** — it tests the real DB write path (working_video_id, export_jobs) while skipping only the GPU processing. If the mock export works but real export doesn't, that isolates the bug to the Real-ESRGAN/R2 pipeline.
+
+### Step 3: Fix the mode indicator assertion
+
+In `regression-tests.spec.js:2331-2333`, add `"Exporting..."` as a valid mode indicator:
 ```javascript
-const createResponse = await request.post(`${API_BASE}/projects`, {
-  headers: { 'X-User-ID': TEST_USER_ID },
-  data: { name: 'E2E Test Project from API', aspect_ratio: '16:9' }
-});
-expect(createResponse.ok()).toBeTruthy(); // FAILS
+const exportingButton = page.locator('button:has-text("Exporting")').first();
+const modeIndicator = frameVideoButton.or(addOverlayButton).or(exportingButton);
 ```
 
-**Root Cause:** Needs investigation. The `request` fixture makes direct HTTP calls (not through the browser page), so it bypasses both `setExtraHTTPHeaders` and `page.route()`. The explicit `headers: { 'X-User-ID': TEST_USER_ID }` should work. Possible causes:
-1. The `/api/projects` endpoint may expect different request body format (e.g., `clip_ids` field required)
-2. The endpoint may have been changed since this test was written
-3. Content-Type header may not be set correctly by Playwright's `request.post` with `data`
+Also update the subsequent assertion (line 2343) to include the exporting state.
 
-**Investigation needed:** Check the actual HTTP status code and response body to understand what the API is rejecting.
+### Step 4: Fix "Create project from clips" (full-workflow.spec.js:316)
+
+The `request.post()` fixture bypasses the page context. The test sends correct fields (`name`, `aspect_ratio`). Most likely cause: the user's SQLite DB isn't initialized when using the `request` fixture directly (no page middleware to create it).
+
+Investigation: Add response status/body logging to the test, then fix based on what the API actually returns.
+
+### Step 5: Verify all tests pass
+
+Run full suite 3x to confirm no flakiness:
+```bash
+cd src/frontend && npx playwright test e2e/regression-tests.spec.js
+cd src/frontend && npx playwright test e2e/full-workflow.spec.js
+```
+
+## Test Video Details
+
+- **Path**: `formal annotations/test.short/wcfc-carlsbad-trimmed.mp4`
+- **Duration**: ~1.5 minutes
+- **FPS**: 30 (2700 total frames)
+- **Used by**: All @full tests via `ensureProjectsExist()` / `ensureFramingMode()`
 
 ## Files to Modify
 
-- `src/frontend/e2e/regression-tests.spec.js` — Fix mode indicator assertion at line 2338
-- `src/frontend/e2e/full-workflow.spec.js` — Fix project creation API call at line 322
+- `src/backend/app/routers/export/framing.py` — Add mock export mode
+- `src/frontend/e2e/regression-tests.spec.js` — Use mock export, fix mode indicator
+- `src/frontend/e2e/full-workflow.spec.js` — Fix project creation test
+- New: pre-canned test video fixture file
 
 ## Classification
 
-**Stack Layers:** Frontend (E2E tests only)
-**Files Affected:** ~2 files
-**LOC Estimate:** ~20 lines
+**Stack Layers:** Frontend (E2E tests) + Backend (mock export path)
+**Files Affected:** ~4 files
+**LOC Estimate:** ~50-80 lines
 **Test Scope:** Frontend E2E
 
 ## Success Metrics
 
-- Both tests pass consistently across 3 consecutive runs
-- No regressions in the other 24 passing tests
+- All 6 @smoke tests pass
+- All 10 @full tests pass (no skips)
+- All 16 full-workflow tests pass
+- Each test run completes in < 3 minutes (no 10-min GPU waits)
+- 3 consecutive clean runs with no flakiness

@@ -34,7 +34,8 @@ Fix data integrity and sync issues before making structural changes. Ordered by 
 | T245 | [Fix Highlight Regions Test](tasks/T245-fix-highlight-regions-test.md) | DONE | Test | 2 | Pre-existing test failure on all branches |
 | T246 | [Fix E2E TSV Import Failures](tasks/T246-fix-e2e-tsv-import-failures.md) | DONE | Test | 4 | Fixed: invalid tags in TSV fixture (10/15 tests resolved) |
 | T247 | [Fix E2E Clip Extraction Timeout](tasks/T247-e2e-clip-extraction-timeout.md) | DONE | Test | 4 | Fixed: X-User-ID header on R2 presigned URLs caused CORS failure; 6/6 smoke tests pass |
-| T20 | [E2E Test Reliability](tasks/T20-e2e-test-reliability.md) | TODO | Test | 2 | 2 remaining E2E failures: mode indicator assertion + project creation API call |
+| T20 | [E2E Test Reliability — Mock Export](tasks/T20-e2e-test-reliability.md) | TODO | Test | 3 | Mock framing export to skip GPU processing; fix all E2E failures |
+| T248 | [Framing Export Sync Failure](tasks/T248-framing-export-sync-failure.md) | TODO | Sync | 3 | Export completes but working_video not persisted; sync failure after commit |
 
 **Priority rationale (infrastructure depth):**
 - T86: Schema integrity — FK enforcement is the foundation all CRUD operations sit on
@@ -43,6 +44,8 @@ Fix data integrity and sync issues before making structural changes. Ordered by 
 - T245: Test baseline — no user impact, but clean tests needed before more changes
 - T246: (DONE) Test baseline — fixed stale fixture tags, resolved 10/15 failures
 - T247: (DONE) Test baseline — root cause was CORS, not FFmpeg; all 6 smoke tests pass
+- T20: Mock export in E2E tests so full suite can pass without 10-min GPU waits
+- T248: Real bug — framing export completes but DB update lost (likely sync overwrite). Depends on T20 for fast iteration
 
 ---
 
