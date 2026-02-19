@@ -35,8 +35,16 @@ const TEST_USER_ID = `e2e_${Date.now()}_${Math.random().toString(36).slice(2, 8)
  * This isolates test data from development data.
  */
 async function setupTestUserContext(page) {
-  // Use setExtraHTTPHeaders instead of route() - more reliable with Vite proxy
+  // Set X-User-ID header on all requests for test isolation
   await page.setExtraHTTPHeaders({ 'X-User-ID': TEST_USER_ID });
+  // Strip X-User-ID from R2 presigned URL requests to avoid CORS preflight
+  // failures. setExtraHTTPHeaders adds to ALL requests including cross-origin
+  // XHR PUTs to R2, which triggers CORS preflight and "Part N network error".
+  await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
+    const headers = { ...route.request().headers() };
+    delete headers['x-user-id'];
+    await route.continue({ headers });
+  });
 }
 
 // ES module equivalent of __dirname

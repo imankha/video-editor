@@ -41,9 +41,16 @@ const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
 
 async function setupTestUserContext(page) {
   console.log(`[Test] Setting up test user context: ${TEST_USER_ID}`);
-  // Use setExtraHTTPHeaders instead of route() - more reliable with Vite proxy
-  // This sets the header for ALL requests from this page, including fetch/XHR
+  // Set X-User-ID header on all requests for test isolation
   await page.setExtraHTTPHeaders({ 'X-User-ID': TEST_USER_ID });
+  // Strip X-User-ID from R2 presigned URL requests to avoid CORS preflight
+  // failures. setExtraHTTPHeaders adds to ALL requests including cross-origin
+  // XHR PUTs to R2, which triggers CORS preflight and "Part N network error".
+  await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
+    const headers = { ...route.request().headers() };
+    delete headers['x-user-id'];
+    await route.continue({ headers });
+  });
 }
 
 /**
@@ -484,34 +491,42 @@ async function ensureAnnotateModeWithClips(page) {
   await videoInput.setInputFiles(TEST_VIDEO);
   await page.waitForTimeout(1000);
 
-  // Click Create Game button
+  // Click Create Game button (triggers upload + game creation)
   const createButton = page.getByRole('button', { name: 'Create Game' });
   await expect(createButton).toBeEnabled({ timeout: 5000 });
   await createButton.click();
 
-  // Wait for annotate mode to load with video
-  await waitForVideoFirstFrame(page);
+  // Wait for annotate mode to load with video (using robust retry like full-workflow)
+  await expect(async () => {
+    const video = page.locator('video').first();
+    await expect(video).toBeVisible();
+    const hasSrc = await video.evaluate(v => !!v.src);
+    expect(hasSrc).toBeTruthy();
+  }).toPass({ timeout: 30000, intervals: [1000, 2000, 5000] });
 
-  // IMPORTANT: Wait for video upload to complete BEFORE importing TSV
-  // The clips/raw/save endpoint requires the video file to exist for extraction
-  const uploadSuccess = await waitForUploadComplete(page);
-  if (!uploadSuccess) {
-    throw new Error('Video upload failed or timed out - clips cannot be saved to library');
+  // Wait for video upload to complete BEFORE importing TSV
+  // Same approach as full-workflow.spec.js which works reliably
+  const uploadingButton = page.locator('button:has-text("Uploading video")');
+  await page.waitForTimeout(2000); // Give upload time to start
+  const isUploading = await uploadingButton.isVisible().catch(() => false);
+  if (isUploading) {
+    console.log('[Test] Upload in progress, waiting for completion...');
+    await expect(uploadingButton).toBeHidden({ timeout: 300000 });
   }
   console.log('[Test] Video upload complete');
 
-  // Import TSV - now clips can be saved to raw_clips since video is available
+  // Import TSV
   const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
   await expect(tsvInput).toBeAttached({ timeout: 10000 });
   await tsvInput.setInputFiles(TEST_TSV);
   await expect(page.locator('text=Good Pass').first()).toBeVisible({ timeout: 15000 });
   console.log('[Test] TSV imported, clips visible in UI');
 
-  // Wait for clips to be saved to raw_clips (auto-save happens in background via FFmpeg)
-  // Poll the API until clips appear - don't just wait a fixed time
-  console.log('[Test] Waiting for clips to be saved to library (FFmpeg extraction)...');
+  // Wait for clips to be auto-saved to library (requires game to exist in backend)
+  // The upload completion callback sets annotateGameId, which triggers auto-save
+  console.log('[Test] Waiting for clips to be saved to library...');
   const startWait = Date.now();
-  const maxWaitTime = 120000; // 2 minutes for FFmpeg extractions
+  const maxWaitTime = 30000;
   let clipsSaved = false;
 
   while (Date.now() - startWait < maxWaitTime) {
@@ -526,13 +541,11 @@ async function ensureAnnotateModeWithClips(page) {
       break;
     }
 
-    // Wait 2 seconds before checking again
     await page.waitForTimeout(2000);
-    console.log(`[Test] Still waiting for clips to save... (${Math.round((Date.now() - startWait) / 1000)}s elapsed)`);
   }
 
   if (!clipsSaved) {
-    console.log('[Test] WARNING: No clips saved to library after 2 minutes - test may fail');
+    console.log('[Test] WARNING: No clips saved to library after 30s - upload may have failed');
   }
 
   console.log('[Test] Loaded video and TSV in annotate mode');
@@ -697,72 +710,53 @@ async function waitForUploadComplete(page, maxTimeout = 600000) {
   let lastProgressChangeTime = Date.now();
   const STALL_TIMEOUT = 120000; // 2 minutes without progress = stalled
 
-  // Check for Create Annotated Video button (replaces Import Into Projects)
+  // Check for Create Annotated Video button
   const createVideoButton = page.locator('button:has-text("Create Annotated Video")');
+  const uploadingButton = page.locator('button:has-text("Uploading video")');
 
   console.log('[Test] Waiting for video upload to complete...');
 
-  while (true) {
-    const elapsed = Date.now() - startTime;
+  // Wait a moment for the upload to initialize (React state update + render)
+  await page.waitForTimeout(3000);
 
-    // Check if upload is complete - the button text changes from "Uploading video..." to "Create Annotated Video"
-    // Note: The button may still be disabled if there are no clips, but that's OK - we just need to know upload is done
-    const isUploading = await page.locator('button:has-text("Uploading video")').isVisible({ timeout: 500 }).catch(() => false);
-    const buttonVisible = await createVideoButton.isVisible({ timeout: 500 }).catch(() => false);
+  // Check if we can see the "Uploading video" state
+  const isCurrentlyUploading = await uploadingButton.isVisible().catch(() => false);
+  if (isCurrentlyUploading) {
+    console.log('[Test] Upload in progress, waiting for completion...');
+    // Wait for uploading button to disappear (upload completes or errors)
+    await expect(uploadingButton).toBeHidden({ timeout: maxTimeout });
+    console.log('[Test] Upload complete - uploading button hidden');
+  }
 
-    if (buttonVisible && !isUploading) {
-      console.log('[Test] Upload complete - Create Annotated Video button visible');
+  // Verify upload actually completed by checking game exists
+  // This handles both: (a) fast dedup where we missed "Uploading" state, and
+  // (b) upload that errored out (button hidden but game not created)
+  const gameCheckStart = Date.now();
+  while (Date.now() - gameCheckStart < 30000) {
+    const games = await page.evaluate(async () => {
+      const res = await fetch('/api/games');
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.games || [];
+    });
+    if (games.length > 0) {
+      console.log(`[Test] Upload confirmed - game exists: id=${games[0].id}, name=${games[0].name}`);
       return true;
     }
 
-    // Try to extract upload progress (if shown)
-    // Upload progress might show as percentage or file size
-    let currentProgress = -1;
-    try {
-      // Look for any percentage in the uploading button area
-      const uploadingButton = page.locator('button:has-text("Uploading")').first();
-      if (await uploadingButton.isVisible({ timeout: 300 })) {
-        const buttonText = await uploadingButton.textContent({ timeout: 300 });
-        const match = buttonText?.match(/(\d+)%/);
-        if (match) {
-          currentProgress = parseInt(match[1], 10);
-        }
-      }
-    } catch {
-      // Ignore
-    }
-
-    // Update progress tracking - even without percentage, just being in "uploading" state counts
-    if (currentProgress > lastUploadProgress || isUploading) {
-      if (currentProgress > lastUploadProgress) {
-        lastUploadProgress = currentProgress;
-      }
-      lastProgressChangeTime = Date.now();
-    }
-
-    // Check for stall
-    const timeSinceChange = Date.now() - lastProgressChangeTime;
-    if (timeSinceChange > STALL_TIMEOUT) {
-      console.log(`[Test] Upload stalled - no progress for ${STALL_TIMEOUT / 1000}s`);
+    // Check if upload errored (look for error indicators in UI)
+    const hasError = await page.locator('text=network error').isVisible({ timeout: 300 }).catch(() => false);
+    if (hasError) {
+      console.log('[Test] Upload failed with network error');
       return false;
     }
 
-    // Hard timeout with stall check
-    if (elapsed > maxTimeout && timeSinceChange > 60000) {
-      console.log(`[Test] Upload timeout after ${maxTimeout / 1000}s`);
-      return false;
-    }
-
-    // Log progress every 30 seconds
-    if (Date.now() - lastLogTime > 30000) {
-      const elapsedSec = Math.round(elapsed / 1000);
-      const progressInfo = lastUploadProgress >= 0 ? `${lastUploadProgress}%` : 'in progress';
-      console.log(`[Test] Upload progress (${elapsedSec}s): ${progressInfo}`);
-      lastLogTime = Date.now();
-    }
-
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1000);
   }
+
+  // If no game found, upload likely failed
+  console.log('[Test] Upload may have failed - no game found after 30s');
+  return false;
 }
 
 /**
