@@ -4,67 +4,56 @@
 export const soccerTags = {
   attacker: [
     {
-      name: "Goals",
-      shortName: "Goal",
+      name: "Goal",
       description: "All types of finishes in scoring situations."
     },
     {
-      name: "Assists",
-      shortName: "Assist",
+      name: "Assist",
       description: "Final pass that leads directly to a goal."
     },
     {
-      name: "Dribbling",
-      shortName: "Dribble",
+      name: "Dribble",
       description: "Beating defenders in individual attacking duels."
     }
   ],
 
   midfielder: [
     {
-      name: "Passing Range",
-      shortName: "Pass",
+      name: "Pass",
       description: "Short, long, and line-breaking passes to advance play."
     },
     {
       name: "Chance Creation",
-      shortName: "Chance Creation",
       description: "Key passes that set up opportunities for teammates."
     },
     {
       name: "Control",
-      shortName: "Control",
       description: "Quick turnover play and composure under pressure."
     }
   ],
 
   defender: [
     {
-      name: "Tackles",
-      shortName: "Tackle",
+      name: "Tackle",
       description: "Clean defensive challenges that win the ball."
     },
     {
-      name: "Interceptions",
-      shortName: "Interception",
+      name: "Interception",
       description: "Reading and winning possession before the opponent."
     },
     {
-      name: "Build-Up Passing",
-      shortName: "Build-Up",
+      name: "Build-Up",
       description: "Accurate passes from the back that start attacks."
     }
   ],
 
   goalie: [
     {
-      name: "Saves",
-      shortName: "Save",
+      name: "Save",
       description: "All shot-stopping and 1v1 saves."
     },
     {
       name: "Distribution",
-      shortName: "Distribution",
       description: "Accurate throws and kicks to start counterattacks."
     }
   ]
@@ -115,19 +104,6 @@ export function getAllTags() {
 }
 
 /**
- * Find a tag by name across all positions
- * @param {string} tagName - Tag name to find
- * @returns {Object|null} Tag object or null
- */
-export function findTagByName(tagName) {
-  for (const tags of Object.values(soccerTags)) {
-    const tag = tags.find(t => t.name === tagName);
-    if (tag) return tag;
-  }
-  return null;
-}
-
-/**
  * Generate a clip name based on rating and selected tags
  * @param {number} rating - Star rating (1-5)
  * @param {Array} selectedTags - Array of selected tag names
@@ -140,16 +116,10 @@ export function generateClipName(rating, selectedTags) {
 
   const adjective = ratingAdjectives[rating] || 'Interesting';
 
-  // Get short names for selected tags (search all positions)
-  const shortNames = selectedTags.map(tagName => {
-    const tag = findTagByName(tagName);
-    return tag?.shortName || tagName;
-  });
-
   // Join with "and" for multiple tags
-  const tagPart = shortNames.length === 1
-    ? shortNames[0]
-    : shortNames.slice(0, -1).join(', ') + ' and ' + shortNames[shortNames.length - 1];
+  const tagPart = selectedTags.length === 1
+    ? selectedTags[0]
+    : selectedTags.slice(0, -1).join(', ') + ' and ' + selectedTags[selectedTags.length - 1];
 
   return `${adjective} ${tagPart}`;
 }

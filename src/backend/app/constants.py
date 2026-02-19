@@ -147,31 +147,9 @@ def is_valid_rating(rating: int) -> bool:
     return MIN_RATING <= rating <= MAX_RATING
 
 
-# Tag name to short name mapping (matches frontend soccerTags.js)
-# Used for generating clip names from full tag names
-TAG_SHORT_NAMES: Dict[str, str] = {
-    'Goals': 'Goal',
-    'Assists': 'Assist',
-    'Dribbling': 'Dribble',
-    'Movement Off Ball': 'Movement',
-    'Passing Range': 'Pass',
-    'Chance Creation': 'Chance Creation',
-    'Possession Play': 'Possession',
-    'Transitions': 'Transition',
-    'Tackles': 'Tackle',
-    'Interceptions': 'Interception',
-    '1v1 Defense': '1v1 Defense',
-    'Build-Up Passing': 'Build-Up',
-    'Shot Stopping': 'Save',
-    'Command of Area': 'Command',
-    'Distribution': 'Distribution',
-    '1v1 Saves': '1v1 Save',
-}
 
-
-def get_tag_short_name(tag: str) -> str:
-    """Get the short name for a tag, returning the tag itself if no mapping exists."""
-    return TAG_SHORT_NAMES.get(tag, tag)
+# Tag definitions live in the frontend (soccerTags.js) as the single source of truth.
+# The backend stores tags as opaque strings - no validation or mapping needed here.
 
 
 # =============================================================================

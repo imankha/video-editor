@@ -86,12 +86,11 @@ function TagSelector({ selectedTags, onTagToggle }) {
             <div className="text-gray-500 text-xs mb-1">{pos.name}</div>
             <div className="flex flex-wrap gap-1">
               {positionTags.map((tag) => {
-                // Use shortName for selection/toggle since tags are stored as short names
-                const isSelected = selectedTags.includes(tag.shortName);
+                const isSelected = selectedTags.includes(tag.name);
                 return (
                   <button
-                    key={tag.shortName}
-                    onClick={() => onTagToggle(tag.shortName)}
+                    key={tag.name}
+                    onClick={() => onTagToggle(tag.name)}
                     className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
                       isSelected
                         ? 'bg-green-600 text-white'
@@ -100,7 +99,7 @@ function TagSelector({ selectedTags, onTagToggle }) {
                     title={tag.description}
                   >
                     {isSelected && <Check size={12} />}
-                    {tag.shortName}
+                    {tag.name}
                   </button>
                 );
               })}
