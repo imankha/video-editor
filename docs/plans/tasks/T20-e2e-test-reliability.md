@@ -1,163 +1,89 @@
-# E2E Test Reliability
+# T20: E2E Test Reliability
+
+## Status: TODO
 
 ## Problem Statement
 
-Two E2E tests are flaky and fail intermittently:
+Two E2E tests fail consistently (not flaky - they fail every run):
 
-1. **"Annotate Mode - Upload video and import TSV"** - Video element doesn't appear within 120s timeout
-2. **"Framing: open automatically created project @full"** - Test user data gets cleaned up during test execution
+1. **regression-tests.spec.js:2287** — "Framing: open automatically created project @full"
+2. **full-workflow.spec.js:316** — "6. Create project from clips"
 
-These failures are not related to code changes but to test infrastructure and timing issues.
+### Context: What T247 Fixed
 
-## Flaky Test Analysis
+T247 fixed the root cause for 6 smoke test failures: `setExtraHTTPHeaders({ 'X-User-ID': ... })` added the header to ALL requests including R2 presigned URL PUTs, triggering CORS preflight failures. After T247, the E2E test suite results are:
 
-### Test 1: Annotate Mode - Upload Video
+| Suite | Pass | Fail | Notes |
+|-------|------|------|-------|
+| Regression @smoke | 6/6 | 0 | All fixed by T247 |
+| Regression @full | 9/10 | 1 | "open automatically created project" |
+| Full workflow | 15/16 | 1 | "Create project from clips" |
 
-**Symptom**: Test times out waiting for video element to appear after upload.
+## Failing Test 1: "Framing: open automatically created project @full"
+
+**File:** `src/frontend/e2e/regression-tests.spec.js:2287`
+
+**Symptom:** Test navigates to a project but fails waiting for a mode indicator to become visible within 30s.
 
 ```
-Error: locator.waitFor: Timeout 120000ms exceeded.
-=========================== logs ===========================
-waiting for locator('video').first()
+Error: Timeout 30000ms exceeded while waiting on the predicate
+  at regression-tests.spec.js:2338
 ```
 
-**Root Causes**:
-1. Video processing (FFmpeg probe, thumbnail generation) can take longer than expected on cold starts
-2. File system operations may be slower when disk is under load
-3. The 120s timeout may not account for:
-   - Large test video processing time
-   - Backend startup delays
-   - R2 upload/download latency
+**Error context (from page snapshot):** The page IS loaded in a project view with:
+- Overlay Settings panel visible
+- "Highlight Region 1/2/3" visible
+- "Exporting..." button visible with "Overlay Export... 0%"
+- Detection data showing "13 players detected"
 
-**Proposed Fixes**:
+**Root Cause:** The preceding test ("Full Pipeline: Annotate -> Framing -> Overlay -> Final Export") leaves an export running that auto-switches the UI to Overlay mode. When this test opens the same project, it's already in Overlay mode but the test's mode detection logic (line 2338) can't find the expected mode indicator element.
 
-1. **Add explicit wait states**: Instead of just waiting for `video` element, wait for specific loading indicators:
-   ```javascript
-   // Wait for upload to complete first
-   await expect(page.getByText('Processing...')).toBeHidden({ timeout: 60000 });
-   // Then wait for video
-   await expect(page.locator('video').first()).toBeVisible({ timeout: 60000 });
-   ```
-
-2. **Use smaller test video**: Ensure the e2e test video is as small as possible (6 seconds, low resolution) to minimize processing time.
-
-3. **Add retry logic for video appearance**: Use Playwright's built-in retry mechanism:
-   ```javascript
-   await expect(async () => {
-     const video = page.locator('video').first();
-     await expect(video).toBeVisible();
-     await expect(video).toHaveAttribute('src', /.+/);
-   }).toPass({ timeout: 120000 });
-   ```
-
-4. **Pre-warm the backend**: Run a health check request before starting the test to ensure backend is ready.
-
-### Test 2: Framing - Auto-created Project
-
-**Symptom**: Test fails with mode detection or missing data errors.
-
-**Error variant 1** (2026-02-06): Mode not detected after opening project:
-```
-Error: Should be in framing or overlay mode
-expect(isFramingMode || isOverlayMode, 'Should be in framing or overlay mode').toBe(true);
-```
-Artifacts: `test-results/artifacts/regression-tests-Full-Cove-f2cf6-ically-created-project-full-chromium/`
-
-**Error variant 2**: Data deleted by concurrent test cleanup:
-```
-Error: Expected project/clip data not found
-(Data was deleted by concurrent test cleanup)
+The test at line 2336-2338:
+```javascript
+await expect(async () => {
+  await expect(modeIndicator).toBeVisible();
+}).toPass({ timeout: 30000, intervals: [1000, 2000, 5000] });
 ```
 
-**Root Causes**:
-1. Tests share the same test user (`e2e_{timestamp}_{random}`)
-2. When tests run in parallel, one test's cleanup can delete another test's data
-3. The `@full` tag runs the full pipeline which takes longer, increasing cleanup race window
-4. Mode transition may not complete before assertion (timing issue with state machine transitions)
-5. Project may load but UI state not yet updated to reflect framing/overlay mode
+**Likely Fix:** The test needs to handle the case where the previous test's export leaves the project in Overlay mode. Options:
+1. Check what `modeIndicator` locator is - it may need to match both Framing and Overlay mode indicators
+2. Ensure the test navigates to a DIFFERENT project than the one used by the full pipeline test
+3. Cancel/wait-for any in-progress exports before asserting mode
 
-**Proposed Fixes**:
+## Failing Test 2: "6. Create project from clips"
 
-1. **Unique test users per test file**: Each test file should create its own unique user ID:
-   ```javascript
-   // In test setup
-   const testUserId = `e2e_${Date.now()}_${testFile}_${Math.random().toString(36).slice(2, 8)}`;
-   ```
+**File:** `src/frontend/e2e/full-workflow.spec.js:316`
 
-2. **Isolate test data directories**: Ensure each test's data is in a completely separate directory that won't be touched by other tests.
+**Symptom:** `POST /api/projects` returns a non-OK response when called from the Playwright `request` fixture.
 
-3. **Add data existence checks before operations**:
-   ```javascript
-   // Before cleanup
-   const response = await request.get(`/api/games`, { headers: { 'X-User-ID': userId } });
-   if (response.ok()) {
-     // Only cleanup if data exists
-     await cleanup(userId);
-   }
-   ```
+```javascript
+const createResponse = await request.post(`${API_BASE}/projects`, {
+  headers: { 'X-User-ID': TEST_USER_ID },
+  data: { name: 'E2E Test Project from API', aspect_ratio: '16:9' }
+});
+expect(createResponse.ok()).toBeTruthy(); // FAILS
+```
 
-4. **Use Playwright's test isolation features**:
-   ```javascript
-   // playwright.config.js
-   {
-     fullyParallel: false, // Run tests serially to avoid conflicts
-     // OR use workers: 1 for tests that share state
-   }
-   ```
+**Root Cause:** Needs investigation. The `request` fixture makes direct HTTP calls (not through the browser page), so it bypasses both `setExtraHTTPHeaders` and `page.route()`. The explicit `headers: { 'X-User-ID': TEST_USER_ID }` should work. Possible causes:
+1. The `/api/projects` endpoint may expect different request body format (e.g., `clip_ids` field required)
+2. The endpoint may have been changed since this test was written
+3. Content-Type header may not be set correctly by Playwright's `request.post` with `data`
 
-5. **Add mutex/lock for cleanup operations**: Prevent concurrent cleanup of shared resources:
-   ```javascript
-   // Use a simple file lock or API-based lock
-   await acquireCleanupLock(userId);
-   try {
-     await performCleanup(userId);
-   } finally {
-     await releaseCleanupLock(userId);
-   }
-   ```
-
-6. **Wait for mode transition to complete**: Add explicit wait for UI mode indicators:
-   ```javascript
-   // Wait for mode-specific UI elements instead of checking state directly
-   await expect(
-     page.locator('[data-testid="framing-timeline"]')
-       .or(page.locator('[data-testid="overlay-timeline"]'))
-   ).toBeVisible({ timeout: 30000 });
-   ```
-
-## Implementation Plan
-
-### Phase 1: Immediate Fixes
-
-1. [ ] Reduce test video size if not already minimal
-2. [ ] Add explicit wait states before video element check
-3. [ ] Generate truly unique user IDs per test (include test name)
-4. [ ] Add guards in cleanup to check data exists first
-5. [ ] Fix mode detection: wait for UI elements instead of checking state variables
-
-### Phase 2: Robust Test Isolation
-
-1. [ ] Review all tests for shared state assumptions
-2. [ ] Implement test-specific user namespacing
-3. [ ] Add pre-test health checks for backend readiness
-4. [ ] Consider running flaky tests with `test.describe.serial()`
-
-### Phase 3: Monitoring & Prevention
-
-1. [ ] Add test timing metrics to identify slow tests
-2. [ ] Set up test result tracking to detect new flaky tests early
-3. [ ] Document test isolation patterns for future tests
+**Investigation needed:** Check the actual HTTP status code and response body to understand what the API is rejecting.
 
 ## Files to Modify
 
-- `src/frontend/e2e/annotate.spec.ts` - Fix video upload wait logic
-- `src/frontend/e2e/framing.spec.ts` - Fix test isolation
-- `src/frontend/e2e/regression-tests.spec.js` - Fix mode detection wait (line 2293)
-- `src/frontend/e2e/helpers/testUser.ts` - Improve user ID generation
-- `src/frontend/playwright.config.ts` - Review parallelization settings
+- `src/frontend/e2e/regression-tests.spec.js` — Fix mode indicator assertion at line 2338
+- `src/frontend/e2e/full-workflow.spec.js` — Fix project creation API call at line 322
+
+## Classification
+
+**Stack Layers:** Frontend (E2E tests only)
+**Files Affected:** ~2 files
+**LOC Estimate:** ~20 lines
+**Test Scope:** Frontend E2E
 
 ## Success Metrics
 
-- Both tests pass consistently in 10 consecutive CI runs
-- No test failures due to timing/cleanup race conditions
-- Test suite completes in reasonable time (not overly serialized)
+- Both tests pass consistently across 3 consecutive runs
+- No regressions in the other 24 passing tests
