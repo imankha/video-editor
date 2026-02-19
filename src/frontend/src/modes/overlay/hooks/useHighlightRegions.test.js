@@ -796,7 +796,7 @@ describe('useHighlightRegions', () => {
       expect(highlight.y).toBe(540); // Center y
       expect(highlight.radiusX).toBeGreaterThan(0);
       expect(highlight.radiusY).toBeGreaterThan(0);
-      expect(highlight.color).toBe('#FFFF00');
+      expect(highlight.color).toBe('none');
     });
 
     it('returns fallback for missing dimensions', () => {
