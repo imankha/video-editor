@@ -99,10 +99,13 @@ export const useUploadStore = create((set, get) => ({
     };
 
     // Completion handler (shared for single and multi)
+    // IMPORTANT: Fire callbacks BEFORE clearing activeUpload so that
+    // setAnnotateGameId() runs before isUploading() returns false.
+    // Otherwise there's a race where the UI shows upload complete but
+    // annotateGameId is still null, causing TSV imports to skip saving clips.
     const onUploadComplete = (result) => {
       console.log('[UploadStore] Upload complete:', result);
       const callbacks = get().onCompleteCallbacks;
-      set({ activeUpload: null, onCompleteCallbacks: [] });
       callbacks.forEach(cb => {
         try {
           cb(result);
@@ -110,6 +113,7 @@ export const useUploadStore = create((set, get) => ({
           console.error('[UploadStore] Callback error:', e);
         }
       });
+      set({ activeUpload: null, onCompleteCallbacks: [] });
     };
 
     const onUploadError = (error) => {

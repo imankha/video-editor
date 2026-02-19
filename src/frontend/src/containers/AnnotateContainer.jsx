@@ -151,6 +151,11 @@ export function AnnotateContainer({
   // Track whether we initiated the upload from this component (vs navigating back)
   const uploadInitiatedHereRef = useRef(false);
 
+  // Keep a ref to annotateGameId so async callbacks always read the latest value.
+  // useCallback closures capture state at creation time, but the ref is always current.
+  const annotateGameIdRef = useRef(annotateGameId);
+  annotateGameIdRef.current = annotateGameId;
+
   // Restore video state from active upload if navigating back from Games screen
   // This allows users to click on the uploading game card and return to annotation
   // Skip if we just started the upload from this same mount (not a navigation back)
@@ -249,6 +254,7 @@ export function AnnotateContainer({
           gameDetails,
           metadataList,
           (result) => {
+            annotateGameIdRef.current = result.game_id;
             setAnnotateGameId(result.game_id);
             setAnnotateGameName(result.name);
             // Update game_videos with presigned URLs from server
@@ -267,6 +273,7 @@ export function AnnotateContainer({
           gameDetails,
           metadataList[0],
           (result) => {
+            annotateGameIdRef.current = result.game_id;
             setAnnotateGameId(result.game_id);
             setAnnotateGameName(result.name);
             if (result.deduplicated) {
@@ -346,6 +353,7 @@ export function AnnotateContainer({
       setAnnotateVideoFile(null);
       setAnnotateVideoUrl(videoUrl);
       setAnnotateVideoMetadata(videoMetadata);
+      annotateGameIdRef.current = gameId;
       setAnnotateGameId(gameId);
       setAnnotateGameName(gameData.name);
 
@@ -881,8 +889,13 @@ export function AnnotateContainer({
     const count = importAnnotations(annotations, overrideDuration);
     console.log('[AnnotateContainer] Imported', count, 'annotations to UI');
 
+    // Read gameId from ref to get the latest value (not a stale closure).
+    // The upload completion callback sets annotateGameId, but useCallback's closure
+    // may still have the old null value if React hasn't re-rendered yet.
+    const gameId = annotateGameIdRef.current;
+
     // Then save raw_clips in background (don't block UI)
-    if (annotateGameId) {
+    if (gameId) {
       console.log('[AnnotateContainer] Starting background raw_clip saves for', annotations.length, 'annotations...');
 
       // Fire off all saves in parallel (don't await each one sequentially)
@@ -890,7 +903,7 @@ export function AnnotateContainer({
         .filter(annotation => !annotation.raw_clip_id && !annotation.rawClipId)
         .map(async (annotation) => {
           try {
-            const result = await saveClip(annotateGameId, {
+            const result = await saveClip(gameId, {
               start_time: annotation.startTime ?? annotation.start_time ?? 0,
               end_time: annotation.endTime ?? annotation.end_time ?? 0,
               name: annotation.name || '',
@@ -917,10 +930,12 @@ export function AnnotateContainer({
         const successCount = results.filter(r => r !== null).length;
         console.log('[AnnotateContainer] Completed', successCount, '/', annotations.length, 'raw_clip saves');
       });
+    } else {
+      console.warn('[AnnotateContainer] No gameId available - clips will not be saved to library');
     }
 
     return count;
-  }, [annotateGameId, importAnnotations, saveClip]);
+  }, [importAnnotations, saveClip]);
 
   // T82: Simple tab-based video switching
   // Each video is independent with its own timeline (no virtual absolute timeline)
