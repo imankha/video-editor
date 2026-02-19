@@ -31,9 +31,9 @@ Fix data integrity and sync issues before making structural changes. Ordered by 
 | T86 | [FK Cascades on raw_clips](tasks/T86-raw-clips-fk-cascade.md) | DONE | Schema | 2 | Orphaned records on game/project delete |
 | T87 | [Sync Connection Loss Handling](tasks/T87-sync-connection-loss.md) | DONE | Sync | 4 | Failed R2 sync causes permanent divergence |
 | T243 | [Archive DB Not Reducing Size](tasks/T243-archive-db-not-reducing-size.md) | DONE | Storage | 4 | Prune old working_video versions + stale export_jobs on startup |
-| T245 | [Fix Highlight Regions Test](tasks/T245-fix-highlight-regions-test.md) | TODO | Test | 2 | Pre-existing test failure on all branches |
+| T245 | [Fix Highlight Regions Test](tasks/T245-fix-highlight-regions-test.md) | DONE | Test | 2 | Pre-existing test failure on all branches |
 | T246 | [Fix E2E TSV Import Failures](tasks/T246-fix-e2e-tsv-import-failures.md) | DONE | Test | 4 | Fixed: invalid tags in TSV fixture (10/15 tests resolved) |
-| T247 | [Fix E2E Clip Extraction Timeout](tasks/T247-e2e-clip-extraction-timeout.md) | TODO | Test | 4 | 5 E2E tests fail: FFmpeg clip extraction never completes in test env |
+| T247 | [Fix E2E Clip Extraction Timeout](tasks/T247-e2e-clip-extraction-timeout.md) | TODO | Test | 4 | 6 E2E tests fail: FFmpeg clip extraction slow/timeout in test env |
 
 **Priority rationale (infrastructure depth):**
 - T86: Schema integrity — FK enforcement is the foundation all CRUD operations sit on
