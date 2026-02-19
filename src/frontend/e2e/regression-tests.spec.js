@@ -41,14 +41,15 @@ const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
 
 async function setupTestUserContext(page) {
   console.log(`[Test] Setting up test user context: ${TEST_USER_ID}`);
-  // Set X-User-ID header on all requests for test isolation
-  await page.setExtraHTTPHeaders({ 'X-User-ID': TEST_USER_ID });
-  // Strip X-User-ID from R2 presigned URL requests to avoid CORS preflight
+  // Set X-User-ID for test isolation and X-Test-Mode to skip AI upscaling in exports
+  await page.setExtraHTTPHeaders({ 'X-User-ID': TEST_USER_ID, 'X-Test-Mode': 'true' });
+  // Strip custom headers from R2 presigned URL requests to avoid CORS preflight
   // failures. setExtraHTTPHeaders adds to ALL requests including cross-origin
   // XHR PUTs to R2, which triggers CORS preflight and "Part N network error".
   await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
     const headers = { ...route.request().headers() };
     delete headers['x-user-id'];
+    delete headers['x-test-mode'];
     await route.continue({ headers });
   });
 }
@@ -2330,7 +2331,8 @@ test.describe('Full Coverage Tests @full', () => {
     // Use longer timeout and combined locator for reliability
     const frameVideoButton = page.locator('button:has-text("Frame Video")').first();
     const addOverlayButton = page.locator('button:has-text("Add Overlay")').first();
-    const modeIndicator = frameVideoButton.or(addOverlayButton);
+    const exportingButton = page.locator('button:has-text("Exporting")').first();
+    const modeIndicator = frameVideoButton.or(addOverlayButton).or(exportingButton);
 
     // Wait for either mode indicator to be visible with robust retry
     await expect(async () => {
@@ -2339,9 +2341,10 @@ test.describe('Full Coverage Tests @full', () => {
 
     const isFramingMode = await frameVideoButton.isVisible().catch(() => false);
     const isOverlayMode = await addOverlayButton.isVisible().catch(() => false);
+    const isExporting = await exportingButton.isVisible().catch(() => false);
 
-    expect(isFramingMode || isOverlayMode, 'Should be in framing or overlay mode').toBe(true);
-    console.log(`[Full] Opened in ${isFramingMode ? 'framing' : 'overlay'} mode`);
+    expect(isFramingMode || isOverlayMode || isExporting, 'Should be in framing, overlay, or exporting mode').toBe(true);
+    console.log(`[Full] Opened in ${isFramingMode ? 'framing' : isOverlayMode ? 'overlay' : 'exporting'} mode`);
 
     // Verify video is playing correctly
     const video = page.locator('video');

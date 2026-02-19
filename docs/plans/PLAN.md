@@ -34,7 +34,7 @@ Fix data integrity and sync issues before making structural changes. Ordered by 
 | T245 | [Fix Highlight Regions Test](tasks/T245-fix-highlight-regions-test.md) | DONE | Test | 2 | Pre-existing test failure on all branches |
 | T246 | [Fix E2E TSV Import Failures](tasks/T246-fix-e2e-tsv-import-failures.md) | DONE | Test | 4 | Fixed: invalid tags in TSV fixture (10/15 tests resolved) |
 | T247 | [Fix E2E Clip Extraction Timeout](tasks/T247-e2e-clip-extraction-timeout.md) | DONE | Test | 4 | Fixed: X-User-ID header on R2 presigned URLs caused CORS failure; 6/6 smoke tests pass |
-| T20 | [E2E Test Reliability — Mock Export](tasks/T20-e2e-test-reliability.md) | TODO | Test | 3 | Mock framing export to skip GPU processing; fix all E2E failures |
+| T20 | [E2E Test Reliability — Mock Export](tasks/T20-e2e-test-reliability.md) | TESTING | Test | 3 | Mock framing export to skip GPU processing; fix all E2E failures |
 | T248 | [Framing Export Sync Failure](tasks/T248-framing-export-sync-failure.md) | TODO | Sync | 3 | Export completes but working_video not persisted; sync failure after commit |
 
 **Priority rationale (infrastructure depth):**

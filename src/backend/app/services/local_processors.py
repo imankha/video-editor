@@ -25,6 +25,100 @@ from app.constants import ExportPhase
 logger = logging.getLogger(__name__)
 
 
+class MockVideoUpscaler:
+    """
+    Drop-in replacement for AIVideoUpscaler that skips AI upscaling.
+
+    Uses FFmpeg-only crop+resize for fast E2E test exports.
+    Same interface as AIVideoUpscaler.process_video_with_upscale().
+    """
+
+    def __init__(self, **kwargs):
+        self.upsampler = True  # Truthy so pipeline doesn't reject it
+
+    def process_video_with_upscale(
+        self,
+        input_path: str,
+        output_path: str,
+        keyframes: list,
+        target_fps: int = 30,
+        export_mode: str = "quality",
+        progress_callback=None,
+        segment_data=None,
+        include_audio: bool = True,
+        highlight_keyframes=None,
+        highlight_effect_type: str = "original",
+    ) -> dict:
+        """Fast FFmpeg crop+resize — no AI, for E2E tests."""
+        import ffmpeg as ffmpeg_lib
+
+        logger.info(f"[MockUpscaler] Processing {input_path} -> {output_path}")
+
+        # Get source dimensions
+        try:
+            probe = ffmpeg_lib.probe(input_path)
+            video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
+            src_w = int(video_info['width'])
+            src_h = int(video_info['height'])
+        except Exception:
+            src_w, src_h = 1920, 1080
+
+        # Use first keyframe for crop
+        # Keyframes may be fractional (0-1) or pixel coords — detect and handle both
+        kf = keyframes[0] if keyframes else {'x': 0, 'y': 0, 'width': 1, 'height': 1}
+        raw_w = kf.get('width', 1)
+        raw_h = kf.get('height', 1)
+        raw_x = kf.get('x', 0)
+        raw_y = kf.get('y', 0)
+
+        # If values are <= 1.0, they're fractional — multiply by source dims
+        # If values are > 1.0, they're already pixel coords
+        if raw_w <= 1.0 and raw_h <= 1.0:
+            crop_w = max(2, int(raw_w * src_w))
+            crop_h = max(2, int(raw_h * src_h))
+            crop_x = int(raw_x * src_w)
+            crop_y = int(raw_y * src_h)
+        else:
+            crop_w = max(2, int(raw_w))
+            crop_h = max(2, int(raw_h))
+            crop_x = int(raw_x)
+            crop_y = int(raw_y)
+
+        # Clamp to source dimensions
+        crop_w = min(crop_w, src_w - crop_x)
+        crop_h = min(crop_h, src_h - crop_y)
+        crop_x = max(0, crop_x)
+        crop_y = max(0, crop_y)
+
+        try:
+            stream = ffmpeg_lib.input(input_path)
+            stream = ffmpeg_lib.filter(stream, 'crop', crop_w, crop_h, crop_x, crop_y)
+            stream = ffmpeg_lib.filter(stream, 'scale', 810, 1440)
+            out_args = dict(
+                vcodec='libx264', crf=23, preset='ultrafast',
+                pix_fmt='yuv420p', t=10,
+            )
+            if include_audio:
+                out_args.update(acodec='aac', audio_bitrate='128k')
+            else:
+                out_args['an'] = None
+            stream = ffmpeg_lib.output(stream, output_path, **out_args)
+            ffmpeg_lib.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
+        except ffmpeg_lib.Error as e:
+            stderr = e.stderr.decode() if e.stderr else str(e)
+            logger.error(f"[MockUpscaler] FFmpeg failed: {stderr}")
+            raise
+
+        if progress_callback:
+            try:
+                progress_callback(1, 1, "Mock complete", 'complete')
+            except Exception:
+                pass
+
+        logger.info(f"[MockUpscaler] Done: {output_path}")
+        return {"status": "success"}
+
+
 async def local_overlay(
     job_id: str,
     user_id: str,
@@ -290,6 +384,127 @@ async def local_framing(
 
     except Exception as e:
         logger.error(f"[LocalProcessor] Framing job {job_id} failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+async def local_framing_mock(
+    job_id: str,
+    user_id: str,
+    input_key: str,
+    output_key: str,
+    keyframes: list,
+    output_width: int = 810,
+    output_height: int = 1440,
+    progress_callback=None,
+) -> dict:
+    """
+    Mock framing processor for E2E tests.
+
+    Same interface as local_framing but skips AI upscaling entirely.
+    Uses fast FFmpeg crop+resize to produce a valid working video in seconds.
+    """
+    from app.storage import download_from_r2, upload_to_r2
+    import ffmpeg as ffmpeg_lib
+
+    logger.info(f"[LocalProcessor] Mock framing job {job_id} starting (test mode)")
+
+    start_time = time.time()
+
+    if progress_callback:
+        try:
+            await progress_callback(10, "Test mode: downloading...", ExportPhase.DOWNLOAD)
+        except Exception as e:
+            logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="framing_mock_") as temp_dir:
+            input_path = os.path.join(temp_dir, "input.mp4")
+            output_path = os.path.join(temp_dir, "output.mp4")
+
+            # Download from R2
+            if not await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path)):
+                return {"status": "error", "error": "Failed to download from R2"}
+
+            if progress_callback:
+                try:
+                    await progress_callback(30, "Test mode: crop+resize...", ExportPhase.PROCESSING)
+                except Exception as e:
+                    logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
+
+            # Get source dimensions
+            try:
+                probe = ffmpeg_lib.probe(input_path)
+                video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
+                src_w = int(video_info['width'])
+                src_h = int(video_info['height'])
+            except Exception:
+                src_w, src_h = 1920, 1080
+
+            # Use first keyframe for crop region
+            # Keyframes may be fractional (0-1) or pixel coords — detect both
+            kf = keyframes[0] if keyframes else {'x': 0, 'y': 0, 'width': 1, 'height': 1}
+            raw_w = kf.get('width', 1)
+            raw_h = kf.get('height', 1)
+            raw_x = kf.get('x', 0)
+            raw_y = kf.get('y', 0)
+
+            if raw_w <= 1.0 and raw_h <= 1.0:
+                crop_w = max(2, int(raw_w * src_w))
+                crop_h = max(2, int(raw_h * src_h))
+                crop_x = int(raw_x * src_w)
+                crop_y = int(raw_y * src_h)
+            else:
+                crop_w = max(2, int(raw_w))
+                crop_h = max(2, int(raw_h))
+                crop_x = int(raw_x)
+                crop_y = int(raw_y)
+
+            crop_w = min(crop_w, src_w - crop_x)
+            crop_h = min(crop_h, src_h - crop_y)
+            crop_x = max(0, crop_x)
+            crop_y = max(0, crop_y)
+
+            # Fast FFmpeg crop + resize (no AI)
+            try:
+                stream = ffmpeg_lib.input(input_path)
+                stream = ffmpeg_lib.filter(stream, 'crop', crop_w, crop_h, crop_x, crop_y)
+                stream = ffmpeg_lib.filter(stream, 'scale', output_width, output_height)
+                stream = ffmpeg_lib.output(stream, output_path,
+                                           vcodec='libx264', crf=23, preset='ultrafast',
+                                           acodec='aac', audio_bitrate='128k',
+                                           pix_fmt='yuv420p', t=10)
+                await asyncio.to_thread(
+                    ffmpeg_lib.run, stream,
+                    overwrite_output=True, capture_stdout=True, capture_stderr=True
+                )
+            except ffmpeg_lib.Error as e:
+                stderr = e.stderr.decode() if e.stderr else str(e)
+                logger.error(f"[LocalProcessor] Mock FFmpeg failed: {stderr}")
+                return {"status": "error", "error": f"Mock FFmpeg failed: {stderr}"}
+
+            if progress_callback:
+                try:
+                    await progress_callback(80, "Test mode: uploading...", ExportPhase.UPLOAD)
+                except Exception as e:
+                    logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
+
+            # Upload to R2
+            if not await asyncio.to_thread(upload_to_r2, user_id, output_key, Path(output_path)):
+                return {"status": "error", "error": "Failed to upload to R2"}
+
+            total_time = time.time() - start_time
+            logger.info(f"[LocalProcessor] Mock framing job {job_id} completed in {total_time:.1f}s")
+
+            if progress_callback:
+                try:
+                    await progress_callback(100, "Complete!", ExportPhase.COMPLETE)
+                except Exception as e:
+                    logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
+
+            return {"status": "success", "output_key": output_key}
+
+    except Exception as e:
+        logger.error(f"[LocalProcessor] Mock framing job {job_id} failed: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
 
 

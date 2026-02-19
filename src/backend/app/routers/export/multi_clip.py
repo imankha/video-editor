@@ -889,16 +889,15 @@ async def process_single_clip(
     # Read video content
     video_content = await video_file.read()
 
-    # Check AI upscaler availability
-    if AIVideoUpscaler is None:
-        raise HTTPException(
-            status_code=503,
-            detail={"error": "AI upscaling dependencies not installed"}
-        )
-
     # Reuse provided upscaler or create a new one
-    # Creating a new upscaler per clip can cause VRAM exhaustion!
     if upscaler is None:
+        # Check AI upscaler availability (only when no upscaler provided)
+        if AIVideoUpscaler is None:
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "AI upscaling dependencies not installed"}
+            )
+        # Creating a new upscaler per clip can cause VRAM exhaustion!
         upscaler = AIVideoUpscaler(
             device='cuda',
             export_mode=export_mode,
@@ -1419,61 +1418,69 @@ async def export_multi_clip(
                 "video_duration": video_duration,
             })
 
-        # ===== LOCAL GPU PROCESSING (fallback when Modal not enabled) =====
+        # ===== LOCAL PROCESSING (GPU or mock for tests) =====
 
-        # Create upscaler ONCE and reuse for all clips
-        # This prevents VRAM exhaustion from loading the model multiple times
-        if AIVideoUpscaler is None:
-            raise HTTPException(
-                status_code=503,
-                detail={"error": "AI upscaling dependencies not installed"}
-            )
+        # Check for E2E test mode — skip AI upscaling, use fast FFmpeg crop+resize
+        is_test_mode = request.headers.get('X-Test-Mode', '').lower() == 'true'
 
-        # Check CUDA availability before trying to initialize
-        if not torch.cuda.is_available():
-            raise HTTPException(
-                status_code=503,
-                detail={"error": "CUDA not available - GPU required for AI upscaling"}
-            )
+        if is_test_mode:
+            from app.services.local_processors import MockVideoUpscaler
+            shared_upscaler = MockVideoUpscaler()
+            logger.info(f"[Multi-Clip Export] TEST MODE: Using MockVideoUpscaler (no AI)")
+        else:
+            # Create real AI upscaler ONCE and reuse for all clips
+            # This prevents VRAM exhaustion from loading the model multiple times
+            if AIVideoUpscaler is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail={"error": "AI upscaling dependencies not installed"}
+                )
 
-        # Clear any stale GPU memory before initializing model
-        try:
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-            logger.info(f"[Multi-Clip Export] CUDA memory cleared. Available: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}GB")
-        except Exception as e:
-            logger.warning(f"[Multi-Clip Export] Failed to clear CUDA cache: {e}")
+            # Check CUDA availability before trying to initialize
+            if not torch.cuda.is_available():
+                raise HTTPException(
+                    status_code=503,
+                    detail={"error": "CUDA not available - GPU required for AI upscaling"}
+                )
 
-        try:
-            shared_upscaler = AIVideoUpscaler(
-                device='cuda',
-                export_mode=export_mode,
-                sr_model_name='realesr_general_x4v3'
-            )
-        except torch.cuda.OutOfMemoryError as e:
-            logger.error(f"[Multi-Clip Export] CUDA out of memory during model init: {e}")
-            torch.cuda.empty_cache()
-            raise HTTPException(
-                status_code=503,
-                detail={"error": f"GPU out of memory - try closing other GPU applications: {e}"}
-            )
-        except RuntimeError as e:
-            if "CUDA" in str(e) or "cuda" in str(e):
-                logger.error(f"[Multi-Clip Export] CUDA error during model init: {e}")
+            # Clear any stale GPU memory before initializing model
+            try:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                logger.info(f"[Multi-Clip Export] CUDA memory cleared. Available: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f}GB")
+            except Exception as e:
+                logger.warning(f"[Multi-Clip Export] Failed to clear CUDA cache: {e}")
+
+            try:
+                shared_upscaler = AIVideoUpscaler(
+                    device='cuda',
+                    export_mode=export_mode,
+                    sr_model_name='realesr_general_x4v3'
+                )
+            except torch.cuda.OutOfMemoryError as e:
+                logger.error(f"[Multi-Clip Export] CUDA out of memory during model init: {e}")
                 torch.cuda.empty_cache()
                 raise HTTPException(
                     status_code=503,
-                    detail={"error": f"CUDA error - GPU may be busy or unavailable: {e}"}
+                    detail={"error": f"GPU out of memory - try closing other GPU applications: {e}"}
                 )
-            raise
+            except RuntimeError as e:
+                if "CUDA" in str(e) or "cuda" in str(e):
+                    logger.error(f"[Multi-Clip Export] CUDA error during model init: {e}")
+                    torch.cuda.empty_cache()
+                    raise HTTPException(
+                        status_code=503,
+                        detail={"error": f"CUDA error - GPU may be busy or unavailable: {e}"}
+                    )
+                raise
 
-        if shared_upscaler.upsampler is None:
-            raise HTTPException(
-                status_code=503,
-                detail={"error": "AI SR model failed to load"}
-            )
+            if shared_upscaler.upsampler is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail={"error": "AI SR model failed to load"}
+                )
 
-        logger.info(f"[Multi-Clip Export] Initialized shared AI upscaler")
+            logger.info(f"[Multi-Clip Export] Initialized shared AI upscaler")
 
         # Process each clip
         total_clips = len(clips_data)
