@@ -17,6 +17,7 @@ import sqlite3
 import logging
 import threading
 import time
+from contextvars import ContextVar
 from pathlib import Path
 from contextlib import contextmanager
 from typing import Optional, Any
@@ -50,8 +51,11 @@ DB_SIZE_CRITICAL_THRESHOLD = 768 * 1024  # 768KB - sync performance degrades
 # Query timing threshold for slow query warnings (in seconds)
 SLOW_QUERY_THRESHOLD = 0.1  # 100ms - warn if query takes this long
 
-# Thread-local storage for request context (write tracking)
-_request_context = threading.local()
+# Per-request context for write tracking (ContextVar is async-safe, unlike threading.local)
+# threading.local is shared across all async coroutines on the same event loop thread,
+# which causes concurrent requests to clobber each other's write flags.
+_request_has_writes: ContextVar[bool] = ContextVar('request_has_writes', default=False)
+_request_user_id: ContextVar[Optional[str]] = ContextVar('request_user_id', default=None)
 
 
 class TrackedCursor:
@@ -144,8 +148,7 @@ class TrackedConnection:
         """Mark that a write operation occurred."""
         self._has_writes = True
         # Also mark in request context for middleware to detect
-        if hasattr(_request_context, 'has_writes'):
-            _request_context.has_writes = True
+        _request_has_writes.set(True)
 
     @property
     def has_writes(self) -> bool:
@@ -289,22 +292,28 @@ def set_local_db_version(user_id: str, version: Optional[int]) -> None:
 
 
 def init_request_context() -> None:
-    """Initialize request context for write tracking. Call at start of request."""
-    _request_context.has_writes = False
-    _request_context.user_id = get_current_user_id()
+    """Initialize request context for write tracking. Call at start of request.
+
+    Uses ContextVar (async-safe) instead of threading.local, so concurrent
+    async requests on the same event loop thread don't clobber each other.
+    """
+    _request_has_writes.set(False)
+    _request_user_id.set(get_current_user_id())
 
 
 def get_request_has_writes() -> bool:
     """Check if any writes occurred during this request."""
-    return getattr(_request_context, 'has_writes', False)
+    return _request_has_writes.get()
 
 
 def clear_request_context() -> None:
-    """Clear request context. Call at end of request."""
-    if hasattr(_request_context, 'has_writes'):
-        del _request_context.has_writes
-    if hasattr(_request_context, 'user_id'):
-        del _request_context.user_id
+    """Clear request context. Call at end of request.
+
+    ContextVar values are automatically scoped to each async task,
+    but we reset explicitly for clarity and to free references.
+    """
+    _request_has_writes.set(False)
+    _request_user_id.set(None)
 
 
 def get_user_data_path() -> Path:
@@ -426,6 +435,14 @@ def ensure_database():
             elif new_version is not None:
                 # R2 has a version but we didn't need to download (local exists)
                 set_local_db_version(user_id, new_version)
+            else:
+                # R2 has no DB for this user (fresh user or R2 HEAD failed).
+                # Set version to 0 so we don't retry the R2 HEAD on every request.
+                # Without this, every get_db_connection() call for fresh users
+                # makes a slow R2 HEAD request (~3s), and if a sync eventually
+                # succeeds (uploading stale data), a later request with
+                # local_version=None would download and overwrite local changes.
+                set_local_db_version(user_id, 0)
 
     # If already initialized, skip table creation
     if already_initialized:
