@@ -1,12 +1,11 @@
 """
-Authentication endpoints for user isolation.
+Authentication and session initialization endpoints.
 
-This is a simple user system for test isolation - no actual authentication.
-The frontend "logs in" with a user ID, and the backend ensures that user
-namespace exists (upsert pattern).
+/api/auth/init — Frontend calls this once on app mount. Performs ALL per-user
+setup (profile load/create, DB init, cleanup). Returns profile_id for the
+frontend to send as X-Profile-ID header on subsequent requests.
 
-Production use: Single user mode with default user ID.
-Test use: Each test suite logs in with a unique user ID for isolation.
+When real auth is added, call user_session_init() from the login handler.
 """
 
 from fastapi import APIRouter, HTTPException
@@ -15,54 +14,38 @@ import logging
 import shutil
 
 from app.user_context import get_current_user_id
-from app.database import get_user_data_path
+from app.database import get_user_data_path, USER_DATA_BASE
+from app.session_init import user_session_init
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-class LoginRequest(BaseModel):
+class InitResponse(BaseModel):
     user_id: str
+    profile_id: str
+    is_new_user: bool
 
 
-class LoginResponse(BaseModel):
-    user_id: str
-    message: str
-
-
-@router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest):
+@router.post("/init", response_model=InitResponse)
+async def init_session():
     """
-    Login with a user ID.
+    Initialize user session. Frontend calls this once on app mount.
 
-    This is a simple upsert - if the user namespace doesn't exist, it will
-    be created automatically when data is first accessed. No actual user
-    records are stored; the user_id simply determines the storage namespace.
+    Creates default profile if needed, ensures database exists, runs
+    cleanup tasks. Returns profile_id for the frontend to include as
+    X-Profile-ID header on all subsequent requests.
 
-    For tests, use a unique user_id like "e2e_test_<timestamp>" to isolate
-    test data from development data.
-
-    Note: The actual user context is set via the X-User-ID header middleware,
-    not this endpoint. This endpoint exists to:
-    1. Provide a clear login action for the frontend
-    2. Return confirmation of the user namespace
-    3. Enable future user management features if needed
+    All per-user setup lives in user_session_init() — when real auth
+    is added, just call that function from the login handler.
     """
-    user_id = request.user_id.strip()
+    user_id = get_current_user_id()
+    result = user_session_init(user_id)
 
-    if not user_id:
-        user_id = "a"  # Default user
-
-    # Sanitize: only allow alphanumeric, underscore, dash
-    sanitized = ''.join(c for c in user_id if c.isalnum() or c in '_-')
-    if not sanitized:
-        sanitized = "a"
-
-    logger.info(f"User login: {sanitized}")
-
-    return LoginResponse(
-        user_id=sanitized,
-        message=f"Logged in as {sanitized}"
+    return InitResponse(
+        user_id=user_id,
+        profile_id=result["profile_id"],
+        is_new_user=result["is_new_user"],
     )
 
 
@@ -85,7 +68,8 @@ async def delete_user():
     Use with caution! This is primarily for test cleanup.
     """
     user_id = get_current_user_id()
-    user_path = get_user_data_path()
+    # Use user-level path (not profile-scoped) — delete everything for this user
+    user_path = USER_DATA_BASE / user_id
 
     if not user_path.exists():
         logger.info(f"User folder does not exist: {user_id}")

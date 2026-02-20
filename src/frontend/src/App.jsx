@@ -1,7 +1,8 @@
-import { useMemo, useRef, useCallback, useEffect } from 'react';
+import { useMemo, useRef, useCallback, useEffect, useState } from 'react';
 import { Home, Scissors } from 'lucide-react';
 import { Logo } from './components/Logo';
 import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
+import { initSession } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
@@ -87,14 +88,19 @@ function App() {
     discardUncommittedChanges
   } = useProjects();
 
+  // T85a: Session must be initialized before any API calls.
+  // initSession() calls /api/auth/init, installs X-Profile-ID header on fetch().
+  // Until this completes, we render nothing to avoid profile-less API calls.
+  const [sessionReady, setSessionReady] = useState(false);
+  useEffect(() => {
+    initSession().then(() => {
+      setSessionReady(true);
+      warmAllUserVideos();
+    });
+  }, []);
+
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
-
-  // Pre-warm R2 cache for all user videos on app init
-  // TODO(T200): Move this to post-login hook when User Management is implemented
-  useEffect(() => {
-    warmAllUserVideos();
-  }, []);
 
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);
@@ -251,6 +257,9 @@ function App() {
     globalExportProgress,
     setGlobalExportProgress,
   ]);
+
+  // Block all rendering until session is initialized
+  if (!sessionReady) return null;
 
   // If no project selected and not in annotate mode, show ProjectsScreen
   if (!selectedProject && editorMode !== EDITOR_MODES.ANNOTATE) {

@@ -1,10 +1,34 @@
 """
-Pytest configuration and shared fixtures for AI Upscaler tests
+Pytest configuration and shared fixtures for backend tests.
 """
 
 import pytest
 import numpy as np
 from unittest.mock import Mock, MagicMock, patch
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _set_default_profile_context():
+    """Set a default profile context for all tests.
+
+    T85a: All code paths that use r2_key() or get_user_data_path() now require
+    a profile ID. This fixture ensures tests don't fail with "Profile ID not set"
+    unless they explicitly reset_profile_id() to test that error case.
+
+    Also pre-populates user_session_init's cache so middleware auto-resolve
+    returns "testdefault" instead of doing R2 lookups for test users.
+    """
+    from app.profile_context import set_current_profile_id
+    from app.session_init import _init_cache
+    set_current_profile_id("testdefault")
+    # Pre-populate the init cache for common test user IDs so middleware
+    # auto-resolve doesn't create random profiles via R2
+    for user_id in ("a", "testdefault"):
+        _init_cache[user_id] = {"profile_id": "testdefault", "is_new_user": False}
+    yield
+    from app.profile_context import reset_profile_id
+    reset_profile_id()
+    _init_cache.clear()
 
 
 @pytest.fixture

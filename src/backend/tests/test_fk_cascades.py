@@ -21,15 +21,20 @@ TEST_USER_ID = f"test_fk_cascades_{uuid.uuid4().hex[:8]}"
 
 def setup_module():
     from app.user_context import set_current_user_id
+    from app.profile_context import set_current_profile_id
     set_current_user_id(TEST_USER_ID)
+    set_current_profile_id("testdefault")
 
 
 def teardown_module():
-    from app.database import get_user_data_path
+    from app.database import get_user_data_path, USER_DATA_BASE
     from app.user_context import set_current_user_id, reset_user_id
+    from app.profile_context import set_current_profile_id
 
     set_current_user_id(TEST_USER_ID)
-    test_path = get_user_data_path()
+    set_current_profile_id("testdefault")
+    # Clean up the entire user directory (includes profiles/)
+    test_path = USER_DATA_BASE / TEST_USER_ID
     if test_path.exists():
         shutil.rmtree(test_path, ignore_errors=True)
 
@@ -146,7 +151,7 @@ def test_delete_game_via_api_cascades():
     from fastapi.testclient import TestClient
     from app.main import app
 
-    with TestClient(app, headers={"X-User-ID": TEST_USER_ID}) as client:
+    with TestClient(app, headers={"X-User-ID": TEST_USER_ID, "X-Profile-ID": "testdefault"}) as client:
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
