@@ -23,6 +23,9 @@ import threading
 
 logger = logging.getLogger(__name__)
 
+# Environment prefix for R2 paths (dev | staging | prod)
+APP_ENV = os.getenv("APP_ENV", "dev")
+
 # Check if R2 is enabled
 R2_ENABLED = os.getenv("R2_ENABLED", "false").lower() == "true"
 R2_ENDPOINT = os.getenv("R2_ENDPOINT", "")
@@ -100,10 +103,15 @@ def get_r2_sync_client():
 
 
 def r2_key(user_id: str, path: str) -> str:
-    """Generate R2 object key from user ID and relative path."""
+    """Generate R2 object key for user profile data.
+
+    Format: {env}/users/{user_id}/profiles/{profile_id}/{path}
+    """
+    from .profile_context import get_current_profile_id
+    profile_id = get_current_profile_id()
     # Normalize path separators for R2
     path = path.replace("\\", "/")
-    return f"{user_id}/{path}"
+    return f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/{path}"
 
 
 def download_from_r2(user_id: str, relative_path: str, local_path: Path, progress_callback=None) -> bool:
@@ -814,11 +822,22 @@ def list_r2_files(user_id: str, prefix: str = "") -> list:
 
 def r2_global_key(path: str) -> str:
     """
-    Generate R2 object key without user prefix (for global storage).
-    Used for deduplicated game storage: games/{blake3_hash}.mp4
+    Generate R2 object key for global storage (not user-scoped).
+    Used for deduplicated game storage: {env}/games/{blake3_hash}.mp4
     """
     # Normalize path separators for R2
-    return path.replace("\\", "/")
+    path = path.replace("\\", "/")
+    return f"{APP_ENV}/{path}"
+
+
+def r2_user_key(user_id: str, path: str) -> str:
+    """
+    Generate R2 object key for user-level files (outside profiles).
+    Used for profiles.json, selected-profile.json.
+    Format: {env}/users/{user_id}/{path}
+    """
+    path = path.replace("\\", "/")
+    return f"{APP_ENV}/users/{user_id}/{path}"
 
 
 def r2_head_object_global(key: str) -> Optional[dict]:
@@ -868,6 +887,103 @@ def r2_delete_object_global(key: str) -> bool:
         return True
     except Exception as e:
         logger.error(f"Failed to delete global object from R2: {key} - {e}")
+        return False
+
+
+# ==============================================================================
+# Profile Management Functions (user-level, outside profiles/)
+# ==============================================================================
+
+def read_selected_profile_from_r2(user_id: str) -> Optional[str]:
+    """Read selected-profile.json from R2 for a user.
+
+    Returns the profile_id string, or None if not found or R2 disabled.
+    """
+    client = get_r2_sync_client()
+    if not client:
+        return None
+
+    import json
+    import tempfile
+
+    key = r2_user_key(user_id, "selected-profile.json")
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.json') as tmp:
+            tmp_path = tmp.name
+        client.download_file(R2_BUCKET, key, tmp_path)
+        with open(tmp_path, 'r') as f:
+            data = json.load(f)
+        os.unlink(tmp_path)
+        profile_id = data.get("profileId")
+        if profile_id:
+            logger.info(f"Loaded profile {profile_id} for user {user_id} from R2")
+        return profile_id
+    except client.exceptions.NoSuchKey:
+        logger.debug(f"No selected-profile.json for user {user_id}")
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to read selected-profile.json for user {user_id}: {e}")
+        return None
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except (OSError, UnboundLocalError):
+            pass
+
+
+def upload_profiles_json(user_id: str, profile_id: str) -> bool:
+    """Upload profiles.json to R2 for a user.
+
+    Creates the initial profile manifest with one default profile.
+    """
+    client = get_r2_client()
+    if not client:
+        return False
+
+    import json
+
+    key = r2_user_key(user_id, "profiles.json")
+    data = {
+        "default": profile_id,
+        "profiles": {
+            profile_id: {"name": None}
+        }
+    }
+    try:
+        client.put_object(
+            Bucket=R2_BUCKET,
+            Key=key,
+            Body=json.dumps(data).encode('utf-8'),
+            ContentType='application/json',
+        )
+        logger.info(f"Created profiles.json for user {user_id} with profile {profile_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to upload profiles.json for user {user_id}: {e}")
+        return False
+
+
+def upload_selected_profile_json(user_id: str, profile_id: str) -> bool:
+    """Upload selected-profile.json to R2 for a user."""
+    client = get_r2_client()
+    if not client:
+        return False
+
+    import json
+
+    key = r2_user_key(user_id, "selected-profile.json")
+    data = {"profileId": profile_id}
+    try:
+        client.put_object(
+            Bucket=R2_BUCKET,
+            Key=key,
+            Body=json.dumps(data).encode('utf-8'),
+            ContentType='application/json',
+        )
+        logger.info(f"Set selected profile to {profile_id} for user {user_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to upload selected-profile.json for user {user_id}: {e}")
         return False
 
 

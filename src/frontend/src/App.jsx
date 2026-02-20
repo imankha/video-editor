@@ -2,6 +2,7 @@ import { useMemo, useRef, useCallback, useEffect } from 'react';
 import { Home, Scissors } from 'lucide-react';
 import { Logo } from './components/Logo';
 import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
+import { initSession } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
@@ -87,14 +88,14 @@ function App() {
     discardUncommittedChanges
   } = useProjects();
 
+  // T85a: Initialize session (profile ID header) then warm video cache.
+  // The backend auto-resolves profile if header is missing, so no render gate needed.
+  useEffect(() => {
+    initSession().then(() => warmAllUserVideos());
+  }, []);
+
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
-
-  // Pre-warm R2 cache for all user videos on app init
-  // TODO(T200): Move this to post-login hook when User Management is implemented
-  useEffect(() => {
-    warmAllUserVideos();
-  }, []);
 
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);

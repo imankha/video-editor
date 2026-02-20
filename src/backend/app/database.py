@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from typing import Optional, Any
 
 from .user_context import get_current_user_id
+from .profile_context import get_current_profile_id
 from .storage import (
     R2_ENABLED,
     sync_database_from_r2,
@@ -317,8 +318,8 @@ def clear_request_context() -> None:
 
 
 def get_user_data_path() -> Path:
-    """Get the user data directory path for the current user."""
-    return USER_DATA_BASE / get_current_user_id()
+    """Get the user data directory path for the current user and profile."""
+    return USER_DATA_BASE / get_current_user_id() / "profiles" / get_current_profile_id()
 
 
 def get_database_path() -> Path:
@@ -919,23 +920,8 @@ def ensure_database():
     finally:
         conn.close()
 
-    # T66: Cleanup stale restored projects on first access for this user
-    # This must be after conn.close() and after _initialized_users.add()
-    # to avoid recursion when cleanup_stale_restored_projects() calls get_db_connection()
-    try:
-        from app.services.project_archive import cleanup_stale_restored_projects
-        archived_count = cleanup_stale_restored_projects(user_id)
-        if archived_count > 0:
-            logger.info(f"T66: Re-archived {archived_count} stale restored projects for user {user_id}")
-    except Exception as e:
-        logger.error(f"T66: Failed to cleanup stale restored projects: {e}")
-
-    # T243: Prune old working_video versions and stale export_jobs to keep DB small
-    try:
-        from app.services.project_archive import cleanup_database_bloat
-        cleanup_database_bloat()
-    except Exception as e:
-        logger.error(f"T243: Failed to cleanup database bloat: {e}")
+    # T85a: Cleanup tasks (T66, T243) moved to session_init.py user_session_init()
+    # They now run explicitly during /api/auth/init instead of implicitly here.
 
 
 @contextmanager

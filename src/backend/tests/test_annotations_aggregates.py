@@ -19,23 +19,25 @@ TEST_USER_ID = f"test_aggregates_{uuid.uuid4().hex[:8]}"
 
 def setup_module():
     """Set up test environment with isolated user namespace."""
-    # Set the user context for tests
     from app.user_context import set_current_user_id
+    from app.profile_context import set_current_profile_id
     set_current_user_id(TEST_USER_ID)
+    set_current_profile_id("testdefault")
 
 
 def teardown_module():
     """Cleanup test user data directory and reset user context."""
-    from app.database import get_user_data_path, USER_DATA_BASE
+    from app.database import USER_DATA_BASE
     from app.user_context import set_current_user_id, reset_user_id
+    from app.profile_context import set_current_profile_id
 
-    # Set the test user context to get the right path
     set_current_user_id(TEST_USER_ID)
-    test_path = get_user_data_path()
+    set_current_profile_id("testdefault")
+    # Clean up the entire user directory (includes profiles/)
+    test_path = USER_DATA_BASE / TEST_USER_ID
     if test_path.exists():
         shutil.rmtree(test_path, ignore_errors=True)
 
-    # Reset to default user context for subsequent tests
     reset_user_id()
 
 
@@ -47,7 +49,7 @@ from app.main import app
 @pytest.fixture(scope="module")
 def client():
     """Create a test client with test user header."""
-    with TestClient(app, headers={"X-User-ID": TEST_USER_ID}) as c:
+    with TestClient(app, headers={"X-User-ID": TEST_USER_ID, "X-Profile-ID": "testdefault"}) as c:
         yield c
 
 

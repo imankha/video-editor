@@ -57,9 +57,10 @@ logging.getLogger("watchfiles").setLevel(logging.WARNING)
 from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router
 from app.routers.exports import router as exports_router
 from app.websocket import websocket_export_progress, websocket_extractions
-from app.database import init_database
 from app.services.export_worker import recover_orphaned_jobs
 from app.user_context import set_current_user_id, get_current_user_id
+from app.profile_context import set_current_profile_id
+from app.session_init import user_session_init
 from app.constants import DEFAULT_USER_ID
 from app.middleware import DatabaseSyncMiddleware
 
@@ -83,6 +84,15 @@ class UserContextMiddleware(BaseHTTPMiddleware):
 
         # Set user context for this request
         set_current_user_id(sanitized)
+
+        # Set profile context from X-Profile-ID header (fast path), or
+        # auto-resolve via user_session_init (first request / missing header).
+        # user_session_init is idempotent and cached after first call per user.
+        profile_id = request.headers.get('X-Profile-ID')
+        if profile_id:
+            set_current_profile_id(profile_id)
+        else:
+            user_session_init(sanitized)
 
         response = await call_next(request)
         return response
@@ -216,13 +226,12 @@ async def startup_event():
     logger.info(f"Python version: {sys.version.split()[0]}")
     logger.info("=" * 80)
 
-    # Initialize database
-    try:
-        init_database()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        raise
+    # Initialize the default user session (profile + database).
+    # This ensures startup tasks that need DB access have a profile context.
+    from app.user_context import set_current_user_id as _set_user
+    _set_user(DEFAULT_USER_ID)
+    user_session_init(DEFAULT_USER_ID)
+    logger.info(f"Default user '{DEFAULT_USER_ID}' session initialized")
 
     # Recover any orphaned export jobs from previous server run
     try:

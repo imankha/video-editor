@@ -64,12 +64,30 @@ async def get_status():
 
 @router.get("/api/health")
 async def health_check():
-    """Health check with database status"""
+    """Health check with database status.
+
+    Works without X-Profile-ID header — reports profile-scoped DB status
+    only when profile context is available.
+    """
+    from ..profile_context import get_current_profile_id
+    try:
+        profile_id = get_current_profile_id()
+        db_info = {
+            "db_initialized": is_database_initialized(),
+            "db_path": str(get_database_path()),
+            "user_data_path": str(get_user_data_path()),
+        }
+    except RuntimeError:
+        db_info = {
+            "db_initialized": None,
+            "db_path": None,
+            "user_data_path": None,
+            "note": "No X-Profile-ID header — call /api/auth/init first",
+        }
+
     return {
         "status": "healthy",
-        "db_initialized": is_database_initialized(),
-        "db_path": str(get_database_path()),
-        "user_data_path": str(get_user_data_path())
+        **db_info,
     }
 
 
