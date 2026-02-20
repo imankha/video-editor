@@ -11,7 +11,7 @@ These endpoints handle crop keyframes, segment speed changes, trimming,
 and AI upscaling for the Framing mode workflow.
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pathlib import Path
 from typing import Dict, Any
@@ -414,7 +414,7 @@ class RenderRequest(BaseModel):
 
 
 @router.post("/render")
-async def render_project(request: RenderRequest):
+async def render_project(request: RenderRequest, http_request: Request):
     """
     Backend-authoritative framing export.
 
@@ -663,12 +663,14 @@ async def render_project(request: RenderRequest):
     temp_dir = tempfile.mkdtemp()
     output_path = os.path.join(temp_dir, working_filename)
 
+    # Check for E2E test mode - routes to fast FFmpeg crop+resize in call_modal_framing_ai
+    is_test_mode = http_request.headers.get('X-Test-Mode', '').lower() == 'true'
+
     try:
-        # Use unified interface - routes to Modal or local automatically
         from app.services.export_helpers import send_progress, create_progress_callback
         from app.services.modal_client import call_modal_framing_ai
 
-        logger.info(f"[Render] Starting AI upscaling (Modal: {modal_enabled()})")
+        logger.info(f"[Render] Starting export (Modal: {modal_enabled()}, test_mode: {is_test_mode})")
 
         # Calculate effective output duration for progress estimation
         # Note: get_output_duration expects raw frontend format (boundaries + segmentSpeeds)
@@ -679,7 +681,7 @@ async def render_project(request: RenderRequest):
 
         # Send initial progress
         await send_progress(
-            export_id, 10, 100, 'init', 'Starting AI upscaler...',
+            export_id, 10, 100, 'init', 'Starting export...',
             'framing', project_id=project_id, project_name=project_name
         )
 
@@ -689,7 +691,7 @@ async def render_project(request: RenderRequest):
             project_id=project_id, project_name=project_name
         )
 
-        # Call unified interface - routes to Modal or local_framing automatically
+        # Call unified interface - routes to Modal, local, or mock automatically
         result = await call_modal_framing_ai(
             job_id=export_id,
             user_id=user_id,
@@ -704,6 +706,7 @@ async def render_project(request: RenderRequest):
             progress_callback=progress_callback,
             include_audio=request.include_audio,
             export_mode=request.export_mode,
+            test_mode=is_test_mode,
         )
 
         if result.get("status") != "success":
@@ -712,7 +715,7 @@ async def render_project(request: RenderRequest):
                 detail={"error": "processing_failed", "message": result.get("error", "AI processing failed")}
             )
 
-        logger.info(f"[Render] AI upscaling complete: {result}")
+        logger.info(f"[Render] Export complete: {result}")
 
         # Get video duration for DB (download output to measure)
         await send_progress(
@@ -741,40 +744,45 @@ async def render_project(request: RenderRequest):
             'name': clip['clip_name'] or 'Clip 1',
         }]
 
-        # Create progress callback for detection phase
-        async def detection_progress_callback(progress: float, message: str, phase: str = "detecting_players"):
-            progress_data = {
-                "progress": progress,
-                "message": message,
-                "status": "processing",
-                "phase": phase,
-                "projectId": project_id,
-                "projectName": project_name,
-                "type": "framing"
-            }
-            export_progress[export_id] = progress_data
-            await manager.send_progress(export_id, progress_data)
-
-        # Run batch player detection on the working video
-        # Download from R2 since unified interface uploads there (local_framing uses its own temp dir)
-        # Note: download_from_r2 is already imported at module level
-        if not await asyncio.to_thread(download_from_r2, user_id, output_key, Path(output_path)):
-            logger.warning(f"[Render] Failed to download working video for detection, using defaults")
+        if is_test_mode:
+            # Skip player detection in test mode - use defaults
+            logger.info(f"[Render] TEST MODE: Skipping player detection, using defaults")
             highlight_regions = generate_default_highlight_regions(source_clips)
         else:
-            try:
-                highlight_regions = await run_local_detection_on_video_file(
-                    video_path=output_path,
-                    source_clips=source_clips,
-                )
-                logger.info(f"[Render] Player detection complete: {len(highlight_regions)} regions with detected keyframes")
-                # DEBUG: Log first region's keyframes to verify detection quality
-                if highlight_regions and highlight_regions[0].get('keyframes'):
-                    first_kf = highlight_regions[0]['keyframes'][:3]  # First 3 keyframes
-                    logger.info(f"[Render] DEBUG - First region keyframes sample: {first_kf}")
-            except Exception as det_error:
-                logger.warning(f"[Render] Player detection failed, using defaults: {det_error}")
+            # Create progress callback for detection phase
+            async def detection_progress_callback(progress: float, message: str, phase: str = "detecting_players"):
+                progress_data = {
+                    "progress": progress,
+                    "message": message,
+                    "status": "processing",
+                    "phase": phase,
+                    "projectId": project_id,
+                    "projectName": project_name,
+                    "type": "framing"
+                }
+                export_progress[export_id] = progress_data
+                await manager.send_progress(export_id, progress_data)
+
+            # Run batch player detection on the working video
+            # Download from R2 since unified interface uploads there (local_framing uses its own temp dir)
+            # Note: download_from_r2 is already imported at module level
+            if not await asyncio.to_thread(download_from_r2, user_id, output_key, Path(output_path)):
+                logger.warning(f"[Render] Failed to download working video for detection, using defaults")
                 highlight_regions = generate_default_highlight_regions(source_clips)
+            else:
+                try:
+                    highlight_regions = await run_local_detection_on_video_file(
+                        video_path=output_path,
+                        source_clips=source_clips,
+                    )
+                    logger.info(f"[Render] Player detection complete: {len(highlight_regions)} regions with detected keyframes")
+                    # DEBUG: Log first region's keyframes to verify detection quality
+                    if highlight_regions and highlight_regions[0].get('keyframes'):
+                        first_kf = highlight_regions[0]['keyframes'][:3]  # First 3 keyframes
+                        logger.info(f"[Render] DEBUG - First region keyframes sample: {first_kf}")
+                except Exception as det_error:
+                    logger.warning(f"[Render] Player detection failed, using defaults: {det_error}")
+                    highlight_regions = generate_default_highlight_regions(source_clips)
 
         highlights_json = json.dumps(highlight_regions)
         logger.info(f"[Render] DEBUG - highlights_json length: {len(highlights_json)} chars")

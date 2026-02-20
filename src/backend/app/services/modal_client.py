@@ -343,15 +343,15 @@ async def call_modal_framing_ai(
     call_id_callback = None,
     include_audio: bool = True,
     export_mode: str = "quality",
+    test_mode: bool = False,
 ) -> dict:
     """
     Call Modal process_framing_ai function for AI-upscaled crop exports.
 
-    Uses Real-ESRGAN on cloud GPU for frame-by-frame super resolution.
-    Streams REAL progress updates from Modal via remote_gen().
-
-    When MODAL_ENABLED=false, uses local Real-ESRGAN/FFmpeg with the same interface.
-    This enables testing the full code path without Modal costs.
+    Three modes:
+    1. test_mode=True: Fast FFmpeg crop+resize (no AI, for E2E tests)
+    2. MODAL_ENABLED=false: Local Real-ESRGAN/FFmpeg
+    3. MODAL_ENABLED=true: Cloud GPU via Modal
 
     Args:
         job_id: Unique export job identifier
@@ -366,11 +366,27 @@ async def call_modal_framing_ai(
         video_duration: Video duration in seconds (for progress estimation)
         progress_callback: async callable(progress: float, message: str, phase: str) for updates
         call_id_callback: Optional callable(call_id: str) - NOT USED with remote_gen
+        test_mode: Skip AI upscaling, use fast FFmpeg crop+resize (for E2E tests)
 
     Returns:
         {"status": "success", "output_key": "..."} or
         {"status": "error", "error": "..."}
     """
+    if test_mode:
+        # Fast FFmpeg crop+resize - no AI, for E2E tests
+        from app.services.local_processors import local_framing_mock
+        logger.info(f"[Modal] Using TEST MODE mock for framing job {job_id}")
+        return await local_framing_mock(
+            job_id=job_id,
+            user_id=user_id,
+            input_key=input_key,
+            output_key=output_key,
+            keyframes=keyframes,
+            output_width=output_width,
+            output_height=output_height,
+            progress_callback=progress_callback,
+        )
+
     if not _modal_enabled:
         # Use local fallback with same interface
         from app.services.local_processors import local_framing
