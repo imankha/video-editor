@@ -1,6 +1,6 @@
 # T248: Framing Export Sync Failure — Working Video Not Persisted
 
-## Status: TESTING
+## Status: DONE
 
 ## Problem Statement
 
