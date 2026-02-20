@@ -34,7 +34,9 @@ class MockVideoUpscaler:
     """
 
     def __init__(self, **kwargs):
-        self.upsampler = True  # Truthy so pipeline doesn't reject it
+        # Must be truthy — process_single_clip checks `upscaler.upsampler is None`
+        # and raises 503 if falsy (see multi_clip.py process_single_clip)
+        self.upsampler = True
 
     def process_video_with_upscale(
         self,

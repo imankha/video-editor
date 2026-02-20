@@ -904,7 +904,9 @@ async def process_single_clip(
             sr_model_name='realesr_general_x4v3'
         )
 
+    # Note: MockVideoUpscaler sets upsampler=True to pass this check
     if upscaler.upsampler is None:
+        logger.error(f"[process_single_clip] upscaler.upsampler is None — if using MockVideoUpscaler, its interface may be out of sync")
         raise HTTPException(
             status_code=503,
             detail={"error": "AI SR model failed to load"}
