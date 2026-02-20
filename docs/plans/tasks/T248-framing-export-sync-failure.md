@@ -1,6 +1,6 @@
 # T248: Framing Export Sync Failure — Working Video Not Persisted
 
-## Status: TODO
+## Status: DONE
 
 ## Problem Statement
 
@@ -66,6 +66,39 @@ The WebSocket `complete` message was received (step 4), which means step 3 likel
 
 - **Blocked by T20**: Need mock export mode working first so we can iterate on the real export path without 10-min waits
 - After T20 is done, can test the real export path and debug this issue with actual GPU processing
+
+## Root Cause (Found)
+
+Two bugs combining to cause the failure:
+
+### Bug 1: `threading.local()` write tracking not async-safe
+
+`database.py` used `threading.local()` for `_request_context.has_writes`. In async FastAPI,
+all coroutines run on the same event loop thread, so `threading.local()` is shared across
+concurrent requests. When a long-running export (Request A) sets `has_writes = True`, and a
+concurrent read (Request B) calls `init_request_context()`, it resets `has_writes = False` —
+clobbering Request A's flag. The middleware then skips R2 sync, thinking no writes occurred.
+
+### Bug 2: Fresh users never get `local_version` set
+
+For new users (E2E test IDs), `get_local_db_version()` returns `None` because R2 has no DB
+and no sync has ever succeeded. This `None` is never replaced with a value, causing
+`ensure_database()` to retry the R2 HEAD request on **every** `get_db_connection()` call.
+This adds ~3s latency per request, and if a sync eventually succeeds (uploading intermediate
+data), a later request with `local_version=None` would download and overwrite local changes.
+
+## Fix
+
+1. **Replaced `threading.local()` with `contextvars.ContextVar`** for `_request_has_writes`
+   and `_request_user_id`. ContextVar is async-safe — each async task gets its own copy.
+
+2. **Set `local_version = 0`** when R2 has no DB for a user (fresh user or failed HEAD).
+   This prevents repeated R2 HEAD requests and the stale-download vulnerability.
+
+## Files Changed
+
+- `src/backend/app/database.py` — ContextVar migration + version 0 initialization
+- `src/backend/tests/test_request_write_tracking.py` — New regression tests
 
 ## Success Metrics
 
