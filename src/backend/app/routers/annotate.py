@@ -491,14 +491,19 @@ async def export_clips(
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT name, video_filename FROM games WHERE id = ?", (game_id_int,))
+            cursor.execute("SELECT name, video_filename, blake3_hash FROM games WHERE id = ?", (game_id_int,))
             row = cursor.fetchone()
 
             if not row:
                 raise HTTPException(status_code=404, detail="Game not found")
 
             game_name = row['name']
-            video_filename = row['video_filename']
+            # Use blake3_hash for R2 key when available (T80 global storage)
+            # video_filename may be an old-format name that doesn't match R2 key
+            if row['blake3_hash']:
+                video_filename = f"{row['blake3_hash']}.mp4"
+            else:
+                video_filename = row['video_filename']
 
             # T82: Check for multi-video game
             cursor.execute("""
