@@ -10,6 +10,8 @@ export default function PlayerDetectionOverlay({
   videoRef,
   videoMetadata,
   detections = [],
+  detectionVideoWidth = 0,
+  detectionVideoHeight = 0,
   isLoading = false,
   onPlayerSelect,
   zoom = 1,
@@ -19,6 +21,7 @@ export default function PlayerDetectionOverlay({
 }) {
   const [videoDisplayRect, setVideoDisplayRect] = useState(null);
   const [hoveredIndex, setHoveredIndex] = useState(null);
+  const lastLoggedDetections = useRef(null);
 
   /**
    * Update video display dimensions when video size changes
@@ -113,6 +116,34 @@ export default function PlayerDetectionOverlay({
       });
     }
   };
+
+  // Diagnostic: log alignment info when detections change
+  useEffect(() => {
+    if (!detections.length || !videoDisplayRect || !videoRef?.current) return;
+    // Only log once per detection set (avoid spamming on every render)
+    const detKey = detections.map(d => `${d.x?.toFixed(0)},${d.y?.toFixed(0)}`).join('|');
+    if (lastLoggedDetections.current === detKey) return;
+    lastLoggedDetections.current = detKey;
+
+    const video = videoRef.current;
+    console.debug('[Detection Alignment]', {
+      videoMetadata: `${videoMetadata?.width}x${videoMetadata?.height}`,
+      detectionSource: `${detectionVideoWidth}x${detectionVideoHeight}`,
+      videoElement: `${video.videoWidth}x${video.videoHeight}`,
+      dimensionMatch: videoMetadata?.width === detectionVideoWidth && videoMetadata?.height === detectionVideoHeight,
+      displayRect: {
+        offset: `(${videoDisplayRect.offsetX.toFixed(1)}, ${videoDisplayRect.offsetY.toFixed(1)})`,
+        size: `${videoDisplayRect.width.toFixed(1)}x${videoDisplayRect.height.toFixed(1)}`,
+        scale: `${videoDisplayRect.scaleX.toFixed(4)}x${videoDisplayRect.scaleY.toFixed(4)}`,
+      },
+      sampleBox: detections[0] ? {
+        center: `(${detections[0].x?.toFixed(1)}, ${detections[0].y?.toFixed(1)})`,
+        size: `${detections[0].width?.toFixed(1)}x${detections[0].height?.toFixed(1)}`,
+      } : null,
+      boxCount: detections.length,
+      zoom,
+    });
+  }, [detections, videoDisplayRect, videoMetadata, detectionVideoWidth, detectionVideoHeight, videoRef, zoom]);
 
   if (!videoDisplayRect || detections.length === 0) {
     // Show loading indicator if loading

@@ -149,6 +149,8 @@ export function OverlayModeView({
   // Player detection (auto-detected during framing export)
   playerDetectionEnabled,
   playerDetections,
+  detectionVideoWidth,
+  detectionVideoHeight,
   isDetectionLoading,
   onPlayerSelect,
   showPlayerBoxes,
@@ -291,6 +293,8 @@ export function OverlayModeView({
                   videoRef={videoRef}
                   videoMetadata={effectiveOverlayMetadata}
                   detections={playerDetections}
+                  detectionVideoWidth={detectionVideoWidth}
+                  detectionVideoHeight={detectionVideoHeight}
                   isLoading={isDetectionLoading}
                   onPlayerSelect={onPlayerSelect}
                   zoom={zoom}

@@ -116,8 +116,7 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
             logger.info(f"Uploaded archive to R2: {user_id}/{r2_path} ({len(archive_bytes)} bytes)")
 
             # 7. Delete from DB (order matters for FK constraints)
-            # Note: final_videos stays - we only delete project-related data
-            # Unlink FK references on project before deleting related records
+            # Unlink self-referencing FKs on project before deleting related records
             cursor.execute("UPDATE projects SET working_video_id = NULL, final_video_id = NULL WHERE id = ?", (project_id,))
 
             cursor.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
@@ -125,6 +124,11 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
 
             cursor.execute("DELETE FROM working_videos WHERE project_id = ?", (project_id,))
             videos_deleted = cursor.rowcount
+
+            # Delete child rows from tables that reference projects without ON DELETE CASCADE
+            cursor.execute("DELETE FROM project_clips WHERE project_id = ?", (project_id,))
+            cursor.execute("DELETE FROM final_videos WHERE project_id = ?", (project_id,))
+            cursor.execute("DELETE FROM ratings WHERE project_id = ?", (project_id,))
 
             cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
 

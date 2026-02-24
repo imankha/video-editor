@@ -20,10 +20,10 @@ export default defineConfig({
       '/api': {
         target: `http://localhost:${API_PORT}`,
         changeOrigin: true,
-        // Long timeout for AI upscaling exports (can take 30+ minutes for multi-clip)
-        // Exports should only timeout if no progress for 2+ minutes (handled by frontend)
-        timeout: 1800000, // 30 minutes
-        proxyTimeout: 1800000, // 30 minutes
+        // No timeout - exports can run for extended periods (Modal GPU or local processing)
+        // Frontend handles staleness detection via WebSocket heartbeats
+        timeout: 0,
+        proxyTimeout: 0,
       },
       '/storage': {
         target: `http://localhost:${API_PORT}`,
@@ -34,9 +34,9 @@ export default defineConfig({
         target: `http://localhost:${API_PORT}`,
         ws: true,
         changeOrigin: true,
-        // Long timeout for WebSocket connections during AI exports
-        timeout: 1800000, // 30 minutes
-        proxyTimeout: 1800000, // 30 minutes
+        // No timeout - WebSocket connections persist for duration of exports
+        timeout: 0,
+        proxyTimeout: 0,
       }
     }
   },
