@@ -282,7 +282,7 @@ class TestLatestFinalVideosSubquery:
         sql = latest_final_videos_subquery()
 
         assert "ROW_NUMBER()" in sql
-        assert "PARTITION BY project_id" in sql
+        assert "PARTITION BY COALESCE(project_id, 0)" in sql
         assert "WHERE rn = 1" in sql
         assert "ORDER BY version DESC" in sql
 
