@@ -55,7 +55,7 @@ class ExportJobCreate(BaseModel):
 class ExportJobResponse(BaseModel):
     """Response model for export job status."""
     job_id: str
-    project_id: int
+    project_id: Optional[int] = None
     project_name: Optional[str] = None
     type: str
     status: str  # 'pending' | 'processing' | 'complete' | 'error'
