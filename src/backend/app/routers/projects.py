@@ -721,7 +721,9 @@ async def create_project_from_clips(request: ProjectFromClipsCreate, background_
 
     # Trigger extraction for clips that need it (outside DB connection)
     from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+    from app.profile_context import get_current_profile_id
     user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
 
     clips_to_extract = []
     for clip in clips:
@@ -747,7 +749,7 @@ async def create_project_from_clips(request: ProjectFromClipsCreate, background_
                 end_time=clip_info['end_time'],
                 user_id=user_id,
             )
-        background_tasks.add_task(run_queue_processor_sync)
+        background_tasks.add_task(run_queue_processor_sync, user_id, profile_id)
         logger.info(f"Enqueued {len(clips_to_extract)} clips for extraction for project {project_id}")
 
     return ProjectResponse(
@@ -1220,7 +1222,9 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
             logger.info(f"Cleared working/final video for project {project_id} after refreshing clips")
 
     # Trigger extraction for clips with updated boundaries (outside DB connection)
+    from app.profile_context import get_current_profile_id
     user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
     for clip_info in clips_to_extract:
         enqueue_clip_extraction(
             clip_id=clip_info['clip_id'],
@@ -1233,7 +1237,7 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
         )
 
     if clips_to_extract:
-        background_tasks.add_task(run_queue_processor_sync)
+        background_tasks.add_task(run_queue_processor_sync, user_id, profile_id)
         logger.info(f"Enqueued {len(clips_to_extract)} clips for re-extraction after boundary update")
 
     return RefreshClipsResponse(

@@ -91,6 +91,38 @@ async def health_check():
     }
 
 
+@router.get("/api/debug/tasks")
+async def debug_modal_tasks():
+    """Debug endpoint: show modal_tasks status (for E2E test diagnostics)."""
+    from ..database import get_db_connection
+    import json
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, task_type, status, raw_clip_id, error,
+                       created_at, started_at, completed_at
+                FROM modal_tasks
+                ORDER BY created_at DESC
+                LIMIT 20
+            """)
+            tasks = []
+            for row in cursor.fetchall():
+                tasks.append({
+                    "id": row["id"],
+                    "task_type": row["task_type"],
+                    "status": row["status"],
+                    "raw_clip_id": row["raw_clip_id"],
+                    "error": row["error"],
+                    "created_at": row["created_at"],
+                    "started_at": row["started_at"],
+                    "completed_at": row["completed_at"],
+                })
+            return {"tasks": tasks}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.post("/api/retry-sync")
 async def retry_sync():
     """
