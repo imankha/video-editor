@@ -36,6 +36,7 @@ from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
 from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2
 from ...user_context import get_current_user_id, set_current_user_id
+from ...profile_context import get_current_profile_id, set_current_profile_id
 from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
 
 logger = logging.getLogger(__name__)
@@ -1197,9 +1198,10 @@ async def export_multi_clip(
     temp_dir = tempfile.mkdtemp()
     processed_paths: List[str] = []
 
-    # Capture user context before async operations (context vars may drift in threads)
+    # Capture user + profile context before async operations (context vars may drift in threads)
     captured_user_id = get_current_user_id()
-    logger.info(f"[Multi-Clip Export] Captured user context: {captured_user_id}")
+    captured_profile_id = get_current_profile_id()
+    logger.info(f"[Multi-Clip Export] Captured user context: {captured_user_id}, profile: {captured_profile_id}")
 
     try:
         # Calculate consistent target resolution for all clips
@@ -1586,9 +1588,10 @@ async def export_multi_clip(
         video_duration = get_video_duration(final_output)
         logger.info(f"[Multi-Clip Export] Video duration: {video_duration:.2f}s")
 
-        # Restore user context after async operations
+        # Restore user + profile context after async operations
         set_current_user_id(captured_user_id)
-        logger.info(f"[Multi-Clip Export] Restored user context: {captured_user_id}")
+        set_current_profile_id(captured_profile_id)
+        logger.info(f"[Multi-Clip Export] Restored user context: {captured_user_id}, profile: {captured_profile_id}")
 
         # Save working video to database if project_id provided
         working_video_id = None
@@ -1605,6 +1608,8 @@ async def export_multi_clip(
 
                 def do_upload():
                     try:
+                        # Restore profile context in upload thread (ContextVars don't propagate)
+                        set_current_profile_id(captured_profile_id)
                         result = upload_to_r2(captured_user_id, f"working_videos/{working_filename}", Path(final_output))
                         upload_result[0] = result
                     except Exception as e:
