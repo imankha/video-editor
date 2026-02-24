@@ -179,7 +179,7 @@ class RatingCounts(BaseModel):
 
 class DownloadItem(BaseModel):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     project_name: str
     filename: str
     file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
