@@ -179,7 +179,7 @@ class RatingCounts(BaseModel):
 
 class DownloadItem(BaseModel):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     project_name: str
     filename: str
     file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
@@ -215,7 +215,7 @@ async def list_downloads(source_type: Optional[str] = None):
         cursor = conn.cursor()
 
         # Build query with optional source_type filter
-        # LEFT JOIN to handle annotated exports (project_id = 0, no real project)
+        # LEFT JOIN to handle annotated exports (project_id IS NULL, no real project)
         # rating_counts is stored as JSON snapshot at export time (frozen, not live)
         # COALESCE uses fv.name for annotated exports, p.name for project exports
         base_query = f"""
@@ -230,7 +230,7 @@ async def list_downloads(source_type: Optional[str] = None):
                 fv.rating_counts,
                 COALESCE(fv.name, p.name) as project_name
             FROM final_videos fv
-            LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id != 0
+            LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id IS NOT NULL
             WHERE fv.id IN ({latest_final_videos_subquery()})
         """
 
@@ -250,7 +250,7 @@ async def list_downloads(source_type: Optional[str] = None):
         for row in rows:
             if row['game_id']:
                 game_ids_to_fetch.add(row['game_id'])
-            if row['project_id'] and row['project_id'] != 0:
+            if row['project_id']:
                 project_ids_to_fetch.add(row['project_id'])
 
         # Fetch raw_clip data for brilliant_clip exports
@@ -260,7 +260,7 @@ async def list_downloads(source_type: Optional[str] = None):
         brilliant_project_ids = [
             row['project_id'] for row in rows
             if row['source_type'] == SourceType.BRILLIANT_CLIP.value
-            and row['project_id'] and row['project_id'] != 0
+            and row['project_id']
         ]
         if brilliant_project_ids:
             placeholders = ','.join(['?' for _ in brilliant_project_ids])
@@ -438,7 +438,7 @@ async def list_downloads(source_type: Optional[str] = None):
                         game_ids = [bc_data['game_id']]
                         game_names = [game_info['name']]
                         game_dates = [game_info['date']]
-            elif row['project_id'] and row['project_id'] != 0:
+            elif row['project_id']:
                 # Custom project export: games from project's working_clips
                 pg = project_games.get(row['project_id'], {})
                 game_ids = pg.get('game_ids', [])
@@ -521,7 +521,7 @@ async def list_downloads(source_type: Optional[str] = None):
         missing_project_ids = [
             row['project_id'] for row in rows
             if row['source_type'] == SourceType.BRILLIANT_CLIP.value
-            and row['project_id'] and row['project_id'] != 0
+            and row['project_id']
             and not row['project_name']
         ]
         if missing_project_ids:
@@ -574,7 +574,7 @@ async def download_file(download_id: int):
         cursor.execute("""
             SELECT fv.filename, COALESCE(fv.name, p.name) as project_name
             FROM final_videos fv
-            LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id != 0
+            LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id IS NOT NULL
             WHERE fv.id = ?
         """, (download_id,))
         row = cursor.fetchone()

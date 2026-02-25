@@ -345,7 +345,7 @@ def cleanup_temp_dir(temp_dir: str):
 def create_annotate_export_job(export_id: str, game_id: Optional[int], game_name: Optional[str], clip_count: int) -> str:
     """
     Create an export_jobs record for annotate export.
-    Uses project_id=0 since annotate exports don't belong to a project.
+    Uses project_id=NULL since annotate exports don't belong to a project.
     """
     input_data = json.dumps({
         "type": "annotate",
@@ -357,7 +357,7 @@ def create_annotate_export_job(export_id: str, game_id: Optional[int], game_name
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO export_jobs (id, project_id, type, status, input_data, game_id, game_name)
-            VALUES (?, 0, 'annotate', 'processing', ?, ?, ?)
+            VALUES (?, NULL, 'annotate', 'processing', ?, ?, ?)
         """, (export_id, input_data, game_id, game_name))
         conn.commit()
 
@@ -491,14 +491,19 @@ async def export_clips(
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT name, video_filename FROM games WHERE id = ?", (game_id_int,))
+            cursor.execute("SELECT name, video_filename, blake3_hash FROM games WHERE id = ?", (game_id_int,))
             row = cursor.fetchone()
 
             if not row:
                 raise HTTPException(status_code=404, detail="Game not found")
 
             game_name = row['name']
-            video_filename = row['video_filename']
+            # Use blake3_hash for R2 key when available (T80 global storage)
+            # video_filename may be an old-format name that doesn't match R2 key
+            if row['blake3_hash']:
+                video_filename = f"{row['blake3_hash']}.mp4"
+            else:
+                video_filename = row['video_filename']
 
             # T82: Check for multi-video game
             cursor.execute("""
@@ -574,7 +579,7 @@ async def export_clips(
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO export_jobs (id, project_id, type, status, input_data, game_id, game_name)
-            VALUES (?, 0, 'annotate', 'pending', ?, ?, ?)
+            VALUES (?, NULL, 'annotate', 'pending', ?, ?, ?)
         """, (export_id, input_data, game_id_int, game_name))
         conn.commit()
 
@@ -856,7 +861,7 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                                 cursor = conn.cursor()
                                 cursor.execute("""
                                     INSERT INTO final_videos (project_id, filename, version, source_type, game_id, name)
-                                    VALUES (0, ?, 1, 'annotated_game', ?, ?)
+                                    VALUES (NULL, ?, 1, 'annotated_game', ?, ?)
                                 """, (final_filename, game_id, f"{game_name} (Annotated)" if game_name else "Annotated Export"))
                                 conn.commit()
 
@@ -906,7 +911,7 @@ async def run_annotate_export_processing(export_id: str, config: dict):
                     cursor = conn.cursor()
                     cursor.execute("""
                         INSERT INTO final_videos (project_id, filename, version, source_type, game_id, name)
-                        VALUES (0, ?, 1, 'annotated_game', ?, ?)
+                        VALUES (NULL, ?, 1, 'annotated_game', ?, ?)
                     """, (final_filename, game_id, f"{game_name} (Annotated)" if game_name else "Annotated Export"))
                     conn.commit()
 

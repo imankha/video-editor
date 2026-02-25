@@ -44,6 +44,7 @@ from pydantic import BaseModel
 from typing import Optional
 import time as time_module
 from ...user_context import get_current_user_id, set_current_user_id
+from ...profile_context import get_current_profile_id, set_current_profile_id
 
 logger = logging.getLogger(__name__)
 
@@ -436,8 +437,9 @@ async def render_project(request: RenderRequest, http_request: Request):
     project_id = request.project_id
     export_id = request.export_id
 
-    # CRITICAL: Capture user ID at the start of the request (see /upscale endpoint for explanation)
+    # CRITICAL: Capture user + profile ID at the start of the request (see /upscale endpoint for explanation)
     captured_user_id = get_current_user_id()
+    captured_profile_id = get_current_profile_id()
 
     logger.info(f"[Render] Starting backend-authoritative render for project {project_id}, user: {captured_user_id}")
 
@@ -730,9 +732,10 @@ async def render_project(request: RenderRequest, http_request: Request):
             video_duration = get_video_duration(output_path)
             logger.info(f"[Render] Video duration: {video_duration:.2f}s")
 
-        # CRITICAL: Restore user context after long-running task
+        # CRITICAL: Restore user + profile context after long-running task
         set_current_user_id(captured_user_id)
-        logger.info(f"[Render] Restored user context: {captured_user_id}")
+        set_current_profile_id(captured_profile_id)
+        logger.info(f"[Render] Restored user context: {captured_user_id}, profile: {captured_profile_id}")
 
         # Step 6: Run player detection for overlay keyframes
         # Build single-clip source structure for detection

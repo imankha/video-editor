@@ -32,8 +32,24 @@ const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
  * This isolates test data from development data.
  */
 async function setupTestUserContext(page) {
-  // Use setExtraHTTPHeaders instead of route() - more reliable with Vite proxy
-  await page.setExtraHTTPHeaders({ 'X-User-ID': TEST_USER_ID });
+  // T85a: Call /api/auth/init to create profile and get profile_id
+  const initResponse = await page.request.post(`${API_BASE}/auth/init`, {
+    headers: { 'X-User-ID': TEST_USER_ID },
+  });
+  const { profile_id } = await initResponse.json();
+
+  // Set X-User-ID + X-Profile-ID for test isolation
+  await page.setExtraHTTPHeaders({
+    'X-User-ID': TEST_USER_ID,
+    'X-Profile-ID': profile_id,
+  });
+  // Strip custom headers from R2 presigned URL requests to avoid CORS preflight
+  await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
+    const headers = { ...route.request().headers() };
+    delete headers['x-user-id'];
+    delete headers['x-profile-id'];
+    await route.continue({ headers });
+  });
 }
 
 test.describe('Game Loading Debug', () => {

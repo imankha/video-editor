@@ -55,7 +55,7 @@ class ExportJobCreate(BaseModel):
 class ExportJobResponse(BaseModel):
     """Response model for export job status."""
     job_id: str
-    project_id: int
+    project_id: Optional[int] = None
     project_name: Optional[str] = None
     type: str
     status: str  # 'pending' | 'processing' | 'complete' | 'error'
@@ -847,12 +847,27 @@ async def check_modal_status(job_id: str):
 
     modal_call_id = job.get('modal_call_id')
     if not modal_call_id:
-        # Job doesn't have a Modal call_id (old job or non-Modal export)
-        return {
-            "status": "not_modal",
-            "job_status": job['status'],
-            "message": "This job does not have a Modal call ID"
-        }
+        # Non-Modal export (local processing) — return actual DB status
+        # so frontend can detect completion even without Modal call_id
+        if job['status'] == 'complete':
+            return {
+                "status": ExportStatus.COMPLETE,
+                "job_status": job['status'],
+                "message": "Local export completed"
+            }
+        elif job['status'] == 'error':
+            return {
+                "status": "error",
+                "job_status": job['status'],
+                "error": job.get('error', 'Unknown error'),
+                "message": "Local export failed"
+            }
+        else:
+            return {
+                "status": "not_modal",
+                "job_status": job['status'],
+                "message": "This job does not have a Modal call ID"
+            }
 
     try:
         import modal

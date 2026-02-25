@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from typing import Optional, Any
 
 from .user_context import get_current_user_id
+from .profile_context import get_current_profile_id
 from .storage import (
     R2_ENABLED,
     sync_database_from_r2,
@@ -317,8 +318,8 @@ def clear_request_context() -> None:
 
 
 def get_user_data_path() -> Path:
-    """Get the user data directory path for the current user."""
-    return USER_DATA_BASE / get_current_user_id()
+    """Get the user data directory path for the current user and profile."""
+    return USER_DATA_BASE / get_current_user_id() / "profiles" / get_current_profile_id()
 
 
 def get_database_path() -> Path:
@@ -530,7 +531,7 @@ def ensure_database():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS final_videos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id INTEGER NOT NULL,
+                project_id INTEGER,
                 filename TEXT NOT NULL,
                 version INTEGER NOT NULL DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -575,7 +576,7 @@ def ensure_database():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS export_jobs (
                 id TEXT PRIMARY KEY,
-                project_id INTEGER NOT NULL,
+                project_id INTEGER,
                 type TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
                 error TEXT,
@@ -721,6 +722,73 @@ def ensure_database():
             except sqlite3.OperationalError:
                 # Column already exists, ignore
                 pass
+
+        # T85a: Make project_id nullable in export_jobs and final_videos
+        # Annotate exports have no project, so project_id must be NULL-able.
+        # SQLite doesn't support ALTER COLUMN, so we recreate the table if needed.
+        # Uses the "create new, copy, drop old, rename new" pattern to avoid
+        # ALTER TABLE RENAME corrupting FK references in other tables.
+        _new_schemas = {
+            'export_jobs': """
+                CREATE TABLE _export_jobs_new (
+                    id TEXT PRIMARY KEY,
+                    project_id INTEGER,
+                    type TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    error TEXT,
+                    input_data TEXT NOT NULL,
+                    output_video_id INTEGER,
+                    output_filename TEXT,
+                    modal_call_id TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    started_at TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    game_id INTEGER,
+                    game_name TEXT,
+                    acknowledged_at TIMESTAMP,
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+                )
+            """,
+            'final_videos': """
+                CREATE TABLE _final_videos_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id INTEGER,
+                    filename TEXT NOT NULL,
+                    version INTEGER NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    duration REAL,
+                    source_type TEXT,
+                    game_id INTEGER,
+                    name TEXT,
+                    rating_counts TEXT,
+                    FOREIGN KEY (project_id) REFERENCES projects(id)
+                )
+            """,
+        }
+        for table_name, new_ddl in _new_schemas.items():
+            try:
+                col_info = cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
+                needs_migration = any(c['name'] == 'project_id' and c['notnull'] for c in col_info)
+                if not needs_migration:
+                    continue
+                logger.info(f"[Migration] Recreating {table_name}: project_id NOT NULL -> nullable")
+                old_cols = [c['name'] for c in col_info]
+                # Create new table with temp name (avoids ALTER TABLE RENAME corruption)
+                cursor.execute(new_ddl)
+                new_col_info = cursor.execute(f"PRAGMA table_info(_{table_name}_new)").fetchall()
+                new_cols = {c['name'] for c in new_col_info}
+                common_cols = [c for c in old_cols if c in new_cols]
+                cols_str = ', '.join(common_cols)
+                select_cols = ', '.join(
+                    'NULLIF(project_id, 0)' if c == 'project_id' else c
+                    for c in common_cols
+                )
+                cursor.execute(f"INSERT INTO _{table_name}_new ({cols_str}) SELECT {select_cols} FROM {table_name}")
+                cursor.execute(f"DROP TABLE {table_name}")
+                cursor.execute(f"ALTER TABLE _{table_name}_new RENAME TO {table_name}")
+                logger.info(f"[Migration] {table_name} recreated successfully")
+            except Exception as e:
+                logger.warning(f"[Migration] Failed to migrate {table_name}: {e}")
 
         # Migrate progress flag to exported_at timestamp
         # Set exported_at to current timestamp for clips that were previously exported (progress >= 1)
@@ -919,23 +987,8 @@ def ensure_database():
     finally:
         conn.close()
 
-    # T66: Cleanup stale restored projects on first access for this user
-    # This must be after conn.close() and after _initialized_users.add()
-    # to avoid recursion when cleanup_stale_restored_projects() calls get_db_connection()
-    try:
-        from app.services.project_archive import cleanup_stale_restored_projects
-        archived_count = cleanup_stale_restored_projects(user_id)
-        if archived_count > 0:
-            logger.info(f"T66: Re-archived {archived_count} stale restored projects for user {user_id}")
-    except Exception as e:
-        logger.error(f"T66: Failed to cleanup stale restored projects: {e}")
-
-    # T243: Prune old working_video versions and stale export_jobs to keep DB small
-    try:
-        from app.services.project_archive import cleanup_database_bloat
-        cleanup_database_bloat()
-    except Exception as e:
-        logger.error(f"T243: Failed to cleanup database bloat: {e}")
+    # T85a: Cleanup tasks (T66, T243) moved to session_init.py user_session_init()
+    # They now run explicitly during /api/auth/init instead of implicitly here.
 
 
 @contextmanager

@@ -36,6 +36,7 @@ from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
 from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2
 from ...user_context import get_current_user_id, set_current_user_id
+from ...profile_context import get_current_profile_id, set_current_profile_id
 from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
 
 logger = logging.getLogger(__name__)
@@ -83,9 +84,16 @@ def get_yolo_model():
     return _yolo_model
 
 
-def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_threshold: float = 0.5) -> dict:
+def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_threshold: float = 0.5, seek_frame: int = None) -> dict:
     """
     Run YOLO detection on a single frame extracted at the given timestamp.
+
+    Args:
+        video_path: Path to the video file
+        timestamp: Timestamp in seconds (used for logging and as fallback for frame calculation)
+        confidence_threshold: Minimum confidence for detections
+        seek_frame: Pre-calculated frame number to seek to. If provided, used instead of
+                    deriving from timestamp (avoids floating-point rounding at clip boundaries).
 
     Returns dict with 'boxes' array containing detected player bounding boxes.
     """
@@ -106,14 +114,22 @@ def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_t
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        # Seek to timestamp
-        frame_number = int(timestamp * fps)
+        # Use pre-calculated frame number if provided (avoids rounding errors at clip boundaries)
+        naive_frame = int(timestamp * fps)
+        frame_number = seek_frame if seek_frame is not None else naive_frame
+        if seek_frame is not None and seek_frame != naive_frame:
+            logger.info(f"[Detection] Frame correction: naive int(ts*fps)={naive_frame}, pre-calculated ceil={seek_frame}, ts={timestamp:.6f}")
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = cap.read()
 
         if not ret or frame is None:
             logger.warning(f"Failed to read frame at timestamp {timestamp}")
             return {'timestamp': timestamp, 'boxes': []}
+
+        # Verify actual frame dimensions match reported dimensions
+        actual_h, actual_w = frame.shape[:2]
+        if actual_w != width or actual_h != height:
+            logger.warning(f"[Detection] Frame dimension mismatch! Reported: {width}x{height}, Actual: {actual_w}x{actual_h}, ts={timestamp:.3f}, frame={frame_number}")
 
         # Run YOLO detection
         results = model(frame, verbose=False, conf=confidence_threshold)
@@ -246,8 +262,10 @@ async def run_local_detection_on_video_file(
         video_width = 0
         video_height = 0
 
-        for i, ts in enumerate(timestamps):
-            result = run_local_detection_on_frame(video_path, ts, confidence_threshold)
+        for i, point in enumerate(detection_points):
+            ts = point['timestamp']
+            seek_frame = point['frame']
+            result = run_local_detection_on_frame(video_path, ts, confidence_threshold, seek_frame=seek_frame)
             detections.append({
                 'timestamp': ts,
                 'boxes': result.get('boxes', [])
@@ -264,6 +282,7 @@ async def run_local_detection_on_video_file(
 
         total_boxes = sum(len(d['boxes']) for d in detections)
         logger.info(f"[Local Detection] Complete: {total_boxes} players detected across {len(timestamps)} frames")
+        logger.info(f"[Local Detection] Video dimensions for detection: {video_width}x{video_height}, fps={fps}")
 
     except Exception as e:
         logger.error(f"[Local Detection] Detection error: {e}, using default regions")
@@ -1197,9 +1216,10 @@ async def export_multi_clip(
     temp_dir = tempfile.mkdtemp()
     processed_paths: List[str] = []
 
-    # Capture user context before async operations (context vars may drift in threads)
+    # Capture user + profile context before async operations (context vars may drift in threads)
     captured_user_id = get_current_user_id()
-    logger.info(f"[Multi-Clip Export] Captured user context: {captured_user_id}")
+    captured_profile_id = get_current_profile_id()
+    logger.info(f"[Multi-Clip Export] Captured user context: {captured_user_id}, profile: {captured_profile_id}")
 
     try:
         # Calculate consistent target resolution for all clips
@@ -1586,9 +1606,10 @@ async def export_multi_clip(
         video_duration = get_video_duration(final_output)
         logger.info(f"[Multi-Clip Export] Video duration: {video_duration:.2f}s")
 
-        # Restore user context after async operations
+        # Restore user + profile context after async operations
         set_current_user_id(captured_user_id)
-        logger.info(f"[Multi-Clip Export] Restored user context: {captured_user_id}")
+        set_current_profile_id(captured_profile_id)
+        logger.info(f"[Multi-Clip Export] Restored user context: {captured_user_id}, profile: {captured_profile_id}")
 
         # Save working video to database if project_id provided
         working_video_id = None
@@ -1605,6 +1626,8 @@ async def export_multi_clip(
 
                 def do_upload():
                     try:
+                        # Restore profile context in upload thread (ContextVars don't propagate)
+                        set_current_profile_id(captured_profile_id)
                         result = upload_to_r2(captured_user_id, f"working_videos/{working_filename}", Path(final_output))
                         upload_result[0] = result
                     except Exception as e:
@@ -1662,6 +1685,11 @@ async def export_multi_clip(
                             source_clips=source_clips,
                         )
                         logger.info(f"[Multi-Clip Export] Local detection complete: {len(highlight_regions)} regions")
+                        # Log detection dimensions stored with each region
+                        for r in highlight_regions:
+                            if r.get('videoWidth') or r.get('videoHeight'):
+                                logger.info(f"[Multi-Clip Export] Region '{r.get('label')}' detection dims: {r.get('videoWidth')}x{r.get('videoHeight')}")
+                                break  # All regions share same dims, log once
                     except Exception as det_error:
                         logger.warning(f"[Multi-Clip Export] Local detection failed, using defaults: {det_error}")
                         highlight_regions = generate_default_highlight_regions(source_clips)
@@ -1677,6 +1705,13 @@ async def export_multi_clip(
 
                     # Update project with new working_video_id
                     cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
+
+                    # Mark export_jobs as complete
+                    cursor.execute("""
+                        UPDATE export_jobs
+                        SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (working_video_id, working_filename, export_id))
 
                     conn.commit()
                     logger.info(f"[Multi-Clip Export] Created working video {working_video_id} for project {project_id}")

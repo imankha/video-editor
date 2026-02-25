@@ -25,6 +25,7 @@ Flow:
 import json
 import logging
 import asyncio
+import contextvars
 import uuid
 import os
 import tempfile
@@ -35,6 +36,8 @@ from app.services.modal_client import modal_enabled, call_modal_extract_clip
 from app.services.ffmpeg_service import extract_clip as ffmpeg_extract_clip
 from app.storage import R2_ENABLED, download_from_r2, download_from_r2_global, upload_to_r2
 from app.websocket import broadcast_extraction_event
+from app.user_context import get_current_user_id, set_current_user_id
+from app.profile_context import get_current_profile_id, set_current_profile_id
 
 logger = logging.getLogger(__name__)
 
@@ -263,6 +266,10 @@ async def _extract_clip_local(
 
     Returns dict with 'status' key ('success' or 'error').
     """
+    # Capture current context so contextvars (user_id, profile_id) propagate
+    # into run_in_executor thread pool threads where r2_key() needs them.
+    ctx = contextvars.copy_context()
+
     try:
         # Determine input path
         if R2_ENABLED:
@@ -270,23 +277,29 @@ async def _extract_clip_local(
             with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_input:
                 input_path = tmp_input.name
 
-            logger.info(f"[LocalExtract] Downloading {input_key} from R2")
+            logger.info(f"[LocalExtract] Downloading {input_key} from R2 to {input_path}")
 
             # Games are stored globally (no user prefix) for deduplication
             # Raw clips are stored per-user
             if input_key.startswith("games/"):
+                logger.info(f"[LocalExtract] Using download_from_r2_global for key: {input_key}")
                 success = await asyncio.get_event_loop().run_in_executor(
                     None,
-                    lambda: download_from_r2_global(input_key, Path(input_path))
+                    lambda: ctx.run(download_from_r2_global, input_key, Path(input_path))
                 )
             else:
                 success = await asyncio.get_event_loop().run_in_executor(
                     None,
-                    lambda: download_from_r2(user_id, input_key, Path(input_path))
+                    lambda: ctx.run(download_from_r2, user_id, input_key, Path(input_path))
                 )
 
             if not success:
+                logger.error(f"[LocalExtract] Download FAILED for {input_key}")
                 return {"status": "error", "error": f"Failed to download {input_key} from R2"}
+
+            # Check downloaded file size
+            file_size = os.path.getsize(input_path) if os.path.exists(input_path) else 0
+            logger.info(f"[LocalExtract] Download complete: {file_size} bytes")
         else:
             # Use local file path
             # input_key is like "games/filename.mp4"
@@ -305,7 +318,8 @@ async def _extract_clip_local(
         logger.info(f"[LocalExtract] Extracting clip: {start_time}s - {end_time}s")
         success = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: ffmpeg_extract_clip(
+            lambda: ctx.run(
+                ffmpeg_extract_clip,
                 input_path=input_path,
                 output_path=local_output_path,
                 start_time=start_time,
@@ -315,14 +329,17 @@ async def _extract_clip_local(
         )
 
         if not success:
+            logger.error(f"[LocalExtract] FFmpeg extraction FAILED")
             return {"status": "error", "error": "FFmpeg extraction failed"}
+
+        logger.info(f"[LocalExtract] FFmpeg extraction succeeded, output: {local_output_path} ({os.path.getsize(local_output_path)} bytes)")
 
         # Upload to R2 if enabled
         if R2_ENABLED:
             logger.info(f"[LocalExtract] Uploading {output_key} to R2")
             upload_success = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: upload_to_r2(user_id, output_key, Path(local_output_path))
+                lambda: ctx.run(upload_to_r2, user_id, output_key, Path(local_output_path))
             )
             if not upload_success:
                 return {"status": "error", "error": f"Failed to upload {output_key} to R2"}
@@ -351,11 +368,22 @@ def _mark_task_failed(task_id: int, error: str):
         conn.commit()
 
 
-def run_queue_processor_sync():
+def run_queue_processor_sync(user_id: str = None, profile_id: str = None):
     """
     Synchronous wrapper for process_modal_queue().
     Used when running in a background thread (e.g., FastAPI BackgroundTasks).
+
+    Must receive user_id and profile_id explicitly because background threads
+    don't inherit request-scoped contextvars. These are needed for:
+    - get_db_connection() which resolves the user's database path
+    - R2 upload/download operations that use user-scoped keys
     """
+    # Restore request context in background thread
+    if user_id:
+        set_current_user_id(user_id)
+    if profile_id:
+        set_current_profile_id(profile_id)
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:

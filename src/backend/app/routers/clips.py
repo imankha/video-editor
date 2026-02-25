@@ -632,6 +632,8 @@ async def _trigger_extraction_for_auto_project(
     from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
 
     user_id = get_current_user_id()
+    from app.profile_context import get_current_profile_id
+    profile_id = get_current_profile_id()
     enqueue_clip_extraction(
         clip_id=clip_id,
         project_id=project_id,
@@ -641,7 +643,7 @@ async def _trigger_extraction_for_auto_project(
         end_time=end_time,
         user_id=user_id,
     )
-    background_tasks.add_task(run_queue_processor_sync)
+    background_tasks.add_task(run_queue_processor_sync, user_id, profile_id)
     logger.info(f"[AutoProject] Enqueued extraction for clip {clip_id} in auto-project {project_id}")
 
 
@@ -1151,7 +1153,9 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
 
     if clips_needing_extraction:
         from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+        from app.profile_context import get_current_profile_id
         user_id = get_current_user_id()
+        profile_id = get_current_profile_id()
 
         # Get game video filenames for extraction
         with get_db_connection() as conn:
@@ -1201,7 +1205,7 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                     end_time=clip_info['end_time'],
                     user_id=user_id,
                 )
-            background_tasks.add_task(run_queue_processor_sync)
+            background_tasks.add_task(run_queue_processor_sync, user_id, profile_id)
             logger.info(f"Enqueued {len(clips_to_enqueue)} clips for extraction for project {project_id}")
 
     return result
@@ -1347,8 +1351,10 @@ async def trigger_clip_extraction(clip_info: dict, background_tasks):
     2. Trigger queue processor in background (calls Modal)
     """
     from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+    from app.profile_context import get_current_profile_id
 
     user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
 
     # Phase 1: Enqueue to DB
     enqueue_clip_extraction(
@@ -1362,7 +1368,7 @@ async def trigger_clip_extraction(clip_info: dict, background_tasks):
     )
 
     # Phase 2: Process queue in background
-    background_tasks.add_task(run_queue_processor_sync)
+    background_tasks.add_task(run_queue_processor_sync, user_id, profile_id)
     logger.info(f"[Extraction] Enqueued clip {clip_info['clip_id']} for project {clip_info['project_id']}")
 
 

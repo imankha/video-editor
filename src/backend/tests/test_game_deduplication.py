@@ -316,22 +316,22 @@ class TestGlobalKeyHelpers:
     """Test global R2 key helper functions."""
 
     def test_r2_global_key_simple(self):
-        """Simple path should pass through."""
-        from app.storage import r2_global_key
+        """Simple path should have env prefix."""
+        from app.storage import r2_global_key, APP_ENV
 
-        assert r2_global_key("games/test.mp4") == "games/test.mp4"
+        assert r2_global_key("games/test.mp4") == f"{APP_ENV}/games/test.mp4"
 
     def test_r2_global_key_normalizes_backslashes(self):
         """Windows backslashes should be normalized to forward slashes."""
-        from app.storage import r2_global_key
+        from app.storage import r2_global_key, APP_ENV
 
-        assert r2_global_key("games\\test.mp4") == "games/test.mp4"
+        assert r2_global_key("games\\test.mp4") == f"{APP_ENV}/games/test.mp4"
 
     def test_r2_global_key_nested_path(self):
         """Nested paths should work."""
-        from app.storage import r2_global_key
+        from app.storage import r2_global_key, APP_ENV
 
-        assert r2_global_key("games/2024/01/test.mp4") == "games/2024/01/test.mp4"
+        assert r2_global_key("games/2024/01/test.mp4") == f"{APP_ENV}/games/2024/01/test.mp4"
 
 
 class TestHeadObjectGlobal:

@@ -75,12 +75,13 @@ class DatabaseSyncMiddleware(BaseHTTPMiddleware):
     header when the user's database is out of sync with R2.
     """
 
-    # Skip sync for these path prefixes (static files, health checks, etc.)
+    # Skip sync for these path prefixes (static files, health checks, auth, etc.)
     SKIP_PATHS = (
         '/docs',
         '/redoc',
         '/openapi.json',
         '/api/health',
+        '/api/auth',
         '/static',
     )
 

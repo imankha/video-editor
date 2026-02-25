@@ -321,9 +321,20 @@ class TestAPICodePath:
         import requests
 
         try:
+            # First, init the session to get a profile_id
+            try:
+                init_resp = requests.post(
+                    "http://localhost:8000/api/auth/init",
+                    headers={"X-User-ID": "a"},
+                    timeout=5
+                )
+                profile_id = init_resp.json().get("profile_id", "testdefault")
+            except Exception:
+                profile_id = "testdefault"
+
             response = requests.get(
                 "http://localhost:8000/api/export/projects/1/overlay-data",
-                headers={"X-User-ID": "a"},
+                headers={"X-User-ID": "a", "X-Profile-ID": profile_id},
                 timeout=5
             )
         except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout):

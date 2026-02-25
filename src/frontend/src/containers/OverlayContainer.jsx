@@ -269,6 +269,23 @@ export function OverlayContainer({
       };
     }
 
+    // Diagnostic: log detection match details for debugging box alignment
+    const detectionFrame = closestDetection.frame !== undefined
+      ? closestDetection.frame
+      : Math.round(closestDetection.timestamp * fps);
+    console.debug('[Detection Match]', {
+      currentTime: currentTime.toFixed(3),
+      currentFrame,
+      detectionFrame,
+      frameDelta: closestFrameDistance,
+      detectionTimestamp: closestDetection.timestamp?.toFixed(3),
+      regionVideoSize: `${currentRegion.videoWidth}x${currentRegion.videoHeight}`,
+      fps,
+      boxCount: closestDetection.boxes?.length || 0,
+      regionId: currentRegion.id,
+      regionLabel: currentRegion.label,
+    });
+
     return {
       detections: closestDetection.boxes || [],
       videoWidth: currentRegion.videoWidth || 0,
@@ -489,6 +506,8 @@ export function OverlayContainer({
     // Player detection (from highlight region data, not per-frame API)
     playerDetectionEnabled,
     playerDetections,
+    detectionVideoWidth: regionDetectionData.videoWidth,
+    detectionVideoHeight: regionDetectionData.videoHeight,
     isDetectionLoading,
     regionHasDetections,  // Whether current region has any detection data
     showPlayerBoxes,
@@ -573,6 +592,8 @@ export function OverlayVideoOverlays({
           videoRef={videoRef}
           videoMetadata={effectiveOverlayMetadata}
           detections={playerDetections}
+          detectionVideoWidth={regionDetectionData.videoWidth}
+          detectionVideoHeight={regionDetectionData.videoHeight}
           isLoading={isDetectionLoading}
           onPlayerSelect={onPlayerSelect}
           zoom={zoom}

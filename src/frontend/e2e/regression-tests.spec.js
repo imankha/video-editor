@@ -41,14 +41,25 @@ const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
 
 async function setupTestUserContext(page) {
   console.log(`[Test] Setting up test user context: ${TEST_USER_ID}`);
-  // Set X-User-ID for test isolation and X-Test-Mode to skip AI upscaling in exports
-  await page.setExtraHTTPHeaders({ 'X-User-ID': TEST_USER_ID, 'X-Test-Mode': 'true' });
+  // T85a: Call /api/auth/init to create profile and get profile_id
+  const initResponse = await page.request.post(`${API_BASE}/auth/init`, {
+    headers: { 'X-User-ID': TEST_USER_ID },
+  });
+  const { profile_id } = await initResponse.json();
+
+  // Set X-User-ID + X-Profile-ID for test isolation, X-Test-Mode to skip AI upscaling
+  await page.setExtraHTTPHeaders({
+    'X-User-ID': TEST_USER_ID,
+    'X-Profile-ID': profile_id,
+    'X-Test-Mode': 'true',
+  });
   // Strip custom headers from R2 presigned URL requests to avoid CORS preflight
   // failures. setExtraHTTPHeaders adds to ALL requests including cross-origin
   // XHR PUTs to R2, which triggers CORS preflight and "Part N network error".
   await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
     const headers = { ...route.request().headers() };
     delete headers['x-user-id'];
+    delete headers['x-profile-id'];
     delete headers['x-test-mode'];
     await route.continue({ headers });
   });
@@ -588,17 +599,17 @@ async function navigateToProjectFromHome(page) {
 /**
  * Trigger clip extraction and wait for clips to have actual video files.
  *
- * In the new architecture, clips are saved to the database with empty filenames
- * (pending extraction). Extraction only happens when the user leaves annotate mode,
- * which triggers the finish-annotation endpoint.
+ * Clips are saved to the database with empty filenames (pending extraction).
+ * Extraction is triggered on-demand when opening a project (GET /api/clips/projects/{id}/clips).
  *
  * This helper:
- * 1. Gets the current game ID
- * 2. Calls POST /api/games/{id}/finish-annotation to enqueue extraction
+ * 1. Calls finish-annotation to signal end of annotation session
+ * 2. Hits the project clips endpoint to trigger extraction enqueue
  * 3. Waits for clips to have non-empty filenames (extraction complete)
+ * 4. Navigates to the project in Framing mode
  */
 async function triggerExtractionAndWait(page, maxWaitTime = 180000) {
-  console.log('[Test] Triggering clip extraction via finish-annotation...');
+  console.log('[Test] Triggering clip extraction...');
 
   // Get the most recent game ID
   const gameId = await page.evaluate(async () => {
@@ -613,7 +624,7 @@ async function triggerExtractionAndWait(page, maxWaitTime = 180000) {
     return;
   }
 
-  // Call finish-annotation to trigger extraction queue
+  // Call finish-annotation to signal end of annotation session
   const result = await page.evaluate(async (id) => {
     const res = await fetch(`/api/games/${id}/finish-annotation`, { method: 'POST' });
     if (!res.ok) return { error: res.status };
@@ -622,9 +633,31 @@ async function triggerExtractionAndWait(page, maxWaitTime = 180000) {
 
   console.log(`[Test] Finish-annotation response: ${JSON.stringify(result)}`);
 
-  // Note: finish-annotation no longer triggers extraction (extraction happens when clips are added to projects)
-  // We still need to wait for any in-progress extractions to complete
-  // Check if clips are actually extracted before returning early
+  // Extraction is triggered on-demand when opening a project (GET /api/clips/projects/{id}/clips).
+  // We need to find the project and hit that endpoint to enqueue extraction tasks.
+  const projectId = await page.evaluate(async () => {
+    const res = await fetch('/api/projects');
+    if (!res.ok) return null;
+    const projects = await res.json();
+    return projects?.[0]?.id || null;
+  });
+
+  if (!projectId) {
+    console.log('[Test] WARNING: No project found, cannot trigger extraction');
+    return;
+  }
+
+  // Hit the project clips endpoint to trigger extraction enqueue
+  const triggerResult = await page.evaluate(async (pid) => {
+    const res = await fetch(`/api/clips/projects/${pid}/clips`);
+    if (!res.ok) return { error: res.status };
+    const data = await res.json();
+    return { clipCount: data.length, clips: data.map(c => ({ id: c.id, filename: c.filename, extraction_status: c.extraction_status })) };
+  }, projectId);
+
+  console.log(`[Test] Triggered extraction via project ${projectId}: ${JSON.stringify(triggerResult)}`);
+
+  // Quick check: are all clips already extracted?
   const quickCheck = await page.evaluate(async (gid) => {
     const res = await fetch('/api/clips/raw');
     const clips = res.ok ? await res.json() : [];
@@ -635,20 +668,27 @@ async function triggerExtractionAndWait(page, maxWaitTime = 180000) {
 
   if (quickCheck.total > 0 && quickCheck.extracted === quickCheck.total) {
     console.log(`[Test] All ${quickCheck.total} clips already extracted, navigating to project...`);
-    // Still need to navigate to the project
     await navigateToProjectFromHome(page);
     return;
   }
 
   console.log(`[Test] Clips not fully extracted (${quickCheck.extracted}/${quickCheck.total}), waiting...`);
 
+  // Check extraction task status via API to diagnose issues
+  const taskStatus = await page.evaluate(async (pid) => {
+    const res = await fetch(`/api/clips/projects/${pid}/clips`);
+    if (!res.ok) return { error: res.status };
+    const clips = await res.json();
+    return clips.map(c => ({ id: c.id, filename: c.filename, extraction_status: c.extraction_status }));
+  }, projectId);
+  console.log(`[Test] Clip extraction statuses: ${JSON.stringify(taskStatus)}`);
+
   // Wait for clips to be extracted
-  // Filter by gameId to only count THIS game's clips (not clips from other tests)
   // Use progress-based timeout: only timeout if progress STALLS, not on absolute time
-  console.log(`[Test] Waiting for ${result.tasks_created} clips to be extracted...`);
+  console.log(`[Test] Waiting for ${quickCheck.total} clips to be extracted...`);
 
   const startWait = Date.now();
-  let lastExtractedCount = 0;
+  let lastExtractedCount = quickCheck.extracted;
   let lastProgressTime = Date.now();
   const STALL_TIMEOUT = 120000; // 2 minutes without progress = stalled
 
@@ -679,7 +719,21 @@ async function triggerExtractionAndWait(page, maxWaitTime = 180000) {
     // Check for stall - fail if no progress for STALL_TIMEOUT
     const timeSinceProgress = Date.now() - lastProgressTime;
     if (timeSinceProgress > STALL_TIMEOUT) {
+      // Diagnostic: check extraction task statuses before giving up
+      const finalStatus = await page.evaluate(async (pid) => {
+        const res = await fetch(`/api/clips/projects/${pid}/clips`);
+        if (!res.ok) return { error: res.status };
+        const clips = await res.json();
+        return clips.map(c => ({ id: c.id, filename: c.filename, extraction_status: c.extraction_status }));
+      }, projectId);
+      const taskDebug = await page.evaluate(async () => {
+        const res = await fetch('/api/debug/tasks');
+        if (!res.ok) return { error: res.status };
+        return res.json();
+      });
       console.log(`[Test] WARNING: Extraction stalled - no progress for ${STALL_TIMEOUT / 1000}s (stuck at ${extractedClips.length}/${gameClips.length})`);
+      console.log(`[Test] Final clip statuses: ${JSON.stringify(finalStatus)}`);
+      console.log(`[Test] Modal tasks: ${JSON.stringify(taskDebug)}`);
       return;
     }
 
@@ -1982,8 +2036,20 @@ test.describe('Full Coverage Tests @full', () => {
     const projectCardReload = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clips?/i') }).first();
     await projectCardReload.click();
 
-    // Wait for framing mode to reload
+    // Wait for mode to load
     await page.waitForTimeout(2000);
+
+    // Project may reopen in Overlay mode (if it has a working video from export).
+    // Switch back to Framing mode if needed.
+    const addOverlayButtonReload = page.locator('button:has-text("Add Overlay")');
+    if (await addOverlayButtonReload.isVisible({ timeout: 2000 }).catch(() => false)) {
+      console.log('[Full] Project reopened in Overlay mode, switching to Framing mode...');
+      const framingModeButtonReload = page.locator('button:has-text("Framing")').first();
+      await expect(framingModeButtonReload).toBeVisible({ timeout: 5000 });
+      await framingModeButtonReload.click();
+      await page.waitForTimeout(2000);
+      console.log('[Full] Switched back to Framing mode after reload');
+    }
 
     // Load video if file picker is shown
     if (await videoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -2014,8 +2080,14 @@ test.describe('Full Coverage Tests @full', () => {
     // STEP 7: Switch to clip 2 and verify its edits
     console.log('[Full] Step 7: Verifying clip 2 edits...');
 
-    if (clipItemCount >= 2) {
-      await clipItems.nth(1).click();
+    // Re-query clip items after reload (sidebar may have been rebuilt)
+    const clipItemsReload = page.locator('[data-testid="clip-item"]')
+      .or(page.locator('.cursor-pointer').filter({ hasText: /Clip|clip/i }));
+    const clipItemCountReload = await clipItemsReload.count();
+    console.log(`[Full] Found ${clipItemCountReload} clip items after reload`);
+
+    if (clipItemCountReload >= 2) {
+      await clipItemsReload.nth(1).click();
       await page.waitForTimeout(2000);
       await waitForVideoFirstFrame(page, 30000);
 
@@ -2032,7 +2104,7 @@ test.describe('Full Coverage Tests @full', () => {
       }
 
       // Switch back to clip 1 to verify it wasn't overwritten
-      await clipItems.nth(0).click();
+      await clipItemsReload.nth(0).click();
       await page.waitForTimeout(2000);
       await waitForVideoFirstFrame(page, 30000);
 
@@ -2061,7 +2133,7 @@ test.describe('Full Coverage Tests @full', () => {
     console.log(`[Full] Has restoring logs: ${hasRestoringLogs}`);
 
     // If we have multiple clips, we should see switching/restoring behavior
-    if (clipItemCount >= 2) {
+    if (clipItemCount >= 2 || clipItemCountReload >= 2) {
       expect(hasSwitchingLogs || hasRestoringLogs, 'Should see clip switching/restoring logs').toBeTruthy();
     }
 

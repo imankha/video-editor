@@ -89,9 +89,9 @@ def latest_final_videos_subquery() -> str:
 
     Partitions by:
     - project_id for project-based exports (brilliant_clip, custom_project)
-    - game_id for annotated game exports (where project_id = 0)
+    - game_id for annotated game exports (where project_id IS NULL)
 
-    Uses (project_id, COALESCE(game_id, 0)) as composite key to avoid collisions.
+    Uses (COALESCE(project_id, 0), COALESCE(game_id, 0)) as composite key to avoid collisions.
 
     Returns:
         SQL string for use in WHERE ... id IN (...)
@@ -105,7 +105,7 @@ def latest_final_videos_subquery() -> str:
     return """
         SELECT id FROM (
             SELECT id, ROW_NUMBER() OVER (
-                PARTITION BY project_id, COALESCE(game_id, 0)
+                PARTITION BY COALESCE(project_id, 0), COALESCE(game_id, 0)
                 ORDER BY version DESC
             ) as rn
             FROM final_videos

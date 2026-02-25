@@ -613,6 +613,8 @@ export function OverlayScreen({
     currentHighlightState,
     playerDetectionEnabled,
     playerDetections,
+    detectionVideoWidth,
+    detectionVideoHeight,
     isDetectionLoading,
     regionHasDetections,
     showPlayerBoxes,
@@ -810,6 +812,8 @@ export function OverlayScreen({
       // Player detection
       playerDetectionEnabled={playerDetectionEnabled}
       playerDetections={playerDetections}
+      detectionVideoWidth={detectionVideoWidth}
+      detectionVideoHeight={detectionVideoHeight}
       isDetectionLoading={isDetectionLoading}
       onPlayerSelect={handlePlayerSelect}
       showPlayerBoxes={showPlayerBoxes}
