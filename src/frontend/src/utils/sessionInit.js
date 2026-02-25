@@ -4,33 +4,48 @@
  *
  * This is the frontend counterpart of backend session_init.py.
  * When real auth is added, call this after login instead of on app mount.
+ *
+ * T85b: Added reinstallProfileHeader() for profile switching.
+ * The fetch interceptor reads from a mutable _currentProfileId variable,
+ * so switching profiles just updates the variable — no re-patching needed.
  */
 
 import { API_BASE } from '../config';
 
 let _profileId = null;
+let _currentProfileId = null;
+let _fetchPatched = false;
 let _initPromise = null;
 
 /**
  * Install a global fetch interceptor that adds X-Profile-ID to all
  * API requests. Called once after /api/auth/init returns.
+ *
+ * Uses _currentProfileId (mutable) so profile switching doesn't
+ * require re-patching fetch.
  */
 function installProfileHeader(profileId) {
+  _currentProfileId = profileId;
+
+  if (_fetchPatched) return; // Only patch once
+
   const originalFetch = window.fetch;
   window.fetch = function(input, init = {}) {
     // Only add header to our API requests (relative URLs or same-origin)
     const url = typeof input === 'string' ? input : input?.url || '';
     const isApiRequest = url.startsWith('/api') || url.startsWith(`${API_BASE}/api`);
 
-    if (isApiRequest && profileId) {
+    if (isApiRequest && _currentProfileId) {
       init = { ...init };
       init.headers = {
         ...(init.headers || {}),
-        'X-Profile-ID': profileId,
+        'X-Profile-ID': _currentProfileId,
       };
     }
     return originalFetch.call(window, input, init);
   };
+
+  _fetchPatched = true;
 }
 
 /**
@@ -74,4 +89,15 @@ export async function initSession() {
  */
 export function getProfileId() {
   return _profileId;
+}
+
+/**
+ * Update the profile ID used in the X-Profile-ID header.
+ * Called on profile switch — no need to re-patch fetch().
+ *
+ * @param {string} newProfileId - The new profile GUID to use
+ */
+export function reinstallProfileHeader(newProfileId) {
+  _currentProfileId = newProfileId;
+  _profileId = newProfileId;
 }

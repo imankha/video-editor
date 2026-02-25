@@ -10,6 +10,7 @@ import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { generateClipName } from '../modes/annotate/constants/soccerTags';
 import { getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
+import { ProfileDropdown } from './ProfileDropdown';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -420,23 +421,25 @@ export function ProjectManager({
         className="hidden"
       />
 
-      {/* Gallery button - fixed top right corner */}
-      {onOpenDownloads && (
-        <Button
-          variant="outline"
-          icon={Image}
-          onClick={onOpenDownloads}
-          className="fixed top-4 right-4 z-30"
-          title="Gallery"
-        >
-          Gallery
-          {downloadsCount > 0 && (
-            <span className="px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
-              {downloadsCount > 9 ? '9+' : downloadsCount}
-            </span>
-          )}
-        </Button>
-      )}
+      {/* Top right controls - Gallery + Profile switcher */}
+      <div className="fixed top-4 right-4 z-30 flex items-center gap-2">
+        <ProfileDropdown />
+        {onOpenDownloads && (
+          <Button
+            variant="outline"
+            icon={Image}
+            onClick={onOpenDownloads}
+            title="Gallery"
+          >
+            Gallery
+            {downloadsCount > 0 && (
+              <span className="px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
+                {downloadsCount > 9 ? '9+' : downloadsCount}
+              </span>
+            )}
+          </Button>
+        )}
+      </div>
 
       {/* Header */}
       <div className="text-center mb-6">

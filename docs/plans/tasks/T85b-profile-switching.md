@@ -1,6 +1,6 @@
 # T85b: Profile Switching — Multi-Athlete Support
 
-**Status:** TODO
+**Status:** TESTING
 **Priority:** HIGH - Second subtask of T85, before deployment
 **Impact:** 7
 **Complexity:** 6

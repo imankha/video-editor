@@ -4,6 +4,7 @@ import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
 import { GalleryButton } from '../components/GalleryButton';
+import { ProfileDropdown } from '../components/ProfileDropdown';
 import { Breadcrumb, Button } from '../components/shared';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
@@ -378,6 +379,7 @@ export function AnnotateScreen({ onClearSelection }) {
               />
             </div>
             <div className="flex items-center gap-4">
+              <ProfileDropdown />
               <GalleryButton />
               {/* Annotate mode indicator */}
               <div className="flex items-center gap-2 px-4 py-2 bg-green-600/20 border border-green-600/40 rounded-lg">

@@ -21,3 +21,4 @@ export { useGalleryStore, useGalleryIsOpen, useGalleryCount, useGalleryActions }
 export { useGamesStore } from './gamesStore';
 export { useSettingsStore, useProjectFilters, useFramingSettings, useOverlaySettings, useSettingsLoading, useSettingsInitialized } from './settingsStore';
 export { useSyncStore, checkSyncStatus } from './syncStore';
+export { useProfileStore, useCurrentProfile, useHasMultipleProfiles, useProfilesLoading } from './profileStore';

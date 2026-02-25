@@ -17,7 +17,8 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, EDITOR_MODES } from './stores';
+import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProfileStore, EDITOR_MODES } from './stores';
+import { ProfileDropdown } from './components/ProfileDropdown';
 
 /**
  * App.jsx - Main application shell
@@ -89,9 +90,13 @@ function App() {
   } = useProjects();
 
   // T85a: Initialize session (profile ID header) then warm video cache.
+  // T85b: Also fetch profiles for the profile switcher.
   // The backend auto-resolves profile if header is missing, so no render gate needed.
   useEffect(() => {
-    initSession().then(() => warmAllUserVideos());
+    initSession().then(() => {
+      warmAllUserVideos();
+      useProfileStore.getState().fetchProfiles();
+    });
   }, []);
 
   // Export recovery - reconnects to active exports on app startup
@@ -304,6 +309,7 @@ function App() {
               />
             </div>
             <div className="flex items-center gap-2">
+              <ProfileDropdown />
               <GalleryButton />
               {/* Combined mode switcher with Annotate button */}
               <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
