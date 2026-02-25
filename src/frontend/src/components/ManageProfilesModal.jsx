@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Pencil, Trash2, ArrowLeft } from 'lucide-react';
 import { Button, ConfirmationDialog } from './shared';
 import { useProfileStore } from '../stores';
@@ -53,17 +53,23 @@ function ColorSelector({ value, onChange, usedColors = [] }) {
 // Profile Form (shared for Add and Edit)
 // ---------------------------------------------------------------------------
 
-function ProfileForm({ title, initialName = '', initialColor, usedColors, onSubmit, onCancel, submitLabel = 'Save' }) {
+function ProfileForm({ title, initialName = '', initialColor, usedColors, existingNames = [], onSubmit, onCancel, submitLabel = 'Save' }) {
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState(initialColor || getNextColor(usedColors));
   const [submitting, setSubmitting] = useState(false);
 
+  const trimmedName = name.trim();
+  const isDuplicate = trimmedName && existingNames.some(
+    n => n && n.toLowerCase() === trimmedName.toLowerCase()
+  );
+  const canSubmit = trimmedName && !isDuplicate && !submitting;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!canSubmit) return;
     setSubmitting(true);
     try {
-      await onSubmit(name.trim(), color);
+      await onSubmit(trimmedName, color);
     } finally {
       setSubmitting(false);
     }
@@ -90,8 +96,13 @@ function ProfileForm({ title, initialName = '', initialColor, usedColors, onSubm
             placeholder="e.g. Jordan"
             maxLength={30}
             autoFocus
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+            className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none ${
+              isDuplicate ? 'border-red-500 focus:border-red-500' : 'border-gray-600 focus:border-purple-500'
+            }`}
           />
+          {isDuplicate && (
+            <p className="text-red-400 text-xs mt-1">A profile with this name already exists</p>
+          )}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">Color</label>
@@ -104,87 +115,11 @@ function ProfileForm({ title, initialName = '', initialColor, usedColors, onSubm
         <Button type="button" variant="secondary" className="flex-1" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" variant="primary" className="flex-1" disabled={!name.trim() || submitting} loading={submitting}>
+        <Button type="submit" variant="primary" className="flex-1" disabled={!canSubmit} loading={submitting}>
           {submitLabel}
         </Button>
       </div>
     </form>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Add First Profile Flow (name current + new)
-// ---------------------------------------------------------------------------
-
-function AddFirstProfileFlow({ currentProfile, usedColors, onComplete, onCancel }) {
-  const [step, setStep] = useState(1);
-  const [currentName, setCurrentName] = useState(currentProfile?.name || '');
-  const [currentColor, setCurrentColor] = useState(currentProfile?.color || PROFILE_COLORS[0]);
-  const [submitting, setSubmitting] = useState(false);
-
-  if (step === 1) {
-    return (
-      <div>
-        {/* Header */}
-        <div className="flex items-center gap-3 p-4 border-b border-gray-700">
-          <button type="button" onClick={onCancel} className="text-gray-400 hover:text-white transition-colors">
-            <ArrowLeft size={20} />
-          </button>
-          <h2 className="text-lg font-bold text-white">Name Your Current Profile</h2>
-        </div>
-
-        {/* Body */}
-        <div className="p-4 space-y-4">
-          <p className="text-sm text-gray-400">
-            Before adding a new profile, let's name your current one so you can tell them apart.
-          </p>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Name</label>
-            <input
-              type="text"
-              value={currentName}
-              onChange={(e) => setCurrentName(e.target.value)}
-              placeholder="e.g. Marcus"
-              maxLength={30}
-              autoFocus
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Color</label>
-            <ColorSelector value={currentColor} onChange={setCurrentColor} usedColors={[]} />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-700 flex gap-3">
-          <Button variant="secondary" className="flex-1" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button variant="primary" className="flex-1" disabled={!currentName.trim()} onClick={() => setStep(2)}>
-            Next
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Step 2: Name the new profile
-  return (
-    <ProfileForm
-      title="Name the New Profile"
-      usedColors={[currentColor]}
-      submitLabel={submitting ? 'Creating...' : 'Create'}
-      onCancel={() => setStep(1)}
-      onSubmit={async (newName, newColor) => {
-        setSubmitting(true);
-        try {
-          await onComplete(currentName.trim(), currentColor, newName, newColor);
-        } finally {
-          setSubmitting(false);
-        }
-      }}
-    />
   );
 }
 
@@ -197,8 +132,7 @@ function AddFirstProfileFlow({ currentProfile, usedColors, onComplete, onCancel 
  *
  * Modes:
  * - 'list': Show all profiles with edit/delete buttons
- * - 'add': Add a new profile (2+ profiles already exist)
- * - 'add-first': Add first additional profile (names both current and new)
+ * - 'add': Add a new profile
  * - 'edit': Edit an existing profile's name and color
  */
 export function ManageProfilesModal({ isOpen, onClose }) {
@@ -232,26 +166,6 @@ export function ManageProfilesModal({ isOpen, onClose }) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, mode, onClose]);
 
-  const handleAddClick = useCallback(() => {
-    if (profiles.length < 2) {
-      setMode('add-first');
-    } else {
-      setMode('add');
-    }
-  }, [profiles.length]);
-
-  const handleAddComplete = useCallback(async (currentName, currentColor, newName, newColor) => {
-    // First update the current profile's name
-    const currentProfile = profiles.find(p => p.isCurrent);
-    if (currentProfile) {
-      await updateProfile(currentProfile.id, { name: currentName, color: currentColor });
-    }
-    // Then create the new profile (this triggers a switch)
-    await createProfile(newName, newColor);
-    setMode('list');
-    onClose();
-  }, [profiles, updateProfile, createProfile, onClose]);
-
   const handleAddProfile = useCallback(async (name, color) => {
     await createProfile(name, color);
     setMode('list');
@@ -273,9 +187,20 @@ export function ManageProfilesModal({ isOpen, onClose }) {
     }
   }, [deleteConfirm, deleteProfile]);
 
+  // Names of all profiles (for duplicate checking)
+  const allProfileNames = useMemo(
+    () => profiles.map(p => p.name).filter(Boolean),
+    [profiles]
+  );
+
   if (!isOpen) return null;
 
   const usedColors = profiles.map(p => p.color).filter(Boolean);
+
+  // Names excluding the one being edited (so you can keep your own name)
+  const existingNamesForEdit = editingProfile
+    ? allProfileNames.filter(n => n.toLowerCase() !== (editingProfile.name || '').toLowerCase())
+    : allProfileNames;
 
   return (
     <div
@@ -347,28 +272,19 @@ export function ManageProfilesModal({ isOpen, onClose }) {
 
             {/* Footer */}
             <div className="p-4 border-t border-gray-700">
-              <Button variant="secondary" fullWidth onClick={handleAddClick} icon={null}>
+              <Button variant="secondary" fullWidth onClick={() => setMode('add')} icon={null}>
                 + Add Profile
               </Button>
             </div>
           </>
         )}
 
-        {/* Add first profile flow (name current + new) */}
-        {mode === 'add-first' && (
-          <AddFirstProfileFlow
-            currentProfile={profiles.find(p => p.isCurrent) || profiles[0]}
-            usedColors={usedColors}
-            onComplete={handleAddComplete}
-            onCancel={() => setMode('list')}
-          />
-        )}
-
-        {/* Add additional profile */}
+        {/* Add profile */}
         {mode === 'add' && (
           <ProfileForm
             title="Add Profile"
             usedColors={usedColors}
+            existingNames={allProfileNames}
             submitLabel="Create"
             onSubmit={handleAddProfile}
             onCancel={() => setMode('list')}
@@ -382,6 +298,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
             initialName={editingProfile.name || ''}
             initialColor={editingProfile.color}
             usedColors={usedColors.filter(c => c !== editingProfile.color)}
+            existingNames={existingNamesForEdit}
             submitLabel="Save"
             onSubmit={handleEditProfile}
             onCancel={() => { setEditingProfile(null); setMode('list'); }}

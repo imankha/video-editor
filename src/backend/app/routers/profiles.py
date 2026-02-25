@@ -99,9 +99,18 @@ async def create_profile(request: CreateProfileRequest):
     if not data:
         raise HTTPException(status_code=500, detail="Could not read profiles.json")
 
+    # Check for duplicate name (case-insensitive)
+    existing_names = [
+        meta.get("name", "").lower()
+        for meta in data["profiles"].values()
+        if meta.get("name")
+    ]
+    if request.name.strip().lower() in existing_names:
+        raise HTTPException(status_code=409, detail="A profile with this name already exists")
+
     new_id = uuid4().hex[:8]
     data["profiles"][new_id] = {
-        "name": request.name,
+        "name": request.name.strip(),
         "color": request.color,
     }
 
@@ -158,7 +167,15 @@ async def update_profile(profile_id: str, request: UpdateProfileRequest):
 
     profile = data["profiles"][profile_id]
     if request.name is not None:
-        profile["name"] = request.name
+        # Check for duplicate name (case-insensitive), excluding this profile
+        existing_names = [
+            meta.get("name", "").lower()
+            for pid, meta in data["profiles"].items()
+            if pid != profile_id and meta.get("name")
+        ]
+        if request.name.strip().lower() in existing_names:
+            raise HTTPException(status_code=409, detail="A profile with this name already exists")
+        profile["name"] = request.name.strip()
     if request.color is not None:
         profile["color"] = request.color
 

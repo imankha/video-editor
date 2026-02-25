@@ -422,8 +422,7 @@ export function ProjectManager({
       />
 
       {/* Top right controls - Gallery + Profile switcher */}
-      <div className="fixed top-4 right-4 z-30 flex items-center gap-2">
-        <ProfileDropdown />
+      <div className="fixed top-4 right-4 z-30 flex items-center gap-4">
         {onOpenDownloads && (
           <Button
             variant="outline"
@@ -439,6 +438,7 @@ export function ProjectManager({
             )}
           </Button>
         )}
+        <ProfileDropdown />
       </div>
 
       {/* Header */}

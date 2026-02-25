@@ -18,7 +18,6 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProfileStore, EDITOR_MODES } from './stores';
-import { ProfileDropdown } from './components/ProfileDropdown';
 
 /**
  * App.jsx - Main application shell
@@ -309,7 +308,6 @@ function App() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <ProfileDropdown />
               <GalleryButton />
               {/* Combined mode switcher with Annotate button */}
               <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
