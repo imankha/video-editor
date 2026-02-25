@@ -2036,8 +2036,20 @@ test.describe('Full Coverage Tests @full', () => {
     const projectCardReload = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clips?/i') }).first();
     await projectCardReload.click();
 
-    // Wait for framing mode to reload
+    // Wait for mode to load
     await page.waitForTimeout(2000);
+
+    // Project may reopen in Overlay mode (if it has a working video from export).
+    // Switch back to Framing mode if needed.
+    const addOverlayButtonReload = page.locator('button:has-text("Add Overlay")');
+    if (await addOverlayButtonReload.isVisible({ timeout: 2000 }).catch(() => false)) {
+      console.log('[Full] Project reopened in Overlay mode, switching to Framing mode...');
+      const framingModeButtonReload = page.locator('button:has-text("Framing")').first();
+      await expect(framingModeButtonReload).toBeVisible({ timeout: 5000 });
+      await framingModeButtonReload.click();
+      await page.waitForTimeout(2000);
+      console.log('[Full] Switched back to Framing mode after reload');
+    }
 
     // Load video if file picker is shown
     if (await videoInput.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -2068,8 +2080,14 @@ test.describe('Full Coverage Tests @full', () => {
     // STEP 7: Switch to clip 2 and verify its edits
     console.log('[Full] Step 7: Verifying clip 2 edits...');
 
-    if (clipItemCount >= 2) {
-      await clipItems.nth(1).click();
+    // Re-query clip items after reload (sidebar may have been rebuilt)
+    const clipItemsReload = page.locator('[data-testid="clip-item"]')
+      .or(page.locator('.cursor-pointer').filter({ hasText: /Clip|clip/i }));
+    const clipItemCountReload = await clipItemsReload.count();
+    console.log(`[Full] Found ${clipItemCountReload} clip items after reload`);
+
+    if (clipItemCountReload >= 2) {
+      await clipItemsReload.nth(1).click();
       await page.waitForTimeout(2000);
       await waitForVideoFirstFrame(page, 30000);
 
@@ -2086,7 +2104,7 @@ test.describe('Full Coverage Tests @full', () => {
       }
 
       // Switch back to clip 1 to verify it wasn't overwritten
-      await clipItems.nth(0).click();
+      await clipItemsReload.nth(0).click();
       await page.waitForTimeout(2000);
       await waitForVideoFirstFrame(page, 30000);
 
@@ -2115,7 +2133,7 @@ test.describe('Full Coverage Tests @full', () => {
     console.log(`[Full] Has restoring logs: ${hasRestoringLogs}`);
 
     // If we have multiple clips, we should see switching/restoring behavior
-    if (clipItemCount >= 2) {
+    if (clipItemCount >= 2 || clipItemCountReload >= 2) {
       expect(hasSwitchingLogs || hasRestoringLogs, 'Should see clip switching/restoring logs').toBeTruthy();
     }
 
