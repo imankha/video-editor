@@ -21,7 +21,7 @@ import {
   listPendingUploads,
   UPLOAD_PHASE,
 } from '../services/uploadManager';
-import { useGamesStore } from '../stores';
+import { useGamesDataStore } from '../stores/gamesDataStore';
 
 export { UPLOAD_PHASE };
 
@@ -44,7 +44,7 @@ export function useGameUpload() {
   const uploadSessionRef = useRef(null);
 
   // Global games invalidation for cross-component coordination
-  const invalidateGames = useGamesStore((state) => state.invalidateGames);
+  const invalidateGames = useGamesDataStore((state) => state.invalidateGames);
 
   /**
    * Upload a game file with deduplication

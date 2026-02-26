@@ -8,7 +8,7 @@ import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useVideo } from '../hooks/useVideo';
 import { useClipManager } from '../hooks/useClipManager';
 import { useProjectClips } from '../hooks/useProjectClips';
-import { useGames } from '../hooks/useGames';
+import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ClipSelectorSidebar } from '../components/ClipSelectorSidebar';
 import { FileUpload } from '../components/FileUpload';
@@ -125,8 +125,9 @@ export function FramingScreen({
     getClipFileUrl
   } = useProjectClips(projectId);
 
-  // Games hook (for game name display and library filters)
-  const { games, fetchGames } = useGames();
+  // Games — Zustand store (for game name display and library filters)
+  const games = useGamesDataStore(state => state.games);
+  const fetchGames = useGamesDataStore(state => state.fetchGames);
 
   // Extraction state - calculated from clips
   const extractionState = useMemo(() => {

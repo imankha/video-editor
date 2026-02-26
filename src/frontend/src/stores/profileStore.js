@@ -176,14 +176,21 @@ export const useProfileStore = create((set, get) => ({
 }));
 
 /**
- * Reset all data stores after a profile switch.
- * These stores hold data from the previous profile's database.
+ * Reset all data stores after a profile switch, then re-fetch.
+ *
+ * Two phases:
+ * 1. Clear — all stores reset to empty state (UI immediately shows empty)
+ * 2. Fetch — stores that hold list data re-fetch from the new profile's DB
+ *
  * Settings are NOT reset — they persist across profiles.
  */
 async function _resetDataStores() {
   // Dynamic import to avoid circular dependency
   const stores = await import('./index');
 
+  // Phase 1: Clear all profile-scoped data
+  stores.useProjectsStore.getState().reset();
+  stores.useGamesDataStore.getState().reset();
   stores.useProjectDataStore.getState().reset();
   stores.useFramingStore.getState().reset();
   stores.useOverlayStore.getState().reset();
@@ -194,6 +201,10 @@ async function _resetDataStores() {
 
   // Force settings to re-load from new profile's DB
   stores.useSettingsStore.setState({ isInitialized: false });
+
+  // Phase 2: Re-fetch data for the new profile
+  stores.useProjectsStore.getState().fetchProjects();
+  stores.useGamesDataStore.getState().fetchGames();
 }
 
 // Selector hooks

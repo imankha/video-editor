@@ -18,7 +18,10 @@ export { useProjectDataStore, useProjectClips, useSelectedClipId, useWorkingVide
 export { useFramingStore, useFramingVideoFile, useFramingIncludeAudio, useFramingChangedSinceExport } from './framingStore';
 export { useOverlayStore, useOverlayEffectType, useOverlayIsLoading } from './overlayStore';
 export { useGalleryStore, useGalleryIsOpen, useGalleryCount, useGalleryActions } from './galleryStore';
+// gamesStore is deprecated — use useGamesDataStore instead (holds data + invalidation)
 export { useGamesStore } from './gamesStore';
+export { useGamesDataStore, useGames as useGamesList, useSelectedGame, useGamesLoading } from './gamesDataStore';
+export { useProjectsStore, useProjects as useProjectsList, useSelectedProject, useSelectedProjectId, useProjectsLoading } from './projectsStore';
 export { useSettingsStore, useProjectFilters, useFramingSettings, useOverlaySettings, useSettingsLoading, useSettingsInitialized } from './settingsStore';
 export { useSyncStore, checkSyncStatus } from './syncStore';
 export { useProfileStore, useCurrentProfile, useHasMultipleProfiles, useProfilesLoading } from './profileStore';
