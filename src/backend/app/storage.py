@@ -862,8 +862,7 @@ def r2_head_object_global(key: str) -> Optional[dict]:
             'ContentType': response.get('ContentType'),
             'LastModified': response.get('LastModified'),
         }
-    except Exception as e:
-        logger.debug(f"Object not found in R2: {key} - {e}")
+    except Exception:
         return None
 
 

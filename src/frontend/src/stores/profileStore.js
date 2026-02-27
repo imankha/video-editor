@@ -188,7 +188,7 @@ async function _resetDataStores() {
   // Dynamic import to avoid circular dependency
   const stores = await import('./index');
 
-  // Phase 1: Clear all profile-scoped data
+  // Phase 1: Clear all profile-scoped data (cancels in-flight fetches via AbortController)
   stores.useProjectsStore.getState().reset();
   stores.useGamesDataStore.getState().reset();
   stores.useProjectDataStore.getState().reset();
@@ -197,10 +197,10 @@ async function _resetDataStores() {
   stores.useVideoStore.getState().reset();
   stores.useClipStore.getState().reset();
   stores.useNavigationStore.getState().reset();
-  stores.useExportStore.getState().clearExport();
-
-  // Force settings to re-load from new profile's DB
-  stores.useSettingsStore.setState({ isInitialized: false });
+  stores.useExportStore.getState().reset();
+  stores.useUploadStore.getState().reset();
+  stores.useGalleryStore.getState().reset();
+  stores.useSettingsStore.getState().reset();
 
   // Phase 2: Re-fetch data for the new profile
   stores.useProjectsStore.getState().fetchProjects();

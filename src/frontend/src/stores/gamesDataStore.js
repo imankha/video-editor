@@ -17,8 +17,9 @@ import { create } from 'zustand';
 import { API_BASE } from '../config';
 import { uploadGame as uploadGameService } from '../services/uploadManager';
 
-// Module-level ref for debounced save timeout
+// Module-level refs for debounced save and fetch cancellation
 let _saveTimeout = null;
+let _fetchController = null;
 
 export const useGamesDataStore = create((set, get) => ({
   games: [],
@@ -40,12 +41,18 @@ export const useGamesDataStore = create((set, get) => ({
   },
 
   /**
-   * Fetch all games from the server
+   * Fetch all games from the server.
+   * Cancels any in-flight fetch to prevent stale data from a previous
+   * profile overwriting the current one (race condition on rapid switch).
    */
   fetchGames: async () => {
+    if (_fetchController) _fetchController.abort();
+    _fetchController = new AbortController();
+    const { signal } = _fetchController;
+
     set({ isLoading: true, error: null });
     try {
-      const response = await fetch(`${API_BASE}/api/games`);
+      const response = await fetch(`${API_BASE}/api/games`, { signal });
       if (!response.ok) {
         throw new Error(`Failed to fetch games: ${response.status}`);
       }
@@ -54,6 +61,7 @@ export const useGamesDataStore = create((set, get) => ({
       set({ games: gamesList, isLoading: false });
       return gamesList;
     } catch (err) {
+      if (err.name === 'AbortError') return get().games;
       console.error('[gamesDataStore] Failed to fetch games:', err);
       set({ error: err.message, isLoading: false });
       return [];
@@ -296,10 +304,8 @@ export const useGamesDataStore = create((set, get) => ({
    * Reset store — called on profile switch.
    */
   reset: () => {
-    if (_saveTimeout) {
-      clearTimeout(_saveTimeout);
-      _saveTimeout = null;
-    }
+    if (_fetchController) { _fetchController.abort(); _fetchController = null; }
+    if (_saveTimeout) { clearTimeout(_saveTimeout); _saveTimeout = null; }
     set({
       games: [],
       selectedGame: null,

@@ -15,6 +15,9 @@ import { API_BASE } from '../config';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
+// Module-level ref for fetch cancellation (prevents stale data on rapid profile switch)
+let _fetchController = null;
+
 export const useProjectsStore = create((set, get) => ({
   projects: [],
   selectedProjectId: null,
@@ -26,17 +29,24 @@ export const useProjectsStore = create((set, get) => ({
   hasProjects: () => get().projects.length > 0,
 
   /**
-   * Fetch all projects from the API
+   * Fetch all projects from the API.
+   * Cancels any in-flight fetch to prevent stale data from a previous
+   * profile overwriting the current one (race condition on rapid switch).
    */
   fetchProjects: async () => {
+    if (_fetchController) _fetchController.abort();
+    _fetchController = new AbortController();
+    const { signal } = _fetchController;
+
     set({ loading: true, error: null });
     try {
-      const response = await fetch(`${API_BASE_URL}/projects`);
+      const response = await fetch(`${API_BASE_URL}/projects`, { signal });
       if (!response.ok) throw new Error('Failed to fetch projects');
       const data = await response.json();
       set({ projects: data, loading: false });
       return data;
     } catch (err) {
+      if (err.name === 'AbortError') return get().projects;
       set({ error: err.message, loading: false });
       console.error('[projectsStore] fetchProjects error:', err);
       return [];
@@ -165,13 +175,16 @@ export const useProjectsStore = create((set, get) => ({
    * Clears all data so the UI immediately reflects the empty state
    * before new data is fetched.
    */
-  reset: () => set({
-    projects: [],
-    selectedProjectId: null,
-    selectedProject: null,
-    loading: false,
-    error: null,
-  }),
+  reset: () => {
+    if (_fetchController) { _fetchController.abort(); _fetchController = null; }
+    set({
+      projects: [],
+      selectedProjectId: null,
+      selectedProject: null,
+      loading: false,
+      error: null,
+    });
+  },
 }));
 
 // Selector hooks for granular subscriptions

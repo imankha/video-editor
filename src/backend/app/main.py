@@ -22,6 +22,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import traceback
 import sys
 import os
+import re
 import subprocess
 import logging
 from dotenv import load_dotenv
@@ -89,9 +90,11 @@ class UserContextMiddleware(BaseHTTPMiddleware):
         # auto-resolve via user_session_init (first request / missing header).
         # user_session_init is idempotent and cached after first call per user.
         profile_id = request.headers.get('X-Profile-ID')
-        if profile_id:
+        if profile_id and re.match(r'^[a-f0-9]{8}$', profile_id):
             set_current_profile_id(profile_id)
         else:
+            if profile_id:
+                logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
             user_session_init(sanitized)
 
         response = await call_next(request)

@@ -129,7 +129,6 @@ async def prepare_upload(request: PrepareUploadRequest):
     if head_result:
         # Video already exists in R2 - no upload needed
         # Game creation is handled separately by POST /api/games
-        logger.info(f"Video already exists in R2: {blake3_hash}")
         return {
             "status": UploadStatus.EXISTS,
             "blake3_hash": blake3_hash,

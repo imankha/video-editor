@@ -64,7 +64,6 @@ export async function hashFile(file, onProgress) {
     Math.floor(file.size * 0.75),
     Math.max(0, file.size - SAMPLE_SIZE),
   ];
-
   // Include file size in hash for extra collision resistance
   // Two files with same samples but different sizes will hash differently
   const sizeBytes = new Uint8Array(8);
@@ -91,7 +90,8 @@ export async function hashFile(file, onProgress) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
-  return hasher.digest('hex');
+  const hash = hasher.digest('hex');
+  return hash;
 }
 
 /**
@@ -297,6 +297,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
 
   if (!prepareRes.ok) {
     const error = await prepareRes.json().catch(() => ({}));
+    console.error(`[ensureVideoInR2] prepare-upload FAILED: ${prepareRes.status}`, error);
     throw new Error(error.detail || `Prepare failed: ${prepareRes.status}`);
   }
 
@@ -316,7 +317,6 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   if (prepareData.status !== UPLOAD_STATUS.UPLOAD_REQUIRED) {
     throw new Error(`Unexpected status: ${prepareData.status}`);
   }
-
   const isResume = prepareData.is_resume === true;
   const completedParts = prepareData.completed_parts || [];
 

@@ -184,6 +184,13 @@ export const useUploadStore = create((set, get) => ({
     const upload = get().activeUpload;
     return upload !== null && upload.phase !== UPLOAD_PHASE.ERROR;
   },
+
+  /**
+   * Reset on profile switch — clears upload state.
+   * In-flight XHR continues (aborting multipart R2 uploads is complex),
+   * but the completion callback is discarded so it won't affect the new profile.
+   */
+  reset: () => set({ activeUpload: null, onCompleteCallbacks: [] }),
 }));
 
 export default useUploadStore;
