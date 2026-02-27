@@ -1,6 +1,6 @@
 # T85a: R2 Restructure — Environment + Profiles Path Layout
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** HIGH - First subtask of T85, before deployment
 **Impact:** 8
 **Complexity:** 5

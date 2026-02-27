@@ -359,6 +359,17 @@ export const useExportStore = create((set, get) => ({
     exportProgress: null,
   }),
 
+  /**
+   * Full reset on profile switch — clears all export state including active exports.
+   */
+  reset: () => set({
+    activeExports: {},
+    exportingProject: null,
+    exportProgress: null,
+    globalExportProgress: null,
+    exportCompleteToastId: null,
+  }),
+
   setGlobalExportProgress: (progress) => set({ globalExportProgress: progress }),
 
   clearGlobalExportProgress: () => set({ globalExportProgress: null }),

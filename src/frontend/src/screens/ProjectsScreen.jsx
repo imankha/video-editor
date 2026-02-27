@@ -1,15 +1,14 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { ProjectManager } from '../components/ProjectManager';
 import { DownloadsPanel } from '../components/DownloadsPanel';
-import { useProjects } from '../hooks/useProjects';
-import { useGames } from '../hooks/useGames';
 import { useGameUpload } from '../hooks/useGameUpload';
 import { useProjectLoader } from '../hooks/useProjectLoader';
 import { useNavigationStore } from '../stores/navigationStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useExportStore } from '../stores/exportStore';
 import { useGalleryStore } from '../stores/galleryStore';
-import { useGamesStore } from '../stores/gamesStore';
+import { useProjectsStore } from '../stores/projectsStore';
+import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
@@ -63,25 +62,21 @@ export function ProjectsScreen({
   const navigate = useNavigationStore(state => state.navigate);
   const setEditorMode = useEditorStore(state => state.setEditorMode);
 
-  // Project management hooks
-  const {
-    projects,
-    loading: projectsLoading,
-    error: projectsError,
-    fetchProjects,
-    selectProject,
-    createProject,
-    deleteProject,
-  } = useProjects();
+  // Project management — Zustand store (reactive to profile switches)
+  const projects = useProjectsStore(state => state.projects);
+  const projectsLoading = useProjectsStore(state => state.loading);
+  const projectsError = useProjectsStore(state => state.error);
+  const fetchProjects = useProjectsStore(state => state.fetchProjects);
+  const selectProject = useProjectsStore(state => state.selectProject);
+  const createProject = useProjectsStore(state => state.createProject);
+  const deleteProject = useProjectsStore(state => state.deleteProject);
 
-  // Games management hook
-  const {
-    games,
-    isLoading: gamesLoading,
-    error: gamesError,
-    fetchGames,
-    deleteGame,
-  } = useGames();
+  // Games management — Zustand store (reactive to profile switches)
+  const games = useGamesDataStore(state => state.games);
+  const gamesLoading = useGamesDataStore(state => state.isLoading);
+  const gamesError = useGamesDataStore(state => state.error);
+  const fetchGames = useGamesDataStore(state => state.fetchGames);
+  const deleteGame = useGamesDataStore(state => state.deleteGame);
 
   // Upload management hook (for pending uploads list)
   const {
@@ -91,9 +86,6 @@ export function ProjectsScreen({
 
   // Active upload from uploadStore (in-progress upload that persists across navigation)
   const activeUpload = useUploadStore(state => state.activeUpload);
-
-  // Watch for games version changes from other components (e.g., AnnotateContainer)
-  const gamesVersion = useGamesStore(state => state.gamesVersion);
 
   // Project loading
   const { loadProject } = useProjectLoader();
@@ -111,15 +103,20 @@ export function ProjectsScreen({
   const activeExports = useExportStore(state => state.activeExports);
   const getProcessingExports = useExportStore(state => state.getProcessingExports);
 
+  // Fetch projects and games on mount (first load — profile switches
+  // are handled by _resetDataStores which calls fetchProjects/fetchGames)
+  useEffect(() => {
+    fetchProjects();
+    fetchGames();
+  }, [fetchProjects, fetchGames]);
+
   // Listen for export completion events and refresh project list
   useEffect(() => {
     const unsubComplete = exportWebSocketManager.addEventListener('*', 'complete', (data, exportId) => {
-      console.log('[ProjectsScreen] Export completed, refreshing projects:', exportId);
       fetchProjects();
     });
 
     const unsubError = exportWebSocketManager.addEventListener('*', 'error', (data, exportId) => {
-      console.log('[ProjectsScreen] Export failed, refreshing projects:', exportId);
       fetchProjects();
     });
 
@@ -128,14 +125,6 @@ export function ProjectsScreen({
       unsubError();
     };
   }, [fetchProjects]);
-
-  // Refetch games when gamesVersion changes (triggered by other components)
-  useEffect(() => {
-    if (gamesVersion > 0) {
-      console.log('[ProjectsScreen] Games version changed, refetching games list');
-      fetchGames();
-    }
-  }, [gamesVersion, fetchGames]);
 
   // Fetch pending uploads on mount
   useEffect(() => {

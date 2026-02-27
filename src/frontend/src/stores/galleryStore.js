@@ -22,6 +22,9 @@ export const useGalleryStore = create((set) => ({
   close: () => set({ isOpen: false }),
   toggle: () => set((state) => ({ isOpen: !state.isOpen })),
   setCount: (count) => set({ count }),
+
+  // Reset on profile switch — clears badge count and closes panel
+  reset: () => set({ isOpen: false, count: 0 }),
 }));
 
 // Selector hooks for granular subscriptions

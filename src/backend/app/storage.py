@@ -862,8 +862,7 @@ def r2_head_object_global(key: str) -> Optional[dict]:
             'ContentType': response.get('ContentType'),
             'LastModified': response.get('LastModified'),
         }
-    except Exception as e:
-        logger.debug(f"Object not found in R2: {key} - {e}")
+    except Exception:
         return None
 
 
@@ -931,10 +930,46 @@ def read_selected_profile_from_r2(user_id: str) -> Optional[str]:
             pass
 
 
-def upload_profiles_json(user_id: str, profile_id: str) -> bool:
-    """Upload profiles.json to R2 for a user.
+def read_profiles_json(user_id: str) -> Optional[dict]:
+    """Read profiles.json from R2 for a user.
 
-    Creates the initial profile manifest with one default profile.
+    Returns the parsed dict, or None if not found or R2 disabled.
+    """
+    client = get_r2_sync_client()
+    if not client:
+        return None
+
+    import json
+    import tempfile
+
+    key = r2_user_key(user_id, "profiles.json")
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.json') as tmp:
+            tmp_path = tmp.name
+        client.download_file(R2_BUCKET, key, tmp_path)
+        with open(tmp_path, 'r') as f:
+            data = json.load(f)
+        os.unlink(tmp_path)
+        return data
+    except client.exceptions.NoSuchKey:
+        logger.debug(f"No profiles.json for user {user_id}")
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to read profiles.json for user {user_id}: {e}")
+        return None
+    finally:
+        try:
+            if tmp_path:
+                os.unlink(tmp_path)
+        except (OSError, UnboundLocalError):
+            pass
+
+
+def save_profiles_json(user_id: str, data: dict) -> bool:
+    """Write profiles.json to R2 for a user.
+
+    Replaces the full document with the provided dict.
     """
     client = get_r2_client()
     if not client:
@@ -943,12 +978,6 @@ def upload_profiles_json(user_id: str, profile_id: str) -> bool:
     import json
 
     key = r2_user_key(user_id, "profiles.json")
-    data = {
-        "default": profile_id,
-        "profiles": {
-            profile_id: {"name": None}
-        }
-    }
     try:
         client.put_object(
             Bucket=R2_BUCKET,
@@ -956,10 +985,77 @@ def upload_profiles_json(user_id: str, profile_id: str) -> bool:
             Body=json.dumps(data).encode('utf-8'),
             ContentType='application/json',
         )
-        logger.info(f"Created profiles.json for user {user_id} with profile {profile_id}")
+        logger.info(f"Saved profiles.json for user {user_id}")
         return True
     except Exception as e:
-        logger.error(f"Failed to upload profiles.json for user {user_id}: {e}")
+        logger.error(f"Failed to save profiles.json for user {user_id}: {e}")
+        return False
+
+
+def upload_profiles_json(user_id: str, profile_id: str) -> bool:
+    """Upload profiles.json to R2 for a user.
+
+    Creates the initial profile manifest with one default profile.
+    """
+    data = {
+        "default": profile_id,
+        "profiles": {
+            profile_id: {"name": None}
+        }
+    }
+    return save_profiles_json(user_id, data)
+
+
+def delete_profile_r2_data(user_id: str, profile_id: str) -> bool:
+    """Delete all R2 objects under profiles/{profile_id}/ for a user.
+
+    Used when deleting a profile — removes database, clips, videos, etc.
+    """
+    client = get_r2_client()
+    if not client:
+        return False
+
+    prefix = r2_user_key(user_id, f"profiles/{profile_id}/")
+    try:
+        # List all objects with the prefix
+        response = client.list_objects_v2(Bucket=R2_BUCKET, Prefix=prefix)
+        objects = response.get("Contents", [])
+
+        if not objects:
+            logger.info(f"No R2 objects to delete for profile {profile_id}")
+            return True
+
+        # Batch delete (S3/R2 supports up to 1000 per request)
+        delete_keys = [{"Key": obj["Key"]} for obj in objects]
+        client.delete_objects(
+            Bucket=R2_BUCKET,
+            Delete={"Objects": delete_keys}
+        )
+        logger.info(f"Deleted {len(delete_keys)} R2 objects for profile {profile_id} of user {user_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to delete R2 data for profile {profile_id}: {e}")
+        return False
+
+
+def delete_local_profile_data(user_id: str, profile_id: str) -> bool:
+    """Delete local data directory for a profile.
+
+    Removes user_data/{user_id}/profiles/{profile_id}/ entirely.
+    """
+    import shutil
+    from .database import USER_DATA_BASE
+
+    profile_path = USER_DATA_BASE / user_id / "profiles" / profile_id
+    if not profile_path.exists():
+        return True
+
+    try:
+        shutil.rmtree(profile_path)
+        logger.info(f"Deleted local data for profile {profile_id} of user {user_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to delete local data for profile {profile_id}: {e}")
         return False
 
 

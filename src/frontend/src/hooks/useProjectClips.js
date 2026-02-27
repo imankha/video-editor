@@ -25,24 +25,19 @@ export function useProjectClips(projectId) {
    */
   const fetchClips = useCallback(async (overrideProjectId = null) => {
     const effectiveProjectId = overrideProjectId ?? projectId;
-    console.log('[useProjectClips v2] fetchClips called with overrideProjectId:', overrideProjectId, 'hook projectId:', projectId, 'effective:', effectiveProjectId);
 
     if (!effectiveProjectId) {
-      console.log('[useProjectClips] No effective projectId, returning empty array');
       return [];
     }
 
     const url = `${API_BASE_URL}/clips/projects/${effectiveProjectId}/clips`;
-    console.log('[useProjectClips] Fetching from URL:', url);
 
     setLoading(true);
     setError(null);
     try {
       const response = await fetch(url);
-      console.log('[useProjectClips] Response status:', response.status, response.ok);
       if (!response.ok) throw new Error('Failed to fetch clips');
       const data = await response.json();
-      console.log('[useProjectClips] Fetched data:', data.length, 'clips');
       setClips(data);
       return data;
     } catch (err) {
@@ -252,8 +247,6 @@ export function useProjectClips(projectId) {
         return { success: true };
       }
 
-      console.log('[useProjectClips] Saving framing edits for clip:', clipId, updatePayload);
-
       const response = await fetch(
         `${API_BASE_URL}/clips/projects/${projectId}/clips/${clipId}`,
         {
@@ -268,7 +261,6 @@ export function useProjectClips(projectId) {
 
       // Backend tells us if we need to refresh (e.g., new data was created server-side)
       if (result.refresh_required) {
-        console.log('[useProjectClips] Server indicated refresh required, new clip ID:', result.new_clip_id);
         await fetchClips();
         // Return the new clip ID so caller can update selection
         return {

@@ -122,7 +122,10 @@ export const useSettingsStore = create((set, get) => ({
     get().saveSettings({ overlay: { highlightEffectType: value } });
   },
 
-  // Reset to defaults
+  // Reset on profile switch — clears to defaults and forces re-fetch
+  reset: () => set({ settings: DEFAULT_SETTINGS, isLoading: true, isInitialized: false, error: null }),
+
+  // Reset to defaults (persists to backend)
   resetSettings: async () => {
     try {
       const response = await fetch(`${API_BASE}/api/settings`, {

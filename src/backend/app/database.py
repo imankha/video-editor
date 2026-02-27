@@ -41,8 +41,8 @@ USER_DATA_BASE = Path(__file__).parent.parent.parent.parent / "user_data"
 # Track initialized user namespaces (per user_id)
 _initialized_users: set = set()
 
-# Track database versions per user (for R2 sync)
-_user_db_versions: dict = {}  # user_id -> version number
+# Track database versions per (user_id, profile_id) (for R2 sync)
+_user_db_versions: dict = {}  # (user_id, profile_id) -> version number
 _db_version_lock = threading.Lock()
 
 # Database size thresholds (archive system targets <400KB)
@@ -212,20 +212,21 @@ def check_database_size(db_path: Path) -> None:
         logger.debug(f"Could not check database size: {e}")
 
 
-def get_local_db_version(user_id: str) -> Optional[int]:
+def get_local_db_version(user_id: str, profile_id: str) -> Optional[int]:
     """
-    Get the locally cached database version for a user.
+    Get the locally cached database version for a user+profile.
 
     First checks in-memory cache, then falls back to reading from the
     database file itself. This ensures version survives process restarts.
     """
+    cache_key = (user_id, profile_id)
     with _db_version_lock:
-        cached = _user_db_versions.get(user_id)
+        cached = _user_db_versions.get(cache_key)
         if cached is not None:
             return cached
 
     # Not in cache - try to read from database file
-    db_path = USER_DATA_BASE / user_id / "database.sqlite"
+    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "database.sqlite"
     if not db_path.exists():
         return None
 
@@ -244,7 +245,7 @@ def get_local_db_version(user_id: str) -> Optional[int]:
             version = row[0]
             # Cache it for future lookups
             with _db_version_lock:
-                _user_db_versions[user_id] = version
+                _user_db_versions[cache_key] = version
             return version
     except Exception as e:
         logger.debug(f"Could not read db_version from {db_path}: {e}")
@@ -252,22 +253,23 @@ def get_local_db_version(user_id: str) -> Optional[int]:
     return None
 
 
-def set_local_db_version(user_id: str, version: Optional[int]) -> None:
+def set_local_db_version(user_id: str, profile_id: str, version: Optional[int]) -> None:
     """
-    Set the locally cached database version for a user.
+    Set the locally cached database version for a user+profile.
 
     Persists to both in-memory cache AND database file, so version
     survives process restarts.
     """
+    cache_key = (user_id, profile_id)
     with _db_version_lock:
         if version is None:
-            _user_db_versions.pop(user_id, None)
+            _user_db_versions.pop(cache_key, None)
         else:
-            _user_db_versions[user_id] = version
+            _user_db_versions[cache_key] = version
 
     # Also persist to database file
     if version is not None:
-        db_path = USER_DATA_BASE / user_id / "database.sqlite"
+        db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "database.sqlite"
         if db_path.exists():
             try:
                 conn = sqlite3.connect(str(db_path), timeout=5)
@@ -423,27 +425,28 @@ def ensure_database():
     # We do NOT check R2 version on every request - that HEAD request is slow (20s+ when cold)
     # Multi-device sync will be handled by user management (T200) with session invalidation
     if R2_ENABLED:
-        local_version = get_local_db_version(user_id)
+        profile_id = get_current_profile_id()
+        local_version = get_local_db_version(user_id, profile_id)
 
-        # Only download from R2 if we've never synced for this user (first access)
+        # Only download from R2 if we've never synced for this user+profile (first access)
         if local_version is None:
             was_synced, new_version = sync_database_from_r2_if_newer(user_id, db_path, local_version)
             if was_synced:
-                logger.info(f"Database downloaded from R2 for user: {user_id}, version: {new_version}")
-                set_local_db_version(user_id, new_version)
+                logger.info(f"Database downloaded from R2 for user: {user_id}, profile: {profile_id}, version: {new_version}")
+                set_local_db_version(user_id, profile_id, new_version)
                 # Force re-initialization since we got a new DB
                 already_initialized = False
             elif new_version is not None:
                 # R2 has a version but we didn't need to download (local exists)
-                set_local_db_version(user_id, new_version)
+                set_local_db_version(user_id, profile_id, new_version)
             else:
-                # R2 has no DB for this user (fresh user or R2 HEAD failed).
+                # R2 has no DB for this user+profile (fresh or R2 HEAD failed).
                 # Set version to 0 so we don't retry the R2 HEAD on every request.
                 # Without this, every get_db_connection() call for fresh users
                 # makes a slow R2 HEAD request (~3s), and if a sync eventually
                 # succeeds (uploading stale data), a later request with
                 # local_version=None would download and overwrite local changes.
-                set_local_db_version(user_id, 0)
+                set_local_db_version(user_id, profile_id, 0)
 
     # If already initialized, skip table creation
     if already_initialized:
@@ -1105,6 +1108,7 @@ def sync_db_to_cloud() -> bool:
         return True
 
     user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
     db_path = get_database_path()
 
     if not db_path.exists():
@@ -1114,17 +1118,17 @@ def sync_db_to_cloud() -> bool:
     check_database_size(db_path)
 
     # Get current local version for conflict detection
-    current_version = get_local_db_version(user_id)
+    current_version = get_local_db_version(user_id, profile_id)
 
     # Sync with version tracking
     success, new_version = sync_database_to_r2_with_version(user_id, db_path, current_version)
 
     if success and new_version is not None:
-        set_local_db_version(user_id, new_version)
-        logger.debug(f"Database synced to R2 for user: {user_id}, version: {new_version}")
+        set_local_db_version(user_id, profile_id, new_version)
+        logger.debug(f"Database synced to R2 for user: {user_id}, profile: {profile_id}, version: {new_version}")
         return True
     elif not success:
-        logger.warning(f"Failed to sync database to R2 for user: {user_id}")
+        logger.warning(f"Failed to sync database to R2 for user: {user_id}, profile: {profile_id}")
         return False
 
     return True

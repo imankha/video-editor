@@ -7,10 +7,10 @@ import { GalleryButton } from '../components/GalleryButton';
 import { Breadcrumb, Button } from '../components/shared';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
-import { useGames } from '../hooks/useGames';
-import { useProjects } from '../hooks/useProjects';
 import { useEditorStore } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
+import { useGamesDataStore } from '../stores/gamesDataStore';
+import { useProjectsStore } from '../stores/projectsStore';
 import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from './ProjectsScreen';
 
 /**
@@ -39,16 +39,14 @@ export function AnnotateScreen({ onClearSelection }) {
   // NOTE: Using editorStore (not navigationStore) because App.jsx renders based on editorStore
   const setEditorMode = useEditorStore(state => state.setEditorMode);
 
-  // Games - OWNED BY THIS SCREEN
-  const {
-    uploadGameVideo, // T80: Unified upload with deduplication
-    getGame,
-    getGameVideoUrl,
-    finishAnnotation,
-  } = useGames();
+  // Games — Zustand store (reactive to profile switches)
+  const uploadGameVideo = useGamesDataStore(state => state.uploadGameVideo);
+  const getGame = useGamesDataStore(state => state.getGame);
+  const getGameVideoUrl = useGamesDataStore(state => state.getGameVideoUrl);
+  const finishAnnotation = useGamesDataStore(state => state.finishAnnotation);
 
-  // Projects (for import/export only - clearSelection comes from App.jsx prop)
-  const { fetchProjects } = useProjects();
+  // Projects — Zustand store
+  const fetchProjects = useProjectsStore(state => state.fetchProjects);
 
   // Track if we're loading a game (ref persists across re-renders without causing them)
   const isLoadingRef = useRef(false);

@@ -30,9 +30,9 @@ vi.mock('../services/uploadManager', () => ({
   getDedupeGameUrl: vi.fn(),
 }));
 
-// Mock the games store
-vi.mock('../stores', () => ({
-  useGamesStore: vi.fn((selector) =>
+// Mock the games data store
+vi.mock('../stores/gamesDataStore', () => ({
+  useGamesDataStore: vi.fn((selector) =>
     selector({
       invalidateGames: vi.fn(),
     })

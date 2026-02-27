@@ -22,6 +22,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import traceback
 import sys
 import os
+import re
 import subprocess
 import logging
 from dotenv import load_dotenv
@@ -54,7 +55,7 @@ logging.getLogger("modal").setLevel(logging.WARNING)
 logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
 # Import routers and websocket handler
-from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router
+from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router, profiles_router
 from app.routers.exports import router as exports_router
 from app.websocket import websocket_export_progress, websocket_extractions
 from app.services.export_worker import recover_orphaned_jobs
@@ -89,9 +90,11 @@ class UserContextMiddleware(BaseHTTPMiddleware):
         # auto-resolve via user_session_init (first request / missing header).
         # user_session_init is idempotent and cached after first call per user.
         profile_id = request.headers.get('X-Profile-ID')
-        if profile_id:
+        if profile_id and re.match(r'^[a-f0-9]{8}$', profile_id):
             set_current_profile_id(profile_id)
         else:
+            if profile_id:
+                logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
             user_session_init(sanitized)
 
         response = await call_next(request)
@@ -141,6 +144,7 @@ app.include_router(downloads_router)
 app.include_router(auth_router)
 app.include_router(storage_router)
 app.include_router(settings_router)
+app.include_router(profiles_router)
 app.include_router(exports_router, prefix="/api")
 
 

@@ -32,6 +32,15 @@ logger = logging.getLogger(__name__)
 _init_cache: dict[str, dict] = {}
 
 
+def invalidate_user_cache(user_id: str) -> None:
+    """Remove user from _init_cache so next request re-reads from R2.
+
+    Called after profile switch or delete to ensure the middleware
+    picks up the new selected profile on the next request.
+    """
+    _init_cache.pop(user_id, None)
+
+
 def user_session_init(user_id: str) -> dict:
     """
     Initialize a user session. Idempotent — safe to call on every request.

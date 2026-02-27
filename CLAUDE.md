@@ -12,6 +12,14 @@ Browser-based video editor: **Annotate** (clip extraction) → **Framing** (crop
 | Storage | Cloudflare R2 |
 | GPU | Modal (cloud) or local FFmpeg + Real-ESRGAN |
 
+## Critical Data Safety Rules
+
+**NEVER delete, wipe, or reset user "a" data.** User "a" is the developer's primary test account with real uploaded videos, projects, and clips. If asked to reset profiles or clean up data:
+- Only overwrite `profiles.json` and `selected-profile.json` — never delete profile data folders
+- Never run bulk delete operations on R2 objects under `users/a/`
+- Never delete `user_data/a/` locally
+- Always confirm the exact scope of deletion with the user before executing
+
 ## Commands
 ```bash
 # Dev servers

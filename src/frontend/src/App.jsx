@@ -9,7 +9,6 @@ import { GalleryButton } from './components/GalleryButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
-import { useProjects } from './hooks/useProjects';
 import { useExportRecovery } from './hooks/useExportRecovery';
 import { Breadcrumb, Button, ConfirmationDialog, ModeSwitcher, ToastContainer } from './components/shared';
 import DebugInfo from './components/DebugInfo';
@@ -17,7 +16,7 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, EDITOR_MODES } from './stores';
+import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, EDITOR_MODES } from './stores';
 
 /**
  * App.jsx - Main application shell
@@ -78,20 +77,22 @@ function App() {
     return clips?.[0] ?? null;
   }, [selectedClipId, clips]);
 
-  // Project management
-  const {
-    selectedProject,
-    selectedProjectId,
-    fetchProjects,
-    selectProject,
-    clearSelection,
-    discardUncommittedChanges
-  } = useProjects();
+  // Project management — Zustand store (reactive to profile switches)
+  const selectedProject = useProjectsStore(state => state.selectedProject);
+  const selectedProjectId = useProjectsStore(state => state.selectedProjectId);
+  const fetchProjects = useProjectsStore(state => state.fetchProjects);
+  const selectProject = useProjectsStore(state => state.selectProject);
+  const clearSelection = useProjectsStore(state => state.clearSelection);
+  const discardUncommittedChanges = useProjectsStore(state => state.discardUncommittedChanges);
 
   // T85a: Initialize session (profile ID header) then warm video cache.
+  // T85b: Also fetch profiles for the profile switcher.
   // The backend auto-resolves profile if header is missing, so no render gate needed.
   useEffect(() => {
-    initSession().then(() => warmAllUserVideos());
+    initSession().then(() => {
+      warmAllUserVideos();
+      useProfileStore.getState().fetchProfiles();
+    });
   }, []);
 
   // Export recovery - reconnects to active exports on app startup

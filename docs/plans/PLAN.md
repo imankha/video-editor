@@ -59,8 +59,8 @@ These tasks MUST be completed before deployment to avoid storage waste and re-mi
 | **T81** | [Faster Upload Hash](tasks/T81-faster-upload-hash.md) | **DONE** | Sample-based hashing instead of full file (depends on T80) |
 | **T82** | [Multi-Video Games](tasks/T82-multi-video-games.md) | **DONE** | First half/second half support (depends on T80) |
 | **T85** | [**Multi-Athlete Profiles**](tasks/T85-multi-athlete-profiles.md) | **TODO** | Per-athlete data isolation — split into subtasks: |
-| T85a | [R2 Restructure](tasks/T85a-r2-restructure.md) | TESTING | Add `{env}/users/` prefix + default profile GUID paths (no UI changes) |
-| T85b | [Profile Switching](tasks/T85b-profile-switching.md) | TODO | Profile CRUD API + frontend switcher (depends on T85a) |
+| T85a | [R2 Restructure](tasks/T85a-r2-restructure.md) | DONE | Add `{env}/users/` prefix + default profile GUID paths (no UI changes) |
+| T85b | [Profile Switching](tasks/T85b-profile-switching.md) | TESTING | Profile CRUD API + frontend switcher (depends on T85a) |
 
 **Why these block deployment:**
 - **T80:** Per-user game storage wastes R2 costs, 4GB uploads needed

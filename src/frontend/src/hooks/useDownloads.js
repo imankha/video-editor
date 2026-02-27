@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { API_BASE } from '../config';
+import { useProfileStore } from '../stores/profileStore';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -63,7 +64,6 @@ export function useDownloads(isOpen = false) {
 
       // Guard: Don't update if request was cancelled
       if (!currentController.signal.aborted) {
-        console.log('[useDownloads] Fetched downloads:', data.downloads?.length, 'first download file_url:', data.downloads?.[0]?.file_url);
         setDownloads(data.downloads || []);
         setCount(data.total_count || 0);
         setLoadState('ready');
@@ -283,6 +283,18 @@ export function useDownloads(isOpen = false) {
     return groups;
   }, [downloads]);
 
+  // Clear stale data on profile switch (this hook holds useState, not Zustand)
+  const currentProfileId = useProfileStore((state) => state.currentProfileId);
+  useEffect(() => {
+    setDownloads([]);
+    setCount(0);
+    setLoadState('idle');
+    setError(null);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, [currentProfileId]);
+
   // Fetch downloads when panel opens or filter changes
   useEffect(() => {
     if (isOpen) {
@@ -297,10 +309,10 @@ export function useDownloads(isOpen = false) {
     };
   }, [isOpen, filter, fetchDownloads]);
 
-  // Fetch count on mount (for badge)
+  // Fetch count on mount or after profile switch (for badge)
   useEffect(() => {
     fetchCount();
-  }, [fetchCount]);
+  }, [fetchCount, currentProfileId]);
 
   return {
     // State
