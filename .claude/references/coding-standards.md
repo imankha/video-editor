@@ -97,7 +97,30 @@ const isError = status === 'error';      // Derived
 | Shared across app | Zustand store | Current project, user settings |
 | Shared in feature | Feature store | Overlay regions, framing keyframes |
 | Local to component | useState/useReducer | Form input, dropdown open |
-| Derived | Computed in render | `isLoading = status === 'loading'` |
+| Derived | Computed in render/selector | `isLoading = status === 'loading'` |
+| **Backend API data** | **Zustand store (raw)** | Clips, projects, export jobs |
+
+### API Data Architecture (CRITICAL)
+
+Backend API data MUST follow this pipeline:
+
+```
+Backend API → Zustand store (raw data) → Computed selectors → UI
+```
+
+**Violations that cause sync bugs:**
+1. **useState for API data** — Creates a parallel store requiring manual sync effects
+2. **Transforming on write** — Creates a stale snapshot that diverges from backend
+3. **Client-side IDs** — Creates a mapping layer that fails silently on lookup miss
+4. **Stored derived flags** — `isX` booleans stored as properties instead of computed from source
+
+**Correct pattern:**
+- Store raw API responses in Zustand (same shape as API returns)
+- Use backend IDs as canonical identifiers (never generate client-side IDs)
+- Compute derived values (isExtracted, isLoading, displayName) via selector functions at read time
+- WebSocket/polling updates write directly to the same Zustand store
+
+See [state-management skill](../../src/frontend/.claude/skills/state-management/SKILL.md) for detailed rules and examples.
 
 ---
 
@@ -324,6 +347,10 @@ if export_mode == ExportMode.FAST:
 | Data Always Ready | Parents guard, Views assume? |
 | Single Source | One authoritative location for each data? |
 | Derive Don't Duplicate | Computed values, not stored duplicates? |
+| API Data in Zustand | Backend data in Zustand stores, never useState? |
+| Raw Data + Selectors | Store raw API shape, compute derived values? |
+| Backend IDs | Using backend IDs, no client-side ID generation? |
+| No Stored Flags | Boolean flags computed, not stored on objects? |
 | No Magic Strings | Constants for repeated values? |
 | External Guards Only | Validation at boundaries, trust internal? |
 | DRY | No duplicate logic? |
