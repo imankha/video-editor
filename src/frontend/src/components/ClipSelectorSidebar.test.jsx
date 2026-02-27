@@ -17,56 +17,55 @@ const defaultProps = {
   onRetryExtraction: vi.fn(),
   existingRawClipIds: [],
   games: [],
+  clipMetadataCache: {},
 };
 
+/**
+ * Create a raw backend clip shape (WorkingClipResponse).
+ * T250: No more client-side IDs or stored boolean flags.
+ */
 function makeClip(overrides = {}) {
   return {
-    id: 'clip_1',
-    workingClipId: 1,
-    fileName: 'test.mp4',
-    fileNameDisplay: 'test',
-    duration: 10,
-    isExtracted: true,
-    isExtracting: false,
-    isFailed: false,
-    extractionStatus: null,
+    id: 1,
+    filename: 'test.mp4',
+    file_url: null,
+    extraction_status: null,
+    crop_data: null,
+    segments_data: null,
+    timing_data: null,
     rating: null,
     tags: [],
-    annotateNotes: null,
-    annotateName: null,
-    cropKeyframes: [],
+    notes: null,
+    name: null,
     game_id: null,
+    raw_clip_id: null,
     ...overrides,
   };
 }
 
 describe('ClipSelectorSidebar extraction states', () => {
-  it('renders "Extracting..." for a clip with isExtracting=true', () => {
+  it('renders "Extracting..." for a clip with extraction_status=running', () => {
     const clip = makeClip({
-      isExtracted: false,
-      isExtracting: true,
-      extractionStatus: 'running',
+      filename: null,
+      extraction_status: 'running',
     });
     render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
     expect(screen.getByText('Extracting...')).toBeTruthy();
   });
 
-  it('renders "Waiting for extraction" for a pending clip', () => {
+  it('renders "Waiting for extraction" for a clip with no extraction_status and no filename', () => {
     const clip = makeClip({
-      isExtracted: false,
-      isExtracting: false,
-      extractionStatus: 'pending',
+      filename: null,
+      extraction_status: null,
     });
     render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
     expect(screen.getByText('Waiting for extraction')).toBeTruthy();
   });
 
-  it('renders "Retrying..." for a clip with extractionStatus=retrying', () => {
+  it('renders "Retrying..." for a clip with extraction_status=retrying', () => {
     const clip = makeClip({
-      isExtracted: false,
-      isExtracting: false,
-      isFailed: false,
-      extractionStatus: 'retrying',
+      filename: null,
+      extraction_status: 'retrying',
     });
     render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
     expect(screen.getByText('Retrying...')).toBeTruthy();
@@ -74,25 +73,20 @@ describe('ClipSelectorSidebar extraction states', () => {
 
   it('renders "Failed" with retry button for a failed clip', () => {
     const clip = makeClip({
-      isExtracted: false,
-      isExtracting: false,
-      isFailed: true,
-      extractionStatus: 'failed',
+      filename: null,
+      extraction_status: 'failed',
     });
     render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
     expect(screen.getByText('Failed')).toBeTruthy();
     expect(screen.getByText('Retry')).toBeTruthy();
   });
 
-  it('calls onRetryExtraction when retry button is clicked', () => {
+  it('calls onRetryExtraction with clip.id when retry button is clicked', () => {
     const onRetry = vi.fn();
     const clip = makeClip({
-      id: 'clip_99',
-      workingClipId: 99,
-      isExtracted: false,
-      isExtracting: false,
-      isFailed: true,
-      extractionStatus: 'failed',
+      id: 99,
+      filename: null,
+      extraction_status: 'failed',
     });
     render(
       <ClipSelectorSidebar {...defaultProps} clips={[clip]} onRetryExtraction={onRetry} />
@@ -103,10 +97,8 @@ describe('ClipSelectorSidebar extraction states', () => {
 
   it('does not show retry button for retrying (auto-retry in progress) clips', () => {
     const clip = makeClip({
-      isExtracted: false,
-      isExtracting: false,
-      isFailed: false,
-      extractionStatus: 'retrying',
+      filename: null,
+      extraction_status: 'retrying',
     });
     render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
     expect(screen.queryByText('Retry')).toBeNull();

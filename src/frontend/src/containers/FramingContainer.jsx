@@ -218,7 +218,7 @@ export function FramingContainer({
     if (!selectedClipId || !selectedProjectId) return;
 
     const currentClip = clips.find(c => c.id === selectedClipId);
-    if (!currentClip?.workingClipId) return;
+    if (!currentClip?.id) return;
 
     const segmentState = {
       boundaries: segmentBoundaries,
@@ -227,28 +227,25 @@ export function FramingContainer({
     };
 
     try {
-      // Save to local clip manager state
+      // Save to local clip manager state (raw backend JSON format)
       updateClipData(selectedClipId, {
-        segments: segmentState,
-        cropKeyframes: keyframes,
-        trimRange: trimRange
+        segments_data: JSON.stringify(segmentState),
+        crop_data: JSON.stringify(keyframes),
+        timing_data: JSON.stringify({ trimRange: trimRange }),
       });
 
       // Save to backend (use frame-based keyframes for storage - FFmpeg conversion happens at export)
       if (saveFramingEdits) {
-        // Store raw frame-based keyframes - time conversion happens only at FFmpeg export
-        // IMPORTANT: Save internal format (segmentState) NOT export format (getSegmentExportData)
-        // Export format skips trimmed segments which breaks index mapping on restore
-        const result = await saveFramingEdits(currentClip.workingClipId, {
+        const result = await saveFramingEdits(currentClip.id, {
           cropKeyframes: keyframes,  // Frame-based - NOT time-based
           segments: segmentState,    // Internal format preserves segment indices
           trimRange: trimRange
         });
 
-        // If backend created a new version, update local clip's workingClipId
+        // If backend created a new version, update local clip's id
         if (result?.newClipId) {
-          console.log('[FramingContainer] Clip versioned, updating workingClipId:', currentClip.workingClipId, '->', result.newClipId);
-          updateClipData(selectedClipId, { workingClipId: result.newClipId });
+          console.log('[FramingContainer] Clip versioned, updating id:', currentClip.id, '->', result.newClipId);
+          updateClipData(selectedClipId, { id: result.newClipId });
         }
       }
 
@@ -279,9 +276,9 @@ export function FramingContainer({
     setFramingChangedSinceExport?.(true);
 
     // Dispatch action to backend (fire-and-forget)
-    const workingClipId = selectedClip?.workingClipId;
-    if (selectedProjectId && workingClipId) {
-      framingActions.addCropKeyframe(selectedProjectId, workingClipId, {
+    const clipId = selectedClip?.id;
+    if (selectedProjectId && clipId) {
+      framingActions.addCropKeyframe(selectedProjectId, clipId, {
         frame,
         x: cropData.x,
         y: cropData.y,
@@ -389,8 +386,8 @@ export function FramingContainer({
 
     // Dispatch trim action to backend (fire-and-forget)
     // Compute the new trim range after this toggle
-    const workingClipId = selectedClip?.workingClipId;
-    if (selectedProjectId && workingClipId) {
+    const clipId = selectedClip?.id;
+    if (selectedProjectId && clipId) {
       // Calculate new trim boundaries based on which segment was toggled
       let newTrimStart = trimRange?.start ?? null;
       let newTrimEnd = trimRange?.end ?? null;
@@ -407,7 +404,7 @@ export function FramingContainer({
       }
 
       if (newTrimStart !== null || newTrimEnd !== null) {
-        framingActions.setTrimRange(selectedProjectId, workingClipId, newTrimStart ?? 0, newTrimEnd ?? duration)
+        framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newTrimEnd ?? duration)
           .catch(err => console.error('[FramingContainer] Failed to sync setTrimRange:', err));
       }
     }
@@ -473,16 +470,16 @@ export function FramingContainer({
     setFramingChangedSinceExport?.(true);
 
     // Dispatch trim action to backend (fire-and-forget)
-    const workingClipId = selectedClip?.workingClipId;
-    if (selectedProjectId && workingClipId) {
+    const clipId = selectedClip?.id;
+    if (selectedProjectId && clipId) {
       // After detrimStart, trim start is cleared (0), trim end remains
       const newTrimEnd = trimRange.end;
       if (newTrimEnd && newTrimEnd < duration) {
-        framingActions.setTrimRange(selectedProjectId, workingClipId, 0, newTrimEnd)
+        framingActions.setTrimRange(selectedProjectId, clipId, 0, newTrimEnd)
           .catch(err => console.error('[FramingContainer] Failed to sync setTrimRange (detrimStart):', err));
       } else {
         // No more trim, clear it
-        framingActions.clearTrimRange(selectedProjectId, workingClipId)
+        framingActions.clearTrimRange(selectedProjectId, clipId)
           .catch(err => console.error('[FramingContainer] Failed to sync clearTrimRange:', err));
       }
     }
@@ -552,16 +549,16 @@ export function FramingContainer({
     setFramingChangedSinceExport?.(true);
 
     // Dispatch trim action to backend (fire-and-forget)
-    const workingClipId = selectedClip?.workingClipId;
-    if (selectedProjectId && workingClipId) {
+    const clipId = selectedClip?.id;
+    if (selectedProjectId && clipId) {
       // After detrimEnd, trim end is cleared (duration), trim start remains
       const newTrimStart = trimRange.start;
       if (newTrimStart && newTrimStart > 0) {
-        framingActions.setTrimRange(selectedProjectId, workingClipId, newTrimStart, duration)
+        framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart, duration)
           .catch(err => console.error('[FramingContainer] Failed to sync setTrimRange (detrimEnd):', err));
       } else {
         // No more trim, clear it
-        framingActions.clearTrimRange(selectedProjectId, workingClipId)
+        framingActions.clearTrimRange(selectedProjectId, clipId)
           .catch(err => console.error('[FramingContainer] Failed to sync clearTrimRange:', err));
       }
     }
@@ -585,9 +582,9 @@ export function FramingContainer({
     setFramingChangedSinceExport?.(true);
 
     // Dispatch action to backend (fire-and-forget)
-    const workingClipId = selectedClip?.workingClipId;
-    if (selectedProjectId && workingClipId) {
-      framingActions.deleteCropKeyframe(selectedProjectId, workingClipId, frame)
+    const clipId = selectedClip?.id;
+    if (selectedProjectId && clipId) {
+      framingActions.deleteCropKeyframe(selectedProjectId, clipId, frame)
         .catch(err => console.error('[FramingContainer] Failed to sync deleteCropKeyframe:', err));
     }
   }, [duration, framerate, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
@@ -611,10 +608,10 @@ export function FramingContainer({
       setFramingChangedSinceExport?.(true);
 
       // Dispatch action to backend (fire-and-forget)
-      const workingClipId = selectedClip?.workingClipId;
-      if (selectedProjectId && workingClipId) {
+      const clipId = selectedClip?.id;
+      if (selectedProjectId && clipId) {
         const frame = Math.round(time * framerate);
-        framingActions.addCropKeyframe(selectedProjectId, workingClipId, {
+        framingActions.addCropKeyframe(selectedProjectId, clipId, {
           frame,
           x: copiedCrop.x,
           y: copiedCrop.y,
@@ -636,9 +633,9 @@ export function FramingContainer({
     setFramingChangedSinceExport?.(true);
 
     // Dispatch action to backend (fire-and-forget)
-    const workingClipId = selectedClip?.workingClipId;
-    if (selectedProjectId && workingClipId) {
-      framingActions.splitSegment(selectedProjectId, workingClipId, time)
+    const clipId = selectedClip?.id;
+    if (selectedProjectId && clipId) {
+      framingActions.splitSegment(selectedProjectId, clipId, time)
         .catch(err => console.error('[FramingContainer] Failed to sync splitSegment:', err));
     }
   }, [addSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
@@ -653,9 +650,9 @@ export function FramingContainer({
     setFramingChangedSinceExport?.(true);
 
     // Dispatch action to backend (fire-and-forget)
-    const workingClipId = selectedClip?.workingClipId;
-    if (selectedProjectId && workingClipId) {
-      framingActions.removeSegmentSplit(selectedProjectId, workingClipId, time)
+    const clipId = selectedClip?.id;
+    if (selectedProjectId && clipId) {
+      framingActions.removeSegmentSplit(selectedProjectId, clipId, time)
         .catch(err => console.error('[FramingContainer] Failed to sync removeSegmentSplit:', err));
     }
   }, [removeSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
@@ -670,9 +667,9 @@ export function FramingContainer({
     setFramingChangedSinceExport?.(true);
 
     // Dispatch action to backend (fire-and-forget)
-    const workingClipId = selectedClip?.workingClipId;
-    if (selectedProjectId && workingClipId) {
-      framingActions.setSegmentSpeed(selectedProjectId, workingClipId, segmentIndex, speed)
+    const clipId = selectedClip?.id;
+    if (selectedProjectId && clipId) {
+      framingActions.setSegmentSpeed(selectedProjectId, clipId, segmentIndex, speed)
         .catch(err => console.error('[FramingContainer] Failed to sync setSegmentSpeed:', err));
     }
   }, [setSegmentSpeed, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);

@@ -120,15 +120,14 @@ function App() {
 
   // Handler for "Edit in Annotate" button - navigates to Annotate mode with clip's game
   const handleEditInAnnotate = useCallback(() => {
-    // Check both possible field names (clipStore uses gameId, projectDataStore uses game_id)
-    const gameId = selectedClipForAnnotate?.gameId || selectedClipForAnnotate?.game_id;
+    const gameId = selectedClipForAnnotate?.game_id;
     if (!gameId) return;
 
     setWarmupPriority(WARMUP_PRIORITY.GAMES); // Prioritize game video warming
 
     // Store navigation intent for AnnotateScreen to pick up
     sessionStorage.setItem('pendingGameId', gameId.toString());
-    const startTime = selectedClipForAnnotate?.annotateStartTime ?? selectedClipForAnnotate?.start_time;
+    const startTime = selectedClipForAnnotate?.start_time;
     if (startTime != null) {
       sessionStorage.setItem('pendingClipSeekTime', startTime.toString());
     }
@@ -138,7 +137,7 @@ function App() {
   }, [selectedClipForAnnotate, setEditorMode]);
 
   // Check if we can edit in annotate (clip has game association)
-  const canEditInAnnotate = !!(selectedClipForAnnotate?.gameId || selectedClipForAnnotate?.game_id);
+  const canEditInAnnotate = !!selectedClipForAnnotate?.game_id;
 
   // Handle mode change between Framing, Overlay, and Project Manager
   const handleModeChange = useCallback((newMode) => {

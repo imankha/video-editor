@@ -7,6 +7,7 @@ import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
+import { isExtracted as isExtractedSel, isExtracting as isExtractingSel, clipCropKeyframes } from '../utils/clipSelectors';
 
 // Export configuration - centralized for easy A/B testing
 export const EXPORT_CONFIG = {
@@ -103,7 +104,7 @@ export function buildClipMetadata(clips) {
     const effectiveDuration = calculateEffectiveDuration(clip);
 
     const clipMeta = {
-      name: clip.fileName,
+      name: clip.fileName || clip.filename,
       start_time: currentTime,
       end_time: currentTime + effectiveDuration
     };
@@ -343,7 +344,7 @@ export function ExportButtonContainer({
    * Main export handler
    */
   const handleExport = async () => {
-    const hasProjectClips = clips && clips.length > 0 && clips.some(c => c.workingClipId);
+    const hasProjectClips = clips && clips.length > 0 && clips.some(c => c.id);
     const isBackendAuthoritative = (editorMode === EDITOR_MODES.OVERLAY && projectId) ||
                                    (editorMode === EDITOR_MODES.FRAMING && hasProjectClips);
     if (!videoFile && !isBackendAuthoritative) {
@@ -423,8 +424,8 @@ export function ExportButtonContainer({
             const clip = clips[index];
             if (clip.file) {
               formData.append(`video_${index}`, clip.file);
-            } else if (clip.workingClipId && projectId) {
-              const streamUrl = `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.workingClipId}/file?stream=true`;
+            } else if (clip.id && projectId) {
+              const streamUrl = `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/file?stream=true`;
               console.log(`[ExportButtonContainer] Fetching clip ${index} via backend proxy:`, streamUrl);
               setProgressMessage(`Downloading clip ${index + 1}/${clips.length}...`);
 
@@ -446,7 +447,7 @@ export function ExportButtonContainer({
 
                   console.error(`[ExportButtonContainer] Clip fetch failed:`, {
                     clipIndex: index,
-                    clipId: clip.workingClipId,
+                    clipId: clip.id,
                     status: response.status,
                     statusText: response.statusText,
                     responseBody: responseBody.substring(0, 500)
@@ -473,7 +474,7 @@ export function ExportButtonContainer({
                 throw new Error(`CLIP_FETCH_ERROR: Failed to download clip ${index + 1}: ${fetchErr.message || 'Network error'}. Server may be unavailable.`);
               }
             } else if (clip.fileUrl) {
-              console.warn(`[ExportButtonContainer] Clip ${index} missing workingClipId, falling back to direct URL fetch`);
+              console.warn(`[ExportButtonContainer] Clip ${index} has no backend id, falling back to direct URL fetch`);
               const urlForLog = clip.fileUrl.includes('?') ? clip.fileUrl.split('?')[0] + '?...' : clip.fileUrl;
               console.log(`[ExportButtonContainer] Fetching clip ${index} from URL:`, urlForLog);
               setProgressMessage(`Downloading clip ${index + 1}/${clips.length}...`);
@@ -874,15 +875,18 @@ export function ExportButtonContainer({
   const isFramingMode = editorMode === EDITOR_MODES.FRAMING;
 
   // Check if any clips are still being extracted
-  const clipsNotExtracted = clips?.filter(c => c.isExtracted === false) || [];
+  const clipsNotExtracted = clips?.filter(c => !isExtractedSel(c)) || [];
   const hasUnextractedClips = clipsNotExtracted.length > 0;
-  const extractingCount = clipsNotExtracted.filter(c => c.isExtracting || c.extractionStatus === 'running').length;
+  const extractingCount = clipsNotExtracted.filter(c => isExtractingSel(c)).length;
   const pendingCount = clipsNotExtracted.length - extractingCount;
 
   // Check if any clips are missing framing data
   const isMultiClipMode = clips && clips.length > 0;
-  const extractedClips = clips?.filter(c => c.isExtracted !== false) || [];
-  const clipsNotFramed = extractedClips.filter(c => !c.cropKeyframes || c.cropKeyframes.length === 0);
+  const extractedClips = clips?.filter(c => isExtractedSel(c)) || [];
+  const clipsNotFramed = extractedClips.filter(c => {
+    const kfs = clipCropKeyframes(c);
+    return !kfs || kfs.length === 0;
+  });
 
   const hasUnframedClips = isMultiClipMode
     ? clipsNotFramed.length > 0

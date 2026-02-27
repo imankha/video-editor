@@ -5,6 +5,7 @@ import { UploadClipModal } from './UploadClipModal';
 import { Button } from './shared/Button';
 import { getRatingDisplay, formatDuration } from './shared/clipConstants';
 import { createGameLookup, formatClipDisplayName } from '../utils/gameNameLookup';
+import { isExtracted as isExtractedSel, isExtracting as isExtractingSel, isFailed as isFailedSel, isRetrying as isRetryingSel, clipDisplayName, clipCropKeyframes } from '../utils/clipSelectors';
 
 /**
  * ClipSelectorSidebar - Sidebar for managing multiple video clips
@@ -41,7 +42,8 @@ export function ClipSelectorSidebar({
   onUploadWithMetadata,
   onRetryExtraction,
   existingRawClipIds = [],
-  games = []
+  games = [],
+  clipMetadataCache = {},
 }) {
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
@@ -193,14 +195,16 @@ export function ClipSelectorSidebar({
           const hasRating = clip.rating != null;
           const ratingInfo = hasRating ? getRatingDisplay(clip.rating) : null;
           const isSelected = selectedClipId === clip.id;
-          // Extraction status — T249: add failed + retrying states
-          const isExtracted = clip.isExtracted !== false;
-          const isExtracting = clip.isExtracting || clip.extractionStatus === 'running';
-          const isFailed = clip.isFailed || clip.extractionStatus === 'failed';
-          const isRetrying = clip.extractionStatus === 'retrying';
-          const canSelect = isExtracted;
-          // A clip is "framed" if it has crop keyframes
-          const isFramed = clip.cropKeyframes && clip.cropKeyframes.length > 0;
+          // Extraction status — computed via selectors from raw backend data
+          const extracted = isExtractedSel(clip);
+          const extracting = isExtractingSel(clip);
+          const failed = isFailedSel(clip);
+          const retrying = isRetryingSel(clip);
+          const canSelect = extracted;
+          // A clip is "framed" if it has crop keyframes (parsed from raw JSON)
+          const parsedCropKfs = clipCropKeyframes(clip);
+          const isFramed = parsedCropKfs && parsedCropKfs.length > 0;
+          const meta = clipMetadataCache[clip.id];
 
           return (
             <div
@@ -215,7 +219,7 @@ export function ClipSelectorSidebar({
               onClick={() => canSelect && onSelectClip(clip.id)}
               className={`
                 group border-b border-gray-800 transition-all
-                ${!canSelect ? 'opacity-60' : 'cursor-pointer'}
+                ${!canSelect ? 'opacity-60 cursor-default' : 'cursor-pointer'}
                 ${isSelected && canSelect
                   ? 'border-l-2'
                   : canSelect ? 'hover:bg-gray-800/50 border-l-2 border-l-transparent' : 'border-l-2 border-l-transparent'
@@ -226,14 +230,14 @@ export function ClipSelectorSidebar({
               style={{
                 backgroundColor: isSelected && canSelect
                   ? (hasRating ? ratingInfo.backgroundColor : 'rgba(147, 51, 234, 0.25)')
-                  : isFailed ? 'rgba(239, 68, 68, 0.1)'
-                  : (isExtracting || isRetrying) ? 'rgba(249, 115, 22, 0.1)' : undefined,
+                  : failed ? 'rgba(239, 68, 68, 0.1)'
+                  : (extracting || retrying) ? 'rgba(249, 115, 22, 0.1)' : undefined,
                 borderLeftColor: isSelected && canSelect
                   ? (hasRating ? ratingInfo.badgeColor : 'rgb(147, 51, 234)')
-                  : isFailed ? 'rgb(239, 68, 68)'
-                  : (isExtracting || isRetrying) ? 'rgb(249, 115, 22)' : undefined,
+                  : failed ? 'rgb(239, 68, 68)'
+                  : (extracting || retrying) ? 'rgb(249, 115, 22)' : undefined,
               }}
-              title={!canSelect ? (isFailed ? 'Extraction failed' : isRetrying ? 'Retrying extraction...' : isExtracting ? 'Extracting...' : 'Waiting for extraction') : undefined}
+              title={!canSelect ? (failed ? 'Extraction failed' : retrying ? 'Retrying extraction...' : extracting ? 'Extracting...' : 'Waiting for extraction') : undefined}
             >
               <div className="flex items-center px-2 py-3">
                 {/* Drag handle */}
@@ -261,7 +265,7 @@ export function ClipSelectorSidebar({
                 <div className="flex-1 min-w-0">
                   {/* Clip number and name on same line */}
                   {(() => {
-                    const clipName = clip.annotateName || clip.fileNameDisplay || clip.fileName;
+                    const clipName = clip.name || clipDisplayName(clip);
                     const displayName = formatClipDisplayName(clipName, clip.game_id, gameLookup);
                     return (
                       <div
@@ -275,27 +279,27 @@ export function ClipSelectorSidebar({
                   })()}
                   {/* Duration and source info OR extraction status */}
                   <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                    {!isExtracted ? (
-                      // T249: Show extraction status with failed/retrying states
-                      isFailed ? (
+                    {!extracted ? (
+                      // Show extraction status with failed/retrying states
+                      failed ? (
                         <span className="text-red-400 flex items-center gap-1">
                           <AlertTriangle size={10} />
                           Failed
                           {onRetryExtraction && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); onRetryExtraction(clip.workingClipId); }}
+                              onClick={(e) => { e.stopPropagation(); onRetryExtraction(clip.id); }}
                               className="ml-1 text-xs underline hover:text-red-300"
                             >
                               Retry
                             </button>
                           )}
                         </span>
-                      ) : isRetrying ? (
+                      ) : retrying ? (
                         <span className="text-amber-400 flex items-center gap-1">
                           <RefreshCw size={10} className="animate-spin" />
                           Retrying...
                         </span>
-                      ) : isExtracting ? (
+                      ) : extracting ? (
                         <span className="text-orange-400 flex items-center gap-1">
                           <RefreshCw size={10} className="animate-spin" />
                           Extracting...
@@ -308,18 +312,18 @@ export function ClipSelectorSidebar({
                       )
                     ) : (
                       <>
-                        <span>{formatDuration(clip.duration)}</span>
-                        {/* Show notes indicator if clip has annotate notes */}
-                        {clip.annotateNotes && (
+                        <span>{formatDuration(meta?.duration || 0)}</span>
+                        {/* Show notes indicator if clip has notes */}
+                        {clip.notes && (
                           <span
                             className="inline-flex items-center text-purple-400"
-                            title={clip.annotateNotes}
+                            title={clip.notes}
                           >
                             <MessageSquare size={10} className="mr-0.5" />
                             <span className="truncate max-w-[60px]">
-                              {clip.annotateNotes.length > 15
-                                ? clip.annotateNotes.slice(0, 15) + '...'
-                                : clip.annotateNotes}
+                              {clip.notes.length > 15
+                                ? clip.notes.slice(0, 15) + '...'
+                                : clip.notes}
                             </span>
                           </span>
                         )}
@@ -329,7 +333,7 @@ export function ClipSelectorSidebar({
                 </div>
 
                 {/* Framing status indicator */}
-                {isExtracted && (
+                {extracted && (
                   <div
                     className={`ml-2 flex-shrink-0 ${isFramed ? 'text-green-400' : 'text-amber-400'}`}
                     title={isFramed ? 'Framed' : 'Not framed - add crop keyframes'}
@@ -457,7 +461,7 @@ export function ClipSelectorSidebar({
       {/* Total duration */}
       {clips.length > 1 && (
         <div className="px-4 py-2 border-t border-gray-700 text-xs text-gray-500 text-center">
-          Total: {formatDuration(clips.reduce((sum, clip) => sum + (clip.duration || 0), 0))}
+          Total: {formatDuration(clips.reduce((sum, clip) => sum + (clipMetadataCache[clip.id]?.duration || 0), 0))}
         </div>
       )}
     </div>
