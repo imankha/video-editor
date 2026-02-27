@@ -228,7 +228,7 @@ export function FramingScreen({
       const managerClip = clips.find(c => c.workingClipId === backendClip.id);
       if (!managerClip) continue;
 
-      const newIsExtracted = !!backendClip.file_url;
+      const newIsExtracted = !!backendClip.filename;
       const newIsExtracting = backendClip.extraction_status === 'running' || backendClip.extraction_status === 'pending';
       const newIsFailed = backendClip.extraction_status === 'failed';
       const newExtractionStatus = backendClip.extraction_status || null;
@@ -245,15 +245,18 @@ export function FramingScreen({
           extractionStatus: newExtractionStatus,
         };
         // If clip just became extracted, also update the file URL
-        if (newIsExtracted && !managerClip.isExtracted && backendClip.file_url) {
-          updates.fileUrl = backendClip.file_url;
-          updates.url = backendClip.file_url;
+        if (newIsExtracted && !managerClip.isExtracted) {
+          const clipFileUrl = backendClip.file_url || getClipFileUrl(backendClip.id, null, backendClip);
+          if (clipFileUrl) {
+            updates.fileUrl = clipFileUrl;
+            updates.url = clipFileUrl;
+          }
           updates.fileName = backendClip.filename || managerClip.fileName;
         }
         updateClipData(managerClip.id, updates);
       }
     }
-  }, [projectClips, clips, updateClipData]);
+  }, [projectClips, clips, updateClipData, getClipFileUrl]);
 
   // Fetch games on mount
   useEffect(() => {

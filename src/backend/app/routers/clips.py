@@ -629,7 +629,7 @@ async def _trigger_extraction_for_auto_project(
     start_time: float, end_time: float, background_tasks: BackgroundTasks
 ):
     """Trigger extraction when an auto-project is created for a 5-star clip."""
-    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor
 
     user_id = get_current_user_id()
     from app.profile_context import get_current_profile_id
@@ -643,7 +643,7 @@ async def _trigger_extraction_for_auto_project(
         end_time=end_time,
         user_id=user_id,
     )
-    background_tasks.add_task(run_queue_processor_sync, user_id, profile_id)
+    background_tasks.add_task(run_queue_processor, user_id, profile_id)
     logger.info(f"[AutoProject] Enqueued extraction for clip {clip_id} in auto-project {project_id}")
 
 
@@ -1146,7 +1146,7 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
     ]
 
     if clips_needing_extraction:
-        from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+        from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor
         from app.profile_context import get_current_profile_id
         user_id = get_current_user_id()
         profile_id = get_current_profile_id()
@@ -1195,7 +1195,7 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                     end_time=clip_info['end_time'],
                     user_id=user_id,
                 )
-            background_tasks.add_task(run_queue_processor_sync, user_id, profile_id)
+            background_tasks.add_task(run_queue_processor, user_id, profile_id)
             logger.info(f"Enqueued {len(clips_to_enqueue)} clips for extraction for project {project_id}")
 
     return result
@@ -1255,8 +1255,8 @@ async def retry_extraction(project_id: int, clip_id: int, background_tasks: Back
     logger.info(f"[Clips] Manual retry: task={task['id']}, clip={clip_id}, raw_clip={raw_clip_id}")
 
     # Trigger queue processing in background
-    from app.services.modal_queue import run_queue_processor_sync
-    background_tasks.add_task(run_queue_processor_sync, user_id, profile_id)
+    from app.services.modal_queue import run_queue_processor
+    background_tasks.add_task(run_queue_processor, user_id, profile_id)
 
     return {"status": "retrying", "task_id": task['id']}
 
@@ -1400,7 +1400,7 @@ async def trigger_clip_extraction(clip_info: dict, background_tasks):
     1. Enqueue task to modal_tasks table (DB write)
     2. Trigger queue processor in background (calls Modal)
     """
-    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor
     from app.profile_context import get_current_profile_id
 
     user_id = get_current_user_id()
@@ -1418,7 +1418,7 @@ async def trigger_clip_extraction(clip_info: dict, background_tasks):
     )
 
     # Phase 2: Process queue in background
-    background_tasks.add_task(run_queue_processor_sync, user_id, profile_id)
+    background_tasks.add_task(run_queue_processor, user_id, profile_id)
     logger.info(f"[Extraction] Enqueued clip {clip_info['clip_id']} for project {clip_info['project_id']}")
 
 

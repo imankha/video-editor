@@ -80,9 +80,10 @@ function transformClipToUIFormat(backendClip, metadata, clipUrl, presignedUrl) {
     gameId: backendClip.game_id || null,
     tags: backendClip.tags || [],
     rating: backendClip.rating || null,
-    // Extraction status - derive isExtracted from file_url presence
+    // Extraction status - derive isExtracted from filename presence
+    // (file_url may be null in local dev without R2, but filename is always set for extracted clips)
     // T249: Fix status mapping — backend sends 'running', not 'processing'
-    isExtracted: !!backendClip.file_url,
+    isExtracted: !!backendClip.filename,
     isExtracting: backendClip.extraction_status === 'running' || backendClip.extraction_status === 'pending',
     isFailed: backendClip.extraction_status === 'failed',
     extractionStatus: backendClip.extraction_status || null,
@@ -228,8 +229,8 @@ export function useProjectLoader() {
       // Use presigned R2 URLs (file_url) when available for streaming, otherwise fall back to proxy
       const clipsWithMetadata = await Promise.all(
         clipsData.map(async (clip) => {
-          // If clip has no file_url, it's not extracted yet - skip metadata loading
-          if (!clip.file_url) {
+          // If clip has no filename, it's not extracted yet - skip metadata loading
+          if (!clip.filename) {
             console.log('[useProjectLoader] Clip not extracted yet:', clip.id, 'status:', clip.extraction_status);
             return transformClipToUIFormat(clip, null, null, null);
           }

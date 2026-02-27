@@ -493,15 +493,30 @@ def get_extraction_status(raw_clip_id: int) -> Optional[str]:
         return task['status']
 
 
+async def run_queue_processor(user_id: str = None, profile_id: str = None):
+    """
+    Async wrapper for process_modal_queue().
+    Used as a FastAPI BackgroundTask — runs in the main event loop so that
+    WebSocket broadcasts (which need access to the main loop's connections)
+    work correctly.
+
+    Must receive user_id and profile_id explicitly because background tasks
+    don't inherit request-scoped contextvars.
+    """
+    if user_id:
+        set_current_user_id(user_id)
+    if profile_id:
+        set_current_profile_id(profile_id)
+
+    return await process_modal_queue()
+
+
 def run_queue_processor_sync(user_id: str = None, profile_id: str = None):
     """
     Synchronous wrapper for process_modal_queue().
-    Used when running in a background thread (e.g., FastAPI BackgroundTasks).
-
-    Must receive user_id and profile_id explicitly because background threads
-    don't inherit request-scoped contextvars. These are needed for:
-    - get_db_connection() which resolves the user's database path
-    - R2 upload/download operations that use user-scoped keys
+    Used only for startup recovery or non-async contexts.
+    NOTE: WebSocket broadcasts will NOT work from this wrapper because it
+    creates a separate event loop. Use run_queue_processor for background tasks.
     """
     # Restore request context in background thread
     if user_id:
