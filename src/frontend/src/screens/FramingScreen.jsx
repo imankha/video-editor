@@ -476,6 +476,7 @@ export function FramingScreen({
     onCropChange: setDragCrop,
     onUserEdit: () => { clipHasUserEditsRef.current = true; },
     setFramingChangedSinceExport,
+    clipMetadataCache,
   });
 
   const {

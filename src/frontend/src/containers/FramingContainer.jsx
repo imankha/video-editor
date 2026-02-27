@@ -2,6 +2,7 @@ import { useEffect, useCallback, useMemo, useRef } from 'react';
 import { FramingMode, CropOverlay } from '../modes/framing';
 import { API_BASE } from '../config';
 import * as framingActions from '../api/framingActions';
+import { clipCropKeyframes } from '../utils/clipSelectors';
 
 /**
  * FramingContainer - Encapsulates Framing mode logic and computed state
@@ -100,6 +101,9 @@ export function FramingContainer({
   // Highlight hook (for coordinated trim operations)
   highlightHook,
 
+  // Video metadata cache (keyed by clip ID)
+  clipMetadataCache = {},
+
   // Project clips hook (for backend persistence)
   saveFramingEdits,
 
@@ -194,22 +198,34 @@ export function FramingContainer({
         };
       }
 
-      let convertedKeyframes = convertKeyframesToTime(clip.cropKeyframes, clip.framerate || 30);
+      // T250: Raw clips store crop_data (JSON string), not cropKeyframes (array).
+      // Parse crop_data first, then convert frame-based to time-based.
+      const parsedKeyframes = clipCropKeyframes(clip);
+      const meta = clipMetadataCache[clip.id];
+      const clipFr = meta?.framerate || 30;
+      let convertedKeyframes = convertKeyframesToTime(parsedKeyframes, clipFr);
 
-      if (convertedKeyframes.length === 0 && clip.sourceWidth && clip.sourceHeight && clip.duration) {
-        const defaultCrop = calculateDefaultCrop(clip.sourceWidth, clip.sourceHeight, globalAspectRatio);
+      const sourceWidth = meta?.width;
+      const sourceHeight = meta?.height;
+      const clipDuration = meta?.duration;
+      if (convertedKeyframes.length === 0 && sourceWidth && sourceHeight && clipDuration) {
+        const defaultCrop = calculateDefaultCrop(sourceWidth, sourceHeight, globalAspectRatio);
         convertedKeyframes = [
           { time: 0, ...defaultCrop },
-          { time: clip.duration, ...defaultCrop }
+          { time: clipDuration, ...defaultCrop }
         ];
       }
 
       return {
         ...clip,
-        cropKeyframes: convertedKeyframes
+        cropKeyframes: convertedKeyframes,
+        sourceWidth,
+        sourceHeight,
+        duration: clipDuration,
+        framerate: clipFr,
       };
     });
-  }, [clips, selectedClipId, getKeyframesForExport, segmentBoundaries, segmentSpeeds, trimRange, hasClips, globalAspectRatio]);
+  }, [clips, selectedClipId, getKeyframesForExport, segmentBoundaries, segmentSpeeds, trimRange, hasClips, globalAspectRatio, clipMetadataCache]);
 
   /**
    * Save current clip's framing state to backend
