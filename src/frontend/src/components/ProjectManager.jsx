@@ -1391,7 +1391,8 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
   };
 
   const handleCardClick = () => {
-    if (!canOpen) return; // Block if no clips extracted
+    if (isRenaming) return; // Don't open while renaming
+    if (!canOpen) return;
     onSelect();
   };
 
@@ -1425,21 +1426,18 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
                 autoFocus
               />
             ) : (
-              <h3
-                className="text-white font-medium truncate"
-                onDoubleClick={handleStartRename}
-              >
-                {getProjectDisplayName(project)}
-              </h3>
-            )}
-            {!isRenaming && (
-              <button
-                onClick={handleStartRename}
-                className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity flex-shrink-0"
-                title="Rename project"
-              >
-                <Pencil size={12} />
-              </button>
+              <>
+                <h3 className="text-white font-medium truncate">
+                  {getProjectDisplayName(project)}
+                </h3>
+                <button
+                  onClick={handleStartRename}
+                  className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity flex-shrink-0"
+                  title="Rename project"
+                >
+                  <Pencil size={12} />
+                </button>
+              </>
             )}
             {isComplete && (
               <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
