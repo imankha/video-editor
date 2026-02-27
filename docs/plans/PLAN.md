@@ -109,6 +109,12 @@ Deploy to production domains with proper scaling.
 - App: `app.reelballers.com`
 - API: `api.reelballers.com`
 
+### Known Bugs
+
+| ID | Task | Status | Impact | Cmplx | Notes |
+|----|------|--------|--------|-------|-------|
+| T249 | [Extraction Recovery](tasks/T249-extraction-recovery.md) | TODO | 5 | 4 | Stuck extractions: no timeout, no retry, no failed UI state |
+
 ### Phase 4: Post-Launch Polish
 
 Improvements after real user traffic.
