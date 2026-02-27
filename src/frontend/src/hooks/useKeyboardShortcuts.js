@@ -1,6 +1,9 @@
 import { useEffect } from 'react';
 import { EDITOR_MODES } from '../stores';
 
+// Arrow key seek amount (seconds) for playhead navigation
+export const ARROW_SEEK_SECONDS = 4;
+
 /**
  * useKeyboardShortcuts - Consolidated keyboard handler for video editor
  *
@@ -8,7 +11,7 @@ import { EDITOR_MODES } from '../stores';
  * - Space bar: Toggle play/pause
  * - Ctrl/Cmd+C: Copy crop keyframe at current time
  * - Ctrl/Cmd+V: Paste crop keyframe at current time
- * - Arrow keys: Layer-specific navigation (playhead uses 5s seek, others navigate keyframes)
+ * - Arrow keys: Layer-specific navigation (playhead uses seek, others navigate keyframes)
  *
  * @param {Object} params - All required dependencies
  * @see APP_REFACTOR_PLAN.md Task 2.1 for refactoring context
@@ -109,12 +112,12 @@ export function useKeyboardShortcuts({
         event.preventDefault();
         const isLeft = event.code === 'ArrowLeft';
 
-        // Playhead layer: seek 5 seconds
+        // Playhead layer: seek with arrow keys
         if (annotateSelectedLayer === 'playhead') {
           if (isLeft) {
-            seekBackward?.(5) ?? stepBackward();
+            seekBackward?.(ARROW_SEEK_SECONDS) ?? stepBackward();
           } else {
-            seekForward?.(5) ?? stepForward();
+            seekForward?.(ARROW_SEEK_SECONDS) ?? stepForward();
           }
           return;
         }
@@ -152,9 +155,9 @@ export function useKeyboardShortcuts({
         case 'playhead': {
           // Seek 5 seconds with arrow keys
           if (isLeft) {
-            seekBackward?.(5) ?? stepBackward();
+            seekBackward?.(ARROW_SEEK_SECONDS) ?? stepBackward();
           } else {
-            seekForward?.(5) ?? stepForward();
+            seekForward?.(ARROW_SEEK_SECONDS) ?? stepForward();
           }
           break;
         }

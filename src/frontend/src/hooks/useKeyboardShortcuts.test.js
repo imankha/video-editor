@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { useKeyboardShortcuts, ARROW_SEEK_SECONDS } from './useKeyboardShortcuts';
 
 describe('useKeyboardShortcuts', () => {
   // Mock functions
@@ -143,7 +143,7 @@ describe('useKeyboardShortcuts', () => {
   });
 
   describe('arrow keys (playhead layer)', () => {
-    it('seeks backward 5s on ArrowLeft in playhead layer', () => {
+    it('seeks backward on ArrowLeft in playhead layer', () => {
       renderHook(() => useKeyboardShortcuts({
         ...defaultProps,
         selectedLayer: 'playhead',
@@ -151,11 +151,11 @@ describe('useKeyboardShortcuts', () => {
 
       simulateKeyDown('ArrowLeft');
 
-      expect(mockSeekBackward).toHaveBeenCalledWith(5);
+      expect(mockSeekBackward).toHaveBeenCalledWith(ARROW_SEEK_SECONDS);
       expect(mockSeekForward).not.toHaveBeenCalled();
     });
 
-    it('seeks forward 5s on ArrowRight in playhead layer', () => {
+    it('seeks forward on ArrowRight in playhead layer', () => {
       renderHook(() => useKeyboardShortcuts({
         ...defaultProps,
         selectedLayer: 'playhead',
@@ -163,7 +163,7 @@ describe('useKeyboardShortcuts', () => {
 
       simulateKeyDown('ArrowRight');
 
-      expect(mockSeekForward).toHaveBeenCalledWith(5);
+      expect(mockSeekForward).toHaveBeenCalledWith(ARROW_SEEK_SECONDS);
       expect(mockSeekBackward).not.toHaveBeenCalled();
     });
 
@@ -305,7 +305,7 @@ describe('useKeyboardShortcuts', () => {
       { id: 'region3', startTime: 10 },
     ];
 
-    it('seeks 5s in playhead layer', () => {
+    it('seeks in playhead layer', () => {
       renderHook(() => useKeyboardShortcuts({
         ...defaultProps,
         editorMode: 'annotate',
@@ -315,7 +315,7 @@ describe('useKeyboardShortcuts', () => {
 
       simulateKeyDown('ArrowRight');
 
-      expect(mockSeekForward).toHaveBeenCalledWith(5);
+      expect(mockSeekForward).toHaveBeenCalledWith(ARROW_SEEK_SECONDS);
     });
 
     it('navigates to next clip region on ArrowRight', () => {
