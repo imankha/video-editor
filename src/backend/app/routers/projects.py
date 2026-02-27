@@ -916,6 +916,13 @@ async def update_project(project_id: int, project: ProjectCreate):
         cursor.execute("""
             UPDATE projects SET name = ?, aspect_ratio = ? WHERE id = ?
         """, (project.name, project.aspect_ratio, project_id))
+
+        # Clear auto_project_id link so the project is no longer treated as auto-created.
+        # The fetch query computes is_auto_created dynamically via this link.
+        cursor.execute("""
+            UPDATE raw_clips SET auto_project_id = NULL WHERE auto_project_id = ?
+        """, (project_id,))
+
         conn.commit()
 
         return {"success": True, "id": project_id}

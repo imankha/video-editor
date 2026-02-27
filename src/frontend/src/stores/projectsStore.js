@@ -167,10 +167,11 @@ export const useProjectsStore = create((set, get) => ({
     });
     if (!response.ok) throw new Error('Failed to rename project');
 
-    // Update local state immediately
+    // Update local state — clear is_auto_created so getProjectDisplayName
+    // returns the user-chosen name instead of the auto-generated clip name
     set(state => ({
       projects: state.projects.map(p =>
-        p.id === projectId ? { ...p, name: newName } : p
+        p.id === projectId ? { ...p, name: newName, is_auto_created: false } : p
       ),
     }));
   },

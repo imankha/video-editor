@@ -1432,10 +1432,10 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
                 </h3>
                 <button
                   onClick={handleStartRename}
-                  className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity flex-shrink-0"
+                  className="opacity-0 group-hover:opacity-60 hover:!opacity-100 text-gray-400 transition-opacity flex-shrink-0"
                   title="Rename project"
                 >
-                  <Pencil size={12} />
+                  <Pencil size={14} />
                 </button>
               </>
             )}
