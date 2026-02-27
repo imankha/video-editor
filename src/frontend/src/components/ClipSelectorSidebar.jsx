@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
-import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, RefreshCw, Clock, Check, AlertCircle } from 'lucide-react';
+import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, RefreshCw, Clock, Check, AlertCircle, AlertTriangle } from 'lucide-react';
 import { ClipLibraryModal } from './ClipLibraryModal';
 import { UploadClipModal } from './UploadClipModal';
 import { Button } from './shared/Button';
@@ -39,6 +39,7 @@ export function ClipSelectorSidebar({
   onTransitionChange,
   onAddFromLibrary,
   onUploadWithMetadata,
+  onRetryExtraction,
   existingRawClipIds = [],
   games = []
 }) {
@@ -192,10 +193,11 @@ export function ClipSelectorSidebar({
           const hasRating = clip.rating != null;
           const ratingInfo = hasRating ? getRatingDisplay(clip.rating) : null;
           const isSelected = selectedClipId === clip.id;
-          // Extraction status
+          // Extraction status — T249: add failed + retrying states
           const isExtracted = clip.isExtracted !== false;
           const isExtracting = clip.isExtracting || clip.extractionStatus === 'running';
-          const isPendingExtraction = clip.extractionStatus === 'pending';
+          const isFailed = clip.isFailed || clip.extractionStatus === 'failed';
+          const isRetrying = clip.extractionStatus === 'retrying';
           const canSelect = isExtracted;
           // A clip is "framed" if it has crop keyframes
           const isFramed = clip.cropKeyframes && clip.cropKeyframes.length > 0;
@@ -224,12 +226,14 @@ export function ClipSelectorSidebar({
               style={{
                 backgroundColor: isSelected && canSelect
                   ? (hasRating ? ratingInfo.backgroundColor : 'rgba(147, 51, 234, 0.25)')
-                  : isExtracting ? 'rgba(249, 115, 22, 0.1)' : undefined,
+                  : isFailed ? 'rgba(239, 68, 68, 0.1)'
+                  : (isExtracting || isRetrying) ? 'rgba(249, 115, 22, 0.1)' : undefined,
                 borderLeftColor: isSelected && canSelect
                   ? (hasRating ? ratingInfo.badgeColor : 'rgb(147, 51, 234)')
-                  : isExtracting ? 'rgb(249, 115, 22)' : undefined,
+                  : isFailed ? 'rgb(239, 68, 68)'
+                  : (isExtracting || isRetrying) ? 'rgb(249, 115, 22)' : undefined,
               }}
-              title={!canSelect ? (isExtracting ? 'Extracting...' : 'Waiting for extraction') : undefined}
+              title={!canSelect ? (isFailed ? 'Extraction failed' : isRetrying ? 'Retrying extraction...' : isExtracting ? 'Extracting...' : 'Waiting for extraction') : undefined}
             >
               <div className="flex items-center px-2 py-3">
                 {/* Drag handle */}
@@ -272,8 +276,26 @@ export function ClipSelectorSidebar({
                   {/* Duration and source info OR extraction status */}
                   <div className="flex items-center gap-1.5 text-xs text-gray-500">
                     {!isExtracted ? (
-                      // Show extraction status
-                      isExtracting ? (
+                      // T249: Show extraction status with failed/retrying states
+                      isFailed ? (
+                        <span className="text-red-400 flex items-center gap-1">
+                          <AlertTriangle size={10} />
+                          Failed
+                          {onRetryExtraction && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onRetryExtraction(clip.workingClipId); }}
+                              className="ml-1 text-xs underline hover:text-red-300"
+                            >
+                              Retry
+                            </button>
+                          )}
+                        </span>
+                      ) : isRetrying ? (
+                        <span className="text-amber-400 flex items-center gap-1">
+                          <RefreshCw size={10} className="animate-spin" />
+                          Retrying...
+                        </span>
+                      ) : isExtracting ? (
                         <span className="text-orange-400 flex items-center gap-1">
                           <RefreshCw size={10} className="animate-spin" />
                           Extracting...

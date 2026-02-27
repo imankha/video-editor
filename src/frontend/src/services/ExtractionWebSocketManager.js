@@ -69,10 +69,15 @@ class ExtractionWebSocketManager {
       }
 
       this.ws.onopen = () => {
-        console.log('[ExtractionWSManager] Connected');
+        const wasReconnect = this.reconnectAttempt > 0;
+        console.log(`[ExtractionWSManager] Connected${wasReconnect ? ' (reconnect)' : ''}`);
         this.isConnected = true;
         this.reconnectAttempt = 0;
         this._startKeepalive();
+        // T249: Emit reconnect event so listeners can refresh stale data
+        if (wasReconnect) {
+          this._handleMessage({ type: 'reconnect' });
+        }
         resolve(true);
       };
 

@@ -41,6 +41,11 @@ from app.profile_context import get_current_profile_id, set_current_profile_id
 
 logger = logging.getLogger(__name__)
 
+# T249: Extraction recovery constants
+STALE_TASK_TIMEOUT_MINUTES = 10
+MAX_RETRY_COUNT = 3
+RETRY_BACKOFF_SECONDS = [60, 300, 900]  # 1min, 5min, 15min
+
 
 def enqueue_clip_extraction(
     clip_id: int,
@@ -96,6 +101,10 @@ async def process_modal_queue() -> dict:
 
     Returns summary of processed tasks.
     """
+    # T249: Check for stale tasks and auto-retry before processing
+    check_stale_tasks()
+    check_and_retry_failed_tasks()
+
     use_modal = modal_enabled()
     if use_modal:
         logger.info("[ModalQueue] Processing queue with Modal (cloud GPU)")
@@ -108,11 +117,12 @@ async def process_modal_queue() -> dict:
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get all pending tasks (also recover any 'running' tasks from crashed server)
+        # Get pending tasks only (not running — running tasks are either
+        # actively being processed or will be caught by stale timeout)
         cursor.execute("""
             SELECT id, task_type, params, raw_clip_id, project_id, game_id
             FROM modal_tasks
-            WHERE status IN ('pending', 'running')
+            WHERE status = 'pending'
             ORDER BY created_at ASC
         """)
         tasks = cursor.fetchall()
@@ -366,6 +376,121 @@ def _mark_task_failed(task_id: int, error: str):
             WHERE id = ?
         """, (error, task_id))
         conn.commit()
+
+
+def check_stale_tasks() -> int:
+    """
+    T249: Mark tasks stuck in 'running' for > STALE_TASK_TIMEOUT_MINUTES as 'failed'.
+
+    Returns the number of tasks timed out.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"""
+            UPDATE modal_tasks
+            SET status = 'failed',
+                completed_at = CURRENT_TIMESTAMP,
+                error = 'Timed out after {STALE_TASK_TIMEOUT_MINUTES} minutes'
+            WHERE status = 'running'
+            AND started_at < datetime('now', '-{STALE_TASK_TIMEOUT_MINUTES} minutes')
+        """)
+        stale_count = cursor.rowcount
+        if stale_count > 0:
+            conn.commit()
+            logger.warning(f"[ModalQueue] Timed out {stale_count} stale running task(s)")
+        return stale_count
+
+
+def check_and_retry_failed_tasks() -> int:
+    """
+    T249: Auto-retry failed tasks with retry_count < MAX_RETRY_COUNT.
+
+    Respects exponential backoff: waits RETRY_BACKOFF_SECONDS[retry_count]
+    after failure before retrying.
+
+    Returns the number of tasks reset to 'pending'.
+    """
+    retried = 0
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, retry_count, completed_at FROM modal_tasks
+            WHERE status = 'failed'
+            AND retry_count < ?
+        """, (MAX_RETRY_COUNT,))
+        candidates = cursor.fetchall()
+
+        for task in candidates:
+            retry_count = task['retry_count']
+            backoff_secs = RETRY_BACKOFF_SECONDS[min(retry_count, len(RETRY_BACKOFF_SECONDS) - 1)]
+            # Only retry if enough time has passed since the failure
+            cursor.execute("""
+                UPDATE modal_tasks
+                SET status = 'pending', retry_count = retry_count + 1,
+                    error = NULL, started_at = NULL, completed_at = NULL
+                WHERE id = ? AND status = 'failed'
+                AND completed_at < datetime('now', ? || ' seconds')
+            """, (task['id'], f'-{backoff_secs}'))
+            if cursor.rowcount > 0:
+                retried += 1
+
+        if retried > 0:
+            conn.commit()
+            logger.info(f"[ModalQueue] Auto-retrying {retried} failed task(s)")
+    return retried
+
+
+def is_clip_already_queued(raw_clip_id: int) -> bool:
+    """
+    T249: Check if a clip already has an active extraction task.
+
+    A clip is considered 'already queued' if it has a task that is:
+    - pending or running (actively being processed), OR
+    - failed with retry_count < MAX_RETRY_COUNT (auto-retry will handle it)
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT COUNT(*) as cnt FROM modal_tasks
+            WHERE raw_clip_id = ?
+            AND task_type = 'clip_extraction'
+            AND (
+                status IN ('pending', 'running')
+                OR (status = 'failed' AND retry_count < ?)
+            )
+        """, (raw_clip_id, MAX_RETRY_COUNT))
+        return cursor.fetchone()['cnt'] > 0
+
+
+def get_extraction_status(raw_clip_id: int) -> Optional[str]:
+    """
+    T249: Get the user-facing extraction status for a clip.
+
+    Maps internal task status to user-facing status:
+    - 'pending' -> 'pending'
+    - 'running' -> 'running'
+    - 'completed' -> 'completed'
+    - 'failed' + retry_count < MAX -> 'retrying'
+    - 'failed' + retry_count >= MAX -> 'failed'
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT status, retry_count FROM modal_tasks
+            WHERE raw_clip_id = ?
+            AND task_type = 'clip_extraction'
+            ORDER BY created_at DESC LIMIT 1
+        """, (raw_clip_id,))
+        task = cursor.fetchone()
+        if not task:
+            return None
+
+        if task['status'] == 'failed':
+            retry_count = task['retry_count'] if task['retry_count'] is not None else 0
+            if retry_count < MAX_RETRY_COUNT:
+                return 'retrying'
+            return 'failed'
+        return task['status']
 
 
 def run_queue_processor_sync(user_id: str = None, profile_id: str = None):

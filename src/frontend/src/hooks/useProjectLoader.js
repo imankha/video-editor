@@ -81,8 +81,10 @@ function transformClipToUIFormat(backendClip, metadata, clipUrl, presignedUrl) {
     tags: backendClip.tags || [],
     rating: backendClip.rating || null,
     // Extraction status - derive isExtracted from file_url presence
+    // T249: Fix status mapping — backend sends 'running', not 'processing'
     isExtracted: !!backendClip.file_url,
-    isExtracting: backendClip.extraction_status === 'processing',
+    isExtracting: backendClip.extraction_status === 'running' || backendClip.extraction_status === 'pending',
+    isFailed: backendClip.extraction_status === 'failed',
     extractionStatus: backendClip.extraction_status || null,
     // Parsed framing data (UI-ready)
     segments: segments || {

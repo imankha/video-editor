@@ -717,6 +717,8 @@ def ensure_database():
             "ALTER TABLE raw_clips ADD COLUMN video_sequence INTEGER",
             # T82: Replace unique index to include video_sequence (allows same end_time on different videos)
             "DROP INDEX IF EXISTS idx_raw_clips_game_end_time",
+            # T249: Extraction recovery — track retry attempts
+            "ALTER TABLE modal_tasks ADD COLUMN retry_count INTEGER DEFAULT 0",
         ]
 
         for migration in migrations:
@@ -900,6 +902,7 @@ def ensure_database():
                 raw_clip_id INTEGER,
                 project_id INTEGER,
                 game_id INTEGER,
+                retry_count INTEGER DEFAULT 0,
                 FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id) ON DELETE CASCADE,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
                 FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE

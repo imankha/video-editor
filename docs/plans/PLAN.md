@@ -58,7 +58,7 @@ These tasks MUST be completed before deployment to avoid storage waste and re-mi
 | **T80** | [**Global Game Deduplication + 4GB Uploads**](tasks/T80-global-game-deduplication.md) | **DONE** | Games to global storage, multipart uploads |
 | **T81** | [Faster Upload Hash](tasks/T81-faster-upload-hash.md) | **DONE** | Sample-based hashing instead of full file (depends on T80) |
 | **T82** | [Multi-Video Games](tasks/T82-multi-video-games.md) | **DONE** | First half/second half support (depends on T80) |
-| **T85** | [**Multi-Athlete Profiles**](tasks/T85-multi-athlete-profiles.md) | **TODO** | Per-athlete data isolation — split into subtasks: |
+| **T85** | [**Multi-Athlete Profiles**](tasks/T85-multi-athlete-profiles.md) | **DONE** | Per-athlete data isolation — split into subtasks: |
 | T85a | [R2 Restructure](tasks/T85a-r2-restructure.md) | DONE | Add `{env}/users/` prefix + default profile GUID paths (no UI changes) |
 | T85b | [Profile Switching](tasks/T85b-profile-switching.md) | DONE | Profile CRUD API + frontend switcher (depends on T85a) |
 
@@ -113,7 +113,7 @@ Deploy to production domains with proper scaling.
 
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| T249 | [Extraction Recovery](tasks/T249-extraction-recovery.md) | TODO | 5 | 4 | Stuck extractions: no timeout, no retry, no failed UI state |
+| T249 | [Extraction Recovery](tasks/T249-extraction-recovery.md) | TESTING | 5 | 4 | Stuck extractions: no timeout, no retry, no failed UI state |
 
 ### Phase 4: Post-Launch Polish
 

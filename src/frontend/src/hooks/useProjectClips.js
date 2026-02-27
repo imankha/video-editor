@@ -284,6 +284,28 @@ export function useProjectClips(projectId) {
   }, [projectId, fetchClips]);
 
   /**
+   * T249: Retry a failed extraction for a specific working clip
+   */
+  const retryExtraction = useCallback(async (workingClipId) => {
+    if (!projectId) return false;
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/clips/projects/${projectId}/clips/${workingClipId}/retry-extraction`,
+        { method: 'POST' }
+      );
+      if (!response.ok) throw new Error('Failed to retry extraction');
+
+      // Refresh clips to get updated status
+      await fetchClips();
+      return true;
+    } catch (err) {
+      console.error('[useProjectClips] retryExtraction error:', err);
+      return false;
+    }
+  }, [projectId, fetchClips]);
+
+  /**
    * Get clip file URL
    * Uses presigned R2 URL if available (from clip.file_url), otherwise falls back to local proxy
    * @param {number} clipId - Clip ID
@@ -319,7 +341,8 @@ export function useProjectClips(projectId) {
     removeClip,
     reorderClips,
     saveFramingEdits,
-    getClipFileUrl
+    getClipFileUrl,
+    retryExtraction
   };
 }
 

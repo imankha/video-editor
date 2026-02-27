@@ -122,7 +122,8 @@ export function FramingScreen({
     removeClip: removeProjectClip,
     reorderClips: reorderProjectClips,
     saveFramingEdits,
-    getClipFileUrl
+    getClipFileUrl,
+    retryExtraction,
   } = useProjectClips(projectId);
 
   // Games — Zustand store (for game name display and library filters)
@@ -130,22 +131,46 @@ export function FramingScreen({
   const fetchGames = useGamesDataStore(state => state.fetchGames);
 
   // Extraction state - calculated from clips
+  // T249: Track failed/retrying clips for UI
   const extractionState = useMemo(() => {
     if (!clips || clips.length === 0) {
-      return { allExtracting: false, anyExtracting: false, extractedCount: 0, totalCount: 0 };
+      return { allExtracting: false, anyExtracting: false, allFailed: false, extractedCount: 0, totalCount: 0 };
     }
     const extractedClips = clips.filter(c => c.isExtracted);
     const extractingClips = clips.filter(c => c.isExtracting);
-    const pendingClips = clips.filter(c => !c.isExtracted && !c.isExtracting);
+    const failedClips = clips.filter(c => c.isFailed);
+    const retryingClips = clips.filter(c => c.extractionStatus === 'retrying');
+    const pendingClips = clips.filter(c => !c.isExtracted && !c.isExtracting && !c.isFailed && c.extractionStatus !== 'retrying');
+    const activeExtracting = extractingClips.length > 0 || pendingClips.length > 0 || retryingClips.length > 0;
     return {
-      allExtracting: extractedClips.length === 0 && (extractingClips.length > 0 || pendingClips.length > 0),
-      anyExtracting: extractingClips.length > 0 || pendingClips.length > 0,
+      allExtracting: extractedClips.length === 0 && activeExtracting && failedClips.length === 0,
+      anyExtracting: activeExtracting,
+      allFailed: extractedClips.length === 0 && failedClips.length > 0 && !activeExtracting,
       extractedCount: extractedClips.length,
       totalCount: clips.length,
       extractingCount: extractingClips.length,
       pendingCount: pendingClips.length,
+      failedCount: failedClips.length,
+      retryingCount: retryingClips.length,
     };
   }, [clips]);
+
+  // T249: Track extraction start time for spinner timeout message
+  const extractionStartRef = useRef(null);
+  const [extractionTimedOut, setExtractionTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (extractionState.allExtracting) {
+      if (!extractionStartRef.current) {
+        extractionStartRef.current = Date.now();
+      }
+      const timer = setTimeout(() => setExtractionTimedOut(true), 300000); // 5 minutes
+      return () => clearTimeout(timer);
+    } else {
+      extractionStartRef.current = null;
+      setExtractionTimedOut(false);
+    }
+  }, [extractionState.allExtracting]);
 
   // Listen for extraction completion via WebSocket
   useEffect(() => {
@@ -172,11 +197,63 @@ export function FramingScreen({
       }
     });
 
+    // T249: On WebSocket reconnect, refresh clips to catch any missed events
+    const unsubReconnect = extractionWebSocketManager.addEventListener('reconnect', () => {
+      console.log('[FramingScreen] WebSocket reconnected — refreshing clips');
+      fetchProjectClips();
+    });
+
+    // T249: Safety-net refresh — if no WebSocket update within 60s, poll once
+    const safetyTimeout = setTimeout(() => {
+      console.log('[FramingScreen] Safety-net refresh after 60s');
+      fetchProjectClips();
+    }, 60000);
+
     return () => {
       unsubComplete();
       unsubFailed();
+      unsubReconnect();
+      clearTimeout(safetyTimeout);
     };
   }, [extractionState.anyExtracting, projectId, fetchProjectClips]);
+
+  // T249: Sync extraction status from backend (projectClips) into clip manager
+  // When fetchProjectClips() runs (on WebSocket event or retry), the raw API data
+  // updates but the clip manager's transformed clips don't automatically refresh.
+  // This effect bridges that gap by updating extraction-related fields.
+  useEffect(() => {
+    if (!projectClips || projectClips.length === 0 || !clips || clips.length === 0) return;
+
+    for (const backendClip of projectClips) {
+      const managerClip = clips.find(c => c.workingClipId === backendClip.id);
+      if (!managerClip) continue;
+
+      const newIsExtracted = !!backendClip.file_url;
+      const newIsExtracting = backendClip.extraction_status === 'running' || backendClip.extraction_status === 'pending';
+      const newIsFailed = backendClip.extraction_status === 'failed';
+      const newExtractionStatus = backendClip.extraction_status || null;
+
+      // Only update if extraction state actually changed
+      if (managerClip.isExtracted !== newIsExtracted ||
+          managerClip.isExtracting !== newIsExtracting ||
+          managerClip.isFailed !== newIsFailed ||
+          managerClip.extractionStatus !== newExtractionStatus) {
+        const updates = {
+          isExtracted: newIsExtracted,
+          isExtracting: newIsExtracting,
+          isFailed: newIsFailed,
+          extractionStatus: newExtractionStatus,
+        };
+        // If clip just became extracted, also update the file URL
+        if (newIsExtracted && !managerClip.isExtracted && backendClip.file_url) {
+          updates.fileUrl = backendClip.file_url;
+          updates.url = backendClip.file_url;
+          updates.fileName = backendClip.filename || managerClip.fileName;
+        }
+        updateClipData(managerClip.id, updates);
+      }
+    }
+  }, [projectClips, clips, updateClipData]);
 
   // Fetch games on mount
   useEffect(() => {
@@ -1042,6 +1119,7 @@ export function FramingScreen({
           onTransitionChange={setGlobalTransition}
           onUploadWithMetadata={handleUploadWithMetadata}
           onAddFromLibrary={handleAddFromLibrary}
+          onRetryExtraction={retryExtraction}
           existingRawClipIds={clips.map(c => c.rawClipId).filter(Boolean)}
           games={games}
         />
@@ -1059,8 +1137,23 @@ export function FramingScreen({
 
       {/* Main content */}
       <div className="flex-1">
-        {/* Show extraction progress when all clips are extracting */}
-        {extractionState.allExtracting ? (
+        {/* Show extraction progress when all clips are extracting, or all-failed state */}
+        {extractionState.allFailed ? (
+          <div className="flex-1 flex flex-col items-center justify-center h-full text-center px-8">
+            <div className="max-w-md">
+              <div className="mb-4 text-red-400">
+                <svg className="h-12 w-12 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.194-.833-2.964 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-medium text-white mb-2">Extraction Failed</h3>
+              <p className="text-gray-400 mb-4">
+                {extractionState.failedCount} clip{extractionState.failedCount > 1 ? 's' : ''} failed to extract.
+                Use the retry button in the sidebar to try again.
+              </p>
+            </div>
+          </div>
+        ) : extractionState.allExtracting ? (
           <div className="flex-1 flex flex-col items-center justify-center h-full text-center px-8">
             <div className="max-w-md">
               <div className="mb-4">
@@ -1075,9 +1168,15 @@ export function FramingScreen({
                   ? `Processing ${extractionState.extractingCount} clip${extractionState.extractingCount > 1 ? 's' : ''}...`
                   : `${extractionState.pendingCount} clip${extractionState.pendingCount > 1 ? 's' : ''} waiting in queue`}
               </p>
-              <p className="text-gray-500 text-sm">
-                This page will automatically refresh when extraction completes.
-              </p>
+              {extractionTimedOut ? (
+                <p className="text-amber-400 text-sm">
+                  Taking longer than expected. Extraction may have failed — check the sidebar for status.
+                </p>
+              ) : (
+                <p className="text-gray-500 text-sm">
+                  This page will automatically refresh when extraction completes.
+                </p>
+              )}
             </div>
           </div>
         ) : (
