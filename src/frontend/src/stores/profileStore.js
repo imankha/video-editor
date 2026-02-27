@@ -178,17 +178,20 @@ export const useProfileStore = create((set, get) => ({
 /**
  * Reset all data stores after a profile switch, then re-fetch.
  *
- * Two phases:
- * 1. Clear — all stores reset to empty state (UI immediately shows empty)
- * 2. Fetch — stores that hold list data re-fetch from the new profile's DB
- *
- * Settings are NOT reset — they persist across profiles.
+ * Three phases:
+ * 1. Disconnect — close WebSocket connections (they're tied to old profile's exports)
+ * 2. Clear — all stores reset to empty state (UI immediately shows empty)
+ * 3. Fetch — stores that hold list data re-fetch from the new profile's DB
  */
 async function _resetDataStores() {
   // Dynamic import to avoid circular dependency
   const stores = await import('./index');
 
-  // Phase 1: Clear all profile-scoped data (cancels in-flight fetches via AbortController)
+  // Phase 1: Close WebSocket connections from old profile's exports
+  const { default: exportWebSocketManager } = await import('../services/ExportWebSocketManager');
+  exportWebSocketManager.disconnectAll();
+
+  // Phase 2: Clear all profile-scoped data (cancels in-flight fetches via AbortController)
   stores.useProjectsStore.getState().reset();
   stores.useGamesDataStore.getState().reset();
   stores.useProjectDataStore.getState().reset();
@@ -202,7 +205,7 @@ async function _resetDataStores() {
   stores.useGalleryStore.getState().reset();
   stores.useSettingsStore.getState().reset();
 
-  // Phase 2: Re-fetch data for the new profile
+  // Phase 3: Re-fetch data for the new profile
   stores.useProjectsStore.getState().fetchProjects();
   stores.useGamesDataStore.getState().fetchGames();
 }
