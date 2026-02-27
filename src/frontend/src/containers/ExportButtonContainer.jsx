@@ -884,7 +884,9 @@ export function ExportButtonContainer({
   const isMultiClipMode = clips && clips.length > 0;
   const extractedClips = clips?.filter(c => isExtractedSel(c)) || [];
   const clipsNotFramed = extractedClips.filter(c => {
-    const kfs = clipCropKeyframes(c);
+    // clipsWithCurrentState merges live keyframes as cropKeyframes (array),
+    // while raw backend clips store crop_data (JSON string). Check both.
+    const kfs = c.cropKeyframes || clipCropKeyframes(c);
     return !kfs || kfs.length === 0;
   });
 
