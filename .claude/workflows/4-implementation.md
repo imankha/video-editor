@@ -12,6 +12,110 @@ See: .claude/agents/implementor.md
 
 Execute the approved design. Focus on **implementation quality**: clean code, no state duplication, proper patterns.
 
+---
+
+## Subagent Delegation (Context Efficiency)
+
+**Goal:** Keep the main orchestrator's context clean. The main agent coordinates; subagents do the file-level editing.
+
+### When to Delegate
+
+- **4+ source files** in the approved plan → use subagent fan-out
+- **1-3 files** → main agent can edit directly (not worth the overhead)
+
+### Step 1: Dependency Analysis
+
+Before writing any code, categorize every file from the approved plan:
+
+| Category | Definition | Example |
+|----------|------------|---------|
+| **Foundation** | Files that other changed files import from (new utils, rewritten stores, new API endpoints) | `clipSelectors.js`, `projectDataStore.js` |
+| **Consumer** | Files that import from foundation files but NOT from each other | `FramingScreen.jsx`, `App.jsx` |
+| **Cleanup** | File deletions, index.js export updates, simple 1-line removals | `clipStore.js` (DELETE), `index.js` |
+| **Tests** | Test files that need mock/assertion updates | `*.test.js`, `*.test.jsx` |
+
+### Step 2: Foundation Phase (Sequential)
+
+Build foundation files FIRST — either in main context (if <100 lines each) or via a single subagent.
+
+After foundation files are written, extract the **API contract** (exports, function signatures, types) to pass to consumer subagents. Example:
+
+```
+API Contract — clipSelectors.js:
+  export const isExtracted = (clip) => boolean
+  export const isFailed = (clip) => boolean
+  export const clipDisplayName = (clip) => string
+  export const clipFileUrl = (clip, projectId) => string
+
+API Contract — projectDataStore.js:
+  state.rawClips: WorkingClipResponse[]
+  state.clipMetadataCache: { [clipId]: { duration, width, height } }
+  actions: fetchClips(projectId), setRawClips(clips), updateClip(id, updates)
+  selectors: useProjectClips, useSelectedClipId
+```
+
+### Step 3: Fan-Out Phase (Parallel Subagents)
+
+Spawn parallel `general-purpose` subagents for consumer files. Rules:
+
+- **Group related files** — a Screen + its Container in one subagent, or 2-3 independent components
+- **Max 3-4 subagents** — diminishing returns beyond that
+- **Each subagent gets:**
+  1. Task ID + title (context)
+  2. The plan section for ITS files only (copy from design doc)
+  3. API contracts from foundation files (signatures, NOT full source)
+  4. Coding standards summary (inline — don't rely on file references)
+  5. Instruction: "Read then edit ONLY your assigned files"
+- **Use the per-file subagent template** from `.claude/agents/implementor.md`
+
+### Step 4: Cleanup + Tests
+
+After all consumer subagents complete:
+- Main agent handles file deletions and index.js updates (small, mechanical)
+- Spawn one subagent for test file updates (if needed)
+- Main agent runs `npm test` + `npm run build`
+- Main agent fixes any failures (or delegates targeted fixes)
+
+### What Stays in Main Context
+
+| Task | Why |
+|------|-----|
+| Dependency analysis + grouping | Requires understanding the full plan |
+| Foundation files (if small) | Other subagents need these to exist first |
+| Running tests + build | Need to see results and coordinate fixes |
+| Interpreting failures | Requires cross-file understanding |
+| Commit + PLAN.md update | Final coordination |
+
+### Example: T250 (17 files) — Optimal Delegation
+
+```
+Foundation (main agent, ~150 lines):
+  clipSelectors.js (NEW, 54 lines)
+  projectDataStore.js (rewrite, 280 lines) → subagent
+
+Fan-out (3 parallel subagents):
+  Agent A: useProjectLoader.js + useClipManager.js
+    (both hooks, closely related, share store imports)
+  Agent B: FramingScreen.jsx + FramingContainer.jsx
+    (screen + its container, tightly coupled)
+  Agent C: ClipSelectorSidebar.jsx + ExportButtonContainer.jsx + App.jsx
+    (remaining consumers, all independent)
+
+Cleanup (main agent, ~5 lines):
+  Delete: useProjectClips.js, clipStore.js, clipStore.test.js
+  Edit: index.js (remove 2 export lines), profileStore.js (remove 1 line)
+
+Tests (1 subagent):
+  ClipSelectorSidebar.test.jsx + ExportButtonContainer.test.js
+
+Verify (main agent):
+  npm test && npm run build
+```
+
+Context saved: ~60% less file content in main agent.
+
+---
+
 ## Core Pattern: MVC + Data Always Ready
 
 All implementations must follow:
