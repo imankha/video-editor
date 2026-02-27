@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2 } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores/exportStore';
+import { useProjectsStore } from '../stores/projectsStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
@@ -1307,6 +1308,40 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
  */
 function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const renameInputRef = useRef(null);
+  const renameProject = useProjectsStore(state => state.renameProject);
+
+  const handleStartRename = (e) => {
+    e.stopPropagation();
+    setRenameValue(project.name || '');
+    setIsRenaming(true);
+    setTimeout(() => renameInputRef.current?.select(), 0);
+  };
+
+  const handleSaveRename = async () => {
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === project.name) {
+      setIsRenaming(false);
+      return;
+    }
+    try {
+      await renameProject(project.id, trimmed);
+    } catch {
+      // Revert on failure — store didn't update
+    }
+    setIsRenaming(false);
+  };
+
+  const handleRenameKeyDown = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      handleSaveRename();
+    } else if (e.key === 'Escape') {
+      setIsRenaming(false);
+    }
+  };
 
   // Check export store for active exports (survives refresh)
   const activeExports = useExportStore((state) => state.activeExports);
@@ -1356,7 +1391,8 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
   };
 
   const handleCardClick = () => {
-    if (!canOpen) return; // Block if no clips extracted
+    if (isRenaming) return; // Don't open while renaming
+    if (!canOpen) return;
     onSelect();
   };
 
@@ -1378,9 +1414,31 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
             {project.is_auto_created && (
               <Star size={14} className="text-yellow-400 flex-shrink-0" fill="currentColor" title="Auto-created project" />
             )}
-            <h3 className="text-white font-medium truncate">
-              {getProjectDisplayName(project)}
-            </h3>
+            {isRenaming ? (
+              <input
+                ref={renameInputRef}
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={handleRenameKeyDown}
+                onBlur={handleSaveRename}
+                onClick={(e) => e.stopPropagation()}
+                className="text-white font-medium bg-transparent border-b border-purple-500 outline-none w-full"
+                autoFocus
+              />
+            ) : (
+              <>
+                <h3 className="text-white font-medium truncate">
+                  {getProjectDisplayName(project)}
+                </h3>
+                <button
+                  onClick={handleStartRename}
+                  className="opacity-0 group-hover:opacity-60 hover:!opacity-100 text-gray-400 transition-opacity flex-shrink-0"
+                  title="Rename project"
+                >
+                  <Pencil size={14} />
+                </button>
+              </>
+            )}
             {isComplete && (
               <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
             )}

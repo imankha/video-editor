@@ -154,6 +154,29 @@ export const useProjectsStore = create((set, get) => ({
   },
 
   /**
+   * Rename a project
+   */
+  renameProject: async (projectId, newName) => {
+    const project = get().projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName, aspect_ratio: project.aspect_ratio }),
+    });
+    if (!response.ok) throw new Error('Failed to rename project');
+
+    // Update local state — clear is_auto_created so getProjectDisplayName
+    // returns the user-chosen name instead of the auto-generated clip name
+    set(state => ({
+      projects: state.projects.map(p =>
+        p.id === projectId ? { ...p, name: newName, is_auto_created: false } : p
+      ),
+    }));
+  },
+
+  /**
    * Discard all uncommitted framing changes for a project.
    */
   discardUncommittedChanges: async (projectId) => {

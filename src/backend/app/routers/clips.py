@@ -666,8 +666,8 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
         project_name = f"Clip {raw_clip_id}"
 
     cursor.execute("""
-        INSERT INTO projects (name, aspect_ratio)
-        VALUES (?, '9:16')
+        INSERT INTO projects (name, aspect_ratio, is_auto_created)
+        VALUES (?, '9:16', 1)
     """, (project_name,))
     project_id = cursor.lastrowid
 

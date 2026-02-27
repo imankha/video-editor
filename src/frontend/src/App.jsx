@@ -1,6 +1,5 @@
 import { useMemo, useRef, useCallback, useEffect } from 'react';
 import { Home, Scissors } from 'lucide-react';
-import { Logo } from './components/Logo';
 import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { initSession } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
@@ -289,8 +288,6 @@ function App() {
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              {/* Logo */}
-              <Logo size={32} />
               {/* Back to Home button */}
               <Button
                 variant="ghost"

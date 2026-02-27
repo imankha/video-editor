@@ -109,6 +109,12 @@ Deploy to production domains with proper scaling.
 - App: `app.reelballers.com`
 - API: `api.reelballers.com`
 
+### Known Bugs
+
+| ID | Task | Status | Impact | Cmplx | Notes |
+|----|------|--------|--------|-------|-------|
+| T249 | [Extraction Recovery](tasks/T249-extraction-recovery.md) | TODO | 5 | 4 | Stuck extractions: no timeout, no retry, no failed UI state |
+
 ### Phase 4: Post-Launch Polish
 
 Improvements after real user traffic.
@@ -120,8 +126,8 @@ Improvements after real user traffic.
 | T74 | [Incremental Framing Export](tasks/T74-incremental-framing-export.md) | TODO | Cache rendered clips |
 | T220 | [Future GPU Features](tasks/T220-future-gpu-features.md) | TODO | Advanced AI features |
 | T240 | [Consistent Logo Placement](tasks/T240-consistent-logo-placement.md) | TODO | Logo in all modes, non-clickable position |
-| T241 | [Annotate Arrow Key Seek](tasks/T241-annotate-arrow-key-seek.md) | TODO | Forward/backward arrows should seek 4s |
-| T242 | [Rename Project from Card](tasks/T242-rename-project-from-card.md) | TODO | Easy inline rename on project card |
+| T241 | [Annotate Arrow Key Seek](tasks/T241-annotate-arrow-key-seek.md) | TESTING | Forward/backward arrows should seek 4s |
+| T242 | [Rename Project from Card](tasks/T242-rename-project-from-card.md) | TESTING | Easy inline rename on project card |
 | T244 | [Game Card Clip Stats & View Progress](tasks/T244-game-card-clip-stats.md) | TODO | Brilliant/good counts, composite score, viewed indicator |
 
 ---
