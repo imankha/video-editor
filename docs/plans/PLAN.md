@@ -114,7 +114,7 @@ Deploy to production domains with proper scaling.
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
 | T249 | [Extraction Recovery](tasks/T249-extraction-recovery.md) | TESTING | 5 | 4 | Stuck extractions: no timeout, no retry, no failed UI state |
-| T250 | [Clip Store Unification](tasks/T250-clip-store-unification.md) | TESTING | 5 | 4 | Eliminate dual-store sync: merge useProjectClips into Zustand, compute flags, use backend IDs |
+| T250 | [Clip Store Unification](tasks/T250-clip-store-unification.md) | DONE | 5 | 4 | Eliminate dual-store sync: merge useProjectClips into Zustand, compute flags, use backend IDs |
 
 ### Phase 4: Post-Launch Polish
 
