@@ -10,6 +10,7 @@ import { GameDetailsModal } from './GameDetailsModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { generateClipName } from '../modes/annotate/constants/soccerTags';
+import { RATING_NOTATION, RATING_BADGE_COLORS } from './shared/clipConstants';
 import { getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
 import { ProfileDropdown } from './ProfileDropdown';
 
@@ -1085,6 +1086,26 @@ function GameCard({ game, onLoad, onDelete }) {
           </div>
           <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
             <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>
+            {game.clip_count > 0 && (
+              <>
+                {game.brilliant_count > 0 && (
+                  <>
+                    <span>•</span>
+                    <span style={{ color: RATING_BADGE_COLORS[5] }}>{game.brilliant_count}{RATING_NOTATION[5]}</span>
+                  </>
+                )}
+                {game.good_count > 0 && (
+                  <>
+                    <span>•</span>
+                    <span style={{ color: RATING_BADGE_COLORS[4] }}>{game.good_count}{RATING_NOTATION[4]}</span>
+                  </>
+                )}
+                <span>•</span>
+                <span title="Composite score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
+                  Score: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
+                </span>
+              </>
+            )}
             <span>•</span>
             <span>{new Date(game.created_at).toLocaleDateString()}</span>
           </div>
