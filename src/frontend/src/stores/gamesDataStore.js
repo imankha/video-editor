@@ -276,13 +276,15 @@ export const useGamesDataStore = create((set, get) => ({
   },
 
   /**
-   * Finish annotation for a game — triggers extraction
+   * Finish annotation for a game — persists view progress
    */
-  finishAnnotation: async (gameId) => {
+  finishAnnotation: async (gameId, viewedDuration = 0) => {
     if (!gameId) return;
     try {
       const response = await fetch(`${API_BASE}/api/games/${gameId}/finish-annotation`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ viewed_duration: viewedDuration }),
       });
 
       if (!response.ok) {
@@ -291,7 +293,12 @@ export const useGamesDataStore = create((set, get) => ({
         return;
       }
 
-      return await response.json();
+      const result = await response.json();
+      // Refresh games list so GameCard shows updated view progress
+      if (viewedDuration > 0) {
+        get().fetchGames();
+      }
+      return result;
     } catch (err) {
       console.error('[gamesDataStore] finish-annotation error:', err);
     }

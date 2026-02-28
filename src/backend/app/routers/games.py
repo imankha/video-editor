@@ -188,6 +188,10 @@ class AddVideosRequest(BaseModel):
     videos: List[VideoReference] = Field(..., description="Video references to add")
 
 
+class FinishAnnotationRequest(BaseModel):
+    viewed_duration: float = Field(0, description="High-water mark of video watched in seconds")
+
+
 # ==============================================================================
 # Game Management Endpoints
 # ==============================================================================
@@ -430,12 +434,19 @@ async def list_games():
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT id, name, blake3_hash, video_filename, created_at,
-                   clip_count, brilliant_count, good_count, interesting_count,
-                   mistake_count, blunder_count, aggregate_score,
-                   opponent_name, game_date, game_type, tournament_name
-            FROM games
-            ORDER BY created_at DESC
+            SELECT g.id, g.name, g.blake3_hash, g.video_filename, g.created_at,
+                   g.clip_count, g.brilliant_count, g.good_count, g.interesting_count,
+                   g.mistake_count, g.blunder_count, g.aggregate_score,
+                   g.opponent_name, g.game_date, g.game_type, g.tournament_name,
+                   g.video_duration, g.viewed_duration,
+                   COALESCE(gv_sum.total_duration, g.video_duration) AS effective_duration
+            FROM games g
+            LEFT JOIN (
+                SELECT game_id, SUM(duration) AS total_duration
+                FROM game_videos
+                GROUP BY game_id
+            ) gv_sum ON gv_sum.game_id = g.id
+            ORDER BY g.created_at DESC
         """)
         rows = cursor.fetchall()
 
@@ -473,6 +484,8 @@ async def list_games():
                 'blunder_count': row['blunder_count'] or 0,
                 'aggregate_score': row['aggregate_score'] or 0,
                 'created_at': row['created_at'],
+                'video_duration': row['effective_duration'],
+                'viewed_duration': row['viewed_duration'] or 0,
             })
 
         return {'games': games}
@@ -508,7 +521,8 @@ async def get_game(game_id: int):
         cursor.execute("""
             SELECT id, name, blake3_hash, video_filename, created_at,
                    video_duration, video_width, video_height, video_size,
-                   opponent_name, game_date, game_type, tournament_name
+                   opponent_name, game_date, game_type, tournament_name,
+                   viewed_duration
             FROM games
             WHERE id = ?
         """, (game_id,))
@@ -565,6 +579,7 @@ async def get_game(game_id: int):
             'annotations': annotations,
             'clip_count': len(annotations),
             'created_at': row['created_at'],
+            'viewed_duration': row['viewed_duration'] or 0,
             'video_duration': total_duration,
             'video_width': video_width,
             'video_height': video_height,
@@ -919,19 +934,26 @@ def _delete_auto_project_if_unmodified(cursor, project_id: int) -> bool:
 
 
 @router.post("/{game_id:int}/finish-annotation")
-async def finish_annotation(game_id: int):
+async def finish_annotation(game_id: int, body: FinishAnnotationRequest = FinishAnnotationRequest()):
     """
     Called when user leaves annotation mode for a game.
+    Persists the high-water mark of video watched (viewed_duration).
 
-    This endpoint is a no-op - extraction is NOT triggered here.
-
-    Extraction only happens when:
-    1. A clip is added to a project (auto-project for 5-star, or manual add)
-    2. User chooses "Use Latest" on outdated clips prompt
-
-    This gives the user full control over when extraction (and GPU costs) occur.
+    Extraction is NOT triggered here — only happens when clips are added to projects.
     """
-    logger.info(f"[FinishAnnotation] User left annotation mode for game {game_id} (no extraction triggered)")
+    if body.viewed_duration > 0:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            # High-water mark: never decrease viewed_duration
+            cursor.execute(
+                "UPDATE games SET viewed_duration = MAX(COALESCE(viewed_duration, 0), ?) WHERE id = ?",
+                (body.viewed_duration, game_id)
+            )
+            conn.commit()
+            logger.info(f"[FinishAnnotation] Updated viewed_duration={body.viewed_duration:.1f}s for game {game_id}")
+    else:
+        logger.info(f"[FinishAnnotation] User left annotation mode for game {game_id} (no progress update)")
+
     return {
         "success": True,
         "tasks_created": 0,

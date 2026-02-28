@@ -719,6 +719,8 @@ def ensure_database():
             "DROP INDEX IF EXISTS idx_raw_clips_game_end_time",
             # T249: Extraction recovery — track retry attempts
             "ALTER TABLE modal_tasks ADD COLUMN retry_count INTEGER DEFAULT 0",
+            # T251: Track how much video the user has watched/scrubbed in annotate mode
+            "ALTER TABLE games ADD COLUMN viewed_duration REAL DEFAULT 0",
         ]
 
         for migration in migrations:
