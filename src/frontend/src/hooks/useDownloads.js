@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { API_BASE } from '../config';
 import { useProfileStore } from '../stores/profileStore';
+import exportWebSocketManager from '../services/ExportWebSocketManager';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -313,6 +314,17 @@ export function useDownloads(isOpen = false) {
   useEffect(() => {
     fetchCount();
   }, [fetchCount, currentProfileId]);
+
+  // Refresh count when an export completes (new download available)
+  useEffect(() => {
+    const unsubComplete = exportWebSocketManager.addEventListener('*', 'complete', () => {
+      fetchCount();
+    });
+
+    return () => {
+      unsubComplete();
+    };
+  }, [fetchCount]);
 
   return {
     // State

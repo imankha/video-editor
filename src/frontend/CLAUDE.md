@@ -54,3 +54,7 @@ keyframe = {
 - Don't use localStorage (all persistence via SQLite + R2)
 - Don't use time in seconds for keyframes (use frame numbers)
 - Don't use polling when WebSockets are available
+- Don't hold backend API data in React useState (use Zustand stores)
+- Don't transform API responses before storing (store raw, compute on read)
+- Don't generate client-side IDs for backend entities (use backend IDs)
+- Don't store derived boolean flags (isExtracted, isFailed) — compute via selectors

@@ -78,6 +78,74 @@ After all changes:
 
 ---
 
+## File-Scoped Subagent Template
+
+When the orchestrator uses **dependency-aware fan-out** (see [4-implementation.md](../workflows/4-implementation.md#subagent-delegation-context-efficiency)), it spawns parallel subagents using this template. Copy and fill in the bracketed sections.
+
+```
+Task tool:
+  subagent_type: general-purpose
+  prompt: |
+    You are an Implementor subagent for task T{id}: {task_title}.
+
+    ## Your Files
+    You are responsible for editing ONLY these files:
+    - {file_path_1}
+    - {file_path_2}
+
+    ## Plan for Your Files
+    {Paste the design doc sections for these specific files.
+     Include the exact changes: what to replace, what to add, what to remove.}
+
+    ## API Contracts (Foundation Files)
+    These files have already been created/updated. Use these signatures
+    when updating imports and call sites — do NOT modify these files.
+
+    {Paste export signatures, e.g.:
+    // clipSelectors.js
+    export const isExtracted = (clip) => boolean
+    export const isFailed = (clip) => boolean
+    export const clipDisplayName = (clip) => string
+
+    // projectDataStore.js
+    state.rawClips: WorkingClipResponse[]
+    actions: fetchClips(projectId), updateClip(id, updates)
+    hooks: useProjectClips → state.rawClips}
+
+    ## Coding Standards
+    - MVC: Screen guards data → Container handles logic → View renders
+    - Data Always Ready: parents guard, children assume data exists
+    - Single source of truth: derive values, don't duplicate state
+    - No console.logs in committed code
+    - No magic strings — use typed constants
+    - Store raw backend data, compute derived values on read
+
+    ## Instructions
+    1. Read each of your assigned files first
+    2. Make the changes described in the plan
+    3. Do NOT modify any files outside your assignment
+    4. Do NOT create new files unless the plan explicitly says to
+    5. Report what you changed when done
+```
+
+### Grouping Guidelines
+
+When assigning files to subagents:
+
+| Group Together | Reason |
+|----------------|--------|
+| Screen + its Container | Tightly coupled, share props interface |
+| Hook + its primary consumer | Refactoring a hook often changes its call sites |
+| 2-3 independent components | Efficient batching, no dependencies between them |
+
+| Keep Separate | Reason |
+|---------------|--------|
+| Foundation files | Must complete before consumers can start |
+| Test files | Run after all implementation subagents finish |
+| Files that import from each other | Put in same subagent to avoid conflicts |
+
+---
+
 ## Quality Checklist
 
 Before returning code:

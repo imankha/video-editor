@@ -59,7 +59,8 @@ Zustand store patterns to prevent duplicate state and sync bugs.
 |------|--------------|--------|
 | `workingVideo` | `projectDataStore` | overlayStore |
 | `clipMetadata` | `projectDataStore` | overlayStore |
-| `clips` (list) | `clipStore` | projectDataStore |
+| `clips` (list) | `projectDataStore` | clipStore (DEPRECATED) |
+| `selectedClipId` | `projectDataStore` | - |
 | `effectType` | `overlayStore` | - |
 | `highlightRegions` | `overlayStore` | - |
 | `selectedProject` | `editorStore` | navigationStore |
@@ -227,6 +228,87 @@ Refs are NOT appropriate for:
 - Tracking loading/ready states
 - Synchronization flags
 - Any value that affects component behavior
+
+---
+
+## API Data Rules (CRITICAL)
+
+These rules prevent the class of sync bugs where backend data updates don't reach the UI.
+
+### Rule: API data lives in Zustand, never useState
+
+Backend API responses MUST be stored directly in a Zustand store. Never hold API data in React `useState` — it creates a parallel data system that requires manual sync effects to bridge.
+
+```javascript
+// BAD: API data in useState requires manual sync to Zustand
+function useProjectClips() {
+  const [clips, setClips] = useState([]);  // Store #1
+  // ...
+}
+// Meanwhile projectDataStore also has clips → Store #2
+// Now you need a sync effect to bridge them. This WILL break.
+
+// GOOD: API data goes directly into Zustand
+// projectDataStore.js
+fetchClips: async (projectId) => {
+  const res = await fetch(`/api/clips/projects/${projectId}/clips`);
+  const clips = await res.json();
+  set({ rawClips: clips });  // Single source of truth
+},
+```
+
+### Rule: Store raw backend data, transform at read time
+
+Never transform API responses into a different shape for storage. Transformation creates a snapshot that immediately starts going stale. Store the raw API response and use selectors to derive UI-friendly values.
+
+```javascript
+// BAD: Transform on write — creates stale snapshot
+function transformClipToUIFormat(backendClip) {
+  return {
+    id: generateClientId(),        // New ID diverges from backend
+    isExtracted: !!backendClip.filename,  // Stored flag goes stale
+    fileNameDisplay: backendClip.filename?.replace(/\.[^/.]+$/, ''),
+    // ... 20 more transformed fields
+  };
+}
+store.setClips(backendClips.map(transformClipToUIFormat));  // Stale on arrival
+
+// GOOD: Store raw, derive on read
+store.setRawClips(backendClips);  // Exact API response
+
+// Selectors compute at read time — always fresh
+export const isExtracted = (clip) => !!clip.filename;
+export const clipDisplayName = (clip) => (clip.filename || 'clip.mp4').replace(/\.[^/.]+$/, '');
+```
+
+### Rule: Use backend IDs as canonical identifiers
+
+Never generate client-side IDs for data that has a backend ID. Client-side IDs create a mapping layer that fails silently when lookups miss.
+
+```javascript
+// BAD: Client-side ID requires constant mapping
+const clip = { id: 'clip_1709123456_abc', workingClipId: 42 };
+// Every sync: clips.find(c => c.workingClipId === backendClip.id) — fails silently
+
+// GOOD: Backend ID is the only ID
+const clip = { id: 42, ...backendData };
+// Direct lookup: clips.find(c => c.id === backendClip.id) — or just clips[id]
+```
+
+### Rule: Never store derived boolean flags
+
+Flags like `isExtracted`, `isExtracting`, `isFailed` MUST be computed from source data, never stored as properties. Stored flags go stale when the source data changes and the flag update is missed.
+
+```javascript
+// BAD: Stored flags that must be manually synced
+{ isExtracted: true, isExtracting: false, isFailed: false, extractionStatus: 'completed' }
+// If extractionStatus changes to 'failed' but isFailed isn't updated → bug
+
+// GOOD: Compute at read time — impossible to go stale
+export const isExtracted = (clip) => !!clip.filename;
+export const isExtracting = (clip) => clip.extraction_status === 'running' || clip.extraction_status === 'pending';
+export const isFailed = (clip) => clip.extraction_status === 'failed';
+```
 
 ---
 

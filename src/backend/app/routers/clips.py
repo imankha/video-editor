@@ -629,7 +629,7 @@ async def _trigger_extraction_for_auto_project(
     start_time: float, end_time: float, background_tasks: BackgroundTasks
 ):
     """Trigger extraction when an auto-project is created for a 5-star clip."""
-    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor
 
     user_id = get_current_user_id()
     from app.profile_context import get_current_profile_id
@@ -643,7 +643,7 @@ async def _trigger_extraction_for_auto_project(
         end_time=end_time,
         user_id=user_id,
     )
-    background_tasks.add_task(run_queue_processor_sync, user_id, profile_id)
+    background_tasks.add_task(run_queue_processor, user_id, profile_id)
     logger.info(f"[AutoProject] Enqueued extraction for clip {clip_id} in auto-project {project_id}")
 
 
@@ -1084,20 +1084,14 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
         ]
 
         # Look up extraction status for clips that need it
+        # T249: Use get_extraction_status for proper retrying/failed mapping
         extraction_statuses = {}
         if raw_clip_ids_needing_status:
-            placeholders = ','.join('?' * len(raw_clip_ids_needing_status))
-            cursor.execute(f"""
-                SELECT raw_clip_id, status
-                FROM modal_tasks
-                WHERE task_type = 'clip_extraction'
-                AND raw_clip_id IN ({placeholders})
-                ORDER BY created_at DESC
-            """, raw_clip_ids_needing_status)
-            # Use latest status for each raw_clip_id
-            for row in cursor.fetchall():
-                if row['raw_clip_id'] not in extraction_statuses:
-                    extraction_statuses[row['raw_clip_id']] = row['status']
+            from app.services.modal_queue import get_extraction_status
+            for rc_id in raw_clip_ids_needing_status:
+                status = get_extraction_status(rc_id)
+                if status:
+                    extraction_statuses[rc_id] = status
 
         result = []
         for clip in clips:
@@ -1152,7 +1146,7 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
     ]
 
     if clips_needing_extraction:
-        from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+        from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor
         from app.profile_context import get_current_profile_id
         user_id = get_current_user_id()
         profile_id = get_current_profile_id()
@@ -1167,18 +1161,14 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
             """, game_ids)
             game_filenames = {row['id']: row['video_filename'] for row in cursor.fetchall()}
 
-        # Check which clips already have extraction tasks
+        # T249: Check which clips already have active extraction tasks
+        # Uses is_clip_already_queued which also considers failed tasks with retries remaining
+        from app.services.modal_queue import is_clip_already_queued
         raw_clip_ids = [c['raw_clip_id'] for c in clips_needing_extraction]
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            placeholders = ','.join('?' * len(raw_clip_ids))
-            cursor.execute(f"""
-                SELECT raw_clip_id FROM modal_tasks
-                WHERE raw_clip_id IN ({placeholders})
-                AND task_type = 'clip_extraction'
-                AND status IN ('pending', 'running')
-            """, raw_clip_ids)
-            already_queued = {row['raw_clip_id'] for row in cursor.fetchall()}
+        already_queued = {
+            rc_id for rc_id in raw_clip_ids
+            if is_clip_already_queued(rc_id)
+        }
 
         clips_to_enqueue = []
         for clip in clips_needing_extraction:
@@ -1205,10 +1195,70 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                     end_time=clip_info['end_time'],
                     user_id=user_id,
                 )
-            background_tasks.add_task(run_queue_processor_sync, user_id, profile_id)
+            background_tasks.add_task(run_queue_processor, user_id, profile_id)
             logger.info(f"Enqueued {len(clips_to_enqueue)} clips for extraction for project {project_id}")
 
     return result
+
+
+@router.post("/projects/{project_id}/clips/{clip_id}/retry-extraction")
+async def retry_extraction(project_id: int, clip_id: int, background_tasks: BackgroundTasks):
+    """
+    T249: Manually retry a failed extraction for a specific working clip.
+
+    Resets the failed task to 'pending' with retry_count reset to 0 (manual retries
+    are unlimited — the count only limits automatic retries).
+    """
+    user_id = get_current_user_id()
+    profile_id = None
+    try:
+        from app.profile_context import get_current_profile_id
+        profile_id = get_current_profile_id()
+    except Exception:
+        pass
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Get raw_clip_id from working clip
+        cursor.execute(
+            "SELECT raw_clip_id FROM working_clips WHERE id = ? AND project_id = ?",
+            (clip_id, project_id)
+        )
+        wc = cursor.fetchone()
+        if not wc or not wc['raw_clip_id']:
+            raise HTTPException(status_code=404, detail="Working clip not found or has no raw clip")
+
+        raw_clip_id = wc['raw_clip_id']
+
+        # Find the most recent failed task for this clip
+        cursor.execute("""
+            SELECT id FROM modal_tasks
+            WHERE raw_clip_id = ?
+            AND task_type = 'clip_extraction'
+            AND status = 'failed'
+            ORDER BY created_at DESC LIMIT 1
+        """, (raw_clip_id,))
+        task = cursor.fetchone()
+        if not task:
+            raise HTTPException(status_code=404, detail="No failed extraction found for this clip")
+
+        # Reset to pending with retry_count=0 (manual retry)
+        cursor.execute("""
+            UPDATE modal_tasks
+            SET status = 'pending', retry_count = 0,
+                error = NULL, started_at = NULL, completed_at = NULL
+            WHERE id = ?
+        """, (task['id'],))
+        conn.commit()
+
+    logger.info(f"[Clips] Manual retry: task={task['id']}, clip={clip_id}, raw_clip={raw_clip_id}")
+
+    # Trigger queue processing in background
+    from app.services.modal_queue import run_queue_processor
+    background_tasks.add_task(run_queue_processor, user_id, profile_id)
+
+    return {"status": "retrying", "task_id": task['id']}
 
 
 @router.post("/projects/{project_id}/clips", response_model=WorkingClipResponse)
@@ -1350,7 +1400,7 @@ async def trigger_clip_extraction(clip_info: dict, background_tasks):
     1. Enqueue task to modal_tasks table (DB write)
     2. Trigger queue processor in background (calls Modal)
     """
-    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor_sync
+    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor
     from app.profile_context import get_current_profile_id
 
     user_id = get_current_user_id()
@@ -1368,7 +1418,7 @@ async def trigger_clip_extraction(clip_info: dict, background_tasks):
     )
 
     # Phase 2: Process queue in background
-    background_tasks.add_task(run_queue_processor_sync, user_id, profile_id)
+    background_tasks.add_task(run_queue_processor, user_id, profile_id)
     logger.info(f"[Extraction] Enqueued clip {clip_info['clip_id']} for project {clip_info['project_id']}")
 
 

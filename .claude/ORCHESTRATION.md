@@ -41,7 +41,10 @@ User: "Implement T{id}"
 │  4. Spawn Tester (Phase 1) ─────► Returns: failing tests    │
 │         │                                                   │
 │         ▼                                                   │
-│  5. Spawn Implementor ──────────► Returns: code changes     │
+│  5. Implementation (dependency-aware fan-out)               │
+│     5a. Build foundation files (sequential)                 │
+│     5b. Fan-out consumer updates (parallel subagents)       │
+│     5c. Cleanup + test updates                              │
 │         │                                                   │
 │         ▼                                                   │
 │  6. Spawn Reviewer ─────────────► Returns: approval/issues  │
@@ -225,6 +228,28 @@ Task tool:
 
     Loop with Implementor until all tests pass.
 ```
+
+---
+
+## Implementation Fan-Out
+
+For tasks with 4+ files, the orchestrator delegates file edits to parallel subagents instead of editing everything in main context. See [4-implementation.md](workflows/4-implementation.md#subagent-delegation-context-efficiency) for the full protocol.
+
+**Quick reference:**
+
+```
+1. Categorize files: Foundation → Consumer → Cleanup → Tests
+2. Build foundation files first (main context or 1 subagent)
+3. Extract API contracts (exports, function signatures)
+4. Spawn 2-4 parallel consumer subagents (use implementor.md template)
+5. Handle cleanup in main context (deletions, index updates)
+6. Spawn 1 test update subagent if needed
+7. Run tests + build in main context
+```
+
+**Subagent prompt:** Use the "File-Scoped Subagent" template from `.claude/agents/implementor.md`.
+
+**Key rule:** Each subagent receives API contracts (function signatures), NOT full foundation file source. This keeps subagent context focused.
 
 ---
 

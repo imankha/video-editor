@@ -1,6 +1,6 @@
 # T249: Robust Extraction Recovery
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-02-27
@@ -90,26 +90,26 @@ Clip extraction can get permanently stuck, leaving projects unopenable with an i
 ### Steps
 
 **Phase 1:**
-1. [ ] Add stale task timeout in `process_modal_queue`: mark 'running' tasks as 'failed' if `started_at` > 10 min ago
-2. [ ] Add retry endpoint: `POST /api/clips/.../retry-extraction` that resets failed task to 'pending' (or creates new one)
-3. [ ] Frontend: add 'failed' extraction state in ClipSelectorSidebar with error message + retry button
-4. [ ] Frontend: add polling fallback in FramingScreen — if anyExtracting and no WebSocket update within 30s, poll clips API
-5. [ ] Frontend: add timeout message after 5 minutes on extraction spinner
+1. [x] Add stale task timeout in `process_modal_queue`: mark 'running' tasks as 'failed' if `started_at` > 10 min ago
+2. [x] Add retry endpoint: `POST /api/clips/.../retry-extraction` that resets failed task to 'pending'
+3. [x] Frontend: add 'failed' extraction state in ClipSelectorSidebar with error message + retry button
+4. [x] Frontend: add WebSocket reconnect refresh + safety-net 60s fallback in FramingScreen
+5. [x] Frontend: add timeout message after 5 minutes on extraction spinner
 
 **Phase 2:**
-6. [ ] Add automatic retry with backoff (max 3 attempts) in modal_queue
-7. [ ] Fix `already_queued` check to also check 'failed' tasks with retry_count < max
-8. [ ] Add extraction health check endpoint
+6. [x] Add automatic retry with backoff (max 3 attempts) in modal_queue
+7. [x] Fix `already_queued` check to also check 'failed' tasks with retry_count < max
+8. [ ] Add extraction health check endpoint (deferred — monitoring, not recovery)
 
 ### Progress Log
 
-*No progress yet*
+- **2026-02-27:** Implementation complete (Phase 1 + Phase 2). Backend: added stale task timeout (10min), auto-retry with exponential backoff (3 attempts), dedup fix for `is_clip_already_queued`, `get_extraction_status` mapping (retrying vs failed), manual retry endpoint. Frontend: fixed status mapping bug ('processing' → 'running'), added failed/retrying UI states in ClipSelectorSidebar, retry button, WebSocket reconnect refresh, spinner timeout (5min), safety-net refresh (60s), projectClips → clipManager sync effect. All tests pass (backend 424, frontend 449). Status → TESTING.
 
 ## Acceptance Criteria
 
-- [ ] Stuck 'running' tasks auto-fail after 10 minutes
-- [ ] Failed extractions show error state in sidebar (not "Waiting for extraction")
-- [ ] Users can retry failed extractions via button click
-- [ ] Extraction spinner has polling fallback (doesn't depend solely on WebSocket)
-- [ ] Spinner shows "taking longer than expected" after 5 minutes
-- [ ] No duplicate failed tasks accumulate on repeated project opens
+- [x] Stuck 'running' tasks auto-fail after 10 minutes
+- [x] Failed extractions show error state in sidebar (not "Waiting for extraction")
+- [x] Users can retry failed extractions via button click
+- [x] Extraction spinner has WebSocket reconnect refresh + safety-net fallback (doesn't depend solely on WebSocket)
+- [x] Spinner shows "taking longer than expected" after 5 minutes
+- [x] No duplicate failed tasks accumulate on repeated project opens

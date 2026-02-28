@@ -12,6 +12,7 @@ import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
+import extractionWebSocketManager from '../services/ExtractionWebSocketManager';
 
 // Module-level variable to pass File object and game details to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
@@ -131,9 +132,23 @@ export function ProjectsScreen({
     fetchPendingUploads();
   }, [fetchPendingUploads]);
 
-  // NOTE: Projects are always clickable now - no need to poll for extraction completion
-  // Users can open and edit projects while extraction runs in the background
-  // TODO: Re-enable extraction WebSocket for real-time status updates (prefer WebSocket over polling)
+  // Listen for extraction events and refresh project list (real-time status updates)
+  useEffect(() => {
+    extractionWebSocketManager.connect();
+
+    const unsubComplete = extractionWebSocketManager.addEventListener('extraction_complete', () => {
+      fetchProjects();
+    });
+
+    const unsubFailed = extractionWebSocketManager.addEventListener('extraction_failed', () => {
+      fetchProjects();
+    });
+
+    return () => {
+      unsubComplete();
+      unsubFailed();
+    };
+  }, [fetchProjects]);
 
   // Handle project selection
   const handleSelectProject = useCallback(async (projectId) => {
