@@ -1,6 +1,6 @@
 # T240: Consistent Logo Placement Across Modes
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-02-17
@@ -51,7 +51,7 @@ Establish a consistent logo position across all modes:
 
 ### Progress Log
 
-*No progress yet*
+- **2026-02-27:** Logo removed from Annotate, Overlay, and Framing modes by user. Logo only appears on Projects screen. Task resolved.
 
 ## Acceptance Criteria
 
