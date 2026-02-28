@@ -129,7 +129,7 @@ Improvements after real user traffic.
 | T240 | [Consistent Logo Placement](tasks/T240-consistent-logo-placement.md) | DONE | Logo removed from editor modes; only on Projects screen |
 | T241 | [Annotate Arrow Key Seek](tasks/T241-annotate-arrow-key-seek.md) | DONE | Forward/backward arrows should seek 4s |
 | T242 | [Rename Project from Card](tasks/T242-rename-project-from-card.md) | DONE | Easy inline rename on project card |
-| T244 | [Game Card Clip Statistics](tasks/T244-game-card-clip-stats.md) | TESTING | Display brilliant/good counts + composite score (frontend only, data already in API) |
+| T244 | [Game Card Clip Statistics](tasks/T244-game-card-clip-stats.md) | DONE | Display brilliant/good counts + composite score (frontend only, data already in API) |
 | T251 | [Game View Progress Tracking](tasks/T251-game-view-progress.md) | DONE | Track watched duration in annotate mode, show progress on game card |
 
 ---

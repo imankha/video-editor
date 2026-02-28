@@ -1,6 +1,6 @@
 # T244: Game Card Clip Statistics
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 1
 **Created:** 2026-02-17
