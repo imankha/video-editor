@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores/exportStore';
@@ -1063,6 +1063,17 @@ function ActiveUploadCard({ upload, onClick }) {
 function GameCard({ game, onLoad, onDelete }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // T251: Compute view progress
+  const hasBeenViewed = game.viewed_duration > 0;
+  const rawPercent = game.video_duration > 0
+    ? (game.viewed_duration / game.video_duration) * 100
+    : 0;
+  // Show at least 1% if any viewing has occurred (avoid rounding to 0 for long videos)
+  const viewedPercent = hasBeenViewed ? Math.max(1, Math.min(100, Math.round(rawPercent))) : 0;
+  const isFullyReviewed = viewedPercent >= 95;
+  const isPartiallyReviewed = hasBeenViewed && !isFullyReviewed;
+  const isNew = !hasBeenViewed;
+
   const handleDelete = (e) => {
     e.stopPropagation();
     if (showDeleteConfirm) {
@@ -1083,8 +1094,22 @@ function GameCard({ game, onLoad, onDelete }) {
           <div className="flex items-center gap-2">
             <Gamepad2 size={18} className="text-green-400" />
             <h3 className="text-white font-medium">{game.name}</h3>
+            {isFullyReviewed && (
+              <CheckCircle size={14} className="text-green-400" title="Fully reviewed" />
+            )}
+            {isPartiallyReviewed && (
+              <span className="text-xs text-gray-400 flex items-center gap-1" title={`${viewedPercent}% reviewed`}>
+                <Eye size={12} className="text-gray-500" />
+                {viewedPercent}%
+              </span>
+            )}
+            {isNew && game.video_duration > 0 && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">New</span>
+            )}
           </div>
           <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
+            <span>{new Date(game.created_at).toLocaleDateString()}</span>
+            <span>•</span>
             <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>
             {game.clip_count > 0 && (
               <>
@@ -1101,13 +1126,11 @@ function GameCard({ game, onLoad, onDelete }) {
                   </>
                 )}
                 <span>•</span>
-                <span title="Composite score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
-                  Score: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
+                <span title="Quality score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
+                  Quality: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
                 </span>
               </>
             )}
-            <span>•</span>
-            <span>{new Date(game.created_at).toLocaleDateString()}</span>
           </div>
         </div>
 

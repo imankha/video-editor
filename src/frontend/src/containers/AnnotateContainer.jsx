@@ -156,6 +156,12 @@ export function AnnotateContainer({
   const annotateGameIdRef = useRef(annotateGameId);
   annotateGameIdRef.current = annotateGameId;
 
+  // T251: High-water mark tracking — track max video position reached per video sequence
+  // Map<sequenceKey, maxTime> where sequenceKey is 'single' for single-video or sequence number
+  const viewedHighWaterRef = useRef(new Map());
+  // Previously persisted viewed_duration from the backend (loaded on game open)
+  const persistedViewedDurationRef = useRef(0);
+
   // Restore video state from active upload if navigating back from Games screen
   // This allows users to click on the uploading game card and return to annotation
   // Skip if we just started the upload from this same mount (not a navigation back)
@@ -345,6 +351,10 @@ export function AnnotateContainer({
       if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
         URL.revokeObjectURL(annotateVideoUrl);
       }
+
+      // T251: Initialize high-water mark from persisted data
+      viewedHighWaterRef.current = new Map();
+      persistedViewedDurationRef.current = gameData.viewed_duration || 0;
 
       // Reset annotate state before loading new game
       resetAnnotate();
@@ -868,6 +878,25 @@ export function AnnotateContainer({
     wasPlayingRef.current = isPlaying;
   }, [isPlaying]);
 
+  // T251: Update high-water mark as user plays/scrubs through video
+  useEffect(() => {
+    if (!annotateGameId || currentTime <= 0) return;
+    const key = currentVideoSequence || 'single';
+    const prev = viewedHighWaterRef.current.get(key) || 0;
+    if (currentTime > prev) {
+      viewedHighWaterRef.current.set(key, currentTime);
+    }
+  }, [currentTime, annotateGameId, currentVideoSequence]);
+
+  // T251: Compute total viewed duration across all videos (for finish-annotation)
+  const getViewedDuration = useCallback(() => {
+    let total = 0;
+    for (const val of viewedHighWaterRef.current.values()) {
+      total += val;
+    }
+    // Include persisted duration — take the max since high-water mark only increases
+    return Math.max(total, persistedViewedDurationRef.current);
+  }, []);
 
   // Computed: Effective duration
   const effectiveDuration = annotateVideoMetadata?.duration || videoDuration || 0;
@@ -1034,6 +1063,9 @@ export function AnnotateContainer({
 
     // Game ID (for finish-annotation call when leaving)
     annotateGameId,
+
+    // T251: View progress tracking
+    getViewedDuration,
 
     // Cleanup
     clearAnnotateState: useCallback(() => {

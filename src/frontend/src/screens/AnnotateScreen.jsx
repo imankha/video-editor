@@ -101,12 +101,15 @@ export function AnnotateScreen({ onClearSelection }) {
 
   // Ref to store gameId for use in handleBackToProjects (avoids circular dependency)
   const gameIdRef = useRef(null);
+  // T251: Ref to store getViewedDuration function from AnnotateContainer
+  const getViewedDurationRef = useRef(null);
 
   // Handlers
   const handleBackToProjects = useCallback(() => {
-    // Trigger extraction of any unextracted clips in projects before leaving
+    // Persist view progress and trigger finish-annotation
     if (gameIdRef.current) {
-      finishAnnotation(gameIdRef.current);
+      const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
+      finishAnnotation(gameIdRef.current, viewedDuration);
     }
     onClearSelection?.();  // Clear App.jsx's selected project (from Framing → Annotate navigation)
     setEditorMode('project-manager');
@@ -181,12 +184,17 @@ export function AnnotateScreen({ onClearSelection }) {
     handleVideoTabSwitch,
     filteredClipRegions,
     filteredRegionsWithLayout,
+    // T251: View progress tracking
+    getViewedDuration,
   } = annotate;
 
   // Keep gameIdRef updated for handleBackToProjects
   useEffect(() => {
     gameIdRef.current = annotateGameId;
   }, [annotateGameId]);
+
+  // T251: Keep getViewedDuration ref updated for handleBackToProjects
+  getViewedDurationRef.current = getViewedDuration;
 
   // Handle initial game ID from sessionStorage (when loading a saved game or navigating from Framing)
   useEffect(() => {
