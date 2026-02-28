@@ -78,7 +78,7 @@ Get the app running on staging URLs for testing.
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| T100 | [Fly.io Staging Backend](tasks/deployment/T100-flyio-backend.md) | TODO | Scale-to-zero, ~$0-2/mo |
+| T100 | [Fly.io Staging Backend](tasks/deployment/T100-flyio-backend.md) | TESTING | Scale-to-zero, ~$0-2/mo |
 | T110 | [Cloudflare Pages Staging](tasks/deployment/T110-cloudflare-pages.md) | TODO | Frontend at `*.pages.dev` |
 
 **Staging URLs:**
