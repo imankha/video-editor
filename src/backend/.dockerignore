@@ -2,8 +2,12 @@
 __pycache__/
 tests/
 *.pyc
+*.pt
+*.pth
 .pytest_cache/
 user_data/
 weights/
 *.db
 *.sqlite
+.fly-secrets
+.git/
