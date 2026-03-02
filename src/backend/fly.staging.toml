@@ -9,6 +9,7 @@ primary_region = "lax"
   APP_ENV = "staging"
   DEBUG = "false"
   CLEAR_PENDING_JOBS_ON_STARTUP = "false"
+  MODAL_ENABLED = "true"
   CORS_ORIGINS = "https://reel-ballers-staging.pages.dev"
 
 [http_service]
