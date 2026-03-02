@@ -19,7 +19,7 @@ boto3==1.35.0
 botocore==1.35.0
 
 # Modal GPU client
-modal==1.0.0
+modal==1.3.1
 
 # Video/Image processing (CPU only - for frame extraction, thumbnails)
 opencv-python-headless==4.9.0.80
