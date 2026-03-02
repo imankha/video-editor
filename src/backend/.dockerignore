@@ -1,13 +1,6 @@
-.venv/
-__pycache__/
-tests/
-*.pyc
-*.pt
-*.pth
-.pytest_cache/
-user_data/
-weights/
-*.db
-*.sqlite
-.fly-secrets
-.git/
+# Exclude everything
+*
+
+# Include only what we need
+!app/
+!requirements.prod.txt
