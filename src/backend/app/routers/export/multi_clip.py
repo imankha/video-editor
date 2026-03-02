@@ -25,7 +25,10 @@ import shutil
 import hashlib
 import base64
 import math
-import torch
+try:
+    import torch
+except ImportError:
+    torch = None
 
 from ...websocket import export_progress, manager
 from ...services.clip_cache import get_clip_cache
@@ -1459,7 +1462,7 @@ async def export_multi_clip(
                 )
 
             # Check CUDA availability before trying to initialize
-            if not torch.cuda.is_available():
+            if not torch or not torch.cuda.is_available():
                 raise HTTPException(
                     status_code=503,
                     detail={"error": "CUDA not available - GPU required for AI upscaling"}
@@ -1479,7 +1482,7 @@ async def export_multi_clip(
                     export_mode=export_mode,
                     sr_model_name='realesr_general_x4v3'
                 )
-            except torch.cuda.OutOfMemoryError as e:
+            except (torch.cuda.OutOfMemoryError if torch else Exception) as e:
                 logger.error(f"[Multi-Clip Export] CUDA out of memory during model init: {e}")
                 torch.cuda.empty_cache()
                 raise HTTPException(
@@ -1575,7 +1578,7 @@ async def export_multi_clip(
             import gc
             gc.collect()  # Force Python garbage collection first
 
-            if torch.cuda.is_available():
+            if torch and torch.cuda.is_available():
                 torch.cuda.synchronize()  # Ensure all GPU operations complete
                 torch.cuda.empty_cache()  # Clear cached GPU memory
                 logger.info(f"[Multi-Clip Export] Cleared GPU cache after clip {clip_index}")
@@ -1736,7 +1739,7 @@ async def export_multi_clip(
         await manager.send_progress(export_id, complete_data)
 
         # Clean up
-        if torch.cuda.is_available():
+        if torch and torch.cuda.is_available():
             torch.cuda.empty_cache()
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
@@ -1753,7 +1756,7 @@ async def export_multi_clip(
         import time
         time.sleep(0.5)
         # Clean up GPU memory on error
-        if torch.cuda.is_available():
+        if torch and torch.cuda.is_available():
             torch.cuda.empty_cache()
         try:
             if os.path.exists(temp_dir):
@@ -1808,7 +1811,7 @@ async def export_multi_clip(
         import time
         time.sleep(0.5)
         # Clean up GPU memory on error
-        if torch.cuda.is_available():
+        if torch and torch.cuda.is_available():
             torch.cuda.empty_cache()
         try:
             if os.path.exists(temp_dir):
