@@ -1,0 +1,17 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer ring - film reel inspired -->
+  <circle cx="24" cy="24" r="22" stroke="url(#gradient)" stroke-width="3" fill="none" />
+  <!-- Film sprocket holes -->
+  <circle cx="24" cy="4" r="2" fill="#a855f7" />
+  <circle cx="24" cy="44" r="2" fill="#a855f7" />
+  <circle cx="4" cy="24" r="2" fill="#a855f7" />
+  <circle cx="44" cy="24" r="2" fill="#a855f7" />
+  <!-- Play button -->
+  <path d="M20 16 L20 32 L34 24 Z" fill="white" opacity="0.95" />
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+  </defs>
+</svg>
