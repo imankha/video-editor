@@ -1,6 +1,6 @@
 # T100: Fly.io Staging Backend
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 5
 **Complexity:** 3
 
@@ -210,31 +210,38 @@ weights/
 
 ---
 
+## Live URL
+
+**https://reel-ballers-api-staging.fly.dev**
+
+- Health check: `GET /api/health`
+- User: `a` (default, no `X-User-ID` header sent)
+- R2 prefix: `staging/users/a/...` (`APP_ENV=staging` isolates from dev data)
+
 ## Deploy Commands
 
+### First-time setup (already done)
 ```bash
 cd src/backend
 
 # Create app
 fly apps create reel-ballers-api-staging
 
-# Set secrets (from .env and ~/.modal.toml)
-fly secrets set --app reel-ballers-api-staging \
-  R2_ENABLED=true \
-  R2_ENDPOINT=<value> \
-  R2_ACCESS_KEY_ID=<value> \
-  R2_SECRET_ACCESS_KEY=<value> \
-  R2_BUCKET=reel-ballers-users \
-  MODAL_ENABLED=true \
-  MODAL_TOKEN_ID=<value> \
-  MODAL_TOKEN_SECRET=<value>
+# Set secrets (values in src/backend/.fly-secrets)
+fly secrets import --app reel-ballers-api-staging < .fly-secrets
+```
 
-# Deploy
+### Redeploy after code changes
+```bash
+cd src/backend
 fly deploy --config fly.staging.toml
+```
 
-# Verify
+### Verify
+```bash
 curl https://reel-ballers-api-staging.fly.dev/api/health
 fly logs --app reel-ballers-api-staging
+fly status --app reel-ballers-api-staging
 ```
 
 ---

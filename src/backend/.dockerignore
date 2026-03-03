@@ -1,0 +1,6 @@
+# Exclude everything
+*
+
+# Include only what we need
+!app/
+!requirements.prod.txt

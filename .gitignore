@@ -82,3 +82,6 @@ formal annotations/
 
 # Deploy output
 deploy_output.txt
+
+# Fly.io secrets
+.fly-secrets

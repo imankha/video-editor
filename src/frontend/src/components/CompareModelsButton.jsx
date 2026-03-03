@@ -46,9 +46,16 @@ export default function CompareModelsButton({ videoFile, cropKeyframes, highligh
       wsRef.current.close();
     }
 
-    // Use same host as the page to go through Vite proxy
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws/export/${exportId}`;
+    const apiBase = import.meta.env.VITE_API_BASE;
+    let wsUrl;
+    if (apiBase) {
+      const url = new URL(apiBase);
+      const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsUrl = `${wsProtocol}//${url.host}/ws/export/${exportId}`;
+    } else {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsUrl = `${wsProtocol}//${window.location.host}/ws/export/${exportId}`;
+    }
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
