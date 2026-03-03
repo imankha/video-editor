@@ -23,8 +23,10 @@ import traceback
 import sys
 import os
 import re
+import signal
 import subprocess
 import logging
+import time
 from dotenv import load_dotenv
 
 # Load environment variables from .env file (if exists)
@@ -211,9 +213,62 @@ def get_git_version_info():
         return None
 
 
+def _graceful_shutdown(signum, frame):
+    """Handle SIGTERM for graceful shutdown: checkpoint WAL and sync databases to R2."""
+    shutdown_start = time.perf_counter()
+    logger.info("[Shutdown] SIGTERM received, starting graceful shutdown")
+
+    try:
+        from app.database import USER_DATA_BASE
+        from app.storage import R2_ENABLED
+
+        if not R2_ENABLED:
+            logger.info("[Shutdown] R2 not enabled, skipping sync")
+            sys.exit(0)
+
+        # Find all user database files and checkpoint + sync each
+        synced = 0
+        failed = 0
+        if USER_DATA_BASE.exists():
+            import sqlite3
+            from app.storage import sync_database_to_r2_with_version
+            from app.database import get_local_db_version, set_local_db_version
+
+            for db_file in USER_DATA_BASE.glob("*/profiles/*/database.sqlite"):
+                parts = db_file.relative_to(USER_DATA_BASE).parts
+                user_id = parts[0]
+                profile_id = parts[2]
+                try:
+                    # WAL checkpoint
+                    conn = sqlite3.connect(str(db_file))
+                    pages = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+                    conn.close()
+                    logger.info(f"[Shutdown] WAL checkpoint for user={user_id} profile={profile_id}: {pages}")
+
+                    # Sync to R2
+                    version = get_local_db_version(user_id, profile_id)
+                    success, new_version = sync_database_to_r2_with_version(user_id, db_file, version)
+                    if success:
+                        synced += 1
+                    else:
+                        failed += 1
+                        logger.warning(f"[Shutdown] R2 sync failed for user={user_id} profile={profile_id}")
+                except Exception as e:
+                    failed += 1
+                    logger.error(f"[Shutdown] Error syncing user={user_id} profile={profile_id}: {e}")
+
+        elapsed = time.perf_counter() - shutdown_start
+        logger.info(f"[Shutdown] Graceful shutdown completed in {elapsed:.2f}s ({synced} synced, {failed} failed)")
+
+    except Exception as e:
+        logger.error(f"[Shutdown] Error during graceful shutdown: {e}")
+
+    sys.exit(0)
+
+
 @app.on_event("startup")
 async def startup_event():
-    """Log version information on startup"""
+    """Log version information on startup and register signal handlers"""
     logger.info("=" * 80)
     logger.info("VIDEO EDITOR BACKEND STARTING")
     logger.info("=" * 80)
@@ -234,6 +289,11 @@ async def startup_event():
     logger.info(f"Environment: {ENV}")
     logger.info(f"Python version: {sys.version.split()[0]}")
     logger.info("=" * 80)
+
+    # Register SIGTERM handler for graceful shutdown (Fly.io sends SIGTERM before stopping)
+    if not IS_DEV:
+        signal.signal(signal.SIGTERM, _graceful_shutdown)
+        logger.info("SIGTERM handler registered for graceful shutdown")
 
     # Initialize the default user session (profile + database).
     # This ensures startup tasks that need DB access have a profile context.
