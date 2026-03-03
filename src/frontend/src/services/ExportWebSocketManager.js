@@ -19,10 +19,10 @@ import { ExportStatus } from '../constants/exportStatus';
 
 // Reconnection configuration
 const RECONNECT_CONFIG = {
-  initialDelay: 1000,    // 1 second initial delay
-  maxDelay: 30000,       // 30 seconds max delay
+  initialDelay: 500,     // 500ms initial delay (fast retry for cold starts)
+  maxDelay: 10000,       // 10 seconds max delay
   backoffMultiplier: 2,  // Double delay each attempt
-  maxAttempts: 10,       // Give up after 10 attempts
+  maxAttempts: 10,       // After 10 attempts, falls back to REST polling
 };
 
 // Keepalive configuration
@@ -120,10 +120,10 @@ class ExportWebSocketManager {
         this._handleMessage(exportId, event.data, callbacks);
       };
 
-      ws.onerror = (error) => {
+      ws.onerror = () => {
         clearTimeout(timeout);
-        console.warn(`[ExportWSManager] WebSocket error for ${exportId}:`, error);
-        // Don't resolve false here - let onclose handle reconnection
+        // Suppress error logging — onclose handles reconnection.
+        // WS errors during Fly.io cold starts are expected and transient.
       };
 
       ws.onclose = (event) => {
