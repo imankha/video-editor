@@ -36,6 +36,12 @@ class ExtractionWebSocketManager {
    * Build WebSocket URL for extractions
    */
   _buildWsUrl() {
+    const apiBase = import.meta.env.VITE_API_BASE;
+    if (apiBase) {
+      const url = new URL(apiBase);
+      const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${wsProtocol}//${url.host}/ws/extractions`;
+    }
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${wsProtocol}//${window.location.host}/ws/extractions`;
   }

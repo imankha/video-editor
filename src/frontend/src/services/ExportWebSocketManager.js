@@ -44,6 +44,12 @@ class ExportWebSocketManager {
    * Build WebSocket URL for an export
    */
   _buildWsUrl(exportId) {
+    const apiBase = import.meta.env.VITE_API_BASE;
+    if (apiBase) {
+      const url = new URL(apiBase);
+      const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${wsProtocol}//${url.host}/ws/export/${exportId}`;
+    }
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${wsProtocol}//${window.location.host}/ws/export/${exportId}`;
   }

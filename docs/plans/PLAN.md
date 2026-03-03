@@ -79,7 +79,7 @@ Get the app running on staging URLs for testing.
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
 | T100 | [Fly.io Staging Backend](tasks/deployment/T100-flyio-backend.md) | TESTING | Scale-to-zero, ~$0-2/mo |
-| T110 | [Cloudflare Pages Staging](tasks/deployment/T110-cloudflare-pages.md) | TODO | Frontend at `*.pages.dev` |
+| T110 | [Cloudflare Pages Staging](tasks/deployment/T110-cloudflare-pages.md) | TESTING | Frontend at `reel-ballers-staging.pages.dev` |
 
 **Staging URLs:**
 - API: `reel-ballers-api-staging.fly.dev`
