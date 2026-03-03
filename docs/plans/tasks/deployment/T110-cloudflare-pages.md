@@ -1,188 +1,94 @@
-# Task 12: Cloudflare Pages Frontend Deployment
+# T110: Cloudflare Pages Staging Frontend
+
+**Status:** TESTING
 
 ## Overview
-Deploy the React frontend to Cloudflare Pages for free global hosting.
+Deploy the React frontend to Cloudflare Pages for staging.
 
-## Owner
-**Claude** - Build configuration and deployment setup
+## Live URL
+
+**https://reel-ballers-staging.pages.dev**
+
+- Backend: https://reel-ballers-api-staging.fly.dev
+- Cloudflare Pages project: `reel-ballers-staging`
 
 ## Prerequisites
-- Task 11 complete (Backend deployed to Fly.io)
+- T100 complete (Backend deployed to Fly.io)
 - Cloudflare account (already have for R2)
-
-## Testability
-**After this task**: Frontend loads from `app.reelballers.com`
+- `wrangler` CLI: `npx wrangler login`
 
 ---
 
-## Steps
+## How It Works
 
-### 1. Update Frontend API URL
-
-Update `src/frontend/src/config.js` (or wherever API_BASE_URL is defined):
-
-```javascript
-// Production vs Development
-const API_BASE_URL = import.meta.env.PROD
-  ? 'https://api.reelballers.com'  // Production: Fly.io
-  : 'http://localhost:8000';        // Development: local
-
-export { API_BASE_URL };
-```
-
-### 2. Create Production Build
-
-```bash
-cd src/frontend
-npm run build
-```
-
-This creates `dist/` folder with static files.
-
-### 3. Deploy via Wrangler CLI
-
-```bash
-# Install wrangler if not already
-npm install -g wrangler
-
-# Login to Cloudflare
-wrangler login
-
-# Deploy
-npx wrangler pages deploy dist --project-name=reel-ballers-app
-```
-
-First deployment creates the project. Subsequent deploys update it.
-
-### 4. Alternative: GitHub Integration
-
-1. Go to Cloudflare Dashboard → Pages
-2. Click "Create a project"
-3. Connect to GitHub repository
-4. Configure build:
-   - Build command: `npm run build`
-   - Build output directory: `dist`
-   - Root directory: `src/frontend`
-5. Add environment variable: `VITE_API_URL=https://api.reelballers.com`
-
-Now every push to `main` auto-deploys.
-
----
-
-## Build Configuration
-
-### Vite Config Updates
-
-If needed, update `src/frontend/vite.config.js`:
+### API URL Configuration
+`src/frontend/src/config.js` reads `VITE_API_BASE` env var at build time:
 
 ```javascript
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-  build: {
-    outDir: 'dist',
-    sourcemap: false,  // Disable for production
-  },
-  // Handle SPA routing
-  preview: {
-    port: 4173,
-  },
-})
+export const API_BASE = import.meta.env.VITE_API_BASE || '';
 ```
+
+- **Dev:** empty string — Vite proxy forwards `/api/*` to localhost
+- **Staging:** set `VITE_API_BASE=https://reel-ballers-api-staging.fly.dev` at build time
+
+### WebSocket URLs
+WebSocket managers (`ExportWebSocketManager`, `ExtractionWebSocketManager`, `CompareModelsButton`) derive the WS host from `VITE_API_BASE` when set, falling back to `window.location` for dev.
 
 ### SPA Routing
-
-Create `src/frontend/public/_redirects`:
-
+`src/frontend/public/_redirects` ensures all routes serve `index.html`:
 ```
 /* /index.html 200
 ```
 
-This ensures client-side routing works (all routes serve index.html).
-
 ---
 
-## Environment Variables
+## Deploy Commands
 
-For GitHub integration, set in Cloudflare Pages dashboard:
-
-| Variable | Value |
-|----------|-------|
-| VITE_API_URL | https://api.reelballers.com |
-| NODE_VERSION | 18 |
-
----
-
-## Custom Domain (Task 13)
-
-After deployment:
-
-1. Go to Pages project → Custom domains
-2. Add `app.reelballers.com`
-3. Add DNS records as instructed
-4. SSL is automatic
-
----
-
-## Deliverables
-
-| Item | Description |
-|------|-------------|
-| Production build | `dist/` folder builds correctly |
-| Deployed site | Running on pages.dev |
-| API URL configured | Points to Fly.io backend |
-| _redirects file | SPA routing works |
-
----
-
-## Deployment Commands
-
-### Manual Deploy
+### Redeploy after code changes
 ```bash
 cd src/frontend
-npm run build
-npx wrangler pages deploy dist --project-name=reel-ballers-app
+VITE_API_BASE=https://reel-ballers-api-staging.fly.dev npm run build
+npx wrangler pages deploy dist --project-name=reel-ballers-staging --branch=master
 ```
 
-### View Deployment
+### On Windows (cmd)
 ```bash
-# List deployments
-npx wrangler pages deployment list --project-name=reel-ballers-app
-
-# View logs (limited for Pages)
-# Use browser dev tools for client-side debugging
+cd src/frontend
+set VITE_API_BASE=https://reel-ballers-api-staging.fly.dev && npm run build
+npx wrangler pages deploy dist --project-name=reel-ballers-staging --branch=master
 ```
+
+### View Deployments
+```bash
+npx wrangler pages deployment list --project-name=reel-ballers-staging
+```
+
+---
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `src/frontend/src/config.js` | Reads `VITE_API_BASE` env var |
+| `src/frontend/src/services/ExportWebSocketManager.js` | WS URL from `VITE_API_BASE` |
+| `src/frontend/src/services/ExtractionWebSocketManager.js` | WS URL from `VITE_API_BASE` |
+| `src/frontend/src/components/CompareModelsButton.jsx` | WS URL from `VITE_API_BASE` |
+| `src/frontend/public/_redirects` | SPA routing for Cloudflare Pages |
 
 ---
 
 ## Troubleshooting
 
-### "API calls failing"
-- Check CORS on Fly.io backend allows Pages domain
-- Verify API_BASE_URL is correct in production build
-
-### "Page not found on refresh"
-- Ensure `_redirects` file exists in `public/`
-- Check build output includes `_redirects`
-
-### "Old version showing"
-- Hard refresh (Ctrl+Shift+R)
-- Clear Cloudflare cache: Dashboard → Caching → Purge Everything
-
-### Build fails
-- Check Node version (use 18+)
-- Run `npm run build` locally first
-- Check for TypeScript/ESLint errors
+| Issue | Solution |
+|-------|----------|
+| API calls failing | Check CORS on backend includes `reel-ballers-staging.pages.dev` |
+| CORS errors on preview URLs | Use main URL `reel-ballers-staging.pages.dev`, not `*.reel-ballers-staging.pages.dev` |
+| Page not found on refresh | Ensure `_redirects` exists in `public/` and appears in `dist/` after build |
+| Old version showing | Hard refresh (Ctrl+Shift+R) |
+| Backend not responding | First request wakes scale-to-zero machine (~2-3s cold start) |
 
 ---
 
 ## Cost
 
-**Free** - Cloudflare Pages free tier includes:
-- Unlimited sites
-- Unlimited bandwidth
-- 500 builds/month
-- Automatic HTTPS
-- Global CDN
+**Free** — Cloudflare Pages free tier: unlimited sites, bandwidth, automatic HTTPS, global CDN.
