@@ -122,6 +122,11 @@ class DatabaseSyncMiddleware(BaseHTTPMiddleware):
                 user_id = get_current_user_id()
                 set_sync_failed(user_id, not sync_success)
 
+                if sync_success:
+                    logger.info(f"[SYNC] {request.method} {request.url.path} → R2 sync OK ({sync_duration:.2f}s)")
+                else:
+                    logger.warning(f"[SYNC] {request.method} {request.url.path} → R2 sync FAILED ({sync_duration:.2f}s)")
+
             # Add X-Sync-Status header if this user has a pending sync failure
             user_id = get_current_user_id()
             if is_sync_failed(user_id):
