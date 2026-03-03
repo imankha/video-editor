@@ -57,6 +57,9 @@ logging.getLogger("modal").setLevel(logging.WARNING)
 logging.getLogger("watchfiles").setLevel(logging.WARNING)
 logging.getLogger("hpack").setLevel(logging.WARNING)
 logging.getLogger("grpc").setLevel(logging.WARNING)
+logging.getLogger("botocore").setLevel(logging.WARNING)
+logging.getLogger("boto3").setLevel(logging.WARNING)
+logging.getLogger("s3transfer").setLevel(logging.WARNING)
 
 # Import routers and websocket handler
 from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router, profiles_router
