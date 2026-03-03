@@ -1,0 +1,26 @@
+name: Deploy Modal Functions
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/backend/app/modal_functions/**'
+
+jobs:
+  deploy-modal:
+    name: Deploy Modal Functions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install modal
+
+      - run: modal deploy app/modal_functions/video_processing.py
+        working-directory: src/backend
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
