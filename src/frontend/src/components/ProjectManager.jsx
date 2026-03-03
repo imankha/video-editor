@@ -59,7 +59,8 @@ export function ProjectManager({
   // Use props if provided, otherwise fall back to context
   const downloadsCount = downloadsCountProp ?? contextDownloadsCount ?? 0;
   const exportingProject = exportingProjectProp ?? contextExportingProject;
-  const [activeTab, setActiveTab] = useState('projects'); // 'games' | 'projects'
+  const hasClips = games.some(g => g.clip_count > 0);
+  const [activeTab, setActiveTab] = useState(projects.length === 0 ? 'games' : 'projects');
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const gameFileInputRef = useRef(null);
@@ -586,6 +587,8 @@ export function ProjectManager({
             variant="primary"
             size="lg"
             icon={Plus}
+            disabled={!hasClips}
+            title={!hasClips ? "Extract clips from a game first using Annotate mode" : undefined}
             onClick={() => setShowNewProjectModal(true)}
           >
             New Project
