@@ -11,10 +11,10 @@
 
 // Reconnection configuration
 const RECONNECT_CONFIG = {
-  initialDelay: 1000,    // 1 second initial delay
-  maxDelay: 30000,       // 30 seconds max delay
+  initialDelay: 500,     // 500ms initial delay (fast retry for cold starts)
+  maxDelay: 10000,       // 10 seconds max delay
   backoffMultiplier: 2,  // Double delay each attempt
-  maxAttempts: 10,       // Give up after 10 attempts
+  maxAttempts: 10,       // Reset counter after 10 attempts, then retry periodically
 };
 
 const KEEPALIVE_INTERVAL = 30000; // 30 seconds
@@ -99,12 +99,16 @@ class ExtractionWebSocketManager {
         }
       };
 
-      this.ws.onerror = (error) => {
-        console.error('[ExtractionWSManager] WebSocket error:', error);
+      this.ws.onerror = () => {
+        // Suppress error logging — onclose handles reconnection.
+        // WS errors during Fly.io cold starts are expected and transient.
       };
 
       this.ws.onclose = (event) => {
-        console.log(`[ExtractionWSManager] Disconnected (code: ${event.code})`);
+        const wasConnected = this.isConnected;
+        if (wasConnected) {
+          console.log(`[ExtractionWSManager] Disconnected (code: ${event.code})`);
+        }
         this.isConnected = false;
         this._stopKeepalive();
 
@@ -209,17 +213,20 @@ class ExtractionWebSocketManager {
    * Schedule a reconnection attempt
    */
   _scheduleReconnect() {
-    if (this.reconnectAttempt >= RECONNECT_CONFIG.maxAttempts) {
-      console.warn('[ExtractionWSManager] Max reconnect attempts reached');
-      return;
+    // After max attempts, keep retrying at max delay interval
+    // (machine may take a while to wake from cold start)
+    const attempt = this.reconnectAttempt;
+    const delay = attempt >= RECONNECT_CONFIG.maxAttempts
+      ? RECONNECT_CONFIG.maxDelay
+      : Math.min(
+          RECONNECT_CONFIG.initialDelay * Math.pow(RECONNECT_CONFIG.backoffMultiplier, attempt),
+          RECONNECT_CONFIG.maxDelay
+        );
+
+    if (attempt < RECONNECT_CONFIG.maxAttempts) {
+      console.log(`[ExtractionWSManager] Reconnecting in ${delay}ms (attempt ${attempt + 1})`);
     }
-
-    const delay = Math.min(
-      RECONNECT_CONFIG.initialDelay * Math.pow(RECONNECT_CONFIG.backoffMultiplier, this.reconnectAttempt),
-      RECONNECT_CONFIG.maxDelay
-    );
-
-    console.log(`[ExtractionWSManager] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempt + 1})`);
+    // After max attempts, silently keep trying at maxDelay interval
 
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectAttempt++;
