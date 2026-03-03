@@ -82,6 +82,7 @@ def configure_cors():
                 'AllowedOrigins': [
                     'http://localhost:5173',      # Vite dev server
                     'http://localhost:3000',      # Alternative dev port
+                    'https://reel-ballers-staging.pages.dev',  # Staging
                     'https://reelballers.com',    # Production
                     'https://www.reelballers.com', # Production with www
                 ],
