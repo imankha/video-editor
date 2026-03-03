@@ -295,6 +295,13 @@ async def startup_event():
         signal.signal(signal.SIGTERM, _graceful_shutdown)
         logger.info("SIGTERM handler registered for graceful shutdown")
 
+    # Log R2 restore status
+    from app.storage import R2_ENABLED as _r2
+    if _r2:
+        logger.info("[Startup] R2 enabled — databases will be lazy-restored from R2 on first user request")
+    else:
+        logger.info("[Startup] R2 disabled — using local database only")
+
     # Initialize the default user session (profile + database).
     # This ensures startup tasks that need DB access have a profile context.
     from app.user_context import set_current_user_id as _set_user

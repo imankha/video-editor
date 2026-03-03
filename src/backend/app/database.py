@@ -430,14 +430,31 @@ def ensure_database():
 
         # Only download from R2 if we've never synced for this user+profile (first access)
         if local_version is None:
+            local_exists = db_path.exists()
+            local_size = db_path.stat().st_size if local_exists else 0
+            logger.info(
+                f"[Restore] First access for user={user_id} profile={profile_id}, "
+                f"local_db={'exists' if local_exists else 'missing'} ({local_size} bytes), checking R2..."
+            )
+            import time as _time
+            restore_start = _time.perf_counter()
             was_synced, new_version = sync_database_from_r2_if_newer(user_id, db_path, local_version)
+            restore_elapsed = _time.perf_counter() - restore_start
             if was_synced:
-                logger.info(f"Database downloaded from R2 for user: {user_id}, profile: {profile_id}, version: {new_version}")
+                new_size = db_path.stat().st_size if db_path.exists() else 0
+                logger.info(
+                    f"[Restore] Downloaded database from R2 for user={user_id} profile={profile_id}: "
+                    f"version={new_version}, size={new_size} bytes, took {restore_elapsed:.2f}s"
+                )
                 set_local_db_version(user_id, profile_id, new_version)
                 # Force re-initialization since we got a new DB
                 already_initialized = False
             elif new_version is not None:
                 # R2 has a version but we didn't need to download (local exists)
+                logger.info(
+                    f"[Restore] Local database up-to-date for user={user_id} profile={profile_id}: "
+                    f"version={new_version}, took {restore_elapsed:.2f}s"
+                )
                 set_local_db_version(user_id, profile_id, new_version)
             else:
                 # R2 has no DB for this user+profile (fresh or R2 HEAD failed).
@@ -446,6 +463,10 @@ def ensure_database():
                 # makes a slow R2 HEAD request (~3s), and if a sync eventually
                 # succeeds (uploading stale data), a later request with
                 # local_version=None would download and overwrite local changes.
+                logger.info(
+                    f"[Restore] No R2 database found for user={user_id} profile={profile_id}, "
+                    f"starting fresh (took {restore_elapsed:.2f}s)"
+                )
                 set_local_db_version(user_id, profile_id, 0)
 
     # If already initialized, skip table creation
