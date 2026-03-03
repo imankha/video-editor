@@ -1341,17 +1341,26 @@ async def call_modal_annotate_compilation(
                 break
 
             if isinstance(update, dict):
-                progress = update.get("progress", 0)
-                message = update.get("message", "Processing...")
-                phase = update.get("phase", "processing")
                 status = update.get("status")
+                progress = update.get("progress", 0)
+                message = update.get("message") or update.get("error") or "Processing..."
+                phase = update.get("phase", "processing")
+
+                # Check for final result BEFORE sending progress callback
+                # (error dicts lack 'message' and would send misleading "Processing...")
+                if status == "success":
+                    result = update
+                    break
+                elif status == "error":
+                    result = update
+                    break
 
                 # Log progress updates
                 if progress != last_progress:
                     logger.info(f"[Modal] Progress: {progress}% - {message}")
                     last_progress = progress
 
-                # Send progress to callback
+                # Send progress to callback (non-terminal updates only)
                 if progress_callback and progress < 100:
                     try:
                         await progress_callback(progress, message, phase)
@@ -1359,14 +1368,6 @@ async def call_modal_annotate_compilation(
                         await asyncio.sleep(0)
                     except Exception as e:
                         logger.warning(f"[Modal] Progress callback failed: {e}")
-
-                # Check for final result
-                if status == "success":
-                    result = update
-                    break
-                elif status == "error":
-                    result = update
-                    break
 
         elapsed = time.time() - start_time
         log_progress_event(job_id, "modal_complete", elapsed=elapsed)
