@@ -2394,7 +2394,11 @@ def create_annotated_compilation(
                 yield {"progress": 15, "phase": "downloading", "message": "Downloads complete"}
             else:
                 input_path = os.path.join(temp_dir, "source.mp4")
-                full_input_key = f"{user_id}/{input_key}"
+                # Game videos are stored globally (no user prefix), same as multi-video path
+                if input_key.startswith("games/"):
+                    full_input_key = input_key
+                else:
+                    full_input_key = f"{user_id}/{input_key}"
                 logger.info(f"[{job_id}] Downloading {full_input_key}")
                 yield {"progress": 5, "phase": "downloading", "message": "Downloading source video..."}
                 r2.download_file(bucket, full_input_key, input_path)
@@ -2617,7 +2621,11 @@ def extract_clip_modal(
         with tempfile.TemporaryDirectory() as temp_dir:
             # Download source video from R2
             input_path = os.path.join(temp_dir, "input.mp4")
-            full_input_key = f"{user_id}/{input_key}"
+            # Game videos are stored globally (no user prefix)
+            if input_key.startswith("games/"):
+                full_input_key = input_key
+            else:
+                full_input_key = f"{user_id}/{input_key}"
             logger.info(f"[ClipExtract] Downloading {full_input_key}")
             r2.download_file(bucket, full_input_key, input_path)
 
