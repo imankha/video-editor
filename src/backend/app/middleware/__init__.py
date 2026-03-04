@@ -2,9 +2,9 @@
 Middleware package for Video Editor API.
 
 Contains FastAPI middleware for cross-cutting concerns:
-- DatabaseSyncMiddleware: Handles R2 database sync at request boundaries
+- RequestContextMiddleware: User context setup + R2 database sync (combined)
 """
 
-from .db_sync import DatabaseSyncMiddleware
+from .db_sync import RequestContextMiddleware, DatabaseSyncMiddleware
 
-__all__ = ['DatabaseSyncMiddleware']
+__all__ = ['RequestContextMiddleware', 'DatabaseSyncMiddleware']

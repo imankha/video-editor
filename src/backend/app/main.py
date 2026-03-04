@@ -67,45 +67,9 @@ from app.routers.exports import router as exports_router
 from app.websocket import websocket_export_progress, websocket_extractions
 from app.services.export_worker import recover_orphaned_jobs
 from app.user_context import set_current_user_id, get_current_user_id
-from app.profile_context import set_current_profile_id
 from app.session_init import user_session_init
 from app.constants import DEFAULT_USER_ID
-from app.middleware import DatabaseSyncMiddleware
-
-
-class UserContextMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware to set user context from X-User-ID header.
-
-    This enables request-based user isolation for testing.
-    In normal use (no header), the default user ID is used.
-    """
-
-    async def dispatch(self, request: Request, call_next):
-        # Get user ID from header, default to 'a'
-        user_id = request.headers.get('X-User-ID', DEFAULT_USER_ID)
-
-        # Sanitize: only allow alphanumeric, underscore, dash
-        sanitized = ''.join(c for c in user_id if c.isalnum() or c in '_-')
-        if not sanitized:
-            sanitized = DEFAULT_USER_ID
-
-        # Set user context for this request
-        set_current_user_id(sanitized)
-
-        # Set profile context from X-Profile-ID header (fast path), or
-        # auto-resolve via user_session_init (first request / missing header).
-        # user_session_init is idempotent and cached after first call per user.
-        profile_id = request.headers.get('X-Profile-ID')
-        if profile_id and re.match(r'^[a-f0-9]{8}$', profile_id):
-            set_current_profile_id(profile_id)
-        else:
-            if profile_id:
-                logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
-            user_session_init(sanitized)
-
-        response = await call_next(request)
-        return response
+from app.middleware import RequestContextMiddleware
 
 # Environment detection
 ENV = os.getenv("ENV", "development")
@@ -136,16 +100,11 @@ app.add_middleware(
     expose_headers=["X-Sync-Status"],
 )
 
-# Middleware ordering matters with BaseHTTPMiddleware:
-# Starlette wraps from outside-in, so LAST added = OUTERMOST (runs first).
-# BaseHTTPMiddleware copies the context for call_next(), so ContextVar changes
-# inside call_next() are NOT visible after it returns.
-#
-# We need UserContextMiddleware to be OUTER so it sets user_id/profile_id
-# BEFORE the context is copied for DatabaseSyncMiddleware. This way,
-# DatabaseSyncMiddleware inherits those values and can sync after the request.
-app.add_middleware(DatabaseSyncMiddleware)   # inner: syncs after writes
-app.add_middleware(UserContextMiddleware)    # outer: sets user/profile context
+# Single combined middleware for user context + R2 sync.
+# Must be ONE middleware because BaseHTTPMiddleware's call_next() copies the
+# asyncio context. Separate middlewares can't share ContextVar state across
+# the call_next() boundary. See db_sync.py for details.
+app.add_middleware(RequestContextMiddleware)
 
 # Include routers
 app.include_router(health_router)
