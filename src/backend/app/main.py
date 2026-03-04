@@ -136,12 +136,16 @@ app.add_middleware(
     expose_headers=["X-Sync-Status"],
 )
 
-# Add user context middleware (must be after CORS)
-app.add_middleware(UserContextMiddleware)
-
-# Add database sync middleware (syncs to R2 at request boundaries)
-# Must be added after UserContextMiddleware so user ID is available
-app.add_middleware(DatabaseSyncMiddleware)
+# Middleware ordering matters with BaseHTTPMiddleware:
+# Starlette wraps from outside-in, so LAST added = OUTERMOST (runs first).
+# BaseHTTPMiddleware copies the context for call_next(), so ContextVar changes
+# inside call_next() are NOT visible after it returns.
+#
+# We need UserContextMiddleware to be OUTER so it sets user_id/profile_id
+# BEFORE the context is copied for DatabaseSyncMiddleware. This way,
+# DatabaseSyncMiddleware inherits those values and can sync after the request.
+app.add_middleware(DatabaseSyncMiddleware)   # inner: syncs after writes
+app.add_middleware(UserContextMiddleware)    # outer: sets user/profile context
 
 # Include routers
 app.include_router(health_router)
