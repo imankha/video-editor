@@ -1093,7 +1093,12 @@ async def export_final(
 
 @router.get("/projects/{project_id}/final-video")
 async def get_final_video(project_id: int):
-    """Stream the final video for a project."""
+    """Get presigned URL for the final video of a project.
+
+    Returns JSON with the presigned URL instead of a 302 redirect.
+    XHR/fetch following 302 redirects to R2 is blocked by CORS, so the
+    frontend must fetch from R2 directly using the presigned URL.
+    """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -1110,7 +1115,6 @@ async def get_final_video(project_id: int):
         if not result:
             raise HTTPException(status_code=404, detail="Final video not found")
 
-        # Redirect to R2 presigned URL
         user_id = get_current_user_id()
         presigned_url = generate_presigned_url(
             user_id=user_id,
@@ -1119,7 +1123,7 @@ async def get_final_video(project_id: int):
             content_type="video/mp4"
         )
         if presigned_url:
-            return RedirectResponse(url=presigned_url, status_code=302)
+            return {"url": presigned_url, "filename": result['filename']}
         raise HTTPException(status_code=404, detail="Failed to generate R2 URL for final video")
 
 

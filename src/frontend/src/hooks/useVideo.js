@@ -523,7 +523,13 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         userMessage = `Failed to load video: ${errorMessage}`;
       }
 
-      console.log(`[VIDEO] Error: ${userMessage} (code: ${errorCode}, raw: ${errorMessage})`);
+      console.error(`[VIDEO] Error: ${userMessage}`, {
+        code: errorCode,
+        rawMessage: errorMessage,
+        url: videoUrl?.substring(0, 80),
+        isBlob: videoUrl?.startsWith('blob:'),
+        retryAttempt: retryAttemptRef.current,
+      });
       setError(userMessage);
       retryAttemptRef.current += 1;
     }

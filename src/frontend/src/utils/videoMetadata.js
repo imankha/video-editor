@@ -20,6 +20,7 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
     // Set timeout for loading
     const timeoutId = setTimeout(() => {
       if (video.readyState === 0) {
+        console.error('[videoMetadata] Timeout loading metadata from URL:', url?.substring(0, 80));
         cleanup();
         reject(new Error('Video metadata loading timed out'));
       }
@@ -52,8 +53,13 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
     video.onerror = (e) => {
       clearTimeout(timeoutId);
       cleanup();
-      console.error('[videoMetadata] Failed to load video from URL:', url, e);
-      reject(new Error('Failed to load video metadata from URL'));
+      const mediaError = video.error;
+      console.error('[videoMetadata] Failed to load video from URL:', {
+        url: url?.substring(0, 80),
+        errorCode: mediaError?.code,
+        errorMessage: mediaError?.message,
+      });
+      reject(new Error(`Failed to load video metadata: ${mediaError?.message || 'unknown error'} (code: ${mediaError?.code})`));
     };
 
     video.src = url;

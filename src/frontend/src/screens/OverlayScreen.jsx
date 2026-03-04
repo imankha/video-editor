@@ -125,6 +125,22 @@ export function OverlayScreen({
   const effectiveOverlayMetadata = workingVideo?.metadata || (shouldWaitForWorkingVideo ? null : framingMetadata);
   const effectiveOverlayFile = workingVideo?.file || (shouldWaitForWorkingVideo ? null : framingVideoFile);
 
+  // Diagnostic: log video source state on every render where something interesting happens
+  useEffect(() => {
+    if (!effectiveOverlayVideoUrl && !isLoadingWorkingVideo && !shouldWaitForWorkingVideo) {
+      console.warn('[OverlayScreen] No video source available', {
+        workingVideo: !!workingVideo,
+        workingVideoUrl: workingVideo?.url?.substring(0, 50),
+        projectWorkingVideoUrl: project?.working_video_url?.substring(0, 50),
+        projectWorkingVideoId: project?.working_video_id,
+        isLoadingWorkingVideo,
+        shouldWaitForWorkingVideo,
+        framingVideoUrl: framingVideoUrl?.substring(0, 50),
+        clipsCount: clips?.length,
+      });
+    }
+  }, [effectiveOverlayVideoUrl, workingVideo, project?.working_video_url, project?.working_video_id, isLoadingWorkingVideo, shouldWaitForWorkingVideo, framingVideoUrl, clips?.length]);
+
   // =========================================
   // VIDEO HOOK - Without segment awareness for overlay mode
   // =========================================
@@ -234,37 +250,48 @@ export function OverlayScreen({
 
       (async () => {
         try {
-          console.log('[OverlayScreen] Using presigned URL for working video (streaming)');
-          // Use presigned URL directly - no blob download needed!
-          // Extract metadata using the streaming URL (fast - only reads headers + moov atom)
+          console.log('[OverlayScreen] Loading working video from presigned URL:', project.working_video_url.substring(0, 80));
           const meta = await extractVideoMetadataFromUrl(project.working_video_url, 'working_video.mp4');
           console.log('[OverlayScreen] Extracted metadata from streaming URL:', meta);
-          // Store URL directly (no file/blob needed for streaming)
           setWorkingVideo({ file: null, url: project.working_video_url, metadata: meta });
         } catch (err) {
-          console.error('[OverlayScreen] Failed to extract working video metadata:', err);
+          console.error('[OverlayScreen] Failed to load working video:', err.message, {
+            url: project.working_video_url?.substring(0, 80),
+            projectId,
+            workingVideoId: project?.working_video_id,
+          });
           workingVideoFetchUrlRef.current = null; // Allow retry on error
         } finally {
           setIsLoadingWorkingVideo(false);
         }
       })();
+    } else if (!workingVideo && !project?.working_video_url && !isLoadingWorkingVideo) {
+      // No working video URL available at all — log why
+      console.warn('[OverlayScreen] No working video URL in project data', {
+        projectId,
+        workingVideoId: project?.working_video_id,
+        hasProject: !!project,
+      });
     }
-  }, [workingVideo, project?.working_video_url, setIsLoadingWorkingVideo, setWorkingVideo]);
+  }, [workingVideo, project?.working_video_url, project?.working_video_id, projectId, isLoadingWorkingVideo, setIsLoadingWorkingVideo, setWorkingVideo]);
 
   // Load video into useVideo hook when effectiveOverlayVideoUrl is available
   // Uses a ref to track the source URL to prevent infinite loops (blob URLs are always unique)
   useEffect(() => {
     if (effectiveOverlayVideoUrl && effectiveOverlayVideoUrl !== videoLoadedFromUrlRef.current) {
-      console.log('[OverlayScreen] Loading video from URL:', effectiveOverlayVideoUrl.substring(0, 50));
+      console.log('[OverlayScreen] Loading video into player:', effectiveOverlayVideoUrl.substring(0, 80));
       videoLoadedFromUrlRef.current = effectiveOverlayVideoUrl;
 
       // Use streaming mode for presigned URLs (not blob URLs)
       // This avoids downloading the entire video before playback
       if (!effectiveOverlayVideoUrl.startsWith('blob:') && effectiveOverlayMetadata) {
-        console.log('[OverlayScreen] Using streaming mode (instant first frame)');
+        console.log('[OverlayScreen] Using streaming mode (instant first frame)', {
+          duration: effectiveOverlayMetadata?.duration,
+          resolution: `${effectiveOverlayMetadata?.width}x${effectiveOverlayMetadata?.height}`,
+        });
         loadVideoFromStreamingUrl(effectiveOverlayVideoUrl, effectiveOverlayMetadata);
       } else {
-        // For blob URLs (local exports), use the fetch approach
+        console.log('[OverlayScreen] Using blob download mode');
         loadVideoFromUrl(effectiveOverlayVideoUrl, 'overlay_video.mp4');
       }
     }

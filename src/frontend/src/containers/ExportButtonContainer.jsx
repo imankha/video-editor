@@ -597,10 +597,20 @@ export function ExportButtonContainer({
           console.log('[ExportButtonContainer] Overlay render complete:', renderResponse.data);
 
           setProgressMessage('Preparing download...');
-          const finalVideoUrl = `${API_BASE}/api/export/projects/${projectId}/final-video`;
-          const downloadResponse = await axios.get(finalVideoUrl, { responseType: 'blob' });
 
-          const blob = new Blob([downloadResponse.data], { type: 'video/mp4' });
+          // Get presigned URL from backend (JSON, not redirect — avoids CORS issues)
+          const finalVideoUrlResponse = await axios.get(
+            `${API_BASE}/api/export/projects/${projectId}/final-video`
+          );
+          const presignedUrl = finalVideoUrlResponse.data.url;
+
+          // Download the video directly from R2 using fetch (supports CORS)
+          const downloadResponse = await fetch(presignedUrl);
+          if (!downloadResponse.ok) {
+            throw new Error(`Failed to download video: ${downloadResponse.status}`);
+          }
+          const blob = await downloadResponse.blob();
+
           const safeName = projectName
             ? projectName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'video'
             : 'video';
@@ -806,8 +816,8 @@ export function ExportButtonContainer({
         );
 
         if (isNetworkError) {
-          setError('Cannot connect to backend server. Please ensure the server is running on port 8000.');
-          setProgressMessage('Server unreachable');
+          setError('Export failed due to a network error. Please check your connection and try again.');
+          setProgressMessage('Network error');
         } else if (err.response) {
           const status = err.response.status;
           const statusText = err.response.statusText;

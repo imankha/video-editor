@@ -126,9 +126,7 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
             videos_deleted = cursor.rowcount
 
             # Delete child rows from tables that reference projects without ON DELETE CASCADE
-            cursor.execute("DELETE FROM project_clips WHERE project_id = ?", (project_id,))
             cursor.execute("DELETE FROM final_videos WHERE project_id = ?", (project_id,))
-            cursor.execute("DELETE FROM ratings WHERE project_id = ?", (project_id,))
 
             cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
 
