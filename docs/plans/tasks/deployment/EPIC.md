@@ -1,7 +1,7 @@
 # Deployment Epic
 
-**Status:** TODO
-**Started:** -
+**Status:** IN_PROGRESS
+**Started:** 2026-02-01
 **Completed:** -
 
 ## Goal
@@ -16,12 +16,31 @@ Deploy the video editor to production: backend on Fly.io, frontend on Cloudflare
 
 ## Tasks
 
+### Phase 1: Staging Infrastructure
+
 | ID | Task | Status |
 |----|------|--------|
-| T100 | [Fly.io Backend](T100-flyio-backend.md) | TODO |
-| T110 | [Cloudflare Pages Frontend](T110-cloudflare-pages.md) | TODO |
+| T100 | [Fly.io Backend](T100-flyio-backend.md) | TESTING |
+| T110 | [Cloudflare Pages Frontend](T110-cloudflare-pages.md) | TESTING |
+| T125 | [CI/CD Auto-Deploy](T125-cicd-auto-deploy.md) | TESTING |
+| T126 | [Fly.io Suspend + Graceful Shutdown](T126-flyio-suspend-graceful-shutdown.md) | TODO |
+| T127 | [R2 Database Restore on Startup](T127-r2-database-restore-on-startup.md) | TODO |
+| T128 | [WebSocket Reconnection Resilience](T128-websocket-reconnection-resilience.md) | TODO |
+
+### Phase 2: Staging Features
+
+| ID | Task | Status |
+|----|------|--------|
+| T200 | User Management | TODO |
+| T210 | Wallet & Payments | TODO |
+
+### Phase 3: Production Infrastructure
+
+| ID | Task | Status |
+|----|------|--------|
+| T105 | [Production Backend Scaling](T105-production-backend-scaling.md) | TODO |
+| T115 | [Cloudflare Pages Production](T115-cloudflare-pages-production.md) | TODO |
 | T120 | [DNS & SSL Setup](T120-dns-ssl.md) | TODO |
-| T130 | [Modal Production Workspace](T130-modal-production-workspace.md) | TODO |
 
 ## Architecture
 
