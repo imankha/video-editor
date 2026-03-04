@@ -52,10 +52,14 @@ DB_SIZE_CRITICAL_THRESHOLD = 768 * 1024  # 768KB - sync performance degrades
 # Query timing threshold for slow query warnings (in seconds)
 SLOW_QUERY_THRESHOLD = 0.1  # 100ms - warn if query takes this long
 
-# Per-request context for write tracking (ContextVar is async-safe, unlike threading.local)
-# threading.local is shared across all async coroutines on the same event loop thread,
-# which causes concurrent requests to clobber each other's write flags.
-_request_has_writes: ContextVar[bool] = ContextVar('request_has_writes', default=False)
+# Per-request context for write tracking.
+#
+# IMPORTANT: We use a mutable dict instead of a plain bool because Starlette's
+# BaseHTTPMiddleware runs the route handler in a copied context (separate task).
+# ContextVar changes in the handler (setting bool to True) are NOT visible to
+# the outer middleware. But a mutable dict IS shared across the context copy —
+# mutations to the dict object are visible to both sides.
+_request_context: ContextVar[Optional[dict]] = ContextVar('request_context', default=None)
 _request_user_id: ContextVar[Optional[str]] = ContextVar('request_user_id', default=None)
 
 
@@ -148,8 +152,12 @@ class TrackedConnection:
     def _mark_write(self):
         """Mark that a write operation occurred."""
         self._has_writes = True
-        # Also mark in request context for middleware to detect
-        _request_has_writes.set(True)
+        # Also mark in request context for middleware to detect.
+        # Uses mutable dict so the change is visible across BaseHTTPMiddleware's
+        # context copy boundary (see _request_context comment above).
+        ctx = _request_context.get()
+        if ctx is not None:
+            ctx['has_writes'] = True
 
     @property
     def has_writes(self) -> bool:
@@ -297,25 +305,25 @@ def set_local_db_version(user_id: str, profile_id: str, version: Optional[int]) 
 def init_request_context() -> None:
     """Initialize request context for write tracking. Call at start of request.
 
-    Uses ContextVar (async-safe) instead of threading.local, so concurrent
-    async requests on the same event loop thread don't clobber each other.
+    Creates a mutable dict that is shared across Starlette's BaseHTTPMiddleware
+    context boundary, so writes in the route handler are visible to the
+    middleware's post-request sync logic.
     """
-    _request_has_writes.set(False)
+    _request_context.set({'has_writes': False})
     _request_user_id.set(get_current_user_id())
 
 
 def get_request_has_writes() -> bool:
     """Check if any writes occurred during this request."""
-    return _request_has_writes.get()
+    ctx = _request_context.get()
+    if ctx is None:
+        return False
+    return ctx.get('has_writes', False)
 
 
 def clear_request_context() -> None:
-    """Clear request context. Call at end of request.
-
-    ContextVar values are automatically scoped to each async task,
-    but we reset explicitly for clarity and to free references.
-    """
-    _request_has_writes.set(False)
+    """Clear request context. Call at end of request."""
+    _request_context.set(None)
     _request_user_id.set(None)
 
 
