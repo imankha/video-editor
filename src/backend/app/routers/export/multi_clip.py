@@ -37,7 +37,7 @@ from ...services.clip_pipeline import process_clip_with_pipeline
 from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR, ExportStatus
 from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
-from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2
+from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2, r2_user_prefix, R2_ENABLED
 from ...user_context import get_current_user_id, set_current_user_id
 from ...profile_context import get_current_profile_id, set_current_profile_id
 from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
@@ -1222,6 +1222,7 @@ async def export_multi_clip(
     # Capture user + profile context before async operations (context vars may drift in threads)
     captured_user_id = get_current_user_id()
     captured_profile_id = get_current_profile_id()
+    modal_user_id = r2_user_prefix(captured_user_id) if R2_ENABLED else captured_user_id
     logger.info(f"[Multi-Clip Export] Captured user context: {captured_user_id}, profile: {captured_profile_id}")
 
     try:
@@ -1312,7 +1313,7 @@ async def export_multi_clip(
             # Call unified Modal function - single container processes all clips
             result = await call_modal_clips_ai(
                 job_id=export_id,
-                user_id=captured_user_id,
+                user_id=modal_user_id,
                 source_keys=source_keys,
                 output_key=output_key,
                 clips_data=normalized_clips_data,
@@ -1371,7 +1372,7 @@ async def export_multi_clip(
                 # This creates highlight regions with detected player keyframes
                 try:
                     highlight_regions = await run_player_detection_for_highlights(
-                        user_id=captured_user_id,
+                        user_id=modal_user_id,
                         output_key=output_key,
                         source_clips=source_clips,
                         progress_callback=modal_progress_callback,

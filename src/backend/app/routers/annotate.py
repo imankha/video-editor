@@ -27,7 +27,7 @@ from app.database import get_db_connection, get_raw_clips_path, get_downloads_pa
 from app.services.clip_cache import get_clip_cache
 from app.services.ffmpeg_service import get_encoding_command_parts
 from app.services.modal_client import modal_enabled, call_modal_annotate_compilation
-from app.storage import generate_presigned_url, upload_to_r2, download_from_r2, download_from_r2_with_progress, R2_ENABLED
+from app.storage import generate_presigned_url, upload_to_r2, download_from_r2, download_from_r2_with_progress, R2_ENABLED, r2_user_prefix
 from app.user_context import get_current_user_id
 from app.websocket import manager, export_progress
 from app.constants import ExportStatus, ExportPhase
@@ -550,8 +550,9 @@ async def export_clips(
     if not export_id:
         export_id = f"annotate_{uuid.uuid4().hex[:12]}"
 
-    # Capture user_id before background task
+    # Capture user_id and R2 prefix before background task
     user_id = get_current_user_id()
+    modal_r2_prefix = r2_user_prefix(user_id) if R2_ENABLED else user_id
 
     # Build config for background processing
     config = {
@@ -571,6 +572,7 @@ async def export_clips(
         'game_videos': game_video_rows if game_id_int else [],  # T82: multi-video info
         'staged_video_path': staged_video_path,  # Local path for uploaded video
         'user_id': user_id,
+        'r2_prefix': modal_r2_prefix,  # Full R2 path prefix for Modal uploads
     }
 
     # Create export job in database (status: pending)
@@ -620,6 +622,7 @@ async def run_annotate_export_processing(export_id: str, config: dict):
     game_videos = config.get('game_videos', [])  # T82: multi-video info
     staged_video_path = config.get('staged_video_path')  # Local uploaded video
     user_id = config.get('user_id')
+    r2_prefix = config.get('r2_prefix', user_id)  # Full R2 prefix for Modal
     is_multi_video = len(game_videos) > 1
 
     # Mark job as started
@@ -897,7 +900,7 @@ async def run_annotate_export_processing(export_id: str, config: dict):
 
             result = await call_modal_annotate_compilation(
                 job_id=export_id,
-                user_id=user_id,
+                user_id=r2_prefix,
                 input_key=f"games/{video_filename}" if video_filename else None,
                 output_key=f"final_videos/{final_filename}",
                 clips=all_clips,

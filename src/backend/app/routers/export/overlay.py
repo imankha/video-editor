@@ -34,7 +34,7 @@ _frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ov
 from ...websocket import export_progress, manager
 from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path, get_uploads_path
 from ...services.ffmpeg_service import get_encoding_command_parts
-from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2, download_from_r2_with_progress
+from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2, download_from_r2_with_progress, r2_user_prefix, R2_ENABLED
 from ...user_context import get_current_user_id
 from ...highlight_transform import (
     transform_all_regions_to_raw,
@@ -1583,6 +1583,7 @@ async def render_overlay(request: OverlayRenderRequest):
     effect_type = request.effect_type
 
     user_id = get_current_user_id()
+    modal_user_id = r2_user_prefix(user_id) if R2_ENABLED else user_id
 
     logger.info(f"[Overlay Render] Starting for project {project_id}, user: {user_id}, Modal: {modal_enabled()}")
 
@@ -1799,7 +1800,7 @@ async def render_overlay(request: OverlayRenderRequest):
         # Call unified interface - routes to Modal or local_overlay automatically
         result = await call_modal_overlay_auto(
             job_id=export_id,
-            user_id=user_id,
+            user_id=modal_user_id,
             input_key=f"working_videos/{working_filename}",
             output_key=f"final_videos/{output_filename}",
             highlight_regions=highlight_regions,

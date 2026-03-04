@@ -34,7 +34,7 @@ from pathlib import Path
 from app.database import get_db_connection, get_raw_clips_path, get_games_path
 from app.services.modal_client import modal_enabled, call_modal_extract_clip
 from app.services.ffmpeg_service import extract_clip as ffmpeg_extract_clip
-from app.storage import R2_ENABLED, download_from_r2, download_from_r2_global, upload_to_r2
+from app.storage import R2_ENABLED, download_from_r2, download_from_r2_global, upload_to_r2, r2_user_prefix
 from app.websocket import broadcast_extraction_event
 from app.user_context import get_current_user_id, set_current_user_id
 from app.profile_context import get_current_profile_id, set_current_profile_id
@@ -68,6 +68,7 @@ def enqueue_clip_extraction(
 
     params = json.dumps({
         "user_id": user_id,
+        "r2_prefix": r2_user_prefix(user_id) if R2_ENABLED else user_id,
         "input_key": f"games/{video_filename}",
         "output_key": f"raw_clips/{clip_filename}",
         "start_time": start_time,
@@ -197,12 +198,14 @@ async def _process_clip_extraction(task_info: dict) -> dict:
     clip_filename = params.get("clip_filename")
     user_id = params["user_id"]
 
+    modal_user_id = params.get("r2_prefix", user_id)
+
     logger.info(f"[ModalQueue] Processing clip extraction: task={task_id}, clip={clip_id}")
 
     if modal_enabled():
         # Use Modal (cloud GPU)
         result = await call_modal_extract_clip(
-            user_id=user_id,
+            user_id=modal_user_id,
             input_key=params["input_key"],
             output_key=params["output_key"],
             start_time=params["start_time"],

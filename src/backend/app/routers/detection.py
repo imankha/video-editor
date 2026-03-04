@@ -47,6 +47,7 @@ from ..storage import (
     R2_BUCKET,
     r2_key,
     R2_ENABLED,
+    r2_user_prefix,
 )
 
 logger = logging.getLogger(__name__)
@@ -371,10 +372,11 @@ async def detect_players(request: PlayerDetectionRequest):
             )
 
         # Cache miss - call Modal GPU
-        logger.info(f"[Modal] Player detection for project {request.project_id}: {user_id}/{input_key} frame {request.frame_number}")
+        modal_user_id = r2_user_prefix(user_id) if R2_ENABLED else user_id
+        logger.info(f"[Modal] Player detection for project {request.project_id}: {modal_user_id}/{input_key} frame {request.frame_number}")
 
         result = await call_modal_detect_players(
-            user_id=user_id,
+            user_id=modal_user_id,
             input_key=input_key,
             frame_number=request.frame_number,
             confidence_threshold=request.confidence_threshold or 0.5,
@@ -406,10 +408,11 @@ async def detect_players(request: PlayerDetectionRequest):
 
     # If R2 video provided and Modal is enabled, use Modal GPU
     if request.user_id and request.input_key and modal_enabled():
-        logger.info(f"[Modal] Player detection for {request.user_id}/{request.input_key} frame {request.frame_number}")
+        modal_uid = r2_user_prefix(request.user_id) if R2_ENABLED else request.user_id
+        logger.info(f"[Modal] Player detection for {modal_uid}/{request.input_key} frame {request.frame_number}")
 
         result = await call_modal_detect_players(
-            user_id=request.user_id,
+            user_id=modal_uid,
             input_key=request.input_key,
             frame_number=request.frame_number,
             confidence_threshold=request.confidence_threshold or 0.5,

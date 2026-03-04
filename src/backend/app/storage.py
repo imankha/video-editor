@@ -114,6 +114,20 @@ def r2_key(user_id: str, path: str) -> str:
     return f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/{path}"
 
 
+def r2_user_prefix(user_id: str) -> str:
+    """Return the R2 key prefix for a user+profile.
+
+    Format: {env}/users/{user_id}/profiles/{profile_id}
+
+    Use this when passing the user's R2 "folder" to external services
+    (e.g., Modal) that prepend it to relative paths like
+    "final_videos/xxx.mp4".
+    """
+    from .profile_context import get_current_profile_id
+    profile_id = get_current_profile_id()
+    return f"{APP_ENV}/users/{user_id}/profiles/{profile_id}"
+
+
 def download_from_r2(user_id: str, relative_path: str, local_path: Path, progress_callback=None) -> bool:
     """
     Download a file from R2 to local filesystem.
