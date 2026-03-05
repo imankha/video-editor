@@ -33,11 +33,8 @@ from ...services.ffmpeg_service import get_video_duration
 from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
 from ...highlight_transform import get_output_duration
 from .multi_clip import (
-    calculate_detection_timestamps,
     run_player_detection_for_highlights,
-    run_local_detection_on_video_file,
     generate_default_highlight_regions,
-    DEFAULT_HIGHLIGHT_REGION_DURATION,
 )
 from ...constants import ExportStatus, DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 from pydantic import BaseModel
@@ -767,26 +764,20 @@ async def render_project(request: RenderRequest, http_request: Request):
                 export_progress[export_id] = progress_data
                 await manager.send_progress(export_id, progress_data)
 
-            # Run batch player detection on the working video
-            # Download from R2 since unified interface uploads there (local_framing uses its own temp dir)
-            # Note: download_from_r2 is already imported at module level
-            if not await asyncio.to_thread(download_from_r2, user_id, output_key, Path(output_path)):
-                logger.warning(f"[Render] Failed to download working video for detection, using defaults")
-                highlight_regions = generate_default_highlight_regions(source_clips)
-            else:
-                try:
-                    highlight_regions = await run_local_detection_on_video_file(
-                        video_path=output_path,
-                        source_clips=source_clips,
-                    )
-                    logger.info(f"[Render] Player detection complete: {len(highlight_regions)} regions with detected keyframes")
-                    # DEBUG: Log first region's keyframes to verify detection quality
-                    if highlight_regions and highlight_regions[0].get('keyframes'):
-                        first_kf = highlight_regions[0]['keyframes'][:3]  # First 3 keyframes
-                        logger.info(f"[Render] DEBUG - First region keyframes sample: {first_kf}")
-                except Exception as det_error:
-                    logger.warning(f"[Render] Player detection failed, using defaults: {det_error}")
-                    highlight_regions = generate_default_highlight_regions(source_clips)
+            # Use unified detection function (Modal GPU when available, local YOLO fallback)
+            # This routes to Modal on Fly.io where ultralytics isn't installed locally
+            highlight_regions = await run_player_detection_for_highlights(
+                user_id=user_id,
+                output_key=output_key,
+                source_clips=source_clips,
+                progress_callback=detection_progress_callback,
+            )
+            total_detections = sum(
+                len(d.get('boxes', []))
+                for r in highlight_regions
+                for d in r.get('detections', [])
+            )
+            logger.info(f"[Render] Player detection complete: {len(highlight_regions)} regions, {total_detections} total player detections")
 
         highlights_json = json.dumps(highlight_regions)
         logger.info(f"[Render] DEBUG - highlights_json length: {len(highlights_json)} chars")

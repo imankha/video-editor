@@ -1457,7 +1457,7 @@ async def get_overlay_data(project_id: int):
 
         # Get latest working video's overlay data for this project
         cursor.execute("""
-            SELECT highlights_data, text_overlays, effect_type, highlight_color
+            SELECT highlights_data, text_overlays, effect_type, highlight_color, duration
             FROM working_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -1470,6 +1470,7 @@ async def get_overlay_data(project_id: int):
         text_overlays = []
         effect_type = DEFAULT_HIGHLIGHT_EFFECT.value
         highlight_color = None  # Default to None (user hasn't selected a color yet)
+        video_duration = None
         from_raw_clip = False
 
         if result:
@@ -1487,6 +1488,7 @@ async def get_overlay_data(project_id: int):
 
             effect_type = normalize_effect_type(result['effect_type'])
             highlight_color = result['highlight_color']  # Can be None
+            video_duration = result['duration']  # Working video duration (seconds)
 
         # If no project-specific highlights, check raw_clips for defaults
         if not highlights:
@@ -1501,7 +1503,8 @@ async def get_overlay_data(project_id: int):
             'effect_type': effect_type,
             'highlight_color': highlight_color,
             'has_data': len(highlights) > 0 or len(text_overlays) > 0,
-            'from_raw_clip': from_raw_clip
+            'from_raw_clip': from_raw_clip,
+            'video_duration': video_duration,
         })
 
 

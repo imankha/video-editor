@@ -308,8 +308,13 @@ export function OverlayScreen({
   // Handle fresh export transition - load highlight regions from backend
   // The backend now creates regions with player detection data during export
   // We must fetch from backend to get that detection data (not create from clip metadata)
+  //
+  // IMPORTANT: This effect does NOT depend on effectiveOverlayMetadata. The working
+  // video loads asynchronously from a presigned URL, and waiting for it creates a race
+  // condition where overlay data (including player tracking) never loads if the video
+  // is slow to load. Instead, we use video_duration from the backend response.
   useEffect(() => {
-    if (overlayClipMetadata && effectiveOverlayMetadata && projectId && overlaySyncState !== 'loading') {
+    if (overlayClipMetadata && projectId && overlaySyncState !== 'loading') {
       console.log('[OverlayScreen] Fresh export detected, fetching overlay data from backend');
 
       // Clear clip metadata to prevent re-triggering
@@ -324,17 +329,25 @@ export function OverlayScreen({
           const response = await fetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`);
           const data = await response.json();
 
+          // Use video_duration from backend, fall back to video metadata or region end times
+          const videoDuration = data.video_duration
+            || effectiveOverlayMetadata?.duration
+            || Math.max(...(data.highlights_data || []).map(r => r.end_time || 0), 0)
+            || 0;
+
           if (data.has_data && data.highlights_data?.length > 0) {
             // Reset existing regions first
             resetHighlightRegions();
 
-            restoreHighlightRegions(data.highlights_data, effectiveOverlayMetadata.duration);
-            console.log('[OverlayScreen] Restored', data.highlights_data.length, 'highlight regions with detection data');
+            restoreHighlightRegions(data.highlights_data, videoDuration);
+            console.log('[OverlayScreen] Restored', data.highlights_data.length, 'highlight regions with detection data, duration:', videoDuration);
 
             // Check if detection data was loaded
             const hasDetections = data.highlights_data.some(r => r.detections?.some(d => d.boxes?.length > 0));
             if (hasDetections) {
               console.log('[OverlayScreen] Detection data loaded - green bar should appear');
+            } else {
+              console.log('[OverlayScreen] No detection boxes in highlight regions (detection may have found no players)');
             }
           } else {
             // Fallback: create default region if backend has no data
@@ -362,7 +375,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [overlayClipMetadata, effectiveOverlayMetadata, projectId, overlaySyncState, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId]);
+  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
