@@ -435,6 +435,15 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     if not keyframes:
         return frame
 
+    # Filter keyframes to region bounds — keyframes outside [start_time, end_time]
+    # should not influence rendering (user may have shrunk the region)
+    start_time = region.get("start_time")
+    end_time = region.get("end_time")
+    if start_time is not None and end_time is not None:
+        keyframes = [kf for kf in keyframes if start_time <= kf["time"] <= end_time]
+        if not keyframes:
+            return frame
+
     # Find surrounding keyframes for interpolation
     kf_before = None
     kf_after = None

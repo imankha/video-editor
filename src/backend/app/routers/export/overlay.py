@@ -550,7 +550,13 @@ def _process_frames_to_ffmpeg(
 
             # Render highlight if in a region
             if active_region:
-                highlight = KeyframeInterpolator.interpolate_highlight(active_region['keyframes'], current_time)
+                # Filter keyframes to region bounds — keyframes outside [start_time, end_time]
+                # should not influence rendering (user may have shrunk the region)
+                region_keyframes = [
+                    kf for kf in active_region['keyframes']
+                    if active_region['start_time'] <= kf['time'] <= active_region['end_time']
+                ]
+                highlight = KeyframeInterpolator.interpolate_highlight(region_keyframes, current_time)
                 if highlight is not None:
                     # Check if keyframe coordinates need to be scaled from detection space to working video space
                     # Detection may have run on source video (e.g., 2560x1440) but rendering is on working video (e.g., 1080x1920)
