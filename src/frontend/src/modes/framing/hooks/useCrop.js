@@ -222,7 +222,6 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
           const expectedIsLandscape = expectedRatio > 1;
 
           if (keyframeIsLandscape !== expectedIsLandscape) {
-            console.log('[useCrop] Orientation mismatch - reinitializing. Keyframe ratio:', keyframeRatio.toFixed(2), 'Expected:', expectedRatio.toFixed(2));
             shouldInitialize = true;
           }
         }

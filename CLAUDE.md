@@ -202,6 +202,67 @@ cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
 
 When the system encounters an invalid state, it should log appropriately and fail visibly - not silently "fix" itself. If you find yourself writing code to handle "impossible" states from your own codebase, fix the source of those states instead.
 
+## Log handling
+
+This project uses the `reduce_log` MCP tool for log analysis. Follow these rules:
+
+### NEVER read raw log files into context
+
+When working with log files, ALWAYS use the `reduce_log` tool with a `file` parameter.
+NEVER use the Read tool or cat/head/tail on log files. Raw logs waste context tokens.
+
+### Always include tail
+
+Every `reduce_log` call MUST include a `tail` parameter to cap input size. Use `tail: 200`
+as a default. Only increase if the user explicitly needs more history.
+
+### Command output → file → reduce_log
+
+When running commands that produce verbose output, redirect to a temp file first:
+
+    npm test 2>&1 > /tmp/test-output.log
+    # Then analyze with:
+    reduce_log({ file: "/tmp/test-output.log", tail: 200, level: "error" })
+
+### Choose the right filter on the FIRST call
+
+Each `reduce_log` call loads its output into your context. Do NOT call it broadly and
+then call it again with filters — the broad output is already in your context and you've
+wasted tokens. Pick the right filter up front:
+
+- **Errors only** (most common — use this by default for debugging):
+  `reduce_log({ file: "app.log", tail: 200, level: "error" })`
+
+- **Errors with surrounding context** (see what happened before each error):
+  `reduce_log({ file: "app.log", tail: 200, level: "error", context: 10 })`
+
+- **Warnings and above**:
+  `reduce_log({ file: "app.log", tail: 200, level: "warning" })`
+
+- **Search for a specific pattern**:
+  `reduce_log({ file: "app.log", tail: 200, grep: "timeout|connection" })`
+
+- **Filter by component/module**:
+  `reduce_log({ file: "app.log", tail: 200, component: "database" })`
+
+- **Time window**:
+  `reduce_log({ file: "app.log", tail: 500, time_range: "13:02-13:05" })`
+
+- **Full compressed output** (only when you truly need everything):
+  `reduce_log({ file: "app.log", tail: 200 })`
+
+The `context` parameter (default 3) controls how many lines before and after each
+matching line are included. Increase it (e.g., `context: 10`) when you need to see
+what led up to an error.
+
+### If the user pastes a log directly into chat
+
+The raw text is already in your context — `reduce_log` cannot undo that. The context
+tokens are spent. Remind the user to use the clipboard workflow instead:
+
+    "Next time, copy the log and type /project:logdump — I'll get the reduced version
+     without the raw log entering our conversation."
+
 ## Resources
 - [src/frontend/CLAUDE.md](src/frontend/CLAUDE.md) - Frontend skills and patterns
 - [src/backend/CLAUDE.md](src/backend/CLAUDE.md) - Backend skills and patterns

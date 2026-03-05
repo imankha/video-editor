@@ -186,9 +186,11 @@ export function FramingContainer({
 
     return clips.map(clip => {
       if (clip.id === selectedClipId) {
-        return {
+        // Only override cropKeyframes when the hook has initialized.
+        // Before useCrop auto-init, getKeyframesForExport() returns [] which
+        // would erase the clip's existing crop_data.
+        const merged = {
           ...clip,
-          cropKeyframes: currentClipExportKeyframes,
           segments: {
             boundaries: segmentBoundaries,
             segmentSpeeds: segmentSpeeds,
@@ -196,6 +198,10 @@ export function FramingContainer({
           },
           trimRange: trimRange
         };
+        if (currentClipExportKeyframes.length > 0) {
+          merged.cropKeyframes = currentClipExportKeyframes;
+        }
+        return merged;
       }
 
       // T250: Raw clips store crop_data (JSON string), not cropKeyframes (array).
@@ -244,10 +250,10 @@ export function FramingContainer({
 
     try {
       // Save to local clip manager state (raw backend JSON format)
+      // T280: No timing_data — trimRange lives in segments_data only
       updateClipData(selectedClipId, {
         segments_data: JSON.stringify(segmentState),
         crop_data: JSON.stringify(keyframes),
-        timing_data: JSON.stringify({ trimRange: trimRange }),
       });
 
       // Save to backend (use frame-based keyframes for storage - FFmpeg conversion happens at export)
@@ -260,12 +266,10 @@ export function FramingContainer({
 
         // If backend created a new version, update local clip's id
         if (result?.newClipId) {
-          console.log('[FramingContainer] Clip versioned, updating id:', currentClip.id, '->', result.newClipId);
           updateClipData(selectedClipId, { id: result.newClipId });
         }
       }
 
-      console.log('[FramingContainer] Saved framing state for clip:', selectedClipId);
     } catch (e) {
       console.error('[FramingContainer] Failed to save framing state:', e);
     }
@@ -283,7 +287,6 @@ export function FramingContainer({
    */
   const handleCropComplete = useCallback((cropData) => {
     const frame = Math.round(currentTime * framerate);
-    console.log(`[FramingContainer] Crop at ${currentTime.toFixed(2)}s (frame ${frame})`);
 
     clipHasUserEditsRef.current = true;
     addOrUpdateKeyframe(currentTime, cropData, duration);
@@ -322,7 +325,6 @@ export function FramingContainer({
     const segment = segments[segmentIndex];
     const isCurrentlyTrimmed = segment.isTrimmed;
 
-    console.log(`[FramingContainer] Trim segment ${segmentIndex}`, { segment, isCurrentlyTrimmed });
 
     if (!isCurrentlyTrimmed) {
       // We're about to trim this segment
@@ -358,13 +360,11 @@ export function FramingContainer({
           // Use tolerance for boundary checks to handle floating point precision
           if (kfTime >= segment.start - TOLERANCE && kfTime <= segment.end + TOLERANCE) {
             cropDataToPreserve = getCropDataAtTime(kfTime);
-            console.log(`[FramingContainer] Found keyframe in trimmed range at time ${kfTime}`);
             break;
           }
         }
       }
 
-      console.log(`[FramingContainer] Crop data to preserve:`, cropDataToPreserve, `boundaryTime:`, boundaryTime);
 
       // Delete crop keyframes in trimmed range
       deleteKeyframesInRange(segment.start, segment.end, duration);
@@ -372,12 +372,10 @@ export function FramingContainer({
       // Reconstitute permanent keyframe at boundary
       // This ensures there's always a keyframe at the new end/start of the visible timeline
       if (cropDataToPreserve && boundaryTime !== undefined) {
-        console.log(`[FramingContainer] Reconstituting permanent keyframe at ${boundaryTime}`);
         addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration, 'permanent');
       } else if (boundaryTime !== undefined) {
         // Emergency fallback: if we couldn't preserve any data, get current interpolated crop
         // This shouldn't happen in normal use, but ensures we always have boundary keyframes
-        console.warn(`[FramingContainer] No crop data found, using current interpolated state`);
         const fallbackData = getCropDataAtTime(boundaryTime);
         if (fallbackData) {
           addOrUpdateKeyframe(boundaryTime, fallbackData, duration, 'permanent');

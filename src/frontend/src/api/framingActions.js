@@ -4,10 +4,9 @@
  * Provides gesture-based API for framing modifications instead of full-blob saves.
  * Each user action (add keyframe, set speed, etc.) is sent as an atomic operation.
  *
- * Benefits:
- * - No overwrites from concurrent edits
- * - Efficient (only sends what changed)
- * - Handles version creation for exported clips automatically
+ * Gesture actions always update in-place (never create new versions).
+ * Version creation for exported clips is handled by the PUT endpoint
+ * (saveCurrentClipState), which sends complete state.
  */
 
 import { API_BASE } from '../config';
