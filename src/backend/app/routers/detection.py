@@ -327,8 +327,8 @@ async def detect_players(request: PlayerDetectionRequest):
     - user_id + input_key for R2-based videos (uses Modal GPU)
     - project_id for project-based detection (backend looks up working video R2 path)
     """
-    # If project_id provided, look up working video R2 path and use Modal
-    if request.project_id and modal_enabled():
+    # If project_id provided, look up working video and detect
+    if request.project_id:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -347,13 +347,11 @@ async def detect_players(request: PlayerDetectionRequest):
 
         user_id = get_current_user_id()
         video_filename = row['filename']
-        input_key = f"working_videos/{video_filename}"
 
         # Check R2 cache first
         cached_result = get_cached_detection(user_id, video_filename, request.frame_number)
         if cached_result:
             logger.info(f"[Cache] Player detection cache hit for project {request.project_id} frame {request.frame_number}")
-            # Convert cached result to response model
             detections = [
                 Detection(
                     bbox=BoundingBox(**d["bbox"]),
@@ -370,23 +368,63 @@ async def detect_players(request: PlayerDetectionRequest):
                 video_height=cached_result.get("video_height", 0)
             )
 
-        # Cache miss - call Modal GPU
-        logger.info(f"[Modal] Player detection for project {request.project_id}: {user_id}/{input_key} frame {request.frame_number}")
+        if modal_enabled():
+            # Use Modal GPU
+            input_key = f"working_videos/{video_filename}"
+            logger.info(f"[Modal] Player detection for project {request.project_id}: {user_id}/{input_key} frame {request.frame_number}")
 
-        result = await call_modal_detect_players(
-            user_id=user_id,
-            input_key=input_key,
-            frame_number=request.frame_number,
-            confidence_threshold=request.confidence_threshold or 0.5,
-        )
+            result = await call_modal_detect_players(
+                user_id=user_id,
+                input_key=input_key,
+                frame_number=request.frame_number,
+                confidence_threshold=request.confidence_threshold or 0.5,
+            )
 
-        if result.get("status") == "error":
-            raise HTTPException(status_code=500, detail=result.get("error", "Modal detection failed"))
+            if result.get("status") == "error":
+                raise HTTPException(status_code=500, detail=result.get("error", "Modal detection failed"))
+        else:
+            # Use local YOLO
+            from ..database import get_working_videos_path
+            video_path = str(get_working_videos_path() / video_filename)
+            if not os.path.exists(video_path):
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Working video not found locally: {video_filename}. Export from framing mode first."
+                )
+
+            logger.info(f"[Local] Player detection for project {request.project_id}: {video_path} frame {request.frame_number}")
+            frame, width, height = extract_frame(video_path, request.frame_number)
+            model = get_yolo_model()
+            results = model(frame, verbose=False, conf=request.confidence_threshold or 0.5)
+
+            det_list = []
+            for r in results:
+                if r.boxes is None:
+                    continue
+                for box in r.boxes:
+                    class_id = int(box.cls[0])
+                    if class_id != PERSON_CLASS_ID:
+                        continue
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    det_list.append({
+                        "bbox": {"x": (x1+x2)/2, "y": (y1+y2)/2, "width": x2-x1, "height": y2-y1},
+                        "confidence": float(box.conf[0]),
+                        "class_name": "person",
+                        "class_id": class_id,
+                    })
+            det_list.sort(key=lambda d: d["confidence"], reverse=True)
+            result = {
+                "status": "success",
+                "frame_number": request.frame_number,
+                "detections": det_list,
+                "video_width": width,
+                "video_height": height,
+            }
 
         # Cache the result for future requests
         cache_detection_result(user_id, video_filename, request.frame_number, result)
 
-        # Convert Modal result to response model
+        # Convert result to response model
         detections = [
             Detection(
                 bbox=BoundingBox(**d["bbox"]),
@@ -434,22 +472,6 @@ async def detect_players(request: PlayerDetectionRequest):
             detections=detections,
             video_width=result.get("video_width", 0),
             video_height=result.get("video_height", 0)
-        )
-
-    # Fallback to local detection
-    if request.user_id and request.input_key:
-        logger.warning("R2 video provided but Modal is disabled - falling back to local detection is not supported")
-        raise HTTPException(
-            status_code=400,
-            detail="R2 video detection requires Modal to be enabled (set MODAL_ENABLED=true)"
-        )
-
-    # Project-based detection requires Modal (working videos are in R2)
-    if request.project_id:
-        logger.warning("Project-based detection requires Modal to be enabled")
-        raise HTTPException(
-            status_code=400,
-            detail="Project-based detection requires Modal to be enabled (set MODAL_ENABLED=true)"
         )
 
     # Resolve video path from ID or direct path
@@ -543,9 +565,6 @@ async def check_detection_cache(project_id: int, frame_number: int):
         - cached: bool - whether the frame is cached
         - detections: list - detection results (if cached)
     """
-    if not modal_enabled():
-        return {"cached": False, "detections": [], "reason": "Modal not enabled"}
-
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
