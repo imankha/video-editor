@@ -1,6 +1,6 @@
 # T260: Framing Audio Toggle Ignored
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-03-04
