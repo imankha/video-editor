@@ -104,11 +104,12 @@ def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_t
 
     model = get_yolo_model()
     if model is None:
+        logger.error(f"[Detection] YOLO model is None - ultralytics may not be installed")
         return {'timestamp': timestamp, 'boxes': []}
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        logger.error(f"Cannot open video: {video_path}")
+        logger.error(f"[Detection] Cannot open video: {video_path} (exists={os.path.exists(video_path)})")
         return {'timestamp': timestamp, 'boxes': []}
 
     try:
@@ -774,18 +775,27 @@ async def run_player_detection_for_highlights(
                 local_video_path=str(local_video_path) if local_video_path else None,
             )
 
+        logger.info(f"[Player Detection] Result: status={detection_result.get('status')}, "
+                    f"detections={len(detection_result.get('detections', []))}, "
+                    f"video_size={detection_result.get('video_width')}x{detection_result.get('video_height')}, "
+                    f"error={detection_result.get('error')}")
+
         if detection_result.get("status") != "success":
-            logger.warning(f"[Player Detection] Detection failed: {detection_result.get('error')}, using default regions")
+            logger.warning(f"[Player Detection] Detection FAILED: {detection_result.get('error')}, using default regions")
             return generate_default_highlight_regions(source_clips)
 
         detections = detection_result.get("detections", [])
         video_width = detection_result.get("video_width", 810)
         video_height = detection_result.get("video_height", 1440)
 
-        logger.info(f"[Player Detection] Got {len(detections)} detection results, video size: {video_width}x{video_height}")
+        # Log per-timestamp detection counts
+        for det in detections:
+            ts = det.get("timestamp", "?")
+            boxes = det.get("boxes", [])
+            logger.info(f"[Player Detection] t={ts}s: {len(boxes)} players detected")
 
     except Exception as e:
-        logger.error(f"[Player Detection] Detection error: {e}, using default regions")
+        logger.error(f"[Player Detection] Detection EXCEPTION: {e}, using default regions", exc_info=True)
         return generate_default_highlight_regions(source_clips)
 
     # Build detection lookup by timestamp (with small tolerance for floating point)

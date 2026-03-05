@@ -779,6 +779,13 @@ async def render_project(request: RenderRequest, http_request: Request):
                 for d in r.get('detections', [])
             )
             logger.info(f"[Render] Player detection complete: {len(highlight_regions)} regions, {total_detections} total player detections")
+            for i, region in enumerate(highlight_regions):
+                det_count = len(region.get('detections', []))
+                boxes_per_det = [len(d.get('boxes', [])) for d in region.get('detections', [])]
+                logger.info(f"[Render] Region {i}: id={region.get('id')}, "
+                           f"time={region.get('start_time')}-{region.get('end_time')}, "
+                           f"detections={det_count}, boxes_per_det={boxes_per_det}, "
+                           f"videoWidth={region.get('videoWidth')}, videoHeight={region.get('videoHeight')}")
 
         highlights_json = json.dumps(highlight_regions)
         logger.info(f"[Render] highlights_json length: {len(highlights_json)} chars, sample: {highlights_json[:200]}")

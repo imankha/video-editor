@@ -576,10 +576,12 @@ async def check_detection_cache(project_id: int, frame_number: int):
         row = cursor.fetchone()
 
     if not row or not row['filename']:
+        logger.info(f"[Cache] project={project_id} frame={frame_number}: no working video found")
         return {"cached": False, "detections": [], "reason": "Working video not found"}
 
     user_id = get_current_user_id()
     video_filename = row['filename']
+    logger.debug(f"[Cache] project={project_id} frame={frame_number}: checking cache for {video_filename}")
 
     # Try to get cached result
     cached_result = get_cached_detection(user_id, video_filename, frame_number)
