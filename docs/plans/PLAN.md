@@ -119,6 +119,22 @@ Deploy to production domains with proper scaling.
 |----|------|--------|--------|-------|-------|
 | T249 | [Extraction Recovery](tasks/T249-extraction-recovery.md) | DONE | 5 | 4 | Stuck extractions: no timeout, no retry, no failed UI state |
 | T250 | [Clip Store Unification](tasks/T250-clip-store-unification.md) | DONE | 5 | 4 | Eliminate dual-store sync: merge useProjectClips into Zustand, compute flags, use backend IDs |
+| T260 | [Framing Audio Toggle Ignored](tasks/T260-framing-audio-toggle-ignored.md) | TODO | 5 | 3 | Audio still present when toggle is off |
+| T270 | [Overlay Renders Outside Region](tasks/T270-overlay-renders-outside-region.md) | TODO | 4 | 4 | Overlay extends beyond shrunk region bounds |
+
+### Mobile Responsive (TODO)
+[tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
+
+Make the app usable on mobile phones. Currently desktop-first layout breaks on narrow screens.
+
+| ID | Task | Status | Impact | Cmplx | Notes |
+|----|------|--------|--------|-------|-------|
+| T280 | [Mobile Navigation](tasks/mobile-responsive/T280-mobile-navigation.md) | TODO | 7 | 3 | Nav buttons truncated/clipped on all screens |
+| T290 | [Mobile Home Screen](tasks/mobile-responsive/T290-mobile-home-screen.md) | TODO | 5 | 3 | Gallery button hidden, game card stats messy |
+| T300 | [Mobile Annotate Screen](tasks/mobile-responsive/T300-mobile-annotate-screen.md) | TODO | 5 | 4 | Content bleeds off right edge |
+| T310 | [Mobile Editor Layout](tasks/mobile-responsive/T310-mobile-editor-layout.md) | TODO | 8 | 6 | Two-column editor unusable, needs vertical stack |
+| T320 | [Mobile Video Preview](tasks/mobile-responsive/T320-mobile-video-preview.md) | TODO | 6 | 4 | Tiny preview, crop handles too small for touch |
+| T330 | [Mobile Video Players](tasks/mobile-responsive/T330-mobile-video-players.md) | TODO | 7 | 4 | Touch controls, scrubbing, iOS/Android quirks |
 
 ### Phase 4: Post-Launch Polish
 
