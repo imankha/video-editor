@@ -195,26 +195,16 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
 
             project = archive["project"]
             if not existing:
-                # Full restore — insert project row (without working_video_id to avoid FK issue)
-                columns = [c for c in project.keys() if c != "working_video_id"]
+                # Full restore — insert project row (without working_video_id FK
+                # to avoid constraint issues; we set it after inserting working_videos)
+                proj_data = {k: v for k, v in project.items() if k != "working_video_id"}
+                columns = list(proj_data.keys())
                 placeholders = ", ".join(["?" for _ in columns])
                 column_names = ", ".join(columns)
-                values = [project[col] for col in columns]
+                values = [proj_data[col] for col in columns]
 
                 cursor.execute(
                     f"INSERT INTO projects ({column_names}) VALUES ({placeholders})",
-                    values
-                )
-
-            # Insert working_videos FIRST (projects.working_video_id FK references this)
-            for video in archive.get("working_videos", []):
-                columns = list(video.keys())
-                placeholders = ", ".join(["?" for _ in columns])
-                column_names = ", ".join(columns)
-                values = [video[col] for col in columns]
-
-                cursor.execute(
-                    f"INSERT INTO working_videos ({column_names}) VALUES ({placeholders})",
                     values
                 )
 
@@ -230,11 +220,24 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
                     values
                 )
 
-            # Now set working_video_id (FK target exists) and restored_at
+            # Insert working_videos (must happen before setting FK on project)
+            for video in archive.get("working_videos", []):
+                columns = list(video.keys())
+                placeholders = ", ".join(["?" for _ in columns])
+                column_names = ", ".join(columns)
+                values = [video[col] for col in columns]
+
+                cursor.execute(
+                    f"INSERT INTO working_videos ({column_names}) VALUES ({placeholders})",
+                    values
+                )
+
+            # Now safe to set working_video_id FK and restored_at
             cursor.execute(
                 "UPDATE projects SET working_video_id = ?, restored_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (project.get("working_video_id"), project_id)
             )
+            logger.info(f"Project {project_id} {'updated' if existing else 'inserted'} with working data")
 
             conn.commit()
 
