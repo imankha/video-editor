@@ -15,15 +15,14 @@ Environment Variables:
 Usage:
     from app.services.modal_client import modal_enabled, call_modal_overlay
 
-    if modal_enabled():
-        result = await call_modal_overlay(
-            job_id="...",
-            user_id="a",
-            input_key="working_videos/input.mp4",
-            output_key="working_videos/output.mp4",
-            highlight_regions=[...],
-            effect_type="dark_overlay"
-        )
+    result = await call_modal_overlay(
+        job_id="...",
+        user_id="a",  # Raw user_id — R2 prefix conversion is handled internally
+        input_key="working_videos/input.mp4",
+        output_key="working_videos/output.mp4",
+        highlight_regions=[...],
+        effect_type="dark_overlay"
+    )
 """
 
 import os
@@ -145,6 +144,20 @@ _create_annotated_compilation_fn = None
 def modal_enabled() -> bool:
     """Check if Modal processing is enabled."""
     return _modal_enabled
+
+
+def _resolve_modal_user_id(user_id: str) -> str:
+    """Convert raw user_id to R2-prefixed user_id for Modal functions.
+
+    Modal functions construct R2 paths as {user_id}/{key}, so user_id must
+    be the full R2 prefix (e.g. "staging/users/a/profiles/default").
+
+    This centralizes the conversion that was previously duplicated in every
+    caller (7 sites across 5 files), eliminating a recurring bug class where
+    callers forgot to convert and Modal couldn't find files in R2.
+    """
+    from app.storage import r2_user_prefix, R2_ENABLED
+    return r2_user_prefix(user_id) if R2_ENABLED else user_id
 
 
 def _get_render_overlay_fn():
@@ -355,7 +368,7 @@ async def call_modal_framing_ai(
 
     Args:
         job_id: Unique export job identifier
-        user_id: User folder in R2
+        user_id: Raw user ID (R2 prefix conversion handled internally)
         input_key: R2 key for source video
         output_key: R2 key for output video
         keyframes: Crop keyframes [{time, x, y, width, height}, ...]
@@ -406,6 +419,9 @@ async def call_modal_framing_ai(
             include_audio=include_audio,
             export_mode=export_mode,
         )
+
+    # Convert raw user_id to R2-prefixed user_id for Modal
+    user_id = _resolve_modal_user_id(user_id)
 
     # Determine parallelization strategy based on video duration
     effective_duration = video_duration or 10  # Default to 10s if unknown
@@ -554,7 +570,7 @@ async def call_modal_clips_ai(
 
     Args:
         job_id: Unique export job identifier
-        user_id: User folder in R2
+        user_id: Raw user ID (R2 prefix conversion handled internally)
         source_keys: List of R2 keys for source videos
         output_key: R2 key for output video
         clips_data: List of clip configs, each with:
@@ -575,6 +591,9 @@ async def call_modal_clips_ai(
     """
     if not _modal_enabled:
         raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
+
+    # Convert raw user_id to R2-prefixed user_id for Modal
+    user_id = _resolve_modal_user_id(user_id)
 
     total_clips = len(clips_data)
     logger.info(f"[Modal] Calling process_clips_ai for job {job_id} ({total_clips} clip(s))")
@@ -739,7 +758,7 @@ async def call_modal_multi_clip(
 
     Args:
         job_id: Unique export job identifier
-        user_id: User folder in R2
+        user_id: Raw user ID (R2 prefix conversion handled internally)
         source_keys: List of R2 keys for source clips
         output_key: R2 key for final output
         clips_data: Per-clip config [{cropKeyframes, segmentsData, clipIndex}, ...]
@@ -757,6 +776,9 @@ async def call_modal_multi_clip(
     """
     if not _modal_enabled:
         raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
+
+    # Convert raw user_id to R2-prefixed user_id for Modal
+    user_id = _resolve_modal_user_id(user_id)
 
     process_multi_clip = _get_process_multi_clip_fn()
 
@@ -916,7 +938,7 @@ async def call_modal_overlay(
 
     Args:
         job_id: Unique export job identifier
-        user_id: User folder in R2
+        user_id: Raw user ID (R2 prefix conversion handled internally)
         input_key: R2 key for working video
         output_key: R2 key for output video
         highlight_regions: Highlight regions with keyframes
@@ -943,6 +965,9 @@ async def call_modal_overlay(
             video_duration=video_duration,
             progress_callback=progress_callback,
         )
+
+    # Convert raw user_id to R2-prefixed user_id for Modal
+    user_id = _resolve_modal_user_id(user_id)
 
     render_overlay = _get_render_overlay_fn()
 
@@ -1050,7 +1075,7 @@ async def call_modal_overlay_auto(
 
     Args:
         job_id: Unique export job identifier
-        user_id: User folder in R2
+        user_id: Raw user ID (R2 prefix conversion handled internally)
         input_key: R2 key for working video
         output_key: R2 key for output video
         highlight_regions: Highlight regions with keyframes
@@ -1091,7 +1116,7 @@ async def call_modal_detect_players(
     Call Modal detect_players_modal function for YOLO player detection.
 
     Args:
-        user_id: User folder in R2
+        user_id: Raw user ID (R2 prefix conversion handled internally)
         input_key: R2 key for input video
         frame_number: Frame number to analyze
         confidence_threshold: Minimum confidence for detections
@@ -1102,6 +1127,9 @@ async def call_modal_detect_players(
     """
     if not _modal_enabled:
         raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
+
+    # Convert raw user_id to R2-prefixed user_id for Modal
+    user_id = _resolve_modal_user_id(user_id)
 
     detect_players = _get_detect_players_fn()
 
@@ -1138,7 +1166,7 @@ async def call_modal_detect_players_batch(
     the video is only downloaded once.
 
     Args:
-        user_id: User folder in R2
+        user_id: Raw user ID (R2 prefix conversion handled internally)
         input_key: R2 key for input video
         timestamps: List of timestamps (seconds) to analyze
         confidence_threshold: Minimum confidence for detections
@@ -1159,6 +1187,9 @@ async def call_modal_detect_players_batch(
     """
     if not _modal_enabled:
         raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
+
+    # Convert raw user_id to R2-prefixed user_id for Modal
+    user_id = _resolve_modal_user_id(user_id)
 
     detect_players_batch = _get_detect_players_batch_fn()
 
@@ -1202,7 +1233,7 @@ async def call_modal_extract_clip(
     This is a CPU-only operation (no GPU) - just FFmpeg codec copy.
 
     Args:
-        user_id: User folder in R2 (e.g., "a")
+        user_id: Raw user ID (R2 prefix conversion handled internally)
         input_key: R2 key for source video (e.g., "games/abc123.mp4")
         output_key: R2 key for output clip (e.g., "clips/def456.mp4")
         start_time: Start time in seconds
@@ -1215,6 +1246,9 @@ async def call_modal_extract_clip(
     """
     if not _modal_enabled:
         raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
+
+    # Convert raw user_id to R2-prefixed user_id for Modal
+    user_id = _resolve_modal_user_id(user_id)
 
     extract_clip = _get_extract_clip_fn()
 
@@ -1266,7 +1300,7 @@ async def call_modal_annotate_compilation(
 
     Args:
         job_id: Unique job identifier
-        user_id: User folder in R2 (e.g., "a")
+        user_id: Raw user ID (R2 prefix conversion handled internally)
         input_key: R2 key for source game video (e.g., "games/abc123.mp4")
             Used for single-video games. Ignored when input_keys is provided.
         output_key: R2 key for output compilation (e.g., "downloads/compilation.mp4")
@@ -1292,6 +1326,9 @@ async def call_modal_annotate_compilation(
             progress_callback=progress_callback,
             input_keys=input_keys,
         )
+
+    # Convert raw user_id to R2-prefixed user_id for Modal
+    user_id = _resolve_modal_user_id(user_id)
 
     create_annotated_compilation = _get_create_annotated_compilation_fn()
 

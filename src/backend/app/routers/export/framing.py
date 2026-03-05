@@ -28,7 +28,7 @@ from ...websocket import export_progress, manager
 from ...interpolation import generate_crop_filter
 from ...database import get_db_connection, get_working_videos_path
 from ...queries import latest_working_clips_subquery
-from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2, download_from_r2_with_progress, r2_user_prefix, R2_ENABLED
+from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2, download_from_r2_with_progress
 from ...services.ffmpeg_service import get_video_duration
 from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
 from ...highlight_transform import get_output_duration
@@ -642,7 +642,6 @@ async def render_project(request: RenderRequest, http_request: Request):
 
     # Step 4: Process video (Modal cloud GPU or local)
     user_id = get_current_user_id()
-    modal_user_id = r2_user_prefix(user_id) if R2_ENABLED else user_id
 
     # Determine R2 path based on source type
     if clip['raw_filename']:
@@ -694,7 +693,7 @@ async def render_project(request: RenderRequest, http_request: Request):
         # Call unified interface - routes to Modal, local, or mock automatically
         result = await call_modal_framing_ai(
             job_id=export_id,
-            user_id=modal_user_id,
+            user_id=user_id,
             input_key=input_key,
             output_key=output_key,
             keyframes=keyframes_dict,
@@ -766,10 +765,10 @@ async def render_project(request: RenderRequest, http_request: Request):
 
             # Use unified detection function (Modal GPU when available, local YOLO fallback)
             # This routes to Modal on Fly.io where ultralytics isn't installed locally
-            # Must use modal_user_id (R2 prefix) so Modal can find the video in R2
-            logger.info(f"[Render] Starting player detection: modal_enabled={modal_enabled()}, user_id={modal_user_id}, output_key={output_key}")
+            # Must use user_id (R2 prefix) so Modal can find the video in R2
+            logger.info(f"[Render] Starting player detection: modal_enabled={modal_enabled()}, user_id={user_id}, output_key={output_key}")
             highlight_regions = await run_player_detection_for_highlights(
-                user_id=modal_user_id,
+                user_id=user_id,
                 output_key=output_key,
                 source_clips=source_clips,
                 progress_callback=detection_progress_callback,
