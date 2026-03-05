@@ -119,7 +119,7 @@ Deploy to production domains with proper scaling.
 |----|------|--------|--------|-------|-------|
 | T249 | [Extraction Recovery](tasks/T249-extraction-recovery.md) | DONE | 5 | 4 | Stuck extractions: no timeout, no retry, no failed UI state |
 | T250 | [Clip Store Unification](tasks/T250-clip-store-unification.md) | DONE | 5 | 4 | Eliminate dual-store sync: merge useProjectClips into Zustand, compute flags, use backend IDs |
-| T260 | [Framing Audio Toggle Ignored](tasks/T260-framing-audio-toggle-ignored.md) | TODO | 5 | 3 | Audio still present when toggle is off |
+| T260 | [Framing Audio Toggle Ignored](tasks/T260-framing-audio-toggle-ignored.md) | DONE | 5 | 3 | Audio still present when toggle is off |
 | T270 | [Overlay Renders Outside Region](tasks/T270-overlay-renders-outside-region.md) | TODO | 4 | 4 | Overlay extends beyond shrunk region bounds |
 
 ### Mobile Responsive (TODO)

@@ -104,11 +104,12 @@ def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_t
 
     model = get_yolo_model()
     if model is None:
+        logger.error(f"[Detection] YOLO model is None - ultralytics may not be installed")
         return {'timestamp': timestamp, 'boxes': []}
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        logger.error(f"Cannot open video: {video_path}")
+        logger.error(f"[Detection] Cannot open video: {video_path} (exists={os.path.exists(video_path)})")
         return {'timestamp': timestamp, 'boxes': []}
 
     try:
@@ -175,19 +176,25 @@ async def run_local_batch_detection(
     output_key: str,
     timestamps: List[float],
     confidence_threshold: float = 0.5,
-    progress_callback=None
+    progress_callback=None,
+    local_video_path: str = None,
 ) -> dict:
     """
     Run local YOLO detection on multiple timestamps.
 
-    Downloads video from R2, runs detection on each timestamp, returns results.
+    Uses local_video_path if provided, otherwise downloads video from R2.
     """
-    # Download video from R2 to temp file
-    temp_dir = Path(tempfile.gettempdir()) / "video_editor_detection"
-    temp_dir.mkdir(exist_ok=True)
-    temp_video = temp_dir / f"detect_{uuid.uuid4().hex[:8]}.mp4"
+    # Use local file or download from R2
+    temp_video = None
+    if local_video_path:
+        video_path = local_video_path
+        logger.info(f"[Local Detection] Using local video: {video_path}")
+    else:
+        temp_dir = Path(tempfile.gettempdir()) / "video_editor_detection"
+        temp_dir.mkdir(exist_ok=True)
+        temp_video = temp_dir / f"detect_{uuid.uuid4().hex[:8]}.mp4"
+        video_path = str(temp_video)
 
-    try:
         logger.info(f"[Local Detection] Downloading video from R2: {output_key}")
         success = download_from_r2(user_id, output_key, temp_video)
 
@@ -195,6 +202,7 @@ async def run_local_batch_detection(
             logger.error(f"[Local Detection] Failed to download video from R2")
             return {"status": "error", "error": "Failed to download video"}
 
+    try:
         logger.info(f"[Local Detection] Running detection on {len(timestamps)} timestamps")
 
         if progress_callback:
@@ -206,7 +214,7 @@ async def run_local_batch_detection(
         video_height = 0
 
         for i, ts in enumerate(timestamps):
-            result = run_local_detection_on_frame(str(temp_video), ts, confidence_threshold)
+            result = run_local_detection_on_frame(video_path, ts, confidence_threshold)
             detections.append({
                 'timestamp': ts,
                 'boxes': result.get('boxes', [])
@@ -232,8 +240,8 @@ async def run_local_batch_detection(
         }
 
     finally:
-        # Clean up temp file
-        if temp_video.exists():
+        # Clean up temp file (only if we downloaded from R2)
+        if temp_video and temp_video.exists():
             temp_video.unlink()
             logger.debug(f"[Local Detection] Cleaned up temp file: {temp_video}")
 
@@ -747,33 +755,47 @@ async def run_player_detection_for_highlights(
             )
             logger.info(f"[Player Detection] Modal result status: {detection_result.get('status')}, detections: {len(detection_result.get('detections', []))}")
         else:
-            # Use local YOLO detection (requires R2 access to download video)
-            from ..storage import get_r2_client
-            if get_r2_client() is None:
-                logger.warning("[Player Detection] Modal disabled AND R2 not configured - cannot run local detection. Configure R2_ENABLED=true with credentials, or enable Modal.")
-                return generate_default_highlight_regions(source_clips)
+            # Use local YOLO detection - find video on disk first, fall back to R2 download
+            from ...database import get_working_videos_path
+            video_filename = output_key.replace("working_videos/", "")
+            local_video_path = get_working_videos_path() / video_filename
 
-            logger.info("[Player Detection] Modal disabled, using local YOLO detection")
+            if local_video_path.exists():
+                logger.info(f"[Player Detection] Modal disabled, using local YOLO on {local_video_path}")
+            else:
+                local_video_path = None
+                logger.info("[Player Detection] Modal disabled, downloading from R2 for local YOLO detection")
+
             detection_result = await run_local_batch_detection(
                 user_id=user_id,
                 output_key=output_key,
                 timestamps=timestamps,
                 confidence_threshold=0.5,
                 progress_callback=progress_callback,
+                local_video_path=str(local_video_path) if local_video_path else None,
             )
 
+        logger.info(f"[Player Detection] Result: status={detection_result.get('status')}, "
+                    f"detections={len(detection_result.get('detections', []))}, "
+                    f"video_size={detection_result.get('video_width')}x{detection_result.get('video_height')}, "
+                    f"error={detection_result.get('error')}")
+
         if detection_result.get("status") != "success":
-            logger.warning(f"[Player Detection] Detection failed: {detection_result.get('error')}, using default regions")
+            logger.warning(f"[Player Detection] Detection FAILED: {detection_result.get('error')}, using default regions")
             return generate_default_highlight_regions(source_clips)
 
         detections = detection_result.get("detections", [])
         video_width = detection_result.get("video_width", 810)
         video_height = detection_result.get("video_height", 1440)
 
-        logger.info(f"[Player Detection] Got {len(detections)} detection results, video size: {video_width}x{video_height}")
+        # Log per-timestamp detection counts
+        for det in detections:
+            ts = det.get("timestamp", "?")
+            boxes = det.get("boxes", [])
+            logger.info(f"[Player Detection] t={ts}s: {len(boxes)} players detected")
 
     except Exception as e:
-        logger.error(f"[Player Detection] Detection error: {e}, using default regions")
+        logger.error(f"[Player Detection] Detection EXCEPTION: {e}, using default regions", exc_info=True)
         return generate_default_highlight_regions(source_clips)
 
     # Build detection lookup by timestamp (with small tolerance for floating point)

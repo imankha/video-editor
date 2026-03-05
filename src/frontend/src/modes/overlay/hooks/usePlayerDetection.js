@@ -44,21 +44,32 @@ export function usePlayerDetection({
    * Returns cached detections if available
    */
   const checkCache = useCallback(async (frameNumber) => {
-    if (!projectId) return null;
+    if (!projectId) {
+      console.log('[usePlayerDetection] No projectId, skipping cache check');
+      return null;
+    }
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/detect/cache/${projectId}/${frameNumber}`
-      );
+      const url = `${API_BASE_URL}/api/detect/cache/${projectId}/${frameNumber}`;
+      console.log(`[usePlayerDetection] Checking cache: ${url}`);
+      const response = await fetch(url);
 
       if (!response.ok) {
+        console.warn(`[usePlayerDetection] Cache check HTTP ${response.status} for frame ${frameNumber}`);
         return null;
       }
 
       const data = await response.json();
+      console.log(`[usePlayerDetection] Cache response for frame ${frameNumber}:`, {
+        cached: data.cached,
+        detectionCount: data.detections?.length ?? 0,
+        videoWidth: data.video_width,
+        videoHeight: data.video_height,
+        reason: data.reason,
+      });
       return data;
     } catch (err) {
-      console.warn('[usePlayerDetection] Cache check failed:', err);
+      console.error('[usePlayerDetection] Cache check failed:', err);
       return null;
     }
   }, [projectId]);
@@ -68,6 +79,8 @@ export function usePlayerDetection({
    */
   useEffect(() => {
     if (!enabled || !projectId) {
+      if (!enabled) console.log('[usePlayerDetection] Disabled, clearing detections');
+      if (!projectId) console.log('[usePlayerDetection] No projectId, clearing detections');
       setDetections([]);
       setIsCached(false);
       lastCheckedFrameRef.current = -1;
