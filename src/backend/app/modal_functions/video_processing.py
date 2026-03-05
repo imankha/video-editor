@@ -914,6 +914,7 @@ def process_framing_ai(
     output_height: int = 1440,
     fps: int = 30,
     segment_data: dict = None,
+    include_audio: bool = True,
 ):
     """
     Process video with AI upscaling using Real-ESRGAN on GPU.
@@ -1079,8 +1080,8 @@ def process_framing_ai(
             # Encode video with FFmpeg
             output_path = os.path.join(temp_dir, "output.mp4")
 
-            # Check if source video has audio
-            has_audio = _has_audio_stream(input_path)
+            # Check if source video has audio and user wants it
+            has_audio = _has_audio_stream(input_path) and include_audio
 
             # Check for segment speed changes
             segments = segment_data.get('segments', []) if segment_data else []
@@ -1644,6 +1645,7 @@ def process_framing_ai_parallel(
     output_height: int = 1440,
     fps: int = 30,
     num_chunks: int = 2,
+    include_audio: bool = True,
 ):
     """
     Orchestrate parallel Real-ESRGAN processing using multiple GPUs.
@@ -1800,9 +1802,9 @@ def process_framing_ai_parallel(
 
             yield {"progress": 85, "phase": "audio", "message": "Adding audio..."}
 
-            # Add audio from source
+            # Add audio from source (only if user wants it)
             output_path = os.path.join(temp_dir, "output.mp4")
-            has_audio = _has_audio_stream(input_path)
+            has_audio = _has_audio_stream(input_path) and include_audio
 
             if has_audio:
                 audio_cmd = [

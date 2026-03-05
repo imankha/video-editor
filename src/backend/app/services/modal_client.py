@@ -465,6 +465,7 @@ async def call_modal_framing_ai(
                     output_height=output_height,
                     fps=fps,
                     num_chunks=num_chunks,
+                    include_audio=include_audio,
                 )
         else:
             # Use sequential processing
@@ -485,6 +486,7 @@ async def call_modal_framing_ai(
                     output_height=output_height,
                     fps=fps,
                     segment_data=segment_data,
+                    include_audio=include_audio,
                 )
 
         # Get the generator in executor (Modal API is sync)
