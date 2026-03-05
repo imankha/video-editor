@@ -766,8 +766,10 @@ async def render_project(request: RenderRequest, http_request: Request):
 
             # Use unified detection function (Modal GPU when available, local YOLO fallback)
             # This routes to Modal on Fly.io where ultralytics isn't installed locally
+            # Must use modal_user_id (R2 prefix) so Modal can find the video in R2
+            logger.info(f"[Render] Starting player detection: modal_enabled={modal_enabled()}, user_id={modal_user_id}, output_key={output_key}")
             highlight_regions = await run_player_detection_for_highlights(
-                user_id=user_id,
+                user_id=modal_user_id,
                 output_key=output_key,
                 source_clips=source_clips,
                 progress_callback=detection_progress_callback,
@@ -780,7 +782,7 @@ async def render_project(request: RenderRequest, http_request: Request):
             logger.info(f"[Render] Player detection complete: {len(highlight_regions)} regions, {total_detections} total player detections")
 
         highlights_json = json.dumps(highlight_regions)
-        logger.info(f"[Render] DEBUG - highlights_json length: {len(highlights_json)} chars")
+        logger.info(f"[Render] highlights_json length: {len(highlights_json)} chars, sample: {highlights_json[:200]}")
 
         # Step 7: Save to database
         working_video_id = None

@@ -730,10 +730,12 @@ async def run_player_detection_for_highlights(
     timestamps = [p['timestamp'] for p in detection_points]
 
     logger.info(f"[Player Detection] Running batch detection on {len(timestamps)} timestamps for {len(source_clips)} clips")
+    logger.info(f"[Player Detection] user_id={user_id}, output_key={output_key}, timestamps={timestamps}")
 
     # Run batch detection - use Modal if enabled, otherwise local YOLO
     try:
         if modal_enabled():
+            logger.info(f"[Player Detection] Using Modal GPU for detection")
             if progress_callback:
                 await progress_callback(92, "Detecting players...", "detecting_players")
 
@@ -743,6 +745,7 @@ async def run_player_detection_for_highlights(
                 timestamps=timestamps,
                 confidence_threshold=0.5,
             )
+            logger.info(f"[Player Detection] Modal result status: {detection_result.get('status')}, detections: {len(detection_result.get('detections', []))}")
         else:
             # Use local YOLO detection (requires R2 access to download video)
             from ..storage import get_r2_client
@@ -834,9 +837,10 @@ async def run_player_detection_for_highlights(
         }
         regions.append(region)
 
-        logger.info(f"[Player Detection] Clip {clip_idx}: {has_detections}/{len(clip_detections)} timestamps have player detections")
+        logger.info(f"[Player Detection] Clip {clip_idx}: {has_detections}/{len(clip_detections)} timestamps have player detections, region {region_start:.2f}-{region_end:.2f}s")
 
-    logger.info(f"[Player Detection] Generated {len(regions)} highlight regions with player detection")
+    total_boxes = sum(len(d.get('boxes', [])) for r in regions for d in r.get('detections', []))
+    logger.info(f"[Player Detection] Generated {len(regions)} highlight regions with {total_boxes} total detection boxes")
     return regions
 
 

@@ -1497,6 +1497,13 @@ async def get_overlay_data(project_id: int):
                 from_raw_clip = True
                 logger.info(f"[Overlay Data] Using default highlights from raw_clip for project {project_id}")
 
+        # Diagnostic logging
+        total_boxes = sum(len(d.get('boxes', [])) for h in highlights for d in (h.get('detections') or []))
+        logger.info(f"[Overlay Data] project={project_id}: {len(highlights)} regions, {total_boxes} detection boxes, duration={video_duration}, from_raw_clip={from_raw_clip}")
+        if highlights:
+            sample = highlights[0]
+            logger.info(f"[Overlay Data] First region: id={sample.get('id')}, detections={len(sample.get('detections', []))}, videoWidth={sample.get('videoWidth')}")
+
         return JSONResponse({
             'highlights_data': highlights,
             'text_overlays': text_overlays,
