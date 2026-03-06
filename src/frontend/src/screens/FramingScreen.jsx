@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { List, X } from 'lucide-react';
 import extractionWebSocketManager from '../services/ExtractionWebSocketManager';
 import { FramingModeView } from '../modes';
 import { FramingContainer } from '../containers';
@@ -71,6 +72,8 @@ export function FramingScreen({
   const [videoFile, setVideoFile] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [outdatedClipsDialog, setOutdatedClipsDialog] = useState({ isOpen: false, clips: [] });
+  // Mobile sidebar toggle
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const clipHasUserEditsRef = useRef(false);
   const localExportButtonRef = useRef(null);
   const initialLoadDoneRef = useRef(false);
@@ -1034,28 +1037,32 @@ export function FramingScreen({
     );
   }
 
+  const sidebarProps = {
+    clips,
+    selectedClipId,
+    onSelectClip: handleSelectClip,
+    onAddClip: handleAddClipFromSidebar,
+    onDeleteClip: handleDeleteClip,
+    onReorderClips: reorderClips,
+    globalTransition,
+    onTransitionChange: setGlobalTransition,
+    onUploadWithMetadata: handleUploadWithMetadata,
+    onAddFromLibrary: handleAddFromLibrary,
+    onRetryExtraction: retryExtraction,
+    existingRawClipIds: clips.map(c => c.raw_clip_id).filter(Boolean),
+    games,
+    clipMetadataCache,
+  };
+
   return (
     <div className="flex h-full">
-      {/* Sidebar */}
+      {/* Sidebar - hidden on mobile, visible on sm+ */}
       {(hasClips && clips.length > 0) ? (
-        <ClipSelectorSidebar
-          clips={clips}
-          selectedClipId={selectedClipId}
-          onSelectClip={handleSelectClip}
-          onAddClip={handleAddClipFromSidebar}
-          onDeleteClip={handleDeleteClip}
-          onReorderClips={reorderClips}
-          globalTransition={globalTransition}
-          onTransitionChange={setGlobalTransition}
-          onUploadWithMetadata={handleUploadWithMetadata}
-          onAddFromLibrary={handleAddFromLibrary}
-          onRetryExtraction={retryExtraction}
-          existingRawClipIds={clips.map(c => c.raw_clip_id).filter(Boolean)}
-          games={games}
-          clipMetadataCache={clipMetadataCache}
-        />
+        <div className="hidden sm:flex">
+          <ClipSelectorSidebar {...sidebarProps} />
+        </div>
       ) : isLoadingProjectData && (
-        <div className="w-64 border-r border-gray-700 bg-gray-800/50 p-4">
+        <div className="hidden sm:block w-64 border-r border-gray-700 bg-gray-800/50 p-4">
           <div className="animate-pulse space-y-3">
             <div className="h-4 bg-gray-700 rounded w-20"></div>
             <div className="space-y-2">
@@ -1066,8 +1073,40 @@ export function FramingScreen({
         </div>
       )}
 
+      {/* Mobile sidebar overlay */}
+      {showMobileSidebar && hasClips && clips.length > 0 && (
+        <div className="fixed inset-0 z-50 flex sm:hidden">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileSidebar(false)} />
+          <div className="relative w-[85vw] max-w-[352px] h-full">
+            <ClipSelectorSidebar
+              {...sidebarProps}
+              onSelectClip={(id) => { handleSelectClip(id); setShowMobileSidebar(false); }}
+            />
+            <button
+              onClick={() => setShowMobileSidebar(false)}
+              className="absolute top-3 right-3 p-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main content */}
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
+        {/* Mobile clips toggle */}
+        {hasClips && clips.length > 0 && (
+          <div className="flex sm:hidden px-3 pt-2">
+            <button
+              onClick={() => setShowMobileSidebar(true)}
+              className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300"
+              title="Show clips"
+            >
+              <List size={16} />
+              <span className="text-xs font-medium">{clips.length} clips</span>
+            </button>
+          </div>
+        )}
         {extractionState.allFailed ? (
           <div className="flex-1 flex flex-col items-center justify-center h-full text-center px-8">
             <div className="max-w-md">

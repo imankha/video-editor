@@ -47,7 +47,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
 
   // View: pure presentation
   return (
-    <div className="mt-6">
+    <div className="mt-4 sm:mt-6">
       <ExportButtonView
         ref={ref}
         isCurrentlyExporting={container.isCurrentlyExporting}
@@ -263,7 +263,7 @@ export function FramingModeView({
       <div className={`${isFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-6 border border-white/20'}`}>
         {/* Controls Bar - hidden in fullscreen */}
         {videoUrl && !isFullscreen && (
-          <div className="mb-6 flex gap-4 items-center">
+          <div className="mb-3 sm:mb-6 flex gap-4 items-center">
             <div className="ml-auto">
               <ZoomControls
                 zoom={zoom}
