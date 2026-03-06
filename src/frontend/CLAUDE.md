@@ -13,6 +13,7 @@
 | [type-safety](.claude/skills/type-safety/SKILL.md) | HIGH | Use `as const` objects, no magic strings |
 | [keyframe-data-model](.claude/skills/keyframe-data-model/SKILL.md) | HIGH | Frame-based keyframes, origins, state machine |
 | [ui-style-guide](.claude/skills/ui-style-guide/SKILL.md) | MEDIUM | Colors, buttons, spacing, components |
+| [responsiveness](.claude/skills/responsiveness/SKILL.md) | MEDIUM | Mobile-first responsive patterns, Playwright testing workflow |
 | [lint](.claude/skills/lint/SKILL.md) | MEDIUM | Build check for JS/JSX errors |
 
 ## Quick Reference
