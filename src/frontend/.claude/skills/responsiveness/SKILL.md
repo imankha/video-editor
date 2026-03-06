@@ -126,47 +126,61 @@ When a component overflows at 360px, apply fixes in this order:
 
 Make all changes using Tailwind responsive classes (`sm:` prefix for 640px breakpoint). No JS.
 
-### Phase 2: Verify with Playwright MCP
+### Phase 2: Visual review with user (MANDATORY)
 
-Use the Playwright MCP tools to test at target widths:
+**Always open a headed Playwright browser so the user can see the result and give feedback.**
+Use `test-mobile.mjs` (see below) to launch a visible browser, walk through each screen at
+each target width, and wait for the user's notes before proceeding. Do NOT mark a responsive
+task as tested based solely on headless screenshots — the user must see the live browser and
+approve.
 
-```
-1. Resize browser to target width:
-   mcp__playwright__browser_resize(width: 375, height: 812)
+Script pattern (`src/frontend/test-mobile.mjs`):
 
-2. Navigate to the page:
-   mcp__playwright__browser_navigate(url: "http://localhost:5173")
+```js
+import { chromium } from 'playwright';
 
-3. Take screenshot to visually verify:
-   mcp__playwright__browser_take_screenshot(type: "png", filename: "mobile-test.png")
+async function run() {
+  const browser = await chromium.launch({ headless: false });
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const page = await context.newPage();
+  await page.goto('http://localhost:5173', { waitUntil: 'networkidle' });
 
-4. Check for horizontal overflow:
-   mcp__playwright__browser_evaluate(() => ({
-     hasOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
-     scrollWidth: document.documentElement.scrollWidth,
-     clientWidth: document.documentElement.clientWidth
-   }))
+  // Check overflow
+  const overflow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+    hasOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  }));
+  console.log('Overflow:', JSON.stringify(overflow));
 
-5. Verify all interactive elements are positioned within viewport:
-   mcp__playwright__browser_evaluate(() => {
-     const header = document.querySelector('.flex.items-center.justify-between');
-     const buttons = header?.querySelectorAll('button') || [];
-     return Array.from(buttons).map(b => ({
-       title: b.title || b.textContent?.trim()?.slice(0, 30),
-       right: Math.round(b.getBoundingClientRect().right),
-       visible: b.offsetParent !== null
-     }));
-   })
+  // Keep browser open for user review
+  console.log('Browser open — review and press Ctrl+C when done');
+  await new Promise(() => {}); // Keep alive
+}
 
-6. Verify at desktop width (no regressions):
-   mcp__playwright__browser_resize(width: 1280, height: 800)
-   mcp__playwright__browser_take_screenshot(type: "png", filename: "desktop-verify.png")
-
-7. Clean up screenshots when done:
-   rm -f mobile-test.png desktop-verify.png
+run().catch(console.error);
 ```
 
-### Phase 3: Checklist
+Walk-through steps:
+1. Launch headed at 375px — user reviews home screen
+2. Click through tabs (Games, Projects) — user reviews each
+3. Resize to 360px — user checks tightest width
+4. Resize to 1280px — user verifies no desktop regressions
+5. Collect user notes, iterate on fixes, re-run
+
+### Phase 3: Automated checks (headless)
+
+After user approval, run headless verification for CI-style checks:
+
+```js
+// In test-mobile.mjs with headless: true
+// For each width in [360, 375, 1280]:
+// 1. Check overflow: scrollWidth === clientWidth
+// 2. Check all visible buttons within viewport bounds
+// 3. Take screenshot for the record
+```
+
+### Phase 4: Checklist
 
 For every responsive change, verify:
 
