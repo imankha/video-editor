@@ -433,7 +433,7 @@ export function ProjectManager({
             onClick={onOpenDownloads}
             title="Gallery"
           >
-            Gallery
+            <span className="hidden sm:inline">Gallery</span>
             {downloadsCount > 0 && (
               <span className="px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
                 {downloadsCount > 9 ? '9+' : downloadsCount}
@@ -451,9 +451,9 @@ export function ProjectManager({
         <p className="text-gray-400">Manage your games and projects</p>
       </div>
 
-      {/* Continue Where You Left Off - Recent Section */}
+      {/* Continue Where You Left Off - Recent Section (hidden on mobile) */}
       {showRecentSection && (
-        <div className="w-full max-w-2xl mb-6">
+        <div className="hidden sm:block w-full max-w-2xl mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Clock size={14} className="text-gray-500" />
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -1110,7 +1110,7 @@ function GameCard({ game, onLoad, onDelete }) {
               <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">New</span>
             )}
           </div>
-          <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
             <span>{new Date(game.created_at).toLocaleDateString()}</span>
             <span>•</span>
             <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>

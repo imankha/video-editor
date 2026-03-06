@@ -367,10 +367,10 @@ export function AnnotateScreen({ onClearSelection }) {
       />
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-3 py-4 sm:px-4 sm:py-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between mb-4 sm:mb-8">
+            <div className="flex items-center gap-2 sm:gap-4">
               <Button
                 variant="ghost"
                 icon={Home}
