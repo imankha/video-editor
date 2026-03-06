@@ -89,3 +89,4 @@ deploy_output.txt
 
 # Fly.io secrets
 .fly-secrets
+/.playwright-mcp
