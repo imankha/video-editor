@@ -78,6 +78,7 @@ formal annotations/
 .claude/settings.json
 .claude/settings.local.json
 .claude/commands/
+.claude/memory.json
 
 # SQLite databases
 *.db
