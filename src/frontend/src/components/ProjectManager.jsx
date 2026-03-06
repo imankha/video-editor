@@ -405,7 +405,7 @@ export function ProjectManager({
   }, [onRefreshProjects]);
 
   return (
-    <div className="flex-1 flex flex-col items-center p-8 bg-gray-900">
+    <div className="flex-1 flex flex-col items-center p-4 sm:p-8 bg-gray-900">
       {/* Hidden file input for game video selection */}
       <input
         ref={gameFileInputRef}
@@ -425,7 +425,7 @@ export function ProjectManager({
       />
 
       {/* Top right controls - Gallery + Profile switcher */}
-      <div className="fixed top-4 right-4 z-30 flex items-center gap-4">
+      <div className="fixed top-4 right-4 z-30 flex items-center gap-2 sm:gap-4">
         {onOpenDownloads && (
           <Button
             variant="outline"
@@ -535,7 +535,7 @@ export function ProjectManager({
       <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 mb-6">
         <button
           onClick={() => setActiveTab('games')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
+          className={`flex items-center gap-2 px-3 py-2 sm:px-4 rounded-md font-medium text-sm transition-all duration-200 ${
             activeTab === 'games'
               ? 'bg-green-600 text-white shadow-lg'
               : 'text-gray-400 hover:text-white hover:bg-white/10'
@@ -553,7 +553,7 @@ export function ProjectManager({
         </button>
         <button
           onClick={() => setActiveTab('projects')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
+          className={`flex items-center gap-2 px-3 py-2 sm:px-4 rounded-md font-medium text-sm transition-all duration-200 ${
             activeTab === 'projects'
               ? 'bg-purple-600 text-white shadow-lg'
               : 'text-gray-400 hover:text-white hover:bg-white/10'
@@ -572,7 +572,7 @@ export function ProjectManager({
       </div>
 
       {/* Action Button */}
-      <div className="mb-8">
+      <div className="mb-4 sm:mb-8">
         {activeTab === 'games' ? (
           <Button
             variant="success"
@@ -957,7 +957,7 @@ function PendingUploadCard({ upload, onResume, onCancel }) {
   return (
     <div
       onClick={onResume}
-      className="group relative p-4 bg-yellow-900/20 hover:bg-yellow-900/30 rounded-lg border border-yellow-600/50 hover:border-yellow-500 cursor-pointer transition-all"
+      className="group relative p-3 sm:p-4 bg-yellow-900/20 hover:bg-yellow-900/30 rounded-lg border border-yellow-600/50 hover:border-yellow-500 cursor-pointer transition-all"
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
@@ -966,7 +966,7 @@ function PendingUploadCard({ upload, onResume, onCancel }) {
             {upload.label && <span className="text-yellow-400 text-sm font-medium shrink-0">{upload.label}:</span>}
             <h3 className="text-white font-medium truncate">{upload.original_filename}</h3>
           </div>
-          <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
             <span>{formatSize(upload.file_size)}</span>
             <span>•</span>
             <span>{upload.completed_parts} / {upload.total_parts} parts uploaded</span>
@@ -1028,7 +1028,7 @@ function ActiveUploadCard({ upload, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="group relative p-4 bg-green-900/20 hover:bg-green-900/30 rounded-lg border border-green-600/50 hover:border-green-500 cursor-pointer transition-all"
+      className="group relative p-3 sm:p-4 bg-green-900/20 hover:bg-green-900/30 rounded-lg border border-green-600/50 hover:border-green-500 cursor-pointer transition-all"
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
@@ -1036,7 +1036,7 @@ function ActiveUploadCard({ upload, onClick }) {
             <FileVideo size={18} className="text-green-400" />
             <h3 className="text-white font-medium truncate">{upload.fileName}</h3>
           </div>
-          <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
             {upload.fileSize && <span>{formatSize(upload.fileSize)}</span>}
             {upload.fileSize && upload.message && <span>•</span>}
             <span>{upload.message || 'Uploading...'}</span>
@@ -1090,13 +1090,13 @@ function GameCard({ game, onLoad, onDelete }) {
   return (
     <div
       onClick={onLoad}
-      className="group relative p-4 bg-gray-800 hover:bg-gray-750 rounded-lg cursor-pointer border border-gray-700 hover:border-green-500 transition-all"
+      className="group relative p-3 sm:p-4 bg-gray-800 hover:bg-gray-750 rounded-lg cursor-pointer border border-gray-700 hover:border-green-500 transition-all"
     >
       <div className="flex items-center justify-between">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <Gamepad2 size={18} className="text-green-400" />
-            <h3 className="text-white font-medium">{game.name}</h3>
+            <Gamepad2 size={18} className="text-green-400 flex-shrink-0" />
+            <h3 className="text-white font-medium truncate">{game.name}</h3>
             {isFullyReviewed && (
               <CheckCircle size={14} className="text-green-400" title="Fully reviewed" />
             )}
@@ -1130,7 +1130,7 @@ function GameCard({ game, onLoad, onDelete }) {
                 )}
                 <span>•</span>
                 <span title="Quality score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
-                  Quality: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
+                  <span className="hidden sm:inline">Quality: </span><span className="sm:hidden">Q: </span>{(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
                 </span>
               </>
             )}
@@ -1448,7 +1448,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
   return (
     <div
       onClick={handleCardClick}
-      className={`group relative p-4 bg-gray-800 rounded-lg border transition-all ${
+      className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border transition-all ${
         canOpen
           ? 'hover:bg-gray-750 cursor-pointer border-gray-700 hover:border-purple-500'
           : 'cursor-not-allowed border-gray-700 opacity-75'
@@ -1504,7 +1504,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
               ))}
             </div>
           )}
-          <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
             <span>{project.aspect_ratio}</span>
             <span>•</span>
             <span>{project.clip_count} clip{project.clip_count !== 1 ? 's' : ''}</span>
