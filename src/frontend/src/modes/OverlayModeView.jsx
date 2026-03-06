@@ -7,6 +7,7 @@ import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '.
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from './overlay';
 import { Minimize } from 'lucide-react';
+import { formatTimeSimple } from '../components/shared/clipConstants';
 
 /**
  * ExportButtonSection - Container+View composition for Overlay mode export
@@ -218,6 +219,12 @@ export function OverlayModeView({
             {/* Right: Metadata */}
             <div className="flex items-center gap-3 text-sm text-gray-300">
               <span>{effectiveOverlayMetadata.width}x{effectiveOverlayMetadata.height}</span>
+              {(duration > 0 || effectiveOverlayMetadata.duration > 0) && (
+                <>
+                  <span className="text-gray-600">•</span>
+                  <span>{formatTimeSimple(duration || effectiveOverlayMetadata.duration)}</span>
+                </>
+              )}
               {effectiveOverlayMetadata.framerate && (
                 <>
                   <span className="text-gray-600">•</span>

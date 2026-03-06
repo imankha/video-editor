@@ -138,10 +138,6 @@ export default function DetectionMarkerLayer({
         ))}
       </div>
 
-      {/* Label hint */}
-      <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 pointer-events-none">
-        Detection
-      </div>
     </div>
   );
 }

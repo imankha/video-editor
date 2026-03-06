@@ -81,6 +81,14 @@ export default function useTimelineZoom() {
     return timelineZoom / 100;
   }, [timelineZoom]);
 
+  /**
+   * Set zoom to an exact value (clamped to MIN/MAX)
+   * @param {number} zoom - Zoom percentage (100-500)
+   */
+  const setZoom = useCallback((zoom) => {
+    setTimelineZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom)));
+  }, []);
+
   return {
     timelineZoom,
     scrollPosition,
@@ -91,6 +99,7 @@ export default function useTimelineZoom() {
     zoomOut,
     zoomByWheel,
     resetZoom,
+    setZoom,
     updateScrollPosition,
     getTimelineScale,
   };

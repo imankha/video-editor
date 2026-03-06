@@ -7,6 +7,7 @@ import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { FramingMode, CropOverlay } from './framing';
+import { formatTimeSimple } from '../components/shared/clipConstants';
 
 /**
  * ExportButtonSection - Container+View composition for Framing mode export
@@ -47,7 +48,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
 
   // View: pure presentation
   return (
-    <div className="mt-6">
+    <div className="mt-4 sm:mt-6">
       <ExportButtonView
         ref={ref}
         isCurrentlyExporting={container.isCurrentlyExporting}
@@ -98,6 +99,7 @@ export function FramingModeView({
   clipTitle,
   clipGameName,
   clipTags = [],
+  clipDuration = 0,
   currentTime,
   duration,
   isPlaying,
@@ -248,6 +250,10 @@ export function FramingModeView({
             {/* Right: Metadata */}
             <div className="flex items-center gap-3 text-sm text-gray-300">
               <span>{metadata.width}x{metadata.height}</span>
+              <>
+                <span className="text-gray-600">•</span>
+                <span>{formatTimeSimple(duration || clipDuration)}</span>
+              </>
               {metadata.framerate && (
                 <>
                   <span className="text-gray-600">•</span>
@@ -263,7 +269,7 @@ export function FramingModeView({
       <div className={`${isFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-6 border border-white/20'}`}>
         {/* Controls Bar - hidden in fullscreen */}
         {videoUrl && !isFullscreen && (
-          <div className="mb-6 flex gap-4 items-center">
+          <div className="mb-3 sm:mb-6 flex gap-4 items-center">
             <div className="ml-auto">
               <ZoomControls
                 zoom={zoom}

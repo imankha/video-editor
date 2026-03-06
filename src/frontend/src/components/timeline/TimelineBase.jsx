@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Undo2 } from 'lucide-react';
 import { formatTimeSimple } from '../../utils/timeFormat';
 
@@ -277,7 +277,7 @@ export function TimelineBase({
         {/* Scrollable timeline tracks container */}
         <div
           ref={scrollContainerRef}
-          className="ml-32 overflow-x-auto"
+          className="ml-32 overflow-x-auto timeline-scroll-container"
           onScroll={handleScroll}
           style={{
             scrollbarWidth: timelineScale > 1 ? 'auto' : 'none',
@@ -365,12 +365,80 @@ export function TimelineBase({
         </div>
       </div>
 
+      {/* Mobile-friendly scrollbar - shown only on small screens when zoomed */}
+      {timelineScale > 1 && (
+        <MobileScrollbar scrollContainerRef={scrollContainerRef} timelineScale={timelineScale} />
+      )}
+
       {/* Zoom hint when playhead layer is selected */}
       {selectedLayer === 'playhead' && (
         <div className="mt-2 text-xs text-gray-500 text-center">
           Scroll to zoom timeline (current: {Math.round(timelineZoom)}%)
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * MobileScrollbar - Touch-friendly scrollbar for zoomed timelines on mobile.
+ * Hidden on sm+ screens where native scrollbar is usable.
+ */
+function MobileScrollbar({ scrollContainerRef, timelineScale }) {
+  const trackRef = React.useRef(null);
+  const thumbWidthPercent = Math.max(20, (1 / timelineScale) * 100);
+  const [thumbLeft, setThumbLeft] = React.useState(0);
+
+  // Sync thumb position from native scroll
+  React.useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const sync = () => {
+      const maxScroll = container.scrollWidth - container.clientWidth;
+      if (maxScroll <= 0) { setThumbLeft(0); return; }
+      const scrollFraction = container.scrollLeft / maxScroll;
+      const maxThumbLeft = 100 - thumbWidthPercent;
+      setThumbLeft(scrollFraction * maxThumbLeft);
+    };
+    container.addEventListener('scroll', sync);
+    sync();
+    return () => container.removeEventListener('scroll', sync);
+  }, [scrollContainerRef, thumbWidthPercent]);
+
+  const handleDrag = useCallback((clientX) => {
+    const track = trackRef.current;
+    const container = scrollContainerRef.current;
+    if (!track || !container) return;
+    const rect = track.getBoundingClientRect();
+    const fraction = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const maxScroll = container.scrollWidth - container.clientWidth;
+    container.scrollLeft = fraction * maxScroll;
+  }, [scrollContainerRef]);
+
+  const handleTouchMove = useCallback((e) => {
+    e.preventDefault();
+    handleDrag(e.touches[0].clientX);
+  }, [handleDrag]);
+
+  const handleTouchStart = useCallback((e) => {
+    handleDrag(e.touches[0].clientX);
+    const onMove = (ev) => { ev.preventDefault(); handleDrag(ev.touches[0].clientX); };
+    const onEnd = () => { document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onEnd); };
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+  }, [handleDrag]);
+
+  return (
+    <div
+      ref={trackRef}
+      className="sm:hidden ml-32 mt-1 h-6 bg-gray-800 rounded-full relative touch-none"
+      onTouchStart={handleTouchStart}
+      onClick={(e) => { handleDrag(e.clientX); }}
+    >
+      <div
+        className="absolute top-0.5 bottom-0.5 bg-gray-500 rounded-full active:bg-gray-400"
+        style={{ left: `${thumbLeft}%`, width: `${thumbWidthPercent}%` }}
+      />
     </div>
   );
 }

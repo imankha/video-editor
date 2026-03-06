@@ -27,6 +27,16 @@
   background-color: #9ca3af;
 }
 
+/* Hide native scrollbar on mobile for timeline — custom touch scrollbar replaces it */
+@media (max-width: 639px) {
+  .timeline-scroll-container {
+    scrollbar-width: none;
+  }
+  .timeline-scroll-container::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Custom styles */
 body {
   margin: 0;
