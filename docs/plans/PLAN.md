@@ -78,12 +78,12 @@ Get the app running on staging URLs for testing.
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| T100 | [Fly.io Staging Backend](tasks/deployment/T100-flyio-backend.md) | TESTING | Scale-to-zero, ~$0-2/mo |
-| T110 | [Cloudflare Pages Staging](tasks/deployment/T110-cloudflare-pages.md) | TESTING | Frontend at `reel-ballers-staging.pages.dev` |
-| T125 | [CI/CD Auto-Deploy](tasks/deployment/T125-cicd-auto-deploy.md) | TESTING | GitHub Actions: backend + frontend + landing with path filters |
-| T126 | [Fly.io Suspend + Graceful Shutdown](tasks/deployment/T126-flyio-suspend-graceful-shutdown.md) | TODO | Suspend mode for faster wake, SIGTERM handler for clean shutdown |
-| T127 | [R2 Database Restore on Startup](tasks/deployment/T127-r2-database-restore-on-startup.md) | TODO | Restore from R2 on cold start so data survives machine restarts |
-| T128 | [WebSocket Reconnection Resilience](tasks/deployment/T128-websocket-reconnection-resilience.md) | TODO | Exponential backoff, suppress error spam during cold starts |
+| T100 | [Fly.io Staging Backend](tasks/deployment/T100-flyio-backend.md) | DONE | Scale-to-zero, ~$0-2/mo |
+| T110 | [Cloudflare Pages Staging](tasks/deployment/T110-cloudflare-pages.md) | DONE | Frontend at `reel-ballers-staging.pages.dev` |
+| T125 | [CI/CD Auto-Deploy](tasks/deployment/T125-cicd-auto-deploy.md) | DONE | GitHub Actions: backend + frontend + landing with path filters |
+| T126 | [Fly.io Suspend + Graceful Shutdown](tasks/deployment/T126-flyio-suspend-graceful-shutdown.md) | DONE | Suspend mode for faster wake, SIGTERM handler for clean shutdown |
+| T127 | [R2 Database Restore on Startup](tasks/deployment/T127-r2-database-restore-on-startup.md) | DONE | Restore from R2 on cold start so data survives machine restarts |
+| T128 | [WebSocket Reconnection Resilience](tasks/deployment/T128-websocket-reconnection-resilience.md) | DONE | Exponential backoff, suppress error spam during cold starts |
 
 **Staging URLs:**
 - API: `reel-ballers-api-staging.fly.dev`
