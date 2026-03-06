@@ -65,6 +65,9 @@ Zustand store patterns to prevent duplicate state and sync bugs.
 | `highlightRegions` | `overlayStore` | - |
 | `selectedProject` | `editorStore` | navigationStore |
 | `editorMode` | `editorStore` | - |
+| `crop_data` (per clip) | `projectDataStore` | useCrop hook (ephemeral only) |
+| `segments_data` (per clip) | `projectDataStore` | useSegments hook (ephemeral only) |
+| `trimRange` | `segments_data.trimRange` | NOT in timing_data |
 
 ---
 
@@ -309,6 +312,62 @@ export const isExtracted = (clip) => !!clip.filename;
 export const isExtracting = (clip) => clip.extraction_status === 'running' || clip.extraction_status === 'pending';
 export const isFailed = (clip) => clip.extraction_status === 'failed';
 ```
+
+---
+
+## Hook → Store Sync Pattern (Framing Persistence)
+
+When React hooks hold ephemeral editing state that must persist to a Zustand store (e.g., crop keyframes, segment data), use the **reactive sync effect pattern**.
+
+### Architecture
+
+```
+React Hooks (ephemeral)  →  Zustand Store (persistence)  →  Backend API (durability)
+   useCrop                    projectDataStore                 PUT /clips/{id}
+   useSegments                  clip.crop_data
+                                clip.segments_data
+```
+
+- **Hooks** = live editing state. Reset on unmount, hold current values during interaction.
+- **Zustand store** = single source of truth for persistence. Survives mode switches, clip switches.
+- **Backend** = durability. Fire-and-forget sync from store, plus full PUT on export.
+
+### The Sync Effect
+
+There is exactly ONE sync effect in FramingScreen that writes hook state → store:
+
+```javascript
+useEffect(() => {
+  if (isRestoringRef.current) return;           // Guard: async restore in progress
+  if (syncClipIdRef.current !== selectedClipId) { // Guard: first render after clip switch
+    syncClipIdRef.current = selectedClipId;
+    return;
+  }
+  if (!selectedClipId) return;
+
+  updateClipData(selectedClipId, {
+    crop_data: JSON.stringify(keyframes),
+    segments_data: JSON.stringify({ boundaries, speeds, trimRange }),
+  });
+}, [keyframes, boundaries, speeds, trimRange, selectedClipId, updateClipData]);
+```
+
+### Rules
+
+1. **NEVER add a second save effect** — no unmount saves, no clip-switch saves, no gesture saves
+2. **Effect order matters** — restore effect BEFORE sync effect (ref mutations must be visible)
+3. **No data redundancy** — trimRange lives ONLY in segments_data, never in timing_data
+4. **Backend sync is fire-and-forget** — store update triggers debounced API call; sync effect never calls backend directly
+
+### Violation Detection
+
+If you see any of these patterns being added, **stop and flag it**:
+- `useEffect(() => { ... }, [])` with a cleanup function that saves state (unmount save)
+- Saving "previous clip" data inside a clip-switch effect
+- Direct `fetch`/`POST` calls inside gesture handlers (bypass store)
+- A new field duplicating data already in segments_data or crop_data
+
+Reference: [T280 Design Doc](../../../../../docs/plans/tasks/T280-framing-persistence-redesign.md) | [Coding Standards - Hook → Store Sync](../../../../../.claude/references/coding-standards.md)
 
 ---
 

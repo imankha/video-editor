@@ -283,6 +283,54 @@ function save() { api.save(data); }
 // Button and keyboard both call save()
 ```
 
+### Hook → Store Sync (Reactive Persistence)
+
+When React hooks hold ephemeral editing state (e.g., crop keyframes, segment boundaries) that must persist to a Zustand store, use **one reactive sync effect** — never multiple competing save mechanisms.
+
+**The pattern:**
+
+```javascript
+// ONE sync effect: hook state → Zustand store
+const syncClipIdRef = useRef(null);
+
+useEffect(() => {
+  // Guard 1: Skip while restoring saved state (async load in progress)
+  if (isRestoringRef.current) return;
+
+  // Guard 2: Skip first render after entity switch (hooks have stale data)
+  if (syncClipIdRef.current !== selectedId) {
+    syncClipIdRef.current = selectedId;
+    return;
+  }
+
+  if (!selectedId) return;
+
+  // Write to Zustand store — the single source of truth for persistence
+  updateStoreData(selectedId, { field: hookValue });
+}, [hookValue, selectedId, updateStoreData]);
+```
+
+**Why two guards are needed:**
+
+| Guard | Problem it prevents |
+|-------|-------------------|
+| `isRestoringRef` | Sync effect fires during async restore → writes empty/default hook state over saved data |
+| `syncClipIdRef` | React batches state updates → on entity switch, hooks still hold OLD entity's data for one render cycle |
+
+**Critical rules:**
+1. **One sync effect per screen** — never add a second save effect (unmount, switch, gesture)
+2. **Effect ordering matters** — the restore effect must be declared BEFORE the sync effect so its ref mutations are visible
+3. **Fire-and-forget backend sync** — the Zustand store update triggers a debounced API call; the sync effect itself never calls the backend
+4. **No data redundancy** — each value lives in exactly one field (e.g., trimRange lives in segments_data only, not also in timing_data)
+
+**Violations that cause data loss:**
+1. **Unmount save effect** — fires AFTER React clears state → writes empty data
+2. **Clip-switch save effect** — races with the restore of the new clip's data
+3. **Multiple save paths** — gesture POST + full PUT → race conditions, last-write-wins
+4. **Missing skip guard** — sync effect fires before hooks update → writes stale data from previous entity
+
+See [T280 design doc](../../docs/plans/tasks/T280-framing-persistence-redesign.md) for the full architecture.
+
 ### Minimal Branching
 
 Prefer strategy/routing over if/else sprawl:
@@ -355,5 +403,6 @@ if export_mode == ExportMode.FAST:
 | External Guards Only | Validation at boundaries, trust internal? |
 | DRY | No duplicate logic? |
 | Single Code Path | One way to do each thing? |
+| Hook → Store Sync | One reactive sync effect, no competing saves? |
 | Loose Coupling | Depends on abstractions? |
 | Tight Cohesion | Each module does one thing? |
