@@ -135,7 +135,7 @@ export function useProjectLoader() {
       const clipsResponse = await fetch(`${API_BASE}/api/clips/projects/${projectId}/clips`);
       const clipsData = clipsResponse.ok ? await clipsResponse.json() : [];
 
-      console.log('[useProjectLoader] Fetched clips:', clipsData.length, 'first clip file_url:', clipsData[0]?.file_url);
+      console.log('[useProjectLoader] Fetched clips:', clipsData.length);
 
       // Load video metadata in parallel for extracted clips
       const metadataCache = {};

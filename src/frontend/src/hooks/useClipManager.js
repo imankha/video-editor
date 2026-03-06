@@ -186,7 +186,7 @@ export function useClipManager() {
           sourceHeight: meta?.height || 0,
           segments: clip.segments_data ? JSON.parse(clip.segments_data) : null,
           cropKeyframes: clipCropKeyframes(clip),
-          trimRange: clip.timing_data ? (JSON.parse(clip.timing_data).trimRange || null) : null,
+          trimRange: clip.segments_data ? (JSON.parse(clip.segments_data).trimRange || null) : null,
         };
       }),
       globalAspectRatio,

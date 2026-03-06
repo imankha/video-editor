@@ -683,8 +683,10 @@ export default function useHighlightRegions(videoMetadata) {
               // Note: origin is computed dynamically based on position, not stored
             };
           })
-          // Filter out keyframes with invalid time
-          .filter(kf => typeof kf.time === 'number' && !isNaN(kf.time));
+          // Filter out keyframes with invalid time or outside region bounds
+          .filter(kf => typeof kf.time === 'number' && !isNaN(kf.time)
+            && kf.time >= region.startTime - TIME_EPSILON
+            && kf.time <= region.endTime + TIME_EPSILON);
 
         // If no valid keyframes, add default at start
         if (regionKeyframes.length === 0) {

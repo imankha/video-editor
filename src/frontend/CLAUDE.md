@@ -58,3 +58,6 @@ keyframe = {
 - Don't transform API responses before storing (store raw, compute on read)
 - Don't generate client-side IDs for backend entities (use backend IDs)
 - Don't store derived boolean flags (isExtracted, isFailed) — compute via selectors
+- Don't add multiple save effects for the same data (unmount saves, clip-switch saves, gesture POSTs) — use ONE reactive sync effect
+- Don't save state in useEffect cleanup functions — React may have already cleared the state
+- Don't store trimRange in timing_data — it lives only in segments_data

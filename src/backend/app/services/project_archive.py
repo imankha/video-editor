@@ -188,29 +188,25 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
-            # Check if project already exists (shouldn't happen, but safety check)
-            cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
-            if cursor.fetchone():
-                logger.warning(f"Project {project_id} already exists in DB, skipping restore")
-                return False
+            # Check if project row already exists (common after archival —
+            # archive deletes working data but keeps the project row)
+            cursor.execute("SELECT id, working_video_id FROM projects WHERE id = ?", (project_id,))
+            existing = cursor.fetchone()
 
-            # Insert project
             project = archive["project"]
-            columns = list(project.keys())
-            placeholders = ", ".join(["?" for _ in columns])
-            column_names = ", ".join(columns)
-            values = [project[col] for col in columns]
+            if not existing:
+                # Full restore — insert project row (without working_video_id FK
+                # to avoid constraint issues; we set it after inserting working_videos)
+                proj_data = {k: v for k, v in project.items() if k != "working_video_id"}
+                columns = list(proj_data.keys())
+                placeholders = ", ".join(["?" for _ in columns])
+                column_names = ", ".join(columns)
+                values = [proj_data[col] for col in columns]
 
-            cursor.execute(
-                f"INSERT INTO projects ({column_names}) VALUES ({placeholders})",
-                values
-            )
-
-            # Set restored_at timestamp
-            cursor.execute(
-                "UPDATE projects SET restored_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (project_id,)
-            )
+                cursor.execute(
+                    f"INSERT INTO projects ({column_names}) VALUES ({placeholders})",
+                    values
+                )
 
             # Insert working_clips
             for clip in archive.get("working_clips", []):
@@ -224,7 +220,7 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
                     values
                 )
 
-            # Insert working_videos
+            # Insert working_videos (must happen before setting FK on project)
             for video in archive.get("working_videos", []):
                 columns = list(video.keys())
                 placeholders = ", ".join(["?" for _ in columns])
@@ -235,6 +231,13 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
                     f"INSERT INTO working_videos ({column_names}) VALUES ({placeholders})",
                     values
                 )
+
+            # Now safe to set working_video_id FK and restored_at
+            cursor.execute(
+                "UPDATE projects SET working_video_id = ?, restored_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (project.get("working_video_id"), project_id)
+            )
+            logger.info(f"Project {project_id} {'updated' if existing else 'inserted'} with working data")
 
             conn.commit()
 

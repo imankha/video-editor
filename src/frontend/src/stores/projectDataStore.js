@@ -171,9 +171,7 @@ export const useProjectDataStore = create((set, get) => ({
       if (framingData.segments !== undefined) {
         updatePayload.segments_data = JSON.stringify(framingData.segments);
       }
-      if (framingData.trimRange !== undefined) {
-        updatePayload.timing_data = JSON.stringify({ trimRange: framingData.trimRange });
-      }
+      // T280: timing_data is redundant with segments_data.trimRange — stop writing it
 
       if (Object.keys(updatePayload).length === 0) {
         return { success: true };

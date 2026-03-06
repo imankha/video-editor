@@ -533,17 +533,14 @@ export function FramingScreen({
     const loadFirstClipVideo = async () => {
       // Restore framing state BEFORE loading video
       if (parsedSegments) {
-        console.log('[FramingScreen] Restoring segments:', JSON.stringify(parsedSegments));
         restoreSegmentState(parsedSegments, firstClipWithMeta?.duration || 0);
       }
 
       if (parsedCropKfs && parsedCropKfs.length > 0) {
         const endFrame = Math.round((firstClipWithMeta?.duration || 0) * (firstClipWithMeta?.framerate || 30));
-        console.log('[FramingScreen] Restoring crop keyframes:', parsedCropKfs.length, 'keyframes');
         restoreCropState(parsedCropKfs, endFrame);
       }
 
-      console.log('[FramingScreen] Loading first clip video:', clipUrl);
       if (!clipUrl.startsWith('blob:')) {
         loadVideoFromStreamingUrl(clipUrl, firstClipWithMeta?.metadata || null);
       } else {
@@ -564,33 +561,25 @@ export function FramingScreen({
     }
   }, [projectAspectRatio, aspectRatio, updateAspectRatio]);
 
-  // Refs to capture current state for clip switching
-  const currentSegmentStateRef = useRef({ segmentBoundaries, segmentSpeeds, trimRange });
-  const currentKeyframesRef = useRef(keyframes);
 
-  useEffect(() => {
-    currentSegmentStateRef.current = { segmentBoundaries, segmentSpeeds, trimRange };
-  }, [segmentBoundaries, segmentSpeeds, trimRange]);
 
-  useEffect(() => {
-    currentKeyframesRef.current = keyframes;
-  }, [keyframes]);
-
-  // Handle clip switching - save previous clip's state and load new clip's state
-  // T250: Uses raw backend clip data. Parse JSON fields on demand.
+  // Handle clip switching - restore new clip's state from store
+  // T280: Previous clip's state is already in the store (sync effects keep it current).
+  // We only need to restore the NEW clip's state into hooks.
   useEffect(() => {
     if (!selectedClipId) return;
     if (selectedClipId === previousClipIdRef.current) return;
 
-    const previousClipId = previousClipIdRef.current;
     const newClip = clips.find(c => c.id === selectedClipId);
-
     if (!newClip) {
       console.warn('[FramingScreen] Selected clip not found:', selectedClipId);
       return;
     }
 
-    console.log('[FramingScreen] Switching clips:', previousClipId, '->', selectedClipId);
+    // Set restoring flag synchronously BEFORE async work.
+    // This prevents the sync effects (declared after this effect) from writing
+    // stale hook state to the new clip's store slot during this render cycle.
+    isRestoringClipStateRef.current = true;
     previousClipIdRef.current = selectedClipId;
 
     const newClipWithMeta = getClipWithMeta(newClip);
@@ -598,33 +587,9 @@ export function FramingScreen({
     const newParsedCropKfs = clipCropKeyframes(newClip);
 
     const switchClip = async () => {
-      if (isRestoringClipStateRef.current) return;
-      isRestoringClipStateRef.current = true;
-
       try {
-        // 1. Save previous clip's state
-        if (previousClipId && clipHasUserEditsRef.current) {
-          const prevClip = clips.find(c => c.id === previousClipId);
-          if (prevClip) {
-            console.log('[FramingScreen] Saving previous clip state:', previousClipId);
-            const { segmentBoundaries: bounds, segmentSpeeds: speeds, trimRange: trim } = currentSegmentStateRef.current;
-            const kfs = currentKeyframesRef.current;
-            // Save as JSON strings to match raw backend format
-            updateClipData(previousClipId, {
-              segments_data: JSON.stringify({
-                boundaries: bounds,
-                segmentSpeeds: speeds,
-                trimRange: trim,
-              }),
-              crop_data: JSON.stringify(kfs),
-              timing_data: JSON.stringify({ trimRange: trim }),
-            });
-          }
-        }
-
-        // 2a. Restore new clip's segments state
+        // 1. Restore new clip's segments state
         if (newParsedSegments) {
-          console.log('[FramingScreen] Restoring segments for clip:', selectedClipId);
           restoreSegmentState(newParsedSegments, newClipWithMeta?.duration || 0);
         } else {
           resetSegments();
@@ -633,9 +598,8 @@ export function FramingScreen({
           }
         }
 
-        // 2b. Restore new clip's crop keyframes BEFORE loading video
+        // 2. Restore new clip's crop keyframes BEFORE loading video
         if (newParsedCropKfs && newParsedCropKfs.length > 0) {
-          console.log('[FramingScreen] Restoring crop keyframes BEFORE video load:', selectedClipId, newParsedCropKfs.length, 'keyframes');
           const endFrame = Math.round((newClipWithMeta?.duration || 0) * (newClipWithMeta?.framerate || 30));
           restoreCropState(newParsedCropKfs, endFrame);
         } else {
@@ -646,7 +610,6 @@ export function FramingScreen({
         if (isExtracted(newClip)) {
           const newClipUrl = getClipFileUrlSelector(newClip, projectId);
           if (newClipUrl) {
-            console.log('[FramingScreen] Loading new clip video:', newClipUrl);
             if (!newClipUrl.startsWith('blob:')) {
               loadVideoFromStreamingUrl(newClipUrl, newClipWithMeta?.metadata || null);
             } else {
@@ -665,7 +628,45 @@ export function FramingScreen({
     };
 
     switchClip();
-  }, [selectedClipId, clips, projectId, clipMetadataCache, updateClipData, loadVideoFromUrl, loadVideoFromStreamingUrl, loadVideo, restoreSegmentState, resetSegments, initializeSegments, restoreCropState, resetCrop, getClipWithMeta]);
+  }, [selectedClipId, clips, projectId, clipMetadataCache, loadVideoFromUrl, loadVideoFromStreamingUrl, loadVideo, restoreSegmentState, resetSegments, initializeSegments, restoreCropState, resetCrop, getClipWithMeta]);
+
+  // T280: Sync hook state → Zustand store on every change.
+  // This is the SINGLE mechanism that keeps the store current. It replaces:
+  // - The unmount-save effect (deleted above)
+  // - The clip-switch save code (no longer needed — store already has latest)
+  //
+  // Guards:
+  // 1. syncClipIdRef: On clip switch, selectedClipId changes but hooks still have OLD
+  //    clip's data. We skip the first render after a clip change to avoid writing
+  //    stale data to the new clip's store slot.
+  // 2. isRestoringClipStateRef: Set synchronously by clip-switch effect (declared before
+  //    this effect) to prevent sync during async restore operations.
+  const syncClipIdRef = useRef(null);
+
+  useEffect(() => {
+    // Guard 1: Skip during restore operations (clip switch in progress)
+    if (isRestoringClipStateRef.current) return;
+
+    // Guard 2: Skip the first render after a clip ID change (hooks have stale data)
+    if (syncClipIdRef.current !== selectedClipId) {
+      syncClipIdRef.current = selectedClipId;
+      return;
+    }
+
+    if (!selectedClipId) return;
+
+    // Only sync if hooks have initialized (avoids writing empty defaults)
+    if (keyframes.length === 0 && segmentBoundaries.length < 2) return;
+
+    updateClipData(selectedClipId, {
+      crop_data: JSON.stringify(keyframes),
+      segments_data: JSON.stringify({
+        boundaries: segmentBoundaries,
+        segmentSpeeds: segmentSpeeds,
+        trimRange: trimRange,
+      }),
+    });
+  }, [keyframes, segmentBoundaries, segmentSpeeds, trimRange, selectedClipId, updateClipData]);
 
   // Derived selection state
   const selectedCropKeyframeIndex = useMemo(() => {

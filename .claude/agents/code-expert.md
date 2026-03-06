@@ -73,6 +73,15 @@ If this is a bug fix, look for architectural red flags:
 - Would you need to "invalidate" or "reload" data?
 - Are there multiple sources of truth?
 
+**Persistence Smell (CRITICAL — see T280):**
+- Are there multiple save effects (unmount, clip-switch, gesture POST) writing the same data?
+- Is there a save effect in a useEffect cleanup function (return () => save())?
+- Does a clip-switch effect save the "previous" clip before loading the new one?
+- Is the same data stored in multiple fields (e.g., trimRange in both timing_data and segments_data)?
+- Does a gesture handler call the backend directly instead of updating the Zustand store?
+
+**The correct pattern (established in T280):** ONE reactive sync effect writes hook state → Zustand store. No unmount saves, no clip-switch saves, no gesture POST calls. See [Coding Standards - Hook → Store Sync](../references/coding-standards.md).
+
 **If you detect a bug smell:**
 - Flag it explicitly in your report
 - Identify the architectural root cause

@@ -45,7 +45,7 @@ from ...services.image_extractor import (
     list_highlight_images,
 )
 from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto
-from ...services.project_archive import archive_project, clear_restored_flag
+from ...services.project_archive import clear_restored_flag
 from ...constants import ExportStatus, HighlightEffect, DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 
 logger = logging.getLogger(__name__)
@@ -550,7 +550,13 @@ def _process_frames_to_ffmpeg(
 
             # Render highlight if in a region
             if active_region:
-                highlight = KeyframeInterpolator.interpolate_highlight(active_region['keyframes'], current_time)
+                # Filter keyframes to region bounds — keyframes outside [start_time, end_time]
+                # should not influence rendering (user may have shrunk the region)
+                region_keyframes = [
+                    kf for kf in active_region['keyframes']
+                    if active_region['start_time'] <= kf['time'] <= active_region['end_time']
+                ]
+                highlight = KeyframeInterpolator.interpolate_highlight(region_keyframes, current_time)
                 if highlight is not None:
                     # Check if keyframe coordinates need to be scaled from detection space to working video space
                     # Detection may have run on source video (e.g., 2560x1440) but rendering is on working video (e.g., 1080x1920)
@@ -1886,15 +1892,8 @@ async def render_overlay(request: OverlayRenderRequest):
 
         logger.info(f"[Overlay Render] Complete: final_video_id={final_video_id}, parallel={parallel_used}")
 
-        # T66: Archive completed project to R2 (non-blocking, don't fail export if archive fails)
-        try:
-            user_id = get_current_user_id()
-            if archive_project(project_id, user_id):
-                logger.info(f"[Overlay Render] Archived project {project_id} to R2")
-            else:
-                logger.warning(f"[Overlay Render] Failed to archive project {project_id} (R2 may be disabled)")
-        except Exception as archive_error:
-            logger.error(f"[Overlay Render] Archive error for project {project_id}: {archive_error}")
+        # T66: Don't archive immediately — user may want to re-edit the overlay
+        # and re-export. Stale-project cleanup will archive later when appropriate.
 
         return JSONResponse({
             'success': True,

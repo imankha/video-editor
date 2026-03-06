@@ -257,55 +257,16 @@ def _get_clip_framing_data(cursor, clip_id: int, project_id: int) -> tuple:
 def _save_clip_framing_data(cursor, conn, clip: dict, project_id: int,
                             crop_keyframes: list, segments_data: dict) -> dict:
     """
-    Save framing data, handling version creation if clip was previously exported.
-    Returns dict with success, new_clip_id (if versioned), new_version.
+    Save framing data from gesture actions (always update in-place).
+
+    Gesture actions carry partial state (e.g., only trimRange or only one keyframe),
+    so they must NOT create new versions of exported clips. Version creation is
+    handled exclusively by the PUT endpoint which receives full state from the
+    frontend's saveCurrentClipState.
     """
     crop_data_str = json.dumps(crop_keyframes) if crop_keyframes else None
     segments_data_str = json.dumps(segments_data) if segments_data else None
 
-    was_exported = clip['exported_at'] is not None
-    data_changed = (
-        normalize_json_data(crop_data_str) != normalize_json_data(clip['crop_data']) or
-        normalize_json_data(segments_data_str) != normalize_json_data(clip['segments_data'])
-    )
-
-    if was_exported and data_changed:
-        # Create a NEW version
-        new_version = clip['version'] + 1
-        logger.info(f"[Framing Action] Creating new version {new_version} of clip {clip['id']}")
-
-        # Fetch raw_clip_version for tracking
-        cursor.execute("SELECT boundaries_version FROM raw_clips WHERE id = ?", (clip['raw_clip_id'],))
-        raw_clip = cursor.fetchone()
-        raw_clip_version = raw_clip['boundaries_version'] if raw_clip and raw_clip['boundaries_version'] else 1
-
-        cursor.execute("""
-            INSERT INTO working_clips (
-                project_id, raw_clip_id, uploaded_filename, sort_order, version,
-                crop_data, timing_data, segments_data, raw_clip_version
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            project_id,
-            clip['raw_clip_id'],
-            clip['uploaded_filename'],
-            clip['sort_order'],
-            new_version,
-            normalize_json_data(crop_data_str),
-            clip['timing_data'],  # Keep existing timing_data
-            normalize_json_data(segments_data_str),
-            raw_clip_version,
-        ))
-        conn.commit()
-
-        new_clip_id = cursor.lastrowid
-        return {
-            "success": True,
-            "refresh_required": True,
-            "new_clip_id": new_clip_id,
-            "new_version": new_version
-        }
-
-    # Regular update
     cursor.execute("""
         UPDATE working_clips
         SET crop_data = ?, segments_data = ?
@@ -1646,6 +1607,7 @@ async def update_working_clip(
 
         if not current_clip:
             raise HTTPException(status_code=404, detail="Working clip not found")
+
 
         # Check if this is a framing change on an exported clip
         is_framing_change = (
