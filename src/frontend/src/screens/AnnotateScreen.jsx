@@ -367,10 +367,10 @@ export function AnnotateScreen({ onClearSelection }) {
       />
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-3 py-4 sm:px-4 sm:py-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between mb-4 sm:mb-8">
+            <div className="flex items-center gap-2 sm:gap-4">
               <Button
                 variant="ghost"
                 icon={Home}
@@ -383,12 +383,12 @@ export function AnnotateScreen({ onClearSelection }) {
                 itemName={annotateGameName}
               />
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1 sm:gap-4">
               <GalleryButton />
               {/* Annotate mode indicator */}
-              <div className="flex items-center gap-2 px-4 py-2 bg-green-600/20 border border-green-600/40 rounded-lg">
+              <div className="flex items-center gap-2 px-2 sm:px-4 py-2 bg-green-600/20 border border-green-600/40 rounded-lg">
                 <Scissors size={16} className="text-green-400" />
-                <span className="text-sm font-medium text-green-400">Annotate</span>
+                <span className="text-sm font-medium text-green-400 hidden sm:inline">Annotate</span>
               </div>
             </div>
           </div>

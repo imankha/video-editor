@@ -67,9 +67,9 @@ export function ModeSwitcher({
     // If in annotate mode with a video, show a simple indicator
     if (mode === 'annotate' && hasAnnotateVideo) {
       return (
-        <div className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg">
+        <div className="flex items-center gap-2 px-2 sm:px-4 py-2 bg-green-600 rounded-lg">
           <Scissors size={16} />
-          <span className="font-medium text-sm text-white">Annotate Mode</span>
+          <span className="font-medium text-sm text-white hidden sm:inline">Annotate Mode</span>
         </div>
       );
     }
@@ -92,7 +92,7 @@ export function ModeSwitcher({
         onClick={() => !disabled && isAvailable && onModeChange(modeOption.id)}
         disabled={disabled || !isAvailable}
         className={`
-          flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 relative
+          flex items-center gap-2 px-2 sm:px-4 py-2 rounded-md transition-all duration-200 relative
           ${isActive
             ? `${activeColor} text-white shadow-lg`
             : isAvailable
@@ -116,7 +116,7 @@ export function ModeSwitcher({
         ) : (
           <Icon size={16} />
         )}
-        <span className="font-medium text-sm">{modeOption.label}</span>
+        <span className="font-medium text-sm hidden sm:inline">{modeOption.label}</span>
         {modeOption.showWarning && isAvailable && (
           <span className="text-yellow-400 font-bold text-xs">*</span>
         )}

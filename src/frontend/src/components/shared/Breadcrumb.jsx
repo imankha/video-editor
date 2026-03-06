@@ -16,7 +16,7 @@ export function Breadcrumb({ type, itemName }) {
       {itemName && (
         <>
           <ChevronRight className="w-4 h-4 text-gray-600" />
-          <span className="text-white font-semibold text-lg">{itemName}</span>
+          <span className="text-white font-semibold text-lg truncate max-w-[120px] sm:max-w-none">{itemName}</span>
         </>
       )}
     </div>

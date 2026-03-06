@@ -200,8 +200,8 @@ export function OverlayModeView({
     <>
       {/* Video Metadata - use overlay metadata, hidden in fullscreen */}
       {!isFullscreen && (effectiveOverlayMetadata ? (
-        <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
-          <div className="flex items-center justify-between text-sm text-gray-300">
+        <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-4 border border-white/20">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 text-sm text-gray-300">
             {/* Left: Title + Tags */}
             <div className="flex flex-col gap-1">
               {videoTitle && <span className="font-semibold text-white">{videoTitle}</span>}
@@ -241,7 +241,7 @@ export function OverlayModeView({
       ))}
 
       {/* Main Editor Area */}
-      <div className={`${isFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20'}`}>
+      <div className={`${isFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-6 border border-white/20'}`}>
         {/* Controls Bar - hidden in fullscreen */}
         {effectiveOverlayVideoUrl && !isFullscreen && (
           <div className="mb-6 flex gap-4 items-center">
