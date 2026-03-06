@@ -1157,6 +1157,7 @@ export function FramingScreen({
       clipTitle={selectedClipWithMeta?.name || (selectedClipWithMeta?.filename || '').replace(/\.[^/.]+$/, '')}
       clipGameName={selectedClipGameName}
       clipTags={selectedClipWithMeta?.tags}
+      clipDuration={selectedClipWithMeta?.duration || 0}
       currentTime={currentTime}
       duration={duration}
       isPlaying={isPlaying}

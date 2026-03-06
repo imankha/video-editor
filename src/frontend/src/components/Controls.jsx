@@ -79,7 +79,7 @@ export function Controls({
 
       {/* Time display */}
       <div className="text-white font-mono text-xs">
-        {formatTime(currentTime)} / {formatTime(duration)}
+        {formatTime(currentTime)}
       </div>
 
       {/* Right side controls */}

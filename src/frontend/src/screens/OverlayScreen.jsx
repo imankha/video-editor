@@ -220,7 +220,50 @@ export function OverlayScreen({
     zoomByWheel: timelineZoomByWheel,
     updateScrollPosition: updateTimelineScrollPosition,
     getTimelineScale,
+    setZoom: setTimelineZoom,
   } = useTimelineZoom();
+
+  // =========================================
+  // AUTO-ZOOM: Ensure detection markers have 48px minimum spacing
+  // =========================================
+  const hasAutoZoomedRef = useRef(false);
+  useEffect(() => {
+    if (hasAutoZoomedRef.current) return;
+    if (!highlightRegions?.length || !effectiveOverlayMetadata?.duration) return;
+
+    // Collect all detection timestamps
+    const timestamps = [];
+    highlightRegions.forEach(region => {
+      region.detections?.forEach(d => {
+        if (d.boxes?.length > 0) timestamps.push(d.timestamp);
+      });
+    });
+    if (timestamps.length < 2) return;
+
+    timestamps.sort((a, b) => a - b);
+
+    // Find the minimum gap between consecutive markers (as fraction of duration)
+    const dur = effectiveOverlayMetadata.duration;
+    let minGapFraction = Infinity;
+    for (let i = 1; i < timestamps.length; i++) {
+      const gap = (timestamps[i] - timestamps[i - 1]) / dur;
+      if (gap > 0 && gap < minGapFraction) minGapFraction = gap;
+    }
+
+    if (minGapFraction === Infinity) return;
+
+    // At 100% zoom, timeline width ≈ viewport - label column (128px) - padding (40px)
+    // We estimate ~200px usable width at 100% zoom on mobile
+    const estimatedBaseWidth = 200;
+    const minSpacingPx = 48; // 44px touch target + 4px gap
+    const neededWidth = minSpacingPx / minGapFraction;
+    const neededZoom = Math.ceil((neededWidth / estimatedBaseWidth) * 100);
+
+    if (neededZoom > 100) {
+      setTimelineZoom(Math.min(neededZoom, 500));
+    }
+    hasAutoZoomedRef.current = true;
+  }, [highlightRegions, effectiveOverlayMetadata?.duration, setTimelineZoom]);
 
   // =========================================
   // DERIVED STATE - Selected keyframe based on playhead position

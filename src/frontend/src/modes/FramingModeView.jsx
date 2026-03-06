@@ -7,6 +7,7 @@ import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { FramingMode, CropOverlay } from './framing';
+import { formatTimeSimple } from '../components/shared/clipConstants';
 
 /**
  * ExportButtonSection - Container+View composition for Framing mode export
@@ -98,6 +99,7 @@ export function FramingModeView({
   clipTitle,
   clipGameName,
   clipTags = [],
+  clipDuration = 0,
   currentTime,
   duration,
   isPlaying,
@@ -248,6 +250,10 @@ export function FramingModeView({
             {/* Right: Metadata */}
             <div className="flex items-center gap-3 text-sm text-gray-300">
               <span>{metadata.width}x{metadata.height}</span>
+              <>
+                <span className="text-gray-600">•</span>
+                <span>{formatTimeSimple(duration || clipDuration)}</span>
+              </>
               {metadata.framerate && (
                 <>
                   <span className="text-gray-600">•</span>
