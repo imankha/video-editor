@@ -106,6 +106,42 @@ Reduce vertical spacing between sections on mobile.
 <div className="mb-4 sm:mb-8">
 ```
 
+## Core Principle
+
+**It's better to hide functionality that doesn't fit than to show unusable UI.** If a feature can't work well at mobile widths, hide it entirely (`hidden sm:block`) rather than cramming it in at a size where it's broken or frustrating. Unusable UI is worse than missing UI — users can always rotate to landscape or use desktop for advanced features.
+
+**Stack into multiple lines rather than overlap.** When a toolbar or control bar overflows at narrow widths, wrap it into two lines (`flex-wrap` or `flex-col sm:flex-row`) instead of letting items overlap or bleed off-screen. Two readable lines are always better than one unreadable line.
+
+**Never show redundant information.** If a piece of data (name, title, label) is already visible elsewhere on the screen, don't repeat it — regardless of screen width. Redundancy wastes space and adds cognitive load.
+
+## Touch Target Guidelines
+
+Minimum sizes based on Apple HIG, Material Design, and WCAG 2.2. These ensure users can reliably tap targets — including with long fingernails, motor impairments, or one-handed thumb use.
+
+| Metric | Minimum | Preferred | Tailwind |
+|--------|---------|-----------|----------|
+| Touch target size | 44px | 48px | `min-h-11 min-w-11` / `min-h-12 min-w-12` |
+| Gap between targets | 8px | 8-12px | `gap-2` / `gap-3` |
+| Icon inside target | 16-24px icon | 48px container | Icon + `p-3` padding |
+| List item height | 44px | 48px | `min-h-11` / `min-h-12` |
+
+**Rules:**
+- Every tappable element must have at least **44x44px** touch area (visual size can be smaller via padding)
+- Minimum **8px gap** between adjacent touch targets to prevent mis-taps
+- Icon buttons: use `iconOnly` with padding — the icon can be 16-20px but the button must be 44px+
+- Close/dismiss buttons are commonly made too small — always enforce 44px minimum
+- On toolbars with many small buttons, use `gap-1 sm:gap-2` minimum (4-8px)
+
+```jsx
+// Icon button with proper touch target (icon is 16px, target is 44px)
+<button className="p-3 min-h-11 min-w-11">
+  <Icon size={16} />
+</button>
+
+// Toolbar with minimum spacing
+<div className="flex items-center gap-2">
+```
+
 ## Decision Framework
 
 When a component overflows at 360px, apply fixes in this order:

@@ -83,7 +83,7 @@ export function AnnotateControls({
   onAddClip,
 }) {
   return (
-    <div className="controls-container flex items-center justify-between py-2 px-4 bg-gray-800 rounded-b-lg">
+    <div className="controls-container flex flex-wrap items-center justify-between gap-y-1 py-2 px-2 sm:px-4 bg-gray-800 rounded-b-lg">
       {/* Playback controls */}
       <div className="flex items-center gap-1">
         {/* Step backward */}
@@ -130,7 +130,7 @@ export function AnnotateControls({
 
       {/* Time display */}
       <div className="text-white font-mono text-xs">
-        {formatTime(currentTime)} / {formatTime(duration)}
+        {formatTime(currentTime)}<span className="hidden sm:inline"> / {formatTime(duration)}</span>
       </div>
 
       {/* Right side controls */}
@@ -143,9 +143,22 @@ export function AnnotateControls({
             icon={Plus}
             onClick={onAddClip}
             title="Add clip ending at current time (A)"
+            className="hidden sm:flex"
           >
             Add Clip
           </Button>
+        )}
+        {/* Mobile: icon-only Add Clip */}
+        {((!isFullscreen) || (isFullscreen && !isPlaying)) && onAddClip && (
+          <Button
+            variant="success"
+            size="sm"
+            icon={Plus}
+            iconOnly
+            onClick={onAddClip}
+            title="Add clip ending at current time (A)"
+            className="flex sm:hidden"
+          />
         )}
 
         {/* Speed control */}
