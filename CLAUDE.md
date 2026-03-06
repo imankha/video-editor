@@ -204,12 +204,19 @@ When the system encounters an invalid state, it should log appropriately and fai
 
 ## Log handling
 
-This project uses the `reduce_log` MCP tool for log analysis. Follow these rules:
+**Why this matters:** Raw logs are extremely token-expensive. The `reduce_log` MCP tool compresses logs up to 95% while preserving full semantic value. Every time raw logs enter context — whether from reading a file, running a command, or the user pasting them — those tokens are permanently spent and cannot be reclaimed. This directly shortens the conversation. Always route logs through `reduce_log` to maximize the useful work you can do in a session.
 
 ### NEVER read raw log files into context
 
 When working with log files, ALWAYS use the `reduce_log` tool with a `file` parameter.
-NEVER use the Read tool or cat/head/tail on log files. Raw logs waste context tokens.
+NEVER use the Read tool or cat/head/tail on log files.
+
+### NEVER ask the user to paste logs into chat
+
+Do NOT ask the user to copy/paste console output, terminal output, or log text into the conversation. Once pasted, those raw tokens are permanently in context. Instead, tell the user:
+
+    "Copy the log to your clipboard and type /logdump — that way I get the
+     compressed version without wasting context tokens on raw output."
 
 ### Always include tail
 
@@ -260,7 +267,7 @@ what led up to an error.
 The raw text is already in your context — `reduce_log` cannot undo that. The context
 tokens are spent. Remind the user to use the clipboard workflow instead:
 
-    "Next time, copy the log and type /project:logdump — I'll get the reduced version
+    "Next time, copy the log and type /logdump — I'll get the reduced version
      without the raw log entering our conversation."
 
 ## Resources

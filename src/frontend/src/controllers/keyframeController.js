@@ -186,10 +186,20 @@ export function keyframeReducer(state, action) {
       }
 
       // Sort and ensure proper structure
-      const sortedKeyframes = sortKeyframes(keyframes.map(kf => ({
+      const sorted = sortKeyframes(keyframes.map(kf => ({
         ...kf,
         origin: kf.origin || 'user'
       })));
+
+      // Enforce origin correctness: only first and last keyframes can be 'permanent'.
+      // Middle keyframes that were incorrectly saved as 'permanent' get corrected to 'user'.
+      const sortedKeyframes = sorted.map((kf, i) => {
+        const isBoundary = i === 0 || i === sorted.length - 1;
+        if (!isBoundary && kf.origin === 'permanent') {
+          return { ...kf, origin: 'user' };
+        }
+        return kf;
+      });
 
       // Determine if end keyframe was explicitly set (not same as start)
       const startKf = sortedKeyframes[0];
