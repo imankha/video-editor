@@ -75,7 +75,9 @@ nul
 formal annotations/
 
 # Local Claude settings
+.claude/settings.json
 .claude/settings.local.json
+.claude/commands/
 
 # SQLite databases
 *.db
