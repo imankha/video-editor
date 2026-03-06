@@ -132,8 +132,8 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 | T280 | [Mobile Navigation](tasks/mobile-responsive/T280-mobile-navigation.md) | DONE | 7 | 3 | Nav buttons truncated/clipped on all screens |
 | T290 | [Mobile Home Screen](tasks/mobile-responsive/T290-mobile-home-screen.md) | DONE | 5 | 3 | Gallery button hidden, game card stats messy |
 | T300 | [Mobile Annotate Screen](tasks/mobile-responsive/T300-mobile-annotate-screen.md) | DONE | 5 | 4 | Content bleeds off right edge |
-| T310 | [Mobile Editor Layout](tasks/mobile-responsive/T310-mobile-editor-layout.md) | TESTING | 8 | 6 | Two-column editor unusable, needs vertical stack |
-| T320 | [Mobile Video Preview](tasks/mobile-responsive/T320-mobile-video-preview.md) | TODO | 6 | 4 | Tiny preview, crop handles too small for touch |
+| T310 | [Mobile Editor Layout](tasks/mobile-responsive/T310-mobile-editor-layout.md) | DONE | 8 | 6 | Two-column editor unusable, needs vertical stack |
+| T320 | [Mobile Video Preview](tasks/mobile-responsive/T320-mobile-video-preview.md) | TESTING | 6 | 4 | Tiny preview, crop handles too small for touch |
 | T330 | [Mobile Video Players](tasks/mobile-responsive/T330-mobile-video-players.md) | TODO | 7 | 4 | Touch controls, scrubbing, iOS/Android quirks |
 
 ### Phase 4: Post-Launch Polish

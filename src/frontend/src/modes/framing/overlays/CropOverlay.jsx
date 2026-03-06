@@ -221,41 +221,54 @@ export default function CropOverlay({
   }, [aspectRatio]);
 
   /**
-   * Handle mouse down on crop rectangle (start drag)
+   * Get clientX/clientY from a pointer or touch event
    */
-  const handleCropMouseDown = (e) => {
+  const getEventPosition = (e) => {
+    if (e.touches && e.touches.length > 0) {
+      return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+    }
+    return { clientX: e.clientX, clientY: e.clientY };
+  };
+
+  /**
+   * Handle pointer/touch down on crop rectangle (start drag)
+   */
+  const handleCropPointerDown = (e) => {
     if (e.target.classList.contains('crop-handle')) return;
 
     e.preventDefault();
     e.stopPropagation();
 
+    const pos = getEventPosition(e);
     setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
+    setDragStart({ x: pos.clientX, y: pos.clientY });
     setCropStart(currentCrop);
   };
 
   /**
-   * Handle mouse down on resize handle
+   * Handle pointer/touch down on resize handle
    */
-  const handleResizeMouseDown = (e, handle) => {
+  const handleResizePointerDown = (e, handle) => {
     e.preventDefault();
     e.stopPropagation();
 
+    const pos = getEventPosition(e);
     setIsResizing(true);
     setResizeHandle(handle);
-    setDragStart({ x: e.clientX, y: e.clientY });
+    setDragStart({ x: pos.clientX, y: pos.clientY });
     setCropStart(currentCrop);
   };
 
   /**
-   * Handle mouse move (drag or resize)
+   * Handle pointer/touch move (drag or resize)
    */
-  const handleMouseMove = useCallback((e) => {
+  const handlePointerMove = useCallback((e) => {
     if (!isDragging && !isResizing) return;
     if (!cropStart || !videoDisplayRect) return;
 
-    const deltaX = (e.clientX - dragStart.x) / videoDisplayRect.scaleX;
-    const deltaY = (e.clientY - dragStart.y) / videoDisplayRect.scaleY;
+    const pos = getEventPosition(e);
+    const deltaX = (pos.clientX - dragStart.x) / videoDisplayRect.scaleX;
+    const deltaY = (pos.clientY - dragStart.y) / videoDisplayRect.scaleY;
 
     if (isDragging) {
       // Move crop rectangle
@@ -306,9 +319,9 @@ export default function CropOverlay({
   }, [isDragging, isResizing, cropStart, dragStart, resizeHandle, videoDisplayRect, constrainCrop, applyAspectRatio, onCropChange]);
 
   /**
-   * Handle mouse up (end drag or resize)
+   * Handle pointer/touch up (end drag or resize)
    */
-  const handleMouseUp = useCallback(() => {
+  const handlePointerUp = useCallback(() => {
     if (isDragging || isResizing) {
       // Notify parent that crop change is complete (create keyframe)
       // IMPORTANT: Only emit spatial properties (x, y, width, height)
@@ -328,18 +341,22 @@ export default function CropOverlay({
     setCropStart(null);
   }, [isDragging, isResizing, currentCrop, onCropComplete]);
 
-  // Attach global mouse handlers
+  // Attach global pointer+touch handlers
   useEffect(() => {
     if (isDragging || isResizing) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('mousemove', handlePointerMove);
+      window.addEventListener('mouseup', handlePointerUp);
+      window.addEventListener('touchmove', handlePointerMove, { passive: false });
+      window.addEventListener('touchend', handlePointerUp);
 
       return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
+        window.removeEventListener('mousemove', handlePointerMove);
+        window.removeEventListener('mouseup', handlePointerUp);
+        window.removeEventListener('touchmove', handlePointerMove);
+        window.removeEventListener('touchend', handlePointerUp);
       };
     }
-  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
+  }, [isDragging, isResizing, handlePointerMove, handlePointerUp]);
 
   if (!currentCrop || !videoDisplayRect) {
     return null;
@@ -430,9 +447,11 @@ export default function CropOverlay({
           top: `${screenCrop.y}px`,
           width: `${screenCrop.width}px`,
           height: `${screenCrop.height}px`,
-          boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.2)'
+          boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.2)',
+          touchAction: 'none'
         }}
-        onMouseDown={handleCropMouseDown}
+        onMouseDown={handleCropPointerDown}
+        onTouchStart={handleCropPointerDown}
       >
         {/* Grid lines */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none">
@@ -465,11 +484,11 @@ export default function CropOverlay({
           </div>
         )}
 
-        {/* Resize handles */}
+        {/* Resize handles — 12px visual, 44px touch target on mobile via ::after */}
         {handles.map(handle => (
           <div
             key={handle.name}
-            className={`crop-handle absolute bg-white border-2 pointer-events-auto ${cropTooSmall ? 'border-red-500' : 'border-blue-500'}`}
+            className={`crop-handle absolute bg-white border-2 pointer-events-auto ${cropTooSmall ? 'border-red-500' : 'border-blue-500'} after:content-[''] after:absolute after:-inset-4 after:block sm:after:inset-0`}
             style={{
               width: '12px',
               height: '12px',
@@ -477,9 +496,11 @@ export default function CropOverlay({
               top: `${handle.y * 100}%`,
               transform: 'translate(-50%, -50%)',
               cursor: handle.cursor,
-              zIndex: 10
+              zIndex: 10,
+              touchAction: 'none'
             }}
-            onMouseDown={(e) => handleResizeMouseDown(e, handle.name)}
+            onMouseDown={(e) => handleResizePointerDown(e, handle.name)}
+            onTouchStart={(e) => handleResizePointerDown(e, handle.name)}
           />
         ))}
       </div>
