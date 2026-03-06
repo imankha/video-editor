@@ -286,7 +286,7 @@ function App() {
         <div className="container mx-auto px-4 py-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
               {/* Back to Home button */}
               <Button
                 variant="ghost"
@@ -300,7 +300,7 @@ function App() {
                 itemName={getProjectDisplayName(selectedProject)}
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <GalleryButton />
               {/* Combined mode switcher with Annotate button */}
               <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
@@ -308,11 +308,11 @@ function App() {
                 {canEditInAnnotate && (
                   <button
                     onClick={handleEditInAnnotate}
-                    className="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-gray-400 hover:text-white hover:bg-white/10"
+                    className="flex items-center gap-2 px-2 sm:px-4 py-2 rounded-md transition-all duration-200 text-gray-400 hover:text-white hover:bg-white/10"
                     title="Edit source clip in Annotate mode"
                   >
                     <Scissors size={16} />
-                    <span className="font-medium text-sm">Annotate</span>
+                    <span className="font-medium text-sm hidden sm:inline">Annotate</span>
                   </button>
                 )}
                 {/* Framing/Overlay mode toggle - rendered inline */}

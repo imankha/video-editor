@@ -383,12 +383,12 @@ export function AnnotateScreen({ onClearSelection }) {
                 itemName={annotateGameName}
               />
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1 sm:gap-4">
               <GalleryButton />
               {/* Annotate mode indicator */}
-              <div className="flex items-center gap-2 px-4 py-2 bg-green-600/20 border border-green-600/40 rounded-lg">
+              <div className="flex items-center gap-2 px-2 sm:px-4 py-2 bg-green-600/20 border border-green-600/40 rounded-lg">
                 <Scissors size={16} className="text-green-400" />
-                <span className="text-sm font-medium text-green-400">Annotate</span>
+                <span className="text-sm font-medium text-green-400 hidden sm:inline">Annotate</span>
               </div>
             </div>
           </div>

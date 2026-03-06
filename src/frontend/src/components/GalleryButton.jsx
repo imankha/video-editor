@@ -20,7 +20,7 @@ export function GalleryButton() {
       onClick={open}
       title="Gallery"
     >
-      Gallery
+      <span className="hidden sm:inline">Gallery</span>
       {count > 0 && (
         <span className="px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
           {count}
