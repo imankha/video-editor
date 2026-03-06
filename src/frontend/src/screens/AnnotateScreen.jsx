@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Home, Scissors } from 'lucide-react';
+import { Home, Scissors, List, X } from 'lucide-react';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
@@ -52,6 +52,8 @@ export function AnnotateScreen({ onClearSelection }) {
   const isLoadingRef = useRef(false);
   // Track pending seek time for navigation from Framing mode
   const [pendingSeekTime, setPendingSeekTime] = useState(null);
+  // Mobile sidebar toggle
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
   // Get active upload from store (for restoring annotation after navigating back from Games)
   const activeUpload = useUploadStore(state => state.activeUpload);
@@ -349,27 +351,58 @@ export function AnnotateScreen({ onClearSelection }) {
     isLoadingRef.current = false;
   }
 
+  const clipCountDisplay = isMultiVideo ? filteredClipRegions.length : annotateClipCount;
+
   return (
     <>
-      {/* Sidebar - Clips list and TSV import */}
-      <ClipsSidePanel
-        clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
-        selectedRegionId={annotateSelectedRegionId}
-        onSelectRegion={handleSelectAnnotateRegion}
-        onUpdateRegion={updateClipRegion}
-        onDeleteRegion={deleteClipRegion}
-        onImportAnnotations={importAnnotations}
-        maxNotesLength={ANNOTATE_MAX_NOTES_LENGTH}
-        clipCount={isMultiVideo ? filteredClipRegions.length : annotateClipCount}
-        videoDuration={annotateVideoMetadata?.duration}
-        isLoading={isLoadingAnnotations}
-        isVideoUploading={isUploadingGameVideo}
-      />
+      {/* Sidebar - hidden on mobile, visible on sm+ */}
+      <div className="hidden sm:flex">
+        <ClipsSidePanel
+          clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
+          selectedRegionId={annotateSelectedRegionId}
+          onSelectRegion={handleSelectAnnotateRegion}
+          onUpdateRegion={updateClipRegion}
+          onDeleteRegion={deleteClipRegion}
+          onImportAnnotations={importAnnotations}
+          maxNotesLength={ANNOTATE_MAX_NOTES_LENGTH}
+          clipCount={clipCountDisplay}
+          videoDuration={annotateVideoMetadata?.duration}
+          isLoading={isLoadingAnnotations}
+          isVideoUploading={isUploadingGameVideo}
+        />
+      </div>
+      {/* Mobile sidebar overlay */}
+      {showMobileSidebar && (
+        <div className="fixed inset-0 z-50 flex sm:hidden">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileSidebar(false)} />
+          <div className="relative w-[85vw] max-w-[352px] h-full">
+            <ClipsSidePanel
+              clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
+              selectedRegionId={annotateSelectedRegionId}
+              onSelectRegion={(id) => { handleSelectAnnotateRegion(id); setShowMobileSidebar(false); }}
+              onUpdateRegion={updateClipRegion}
+              onDeleteRegion={deleteClipRegion}
+              onImportAnnotations={importAnnotations}
+              maxNotesLength={ANNOTATE_MAX_NOTES_LENGTH}
+              clipCount={clipCountDisplay}
+              videoDuration={annotateVideoMetadata?.duration}
+              isLoading={isLoadingAnnotations}
+              isVideoUploading={isUploadingGameVideo}
+            />
+            <button
+              onClick={() => setShowMobileSidebar(false)}
+              className="absolute top-3 right-3 p-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      )}
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <div className="container mx-auto px-3 py-4 sm:px-4 sm:py-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-4 sm:mb-8">
+          <div className="flex flex-col-reverse sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-4 sm:mb-8">
             <div className="flex items-center gap-2 sm:gap-4">
               <Button
                 variant="ghost"
@@ -384,6 +417,15 @@ export function AnnotateScreen({ onClearSelection }) {
               />
             </div>
             <div className="flex items-center gap-1 sm:gap-4">
+              {/* Mobile clips toggle button */}
+              <button
+                onClick={() => setShowMobileSidebar(true)}
+                className="flex sm:hidden items-center gap-1.5 px-2.5 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300"
+                title="Show clips"
+              >
+                <List size={16} />
+                <span className="text-xs font-medium">{clipCountDisplay}</span>
+              </button>
               <GalleryButton />
               {/* Annotate mode indicator */}
               <div className="flex items-center gap-2 px-2 sm:px-4 py-2 bg-green-600/20 border border-green-600/40 rounded-lg">

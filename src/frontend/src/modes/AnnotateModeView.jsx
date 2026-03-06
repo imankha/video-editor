@@ -92,25 +92,20 @@ export function AnnotateModeView({
     <>
       {/* Video Metadata - Annotate mode */}
       {annotateVideoMetadata && !annotateFullscreen && (
-        <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20">
-          <div className="flex items-center justify-between text-sm text-gray-300">
-            <span className="font-semibold text-white truncate max-w-md" title={annotateVideoMetadata.fileName}>
-              {annotateVideoMetadata.fileName}
+        <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-4 border border-white/20">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-300">
+            <span>
+              <span className="text-gray-400">Resolution:</span>{' '}
+              {annotateVideoMetadata.resolution}
             </span>
-            <div className="flex space-x-6">
-              <span>
-                <span className="text-gray-400">Resolution:</span>{' '}
-                {annotateVideoMetadata.resolution}
-              </span>
-              <span>
-                <span className="text-gray-400">Format:</span>{' '}
-                {annotateVideoMetadata.format?.toUpperCase() || 'MP4'}
-              </span>
-              <span>
-                <span className="text-gray-400">Size:</span>{' '}
-                {annotateVideoMetadata.sizeFormatted || `${(annotateVideoMetadata.size / (1024 * 1024)).toFixed(2)} MB`}
-              </span>
-            </div>
+            <span>
+              <span className="text-gray-400">Format:</span>{' '}
+              {annotateVideoMetadata.format?.toUpperCase() || 'MP4'}
+            </span>
+            <span>
+              <span className="text-gray-400">Size:</span>{' '}
+              {annotateVideoMetadata.sizeFormatted || `${(annotateVideoMetadata.size / (1024 * 1024)).toFixed(2)} MB`}
+            </span>
           </div>
         </div>
       )}

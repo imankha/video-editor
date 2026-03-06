@@ -105,10 +105,24 @@ export default function ClipRegionLayer({
               onMouseEnter={() => setHoveredRegionId(region.id)}
               onMouseLeave={() => setHoveredRegionId(null)}
             >
-              {/* Rating notation badge with outline for visibility */}
+              {/* Mobile: thin color bar (no text, avoids overlaps) */}
               <div
                 className={`
-                  px-1.5 py-0.5 rounded font-bold transition-all duration-150
+                  sm:hidden rounded transition-all duration-150
+                  ${isSelected ? 'ring-2 ring-white shadow-lg' : ''}
+                `}
+                style={{
+                  width: '6px',
+                  height: isSelected ? '28px' : '20px',
+                  backgroundColor: color,
+                  border: '1px solid rgba(0,0,0,0.3)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                }}
+              />
+              {/* Desktop: rating notation badge */}
+              <div
+                className={`
+                  hidden sm:block px-1.5 py-0.5 rounded font-bold transition-all duration-150
                   ${isSelected
                     ? 'text-lg ring-2 ring-white shadow-lg'
                     : 'text-sm hover:scale-110'
@@ -118,7 +132,7 @@ export default function ClipRegionLayer({
                   backgroundColor: color,
                   color: '#ffffff',
                   textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-                  border: '1px solid rgba(0,0,0,0.3)', // Dark outline for visibility
+                  border: '1px solid rgba(0,0,0,0.3)',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                 }}
               >
