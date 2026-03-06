@@ -66,7 +66,7 @@ export function KeyframeMarker({
       }}
     >
       {/* Invisible hit area that keeps buttons visible when moving mouse between elements */}
-      <div className="absolute -top-5 -bottom-4 -left-4 -right-4" />
+      <div className="absolute -top-7 -bottom-4 -left-4 -right-4" />
 
       {/* Copy button (shown when selected, above keyframe) - z-50 to appear above all UI including playhead */}
       {showCopyButton && onCopy && (
@@ -92,10 +92,14 @@ export function KeyframeMarker({
       >
       </div>
 
-      {/* Delete button (shown when selected) - z-50 to appear above all UI including playhead */}
+      {/* Delete button (shown when selected) - z-50 to appear above all UI including playhead
+          Position above diamond when copy button is absent (e.g., CropLayer) to avoid
+          being hidden behind the next layer below */}
       {showDeleteButton && onDelete && (
         <button
-          className={`absolute top-4 left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 z-50 ${
+          className={`absolute left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 z-50 ${
+            !showCopyButton || !onCopy ? '-top-5' : 'top-4'
+          } ${
             isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
           onClick={(e) => {
