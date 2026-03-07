@@ -196,7 +196,7 @@ test.describe('T340: Keyframe Integrity Guards', () => {
     console.log('[T340] Guard 1 PASSED: permanent keyframes reconstituted on restore');
 
     // === Guard 2: Minimum keyframe spacing ===
-    expect(result.MIN_KEYFRAME_SPACING).toBe(5);
+    expect(result.MIN_KEYFRAME_SPACING).toBe(10);
     expect(result.g2_snappedCount, 'Snap keeps count').toBe(result.g2_baseCount);
     expect(result.g2_snappedX, 'Snap updates data').toBe(155);
     expect(result.g2_allowedCount, 'Distant add works').toBe(result.g2_baseCount + 1);

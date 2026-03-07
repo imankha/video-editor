@@ -67,7 +67,8 @@ export const FRAME_TOLERANCE = 5;
 /**
  * Minimum spacing between keyframes (in frames).
  * Prevents overlapping keyframe diamonds on the timeline.
- * At 30fps, 5 frames = ~167ms — close enough to feel instant,
- * far enough apart to select independently.
+ * Diamond is 12px wide; on a 15s clip at 800px, each frame ≈ 1.8px.
+ * 10 frames = 18px gap — enough to visually distinguish and click independently.
+ * At 30fps, 10 frames = 333ms.
  */
-export const MIN_KEYFRAME_SPACING = 5;
+export const MIN_KEYFRAME_SPACING = 10;

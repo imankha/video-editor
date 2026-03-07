@@ -132,8 +132,8 @@ describe('keyframeUtils', () => {
   });
 
   describe('MIN_KEYFRAME_SPACING', () => {
-    it('should be 5 (prevents overlapping keyframe diamonds)', () => {
-      expect(MIN_KEYFRAME_SPACING).toBe(5);
+    it('should be 10 (prevents overlapping keyframe diamonds)', () => {
+      expect(MIN_KEYFRAME_SPACING).toBe(10);
     });
   });
 });
