@@ -150,33 +150,41 @@ function ensurePermanentKeyframes(keyframes, endFrame) {
 
   let result = [...keyframes];
 
-  // Ensure frame 0 exists
-  const hasStart = result.some(kf => kf.frame === 0);
-  if (!hasStart) {
-    // Reconstitute from nearest (first) keyframe
-    const nearest = result[0];
-    const { frame: _f, origin: _o, ...data } = nearest;
-    result = [{ ...data, frame: 0, origin: 'permanent' }, ...result];
+  // Ensure frame 0 exists — absorb nearby keyframe if within MIN_KEYFRAME_SPACING
+  const startIndex = result.findIndex(kf => kf.frame === 0);
+  if (startIndex >= 0) {
+    result[startIndex] = { ...result[startIndex], origin: 'permanent' };
   } else {
-    // Ensure frame 0 has origin='permanent'
-    result = result.map(kf => kf.frame === 0 ? { ...kf, origin: 'permanent' } : kf);
-  }
-
-  // Ensure endFrame exists
-  if (endFrame !== null && endFrame !== undefined) {
-    const hasEnd = result.some(kf => kf.frame === endFrame);
-    if (!hasEnd) {
-      // Reconstitute from nearest (last) keyframe
-      const nearest = result[result.length - 1];
-      const { frame: _f, origin: _o, ...data } = nearest;
-      result = [...result, { ...data, frame: endFrame, origin: 'permanent' }];
+    const nearbyStartIndex = result.findIndex(kf => kf.frame < MIN_KEYFRAME_SPACING);
+    if (nearbyStartIndex >= 0) {
+      // Absorb: move nearby keyframe to frame 0
+      result[nearbyStartIndex] = { ...result[nearbyStartIndex], frame: 0, origin: 'permanent' };
     } else {
-      // Ensure endFrame has origin='permanent'
-      result = result.map(kf => kf.frame === endFrame ? { ...kf, origin: 'permanent' } : kf);
+      // No nearby keyframe — reconstitute from first
+      const { frame: _f, origin: _o, ...data } = result[0];
+      result = [{ ...data, frame: 0, origin: 'permanent' }, ...result];
     }
   }
 
-  return result;
+  // Ensure endFrame exists — absorb nearby keyframe if within MIN_KEYFRAME_SPACING
+  if (endFrame !== null && endFrame !== undefined) {
+    const endIndex = result.findIndex(kf => kf.frame === endFrame);
+    if (endIndex >= 0) {
+      result[endIndex] = { ...result[endIndex], origin: 'permanent' };
+    } else {
+      const nearbyEndIndex = result.findIndex(kf => kf.frame > endFrame - MIN_KEYFRAME_SPACING && kf.frame < endFrame);
+      if (nearbyEndIndex >= 0) {
+        // Absorb: move nearby keyframe to endFrame
+        result[nearbyEndIndex] = { ...result[nearbyEndIndex], frame: endFrame, origin: 'permanent' };
+      } else {
+        // No nearby keyframe — reconstitute from last
+        const { frame: _f, origin: _o, ...data } = result[result.length - 1];
+        result = [...result, { ...data, frame: endFrame, origin: 'permanent' }];
+      }
+    }
+  }
+
+  return sortKeyframes(result);
 }
 
 /**
