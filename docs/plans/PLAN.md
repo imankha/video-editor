@@ -134,7 +134,7 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 | T300 | [Mobile Annotate Screen](tasks/mobile-responsive/T300-mobile-annotate-screen.md) | DONE | 5 | 4 | Content bleeds off right edge |
 | T310 | [Mobile Editor Layout](tasks/mobile-responsive/T310-mobile-editor-layout.md) | DONE | 8 | 6 | Two-column editor unusable, needs vertical stack |
 | T320 | [Mobile Video Preview](tasks/mobile-responsive/T320-mobile-video-preview.md) | DONE | 6 | 4 | Tiny preview, crop handles too small for touch |
-| T330 | [Mobile Video Players](tasks/mobile-responsive/T330-mobile-video-players.md) | TODO | 7 | 4 | Touch controls, scrubbing, iOS/Android quirks |
+| T330 | [Mobile Video Players](tasks/mobile-responsive/T330-mobile-video-players.md) | TESTING | 7 | 4 | Touch controls, scrubbing, iOS/Android quirks |
 
 ### Phase 4: Post-Launch Polish
 
@@ -142,6 +142,7 @@ Improvements after real user traffic.
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
+| T340 | [Keyframe Integrity Guards](tasks/T340-keyframe-integrity-guards.md) | TODO | Missing permanent keyframes, min spacing, selection disambiguation |
 | T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | TODO | Multi-tab conflict handling |
 | T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | Faster video loads (needs T200) |
 | T74 | [Incremental Framing Export](tasks/T74-incremental-framing-export.md) | TODO | Cache rendered clips |
