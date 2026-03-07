@@ -340,8 +340,10 @@ export function keyframeReducer(state, action) {
       const keyframeToRemove = findKeyframeAtFrame(keyframes, frame);
       if (!keyframeToRemove) return state;
 
-      // Don't allow removing permanent keyframes
+      // Don't allow removing permanent keyframes or boundary keyframes
       if (keyframeToRemove.origin === 'permanent') return state;
+      if (frame === 0) return state;
+      if (state.endFrame !== null && frame === state.endFrame) return state;
 
       // Don't allow removing if it would leave less than 2 keyframes
       if (keyframes.length <= 2) return state;

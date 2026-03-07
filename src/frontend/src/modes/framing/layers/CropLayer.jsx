@@ -104,6 +104,8 @@ export default function CropLayer({
           const isAtStartTime = Math.abs(currentTime - effectiveStartTime) < 0.01;
           const isSelected = selectedKeyframeIndex === index;
           const isPermanent = keyframe.origin === 'permanent';
+          // Treat boundary keyframes as undeletable regardless of origin
+          const isBoundaryKeyframe = isPermanent || isStartKeyframe || isEffectiveEndKeyframe;
 
           // Highlight keyframe if no other keyframe is selected AND:
           // 1. At current time, OR
@@ -124,13 +126,13 @@ export default function CropLayer({
               isStartKeyframe={isStartKeyframe}
               isEndKeyframe={isEffectiveEndKeyframe}
               onClick={() => onKeyframeClick(keyframeTime, index)}
-              onDelete={keyframes.length > 2 && !isPermanent ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
+              onDelete={keyframes.length > 2 && !isBoundaryKeyframe ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
               tooltip={`Keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
                 isEffectiveEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
               }${isSelected ? ' [SELECTED]' : ''}`}
               edgePadding={edgePadding}
               showCopyButton={false}
-              showDeleteButton={keyframes.length > 2 && !isPermanent}
+              showDeleteButton={keyframes.length > 2 && !isBoundaryKeyframe}
             />
           );
         })}
