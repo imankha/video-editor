@@ -121,6 +121,7 @@ Deploy to production domains with proper scaling.
 | T250 | [Clip Store Unification](tasks/T250-clip-store-unification.md) | DONE | 5 | 4 | Eliminate dual-store sync: merge useProjectClips into Zustand, compute flags, use backend IDs |
 | T260 | [Framing Audio Toggle Ignored](tasks/T260-framing-audio-toggle-ignored.md) | DONE | 5 | 3 | Audio still present when toggle is off |
 | T270 | [Overlay Renders Outside Region](tasks/T270-overlay-renders-outside-region.md) | DONE | 4 | 4 | Overlay extends beyond shrunk region bounds |
+| T350 | [Sync Strategy Overhaul](tasks/T350-sync-strategy-overhaul.md) | TODO | 9 | 6 | DB writes only on user gestures; reactive sync effect corrupts keyframe data |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
@@ -142,7 +143,7 @@ Improvements after real user traffic.
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| T340 | [Keyframe Integrity Guards](tasks/T340-keyframe-integrity-guards.md) | TODO | Missing permanent keyframes, min spacing, selection disambiguation |
+| T340 | [Keyframe Integrity Guards](tasks/T340-keyframe-integrity-guards.md) | TESTING | Missing permanent keyframes, min spacing, selection disambiguation |
 | T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | TODO | Multi-tab conflict handling |
 | T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | Faster video loads (needs T200) |
 | T74 | [Incremental Framing Export](tasks/T74-incremental-framing-export.md) | TODO | Cache rendered clips |

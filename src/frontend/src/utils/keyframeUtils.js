@@ -31,7 +31,16 @@ export function findKeyframeAtFrame(keyframes, frame) {
  * @returns {number} Index of keyframe, or -1 if not found
  */
 export function findKeyframeIndexNearFrame(keyframes, frame, tolerance = 2) {
-  return keyframes.findIndex(kf => Math.abs(kf.frame - frame) <= tolerance);
+  let bestIndex = -1;
+  let bestDistance = Infinity;
+  for (let i = 0; i < keyframes.length; i++) {
+    const distance = Math.abs(keyframes[i].frame - frame);
+    if (distance <= tolerance && distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = i;
+    }
+  }
+  return bestIndex;
 }
 
 /**
@@ -54,3 +63,12 @@ export function hasKeyframeAtFrame(keyframes, frame) {
  * - Large enough to make keyframe selection easy
  */
 export const FRAME_TOLERANCE = 5;
+
+/**
+ * Minimum spacing between keyframes (in frames).
+ * Prevents overlapping keyframe diamonds on the timeline.
+ * Diamond is 12px wide; on a 15s clip at 800px, each frame ≈ 1.8px.
+ * 10 frames = 18px gap — enough to visually distinguish and click independently.
+ * At 30fps, 10 frames = 333ms.
+ */
+export const MIN_KEYFRAME_SPACING = 10;

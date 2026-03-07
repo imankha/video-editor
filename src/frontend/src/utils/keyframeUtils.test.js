@@ -4,7 +4,8 @@ import {
   findKeyframeAtFrame,
   findKeyframeIndexNearFrame,
   hasKeyframeAtFrame,
-  FRAME_TOLERANCE
+  FRAME_TOLERANCE,
+  MIN_KEYFRAME_SPACING
 } from './keyframeUtils';
 
 describe('keyframeUtils', () => {
@@ -79,14 +80,27 @@ describe('keyframeUtils', () => {
       expect(findKeyframeIndexNearFrame(sampleKeyframes, 29, 0)).toBe(-1);
     });
 
-    it('returns first matching keyframe when multiple could match', () => {
+    it('returns closest keyframe when multiple are within tolerance', () => {
       // Keyframes very close together
       const closeKeyframes = [
         { frame: 10 },
         { frame: 12 }
       ];
-      // With tolerance of 3, frame 11 could match both, but should return first
+      // With tolerance of 3, frame 11 is equidistant — returns first (index 0)
       expect(findKeyframeIndexNearFrame(closeKeyframes, 11, 3)).toBe(0);
+      // Frame 12 is closer to index 1
+      expect(findKeyframeIndexNearFrame(closeKeyframes, 12, 3)).toBe(1);
+      // Frame 10 is closer to index 0
+      expect(findKeyframeIndexNearFrame(closeKeyframes, 10, 3)).toBe(0);
+    });
+
+    it('disambiguates by distance, not array order', () => {
+      const closeKeyframes = [
+        { frame: 20 },
+        { frame: 28 }
+      ];
+      // Frame 26 is 6 from 20 and 2 from 28 — with tolerance 7, should pick index 1
+      expect(findKeyframeIndexNearFrame(closeKeyframes, 26, 7)).toBe(1);
     });
 
     it('returns -1 for empty keyframes array', () => {
@@ -113,10 +127,13 @@ describe('keyframeUtils', () => {
 
   describe('FRAME_TOLERANCE', () => {
     it('should be 5 (for ~167ms tolerance at 30fps)', () => {
-      // 5 frames at 30fps = ~167ms tolerance
-      // Based on analysis: minimum gap between user keyframes is 6-10 frames
-      // 5 frames is small enough to avoid false snaps, large enough for easy selection
       expect(FRAME_TOLERANCE).toBe(5);
+    });
+  });
+
+  describe('MIN_KEYFRAME_SPACING', () => {
+    it('should be 10 (prevents overlapping keyframe diamonds)', () => {
+      expect(MIN_KEYFRAME_SPACING).toBe(10);
     });
   });
 });
