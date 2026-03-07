@@ -84,12 +84,14 @@ export function KeyframeMarker({
         </button>
       )}
 
-      {/* Diamond keyframe indicator */}
+      {/* Diamond keyframe indicator with expanded click area */}
       <div
-        className={`w-3 h-3 transform rotate-45 transition-all ${markerColorClass} ${onClick ? 'cursor-pointer' : 'pointer-events-none'} relative`}
+        className={`relative ${onClick ? 'cursor-pointer' : 'pointer-events-none'}`}
         onClick={onClick}
         title={tooltip}
       >
+        <div className="absolute -inset-2" />
+        <div className={`w-3 h-3 transform rotate-45 transition-all ${markerColorClass}`} />
       </div>
 
       {/* Delete button (shown when selected) - z-50 to appear above all UI including playhead
