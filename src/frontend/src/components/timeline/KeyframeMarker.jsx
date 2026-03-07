@@ -66,7 +66,7 @@ export function KeyframeMarker({
       }}
     >
       {/* Invisible hit area that keeps buttons visible when moving mouse between elements */}
-      <div className="absolute -top-7 -bottom-4 -left-4 -right-4" />
+      <div className="absolute -top-7 -bottom-4 -left-4 -right-4 pointer-events-none" />
 
       {/* Copy button (shown when selected, above keyframe) - z-50 to appear above all UI including playhead */}
       {showCopyButton && onCopy && (
