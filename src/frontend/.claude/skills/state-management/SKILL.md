@@ -315,59 +315,106 @@ export const isFailed = (clip) => clip.extraction_status === 'failed';
 
 ---
 
-## Hook → Store Sync Pattern (Framing Persistence)
+## Persistence: Gesture-Based, Never Reactive
 
-When React hooks hold ephemeral editing state that must persist to a Zustand store (e.g., crop keyframes, segment data), use the **reactive sync effect pattern**.
+### The Core Concept
+
+React hooks hold ephemeral editing state. This state includes **runtime fixups** — corrections that happen in memory for correct rendering but were never in the database:
+- `ensurePermanentKeyframes`: adds/corrects boundary keyframes at frame 0 and endFrame
+- Origin normalization: corrects 'user' → 'permanent' on boundary keyframes
+- Restore normalization: sorts, validates, and fills in defaults on loaded data
+
+These fixups change hook state. A `useEffect` watching that state cannot tell the difference between "user dragged a crop handle" and "ensurePermanentKeyframes just ran." It sees state changed and persists everything — including fixup artifacts that should never have been saved.
 
 ### Architecture
 
 ```
-React Hooks (ephemeral)  →  Zustand Store (persistence)  →  Backend API (durability)
-   useCrop                    projectDataStore                 PUT /clips/{id}
-   useSegments                  clip.crop_data
-                                clip.segments_data
+User Gesture → Handler → Surgical API call (POST /actions, sends ONLY changed data)
+                       → Hook state update (for immediate UI feedback)
+
+Backend: reads DB → applies single change → writes back
+
+Internal Fixup → Hook state update (memory only, NEVER persisted)
+
+Export → saveCurrentClipState → Full-state PUT (explicit user gesture only)
 ```
 
-- **Hooks** = live editing state. Reset on unmount, hold current values during interaction.
-- **Zustand store** = single source of truth for persistence. Survives mode switches, clip switches.
-- **Backend** = durability. Fire-and-forget sync from store, plus full PUT on export.
-
-### The Sync Effect
-
-There is exactly ONE sync effect in FramingScreen that writes hook state → store:
-
-```javascript
-useEffect(() => {
-  if (isRestoringRef.current) return;           // Guard: async restore in progress
-  if (syncClipIdRef.current !== selectedClipId) { // Guard: first render after clip switch
-    syncClipIdRef.current = selectedClipId;
-    return;
-  }
-  if (!selectedClipId) return;
-
-  updateClipData(selectedClipId, {
-    crop_data: JSON.stringify(keyframes),
-    segments_data: JSON.stringify({ boundaries, speeds, trimRange }),
-  });
-}, [keyframes, boundaries, speeds, trimRange, selectedClipId, updateClipData]);
-```
+- **Hooks** = ephemeral editing state + runtime fixups. Correct for rendering, NOT for persistence.
+- **Backend** = source of truth. Updated via surgical gesture actions.
+- **Zustand store** = cache. Refreshed on clip load, not continuously synced from hooks.
 
 ### Rules
 
-1. **NEVER add a second save effect** — no unmount saves, no clip-switch saves, no gesture saves
-2. **Effect order matters** — restore effect BEFORE sync effect (ref mutations must be visible)
-3. **No data redundancy** — trimRange lives ONLY in segments_data, never in timing_data
-4. **Backend sync is fire-and-forget** — store update triggers debounced API call; sync effect never calls backend directly
+1. **Every DB write traces to a named user gesture** — crop drag, keyframe delete, trim toggle, speed change, split add/remove. If you can't name the gesture, don't persist.
+2. **No `useEffect` that writes to store or backend** — this is the #1 source of data corruption bugs. Move persistence into the gesture handler.
+3. **Runtime fixups are memory-only** — `ensurePermanentKeyframes`, origin corrections, restore normalization stay in hooks for rendering. They MUST NOT trigger persistence.
+4. **Restore is read-only** — loading data from DB into hooks must not trigger a write-back. The restore changes hook state, but that state change is not a user gesture.
+5. **Surgical over full-state** — gesture actions send ONLY the data that changed (one keyframe, one speed value). Never dump all hook state to the backend.
+6. **Single write path per data** — each piece of persistent data has exactly one code path that writes it to the backend.
+
+### Why "Just Add Guards" Doesn't Work
+
+Previous attempts used ref guards (`isRestoringRef`, `syncClipIdRef`) to prevent the reactive effect from firing during restores. This fails because:
+- Guards must cover EVERY code path that changes state without a gesture (fixups, normalizations, trim cleanup)
+- Missing one guard = silent data corruption
+- New fixup logic added later won't know it needs a guard
+- The fundamental architecture is wrong: persistence should be opt-in (gesture fires API call), not opt-out (effect fires unless guarded)
 
 ### Violation Detection
 
-If you see any of these patterns being added, **stop and flag it**:
-- `useEffect(() => { ... }, [])` with a cleanup function that saves state (unmount save)
-- Saving "previous clip" data inside a clip-switch effect
-- Direct `fetch`/`POST` calls inside gesture handlers (bypass store)
-- A new field duplicating data already in segments_data or crop_data
+**STOP and flag** if you see any of these being added:
+- `useEffect` with `updateClipData`, `saveFramingEdits`, `fetch`, or any API call in its body
+- `useEffect` that watches `keyframes`, `segmentBoundaries`, `segmentSpeeds`, or `trimRange` and writes to a store
+- `useEffect(() => { ... return () => { save(); } }, [])` — cleanup save on unmount
+- Saving "previous entity" data inside an entity-switch effect
+- A handler that sends ALL keyframes/segments when only one changed
 
-Reference: [T280 Design Doc](../../../../../docs/plans/tasks/T280-framing-persistence-redesign.md) | [Coding Standards - Hook → Store Sync](../../../../../.claude/references/coding-standards.md)
+### Correct Patterns
+
+```javascript
+// CORRECT: Gesture handler → surgical API call
+const handleCropComplete = useCallback((cropData) => {
+  addKeyframe(frame, cropData);  // Hook state (ephemeral)
+  framingActions.addCropKeyframe(projectId, clipId, {
+    frame, x: cropData.x, y: cropData.y,
+    width: cropData.width, height: cropData.height,
+    origin: 'user'
+  }).catch(err => console.error('Sync failed:', err));
+}, [...]);
+
+// CORRECT: Full-state save on explicit export gesture only
+const handleExport = useCallback(async () => {
+  await saveCurrentClipState();  // Sends all hook state — OK because user clicked Export
+  startExport();
+}, [...]);
+```
+
+### Anti-Patterns
+
+```javascript
+// BANNED: Reactive sync effect
+useEffect(() => {
+  updateClipData(clipId, {
+    crop_data: JSON.stringify(keyframes),  // Includes ensurePermanentKeyframes fixups!
+  });
+}, [keyframes, clipId]);
+
+// BANNED: Unmount save
+useEffect(() => {
+  return () => { saveState(); };  // React may have cleared state already
+}, []);
+
+// BANNED: Full-state dump in gesture handler
+const handleCropComplete = useCallback((cropData) => {
+  addKeyframe(frame, cropData);
+  saveFramingEdits(clipId, {
+    cropKeyframes: allKeyframes,  // Sends ALL keyframes, not just the new one
+    segments: allSegments,
+  });
+}, [...]);
+```
+
+Reference: [T350 Design Doc](../../../../../docs/plans/tasks/T350-design.md) | [Coding Standards](../../../../../.claude/references/coding-standards.md)
 
 ---
 

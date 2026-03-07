@@ -283,53 +283,73 @@ function save() { api.save(data); }
 // Button and keyboard both call save()
 ```
 
-### Hook → Store Sync (Reactive Persistence)
+### Persistence: Gesture-Based, Never Reactive
 
-When React hooks hold ephemeral editing state (e.g., crop keyframes, segment boundaries) that must persist to a Zustand store, use **one reactive sync effect** — never multiple competing save mechanisms.
+React hooks hold ephemeral editing state that includes **runtime fixups** — internal corrections like `ensurePermanentKeyframes` (adds boundary keyframes) and origin normalization. These fixups are necessary for correct rendering but were never in the DB. They must not be persisted.
 
-**The pattern:**
+**The fundamental problem with reactive persistence:**
+
+A `useEffect` that watches hook state and writes it to a store or backend cannot distinguish between:
+- A user gesture (crop drag, keyframe delete) — should persist
+- An internal fixup (ensurePermanentKeyframes, origin correction) — should NOT persist
+- A restore operation (loading from DB) — should NOT persist
+
+All three change the same hook state. The effect sees "state changed" and writes it all back. This creates a feedback loop: load → fixup → persist fixup → next load restores fixup data → fixup runs again on already-fixed data → corruption compounds.
+
+**Correct pattern: Surgical gesture actions**
+
+Each user gesture fires its own API call from the handler, sending ONLY the data that gesture changed. The backend reads current DB state, applies the single change, and writes back.
 
 ```javascript
-// ONE sync effect: hook state → Zustand store
-const syncClipIdRef = useRef(null);
+// CORRECT: Gesture handler fires surgical API call
+const handleCropComplete = useCallback((cropData) => {
+  // 1. Update local hook state (for immediate UI feedback)
+  addKeyframe(frame, cropData);
 
-useEffect(() => {
-  // Guard 1: Skip while restoring saved state (async load in progress)
-  if (isRestoringRef.current) return;
-
-  // Guard 2: Skip first render after entity switch (hooks have stale data)
-  if (syncClipIdRef.current !== selectedId) {
-    syncClipIdRef.current = selectedId;
-    return;
-  }
-
-  if (!selectedId) return;
-
-  // Write to Zustand store — the single source of truth for persistence
-  updateStoreData(selectedId, { field: hookValue });
-}, [hookValue, selectedId, updateStoreData]);
+  // 2. Fire surgical API call — sends ONLY this keyframe
+  framingActions.addCropKeyframe(projectId, clipId, {
+    frame,
+    x: cropData.x, y: cropData.y,
+    width: cropData.width, height: cropData.height,
+    origin: 'user'
+  }).catch(err => console.error('Failed to sync:', err));
+}, [addKeyframe, projectId, clipId]);
 ```
 
-**Why two guards are needed:**
+**Why this is safe:** The backend receives `{frame, x, y, w, h, origin}` and appends it to the existing array in the DB. It never sees the full hook state, so runtime fixups can't leak into the DB.
 
-| Guard | Problem it prevents |
-|-------|-------------------|
-| `isRestoringRef` | Sync effect fires during async restore → writes empty/default hook state over saved data |
-| `syncClipIdRef` | React batches state updates → on entity switch, hooks still hold OLD entity's data for one render cycle |
+**Banned pattern: Reactive sync effect**
 
-**Critical rules:**
-1. **One sync effect per screen** — never add a second save effect (unmount, switch, gesture)
-2. **Effect ordering matters** — the restore effect must be declared BEFORE the sync effect so its ref mutations are visible
-3. **Fire-and-forget backend sync** — the Zustand store update triggers a debounced API call; the sync effect itself never calls the backend
-4. **No data redundancy** — each value lives in exactly one field (e.g., trimRange lives in segments_data only, not also in timing_data)
+```javascript
+// BANNED: useEffect watching hook state → writing to store/backend
+useEffect(() => {
+  updateClipData(clipId, {
+    crop_data: JSON.stringify(keyframes),      // ALL keyframes — includes fixups!
+    segments_data: JSON.stringify(segments),    // ALL segments — includes fixups!
+  });
+}, [keyframes, segments, clipId]);
+```
 
-**Violations that cause data loss:**
-1. **Unmount save effect** — fires AFTER React clears state → writes empty data
-2. **Clip-switch save effect** — races with the restore of the new clip's data
-3. **Multiple save paths** — gesture POST + full PUT → race conditions, last-write-wins
-4. **Missing skip guard** — sync effect fires before hooks update → writes stale data from previous entity
+**Why this corrupts data:** `keyframes` includes runtime fixups from `ensurePermanentKeyframes`. This effect writes them to the store. On next load, the fixup data is treated as user data. The fixup runs again. Origins get corrupted, duplicate keyframes appear.
 
-See [T280 design doc](../../docs/plans/tasks/T280-framing-persistence-redesign.md) for the full architecture.
+**Full-state saves (saveCurrentClipState):**
+
+Full-state persistence (PUT with all keyframes + segments) is allowed ONLY when triggered by an explicit user gesture like export. Never reactively or on clip switch.
+
+**Rules:**
+1. **Every DB write traces to a named user gesture** — if you can't name it, don't persist
+2. **No `useEffect` that writes to store or backend** — move persistence into the gesture handler
+3. **Runtime fixups are memory-only** — `ensurePermanentKeyframes`, origin correction, restore normalization stay in hooks
+4. **Restore is read-only** — loading from DB must not trigger write-back
+5. **Surgical over full-state** — send only the changed field, not all hook state
+6. **Single write path per data** — each piece of data has exactly one code path that persists it
+
+**How to verify:**
+- For every `useEffect` in a Screen: does it write to a store or call an API? → Move to gesture handler
+- For every API call: does the payload contain more data than the gesture changed? → Make it surgical
+- For every store update: what user gesture caused this? If "none" → don't persist
+
+See [T350 design doc](../../docs/plans/tasks/T350-design.md) for the audit that motivated this rule.
 
 ### Minimal Branching
 
@@ -403,6 +423,6 @@ if export_mode == ExportMode.FAST:
 | External Guards Only | Validation at boundaries, trust internal? |
 | DRY | No duplicate logic? |
 | Single Code Path | One way to do each thing? |
-| Hook → Store Sync | One reactive sync effect, no competing saves? |
+| Gesture-Based Persistence | Every DB write traces to a user gesture? No reactive useEffect persistence? |
 | Loose Coupling | Depends on abstractions? |
 | Tight Cohesion | Each module does one thing? |
