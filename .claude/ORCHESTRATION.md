@@ -117,6 +117,18 @@ Which skills are relevant to each agent:
 | data-always-ready | CRITICAL | Checking data guards |
 | state-management | HIGH | Verifying state approach |
 
+### Merge Reviewer
+| Skill | Relevance | Load When |
+|-------|-----------|-----------|
+| state-management | CRITICAL | Checking sync strategy, store ownership |
+| mvc-pattern | HIGH | Verifying architecture compliance |
+| data-always-ready | HIGH | Checking data guards |
+| keyframe-data-model | MEDIUM | If keyframe code changed |
+
+**References**:
+- coding-standards.md - Always consult (persistence rules)
+- code-smells.md - Always consult
+
 ---
 
 ## Spawning Agents
@@ -227,6 +239,21 @@ Task tool:
     3. Coverage assessment
 
     Loop with Implementor until all tests pass.
+```
+
+### Merge Reviewer
+```
+Task tool:
+  subagent_type: general-purpose
+  prompt: |
+    You are the Merge Reviewer agent.
+    Read .claude/agents/merge-reviewer.md for your full instructions.
+
+    Branch: {current branch}
+    Main branch: master
+
+    Run git diff master...HEAD and audit every change against the checklist.
+    Return ALL CLEAR or ISSUES FOUND with specific file:line references.
 ```
 
 ---

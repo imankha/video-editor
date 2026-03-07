@@ -763,7 +763,7 @@ export function FramingContainer({
   }, [selectedClipId]);
 
   // NOTE: Auto-save effect removed - gesture-based actions save immediately on each user action
-  // saveCurrentClipState is still available for explicit saves (export, clip switching)
+  // saveCurrentClipState is still available for explicit saves (export only)
 
   return {
     // Derived state

@@ -101,6 +101,7 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 | "I think this works" / code complete | → Stage 5 (automated testing) |
 | All tests pass | → Stage 6 (manual testing instructions) |
 | "Approved" / "that worked" (testing) | → Stage 7 (task complete) |
+| "Ready to merge?" / "can I push?" / "ready for PR?" | → Spawn Merge Reviewer agent |
 
 ## Agents
 
@@ -114,6 +115,7 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 | **Reviewer** | Verify implementation matches approved design | [reviewer.md](.claude/agents/reviewer.md) |
 | **Project Manager** | Roadmap, prioritization, development cycles | [project-manager.md](.claude/agents/project-manager.md) |
 | **UI Designer** | Define UI details, maintain style guide; requires approval | [ui-designer.md](.claude/agents/ui-designer.md) |
+| **Merge Reviewer** | Pre-merge audit: sync strategy, state, architecture | [merge-reviewer.md](.claude/agents/merge-reviewer.md) |
 
 **Orchestration**: See [ORCHESTRATION.md](.claude/ORCHESTRATION.md) for agent spawning, handoffs, and skill access.
 
