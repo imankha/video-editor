@@ -633,43 +633,9 @@ export function FramingScreen({
     switchClip();
   }, [selectedClipId, clips, projectId, clipMetadataCache, loadVideoFromUrl, loadVideoFromStreamingUrl, loadVideo, restoreSegmentState, resetSegments, initializeSegments, restoreCropState, resetCrop, getClipWithMeta]);
 
-  // T280: Sync hook state → Zustand store on every change.
-  // This is the SINGLE mechanism that keeps the store current. It replaces:
-  // - The unmount-save effect (deleted above)
-  // - The clip-switch save code (no longer needed — store already has latest)
-  //
-  // Guards:
-  // 1. syncClipIdRef: On clip switch, selectedClipId changes but hooks still have OLD
-  //    clip's data. We skip the first render after a clip change to avoid writing
-  //    stale data to the new clip's store slot.
-  // 2. isRestoringClipStateRef: Set synchronously by clip-switch effect (declared before
-  //    this effect) to prevent sync during async restore operations.
-  const syncClipIdRef = useRef(null);
-
-  useEffect(() => {
-    // Guard 1: Skip during restore operations (clip switch in progress)
-    if (isRestoringClipStateRef.current) return;
-
-    // Guard 2: Skip the first render after a clip ID change (hooks have stale data)
-    if (syncClipIdRef.current !== selectedClipId) {
-      syncClipIdRef.current = selectedClipId;
-      return;
-    }
-
-    if (!selectedClipId) return;
-
-    // Only sync if hooks have initialized (avoids writing empty defaults)
-    if (keyframes.length === 0 && segmentBoundaries.length < 2) return;
-
-    updateClipData(selectedClipId, {
-      crop_data: JSON.stringify(keyframes),
-      segments_data: JSON.stringify({
-        boundaries: segmentBoundaries,
-        segmentSpeeds: segmentSpeeds,
-        trimRange: trimRange,
-      }),
-    });
-  }, [keyframes, segmentBoundaries, segmentSpeeds, trimRange, selectedClipId, updateClipData]);
+  // T350: Reactive sync effect REMOVED. See docs/plans/tasks/T350-design.md.
+  // Persistence is now gesture-based: each user action in FramingContainer fires
+  // a surgical POST /actions call. No reactive useEffect writes to store/backend.
 
   // Derived selection state
   const selectedCropKeyframeIndex = useMemo(() => {

@@ -59,6 +59,7 @@ keyframe = {
 - Don't transform API responses before storing (store raw, compute on read)
 - Don't generate client-side IDs for backend entities (use backend IDs)
 - Don't store derived boolean flags (isExtracted, isFailed) — compute via selectors
-- Don't add multiple save effects for the same data (unmount saves, clip-switch saves, gesture POSTs) — use ONE reactive sync effect
+- Don't use reactive `useEffect` to persist state — no watching hook state to write to store/backend (causes fixup data corruption). Use gesture-based API calls instead.
 - Don't save state in useEffect cleanup functions — React may have already cleared the state
+- Don't send full hook state (all keyframes/segments) in gesture handlers — use surgical API calls that send only the changed data
 - Don't store trimRange in timing_data — it lives only in segments_data

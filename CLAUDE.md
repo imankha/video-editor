@@ -202,6 +202,54 @@ cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
 
 When the system encounters an invalid state, it should log appropriately and fail visibly - not silently "fix" itself. If you find yourself writing code to handle "impossible" states from your own codebase, fix the source of those states instead.
 
+### Persistence: Gesture-Based, Never Reactive
+
+**The app NEVER writes to the backend as a side effect of state changing.** Only explicit user actions trigger persistence. This is not a preference — reactive persistence creates feedback loops that corrupt data.
+
+**The rule:** Every DB write must trace back to a specific user gesture (click, drag, keypress). If you can't name the gesture, the write shouldn't exist.
+
+**Why reactive persistence corrupts data:**
+
+React hooks hold ephemeral editing state that includes runtime fixups (e.g., `ensurePermanentKeyframes` adds boundary keyframes, origin corrections normalize loaded data). These fixups are correct for rendering but were never part of the user's saved data. A reactive `useEffect` that watches hook state and writes it back to a store or backend will:
+
+1. Detect the fixup as a "change"
+2. Persist the fixup data (overwriting what was in the DB)
+3. On next load, the fixup runs again on already-fixed data
+4. Each load cycle compounds the corruption
+
+This is not hypothetical — it caused keyframe origin corruption in Framing (T350).
+
+**Persistence architecture:**
+
+```
+SURGICAL (gesture actions):
+  User gesture → handler → POST /actions with ONLY the changed field
+  Backend: reads current DB state → applies single change → writes back
+  Example: addCropKeyframe sends {frame, x, y, w, h} → backend appends to array
+
+FULL-STATE (explicit save):
+  Export button → saveCurrentClipState → PUT /clips/{id} with all current state
+  Only called on deliberate user action (export, not on every state change)
+
+NEVER (reactive):
+  useEffect watching state → write to store/backend    ← THIS IS BANNED
+```
+
+**Rules:**
+1. **Gesture → surgical API call**: Each user action fires a backend call from its handler, sending ONLY the data that gesture changed
+2. **No reactive persistence**: Never `useEffect` to watch state and write to DB/store. No exceptions.
+3. **Runtime fixups are memory-only**: Internal corrections (`ensurePermanentKeyframes`, origin normalization) happen in hooks for rendering — they MUST NOT trigger persistence
+4. **Restore is read-only**: Loading data from DB into hooks must not trigger a write-back
+5. **Single write path per data**: Each piece of persistent data has exactly ONE code path that writes it
+6. **Full-state saves require explicit gesture**: `saveCurrentClipState` only runs on export button click, never reactively
+
+**How to check if you're about to violate this:**
+- Am I writing a `useEffect` that calls an API or updates a store? → Probably wrong. Move the persistence call into the gesture handler instead.
+- Am I watching hook state for changes? → Ask: what user gesture caused this change? If "none" or "internal fixup", don't persist it.
+- Am I sending ALL keyframes/segments when only one changed? → Use a surgical action instead.
+
+See [coding-standards.md](.claude/references/coding-standards.md) for implementation patterns and anti-patterns.
+
 ## Log handling
 
 **Why this matters:** Raw logs are extremely token-expensive. The `reduce_log` MCP tool compresses logs up to 95% while preserving full semantic value. Every time raw logs enter context — whether from reading a file, running a command, or the user pasting them — those tokens are permanently spent and cannot be reclaimed. This directly shortens the conversation. Always route logs through `reduce_log` to maximize the useful work you can do in a session.
