@@ -122,6 +122,7 @@ Deploy to production domains with proper scaling.
 | T260 | [Framing Audio Toggle Ignored](tasks/T260-framing-audio-toggle-ignored.md) | DONE | 5 | 3 | Audio still present when toggle is off |
 | T270 | [Overlay Renders Outside Region](tasks/T270-overlay-renders-outside-region.md) | DONE | 4 | 4 | Overlay extends beyond shrunk region bounds |
 | T350 | [Sync Strategy Overhaul](tasks/T350-sync-strategy-overhaul.md) | TESTING | 9 | 6 | DB writes only on user gestures; reactive sync effect corrupts keyframe data |
+| T355 | [Permanent Keyframe Selection](tasks/T355-permanent-keyframe-selection.md) | TODO | 5 | 3 | Permanent keyframes (frame 0/end) can't be selected by clicking diamonds |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
