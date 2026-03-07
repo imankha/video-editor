@@ -99,6 +99,15 @@ export function TimelineBase({
     }
   };
 
+  const handleTouchStart = (e) => {
+    setIsDragging(true);
+    const time = getTimeFromPosition(e.touches[0].clientX);
+    onSeek(time);
+    if (onLayerSelect) {
+      onLayerSelect('playhead');
+    }
+  };
+
   const handleMouseMove = (e) => {
     if (!timelineRef.current) return;
 
@@ -136,8 +145,21 @@ export function TimelineBase({
 
   React.useEffect(() => {
     if (isDragging) {
+      const handleTouchMove = (e) => {
+        e.preventDefault();
+        const time = getTimeFromPosition(e.touches[0].clientX);
+        onSeek(time);
+      };
+      const handleTouchEnd = () => setIsDragging(false);
+
       window.addEventListener('mouseup', handleMouseUp);
-      return () => window.removeEventListener('mouseup', handleMouseUp);
+      window.addEventListener('touchmove', handleTouchMove, { passive: false });
+      window.addEventListener('touchend', handleTouchEnd);
+      return () => {
+        window.removeEventListener('mouseup', handleMouseUp);
+        window.removeEventListener('touchmove', handleTouchMove);
+        window.removeEventListener('touchend', handleTouchEnd);
+      };
     }
   }, [isDragging]);
 
@@ -299,10 +321,11 @@ export function TimelineBase({
                 {/* Timeline track */}
                 <div
                   ref={timelineRef}
-                  className="absolute inset-0 bg-gray-700 rounded-r-lg cursor-pointer select-none"
+                  className="absolute inset-0 bg-gray-700 rounded-r-lg cursor-pointer select-none touch-none"
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
                   onMouseLeave={handleMouseLeave}
+                  onTouchStart={handleTouchStart}
                 >
                   {/* Progress bar - accounts for edge padding */}
                   <div

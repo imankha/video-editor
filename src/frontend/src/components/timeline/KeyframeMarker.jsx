@@ -66,7 +66,7 @@ export function KeyframeMarker({
       }}
     >
       {/* Invisible hit area that keeps buttons visible when moving mouse between elements */}
-      <div className="absolute -top-7 -bottom-4 -left-4 -right-4" />
+      <div className="absolute -top-7 -bottom-4 -left-4 -right-4 pointer-events-none" />
 
       {/* Copy button (shown when selected, above keyframe) - z-50 to appear above all UI including playhead */}
       {showCopyButton && onCopy && (
@@ -84,12 +84,14 @@ export function KeyframeMarker({
         </button>
       )}
 
-      {/* Diamond keyframe indicator */}
+      {/* Diamond keyframe indicator with expanded click area */}
       <div
-        className={`w-3 h-3 transform rotate-45 transition-all ${markerColorClass} ${onClick ? 'cursor-pointer' : 'pointer-events-none'} relative`}
+        className={`relative ${onClick ? 'cursor-pointer' : 'pointer-events-none'}`}
         onClick={onClick}
         title={tooltip}
       >
+        <div className="absolute -inset-2" />
+        <div className={`w-3 h-3 transform rotate-45 transition-all ${markerColorClass}`} />
       </div>
 
       {/* Delete button (shown when selected) - z-50 to appear above all UI including playhead

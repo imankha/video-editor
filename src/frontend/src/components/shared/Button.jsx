@@ -97,7 +97,7 @@ export function Button({
 
   // Size styles
   const sizeStyles = {
-    sm: iconOnly ? 'p-1.5' : 'px-3 py-1.5 text-sm',
+    sm: iconOnly ? 'p-1.5 min-w-11 min-h-11 sm:min-w-0 sm:min-h-0' : 'px-3 py-1.5 text-sm',
     md: iconOnly ? 'p-2' : 'px-4 py-2 text-sm',
     lg: iconOnly ? 'p-3' : 'px-6 py-3 text-base',
   };

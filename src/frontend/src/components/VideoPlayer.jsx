@@ -207,6 +207,7 @@ export function VideoPlayer({
               onPlaying={handlers.onPlaying}
               onCanPlay={handlers.onCanPlay}
               onError={handlers.onError}
+              playsInline
               preload="auto"
               style={{ pointerEvents: 'none' }}
             />
