@@ -104,8 +104,11 @@ export default function CropLayer({
           const isAtStartTime = Math.abs(currentTime - effectiveStartTime) < 0.01;
           const isSelected = selectedKeyframeIndex === index;
           const isPermanent = keyframe.origin === 'permanent';
-          // Treat boundary keyframes as undeletable regardless of origin
-          const isBoundaryKeyframe = isPermanent || isStartKeyframe || isEffectiveEndKeyframe;
+          // Boundary keyframes (at effective start/end) are never deletable
+          const isBoundaryKeyframe = isStartKeyframe || isEffectiveEndKeyframe;
+          if (isBoundaryKeyframe && !isPermanent) {
+            console.warn(`[CropLayer] Boundary keyframe at frame ${keyframe.frame} has origin '${keyframe.origin}' instead of 'permanent' — hiding delete but origin should be fixed upstream`);
+          }
 
           // Highlight keyframe if no other keyframe is selected AND:
           // 1. At current time, OR
