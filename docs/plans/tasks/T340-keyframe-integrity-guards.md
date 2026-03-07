@@ -1,6 +1,6 @@
 # T340: Crop Keyframe Integrity Guards
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-03-06

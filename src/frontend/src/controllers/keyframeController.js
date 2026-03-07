@@ -24,7 +24,8 @@ import {
   findKeyframeIndexNearFrame,
   findKeyframeAtFrame,
   hasKeyframeAtFrame,
-  FRAME_TOLERANCE
+  FRAME_TOLERANCE,
+  MIN_KEYFRAME_SPACING
 } from '../utils/keyframeUtils';
 
 // State machine states
@@ -111,6 +112,20 @@ export function validateInvariants(state) {
     violations.push(`Initialized state should have at least 2 keyframes, has ${state.keyframes.length}`);
   }
 
+  // If initialized, must have permanent keyframes at frame 0 and endFrame
+  if (state.machineState !== KeyframeStates.UNINITIALIZED && state.keyframes.length >= 2) {
+    const first = state.keyframes[0];
+    if (first.frame !== 0 || first.origin !== 'permanent') {
+      violations.push(`First keyframe must be permanent at frame 0, got frame=${first.frame} origin=${first.origin}`);
+    }
+    if (state.endFrame !== null) {
+      const last = state.keyframes[state.keyframes.length - 1];
+      if (last.frame !== state.endFrame || last.origin !== 'permanent') {
+        violations.push(`Last keyframe must be permanent at endFrame=${state.endFrame}, got frame=${last.frame} origin=${last.origin}`);
+      }
+    }
+  }
+
   return violations;
 }
 
@@ -121,6 +136,47 @@ export function validateInvariants(state) {
  */
 function sortKeyframes(keyframes) {
   return [...keyframes].sort((a, b) => a.frame - b.frame);
+}
+
+/**
+ * Ensure permanent keyframes exist at frame 0 and endFrame.
+ * If missing, reconstitute from the nearest keyframe's data.
+ * @param {Array} keyframes - Sorted array of keyframes
+ * @param {number|null} endFrame - End frame number
+ * @returns {Array} Keyframes with permanent boundaries guaranteed
+ */
+function ensurePermanentKeyframes(keyframes, endFrame) {
+  if (keyframes.length === 0) return keyframes;
+
+  let result = [...keyframes];
+
+  // Ensure frame 0 exists
+  const hasStart = result.some(kf => kf.frame === 0);
+  if (!hasStart) {
+    // Reconstitute from nearest (first) keyframe
+    const nearest = result[0];
+    const { frame: _f, origin: _o, ...data } = nearest;
+    result = [{ ...data, frame: 0, origin: 'permanent' }, ...result];
+  } else {
+    // Ensure frame 0 has origin='permanent'
+    result = result.map(kf => kf.frame === 0 ? { ...kf, origin: 'permanent' } : kf);
+  }
+
+  // Ensure endFrame exists
+  if (endFrame !== null && endFrame !== undefined) {
+    const hasEnd = result.some(kf => kf.frame === endFrame);
+    if (!hasEnd) {
+      // Reconstitute from nearest (last) keyframe
+      const nearest = result[result.length - 1];
+      const { frame: _f, origin: _o, ...data } = nearest;
+      result = [...result, { ...data, frame: endFrame, origin: 'permanent' }];
+    } else {
+      // Ensure endFrame has origin='permanent'
+      result = result.map(kf => kf.frame === endFrame ? { ...kf, origin: 'permanent' } : kf);
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -201,18 +257,22 @@ export function keyframeReducer(state, action) {
         return kf;
       });
 
+      // Enforce permanent keyframe invariant at boundaries
+      const resolvedEndFrame = endFrame || sortedKeyframes[sortedKeyframes.length - 1].frame;
+      const guardedKeyframes = ensurePermanentKeyframes(sortedKeyframes, resolvedEndFrame);
+
       // Determine if end keyframe was explicitly set (not same as start)
-      const startKf = sortedKeyframes[0];
-      const endKf = sortedKeyframes[sortedKeyframes.length - 1];
+      const startKf = guardedKeyframes[0];
+      const endKf = guardedKeyframes[guardedKeyframes.length - 1];
       const isEndExplicit = JSON.stringify({ x: startKf.x, y: startKf.y, width: startKf.width, height: startKf.height }) !==
                            JSON.stringify({ x: endKf.x, y: endKf.y, width: endKf.width, height: endKf.height });
 
       return {
         ...state,
         machineState: KeyframeStates.INITIALIZED,
-        keyframes: sortedKeyframes,
+        keyframes: guardedKeyframes,
         isEndKeyframeExplicit: isEndExplicit,
-        endFrame: endFrame || sortedKeyframes[sortedKeyframes.length - 1].frame,
+        endFrame: resolvedEndFrame,
         framerate: framerate || state.framerate
       };
     }
@@ -226,6 +286,13 @@ export function keyframeReducer(state, action) {
       // This prevents accidentally creating new keyframes when user intends to edit existing ones
       const nearbyIndex = findKeyframeIndexNearFrame(keyframes, frame, FRAME_TOLERANCE);
       const targetFrame = nearbyIndex >= 0 ? keyframes[nearbyIndex].frame : frame;
+
+      // Enforce minimum spacing: reject new keyframes too close to existing ones
+      // (snapped updates are fine — this only blocks genuinely new keyframes)
+      if (nearbyIndex < 0) {
+        const tooClose = keyframes.some(kf => Math.abs(kf.frame - frame) < MIN_KEYFRAME_SPACING);
+        if (tooClose) return state;
+      }
 
       const isEndKeyframe = endFrame !== null && targetFrame === endFrame;
       const isStartKeyframe = targetFrame === 0;
@@ -279,9 +346,10 @@ export function keyframeReducer(state, action) {
       // Don't allow removing if it would leave less than 2 keyframes
       if (keyframes.length <= 2) return state;
 
+      const filtered = keyframes.filter(kf => kf.frame !== frame);
       return {
         ...state,
-        keyframes: keyframes.filter(kf => kf.frame !== frame)
+        keyframes: ensurePermanentKeyframes(filtered, state.endFrame)
       };
     }
 
@@ -332,10 +400,11 @@ export function keyframeReducer(state, action) {
 
     case ActionTypes.CLEANUP_TRIM_KEYFRAMES: {
       const { keyframes } = state;
+      const filtered = keyframes.filter(kf => kf.origin !== 'trim');
 
       return {
         ...state,
-        keyframes: keyframes.filter(kf => kf.origin !== 'trim'),
+        keyframes: ensurePermanentKeyframes(filtered, state.endFrame),
         machineState: KeyframeStates.INITIALIZED
       };
     }

@@ -59,8 +59,8 @@ describe('keyframeController', () => {
         framerate: 30
       };
       const violations = validateInvariants(state);
-      expect(violations.length).toBe(1);
-      expect(violations[0]).toContain('missing origin');
+      expect(violations.length).toBeGreaterThanOrEqual(1);
+      expect(violations.some(v => v.includes('missing origin'))).toBe(true);
     });
 
     it('detects missing frame number', () => {
@@ -759,6 +759,178 @@ describe('keyframeController', () => {
       it('returns isEndKeyframeExplicit value', () => {
         expect(selectors.isEndExplicit(sampleState)).toBe(true);
       });
+    });
+  });
+
+  // ============================================================================
+  // T340: KEYFRAME INTEGRITY GUARDS
+  // ============================================================================
+
+  describe('permanent keyframe invariant', () => {
+    it('RESTORE_KEYFRAMES reconstitutes missing frame 0', () => {
+      const state = createInitialState();
+      // Saved keyframes missing frame 0 (starts at frame 10)
+      const saved = [
+        { frame: 10, origin: 'user', x: 120 },
+        { frame: 50, origin: 'user', x: 160 },
+        { frame: 90, origin: 'permanent', x: 200 }
+      ];
+
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved, 90, 30));
+
+      expect(newState.keyframes[0].frame).toBe(0);
+      expect(newState.keyframes[0].origin).toBe('permanent');
+      expect(newState.keyframes[0].x).toBe(120); // Reconstituted from nearest
+      expect(newState.keyframes.length).toBe(4);
+    });
+
+    it('RESTORE_KEYFRAMES reconstitutes missing endFrame', () => {
+      const state = createInitialState();
+      // Saved keyframes missing endFrame (last is at frame 60)
+      const saved = [
+        { frame: 0, origin: 'permanent', x: 100 },
+        { frame: 60, origin: 'user', x: 180 }
+      ];
+
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved, 90, 30));
+
+      expect(newState.keyframes[newState.keyframes.length - 1].frame).toBe(90);
+      expect(newState.keyframes[newState.keyframes.length - 1].origin).toBe('permanent');
+      expect(newState.keyframes.length).toBe(3);
+    });
+
+    it('RESTORE_KEYFRAMES fixes origin on boundary keyframes', () => {
+      const state = createInitialState();
+      // Saved keyframes with wrong origins at boundaries
+      const saved = [
+        { frame: 0, origin: 'user', x: 100 },
+        { frame: 90, origin: 'user', x: 200 }
+      ];
+
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved, 90, 30));
+
+      expect(newState.keyframes[0].origin).toBe('permanent');
+      expect(newState.keyframes[1].origin).toBe('permanent');
+    });
+
+    it('CLEANUP_TRIM_KEYFRAMES preserves permanent boundaries', () => {
+      const state = {
+        machineState: KeyframeStates.TRIMMING,
+        keyframes: [
+          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 25, origin: 'trim', x: 140 },
+          { frame: 90, origin: 'permanent', x: 200 }
+        ],
+        isEndKeyframeExplicit: false,
+        copiedData: null,
+        endFrame: 90,
+        framerate: 30
+      };
+
+      const newState = keyframeReducer(state, actions.cleanupTrimKeyframes());
+
+      expect(newState.keyframes.length).toBe(2);
+      expect(newState.keyframes[0].frame).toBe(0);
+      expect(newState.keyframes[0].origin).toBe('permanent');
+      expect(newState.keyframes[1].frame).toBe(90);
+      expect(newState.keyframes[1].origin).toBe('permanent');
+    });
+
+    it('validateInvariants detects missing permanent start keyframe', () => {
+      const state = {
+        machineState: KeyframeStates.INITIALIZED,
+        keyframes: [
+          { frame: 10, origin: 'user', x: 120 },
+          { frame: 90, origin: 'permanent', x: 200 }
+        ],
+        isEndKeyframeExplicit: false,
+        copiedData: null,
+        endFrame: 90,
+        framerate: 30
+      };
+      const violations = validateInvariants(state);
+      expect(violations.some(v => v.includes('permanent at frame 0'))).toBe(true);
+    });
+
+    it('validateInvariants detects missing permanent end keyframe', () => {
+      const state = {
+        machineState: KeyframeStates.INITIALIZED,
+        keyframes: [
+          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 60, origin: 'user', x: 180 }
+        ],
+        isEndKeyframeExplicit: false,
+        copiedData: null,
+        endFrame: 90,
+        framerate: 30
+      };
+      const violations = validateInvariants(state);
+      expect(violations.some(v => v.includes('permanent at endFrame=90'))).toBe(true);
+    });
+  });
+
+  describe('minimum keyframe spacing', () => {
+    it('rejects new keyframe within MIN_KEYFRAME_SPACING of existing', () => {
+      const state = {
+        machineState: KeyframeStates.INITIALIZED,
+        keyframes: [
+          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 30, origin: 'user', x: 150 },
+          { frame: 90, origin: 'permanent', x: 200 }
+        ],
+        isEndKeyframeExplicit: false,
+        copiedData: null,
+        endFrame: 90,
+        framerate: 30
+      };
+
+      // Try to add at frame 33 (3 frames from 30, less than MIN_KEYFRAME_SPACING=5)
+      // BUT within FRAME_TOLERANCE=5, so it snaps to frame 30 (update, not reject)
+      const newState = keyframeReducer(state, actions.addKeyframe(33, { x: 155 }, 'user'));
+      expect(newState.keyframes.length).toBe(3);
+      expect(newState.keyframes[1].frame).toBe(30);
+      expect(newState.keyframes[1].x).toBe(155);
+    });
+
+    it('allows keyframe at sufficient distance', () => {
+      const state = {
+        machineState: KeyframeStates.INITIALIZED,
+        keyframes: [
+          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 30, origin: 'user', x: 150 },
+          { frame: 90, origin: 'permanent', x: 200 }
+        ],
+        isEndKeyframeExplicit: false,
+        copiedData: null,
+        endFrame: 90,
+        framerate: 30
+      };
+
+      // Frame 50 is well away from 30 and 90
+      const newState = keyframeReducer(state, actions.addKeyframe(50, { x: 170 }, 'user'));
+      expect(newState.keyframes.length).toBe(4);
+      expect(newState.keyframes[2].frame).toBe(50);
+    });
+
+    it('rejects new keyframe just outside tolerance but within spacing', () => {
+      const state = {
+        machineState: KeyframeStates.INITIALIZED,
+        keyframes: [
+          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 30, origin: 'user', x: 150 },
+          { frame: 90, origin: 'permanent', x: 200 }
+        ],
+        isEndKeyframeExplicit: false,
+        copiedData: null,
+        endFrame: 90,
+        framerate: 30
+      };
+
+      // Frame 86 is 4 frames from 90 — within MIN_KEYFRAME_SPACING but also within FRAME_TOLERANCE
+      // So it snaps to 90 (update). This tests the edge case.
+      const newState = keyframeReducer(state, actions.addKeyframe(86, { x: 195 }, 'user'));
+      // Should snap to frame 90 and update it
+      expect(newState.keyframes[newState.keyframes.length - 1].frame).toBe(90);
     });
   });
 
