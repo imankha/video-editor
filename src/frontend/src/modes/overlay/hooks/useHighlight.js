@@ -18,7 +18,7 @@ import useKeyframeController from '../../../hooks/useKeyframeController';
  * - 'trim': Auto-created keyframes when trimming segments
  */
 export default function useHighlight(videoMetadata, trimRange = null) {
-  const [framerate] = useState(30);
+  const framerate = videoMetadata?.framerate || 30;
   const [isEnabled, setIsEnabled] = useState(false); // Highlight layer is disabled by default
   const [highlightDuration, setHighlightDuration] = useState(5); // Default 5 seconds
 

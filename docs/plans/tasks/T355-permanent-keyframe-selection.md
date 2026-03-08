@@ -1,60 +1,87 @@
 # T355: Permanent Keyframes Not Selectable
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-03-07
+**Updated:** 2026-03-07
 
 ## Problem
 
-Permanent keyframes (frame 0 and endFrame) cannot be selected by clicking their diamond markers in the timeline. The click handler fires (seek works — the playhead moves to the keyframe position), but the selection highlight doesn't appear. This means users can't interact with boundary keyframes to edit their crop values.
+Permanent keyframes (frame 0 and endFrame) cannot be selected by clicking their diamond markers in the timeline. The click handler fires (seek works — the playhead moves to the keyframe position), but the selection highlight doesn't appear. Users can't interact with boundary keyframes to edit their crop values.
 
-## Investigation
+This also affects non-30fps videos for ALL keyframes, not just permanent ones.
 
-### What works
-- `handleKeyframeClick` in FramingContainer.jsx (line 584) fires and calls `seek(time)` — playhead moves correctly
-- CropLayer.jsx line 131: `onClick={() => onKeyframeClick(keyframeTime, index)}` fires for all keyframes including permanent ones
-- KeyframeMarker.jsx line 89: `onClick ? 'cursor-pointer' : 'pointer-events-none'` — onClick is always provided
+## Root Cause
 
-### What doesn't work
-- `selectedCropKeyframeIndex` in FramingScreen.jsx uses `findKeyframeIndexNearFrame(keyframes, currentFrame, FRAME_TOLERANCE)` where `FRAME_TOLERANCE = 5`
-- After seeking, the selection highlight doesn't appear on permanent keyframes
+**Two issues found:**
 
-### Likely causes
-1. **Z-index / hit area at timeline edges**: Permanent keyframes sit at position 0% and 100%, where edge padding or container clipping may interfere
-2. **Trim undo buttons overlapping**: The trim controls may sit on top of the first/last keyframe diamonds, intercepting clicks
-3. **Frame tolerance mismatch**: After seeking to frame 0 or endFrame, `currentFrame` may not match within `FRAME_TOLERANCE` due to rounding or video player frame reporting
+### 1. Hardcoded framerate in `useCrop` and `useHighlight` (minor)
+
+Both hooks initialized framerate as `useState(30)` instead of reading from `videoMetadata.framerate`. Fixed by deriving from `videoMetadata?.framerate || 30`. Note: currently all extracted clips are 30fps, so this was latent rather than actively broken.
+
+### 2. Trim clamping breaks time-based keyframe selection (primary cause)
+
+Permanent keyframes exist at the full video boundaries (frame 0 and endFrame=451 for a 15s video), but when the video has trimmed segments, `seek()` clamps to the visible trim range via `clampToVisibleRange()`.
+
+**How this breaks selection:**
+
+1. Video has trim range 1.294s → 11.613s (frames 39 → 348)
+2. Permanent end keyframe is at frame 451 (15.033s)
+3. User clicks the endFrame diamond → `seek(15.033)` → clamped to 11.613s
+4. `selectedCropKeyframeIndex` computes: `currentFrame = Math.round(11.613 * 30) = 348`
+5. `findKeyframeIndexNearFrame(keyframes, 348, FRAME_TOLERANCE=5)` → no match (nearest is 275 or 451)
+6. No match → selection highlight doesn't appear
+
+Same issue for frame 0 keyframe when trim start > 0: seek clamps to trim start, currentFrame doesn't match frame 0.
 
 ## Solution
 
-Investigate the three likely causes and fix whichever is blocking selection. Most likely a positioning/overlap issue at timeline edges.
+Extract framerate from `videoMetadata` instead of hardcoding it.
+
+### Approach
+
+Replace `useState(30)` with a value derived from `videoMetadata.framerate` in both hooks. Since `videoMetadata` may arrive asynchronously (after video loads), handle the initial null case with a default of 30.
 
 ## Context
 
 ### Relevant Files
-- `src/frontend/src/screens/FramingScreen.jsx` - `selectedCropKeyframeIndex` computation
-- `src/frontend/src/containers/FramingContainer.jsx` - `handleKeyframeClick` handler
-- `src/frontend/src/components/timeline/KeyframeMarker.jsx` - Diamond marker click area
-- `src/frontend/src/modes/framing/layers/CropLayer.jsx` - Keyframe rendering in timeline
-- `src/frontend/src/utils/keyframeUtils.js` - `findKeyframeIndexNearFrame`, `FRAME_TOLERANCE`
+
+**Fix 1 — Framerate (2 files):**
+- `src/frontend/src/modes/framing/hooks/useCrop.js:65` — `useState(30)` → `videoMetadata?.framerate || 30`
+- `src/frontend/src/modes/overlay/hooks/useHighlight.js:21` — same fix
+
+**Fix 2 — Trim clamping (1 file):**
+- `src/frontend/src/screens/FramingScreen.jsx` — Added `clickedKeyframeIndexRef` that tracks direct keyframe clicks. `selectedCropKeyframeIndex` uses this as fallback when `findKeyframeIndexNearFrame` fails (i.e., when seek was clamped by trim). Ref is cleared on playback start and when a time-based match succeeds.
 
 ### Related Tasks
-- T350: Sync Strategy Overhaul (same area of code)
 - T340: Keyframe Integrity Guards (permanent keyframe handling)
+- T350: Sync Strategy Overhaul (same codebase area)
+
+### Technical Notes
+
+- `videoMetadata` is passed as the first argument to both `useCrop(videoMetadata, ...)` and `useHighlight(videoMetadata, ...)`
+- `videoMetadata.framerate` is populated via `extractVideoMetadataFromUrl()` at FramingScreen.jsx:186-191
+- The metadata may be `null` initially before video loads — need to handle this gracefully
+- `framerate` is used throughout: keyframe frame calculations, interpolation, timeline positioning, endFrame computation
+- Changing framerate after initialization may require re-running `ensurePermanentKeyframes` since endFrame depends on it
 
 ## Implementation
 
 ### Steps
-1. [ ] Reproduce the bug — confirm permanent keyframes don't highlight on click
-2. [ ] Check if frame tolerance / rounding prevents matching at frame 0 and endFrame
-3. [ ] Check if trim undo buttons or other UI elements overlap the diamonds at edges
-4. [ ] Check if edge padding pushes markers outside clickable area
-5. [ ] Fix the root cause
-6. [ ] Verify both permanent keyframes can be selected and their crop values edited
+1. [ ] In `useCrop.js`: Replace `useState(30)` with a derived value from `videoMetadata?.framerate || 30`
+2. [ ] In `useHighlight.js`: Same fix
+3. [ ] Verify keyframe controller receives updated framerate when metadata loads
+4. [ ] Verify `ensurePermanentKeyframes` recalculates endFrame when framerate changes
+5. [ ] Test: Select permanent keyframes on a 60fps video
+6. [ ] Test: Select user keyframes on a 60fps video
+7. [ ] Test: 30fps video still works (regression check)
 
 ## Acceptance Criteria
 
-- [ ] Clicking frame 0 keyframe diamond selects it (highlight visible)
-- [ ] Clicking endFrame keyframe diamond selects it (highlight visible)
+- [ ] Clicking frame 0 keyframe diamond selects it (highlight visible) on any framerate video
+- [ ] Clicking endFrame keyframe diamond selects it (highlight visible) on any framerate video
 - [ ] Selected permanent keyframe's crop values are editable in the crop panel
 - [ ] Non-permanent keyframes still selectable (no regression)
+- [ ] 30fps videos work identically to before (regression check)
+- [ ] 60fps videos have correct keyframe positions and selection

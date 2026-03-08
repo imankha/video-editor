@@ -637,13 +637,60 @@ export function FramingScreen({
   // Persistence is now gesture-based: each user action in FramingContainer fires
   // a surgical POST /actions call. No reactive useEffect writes to store/backend.
 
+  // Track keyframe index from direct clicks (needed when seek is clamped by trim range).
+  // Stores { index, settledTime } — settledTime is set once currentTime settles after click.
+  const clickedKeyframeRef = useRef(null);
+
+  // Wrap keyframe click to track the clicked index
+  const handleKeyframeClickWithIndex = useCallback((time, index) => {
+    clickedKeyframeRef.current = { index, settledTime: null };
+    framingHandleKeyframeClick(time, index);
+  }, [framingHandleKeyframeClick]);
+
   // Derived selection state
   const selectedCropKeyframeIndex = useMemo(() => {
     if (!videoUrl) return null;
     const currentFrame = Math.round(currentTime * framerate);
     const index = findKeyframeIndexNearFrame(keyframes, currentFrame, FRAME_TOLERANCE);
-    return index !== -1 ? index : null;
-  }, [videoUrl, currentTime, framerate, keyframes]);
+    if (index !== -1) {
+      clickedKeyframeRef.current = null;
+      return index;
+    }
+    // Fallback: if a keyframe was clicked but seek was clamped (e.g., by trim range),
+    // use the clicked index — but only while currentTime stays at the clamped position
+    const clicked = clickedKeyframeRef.current;
+    if (clicked !== null && clicked.index >= 0 && clicked.index < keyframes.length) {
+      if (clicked.settledTime === null) {
+        // First render after click — record where currentTime settled (the clamped position)
+        clicked.settledTime = currentTime;
+        return clicked.index;
+      }
+      // Subsequent renders — only keep selection if currentTime hasn't moved
+      const frameDuration = 1 / framerate;
+      if (Math.abs(currentTime - clicked.settledTime) < frameDuration) {
+        return clicked.index;
+      }
+      // User seeked elsewhere — clear
+      clickedKeyframeRef.current = null;
+    }
+
+    // Fallback 2: playhead is at a trim boundary — select the boundary permanent keyframe.
+    // Permanent keyframes live at full video boundaries (frame 0 / endFrame) but the playhead
+    // can only reach the trim boundaries, so findKeyframeIndexNearFrame misses them.
+    if (trimRange && keyframes.length >= 2) {
+      const trimStartFrame = Math.round(trimRange.start * framerate);
+      const trimEndFrame = Math.round(trimRange.end * framerate);
+      if (Math.abs(currentFrame - trimStartFrame) <= FRAME_TOLERANCE) {
+        if (keyframes[0].origin === 'permanent') return 0;
+      }
+      if (Math.abs(currentFrame - trimEndFrame) <= FRAME_TOLERANCE) {
+        const lastIdx = keyframes.length - 1;
+        if (keyframes[lastIdx].origin === 'permanent') return lastIdx;
+      }
+    }
+
+    return null;
+  }, [videoUrl, currentTime, framerate, keyframes, trimRange]);
 
   // Current crop state
   const currentCropState = useMemo(() => {
@@ -1155,7 +1202,7 @@ export function FramingScreen({
       dragCrop={dragCrop}
       onCropChange={framingHandleCropChange}
       onCropComplete={framingHandleCropComplete}
-      onKeyframeClick={framingHandleKeyframeClick}
+      onKeyframeClick={handleKeyframeClickWithIndex}
       onKeyframeDelete={framingHandleKeyframeDelete}
       onCopyCrop={framingHandleCopyCrop}
       onPasteCrop={framingHandlePasteCrop}

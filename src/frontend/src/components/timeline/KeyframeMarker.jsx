@@ -90,7 +90,7 @@ export function KeyframeMarker({
         onClick={onClick}
         title={tooltip}
       >
-        <div className="absolute -inset-2" />
+        <div className="absolute -inset-3 bg-transparent" />
         <div className={`w-3 h-3 transform rotate-45 transition-all ${markerColorClass}`} />
       </div>
 

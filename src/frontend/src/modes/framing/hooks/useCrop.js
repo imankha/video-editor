@@ -62,7 +62,7 @@ const calculateDefaultPosition = (videoWidth, videoHeight, cropWidth, cropHeight
  */
 export default function useCrop(videoMetadata, trimRange = null, savedKeyframes = null) {
   const [aspectRatio, setAspectRatio] = useState('9:16'); // '16:9', '9:16'
-  const [framerate] = useState(30); // Default framerate - TODO: extract from video
+  const framerate = videoMetadata?.framerate || 30;
 
   // Crop data keys for copy/paste operations
   const cropDataKeys = ['x', 'y', 'width', 'height'];

@@ -50,11 +50,32 @@ export default function CropLayer({
   };
 
   /**
-   * Handle click on keyframes track to select layer
+   * Handle click on keyframes track — select layer and select boundary keyframe
+   * if the click is before the first or after the last keyframe.
    */
-  const handleTrackClick = () => {
+  const handleTrackClick = (e) => {
     if (onLayerSelect) {
       onLayerSelect();
+    }
+
+    // Select boundary keyframe if clicking in the edge zones
+    if (keyframes.length >= 2 && trackRef.current && onKeyframeClick) {
+      const rect = trackRef.current.getBoundingClientRect();
+      const usableWidth = rect.width - (edgePadding * 2);
+      const x = e.clientX - rect.left - edgePadding;
+      const clickPercent = (x / usableWidth) * 100;
+
+      const firstPosition = frameToPixel(keyframes[0].frame);
+      const lastPosition = frameToPixel(keyframes[keyframes.length - 1].frame);
+
+      if (clickPercent <= firstPosition) {
+        const time = frameToTime(keyframes[0].frame, framerate);
+        onKeyframeClick(time, 0);
+      } else if (clickPercent >= lastPosition) {
+        const lastIndex = keyframes.length - 1;
+        const time = frameToTime(keyframes[lastIndex].frame, framerate);
+        onKeyframeClick(time, lastIndex);
+      }
     }
   };
 
