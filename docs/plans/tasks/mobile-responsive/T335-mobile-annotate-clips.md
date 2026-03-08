@@ -1,6 +1,6 @@
 # T335: Mobile Annotate — Clips Panel & Details Editor
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-03-07

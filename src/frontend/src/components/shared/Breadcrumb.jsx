@@ -11,12 +11,12 @@ import { ChevronRight } from 'lucide-react';
  */
 export function Breadcrumb({ type, itemName }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 min-w-0">
       <span className="text-gray-400 text-sm">{type}</span>
       {itemName && (
         <>
           <ChevronRight className="w-4 h-4 text-gray-600" />
-          <span className="text-white font-semibold text-lg truncate">{itemName}</span>
+          <span className="text-white font-semibold text-sm sm:text-lg truncate">{itemName}</span>
         </>
       )}
     </div>
