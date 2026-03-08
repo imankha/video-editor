@@ -1,6 +1,6 @@
 # T350: Sync Strategy Overhaul — DB Writes Only on User Gestures
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 9
 **Complexity:** 6
 **Created:** 2026-03-06

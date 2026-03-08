@@ -1,6 +1,6 @@
 # T355: Permanent Keyframes Not Selectable
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-03-07
