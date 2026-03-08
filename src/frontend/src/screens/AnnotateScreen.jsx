@@ -380,7 +380,6 @@ export function AnnotateScreen({ onClearSelection }) {
               clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
               selectedRegionId={annotateSelectedRegionId}
               onSelectRegion={handleSelectAnnotateRegion}
-              onDeselectRegion={() => selectAnnotateRegion(null)}
               onUpdateRegion={updateClipRegion}
               onDeleteRegion={deleteClipRegion}
               onImportAnnotations={importAnnotations}

@@ -15,7 +15,6 @@ export function ClipsSidePanel({
   clipRegions,
   selectedRegionId,
   onSelectRegion,
-  onDeselectRegion,
   onUpdateRegion,
   onDeleteRegion,
   onImportAnnotations,
@@ -31,9 +30,17 @@ export function ClipsSidePanel({
   const [importErrors, setImportErrors] = useState(null);
   const [importSuccess, setImportSuccess] = useState(null);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  // Mobile: local view state — back button forces list view even if a clip is selected
+  const [mobileForceList, setMobileForceList] = useState(false);
 
-  // On mobile: show detail view when a clip is selected, list view otherwise
-  const mobileShowDetail = isMobile && selectedRegion;
+  // On mobile: show detail view when a clip is selected AND not forced to list
+  const mobileShowDetail = isMobile && selectedRegion && !mobileForceList;
+
+  // When selecting a clip on mobile, switch to detail view
+  const handleMobileSelect = (regionId) => {
+    setMobileForceList(false);
+    onSelectRegion(regionId);
+  };
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
@@ -96,7 +103,7 @@ export function ClipsSidePanel({
           {/* Back to list header */}
           <div className="p-3 border-b border-gray-700">
             <button
-              onClick={() => onDeselectRegion?.()}
+              onClick={() => setMobileForceList(true)}
               className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
             >
               <ArrowLeft size={18} />
@@ -109,7 +116,7 @@ export function ClipsSidePanel({
             <ClipDetailsEditor
               region={selectedRegion}
               onUpdate={(updates) => onUpdateRegion(selectedRegion.id, updates)}
-              onDelete={() => { onDeleteRegion(selectedRegion.id); onDeselectRegion?.(); }}
+              onDelete={() => { onDeleteRegion(selectedRegion.id); setMobileForceList(true); }}
               maxNotesLength={maxNotesLength}
               videoDuration={videoDuration}
               compact
@@ -244,7 +251,7 @@ export function ClipsSidePanel({
                   region={region}
                   index={index}
                   isSelected={region.id === selectedRegionId}
-                  onClick={() => onSelectRegion(region.id)}
+                  onClick={() => isMobile ? handleMobileSelect(region.id) : onSelectRegion(region.id)}
                   isMobile={isMobile}
                 />
               ))
