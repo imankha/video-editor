@@ -389,6 +389,11 @@ export function AnnotateScreen({ onClearSelection }) {
               isLoading={isLoadingAnnotations}
               isVideoUploading={isUploadingGameVideo}
               isMobile
+              onJumpToClip={(regionId, endTime) => {
+                handleSelectAnnotateRegion(regionId);
+                seek(endTime);
+                setShowMobileSidebar(false);
+              }}
             />
             <button
               onClick={() => setShowMobileSidebar(false)}

@@ -137,7 +137,7 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 | T310 | [Mobile Editor Layout](tasks/mobile-responsive/T310-mobile-editor-layout.md) | DONE | 8 | 6 | Two-column editor unusable, needs vertical stack |
 | T320 | [Mobile Video Preview](tasks/mobile-responsive/T320-mobile-video-preview.md) | DONE | 6 | 4 | Tiny preview, crop handles too small for touch |
 | T330 | [Mobile Video Players](tasks/mobile-responsive/T330-mobile-video-players.md) | TESTING | 7 | 4 | Touch controls, scrubbing, iOS/Android quirks |
-| T335 | [Mobile Annotate Clips](tasks/mobile-responsive/T335-mobile-annotate-clips.md) | TODO | 7 | 5 | Clips panel crushed to 0px, video wastes 60% screen, markers untappable |
+| T335 | [Mobile Annotate Clips](tasks/mobile-responsive/T335-mobile-annotate-clips.md) | TESTING | 7 | 5 | Clips panel crushed to 0px, video wastes 60% screen, markers untappable |
 
 ### Phase 4: Post-Launch Polish
 

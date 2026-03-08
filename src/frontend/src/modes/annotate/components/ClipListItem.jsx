@@ -1,4 +1,5 @@
 import React from 'react';
+import { Info, Play } from 'lucide-react';
 import { getRatingDisplay } from '../../../components/shared/clipConstants';
 import { generateClipName } from '../constants/soccerTags';
 
@@ -17,8 +18,11 @@ const formatTime = (seconds) => {
  * ClipListItem - Individual clip item in the side panel list
  * Compact single-line display showing rating badge and title only.
  * Background tint reflects the clip's star rating when selected.
+ *
+ * On mobile: two action buttons — "details" and "jump to clip".
+ * On desktop: entire row is clickable to select.
  */
-export function ClipListItem({ region, index, isSelected, onClick, isMobile = false }) {
+export function ClipListItem({ region, index, isSelected, onClick, isMobile = false, onViewDetails, onJumpToClip }) {
   const rating = region.rating || 3;
   const { notation, badgeColor, backgroundColor } = getRatingDisplay(rating);
 
@@ -30,9 +34,9 @@ export function ClipListItem({ region, index, isSelected, onClick, isMobile = fa
 
   return (
     <div
-      onClick={onClick}
+      onClick={isMobile ? undefined : onClick}
       className={`
-        cursor-pointer border-b border-gray-800 transition-all
+        ${isMobile ? '' : 'cursor-pointer'} border-b border-gray-800 transition-all
         ${isSelected
           ? 'border-l-2'
           : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'
@@ -63,9 +67,27 @@ export function ClipListItem({ region, index, isSelected, onClick, isMobile = fa
           <span className="text-gray-500 mr-1">{index + 1}.</span>
           {displayName}
         </div>
-        {isMobile && (
-          <span className="text-xs text-gray-500 ml-2 flex-shrink-0">{formatTime(region.endTime)}</span>
-        )}
+
+        {/* Mobile: two action buttons */}
+        {isMobile ? (
+          <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+            <span className="text-xs text-gray-500 mr-1">{formatTime(region.endTime)}</span>
+            <button
+              onClick={onViewDetails}
+              className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
+              title="View details"
+            >
+              <Info size={16} />
+            </button>
+            <button
+              onClick={onJumpToClip}
+              className="p-2 rounded-lg bg-green-700 hover:bg-green-600 text-white transition-colors"
+              title="Jump to clip"
+            >
+              <Play size={16} />
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

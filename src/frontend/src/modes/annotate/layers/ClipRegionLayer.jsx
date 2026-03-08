@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { generateClipName } from '../constants/soccerTags';
 
 // Format seconds to MM:SS or HH:MM:SS
@@ -53,8 +53,32 @@ export default function ClipRegionLayer({
 }) {
   const trackRef = useRef(null);
   const [hoveredRegionId, setHoveredRegionId] = useState(null);
+  const [trackWidth, setTrackWidth] = useState(0);
+
+  // Measure track width for dynamic mobile marker sizing
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setTrackWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   if (!duration) return null;
+
+  // Mobile marker width: fit all clips without overlap
+  // Formula: (usableTrackWidth / clipCount) - gap, clamped to [4, 12]
+  const MOBILE_MARKER_MIN = 4;
+  const MOBILE_MARKER_MAX = 12;
+  const MOBILE_MARKER_GAP = 2;
+  const clipCount = regions.length || 1;
+  const usableWidth = trackWidth - (edgePadding * 2);
+  const mobileMarkerWidth = Math.min(
+    MOBILE_MARKER_MAX,
+    Math.max(MOBILE_MARKER_MIN, Math.floor(usableWidth / clipCount) - MOBILE_MARKER_GAP)
+  );
 
   // Convert time to percentage position
   const timeToPercent = (time) => (time / duration) * 100;
@@ -105,10 +129,10 @@ export default function ClipRegionLayer({
               onMouseEnter={() => setHoveredRegionId(region.id)}
               onMouseLeave={() => setHoveredRegionId(null)}
             >
-              {/* Mobile: wider color bar with transparent touch padding */}
+              {/* Mobile: color bar sized to fit without overlap */}
               <div
                 className="sm:hidden relative"
-                style={{ padding: '8px 6px' }}
+                style={{ padding: '8px 4px' }}
               >
                 <div
                   className={`
@@ -116,7 +140,7 @@ export default function ClipRegionLayer({
                     ${isSelected ? 'ring-2 ring-white shadow-lg' : ''}
                   `}
                   style={{
-                    width: '12px',
+                    width: `${mobileMarkerWidth}px`,
                     height: isSelected ? '28px' : '20px',
                     backgroundColor: color,
                     border: '1px solid rgba(0,0,0,0.3)',

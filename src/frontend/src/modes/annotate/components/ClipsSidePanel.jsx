@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Scissors, Upload, Download, X, AlertCircle, Loader, ArrowLeft, MoreVertical } from 'lucide-react';
+import { Scissors, Upload, Download, X, AlertCircle, Loader, ArrowLeft } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
 import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
@@ -24,20 +24,20 @@ export function ClipsSidePanel({
   isLoading = false,
   isVideoUploading = false,
   isMobile = false,
+  onJumpToClip,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
   const fileInputRef = useRef(null);
   const [importErrors, setImportErrors] = useState(null);
   const [importSuccess, setImportSuccess] = useState(null);
-  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
-  // Mobile: local view state — back button forces list view even if a clip is selected
-  const [mobileForceList, setMobileForceList] = useState(false);
+  // Mobile: local view state — always starts on list, detail view via explicit action
+  const [mobileForceList, setMobileForceList] = useState(true);
 
   // On mobile: show detail view when a clip is selected AND not forced to list
   const mobileShowDetail = isMobile && selectedRegion && !mobileForceList;
 
-  // When selecting a clip on mobile, switch to detail view
-  const handleMobileSelect = (regionId) => {
+  // When viewing details for a clip on mobile, switch to detail view
+  const handleMobileViewDetails = (regionId) => {
     setMobileForceList(false);
     onSelectRegion(regionId);
   };
@@ -101,14 +101,13 @@ export function ClipsSidePanel({
       {mobileShowDetail ? (
         <>
           {/* Back to list header */}
-          <div className="p-3 border-b border-gray-700">
+          <div className="p-2 border-b border-gray-700">
             <button
               onClick={() => setMobileForceList(true)}
-              className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
+              className="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
+              title="Back to clips"
             >
-              <ArrowLeft size={18} />
-              <span className="text-sm font-medium">Back to clips</span>
-              <span className="ml-auto text-xs text-gray-500">{clipCount}</span>
+              <ArrowLeft size={20} />
             </button>
           </div>
           {/* Full-panel details editor */}
@@ -134,37 +133,8 @@ export function ClipsSidePanel({
             </div>
             <p className="text-xs text-gray-500 mb-3">Click timeline to add clip</p>
 
-            {/* Import/Export - full buttons on desktop, overflow menu on mobile */}
-            {isMobile ? (
-              <div className="relative">
-                <button
-                  onClick={() => setShowOverflowMenu(!showOverflowMenu)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-gray-300 text-xs transition-colors"
-                >
-                  <MoreVertical size={14} />
-                  <span>Import / Export</span>
-                </button>
-                {showOverflowMenu && (
-                  <div className="absolute top-full left-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-10 min-w-[140px]">
-                    <button
-                      onClick={() => { handleImportClick(); setShowOverflowMenu(false); }}
-                      className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-700 rounded-t-lg"
-                    >
-                      <Upload size={14} />
-                      Import TSV
-                    </button>
-                    <button
-                      onClick={() => { handleExportClick(); setShowOverflowMenu(false); }}
-                      disabled={clipRegions.length === 0}
-                      className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-700 rounded-b-lg disabled:opacity-40"
-                    >
-                      <Download size={14} />
-                      Export TSV
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
+            {/* Import/Export - desktop only */}
+            {!isMobile && (
               <div className="flex gap-2">
                 <Button
                   variant="secondary"
@@ -251,8 +221,10 @@ export function ClipsSidePanel({
                   region={region}
                   index={index}
                   isSelected={region.id === selectedRegionId}
-                  onClick={() => isMobile ? handleMobileSelect(region.id) : onSelectRegion(region.id)}
+                  onClick={() => onSelectRegion(region.id)}
                   isMobile={isMobile}
+                  onViewDetails={isMobile ? () => handleMobileViewDetails(region.id) : undefined}
+                  onJumpToClip={isMobile && onJumpToClip ? () => onJumpToClip(region.id, region.endTime) : undefined}
                 />
               ))
             )}
