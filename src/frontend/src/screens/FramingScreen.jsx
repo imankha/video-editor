@@ -637,19 +637,15 @@ export function FramingScreen({
   // Persistence is now gesture-based: each user action in FramingContainer fires
   // a surgical POST /actions call. No reactive useEffect writes to store/backend.
 
-  // Track keyframe index from direct clicks (needed when seek is clamped by trim range)
-  const clickedKeyframeIndexRef = useRef(null);
+  // Track keyframe index from direct clicks (needed when seek is clamped by trim range).
+  // Stores { index, settledTime } — settledTime is set once currentTime settles after click.
+  const clickedKeyframeRef = useRef(null);
 
   // Wrap keyframe click to track the clicked index
   const handleKeyframeClickWithIndex = useCallback((time, index) => {
-    clickedKeyframeIndexRef.current = index;
+    clickedKeyframeRef.current = { index, settledTime: null };
     framingHandleKeyframeClick(time, index);
   }, [framingHandleKeyframeClick]);
-
-  // Clear clicked keyframe when playback starts (time will move away)
-  if (isPlaying) {
-    clickedKeyframeIndexRef.current = null;
-  }
 
   // Derived selection state
   const selectedCropKeyframeIndex = useMemo(() => {
@@ -657,14 +653,25 @@ export function FramingScreen({
     const currentFrame = Math.round(currentTime * framerate);
     const index = findKeyframeIndexNearFrame(keyframes, currentFrame, FRAME_TOLERANCE);
     if (index !== -1) {
-      clickedKeyframeIndexRef.current = null;
+      clickedKeyframeRef.current = null;
       return index;
     }
     // Fallback: if a keyframe was clicked but seek was clamped (e.g., by trim range),
-    // use the clicked index if it's still valid
-    const clicked = clickedKeyframeIndexRef.current;
-    if (clicked !== null && clicked >= 0 && clicked < keyframes.length) {
-      return clicked;
+    // use the clicked index — but only while currentTime stays at the clamped position
+    const clicked = clickedKeyframeRef.current;
+    if (clicked !== null && clicked.index >= 0 && clicked.index < keyframes.length) {
+      if (clicked.settledTime === null) {
+        // First render after click — record where currentTime settled (the clamped position)
+        clicked.settledTime = currentTime;
+        return clicked.index;
+      }
+      // Subsequent renders — only keep selection if currentTime hasn't moved
+      const frameDuration = 1 / framerate;
+      if (Math.abs(currentTime - clicked.settledTime) < frameDuration) {
+        return clicked.index;
+      }
+      // User seeked elsewhere — clear
+      clickedKeyframeRef.current = null;
     }
     return null;
   }, [videoUrl, currentTime, framerate, keyframes]);
