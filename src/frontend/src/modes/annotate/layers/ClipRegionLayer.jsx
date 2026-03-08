@@ -105,20 +105,25 @@ export default function ClipRegionLayer({
               onMouseEnter={() => setHoveredRegionId(region.id)}
               onMouseLeave={() => setHoveredRegionId(null)}
             >
-              {/* Mobile: thin color bar (no text, avoids overlaps) */}
+              {/* Mobile: wider color bar with transparent touch padding */}
               <div
-                className={`
-                  sm:hidden rounded transition-all duration-150
-                  ${isSelected ? 'ring-2 ring-white shadow-lg' : ''}
-                `}
-                style={{
-                  width: '6px',
-                  height: isSelected ? '28px' : '20px',
-                  backgroundColor: color,
-                  border: '1px solid rgba(0,0,0,0.3)',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                }}
-              />
+                className="sm:hidden relative"
+                style={{ padding: '8px 6px' }}
+              >
+                <div
+                  className={`
+                    rounded transition-all duration-150
+                    ${isSelected ? 'ring-2 ring-white shadow-lg' : ''}
+                  `}
+                  style={{
+                    width: '12px',
+                    height: isSelected ? '28px' : '20px',
+                    backgroundColor: color,
+                    border: '1px solid rgba(0,0,0,0.3)',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  }}
+                />
+              </div>
               {/* Desktop: rating notation badge */}
               <div
                 className={`

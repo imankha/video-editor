@@ -90,9 +90,9 @@ export function AnnotateModeView({
 
   return (
     <>
-      {/* Video Metadata - Annotate mode */}
+      {/* Video Metadata - Annotate mode (hidden on mobile) */}
       {annotateVideoMetadata && !annotateFullscreen && (
-        <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-4 border border-white/20">
+        <div className="hidden sm:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-4 border border-white/20">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-300">
             <span>
               <span className="text-gray-400">Resolution:</span>{' '}
@@ -111,10 +111,10 @@ export function AnnotateModeView({
       )}
 
       {/* Main Editor Area */}
-      <div className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20'}`}>
-        {/* Controls Bar - hidden in fullscreen */}
+      <div className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'}`}>
+        {/* Controls Bar - hidden in fullscreen and on mobile */}
         {annotateVideoUrl && !annotateFullscreen && (
-          <div className="mb-6 flex gap-4 items-center">
+          <div className="hidden sm:flex mb-6 gap-4 items-center">
             <div className="ml-auto">
               <ZoomControls
                 zoom={zoom}
@@ -228,10 +228,10 @@ export function AnnotateModeView({
 
         {/* Export Section - hidden in fullscreen */}
         {!annotateFullscreen && (
-        <div className="mt-6">
+        <div className="mt-3 sm:mt-6">
           <div className="space-y-3">
-            {/* Export Settings */}
-            <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
+            {/* Export Settings (hidden on mobile) */}
+            <div className="hidden sm:block bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
               <div className="text-sm font-medium text-gray-300 mb-3">
                 Annotate Settings
               </div>

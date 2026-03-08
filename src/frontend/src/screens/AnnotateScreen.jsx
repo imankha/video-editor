@@ -379,7 +379,8 @@ export function AnnotateScreen({ onClearSelection }) {
             <ClipsSidePanel
               clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
               selectedRegionId={annotateSelectedRegionId}
-              onSelectRegion={(id) => { handleSelectAnnotateRegion(id); setShowMobileSidebar(false); }}
+              onSelectRegion={handleSelectAnnotateRegion}
+              onDeselectRegion={() => selectAnnotateRegion(null)}
               onUpdateRegion={updateClipRegion}
               onDeleteRegion={deleteClipRegion}
               onImportAnnotations={importAnnotations}
@@ -388,10 +389,11 @@ export function AnnotateScreen({ onClearSelection }) {
               videoDuration={annotateVideoMetadata?.duration}
               isLoading={isLoadingAnnotations}
               isVideoUploading={isUploadingGameVideo}
+              isMobile
             />
             <button
               onClick={() => setShowMobileSidebar(false)}
-              className="absolute top-3 right-3 p-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white"
+              className="absolute top-3 right-3 p-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white z-10"
             >
               <X size={18} />
             </button>
@@ -403,7 +405,7 @@ export function AnnotateScreen({ onClearSelection }) {
         <div className="container mx-auto px-3 py-4 sm:px-4 sm:py-8">
           {/* Header */}
           <div className="flex flex-col-reverse sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-4 sm:mb-8">
-            <div className="flex items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1 sm:flex-initial">
               <Button
                 variant="ghost"
                 icon={Home}
@@ -411,10 +413,12 @@ export function AnnotateScreen({ onClearSelection }) {
                 onClick={handleBackToProjects}
                 title="Home"
               />
-              <Breadcrumb
-                type="Games"
-                itemName={annotateGameName}
-              />
+              <div className="min-w-0">
+                <Breadcrumb
+                  type="Games"
+                  itemName={annotateGameName}
+                />
+              </div>
             </div>
             <div className="flex items-center gap-1 sm:gap-4">
               {/* Mobile clips toggle button */}

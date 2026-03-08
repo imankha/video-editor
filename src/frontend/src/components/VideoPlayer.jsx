@@ -167,7 +167,7 @@ export function VideoPlayer({
     <div
       ref={containerRef}
       className={`video-player-container rounded-t-lg overflow-hidden relative outline-none ${
-        isFullscreen ? 'w-full h-full' : 'min-h-[60vh]'
+        isFullscreen ? 'w-full h-full' : 'max-h-[40vh] sm:max-h-none sm:min-h-[60vh]'
       }`}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
@@ -178,7 +178,7 @@ export function VideoPlayer({
     >
       {videoUrl ? (
         <div className={`relative video-container overflow-hidden ${
-          isFullscreen ? 'w-full h-full' : 'h-[60vh]'
+          isFullscreen ? 'w-full h-full' : 'h-[40vh] sm:h-[60vh]'
         }`}>
           <div
             className="absolute inset-0 flex items-center justify-center"
@@ -266,7 +266,7 @@ export function VideoPlayer({
           })()}
         </div>
       ) : isLoading ? (
-        <div className="flex items-center justify-center h-[60vh] text-gray-400">
+        <div className="flex items-center justify-center h-[40vh] sm:h-[60vh] text-gray-400">
           <div className="text-center">
             <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-gray-600 border-t-purple-500"></div>
             <p className="mt-4 text-sm text-gray-300">{loadingMessage}</p>
@@ -274,7 +274,7 @@ export function VideoPlayer({
         </div>
       ) : (
         <div
-          className={`flex items-center justify-center h-[60vh] text-gray-400 transition-colors ${
+          className={`flex items-center justify-center h-[40vh] sm:h-[60vh] text-gray-400 transition-colors ${
             isDragging ? 'bg-blue-600/20 border-2 border-blue-500 border-dashed' : ''
           }`}
         >

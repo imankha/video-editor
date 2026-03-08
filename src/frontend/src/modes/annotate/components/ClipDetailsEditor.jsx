@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Star, Check } from 'lucide-react';
+import { Trash2, Star, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { soccerTags, positions, generateClipName } from '../constants/soccerTags';
 
 // Constants
@@ -76,29 +76,31 @@ function StarRating({ rating, onRatingChange }) {
  * TagSelector - Multi-select tags grouped by position
  * Shows all tags from all positions, allowing selection from multiple positions
  */
-function TagSelector({ selectedTags, onTagToggle }) {
+function TagSelector({ selectedTags, onTagToggle, compact = false }) {
   return (
-    <div className="space-y-2">
+    <div className={compact ? 'space-y-1.5' : 'space-y-2'}>
       {positions.map((pos) => {
         const positionTags = soccerTags[pos.id] || [];
         return (
           <div key={pos.id}>
-            <div className="text-gray-500 text-xs mb-1">{pos.name}</div>
-            <div className="flex flex-wrap gap-1">
+            <div className={`text-gray-500 mb-1 ${compact ? 'text-[10px]' : 'text-xs'}`}>{pos.name}</div>
+            <div className={`flex flex-wrap gap-1`}>
               {positionTags.map((tag) => {
                 const isSelected = selectedTags.includes(tag.name);
                 return (
                   <button
                     key={tag.name}
                     onClick={() => onTagToggle(tag.name)}
-                    className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                    className={`flex items-center gap-1 rounded transition-colors ${
+                      compact ? 'px-1.5 py-1 text-[11px]' : 'px-2 py-1 text-xs'
+                    } ${
                       isSelected
                         ? 'bg-green-600 text-white'
                         : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                     title={tag.description}
                   >
-                    {isSelected && <Check size={12} />}
+                    {isSelected && <Check size={compact ? 10 : 12} />}
                     {tag.name}
                   </button>
                 );
@@ -129,10 +131,12 @@ export function ClipDetailsEditor({
   onUpdate,
   onDelete,
   maxNotesLength = 280,
-  videoDuration
+  videoDuration,
+  compact = false,
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [endTimeInput, setEndTimeInput] = useState('');
+  const [showTiming, setShowTiming] = useState(!compact);
 
   // Calculate current duration
   const clipDuration = region.endTime - region.startTime;
@@ -235,6 +239,7 @@ export function ClipDetailsEditor({
           <TagSelector
             selectedTags={region.tags || []}
             onTagToggle={handleTagToggle}
+            compact={compact}
           />
         </div>
 
@@ -253,49 +258,99 @@ export function ClipDetailsEditor({
           />
         </div>
 
-        {/* End Time (editable) */}
-        <div className="flex items-center gap-2">
-          <label className="text-gray-400 text-xs w-16 shrink-0">End Time</label>
-          <input
-            type="text"
-            value={endTimeInput}
-            onChange={handleEndTimeChange}
-            onBlur={handleEndTimeBlur}
-            className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm font-mono focus:outline-none focus:border-green-500"
-            placeholder="00:00.0"
-          />
-        </div>
+        {/* Timing Section - collapsible when compact */}
+        {compact ? (
+          <div>
+            <button
+              onClick={() => setShowTiming(!showTiming)}
+              className="flex items-center gap-1 text-gray-400 text-xs mb-1 hover:text-gray-300 transition-colors"
+            >
+              {showTiming ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              <span>Timing</span>
+              <span className="text-gray-500 ml-1 font-mono">{clipDuration.toFixed(1)}s</span>
+            </button>
+            {showTiming && (
+              <div className="space-y-2 ml-1 pl-3 border-l border-gray-700">
+                <div className="flex items-center gap-2">
+                  <label className="text-gray-400 text-xs w-16 shrink-0">End Time</label>
+                  <input
+                    type="text"
+                    value={endTimeInput}
+                    onChange={handleEndTimeChange}
+                    onBlur={handleEndTimeBlur}
+                    className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm font-mono focus:outline-none focus:border-green-500"
+                    placeholder="00:00.0"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-gray-400 text-xs">Duration</label>
+                    <span className="text-white text-xs font-mono">{clipDuration.toFixed(1)}s</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={MIN_CLIP_DURATION}
+                    max={MAX_CLIP_DURATION}
+                    step={0.5}
+                    value={clipDuration}
+                    onChange={handleDurationChange}
+                    className="w-full h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-gray-400 text-xs w-16 shrink-0">Start</label>
+                  <span className="text-gray-400 text-sm font-mono">{formatTimeForDisplay(region.startTime)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* End Time (editable) */}
+            <div className="flex items-center gap-2">
+              <label className="text-gray-400 text-xs w-16 shrink-0">End Time</label>
+              <input
+                type="text"
+                value={endTimeInput}
+                onChange={handleEndTimeChange}
+                onBlur={handleEndTimeBlur}
+                className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm font-mono focus:outline-none focus:border-green-500"
+                placeholder="00:00.0"
+              />
+            </div>
 
-        {/* Duration Slider */}
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <label className="text-gray-400 text-xs">Duration</label>
-            <span className="text-white text-xs font-mono">{clipDuration.toFixed(1)}s</span>
-          </div>
-          <input
-            type="range"
-            min={MIN_CLIP_DURATION}
-            max={MAX_CLIP_DURATION}
-            step={0.5}
-            value={clipDuration}
-            onChange={handleDurationChange}
-            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
-          />
-          <div className="relative w-full h-4 mt-0.5">
-            <span className="absolute left-0 text-xs text-gray-500">{MIN_CLIP_DURATION}s</span>
-            {/* Position 15s label at correct slider position: (15-1)/(60-1) ≈ 24% */}
-            <span className="absolute text-xs text-gray-500" style={{ left: `${((DEFAULT_CLIP_DURATION - MIN_CLIP_DURATION) / (MAX_CLIP_DURATION - MIN_CLIP_DURATION)) * 100}%`, transform: 'translateX(-50%)' }}>{DEFAULT_CLIP_DURATION}s</span>
-            <span className="absolute right-0 text-xs text-gray-500">{MAX_CLIP_DURATION}s</span>
-          </div>
-        </div>
+            {/* Duration Slider */}
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-gray-400 text-xs">Duration</label>
+                <span className="text-white text-xs font-mono">{clipDuration.toFixed(1)}s</span>
+              </div>
+              <input
+                type="range"
+                min={MIN_CLIP_DURATION}
+                max={MAX_CLIP_DURATION}
+                step={0.5}
+                value={clipDuration}
+                onChange={handleDurationChange}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+              />
+              <div className="relative w-full h-4 mt-0.5">
+                <span className="absolute left-0 text-xs text-gray-500">{MIN_CLIP_DURATION}s</span>
+                {/* Position 15s label at correct slider position: (15-1)/(60-1) ≈ 24% */}
+                <span className="absolute text-xs text-gray-500" style={{ left: `${((DEFAULT_CLIP_DURATION - MIN_CLIP_DURATION) / (MAX_CLIP_DURATION - MIN_CLIP_DURATION)) * 100}%`, transform: 'translateX(-50%)' }}>{DEFAULT_CLIP_DURATION}s</span>
+                <span className="absolute right-0 text-xs text-gray-500">{MAX_CLIP_DURATION}s</span>
+              </div>
+            </div>
 
-        {/* Start Time (calculated, read-only) */}
-        <div className="flex items-center gap-2">
-          <label className="text-gray-400 text-xs w-16 shrink-0">Start Time</label>
-          <div className="flex-1 px-2 py-1.5 bg-gray-700/30 border border-gray-600/50 rounded text-gray-400 text-sm font-mono">
-            {formatTimeForDisplay(region.startTime)}
-          </div>
-        </div>
+            {/* Start Time (calculated, read-only) */}
+            <div className="flex items-center gap-2">
+              <label className="text-gray-400 text-xs w-16 shrink-0">Start Time</label>
+              <div className="flex-1 px-2 py-1.5 bg-gray-700/30 border border-gray-600/50 rounded text-gray-400 text-sm font-mono">
+                {formatTimeForDisplay(region.startTime)}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Notes Textarea */}
         <div>

@@ -18,7 +18,7 @@ const formatTime = (seconds) => {
  * Compact single-line display showing rating badge and title only.
  * Background tint reflects the clip's star rating when selected.
  */
-export function ClipListItem({ region, index, isSelected, onClick }) {
+export function ClipListItem({ region, index, isSelected, onClick, isMobile = false }) {
   const rating = region.rating || 3;
   const { notation, badgeColor, backgroundColor } = getRatingDisplay(rating);
 
@@ -43,26 +43,29 @@ export function ClipListItem({ region, index, isSelected, onClick }) {
         borderLeftColor: isSelected ? badgeColor : undefined,
       }}
     >
-      <div className="flex items-center px-2 py-1.5">
+      <div className={`flex items-center px-2 ${isMobile ? 'py-3' : 'py-1.5'}`}>
         {/* Rating notation badge */}
         <div
-          className="px-1 py-0.5 mr-2 rounded font-bold text-xs flex-shrink-0"
+          className={`${isMobile ? 'px-1.5 py-1 mr-2.5' : 'px-1 py-0.5 mr-2'} rounded font-bold text-xs flex-shrink-0`}
           style={{
             backgroundColor: badgeColor,
             color: '#ffffff',
             textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-            fontSize: '10px',
+            fontSize: isMobile ? '11px' : '10px',
           }}
           title={`Rating: ${rating}/5`}
         >
           {notation}
         </div>
 
-        {/* Clip title only - single line */}
+        {/* Clip title + end time */}
         <div className="flex-1 min-w-0 text-sm text-white truncate" title={tooltipText}>
           <span className="text-gray-500 mr-1">{index + 1}.</span>
           {displayName}
         </div>
+        {isMobile && (
+          <span className="text-xs text-gray-500 ml-2 flex-shrink-0">{formatTime(region.endTime)}</span>
+        )}
       </div>
     </div>
   );
