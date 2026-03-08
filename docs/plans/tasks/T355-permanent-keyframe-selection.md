@@ -14,40 +14,26 @@ This also affects non-30fps videos for ALL keyframes, not just permanent ones.
 
 ## Root Cause
 
-**Hardcoded framerate in `useCrop` and `useHighlight`.**
+**Two issues found:**
 
-Both hooks initialize framerate as `useState(30)` instead of reading from `videoMetadata.framerate`:
+### 1. Hardcoded framerate in `useCrop` and `useHighlight` (minor)
 
-```javascript
-// useCrop.js:65
-const [framerate] = useState(30); // Default framerate - TODO: extract from video
+Both hooks initialized framerate as `useState(30)` instead of reading from `videoMetadata.framerate`. Fixed by deriving from `videoMetadata?.framerate || 30`. Note: currently all extracted clips are 30fps, so this was latent rather than actively broken.
 
-// useHighlight.js:21
-const [framerate] = useState(30);
-```
+### 2. Trim clamping breaks time-based keyframe selection (primary cause)
 
-Meanwhile, `videoMetadata` is passed to both hooks and DOES contain the real framerate (extracted at FramingScreen.jsx:191).
+Permanent keyframes exist at the full video boundaries (frame 0 and endFrame=451 for a 15s video), but when the video has trimmed segments, `seek()` clamps to the visible trim range via `clampToVisibleRange()`.
 
-### How this breaks selection
+**How this breaks selection:**
 
-1. User loads a 60fps video
-2. `useCrop` uses hardcoded `framerate = 30`
-3. Permanent endFrame keyframe is stored at frame 600 (10s × 60fps)
-4. User clicks the endFrame diamond → `seek(10)` → video currentTime = 10s
-5. `selectedCropKeyframeIndex` computes: `currentFrame = Math.round(10 * 30) = 300`
-6. `findKeyframeIndexNearFrame(keyframes, 300, FRAME_TOLERANCE=5)` looks for frame 300
-7. Actual keyframe is at frame 600 → distance = 300, far exceeds FRAME_TOLERANCE=5
-8. No match → selection highlight doesn't appear
+1. Video has trim range 1.294s → 11.613s (frames 39 → 348)
+2. Permanent end keyframe is at frame 451 (15.033s)
+3. User clicks the endFrame diamond → `seek(15.033)` → clamped to 11.613s
+4. `selectedCropKeyframeIndex` computes: `currentFrame = Math.round(11.613 * 30) = 348`
+5. `findKeyframeIndexNearFrame(keyframes, 348, FRAME_TOLERANCE=5)` → no match (nearest is 275 or 451)
+6. No match → selection highlight doesn't appear
 
-For 30fps videos the bug is masked because the hardcoded value happens to be correct.
-
-### Impact beyond permanent keyframes
-
-This is actually a broader framerate bug. On non-30fps videos:
-- ALL keyframe selection is broken (not just permanent ones)
-- Keyframe positions in the timeline may be rendered incorrectly
-- Frame calculations for trim ranges, segment boundaries are wrong
-- Crop interpolation at specific frames may use wrong values
+Same issue for frame 0 keyframe when trim start > 0: seek clamps to trim start, currentFrame doesn't match frame 0.
 
 ## Solution
 
@@ -61,19 +47,12 @@ Replace `useState(30)` with a value derived from `videoMetadata.framerate` in bo
 
 ### Relevant Files
 
-**Primary fix (2 files):**
-- `src/frontend/src/modes/framing/hooks/useCrop.js:65` — `useState(30)` → use `videoMetadata.framerate`
+**Fix 1 — Framerate (2 files):**
+- `src/frontend/src/modes/framing/hooks/useCrop.js:65` — `useState(30)` → `videoMetadata?.framerate || 30`
 - `src/frontend/src/modes/overlay/hooks/useHighlight.js:21` — same fix
 
-**Dependent code (verify correctness after fix):**
-- `src/frontend/src/screens/FramingScreen.jsx:643` — `selectedCropKeyframeIndex` computation uses `framerate` from useCrop
-- `src/frontend/src/screens/OverlayScreen.jsx:278` — same for highlight keyframes
-- `src/frontend/src/modes/framing/layers/CropLayer.jsx:92-99` — boundary frame calculations
-- `src/frontend/src/modes/overlay/layers/HighlightLayer.jsx:192-199` — same
-- `src/frontend/src/controllers/keyframeController.js` — `useKeyframeController` receives framerate
-
-**Reference:**
-- `src/frontend/src/utils/keyframeUtils.js:33-44` — `findKeyframeIndexNearFrame` (works correctly, just needs correct framerate input)
+**Fix 2 — Trim clamping (1 file):**
+- `src/frontend/src/screens/FramingScreen.jsx` — Added `clickedKeyframeIndexRef` that tracks direct keyframe clicks. `selectedCropKeyframeIndex` uses this as fallback when `findKeyframeIndexNearFrame` fails (i.e., when seek was clamped by trim). Ref is cleared on playback start and when a time-based match succeeds.
 
 ### Related Tasks
 - T340: Keyframe Integrity Guards (permanent keyframe handling)
