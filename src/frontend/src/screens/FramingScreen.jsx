@@ -673,8 +673,24 @@ export function FramingScreen({
       // User seeked elsewhere — clear
       clickedKeyframeRef.current = null;
     }
+
+    // Fallback 2: playhead is at a trim boundary — select the boundary permanent keyframe.
+    // Permanent keyframes live at full video boundaries (frame 0 / endFrame) but the playhead
+    // can only reach the trim boundaries, so findKeyframeIndexNearFrame misses them.
+    if (trimRange && keyframes.length >= 2) {
+      const trimStartFrame = Math.round(trimRange.start * framerate);
+      const trimEndFrame = Math.round(trimRange.end * framerate);
+      if (Math.abs(currentFrame - trimStartFrame) <= FRAME_TOLERANCE) {
+        if (keyframes[0].origin === 'permanent') return 0;
+      }
+      if (Math.abs(currentFrame - trimEndFrame) <= FRAME_TOLERANCE) {
+        const lastIdx = keyframes.length - 1;
+        if (keyframes[lastIdx].origin === 'permanent') return lastIdx;
+      }
+    }
+
     return null;
-  }, [videoUrl, currentTime, framerate, keyframes]);
+  }, [videoUrl, currentTime, framerate, keyframes, trimRange]);
 
   // Current crop state
   const currentCropState = useMemo(() => {
