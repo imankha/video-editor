@@ -637,12 +637,36 @@ export function FramingScreen({
   // Persistence is now gesture-based: each user action in FramingContainer fires
   // a surgical POST /actions call. No reactive useEffect writes to store/backend.
 
+  // Track keyframe index from direct clicks (needed when seek is clamped by trim range)
+  const clickedKeyframeIndexRef = useRef(null);
+
+  // Wrap keyframe click to track the clicked index
+  const handleKeyframeClickWithIndex = useCallback((time, index) => {
+    clickedKeyframeIndexRef.current = index;
+    framingHandleKeyframeClick(time, index);
+  }, [framingHandleKeyframeClick]);
+
+  // Clear clicked keyframe when playback starts (time will move away)
+  if (isPlaying) {
+    clickedKeyframeIndexRef.current = null;
+  }
+
   // Derived selection state
   const selectedCropKeyframeIndex = useMemo(() => {
     if (!videoUrl) return null;
     const currentFrame = Math.round(currentTime * framerate);
     const index = findKeyframeIndexNearFrame(keyframes, currentFrame, FRAME_TOLERANCE);
-    return index !== -1 ? index : null;
+    if (index !== -1) {
+      clickedKeyframeIndexRef.current = null;
+      return index;
+    }
+    // Fallback: if a keyframe was clicked but seek was clamped (e.g., by trim range),
+    // use the clicked index if it's still valid
+    const clicked = clickedKeyframeIndexRef.current;
+    if (clicked !== null && clicked >= 0 && clicked < keyframes.length) {
+      return clicked;
+    }
+    return null;
   }, [videoUrl, currentTime, framerate, keyframes]);
 
   // Current crop state
@@ -1155,7 +1179,7 @@ export function FramingScreen({
       dragCrop={dragCrop}
       onCropChange={framingHandleCropChange}
       onCropComplete={framingHandleCropComplete}
-      onKeyframeClick={framingHandleKeyframeClick}
+      onKeyframeClick={handleKeyframeClickWithIndex}
       onKeyframeDelete={framingHandleKeyframeDelete}
       onCopyCrop={framingHandleCopyCrop}
       onPasteCrop={framingHandlePasteCrop}
