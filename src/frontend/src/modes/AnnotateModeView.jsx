@@ -131,99 +131,130 @@ export function AnnotateModeView({
         {/* Fullscreen container - uses fixed positioning for fullscreen */}
         <div
           ref={annotateContainerRef}
-          className={`${annotateFullscreen ? 'fixed inset-0 z-[100] flex flex-col bg-gray-900' : ''}`}
+          className={`${annotateFullscreen ? 'fixed inset-0 z-[100] bg-gray-900 flex flex-col' : ''}`}
         >
           {/* Video Player with annotate overlays */}
-          <div className={`relative bg-gray-900 ${annotateFullscreen ? 'flex-1 min-h-0' : 'rounded-lg'}`}>
-            <VideoPlayer
-              videoRef={videoRef}
-              videoUrl={annotateVideoUrl}
-              handlers={handlers}
-              isLoading={isLoading}
-              isVideoElementLoading={isVideoElementLoading}
-              loadingProgress={loadingProgress}
-              loadingElapsedSeconds={loadingElapsedSeconds}
-              error={error}
-              loadingMessage="Loading video..."
-              overlays={[
-                // NotesOverlay - shows name, rating, notes for region at playhead
-                (() => {
-                  const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
-                  if (!regionAtPlayhead) return null;
+          <div className={`relative bg-gray-900 ${annotateFullscreen ? '' : 'rounded-lg'}`}>
+            {/* In fullscreen: aspect-ratio wrapper constrains video height */}
+            <div
+              className={annotateFullscreen ? 'relative w-full' : 'contents'}
+              style={annotateFullscreen ? {
+                maxHeight: 'calc(100vh - 140px)',
+                aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}`
+              } : undefined}
+            >
+              <VideoPlayer
+                videoRef={videoRef}
+                videoUrl={annotateVideoUrl}
+                handlers={handlers}
+                isLoading={isLoading}
+                isVideoElementLoading={isVideoElementLoading}
+                loadingProgress={loadingProgress}
+                loadingElapsedSeconds={loadingElapsedSeconds}
+                error={error}
+                loadingMessage="Loading video..."
+                overlays={[
+                  // NotesOverlay - shows name, rating, notes for region at playhead
+                  (() => {
+                    const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
+                    if (!regionAtPlayhead) return null;
 
-                  // Derive display name from rating+tags if no explicit name is set
-                  const displayName = regionAtPlayhead.name ||
-                    generateClipName(regionAtPlayhead.rating, regionAtPlayhead.tags);
+                    // Derive display name from rating+tags if no explicit name is set
+                    const displayName = regionAtPlayhead.name ||
+                      generateClipName(regionAtPlayhead.rating, regionAtPlayhead.tags);
 
-                  return (displayName || regionAtPlayhead.notes) ? (
-                    <NotesOverlay
-                      key="annotate-notes"
-                      name={displayName}
-                      notes={regionAtPlayhead.notes}
-                      rating={regionAtPlayhead.rating}
-                      isVisible={true}
-                      isFullscreen={annotateFullscreen}
-                    />
-                  ) : null;
-                })(),
-                // AnnotateFullscreenOverlay - appears when paused in fullscreen
-                showAnnotateOverlay && (() => {
-                  const existingClip = getAnnotateRegionAtTime(currentTime);
-                  return (
-                    <AnnotateFullscreenOverlay
-                      key="annotate-fullscreen"
-                      isVisible={showAnnotateOverlay}
-                      currentTime={currentTime}
-                      videoDuration={annotateVideoMetadata?.duration || 0}
-                      existingClip={existingClip}
-                      onCreateClip={onFullscreenCreateClip}
-                      onUpdateClip={onFullscreenUpdateClip}
-                      onResume={onOverlayResume}
-                      onClose={onOverlayClose}
-                    />
-                  );
-                })(),
-              ].filter(Boolean)}
-              zoom={zoom}
-              panOffset={panOffset}
-              onZoomChange={onZoomChange}
-              onPanChange={onPanChange}
-              isFullscreen={annotateFullscreen}
-              clipRating={getAnnotateRegionAtTime(currentTime)?.rating ?? null}
-            />
+                    return (displayName || regionAtPlayhead.notes) ? (
+                      <NotesOverlay
+                        key="annotate-notes"
+                        name={displayName}
+                        notes={regionAtPlayhead.notes}
+                        rating={regionAtPlayhead.rating}
+                        isVisible={true}
+                        isFullscreen={annotateFullscreen}
+                      />
+                    ) : null;
+                  })(),
+                  // AnnotateFullscreenOverlay - appears when paused in fullscreen
+                  showAnnotateOverlay && (() => {
+                    const existingClip = getAnnotateRegionAtTime(currentTime);
+                    return (
+                      <AnnotateFullscreenOverlay
+                        key="annotate-fullscreen"
+                        isVisible={showAnnotateOverlay}
+                        currentTime={currentTime}
+                        videoDuration={annotateVideoMetadata?.duration || 0}
+                        existingClip={existingClip}
+                        onCreateClip={onFullscreenCreateClip}
+                        onUpdateClip={onFullscreenUpdateClip}
+                        onResume={onOverlayResume}
+                        onClose={onOverlayClose}
+                      />
+                    );
+                  })(),
+                ].filter(Boolean)}
+                zoom={zoom}
+                panOffset={panOffset}
+                onZoomChange={onZoomChange}
+                onPanChange={onPanChange}
+                isFullscreen={annotateFullscreen}
+                clipRating={getAnnotateRegionAtTime(currentTime)?.rating ?? null}
+              />
+            </div>
 
-            {/* Annotate Controls */}
-            <AnnotateControls
-              isPlaying={isPlaying}
-              currentTime={currentTime}
-              duration={annotateVideoMetadata?.duration || duration}
-              onTogglePlay={togglePlay}
-              onStepForward={stepForward}
-              onStepBackward={stepBackward}
-              onRestart={restart}
-              playbackSpeed={annotatePlaybackSpeed}
-              onSpeedChange={onSpeedChange}
-              isFullscreen={annotateFullscreen}
-              onToggleFullscreen={onToggleFullscreen}
-              onAddClip={onAddClip}
-            />
+            {/* Controls - in flow for both modes, right below video */}
+            <div className={annotateFullscreen ? 'w-full shrink-0' : ''}>
+              <AnnotateControls
+                isPlaying={isPlaying}
+                currentTime={currentTime}
+                duration={annotateVideoMetadata?.duration || duration}
+                onTogglePlay={togglePlay}
+                onStepForward={stepForward}
+                onStepBackward={stepBackward}
+                onRestart={restart}
+                playbackSpeed={annotatePlaybackSpeed}
+                onSpeedChange={onSpeedChange}
+                isFullscreen={annotateFullscreen}
+                onToggleFullscreen={onToggleFullscreen}
+                onAddClip={onAddClip}
+              />
+            </div>
+
+            {/* Fullscreen timeline - right below controls */}
+            {annotateFullscreen && (
+              <div className="w-full shrink-0 bg-gray-900/95 border-t border-gray-700 px-4 py-2">
+                <AnnotateMode
+                  currentTime={currentTime}
+                  duration={annotateVideoMetadata?.duration || 0}
+                  isPlaying={isPlaying}
+                  onSeek={seek}
+                  regions={annotateRegionsWithLayout}
+                  selectedRegionId={annotateSelectedRegionId}
+                  onSelectRegion={onSelectRegion}
+                  onDeleteRegion={onDeleteRegion}
+                  selectedLayer={annotateSelectedLayer}
+                  onLayerSelect={onLayerSelect}
+                />
+              </div>
+            )}
           </div>
 
-          {/* Annotate Mode Timeline - visible in fullscreen */}
-          <div className={`${annotateFullscreen ? 'bg-gray-900/95 border-t border-gray-700 px-4 py-2' : 'mt-6'}`}>
-            <AnnotateMode
-              currentTime={currentTime}
-              duration={annotateVideoMetadata?.duration || 0}
-              isPlaying={isPlaying}
-              onSeek={seek}
-              regions={annotateRegionsWithLayout}
-              selectedRegionId={annotateSelectedRegionId}
-              onSelectRegion={onSelectRegion}
-              onDeleteRegion={onDeleteRegion}
-              selectedLayer={annotateSelectedLayer}
-              onLayerSelect={onLayerSelect}
-            />
-          </div>
+          {/* Annotate Mode Timeline - non-fullscreen */}
+          {!annotateFullscreen && (
+            <div className="mt-6">
+              <AnnotateMode
+                currentTime={currentTime}
+                duration={annotateVideoMetadata?.duration || 0}
+                isPlaying={isPlaying}
+                onSeek={seek}
+                regions={annotateRegionsWithLayout}
+                selectedRegionId={annotateSelectedRegionId}
+                onSelectRegion={onSelectRegion}
+                onDeleteRegion={onDeleteRegion}
+                selectedLayer={annotateSelectedLayer}
+                onLayerSelect={onLayerSelect}
+              />
+            </div>
+          )}
         </div>
 
         {/* Export Section - hidden in fullscreen */}

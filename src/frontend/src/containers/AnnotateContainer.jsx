@@ -7,6 +7,7 @@ import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore } from '../stores';
 import { useUploadStore } from '../stores/uploadStore';
 import { useRawClipSave } from '../hooks/useRawClipSave';
+import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { API_BASE } from '../config';
 import { VideoMode, GameType } from '../constants/gameConstants';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
@@ -604,6 +605,9 @@ export function AnnotateContainer({
     setAnnotateFullscreen(prev => !prev);
   }, [setAnnotateFullscreen]);
 
+  // Hide fullscreen button when it wouldn't meaningfully increase video size
+  const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);
+
   /**
    * Handle Add Clip button click (non-fullscreen mode)
    */
@@ -1030,7 +1034,7 @@ export function AnnotateContainer({
     handleGameVideoSelect,
     handleLoadGame,
     handleCreateAnnotatedVideo,
-    handleToggleFullscreen,
+    handleToggleFullscreen: fullscreenWorthwhile ? handleToggleFullscreen : undefined,
     handleAddClipFromButton,
     handleFullscreenCreateClip,
     handleFullscreenUpdateClip,

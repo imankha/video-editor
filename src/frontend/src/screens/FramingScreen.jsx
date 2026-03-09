@@ -8,6 +8,7 @@ import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useVideo } from '../hooks/useVideo';
 import { useClipManager } from '../hooks/useClipManager';
+import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ClipSelectorSidebar } from '../components/ClipSelectorSidebar';
@@ -803,6 +804,9 @@ export function FramingScreen({
     setIsFullscreen(prev => !prev);
   }, []);
 
+  // Hide fullscreen button when it wouldn't meaningfully increase video size
+  const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, isFullscreen);
+
   // Retry video loading when URL expires
   const handleRetryVideo = useCallback(async () => {
     if (!selectedClipWithMeta) return;
@@ -1186,7 +1190,7 @@ export function FramingScreen({
       handlers={handlers}
       fullscreenContainerRef={fullscreenContainerRef}
       isFullscreen={isFullscreen}
-      onToggleFullscreen={handleToggleFullscreen}
+      onToggleFullscreen={fullscreenWorthwhile ? handleToggleFullscreen : undefined}
       onFileSelect={handleFileSelect}
       togglePlay={togglePlay}
       stepForward={stepForward}

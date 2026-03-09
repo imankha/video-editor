@@ -83,7 +83,9 @@ export function AnnotateControls({
   onAddClip,
 }) {
   return (
-    <div className="controls-container flex flex-wrap items-center justify-between gap-y-1 py-2 px-2 sm:px-4 bg-gray-800 rounded-b-lg">
+    <div className={`controls-container flex flex-wrap items-center justify-between gap-y-1 py-2 px-2 sm:px-4 ${
+      isFullscreen ? 'bg-gray-900/90' : 'bg-gray-800 rounded-b-lg'
+    }`}>
       {/* Playback controls */}
       <div className="flex items-center gap-1">
         {/* Step backward */}
@@ -164,15 +166,17 @@ export function AnnotateControls({
         {/* Speed control */}
         <SpeedControl speed={playbackSpeed} onSpeedChange={onSpeedChange} />
 
-        {/* Fullscreen button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={isFullscreen ? Minimize : Maximize}
-          iconOnly
-          onClick={onToggleFullscreen}
-          title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-        />
+        {/* Fullscreen button - hidden when fullscreen wouldn't increase video size */}
+        {onToggleFullscreen && (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={isFullscreen ? Minimize : Maximize}
+            iconOnly
+            onClick={onToggleFullscreen}
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+          />
+        )}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { useHighlightRegions, useOverlayState } from '../modes/overlay';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
+import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { frameToTime } from '../utils/videoUtils';
@@ -755,6 +756,9 @@ export function OverlayScreen({
     setIsFullscreen(prev => !prev);
   }, []);
 
+  // Hide fullscreen button when it wouldn't meaningfully increase video size
+  const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, isFullscreen);
+
   // Escape key to exit fullscreen
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -843,7 +847,7 @@ export function OverlayScreen({
       // Fullscreen
       fullscreenContainerRef={fullscreenContainerRef}
       isFullscreen={isFullscreen}
-      onToggleFullscreen={handleToggleFullscreen}
+      onToggleFullscreen={fullscreenWorthwhile ? handleToggleFullscreen : undefined}
       // Video state
       videoRef={videoRef}
       effectiveOverlayVideoUrl={effectiveOverlayVideoUrl}
