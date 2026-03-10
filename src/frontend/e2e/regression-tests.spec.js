@@ -48,14 +48,18 @@ async function setupTestUserContext(page) {
   }, TEST_USER_ID);
 
   // X-Test-Mode to skip AI upscaling (not part of app logic, needs extra header)
+  // X-User-ID at CDP level ensures ALL requests (including axios XHR) use the test user's DB.
+  // The patched window.fetch in sessionInit.js only covers fetch() calls, not axios.
   await page.setExtraHTTPHeaders({
     'X-Test-Mode': 'true',
+    'X-User-ID': TEST_USER_ID,
   });
 
-  // Strip X-Test-Mode from R2 presigned URL requests to avoid CORS preflight
+  // Strip test headers from R2 presigned URL requests to avoid CORS preflight
   await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
     const headers = { ...route.request().headers() };
     delete headers['x-test-mode'];
+    delete headers['x-user-id'];
     await route.continue({ headers });
   });
 }
