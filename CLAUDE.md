@@ -254,71 +254,42 @@ See [coding-standards.md](.claude/references/coding-standards.md) for implementa
 
 ## Log handling
 
-**Why this matters:** Raw logs are extremely token-expensive. The `reduce_log` MCP tool compresses logs up to 95% while preserving full semantic value. Every time raw logs enter context — whether from reading a file, running a command, or the user pasting them — those tokens are permanently spent and cannot be reclaimed. This directly shortens the conversation. Always route logs through `reduce_log` to maximize the useful work you can do in a session.
+**NEVER ingest raw logs.** A 2000-line log burns 20,000+ tokens of context and drowns out
+everything else. `reduce_log` reads the file server-side — only the reduced output enters
+your context. This is the single most important rule for effective log debugging.
 
-### NEVER read raw log files into context
+Use `reduce_log` instead of Read/cat/head/tail for any log file. Always include `tail`
+(200-2000) to cap input size. Use `grep` or `level` to filter — don't load the whole log
+when you only need errors.
 
-When working with log files, ALWAYS use the `reduce_log` tool with a `file` parameter.
-NEVER use the Read tool or cat/head/tail on log files.
+reduce_log({ file: "app.log", tail: 2000 })                                     // just call it — auto-summary if large
+reduce_log({ file: "app.log", tail: 200, level: "error" })                      // errors only
+reduce_log({ file: "app.log", tail: 200, level: "error", before: 30, context_level: "warning" })  // errors + relevant context
+reduce_log({ file: "app.log", tail: 200, grep: "timeout|connection" })           // regex search
+reduce_log({ file: "app.log", tail: 2000, summary: true })                      // force structural overview
 
-### NEVER ask the user to paste logs into chat
+**How the threshold gate works:**
+- **No filters + over threshold** → you get an enhanced summary: unique errors/warnings with
+  counts, timestamps, and components. Use this to plan your next call.
+- **Filters + over threshold** → you get the actual output with a TIP on how to narrow further.
+- **Under threshold** → you get the full reduced output directly.
 
-Do NOT ask the user to copy/paste console output, terminal output, or log text into the conversation. Once pasted, those raw tokens are permanently in context. Instead, tell the user:
+**Always redirect commands that might produce more than ~20 lines.** When in doubt, redirect.
+The cost of an unnecessary redirect is ~2 seconds. The cost of raw output in context is
+permanent token loss with no recovery. These commands MUST always be redirected:
 
-    "Copy the log to your clipboard and type /logdump — that way I get the
-     compressed version without wasting context tokens on raw output."
+    npm test 2>&1 > /tmp/test-output.log; echo "exit: $?"
+    pytest 2>&1 > /tmp/test-output.log; echo "exit: $?"
+    npx playwright test 2>&1 > /tmp/test-output.log; echo "exit: $?"
+    pip install 2>&1 > /tmp/pip-output.log; echo "exit: $?"
+    docker build 2>&1 > /tmp/docker-output.log; echo "exit: $?"
 
-### Always include tail
+The `echo "exit: $?"` gives you pass/fail immediately. Then `reduce_log` the file only if
+you need details. Short commands (`git status`, `ls`, `node -v`) can run directly.
 
-Every `reduce_log` call MUST include a `tail` parameter to cap input size. Use `tail: 200`
-as a default. Only increase if the user explicitly needs more history.
-
-### Command output → file → reduce_log
-
-When running commands that produce verbose output, redirect to a temp file first:
-
-    npm test 2>&1 > /tmp/test-output.log
-    # Then analyze with:
-    reduce_log({ file: "/tmp/test-output.log", tail: 200, level: "error" })
-
-### Choose the right filter on the FIRST call
-
-Each `reduce_log` call loads its output into your context. Do NOT call it broadly and
-then call it again with filters — the broad output is already in your context and you've
-wasted tokens. Pick the right filter up front:
-
-- **Errors only** (most common — use this by default for debugging):
-  `reduce_log({ file: "app.log", tail: 200, level: "error" })`
-
-- **Errors with surrounding context** (see what happened before each error):
-  `reduce_log({ file: "app.log", tail: 200, level: "error", context: 10 })`
-
-- **Warnings and above**:
-  `reduce_log({ file: "app.log", tail: 200, level: "warning" })`
-
-- **Search for a specific pattern**:
-  `reduce_log({ file: "app.log", tail: 200, grep: "timeout|connection" })`
-
-- **Filter by component/module**:
-  `reduce_log({ file: "app.log", tail: 200, component: "database" })`
-
-- **Time window**:
-  `reduce_log({ file: "app.log", tail: 500, time_range: "13:02-13:05" })`
-
-- **Full compressed output** (only when you truly need everything):
-  `reduce_log({ file: "app.log", tail: 200 })`
-
-The `context` parameter (default 3) controls how many lines before and after each
-matching line are included. Increase it (e.g., `context: 10`) when you need to see
-what led up to an error.
-
-### If the user pastes a log directly into chat
-
-The raw text is already in your context — `reduce_log` cannot undo that. The context
-tokens are spent. Remind the user to use the clipboard workflow instead:
-
-    "Next time, copy the log and type /logdump — I'll get the reduced version
-     without the raw log entering our conversation."
+**When the user needs to provide logs:** never ask them to paste logs. Tell them to type
+`/logdump` (dumps clipboard to file + auto-reduces) or give a file path. If YOU need a log
+from the user, say: *"Copy the log to your clipboard and type `/logdump`"*.
 
 ## Resources
 - [src/frontend/CLAUDE.md](src/frontend/CLAUDE.md) - Frontend skills and patterns
