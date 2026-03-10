@@ -90,10 +90,17 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         """Set user context, process request, sync DB if writes occurred."""
 
         # --- User context setup ---
-        user_id = request.headers.get('X-User-ID', DEFAULT_USER_ID)
+        raw_user_id = request.headers.get('X-User-ID')
+        user_id = raw_user_id if raw_user_id else DEFAULT_USER_ID
         sanitized = ''.join(c for c in user_id if c.isalnum() or c in '_-')
         if not sanitized:
             sanitized = DEFAULT_USER_ID
+
+        logger.info(
+            f"[REQ] {request.method} {request.url.path} | "
+            f"X-User-ID={repr(raw_user_id)} -> user={sanitized} | "
+            f"origin={request.headers.get('origin', '-')}"
+        )
 
         set_current_user_id(sanitized)
 
