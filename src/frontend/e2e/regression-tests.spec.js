@@ -48,14 +48,18 @@ async function setupTestUserContext(page) {
   }, TEST_USER_ID);
 
   // X-Test-Mode to skip AI upscaling (not part of app logic, needs extra header)
+  // X-User-ID at CDP level ensures ALL requests (including axios XHR) use the test user's DB.
+  // The patched window.fetch in sessionInit.js only covers fetch() calls, not axios.
   await page.setExtraHTTPHeaders({
     'X-Test-Mode': 'true',
+    'X-User-ID': TEST_USER_ID,
   });
 
-  // Strip X-Test-Mode from R2 presigned URL requests to avoid CORS preflight
+  // Strip test headers from R2 presigned URL requests to avoid CORS preflight
   await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
     const headers = { ...route.request().headers() };
     delete headers['x-test-mode'];
+    delete headers['x-user-id'];
     await route.continue({ headers });
   });
 }
@@ -250,7 +254,9 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     const elapsed = Date.now() - startTime;
 
     // Check if export button returned to normal state (not "Exporting")
-    const exportButton = page.locator('button:has-text("Export Video")').first();
+    // Button text is "Frame Video" (framing mode) or "Add Overlay" (overlay mode)
+    const frameVideoButton = page.locator('button:has-text("Frame Video")').first();
+    const addOverlayButton = page.locator('button:has-text("Add Overlay")').first();
     const exportingButton = page.locator('button:has-text("Exporting")');
     const loaderVisible = page.locator('.animate-spin').first();
 
@@ -258,10 +264,12 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     // 1. Export started (exportStarted=true)
     // 2. No "Exporting" button visible
     // 3. No loader visible
-    // 4. "Export Video" button is back and enabled
+    // 4. Export button is back and enabled ("Frame Video" or "Add Overlay")
     const isExporting = await exportingButton.isVisible({ timeout: 500 }).catch(() => false);
     const hasLoader = await loaderVisible.isVisible({ timeout: 500 }).catch(() => false);
-    const exportButtonEnabled = await exportButton.isEnabled({ timeout: 500 }).catch(() => false);
+    const frameButtonEnabled = await frameVideoButton.isEnabled({ timeout: 500 }).catch(() => false);
+    const overlayButtonEnabled = await addOverlayButton.isEnabled({ timeout: 500 }).catch(() => false);
+    const exportButtonEnabled = frameButtonEnabled || overlayButtonEnabled;
 
     if (exportStarted && !isExporting && !hasLoader && exportButtonEnabled) {
       console.log('[Full] Export complete - Export button returned to normal state');
@@ -1004,8 +1012,9 @@ async function ensureWorkingVideoExists(page) {
   }
 
   // Use page.evaluate(fetch) with relative URL so it goes through Vite proxy + route interceptor
+  // cache: 'no-store' bypasses browser HTTP cache (FastAPI doesn't set Cache-Control)
   const projects = await page.evaluate(async () => {
-    const res = await fetch('/api/projects');
+    const res = await fetch('/api/projects', { cache: 'no-store' });
     return res.json();
   });
   const projectWithVideo = projects.find(p => p.has_working_video);
@@ -1027,7 +1036,7 @@ async function ensureWorkingVideoExists(page) {
 
   // Return updated project info
   const newProjects = await page.evaluate(async () => {
-    const res = await fetch('/api/projects');
+    const res = await fetch('/api/projects', { cache: 'no-store' });
     return res.json();
   });
   return newProjects.find(p => p.has_working_video);
@@ -1554,10 +1563,11 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Verify export succeeded - check database for has_working_video flag with retries
     // The backend sets working_video_id after saving the video file
+    // Use cache: 'no-store' to bypass browser HTTP cache (FastAPI doesn't set Cache-Control)
     let projectWithVideo = null;
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       const projects = await page.evaluate(async () => {
-        const res = await fetch('/api/projects');
+        const res = await fetch('/api/projects', { cache: 'no-store' });
         return res.json();
       });
       projectWithVideo = projects.find(p => p.has_working_video);
@@ -1565,7 +1575,7 @@ test.describe('Full Coverage Tests @full', () => {
         console.log(`[Full] Working video found for project ${projectWithVideo.id} (attempt ${attempt + 1})`);
         break;
       }
-      console.log(`[Full] No working video found yet (attempt ${attempt + 1}/5), waiting...`);
+      console.log(`[Full] No working video found yet (attempt ${attempt + 1}/10), waiting...`);
       await page.waitForTimeout(2000);
     }
 
