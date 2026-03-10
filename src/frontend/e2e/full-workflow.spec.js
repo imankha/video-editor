@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
  * OPTIMIZATION: Uses a short 1.5 minute video for fast test runs.
  * All tests that need annotate mode load the saved game instead of re-uploading.
  *
- * Test Isolation: Each test run uses a unique user ID via X-User-ID header.
+ * Test Isolation: Each test run uses a unique user ID via localStorage (T220).
  * This ensures E2E tests don't pollute the dev database.
  *
  * Run with:
@@ -31,29 +31,24 @@ const API_BASE = `http://localhost:${API_PORT}/api`;
 const TEST_USER_ID = `e2e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 /**
- * Set up page to add X-User-ID header to all API requests.
- * This isolates test data from development data.
+ * Set up test user isolation via URL-based user ID (T220).
+ * Sets localStorage before page scripts run so the app's resolveUserId()
+ * picks it up and sends X-User-ID on all API requests automatically.
  */
 async function setupTestUserContext(page) {
-  // T85a: Call /api/auth/init to create profile and get profile_id
-  const initResponse = await page.request.post(`${API_BASE}/auth/init`, {
-    headers: { 'X-User-ID': TEST_USER_ID },
-  });
-  const { profile_id } = await initResponse.json();
+  // Set user ID in localStorage before any page script runs
+  await page.addInitScript((userId) => {
+    localStorage.setItem('reel-ballers-user-id', userId);
+  }, TEST_USER_ID);
 
-  // Set X-User-ID + X-Profile-ID for test isolation, X-Test-Mode to skip AI upscaling
+  // X-Test-Mode to skip AI upscaling (not part of app logic, needs extra header)
   await page.setExtraHTTPHeaders({
-    'X-User-ID': TEST_USER_ID,
-    'X-Profile-ID': profile_id,
     'X-Test-Mode': 'true',
   });
-  // Strip custom headers from R2 presigned URL requests to avoid CORS preflight
-  // failures. setExtraHTTPHeaders adds to ALL requests including cross-origin
-  // XHR PUTs to R2, which triggers CORS preflight and "Part N network error".
+
+  // Strip X-Test-Mode from R2 presigned URL requests to avoid CORS preflight
   await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
     const headers = { ...route.request().headers() };
-    delete headers['x-user-id'];
-    delete headers['x-profile-id'];
     delete headers['x-test-mode'];
     await route.continue({ headers });
   });

@@ -1,6 +1,6 @@
 /**
  * Session initialization — calls /api/auth/init and installs the
- * X-Profile-ID header on all subsequent fetch() requests.
+ * X-Profile-ID and X-User-ID headers on all subsequent fetch() requests.
  *
  * This is the frontend counterpart of backend session_init.py.
  * When real auth is added, call this after login instead of on app mount.
@@ -8,14 +8,41 @@
  * T85b: Added reinstallProfileHeader() for profile switching.
  * The fetch interceptor reads from a mutable _currentProfileId variable,
  * so switching profiles just updates the variable — no re-patching needed.
+ *
+ * T220: Added URL-based user ID (?user=param → localStorage → X-User-ID header).
+ * For multi-tester support without auth. Will be removed when real auth is added.
  */
 
 import { API_BASE } from '../config';
 
 let _profileId = null;
 let _currentProfileId = null;
+let _currentUserId = null;
 let _fetchPatched = false;
 let _initPromise = null;
+
+/**
+ * Resolve user ID from URL param (?user=) or localStorage.
+ * Sanitizes to alphanumeric + underscore + hyphen only.
+ * Cleans the URL after reading the param.
+ */
+function resolveUserId() {
+  const params = new URLSearchParams(window.location.search);
+  const urlUser = params.get('user');
+  if (urlUser) {
+    const sanitized = urlUser.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (sanitized) {
+      localStorage.setItem('reel-ballers-user-id', sanitized);
+      params.delete('user');
+      const newUrl = params.toString()
+        ? `${window.location.pathname}?${params}`
+        : window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+      return sanitized;
+    }
+  }
+  return localStorage.getItem('reel-ballers-user-id') || null;
+}
 
 /**
  * Install a global fetch interceptor that adds X-Profile-ID to all
@@ -35,11 +62,12 @@ function installProfileHeader(profileId) {
     const url = typeof input === 'string' ? input : input?.url || '';
     const isApiRequest = url.startsWith('/api') || url.startsWith(`${API_BASE}/api`);
 
-    if (isApiRequest && _currentProfileId) {
+    if (isApiRequest) {
       init = { ...init };
       init.headers = {
         ...(init.headers || {}),
-        'X-Profile-ID': _currentProfileId,
+        ...(_currentProfileId ? { 'X-Profile-ID': _currentProfileId } : {}),
+        ...(_currentUserId ? { 'X-User-ID': _currentUserId } : {}),
       };
     }
     return originalFetch.call(window, input, init);
@@ -60,6 +88,13 @@ export async function initSession() {
   if (_initPromise) return _initPromise;
 
   _initPromise = (async () => {
+    // Resolve user ID from URL or localStorage before any API calls
+    _currentUserId = resolveUserId();
+
+    // Install fetch interceptor early so X-User-ID is sent on the init call.
+    // Profile ID starts null and gets set after init returns.
+    installProfileHeader(null);
+
     const response = await fetch(`${API_BASE}/api/auth/init`, {
       method: 'POST',
     });
@@ -70,9 +105,7 @@ export async function initSession() {
 
     const data = await response.json();
     _profileId = data.profile_id;
-
-    // Patch fetch() to include X-Profile-ID on all API requests
-    installProfileHeader(_profileId);
+    _currentProfileId = data.profile_id;
 
     return {
       profileId: data.profile_id,
@@ -100,4 +133,11 @@ export function getProfileId() {
 export function reinstallProfileHeader(newProfileId) {
   _currentProfileId = newProfileId;
   _profileId = newProfileId;
+}
+
+/**
+ * Get the current user ID (null if no user param was provided).
+ */
+export function getUserId() {
+  return _currentUserId;
 }

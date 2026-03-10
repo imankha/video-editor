@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChevronDown, Check, Settings, User, Plus } from 'lucide-react';
 import { useProfileStore } from '../stores';
 import { ManageProfilesModal } from './ManageProfilesModal';
+import { getUserId } from '../utils/sessionInit';
 
 /**
  * ProfileDropdown - Header component for switching between athlete profiles
@@ -24,6 +25,8 @@ export function ProfileDropdown() {
 
   const currentProfile = profiles.find(p => p.id === currentProfileId);
   const hasMultiple = profiles.length >= 2;
+  const userId = getUserId();
+  const userTooltip = userId || undefined;
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -62,7 +65,7 @@ export function ProfileDropdown() {
         <button
           onClick={() => setShowManageModal(true)}
           className="flex items-center justify-center w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-          title="Add Profile"
+          title={userTooltip || 'Add Profile'}
         >
           <User size={16} className="text-gray-300" />
         </button>
@@ -84,6 +87,7 @@ export function ProfileDropdown() {
           ref={triggerRef}
           onClick={() => setShowDropdown(!showDropdown)}
           disabled={isLoading}
+          title={userTooltip}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
         >
           {/* Avatar circle */}

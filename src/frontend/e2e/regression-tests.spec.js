@@ -41,25 +41,20 @@ const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
 
 async function setupTestUserContext(page) {
   console.log(`[Test] Setting up test user context: ${TEST_USER_ID}`);
-  // T85a: Call /api/auth/init to create profile and get profile_id
-  const initResponse = await page.request.post(`${API_BASE}/auth/init`, {
-    headers: { 'X-User-ID': TEST_USER_ID },
-  });
-  const { profile_id } = await initResponse.json();
 
-  // Set X-User-ID + X-Profile-ID for test isolation, X-Test-Mode to skip AI upscaling
+  // Set user ID in localStorage before any page script runs (T220)
+  await page.addInitScript((userId) => {
+    localStorage.setItem('reel-ballers-user-id', userId);
+  }, TEST_USER_ID);
+
+  // X-Test-Mode to skip AI upscaling (not part of app logic, needs extra header)
   await page.setExtraHTTPHeaders({
-    'X-User-ID': TEST_USER_ID,
-    'X-Profile-ID': profile_id,
     'X-Test-Mode': 'true',
   });
-  // Strip custom headers from R2 presigned URL requests to avoid CORS preflight
-  // failures. setExtraHTTPHeaders adds to ALL requests including cross-origin
-  // XHR PUTs to R2, which triggers CORS preflight and "Part N network error".
+
+  // Strip X-Test-Mode from R2 presigned URL requests to avoid CORS preflight
   await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
     const headers = { ...route.request().headers() };
-    delete headers['x-user-id'];
-    delete headers['x-profile-id'];
     delete headers['x-test-mode'];
     await route.continue({ headers });
   });
