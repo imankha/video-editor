@@ -41,7 +41,14 @@ function resolveUserId() {
       return sanitized;
     }
   }
-  return localStorage.getItem('reel-ballers-user-id') || null;
+  const stored = localStorage.getItem('reel-ballers-user-id');
+  if (stored) return stored;
+
+  // No user set — generate a random guest ID so this visitor gets their own
+  // isolated account instead of defaulting to the backend's fallback user.
+  const guestId = 'guest_' + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem('reel-ballers-user-id', guestId);
+  return guestId;
 }
 
 /**
