@@ -13,20 +13,12 @@ import { test, expect } from '@playwright/test';
  */
 
 const USER_ID = 'a';
-const PROFILE_ID = 'ac040a85';
 
 async function setupUserA(page) {
-  await page.setExtraHTTPHeaders({
-    'X-User-ID': USER_ID,
-    'X-Profile-ID': PROFILE_ID,
-  });
-  // Strip custom headers from R2 presigned URL requests to avoid CORS preflight
-  await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
-    const headers = { ...route.request().headers() };
-    delete headers['x-user-id'];
-    delete headers['x-profile-id'];
-    await route.continue({ headers });
-  });
+  // Set user ID in localStorage before any page script runs (T220)
+  await page.addInitScript((userId) => {
+    localStorage.setItem('reel-ballers-user-id', userId);
+  }, USER_ID);
 }
 
 /**

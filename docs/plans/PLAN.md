@@ -123,6 +123,8 @@ Deploy to production domains with proper scaling.
 | T270 | [Overlay Renders Outside Region](tasks/T270-overlay-renders-outside-region.md) | DONE | 4 | 4 | Overlay extends beyond shrunk region bounds |
 | T350 | [Sync Strategy Overhaul](tasks/T350-sync-strategy-overhaul.md) | DONE | 9 | 6 | DB writes only on user gestures; reactive sync effect corrupts keyframe data |
 | T355 | [Permanent Keyframe Selection](tasks/T355-permanent-keyframe-selection.md) | DONE | 5 | 3 | Permanent keyframes (frame 0/end) can't be selected by clicking diamonds |
+| T252 | [E2E Project Manager Default Tab](tasks/T252-e2e-project-manager-default-tab.md) | TODO | 3 | 1 | Test expects Projects tab but UI defaults to Games; blocks 8 downstream tests |
+| T253 | [E2E Framing Export Working Video](tasks/T253-e2e-framing-export-working-video.md) | TODO | 3 | 2 | has_working_video undefined after export |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)

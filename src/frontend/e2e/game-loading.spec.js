@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
  * This test captures console logs to debug the "blink" issue where
  * clicking a game doesn't transition to annotate mode.
  *
- * Test Isolation: Each test run uses a unique user ID via X-User-ID header.
+ * Test Isolation: Each test run uses a unique user ID via localStorage (T220).
  */
 
 // Always use port 8000 - the dev backend port
@@ -28,28 +28,13 @@ const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-carlsbad-trimmed.mp4');
 const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
 
 /**
- * Set up page to add X-User-ID header to all API requests.
- * This isolates test data from development data.
+ * Set up test user isolation via URL-based user ID (T220).
  */
 async function setupTestUserContext(page) {
-  // T85a: Call /api/auth/init to create profile and get profile_id
-  const initResponse = await page.request.post(`${API_BASE}/auth/init`, {
-    headers: { 'X-User-ID': TEST_USER_ID },
-  });
-  const { profile_id } = await initResponse.json();
-
-  // Set X-User-ID + X-Profile-ID for test isolation
-  await page.setExtraHTTPHeaders({
-    'X-User-ID': TEST_USER_ID,
-    'X-Profile-ID': profile_id,
-  });
-  // Strip custom headers from R2 presigned URL requests to avoid CORS preflight
-  await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
-    const headers = { ...route.request().headers() };
-    delete headers['x-user-id'];
-    delete headers['x-profile-id'];
-    await route.continue({ headers });
-  });
+  // Set user ID in localStorage before any page script runs
+  await page.addInitScript((userId) => {
+    localStorage.setItem('reel-ballers-user-id', userId);
+  }, TEST_USER_ID);
 }
 
 test.describe('Game Loading Debug', () => {
