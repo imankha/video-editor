@@ -9,7 +9,7 @@
  * The fetch interceptor reads from a mutable _currentProfileId variable,
  * so switching profiles just updates the variable — no re-patching needed.
  *
- * T220: Added URL-based user ID (?user=param → localStorage → X-User-ID header).
+ * T220: Added URL-based user ID (?user=param -> localStorage -> X-User-ID header).
  * For multi-tester support without auth. Will be removed when real auth is added.
  */
 
@@ -52,8 +52,8 @@ function resolveUserId() {
 }
 
 /**
- * Install a global fetch interceptor that adds X-Profile-ID to all
- * API requests. Called once after /api/auth/init returns.
+ * Install a global fetch interceptor that adds X-Profile-ID and X-User-ID to all
+ * API requests. Called once at module load time and again after profile switches.
  *
  * Uses _currentProfileId (mutable) so profile switching doesn't
  * require re-patching fetch.
@@ -83,6 +83,11 @@ function installProfileHeader(profileId) {
   _fetchPatched = true;
 }
 
+// Patch window.fetch at module load time (synchronous) so X-User-ID is present
+// on ALL requests — including those fired by stores before initSession() resolves.
+_currentUserId = resolveUserId();
+installProfileHeader(null);
+
 /**
  * Initialize the user session. Calls /api/auth/init, stores the profile ID,
  * and patches fetch() to include it on all subsequent requests.
@@ -95,13 +100,6 @@ export async function initSession() {
   if (_initPromise) return _initPromise;
 
   _initPromise = (async () => {
-    // Resolve user ID from URL or localStorage before any API calls
-    _currentUserId = resolveUserId();
-
-    // Install fetch interceptor early so X-User-ID is sent on the init call.
-    // Profile ID starts null and gets set after init returns.
-    installProfileHeader(null);
-
     const response = await fetch(`${API_BASE}/api/auth/init`, {
       method: 'POST',
     });
