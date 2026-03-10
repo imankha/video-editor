@@ -123,7 +123,7 @@ Deploy to production domains with proper scaling.
 | T270 | [Overlay Renders Outside Region](tasks/T270-overlay-renders-outside-region.md) | DONE | 4 | 4 | Overlay extends beyond shrunk region bounds |
 | T350 | [Sync Strategy Overhaul](tasks/T350-sync-strategy-overhaul.md) | DONE | 9 | 6 | DB writes only on user gestures; reactive sync effect corrupts keyframe data |
 | T355 | [Permanent Keyframe Selection](tasks/T355-permanent-keyframe-selection.md) | DONE | 5 | 3 | Permanent keyframes (frame 0/end) can't be selected by clicking diamonds |
-| T252 | [E2E Project Manager Default Tab](tasks/T252-e2e-project-manager-default-tab.md) | TODO | 3 | 1 | Test expects Projects tab but UI defaults to Games; blocks 8 downstream tests |
+| T252 | [E2E Project Manager Default Tab](tasks/T252-e2e-project-manager-default-tab.md) | DONE | 3 | 1 | Test expects Projects tab but UI defaults to Games; blocks 8 downstream tests |
 | T253 | [E2E Framing Export Working Video](tasks/T253-e2e-framing-export-working-video.md) | TODO | 3 | 2 | has_working_video undefined after export |
 
 ### Mobile Responsive (TODO)
@@ -147,7 +147,7 @@ Improvements after real user traffic.
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| T340 | [Keyframe Integrity Guards](tasks/T340-keyframe-integrity-guards.md) | TESTING | Missing permanent keyframes, min spacing, selection disambiguation |
+| T340 | [Keyframe Integrity Guards](tasks/T340-keyframe-integrity-guards.md) | DONE | Missing permanent keyframes, min spacing, selection disambiguation |
 | T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | TODO | Multi-tab conflict handling |
 | T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | Faster video loads (needs T200) |
 | T74 | [Incremental Framing Export](tasks/T74-incremental-framing-export.md) | TODO | Cache rendered clips |
