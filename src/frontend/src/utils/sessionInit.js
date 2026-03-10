@@ -67,7 +67,7 @@ function installProfileHeader(profileId) {
   window.fetch = function(input, init = {}) {
     // Only add header to our API requests (relative URLs or same-origin)
     const url = typeof input === 'string' ? input : input?.url || '';
-    const isApiRequest = url.startsWith('/api') || url.startsWith(`${API_BASE}/api`);
+    const isApiRequest = url.startsWith('/api') || url.startsWith('/storage') || url.startsWith(`${API_BASE}/api`) || url.startsWith(`${API_BASE}/storage`);
 
     if (isApiRequest) {
       init = { ...init };
