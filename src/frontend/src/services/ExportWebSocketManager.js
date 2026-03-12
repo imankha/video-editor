@@ -66,8 +66,10 @@ class ExportWebSocketManager {
    */
   connect(exportId, callbacks = {}) {
     return new Promise((resolve) => {
-      // Close existing connection if any
+      // Preserve reconnect attempt count before closing existing connection
+      let previousReconnectAttempt = 0;
       if (this.connections.has(exportId)) {
+        previousReconnectAttempt = this.connections.get(exportId).reconnectAttempt;
         this._closeConnection(exportId, false);
       }
 
@@ -76,11 +78,11 @@ class ExportWebSocketManager {
 
       const ws = new WebSocket(wsUrl);
 
-      // Store connection info
+      // Store connection info (preserve reconnect count so onReconnect fires)
       const connectionInfo = {
         ws,
         keepaliveInterval: null,
-        reconnectAttempt: 0,
+        reconnectAttempt: previousReconnectAttempt,
         reconnectTimeout: null,
         callbacks,
       };
@@ -100,6 +102,15 @@ class ExportWebSocketManager {
 
         // Reset reconnect attempts on successful connection
         connectionInfo.reconnectAttempt = 0;
+
+        // Notify onReconnect if this was a reconnection
+        if (wasReconnect && callbacks.onReconnect) {
+          try {
+            callbacks.onReconnect();
+          } catch (e) {
+            console.warn(`[ExportWSManager] onReconnect callback error:`, e);
+          }
+        }
 
         // Start keepalive pings
         connectionInfo.keepaliveInterval = setInterval(() => {
@@ -139,6 +150,14 @@ class ExportWebSocketManager {
         // Check if export is still active and we should reconnect
         const exportState = useExportStore.getState().activeExports[exportId];
         if (exportState && (exportState.status === 'pending' || exportState.status === 'processing')) {
+          // Notify onDisconnect before scheduling reconnect
+          if (callbacks.onDisconnect) {
+            try {
+              callbacks.onDisconnect();
+            } catch (e) {
+              console.warn(`[ExportWSManager] onDisconnect callback error:`, e);
+            }
+          }
           // Export still active, attempt reconnection
           this._scheduleReconnect(exportId, callbacks);
         } else {
