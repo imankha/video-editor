@@ -850,14 +850,15 @@ export function ExportButtonContainer({
             if (data.traceback) {
               console.error('[ExportButtonContainer] Traceback:', Array.isArray(data.traceback) ? data.traceback.join('\n') : data.traceback);
             }
-            errorMessage = data.message || data.detail || data.error || `Server error (${status})`;
+            const extracted = data.message || data.detail || data.error;
+            errorMessage = (typeof extracted === 'string') ? extracted : `Server error (${status})`;
           } else if (typeof err.response.data === 'string') {
             errorMessage = err.response.data || `Server error (${status})`;
           } else {
             errorMessage = `Server error (${status}): ${statusText || 'Unknown error'}`;
           }
 
-          setError(errorMessage);
+          setError(typeof errorMessage === 'string' ? errorMessage : String(errorMessage));
           setProgressMessage('');
         } else {
           console.error('[ExportButtonContainer] Unknown error:', err);
