@@ -22,6 +22,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   displayProgress,
   displayMessage,
   error,
+  disconnected,
   isFramingMode,
   isDarkOverlay,
 
@@ -219,6 +220,14 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         progressMessage={displayMessage}
         label={isFramingMode ? "AI Upscaling" : "Overlay Export"}
       />
+
+      {/* Disconnected state - recoverable, not an error */}
+      {disconnected && !error && (
+        <div className="text-amber-400 text-sm bg-amber-900/20 border border-amber-800 rounded p-2 flex items-center gap-2">
+          <Loader size={14} className="animate-spin" />
+          <span>Connection lost — export continues on server. Reconnecting...</span>
+        </div>
+      )}
 
       {/* Error message */}
       {error && (

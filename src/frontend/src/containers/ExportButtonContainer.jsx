@@ -222,6 +222,7 @@ export function ExportButtonContainer({
   const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState(null);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
+  const [disconnected, setDisconnected] = useState(false);
 
   // Refs for tracking export state
   const exportIdRef = useRef(null);
@@ -295,22 +296,45 @@ export function ExportButtonContainer({
    * Connect to WebSocket for real-time progress updates using the global manager.
    */
   const connectWebSocket = useCallback(async (exportId) => {
-    console.log('[ExportButtonContainer] Connecting to WebSocket via global manager for:', exportId);
-
     const connected = await exportWebSocketManager.connect(exportId, {
       onProgress: (progress, message) => {
         setProgressMessage(message || '');
       },
       onComplete: (data) => {
-        console.log('[ExportButtonContainer] Export completed via WebSocket:', data);
+        // If we were in disconnected state, the try/catch already exited.
+        // Complete the export from here.
+        setDisconnected(false);
+        setLocalProgress(100);
+        setProgressMessage('Export complete!');
+        setIsExporting(false);
+        handleExportEnd();
+
+        if (onProceedToOverlay && editorMode === EDITOR_MODES.FRAMING) {
+          onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
+        }
+        if (onExportComplete) {
+          onExportComplete();
+        }
       },
-      onError: (error) => {
-        console.error('[ExportButtonContainer] Export error via WebSocket:', error);
-      }
+      onError: (serverError) => {
+        // Server reported a real error — show it
+        setDisconnected(false);
+        setError(serverError || 'Export failed on server');
+        setIsExporting(false);
+        handleExportEnd();
+      },
+      onDisconnect: () => {
+        setDisconnected(true);
+        setProgressMessage('Connection lost — export continues on server...');
+      },
+      onReconnect: () => {
+        setDisconnected(false);
+        setProgressMessage('Reconnected — resuming progress...');
+      },
     });
 
     return { connected };
-  }, []);
+  }, [editorMode, projectId, clips, onProceedToOverlay, onExportComplete]);
 
   /**
    * Wait for export job to complete by polling status
@@ -368,6 +392,7 @@ export function ExportButtonContainer({
     setLocalProgress(0);
     setProgressMessage('Checking server...');
     setError(null);
+    setDisconnected(false);
     uploadCompleteRef.current = false;
 
     // Health check
@@ -401,6 +426,8 @@ export function ExportButtonContainer({
     const exportId = generateExportId();
     exportIdRef.current = exportId;
     handleExportStart(exportId);
+
+    let renderRequestAccepted = false;
 
     try {
       const formData = new FormData();
@@ -557,6 +584,7 @@ export function ExportButtonContainer({
             target_fps: EXPORT_CONFIG.targetFps,
             include_audio: includeAudio
           });
+          renderRequestAccepted = true;
 
           console.log('[ExportButtonContainer] Backend render complete:', renderResponse.data);
 
@@ -593,6 +621,7 @@ export function ExportButtonContainer({
             export_id: exportId,
             effect_type: highlightEffectType
           });
+          renderRequestAccepted = true;
 
           console.log('[ExportButtonContainer] Overlay render complete:', renderResponse.data);
 
@@ -796,6 +825,16 @@ export function ExportButtonContainer({
     } catch (err) {
       console.error('[ExportButtonContainer] Export failed:', err);
 
+      // If the render POST already succeeded, the export is running server-side.
+      // Don't fail it — show a disconnected state and let WS reconnect handle it.
+      if (renderRequestAccepted) {
+        setDisconnected(true);
+        setProgressMessage('Connection lost — export continues on server...');
+        // Don't call setIsExporting(false), failExportInStore, or disconnect WS.
+        // The WS manager will reconnect and onComplete/onError callbacks will finish the flow.
+        return;
+      }
+
       if (exportIdRef.current) {
         failExportInStore(exportIdRef.current, err.message || 'Export failed');
         exportWebSocketManager.disconnect(exportIdRef.current);
@@ -925,6 +964,7 @@ export function ExportButtonContainer({
     displayProgress,
     displayMessage,
     error,
+    disconnected,
     isFramingMode,
     isDarkOverlay,
 

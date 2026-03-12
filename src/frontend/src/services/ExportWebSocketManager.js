@@ -101,6 +101,15 @@ class ExportWebSocketManager {
         // Reset reconnect attempts on successful connection
         connectionInfo.reconnectAttempt = 0;
 
+        // Notify onReconnect if this was a reconnection
+        if (wasReconnect && callbacks.onReconnect) {
+          try {
+            callbacks.onReconnect();
+          } catch (e) {
+            console.warn(`[ExportWSManager] onReconnect callback error:`, e);
+          }
+        }
+
         // Start keepalive pings
         connectionInfo.keepaliveInterval = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
@@ -139,6 +148,14 @@ class ExportWebSocketManager {
         // Check if export is still active and we should reconnect
         const exportState = useExportStore.getState().activeExports[exportId];
         if (exportState && (exportState.status === 'pending' || exportState.status === 'processing')) {
+          // Notify onDisconnect before scheduling reconnect
+          if (callbacks.onDisconnect) {
+            try {
+              callbacks.onDisconnect();
+            } catch (e) {
+              console.warn(`[ExportWSManager] onDisconnect callback error:`, e);
+            }
+          }
           // Export still active, attempt reconnection
           this._scheduleReconnect(exportId, callbacks);
         } else {
@@ -267,11 +284,8 @@ class ExportWebSocketManager {
     const { reconnectAttempt } = connectionInfo;
 
     if (reconnectAttempt >= RECONNECT_CONFIG.maxAttempts) {
-      console.warn(`[ExportWSManager] Max reconnect attempts reached for ${exportId}, polling status`);
-      // Poll backend status as final fallback before giving up
-      this._pollExportStatus(exportId, connectionInfo.callbacks).then(() => {
-        this.connections.delete(exportId);
-      });
+      console.warn(`[ExportWSManager] Max reconnect attempts reached for ${exportId}, switching to periodic polling`);
+      this._startPeriodicPolling(exportId, connectionInfo.callbacks);
       return;
     }
 
@@ -441,6 +455,39 @@ class ExportWebSocketManager {
         }
       });
     }
+  }
+
+  /**
+   * Start periodic REST polling as fallback after max WS reconnect attempts.
+   * Polls every 5s until the export reaches a terminal state.
+   */
+  _startPeriodicPolling(exportId, callbacks = {}) {
+    const POLL_INTERVAL = 5000;
+
+    const poll = async () => {
+      const result = await this._pollExportStatus(exportId, callbacks);
+
+      // Stop polling on terminal state or if export was removed
+      if (result && (result.status === ExportStatus.COMPLETE || result.status === ExportStatus.ERROR)) {
+        this.connections.delete(exportId);
+        return;
+      }
+
+      // Check if export is still tracked
+      const exportState = useExportStore.getState().activeExports[exportId];
+      if (!exportState || (exportState.status !== 'pending' && exportState.status !== 'processing')) {
+        this.connections.delete(exportId);
+        return;
+      }
+
+      // Schedule next poll
+      const connectionInfo = this.connections.get(exportId);
+      if (connectionInfo) {
+        connectionInfo.reconnectTimeout = setTimeout(poll, POLL_INTERVAL);
+      }
+    };
+
+    poll();
   }
 
   /**
