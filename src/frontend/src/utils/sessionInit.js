@@ -13,12 +13,14 @@
  * For multi-tester support without auth. Will be removed when real auth is added.
  */
 
+import axios from 'axios';
 import { API_BASE } from '../config';
 
 let _profileId = null;
 let _currentProfileId = null;
 let _currentUserId = null;
 let _fetchPatched = false;
+let _axiosPatched = false;
 let _initPromise = null;
 
 /**
@@ -83,10 +85,37 @@ function installProfileHeader(profileId) {
   _fetchPatched = true;
 }
 
-// Patch window.fetch at module load time (synchronous) so X-User-ID is present
-// on ALL requests — including those fired by stores before initSession() resolves.
+/**
+ * Install an axios request interceptor that adds X-Profile-ID and X-User-ID
+ * to all API requests. Mirrors the fetch interceptor above.
+ * Axios uses XMLHttpRequest, not window.fetch, so needs its own interceptor.
+ */
+function installAxiosHeader() {
+  if (_axiosPatched) return;
+
+  axios.interceptors.request.use((config) => {
+    const url = config.url || '';
+    const isApiRequest = url.startsWith('/api') || url.startsWith('/storage') || url.startsWith(`${API_BASE}/api`) || url.startsWith(`${API_BASE}/storage`);
+
+    if (isApiRequest) {
+      if (_currentProfileId) {
+        config.headers['X-Profile-ID'] = _currentProfileId;
+      }
+      if (_currentUserId) {
+        config.headers['X-User-ID'] = _currentUserId;
+      }
+    }
+    return config;
+  });
+
+  _axiosPatched = true;
+}
+
+// Patch window.fetch AND axios at module load time (synchronous) so X-User-ID
+// is present on ALL requests — including those fired by stores before initSession() resolves.
 _currentUserId = resolveUserId();
 installProfileHeader(null);
+installAxiosHeader();
 
 /**
  * Initialize the user session. Calls /api/auth/init, stores the profile ID,
