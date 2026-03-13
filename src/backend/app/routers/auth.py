@@ -136,28 +136,28 @@ async def google_auth(body: GoogleAuthRequest):
         raise HTTPException(status_code=401, detail="Email not verified by Google")
 
     # Store auth data in per-user SQLite
-    db = get_db_connection()
-    cursor = db.cursor()
+    with get_db_connection() as db:
+        cursor = db.cursor()
 
-    # Upsert auth_profile (single row per user)
-    cursor.execute("""
-        INSERT INTO auth_profile (id, email, google_id, verified_at)
-        VALUES (1, ?, ?, datetime('now'))
-        ON CONFLICT(id) DO UPDATE SET
-            email = excluded.email,
-            google_id = excluded.google_id,
-            verified_at = datetime('now')
-    """, (email, google_id))
+        # Upsert auth_profile (single row per user)
+        cursor.execute("""
+            INSERT INTO auth_profile (id, email, google_id, verified_at)
+            VALUES (1, ?, ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE SET
+                email = excluded.email,
+                google_id = excluded.google_id,
+                verified_at = datetime('now')
+        """, (email, google_id))
 
-    # Create session
-    session_id = secrets.token_urlsafe(32)
-    expires_at = (datetime.utcnow() + timedelta(days=30)).isoformat()
-    cursor.execute("""
-        INSERT INTO sessions (session_id, expires_at)
-        VALUES (?, ?)
-    """, (session_id, expires_at))
+        # Create session
+        session_id = secrets.token_urlsafe(32)
+        expires_at = (datetime.utcnow() + timedelta(days=30)).isoformat()
+        cursor.execute("""
+            INSERT INTO sessions (session_id, expires_at)
+            VALUES (?, ?)
+        """, (session_id, expires_at))
 
-    db.commit()
+        db.commit()
 
     # Set session cookie on response
     response = JSONResponse(content={
@@ -188,31 +188,31 @@ async def auth_me(request: Request):
         raise HTTPException(status_code=401, detail="No session")
 
     user_id = get_current_user_id()
-    db = get_db_connection()
-    cursor = db.cursor()
+    with get_db_connection() as db:
+        cursor = db.cursor()
 
-    # Check session exists and not expired
-    cursor.execute("""
-        SELECT session_id, expires_at FROM sessions
-        WHERE session_id = ?
-    """, (session_id,))
-    row = cursor.fetchone()
+        # Check session exists and not expired
+        cursor.execute("""
+            SELECT session_id, expires_at FROM sessions
+            WHERE session_id = ?
+        """, (session_id,))
+        row = cursor.fetchone()
 
-    if not row:
-        raise HTTPException(status_code=401, detail="Invalid session")
+        if not row:
+            raise HTTPException(status_code=401, detail="Invalid session")
 
-    if datetime.fromisoformat(row['expires_at']) < datetime.utcnow():
-        # Clean up expired session
-        cursor.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
-        db.commit()
-        raise HTTPException(status_code=401, detail="Session expired")
+        if datetime.fromisoformat(row['expires_at']) < datetime.utcnow():
+            # Clean up expired session
+            cursor.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+            db.commit()
+            raise HTTPException(status_code=401, detail="Session expired")
 
-    # Get auth profile
-    cursor.execute("SELECT email, google_id FROM auth_profile WHERE id = 1")
-    profile = cursor.fetchone()
+        # Get auth profile
+        cursor.execute("SELECT email, google_id FROM auth_profile WHERE id = 1")
+        profile = cursor.fetchone()
 
-    return {
-        "email": profile['email'] if profile else None,
-        "user_id": user_id,
-        "is_authenticated": True,
-    }
+        return {
+            "email": profile['email'] if profile else None,
+            "user_id": user_id,
+            "is_authenticated": True,
+        }
