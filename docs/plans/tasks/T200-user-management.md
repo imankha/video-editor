@@ -17,6 +17,7 @@ Implement user authentication and multi-tenant data isolation to support multipl
 ## Current State
 
 The app currently uses a simple user ID approach:
+- User ID comes in as a query param "user"
 - User ID is stored in a cookie (default: 'a')
 - All data is scoped to this user ID in R2 paths
 - No authentication required
@@ -80,16 +81,12 @@ Standard OAuth flow:
 
 ## Recommended Path
 
-### Phase 1: Anonymous (Current)
-- UUID in cookie
-- Works immediately
-- Good for MVP/testing
 
-### Phase 2: Email Magic Link (When needed)
+### Phase 1: Email Magic Link (When needed)
 - Add when users want cross-device sync
 - Use Resend.com for email (~$0.001/email)
 
-### Phase 3: OAuth (Optional)
+### Phase 2: OAuth (Optional)
 - Add Google login for convenience
 - Keep magic link as fallback
 
