@@ -141,6 +141,23 @@ export async function initSession() {
     _profileId = data.profile_id;
     _currentProfileId = data.profile_id;
 
+    // T400: Check if user has an active session
+    try {
+      const authResponse = await fetch(`${API_BASE}/api/auth/me`);
+      if (authResponse.ok) {
+        const authData = await authResponse.json();
+        const { useAuthStore } = await import('../stores/authStore');
+        useAuthStore.getState().setSessionState(true, authData.email);
+      } else {
+        const { useAuthStore } = await import('../stores/authStore');
+        useAuthStore.getState().setSessionState(false);
+      }
+    } catch {
+      // No session — user is anonymous, that's fine
+      const { useAuthStore } = await import('../stores/authStore');
+      useAuthStore.getState().setSessionState(false);
+    }
+
     return {
       profileId: data.profile_id,
       userId: data.user_id,

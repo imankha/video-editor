@@ -15,6 +15,7 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
+import { AuthGateModal } from './components/AuthGateModal';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, EDITOR_MODES } from './stores';
 
 /**
@@ -267,6 +268,8 @@ function App() {
         <UploadProgressIndicator />
         {/* Sync Status Indicator - shows when R2 sync has failed */}
         <SyncStatusIndicator />
+        {/* Auth Gate Modal - shows when GPU action requires authentication */}
+        <AuthGateModal />
       </>
     );
   }
@@ -399,6 +402,9 @@ function App() {
 
       {/* Toast Notifications */}
       <ToastContainer />
+
+      {/* Auth Gate Modal - shows when GPU action requires authentication */}
+      <AuthGateModal />
     </div>
     </AppStateProvider>
     </ProjectProvider>

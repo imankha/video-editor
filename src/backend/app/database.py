@@ -1001,6 +1001,25 @@ def ensure_database():
             )
         """)
 
+        # T400: Auth tables
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS auth_profile (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                email TEXT,
+                google_id TEXT,
+                verified_at TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                session_id TEXT PRIMARY KEY,
+                created_at TEXT DEFAULT (datetime('now')),
+                expires_at TEXT NOT NULL
+            )
+        """)
+
         # T80: Database version tracking for R2 sync
         # Stored in DB so version survives process restarts
         cursor.execute("""
