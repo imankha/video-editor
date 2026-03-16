@@ -90,3 +90,6 @@ deploy_output.txt
 # Fly.io secrets
 .fly-secrets
 /.playwright-mcp
+
+# Google OAuth credentials
+client_secret_*.json
