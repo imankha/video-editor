@@ -102,7 +102,7 @@ Gate GPU operations behind email verification. Google OAuth primary, Email OTP s
 |----|------|--------|--------|-------|-------|
 | T400 | [Auth Gate + Google OAuth](tasks/user-auth/T400-auth-gate-ui.md) | TESTING | 9 | 4 | Modal + real Google sign-in (per-user SQLite) |
 | T401 | [Email OTP Auth](tasks/user-auth/T401-email-otp.md) | TODO | 9 | 4 | Real Resend integration (per-user SQLite) |
-| T405 | [Central Auth + Cross-Device](tasks/user-auth/T405-central-auth-db.md) | TODO | 7 | 5 | D1 migration, LoginPage, account recovery |
+| T405 | [Central Auth + Cross-Device](tasks/user-auth/T405-central-auth-db.md) | TODO | 7 | 5 | GUID folders, central users table, remove ?user= param, login button, D1 |
 | T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 7 | 3 | Single-session enforcement, expiry |
 | T430 | [Account Settings](tasks/user-auth/T430-account-settings.md) | TODO | 4 | 2 | Email display, linking, logout |
 

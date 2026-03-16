@@ -26,6 +26,8 @@ Cloudflare D1 (free, already in our infra) as the central auth database. Migrate
 - `src/backend/app/routers/auth.py` - Migrate Google/OTP/session logic from per-user SQLite to D1
 - `src/backend/app/middleware/db_sync.py` - Session validation now checks D1
 - `src/backend/app/database.py` - Per-user auth tables become deprecated
+- `src/frontend/src/utils/sessionInit.js` - Remove `?user=` param support, generate UUID instead of `guest_*`
+- `src/frontend/src/components/ProfileDropdown.jsx` - Show email after auth, "Guest" before, add Sign In button
 - `src/frontend/src/components/LoginPage.jsx` - NEW: full-screen login for return visitors
 
 ### Related Tasks
@@ -36,10 +38,18 @@ Cloudflare D1 (free, already in our infra) as the central auth database. Migrate
 
 ### Technical Notes
 
+**Key Architectural Decisions (from T400 testing):**
+
+1. **User folders are GUIDs** — not `guest_*` strings, not emails. R2 path: `{env}/users/{uuid}/profiles/...`. Clean, no identity info leaked in paths.
+2. **Central users table** maps email → GUID. Lookup happens at auth time.
+3. **Remove `?user=` param** from sessionInit.js — was a pre-auth hack for multi-tester support. With Google OAuth, no longer needed.
+4. **Login button in UI** — users need a way to trigger sign-in (not just the auth gate modal on GPU actions). ProfileDropdown should show "Sign In" for anonymous users, email for authenticated users.
+5. **Profile display shows email** after auth, "Guest" before auth. Currently shows raw user ID ("b") which is meaningless.
+
 **D1 Schema:**
 ```sql
 CREATE TABLE users (
-    user_id TEXT PRIMARY KEY,           -- guest_XXXXXXXX (preserved)
+    user_id TEXT PRIMARY KEY,           -- UUID (folder name in R2)
     email TEXT UNIQUE,
     google_id TEXT UNIQUE,
     verified_at TEXT,
@@ -165,23 +175,38 @@ d1.execute("SELECT * FROM users WHERE email = ?", (email,))
 ## Implementation
 
 ### Steps
-1. [ ] Create D1 database via Wrangler CLI or Cloudflare dashboard
-2. [ ] Run D1 schema migrations
-3. [ ] Create auth_db.py service with D1 REST API client
-4. [ ] Implement: create_user, get_user_by_email, get_user_by_google_id
-5. [ ] Implement: store_otp, verify_otp (move from per-user SQLite to D1)
-6. [ ] Implement: create_session, validate_session, invalidate_user_sessions
-7. [ ] Write migration script: scan per-user auth_profile tables → populate D1
-8. [ ] Migrate auth.py endpoints from per-user SQLite to D1
-9. [ ] Update session validation in middleware to check D1
-10. [ ] Create LoginPage.jsx (full-screen, for cookie-less visitors)
-11. [ ] Add "continue as guest" option to LoginPage
-12. [ ] Update sessionInit.js: if no cookie, show LoginPage instead of auto-creating guest
-13. [ ] Add D1 API credentials to env vars (staging + production)
-14. [ ] Test: existing user → deploy T405 → session still works (no re-auth)
-15. [ ] Test: clear cookies → LoginPage → OTP → recover account + data
-16. [ ] Test: new device → LoginPage → Google → same data appears
-17. [ ] Test: "continue as guest" → fresh guest_XXXXXXXX, no old data
+
+**Frontend cleanup (from T400 feedback):**
+1. [ ] Remove `?user=` param support from sessionInit.js
+2. [ ] Change user ID generation from `guest_*` to UUID
+3. [ ] Update ProfileDropdown: show email (from authStore) after auth, "Guest" before
+4. [ ] Add Sign In button to ProfileDropdown for anonymous users
+
+**Central DB:**
+5. [ ] Create D1 database via Wrangler CLI or Cloudflare dashboard
+6. [ ] Run D1 schema migrations (users table with UUID as PK)
+7. [ ] Create auth_db.py service with D1 REST API client
+8. [ ] Implement: create_user, get_user_by_email, get_user_by_google_id
+9. [ ] Implement: store_otp, verify_otp (move from per-user SQLite to D1)
+10. [ ] Implement: create_session, validate_session, invalidate_user_sessions
+
+**Migration:**
+11. [ ] Write migration script: scan per-user auth_profile tables → populate D1 (map existing user IDs to new UUIDs)
+12. [ ] Migrate R2 paths from old user IDs to UUIDs (or maintain alias table)
+13. [ ] Migrate auth.py endpoints from per-user SQLite to D1
+14. [ ] Update session validation in middleware to check D1
+
+**Login flow:**
+15. [ ] Create LoginPage.jsx (full-screen, for cookie-less visitors)
+16. [ ] Add "continue as guest" option to LoginPage
+17. [ ] Update sessionInit.js: if no cookie, show LoginPage instead of auto-creating guest
+18. [ ] Add D1 API credentials to env vars (staging + production)
+
+**Testing:**
+19. [ ] Test: existing user → deploy T405 → session still works (no re-auth)
+20. [ ] Test: clear cookies → LoginPage → OTP → recover account + data
+21. [ ] Test: new device → LoginPage → Google → same data appears
+22. [ ] Test: "continue as guest" → fresh UUID, no old data
 
 ## Acceptance Criteria
 

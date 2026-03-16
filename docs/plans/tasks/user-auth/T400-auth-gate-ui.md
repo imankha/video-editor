@@ -1,6 +1,6 @@
 # T400: Auth Gate + Google OAuth
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 9
 **Complexity:** 4
 **Created:** 2026-03-12
