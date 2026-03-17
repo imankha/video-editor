@@ -18,6 +18,7 @@ per-user SQLite. This enables cross-device recovery via email→user_id lookup.
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from datetime import datetime
 import httpx
 import logging
 import os
@@ -152,12 +153,14 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
 
     # Validate token audience matches our app's client ID
     expected_aud = os.getenv("GOOGLE_CLIENT_ID")
-    if expected_aud and token_data.get("aud") != expected_aud:
+    if not expected_aud:
+        raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID not configured")
+    if token_data.get("aud") != expected_aud:
         raise HTTPException(status_code=401, detail="Token audience mismatch")
 
     email = token_data.get("email")
     google_id = token_data.get("sub")
-    if not email or not token_data.get("email_verified"):
+    if not email or token_data.get("email_verified") != "true":
         raise HTTPException(status_code=401, detail="Email not verified by Google")
 
     # Look up in central auth DB: does this email already have a user?
@@ -181,7 +184,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
             # Brand new user (shouldn't happen often — guest should exist already)
             user_id = current_user_id
             create_user(user_id, email=email, google_id=google_id,
-                        verified_at=__import__('datetime').datetime.utcnow().isoformat())
+                        verified_at=datetime.utcnow().isoformat())
             logger.info(f"[Auth] Google login — created new user: {user_id} ({email})")
 
     # Create session in central auth DB
