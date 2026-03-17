@@ -220,8 +220,6 @@ def create_user(
         )
         db.commit()
 
-    _mark_dirty()
-
     # Sync to R2 immediately — new user registration is critical
     sync_auth_db_to_r2()
 
@@ -239,7 +237,6 @@ def link_google_to_user(user_id: str, email: str, google_id: str) -> None:
             (email, google_id, now, user_id),
         )
         db.commit()
-    _mark_dirty()
     sync_auth_db_to_r2()
     logger.info(f"[AuthDB] Linked Google to user {user_id}: {email}")
 

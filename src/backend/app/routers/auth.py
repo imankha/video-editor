@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import httpx
 import logging
+import os
 import shutil
 
 from app.user_context import get_current_user_id, set_current_user_id
@@ -27,7 +28,6 @@ from app.database import USER_DATA_BASE
 from app.session_init import user_session_init
 from app.services.auth_db import (
     get_user_by_email,
-    get_user_by_google_id,
     create_user,
     create_session,
     validate_session,
@@ -144,6 +144,11 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
         if resp.status_code != 200:
             raise HTTPException(status_code=401, detail="Invalid Google token")
         token_data = resp.json()
+
+    # Validate token audience matches our app's client ID
+    expected_aud = os.getenv("GOOGLE_CLIENT_ID")
+    if expected_aud and token_data.get("aud") != expected_aud:
+        raise HTTPException(status_code=401, detail="Token audience mismatch")
 
     email = token_data.get("email")
     google_id = token_data.get("sub")
