@@ -132,7 +132,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         else:
             if profile_id:
                 logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
-            user_session_init(sanitized)
+            user_session_init(user_id)
 
         # --- Skip sync for certain paths ---
         should_sync = R2_ENABLED and not any(
@@ -164,7 +164,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     sync_success = False
                 sync_duration = time.perf_counter() - sync_start
 
-                set_sync_failed(sanitized, not sync_success)
+                set_sync_failed(user_id, not sync_success)
 
                 if sync_success:
                     logger.info(f"[SYNC] {request.method} {request.url.path} → R2 sync OK ({sync_duration:.2f}s)")
@@ -172,7 +172,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     logger.warning(f"[SYNC] {request.method} {request.url.path} → R2 sync FAILED ({sync_duration:.2f}s)")
 
             # Add X-Sync-Status header if this user has a pending sync failure
-            if is_sync_failed(sanitized):
+            if is_sync_failed(user_id):
                 response.headers["X-Sync-Status"] = "failed"
 
             return response
@@ -190,7 +190,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                         sync_success = False
                     sync_duration = time.perf_counter() - sync_start
 
-                    set_sync_failed(sanitized, not sync_success)
+                    set_sync_failed(user_id, not sync_success)
             except Exception as tracking_error:
                 logger.error(f"Failed to track sync state after error: {tracking_error}")
 
