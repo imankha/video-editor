@@ -21,6 +21,15 @@ let _currentUserId = null;
 let _fetchPatched = false;
 let _axiosPatched = false;
 let _initPromise = null;
+let _onGuestWrite = null;
+
+/**
+ * Register a callback that fires after any successful mutating API call
+ * while the user is a guest. Used to track guest activity for the exit warning.
+ */
+export function setGuestWriteCallback(fn) {
+  _onGuestWrite = fn;
+}
 
 /**
  * Install global fetch interceptor that adds X-Profile-ID and X-User-ID
@@ -73,6 +82,16 @@ function installAxiosInterceptor() {
       }
     }
     return config;
+  });
+
+  // Fire guest-write callback on any successful mutating API call
+  axios.interceptors.response.use((response) => {
+    const method = response.config?.method?.toLowerCase();
+    const isWrite = method && method !== 'get' && method !== 'head' && method !== 'options';
+    if (isWrite && response.status < 400 && _onGuestWrite) {
+      _onGuestWrite();
+    }
+    return response;
   });
 
   _axiosPatched = true;

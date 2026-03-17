@@ -97,6 +97,17 @@ export function ProfileDropdown() {
   // Multiple profiles: full dropdown
   return (
     <>
+      <div className="flex items-center gap-2">
+      {!isAuthenticated && (
+        <button
+          onClick={() => requireAuth(() => {})}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+          title="Sign in to save your work across devices"
+        >
+          <LogIn size={14} className="text-blue-400" />
+          <span className="text-xs text-blue-400 font-medium">Sign In</span>
+        </button>
+      )}
       <div className="relative">
         {/* Trigger button */}
         <button
@@ -209,6 +220,7 @@ export function ProfileDropdown() {
             )}
           </div>
         )}
+      </div>
       </div>
 
       <ManageProfilesModal

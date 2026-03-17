@@ -9,6 +9,14 @@ export const useAuthStore = create((set, get) => ({
   showAuthModal: false,
   pendingAction: null,
   isCheckingSession: true,  // true until initial session check completes
+  hasGuestActivity: false,  // true once a guest user has done any write operation
+
+  // Mark that a guest has done meaningful work (triggers exit warning)
+  markGuestActivity: () => {
+    if (!get().isAuthenticated) {
+      set({ hasGuestActivity: true });
+    }
+  },
 
   // Gate action: shows modal if not authenticated, runs action if authenticated
   requireAuth: (action) => {
@@ -54,7 +62,13 @@ export const useAuthStore = create((set, get) => ({
 
   // Called on app load after session check
   setSessionState: (isAuthenticated, email = null) => {
-    set({ isAuthenticated, email, isCheckingSession: false });
+    set({
+      isAuthenticated,
+      email,
+      isCheckingSession: false,
+      // Clear guest activity once authenticated — no need for exit warning
+      ...(isAuthenticated ? { hasGuestActivity: false } : {}),
+    });
   },
 
   // T405: Logout — invalidate session and clear cookie

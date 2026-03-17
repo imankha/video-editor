@@ -1,7 +1,7 @@
 import { useMemo, useRef, useCallback, useEffect } from 'react';
 import { Home, Scissors } from 'lucide-react';
 import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
-import { initSession } from './utils/sessionInit';
+import { initSession, setGuestWriteCallback } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
@@ -17,6 +17,7 @@ import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AuthGateModal } from './components/AuthGateModal';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, EDITOR_MODES } from './stores';
+import { useAuthStore } from './stores/authStore';
 
 /**
  * App.jsx - Main application shell
@@ -89,11 +90,27 @@ function App() {
   // T85b: Also fetch profiles for the profile switcher.
   // The backend auto-resolves profile if header is missing, so no render gate needed.
   useEffect(() => {
+    // Wire guest-write callback: any successful mutating API call while guest marks activity
+    setGuestWriteCallback(() => useAuthStore.getState().markGuestActivity());
+
     initSession().then(() => {
       warmAllUserVideos();
       useProfileStore.getState().fetchProfiles();
     });
   }, []);
+
+  // Warn guests before leaving if they've done any work
+  const hasGuestActivity = useAuthStore(state => state.hasGuestActivity);
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  useEffect(() => {
+    if (!hasGuestActivity || isAuthenticated) return;
+    const handler = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasGuestActivity, isAuthenticated]);
 
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
