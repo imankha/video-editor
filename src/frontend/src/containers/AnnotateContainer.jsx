@@ -4,7 +4,7 @@ import { useAnnotateState, useAnnotate, AnnotateMode, ClipsSidePanel, NotesOverl
 import { FileUpload } from '../components/FileUpload';
 import { toast } from '../components/shared';
 import { extractVideoMetadata } from '../utils/videoMetadata';
-import { useExportStore } from '../stores';
+import { useExportStore, useAuthStore } from '../stores';
 import { useUploadStore } from '../stores/uploadStore';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
@@ -126,6 +126,8 @@ export function AnnotateContainer({
     dismissExportCompleteToast,
     startExport: startExportInStore,
   } = useExportStore();
+
+  const requireAuth = useAuthStore((s) => s.requireAuth);
 
   // Filter export progress to only show progress for current game (not other projects)
   const exportProgress = useMemo(() => {
@@ -1033,7 +1035,7 @@ export function AnnotateContainer({
     // Handlers
     handleGameVideoSelect,
     handleLoadGame,
-    handleCreateAnnotatedVideo,
+    handleCreateAnnotatedVideo: (clipData) => requireAuth(() => handleCreateAnnotatedVideo(clipData)),
     handleToggleFullscreen: fullscreenWorthwhile ? handleToggleFullscreen : undefined,
     handleAddClipFromButton,
     handleFullscreenCreateClip,

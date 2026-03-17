@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
  * OPTIMIZATION: Uses a short 1.5 minute video for fast test runs.
  * All tests that need annotate mode load the saved game instead of re-uploading.
  *
- * Test Isolation: Each test run uses a unique user ID via localStorage (T220).
+ * Test Isolation: Each test run uses a unique user ID via X-User-ID header (T220/T405).
  * This ensures E2E tests don't pollute the dev database.
  *
  * Run with:
@@ -31,18 +31,13 @@ const API_BASE = `http://localhost:${API_PORT}/api`;
 const TEST_USER_ID = `e2e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 /**
- * Set up test user isolation via URL-based user ID (T220).
- * Sets localStorage before page scripts run so the app's resolveUserId()
- * picks it up and sends X-User-ID on all API requests automatically.
+ * Set up test user isolation via X-User-ID header (T220/T405).
+ * The backend init-guest endpoint accepts X-User-ID for test isolation.
  */
 async function setupTestUserContext(page) {
-  // Set user ID in localStorage before any page script runs
-  await page.addInitScript((userId) => {
-    localStorage.setItem('reel-ballers-user-id', userId);
-  }, TEST_USER_ID);
-
-  // X-Test-Mode to skip AI upscaling (not part of app logic, needs extra header)
+  // Set X-User-ID and X-Test-Mode headers for all requests
   await page.setExtraHTTPHeaders({
+    'X-User-ID': TEST_USER_ID,
     'X-Test-Mode': 'true',
   });
 

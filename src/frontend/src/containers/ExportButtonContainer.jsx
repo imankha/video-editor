@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from '../components/shared';
 import { useAppState } from '../contexts';
-import { useExportStore, EDITOR_MODES } from '../stores';
+import { useExportStore, useAuthStore, EDITOR_MODES } from '../stores';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 import { ExportStatus } from '../constants/exportStatus';
@@ -177,6 +177,7 @@ export function ExportButtonContainer({
   const activeExports = useExportStore(state => state.activeExports);
   const completeExportInStore = useExportStore(state => state.completeExport);
   const failExportInStore = useExportStore(state => state.failExport);
+  const requireAuth = useAuthStore((s) => s.requireAuth);
 
   // Use props if provided, otherwise fall back to context values
   const editorMode = editorModeProp ?? contextEditorMode ?? EDITOR_MODES.FRAMING;
@@ -982,7 +983,7 @@ export function ExportButtonContainer({
     buttonTitle,
 
     // Handlers
-    handleExport,
+    handleExport: () => requireAuth(() => handleExport()),
     handleAudioToggle,
 
     // Effect labels

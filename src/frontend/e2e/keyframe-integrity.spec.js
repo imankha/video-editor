@@ -15,10 +15,10 @@ import { test, expect } from '@playwright/test';
 const USER_ID = 'a';
 
 async function setupUserA(page) {
-  // Set user ID in localStorage before any page script runs (T220)
-  await page.addInitScript((userId) => {
-    localStorage.setItem('reel-ballers-user-id', userId);
-  }, USER_ID);
+  // Set user ID via header for test isolation (T220/T405)
+  await page.setExtraHTTPHeaders({
+    'X-User-ID': USER_ID,
+  });
 }
 
 /**

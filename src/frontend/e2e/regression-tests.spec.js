@@ -42,14 +42,9 @@ const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
 async function setupTestUserContext(page) {
   console.log(`[Test] Setting up test user context: ${TEST_USER_ID}`);
 
-  // Set user ID in localStorage before any page script runs (T220)
-  await page.addInitScript((userId) => {
-    localStorage.setItem('reel-ballers-user-id', userId);
-  }, TEST_USER_ID);
-
-  // X-Test-Mode to skip AI upscaling (not part of app logic, needs extra header)
-  // X-User-ID at CDP level ensures ALL requests (including axios XHR) use the test user's DB.
-  // The patched window.fetch in sessionInit.js only covers fetch() calls, not axios.
+  // T405: X-User-ID header ensures ALL requests use the test user.
+  // Backend middleware falls back to X-User-ID when no session cookie.
+  // init-guest uses this ID instead of generating a UUID.
   await page.setExtraHTTPHeaders({
     'X-Test-Mode': 'true',
     'X-User-ID': TEST_USER_ID,

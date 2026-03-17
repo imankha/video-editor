@@ -3,6 +3,7 @@ import { FlaskConical, Loader, FolderOpen } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE } from '../config';
 import { ExportStatus } from '../constants/exportStatus';
+import { useAuthStore } from '../stores/authStore';
 
 /**
  * Generate a unique ID for tracking export progress
@@ -16,6 +17,7 @@ function generateExportId() {
  * Runs the same video through multiple models to compare quality
  */
 export default function CompareModelsButton({ videoFile, cropKeyframes, highlightKeyframes = [], segmentData, disabled }) {
+  const requireAuth = useAuthStore((s) => s.requireAuth);
   const [isComparing, setIsComparing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
@@ -252,7 +254,7 @@ export default function CompareModelsButton({ videoFile, cropKeyframes, highligh
 
         {/* Compare Button */}
         <button
-          onClick={handleCompare}
+          onClick={() => requireAuth(() => handleCompare())}
           disabled={disabled || isComparing || !videoFile}
           className={`w-full px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
             disabled || isComparing || !videoFile

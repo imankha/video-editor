@@ -1,15 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronDown, Check, Settings, User, Plus } from 'lucide-react';
+import { ChevronDown, Check, Settings, User, Plus, LogIn, LogOut } from 'lucide-react';
 import { useProfileStore } from '../stores';
+import { useAuthStore } from '../stores/authStore';
 import { ManageProfilesModal } from './ManageProfilesModal';
-import { getUserId } from '../utils/sessionInit';
 
 /**
- * ProfileDropdown - Header component for switching between athlete profiles
+ * ProfileDropdown - Header auth + profile switcher.
  *
- * Rendering logic:
- * - 0-1 profiles: Small user icon that opens ManageProfilesModal directly
- * - 2+ profiles: Full dropdown with avatar, name, chevron, and profile list
+ * Guest:                  Sign In button only — no profile UI
+ * Authenticated, 1 profile:  User icon → dropdown (Manage Profiles, Sign Out)
+ * Authenticated, 2+ profiles: Full profile switcher dropdown
  */
 export function ProfileDropdown() {
   const profiles = useProfileStore(state => state.profiles);
@@ -23,10 +23,10 @@ export function ProfileDropdown() {
   const dropdownRef = useRef(null);
   const triggerRef = useRef(null);
 
-  const currentProfile = profiles.find(p => p.id === currentProfileId);
-  const hasMultiple = profiles.length >= 2;
-  const userId = getUserId();
-  const userTooltip = userId || undefined;
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const email = useAuthStore(state => state.email);
+  const logout = useAuthStore(state => state.logout);
+  const requireAuth = useAuthStore(state => state.requireAuth);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -50,25 +50,78 @@ export function ProfileDropdown() {
     await switchProfile(profileId);
   }, [switchProfile]);
 
-  const handleManageClick = useCallback(() => {
-    setShowDropdown(false);
-    setShowManageModal(true);
-  }, []);
-
-  // Don't render until profiles are loaded
   if (!isInitialized) return null;
 
-  // Single profile: show small user icon that opens manage modal
+  // Guest: sign in button only
+  if (!isAuthenticated) {
+    return (
+      <button
+        onClick={() => requireAuth(() => {})}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+        title="Sign in to save your work across devices"
+      >
+        <LogIn size={14} className="text-blue-400" />
+        <span className="text-xs text-blue-400 font-medium">Sign In</span>
+      </button>
+    );
+  }
+
+  const currentProfile = profiles.find(p => p.id === currentProfileId);
+  const hasMultiple = profiles.length >= 2;
+
+  // Auth section shared across both dropdown variants
+  const authSection = (
+    <>
+      <div className="border-t border-gray-700 my-1" />
+      <div className="px-4 py-2 text-xs text-gray-500 truncate">{email}</div>
+      <button
+        onClick={() => { setShowDropdown(false); logout(); }}
+        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"
+      >
+        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 flex-shrink-0">
+          <LogOut size={14} className="text-gray-300" />
+        </div>
+        <span className="text-sm text-gray-300">Sign Out</span>
+      </button>
+    </>
+  );
+
+  // Authenticated, single profile: user icon → small dropdown
   if (!hasMultiple) {
     return (
       <>
-        <button
-          onClick={() => setShowManageModal(true)}
-          className="flex items-center justify-center w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-          title={userTooltip || 'Add Profile'}
-        >
-          <User size={16} className="text-gray-300" />
-        </button>
+        <div className="relative">
+          <button
+            ref={triggerRef}
+            onClick={() => setShowDropdown(!showDropdown)}
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            title={email}
+          >
+            <User size={16} className="text-gray-300" />
+          </button>
+
+          {showDropdown && (
+            <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
+          )}
+
+          {showDropdown && (
+            <div
+              ref={dropdownRef}
+              className="absolute right-0 top-full mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 py-1"
+            >
+              <button
+                onClick={() => { setShowDropdown(false); setShowManageModal(true); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"
+              >
+                <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 flex-shrink-0">
+                  <Settings size={14} className="text-gray-300" />
+                </div>
+                <span className="text-sm text-gray-300">Manage Profiles</span>
+              </button>
+              {authSection}
+            </div>
+          )}
+        </div>
 
         <ManageProfilesModal
           isOpen={showManageModal}
@@ -78,19 +131,17 @@ export function ProfileDropdown() {
     );
   }
 
-  // Multiple profiles: full dropdown
+  // Authenticated, multiple profiles: full switcher dropdown
   return (
     <>
       <div className="relative">
-        {/* Trigger button */}
         <button
           ref={triggerRef}
           onClick={() => setShowDropdown(!showDropdown)}
           disabled={isLoading}
-          title={userTooltip}
+          title={email}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
         >
-          {/* Avatar circle */}
           <div
             className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
             style={{ backgroundColor: currentProfile?.color || '#3B82F6' }}
@@ -103,18 +154,15 @@ export function ProfileDropdown() {
           <ChevronDown size={14} className={`text-gray-400 transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
         </button>
 
-        {/* Backdrop */}
         {showDropdown && (
           <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
         )}
 
-        {/* Dropdown menu */}
         {showDropdown && (
           <div
             ref={dropdownRef}
             className="absolute right-0 top-full mt-2 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 py-1"
           >
-            {/* Profile list */}
             {profiles.map(p => (
               <button
                 key={p.id}
@@ -136,10 +184,8 @@ export function ProfileDropdown() {
               </button>
             ))}
 
-            {/* Divider */}
             <div className="border-t border-gray-700 my-1" />
 
-            {/* Add Profile */}
             <button
               onClick={() => { setShowDropdown(false); setShowManageModal(true); }}
               className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"
@@ -150,9 +196,8 @@ export function ProfileDropdown() {
               <span className="text-sm text-gray-300">Add Profile</span>
             </button>
 
-            {/* Manage Profiles */}
             <button
-              onClick={handleManageClick}
+              onClick={() => { setShowDropdown(false); setShowManageModal(true); }}
               className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"
             >
               <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 flex-shrink-0">
@@ -160,6 +205,8 @@ export function ProfileDropdown() {
               </div>
               <span className="text-sm text-gray-300">Manage Profiles</span>
             </button>
+
+            {authSection}
           </div>
         )}
       </div>

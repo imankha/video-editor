@@ -1,16 +1,15 @@
 /**
- * Session initialization — calls /api/auth/init and installs the
+ * Session initialization — resolves user identity from server, installs
  * X-Profile-ID and X-User-ID headers on all subsequent fetch() requests.
  *
- * This is the frontend counterpart of backend session_init.py.
- * When real auth is added, call this after login instead of on app mount.
+ * T405: User identity comes from the SERVER, not the client.
+ * - rb_session cookie → /api/auth/me → user_id (returning visitor)
+ * - /api/auth/init-guest → new UUID + cookie (new visitor)
+ * - No more ?user= URL param or localStorage user IDs
  *
- * T85b: Added reinstallProfileHeader() for profile switching.
- * The fetch interceptor reads from a mutable _currentProfileId variable,
+ * T85b: reinstallProfileHeader() for profile switching.
+ * The fetch interceptor reads from mutable variables,
  * so switching profiles just updates the variable — no re-patching needed.
- *
- * T220: Added URL-based user ID (?user=param -> localStorage -> X-User-ID header).
- * For multi-tester support without auth. Will be removed when real auth is added.
  */
 
 import axios from 'axios';
@@ -22,57 +21,34 @@ let _currentUserId = null;
 let _fetchPatched = false;
 let _axiosPatched = false;
 let _initPromise = null;
+let _onGuestWrite = null;
 
 /**
- * Resolve user ID from URL param (?user=) or localStorage.
- * Sanitizes to alphanumeric + underscore + hyphen only.
- * Cleans the URL after reading the param.
+ * Register a callback that fires after any successful mutating API call
+ * while the user is a guest. Used to track guest activity for the exit warning.
  */
-function resolveUserId() {
-  const params = new URLSearchParams(window.location.search);
-  const urlUser = params.get('user');
-  if (urlUser) {
-    const sanitized = urlUser.replace(/[^a-zA-Z0-9_-]/g, '');
-    if (sanitized) {
-      localStorage.setItem('reel-ballers-user-id', sanitized);
-      params.delete('user');
-      const newUrl = params.toString()
-        ? `${window.location.pathname}?${params}`
-        : window.location.pathname;
-      window.history.replaceState({}, '', newUrl);
-      return sanitized;
-    }
-  }
-  const stored = localStorage.getItem('reel-ballers-user-id');
-  if (stored) return stored;
-
-  // No user set — generate a random guest ID so this visitor gets their own
-  // isolated account instead of defaulting to the backend's fallback user.
-  const guestId = 'guest_' + Math.random().toString(36).slice(2, 10);
-  localStorage.setItem('reel-ballers-user-id', guestId);
-  return guestId;
+export function setGuestWriteCallback(fn) {
+  _onGuestWrite = fn;
 }
 
 /**
- * Install a global fetch interceptor that adds X-Profile-ID and X-User-ID to all
- * API requests. Called once at module load time and again after profile switches.
- *
- * Uses _currentProfileId (mutable) so profile switching doesn't
- * require re-patching fetch.
+ * Install global fetch interceptor that adds X-Profile-ID and X-User-ID
+ * to all API requests. Also ensures credentials: 'include' for cookies.
  */
-function installProfileHeader(profileId) {
-  _currentProfileId = profileId;
-
-  if (_fetchPatched) return; // Only patch once
+function installFetchInterceptor() {
+  if (_fetchPatched) return;
 
   const originalFetch = window.fetch;
   window.fetch = function(input, init = {}) {
-    // Only add header to our API requests (relative URLs or same-origin)
     const url = typeof input === 'string' ? input : input?.url || '';
     const isApiRequest = url.startsWith('/api') || url.startsWith('/storage') || url.startsWith(`${API_BASE}/api`) || url.startsWith(`${API_BASE}/storage`);
 
     if (isApiRequest) {
       init = { ...init };
+      // Ensure cookies are sent (rb_session)
+      if (!init.credentials) {
+        init.credentials = 'include';
+      }
       init.headers = {
         ...(init.headers || {}),
         ...(_currentProfileId ? { 'X-Profile-ID': _currentProfileId } : {}),
@@ -86,11 +62,10 @@ function installProfileHeader(profileId) {
 }
 
 /**
- * Install an axios request interceptor that adds X-Profile-ID and X-User-ID
- * to all API requests. Mirrors the fetch interceptor above.
- * Axios uses XMLHttpRequest, not window.fetch, so needs its own interceptor.
+ * Install axios interceptor that adds X-Profile-ID and X-User-ID
+ * to all API requests. Also ensures withCredentials for cookies.
  */
-function installAxiosHeader() {
+function installAxiosInterceptor() {
   if (_axiosPatched) return;
 
   axios.interceptors.request.use((config) => {
@@ -98,6 +73,7 @@ function installAxiosHeader() {
     const isApiRequest = url.startsWith('/api') || url.startsWith('/storage') || url.startsWith(`${API_BASE}/api`) || url.startsWith(`${API_BASE}/storage`);
 
     if (isApiRequest) {
+      config.withCredentials = true;
       if (_currentProfileId) {
         config.headers['X-Profile-ID'] = _currentProfileId;
       }
@@ -108,18 +84,41 @@ function installAxiosHeader() {
     return config;
   });
 
+  // Fire guest-write callback on any successful mutating API call
+  axios.interceptors.response.use((response) => {
+    const method = response.config?.method?.toLowerCase();
+    const isWrite = method && method !== 'get' && method !== 'head' && method !== 'options';
+    if (isWrite && response.status < 400 && _onGuestWrite) {
+      _onGuestWrite();
+    }
+    return response;
+  });
+
   _axiosPatched = true;
 }
 
-// Patch window.fetch AND axios at module load time (synchronous) so X-User-ID
-// is present on ALL requests — including those fired by stores before initSession() resolves.
-_currentUserId = resolveUserId();
-installProfileHeader(null);
-installAxiosHeader();
+// Patch interceptors at module load time (synchronous).
+// _currentUserId is null until initSession() resolves — that's fine,
+// the interceptor reads the mutable variable on each request.
+installFetchInterceptor();
+installAxiosInterceptor();
 
 /**
- * Initialize the user session. Calls /api/auth/init, stores the profile ID,
- * and patches fetch() to include it on all subsequent requests.
+ * Set the user ID for all subsequent API requests.
+ * Called after /api/auth/me or /api/auth/init-guest returns the user_id.
+ */
+export function setUserId(userId) {
+  _currentUserId = userId;
+}
+
+/**
+ * Initialize the user session. Resolves user identity from server:
+ *
+ * 1. GET /api/auth/me — check for existing session (cookie-based)
+ *    - If valid: use that user_id, set auth state
+ * 2. If no session: POST /api/auth/init-guest — create anonymous user
+ *    - Server generates UUID, creates session, sets cookie
+ * 3. POST /api/auth/init — initialize profile + database for user
  *
  * Safe to call multiple times — returns cached promise after first call.
  *
@@ -129,22 +128,64 @@ export async function initSession() {
   if (_initPromise) return _initPromise;
 
   _initPromise = (async () => {
-    const response = await fetch(`${API_BASE}/api/auth/init`, {
-      method: 'POST',
-    });
+    const { useAuthStore } = await import('../stores/authStore');
+    let userId = null;
 
-    if (!response.ok) {
-      throw new Error(`Session init failed: ${response.status}`);
+    // Step 1: Check for existing session via cookie
+    try {
+      const meResponse = await fetch(`${API_BASE}/api/auth/me`, {
+        credentials: 'include',
+      });
+      if (meResponse.ok) {
+        const meData = await meResponse.json();
+        userId = meData.user_id;
+        _currentUserId = userId;
+        // Only authenticated if they have an email (Google sign-in).
+        // A guest session has a user_id but no email — still not authenticated.
+        useAuthStore.getState().setSessionState(!!meData.email, meData.email || null);
+      }
+    } catch {
+      // No session — will create guest below
     }
 
-    const data = await response.json();
-    _profileId = data.profile_id;
-    _currentProfileId = data.profile_id;
+    // Step 2: No valid session — create anonymous guest
+    if (!userId) {
+      const guestResponse = await fetch(`${API_BASE}/api/auth/init-guest`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!guestResponse.ok) {
+        throw new Error(`Guest init failed: ${guestResponse.status}`);
+      }
+      const guestData = await guestResponse.json();
+      userId = guestData.user_id;
+      _currentUserId = userId;
+      _profileId = guestData.profile_id;
+      _currentProfileId = guestData.profile_id;
+      useAuthStore.getState().setSessionState(false);
+
+      return {
+        profileId: guestData.profile_id,
+        userId: userId,
+        isNewUser: guestData.is_new_user,
+      };
+    }
+
+    // Step 3: Have a user_id (from session) — initialize profile
+    const initResponse = await fetch(`${API_BASE}/api/auth/init`, {
+      method: 'POST',
+    });
+    if (!initResponse.ok) {
+      throw new Error(`Session init failed: ${initResponse.status}`);
+    }
+    const initData = await initResponse.json();
+    _profileId = initData.profile_id;
+    _currentProfileId = initData.profile_id;
 
     return {
-      profileId: data.profile_id,
-      userId: data.user_id,
-      isNewUser: data.is_new_user,
+      profileId: initData.profile_id,
+      userId: userId,
+      isNewUser: initData.is_new_user,
     };
   })();
 
@@ -170,8 +211,19 @@ export function reinstallProfileHeader(newProfileId) {
 }
 
 /**
- * Get the current user ID (null if no user param was provided).
+ * Get the current user ID (null until initSession resolves).
  */
 export function getUserId() {
   return _currentUserId;
+}
+
+/**
+ * Reset session state. Called after auth changes (login/logout)
+ * to force re-initialization on next initSession() call.
+ */
+export function resetSession() {
+  _initPromise = null;
+  _currentUserId = null;
+  _currentProfileId = null;
+  _profileId = null;
 }

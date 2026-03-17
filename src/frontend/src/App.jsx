@@ -1,7 +1,7 @@
 import { useMemo, useRef, useCallback, useEffect } from 'react';
-import { Home, Scissors } from 'lucide-react';
+import { Home, Scissors, LogIn } from 'lucide-react';
 import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
-import { initSession } from './utils/sessionInit';
+import { initSession, setGuestWriteCallback } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { GalleryButton } from './components/GalleryButton';
@@ -15,7 +15,9 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
+import { AuthGateModal } from './components/AuthGateModal';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, EDITOR_MODES } from './stores';
+import { useAuthStore } from './stores/authStore';
 
 /**
  * App.jsx - Main application shell
@@ -88,11 +90,19 @@ function App() {
   // T85b: Also fetch profiles for the profile switcher.
   // The backend auto-resolves profile if header is missing, so no render gate needed.
   useEffect(() => {
+    // Wire guest-write callback: any successful mutating API call while guest marks activity
+    setGuestWriteCallback(() => useAuthStore.getState().markGuestActivity());
+
     initSession().then(() => {
       warmAllUserVideos();
       useProfileStore.getState().fetchProfiles();
     });
   }, []);
+
+  const hasGuestActivity = useAuthStore(state => state.hasGuestActivity);
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const isCheckingSession = useAuthStore(state => state.isCheckingSession);
+  const requireAuth = useAuthStore(state => state.requireAuth);
 
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
@@ -252,6 +262,10 @@ function App() {
     setGlobalExportProgress,
   ]);
 
+  // Block rendering until session is resolved — prevents data fetches from firing
+  // before the user identity is established (would fall back to DEFAULT_USER_ID)
+  if (isCheckingSession) return null;
+
   // If no project selected and not in annotate mode, show ProjectsScreen
   if (!selectedProject && editorMode !== EDITOR_MODES.ANNOTATE) {
     return (
@@ -267,6 +281,10 @@ function App() {
         <UploadProgressIndicator />
         {/* Sync Status Indicator - shows when R2 sync has failed */}
         <SyncStatusIndicator />
+        {/* Auth Gate Modal - shows when GPU action requires authentication */}
+        <AuthGateModal />
+        {/* Guest activity banner — only shown after guest does meaningful work */}
+        {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
       </>
     );
   }
@@ -277,6 +295,8 @@ function App() {
     <div className="h-screen overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
       {/* Connection status banner - shows when backend is unreachable */}
       <ConnectionStatus />
+      {/* Guest activity banner — only shown after guest does meaningful work */}
+      {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
       {editorMode === EDITOR_MODES.ANNOTATE && <AnnotateScreen onClearSelection={clearSelection} />}
 
@@ -399,9 +419,30 @@ function App() {
 
       {/* Toast Notifications */}
       <ToastContainer />
+
+      {/* Auth Gate Modal - shows when GPU action requires authentication */}
+      <AuthGateModal />
     </div>
     </AppStateProvider>
     </ProjectProvider>
+  );
+}
+
+function GuestSaveBanner({ onSignIn }) {
+  return (
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-800 border border-yellow-500/40 shadow-xl text-sm">
+      <span className="text-yellow-400">⚠</span>
+      <span className="text-gray-200">
+        You're a guest — your work <span className="text-white font-medium">won't be recoverable</span> without signing in.
+      </span>
+      <button
+        onClick={onSignIn}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors text-white font-medium whitespace-nowrap"
+      >
+        <LogIn size={13} />
+        Sign in to save
+      </button>
+    </div>
   );
 }
 

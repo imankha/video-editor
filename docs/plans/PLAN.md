@@ -89,14 +89,52 @@ Get the app running on staging URLs for testing.
 - API: `reel-ballers-api-staging.fly.dev`
 - App: `reel-ballers-staging.pages.dev`
 
-### Phase 2: Staging Features
+### Phase 2: User Auth & Monetization
 
-Test auth and payments with Stripe test mode before production.
+Two epics, interleaved for feedback velocity. UI shells first (testable with users), then backend wiring, then Stripe last.
 
-| ID | Task | Status | Notes |
-|----|------|--------|-------|
-| T200 | [User Management](tasks/T200-user-management.md) | TODO | Email magic link auth |
-| T210 | [Wallet & Payments](tasks/T210-wallet-payments.md) | TODO | Stripe test keys |
+#### Epic: User Auth
+[tasks/user-auth/EPIC.md](tasks/user-auth/EPIC.md)
+
+Gate GPU operations behind email verification. Google OAuth primary, Email OTP secondary. Per-user SQLite first (T400/T401), central D1 later (T405).
+
+| ID | Task | Status | Impact | Cmplx | Notes |
+|----|------|--------|--------|-------|-------|
+| T400 | [Auth Gate + Google OAuth](tasks/user-auth/T400-auth-gate-ui.md) | DONE | 9 | 4 | Modal + real Google sign-in (per-user SQLite) |
+| T401 | [Email OTP Auth](tasks/user-auth/T401-email-otp.md) | TODO | 9 | 4 | Real Resend integration (per-user SQLite) |
+| T405 | [Central Auth + Cross-Device](tasks/user-auth/T405-central-auth-db.md) | TESTING | 7 | 5 | Shared auth.sqlite+R2, server-issued UUIDs, session cookies, remove ?user= param |
+| T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 7 | 3 | Single-session enforcement, expiry |
+| T430 | [Account Settings](tasks/user-auth/T430-account-settings.md) | TODO | 4 | 2 | Email display, linking, logout |
+
+#### Epic: Monetization
+[tasks/monetization/EPIC.md](tasks/monetization/EPIC.md)
+
+Prepaid credits for GPU operations. Credit system built Stripe-ready, Stripe snaps in after auth is working.
+
+| ID | Task | Status | Impact | Cmplx | Notes |
+|----|------|--------|--------|-------|-------|
+| T500 | [Credits UI Shell](tasks/monetization/T500-credits-ui-shell.md) | TODO | 7 | 2 | Balance display + insufficient modal (mock data) |
+| T505 | [Credit System Backend](tasks/monetization/T505-credit-system-backend.md) | TODO | 8 | 4 | D1 schema, balance/deduct/grant API, ledger |
+| T510 | [GPU Cost Gate](tasks/monetization/T510-gpu-cost-gate.md) | TODO | 9 | 3 | Check credits before GPU, deduct, refund on failure |
+| T515 | [Free Trial Credits](tasks/monetization/T515-free-trial-credits.md) | TODO | 7 | 2 | Grant on email verify, one-time |
+| T520 | [Pricing Exploration](tasks/monetization/T520-pricing-exploration.md) | TODO | 6 | 1 | AI-assisted pricing research (placeholder) |
+| T525 | [Stripe Integration](tasks/monetization/T525-stripe-integration.md) | TODO | 8 | 5 | Checkout, webhooks, credit packages (LAST) |
+
+#### Recommended Build Order (feedback velocity)
+
+Each task delivers working functionality users can test:
+
+1. **T400** — Auth gate + Google OAuth (real sign-in, testable immediately)
+2. **T401** — Email OTP (real Resend, second auth method)
+3. **T500** — Credits UI (real balance display + insufficient modal, mock data)
+4. **T505** — Credit system backend (real D1 balance, wires to frontend)
+5. **T510** — GPU cost gate (enforces credits on exports)
+6. **T515** — Free trial credits (grants on first auth)
+7. **T405** — Central auth DB + cross-device recovery (D1 migration)
+8. **T420** — Session management (single-session, expiry)
+9. **T520** — Pricing exploration (can happen anytime)
+10. **T525** — Stripe integration (LAST — after auth is solid)
+11. **T430** — Account settings (polish)
 
 ### Phase 3: Production Infrastructure
 
@@ -150,7 +188,7 @@ Improvements after real user traffic.
 |----|------|--------|-------|
 | T340 | [Keyframe Integrity Guards](tasks/T340-keyframe-integrity-guards.md) | DONE | Missing permanent keyframes, min spacing, selection disambiguation |
 | T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | TODO | Multi-tab conflict handling |
-| T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | Faster video loads (needs T200) |
+| T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | Faster video loads (needs T415) |
 | T74 | [Incremental Framing Export](tasks/T74-incremental-framing-export.md) | TODO | Cache rendered clips |
 | T220 | [Future GPU Features](tasks/T220-future-gpu-features.md) | TODO | Advanced AI features |
 | T240 | [Consistent Logo Placement](tasks/T240-consistent-logo-placement.md) | DONE | Logo removed from editor modes; only on Projects screen |
@@ -254,6 +292,8 @@ IDs use gaps of 10 to allow insertions:
 - `T10-T79` - Feature tasks (complete)
 - `T80-T99` - Pre-deployment blockers + bug fix sprint
 - `T100-T199` - Deployment epic
-- `T200-T299` - Post-launch features
+- `T200-T299` - Post-launch features + polish
+- `T400-T430` - User Auth epic (T400=Google, T401=OTP, T405=D1, T420=sessions, T430=settings)
+- `T500-T525` - Monetization epic
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.

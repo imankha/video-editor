@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
  * This test captures console logs to debug the "blink" issue where
  * clicking a game doesn't transition to annotate mode.
  *
- * Test Isolation: Each test run uses a unique user ID via localStorage (T220).
+ * Test Isolation: Each test run uses a unique user ID via X-User-ID header (T220/T405).
  */
 
 // Always use port 8000 - the dev backend port
@@ -28,13 +28,12 @@ const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-carlsbad-trimmed.mp4');
 const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
 
 /**
- * Set up test user isolation via URL-based user ID (T220).
+ * Set up test user isolation via X-User-ID header (T220/T405).
  */
 async function setupTestUserContext(page) {
-  // Set user ID in localStorage before any page script runs
-  await page.addInitScript((userId) => {
-    localStorage.setItem('reel-ballers-user-id', userId);
-  }, TEST_USER_ID);
+  await page.setExtraHTTPHeaders({
+    'X-User-ID': TEST_USER_ID,
+  });
 }
 
 test.describe('Game Loading Debug', () => {
