@@ -7,19 +7,19 @@ database shared by all users. It stores:
   - sessions: session_id → user_id (validates rb_session cookies)
   - otp_codes: temporary email verification codes (T401)
 
-Sync strategy (NOT per-request like user DBs):
-  - Read from R2 on server startup
-  - Write to R2 on: SIGTERM, new user creation, periodic (10 min if dirty)
+Sync strategy:
+  - Read from R2 on server startup (restore users table for cross-device recovery)
+  - Write to R2 immediately on create_user / link_google_to_user only
+  - Sessions are ephemeral — local SQLite only, loss on restart is acceptable
 
 The local SQLite file is the source of truth while the server is running.
-R2 is a backup for recovery after restarts/deploys.
+R2 is a backup for the users table only.
 """
 
 import logging
 import secrets
 import sqlite3
 import threading
-import time
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -35,35 +35,10 @@ AUTH_DB_PATH = _AUTH_DB_DIR / "auth.sqlite"
 # R2 key for backup (not under any user folder)
 AUTH_DB_R2_KEY_SUFFIX = "auth/auth.sqlite"
 
-# Dirty flag — set when writes occur, cleared after R2 sync
-_dirty = False
-_dirty_lock = threading.Lock()
-
 # Session cache — avoids hitting SQLite on every request
 # Maps session_id → (user_id, email, expires_at_iso)
 _session_cache: dict[str, tuple[str, Optional[str], str]] = {}
 _session_cache_lock = threading.Lock()
-SESSION_CACHE_MAX_AGE = 300  # 5 minutes
-
-
-def _mark_dirty():
-    """Mark the auth DB as having unsaved changes."""
-    global _dirty
-    with _dirty_lock:
-        _dirty = True
-
-
-def is_dirty() -> bool:
-    """Check if auth DB has unsaved changes since last R2 sync."""
-    with _dirty_lock:
-        return _dirty
-
-
-def clear_dirty():
-    """Clear dirty flag after successful R2 sync."""
-    global _dirty
-    with _dirty_lock:
-        _dirty = False
 
 
 def _get_auth_db_r2_key() -> str:
@@ -188,7 +163,6 @@ def sync_auth_db_to_r2() -> bool:
         conn.close()
 
         client.upload_file(str(AUTH_DB_PATH), R2_BUCKET, key)
-        clear_dirty()
         logger.info(f"[AuthDB] Backed up to R2: {key}")
         return True
     except Exception as e:
@@ -279,7 +253,6 @@ def update_last_seen(user_id: str) -> None:
             (now, user_id),
         )
         db.commit()
-    _mark_dirty()
 
 
 def get_user_by_id(user_id: str) -> Optional[dict]:
@@ -311,8 +284,6 @@ def create_session(user_id: str, ttl_days: int = 30) -> str:
             (session_id, user_id, expires_at),
         )
         db.commit()
-
-    _mark_dirty()
 
     # Cache the new session
     with _session_cache_lock:
@@ -377,7 +348,6 @@ def invalidate_session(session_id: str) -> None:
     with get_auth_db() as db:
         db.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
         db.commit()
-    _mark_dirty()
 
     with _session_cache_lock:
         _session_cache.pop(session_id, None)
@@ -388,7 +358,6 @@ def invalidate_user_sessions(user_id: str) -> None:
     with get_auth_db() as db:
         db.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
         db.commit()
-    _mark_dirty()
 
     # Clear cache entries for this user
     with _session_cache_lock:
@@ -408,7 +377,6 @@ def cleanup_expired_sessions() -> int:
         count = cursor.rowcount
 
     if count > 0:
-        _mark_dirty()
         logger.info(f"[AuthDB] Cleaned up {count} expired sessions")
 
     return count
@@ -435,40 +403,5 @@ def create_guest_user() -> str:
             (user_id,),
         )
         db.commit()
-    _mark_dirty()
     logger.info(f"[AuthDB] Created guest user: {user_id}")
     return user_id
-
-
-# ---------------------------------------------------------------------------
-# Periodic sync (called from background task)
-# ---------------------------------------------------------------------------
-
-_periodic_sync_thread: Optional[threading.Thread] = None
-_periodic_sync_stop = threading.Event()
-
-
-def start_periodic_sync(interval_seconds: int = 600):
-    """Start background thread that syncs auth DB to R2 every N seconds if dirty."""
-    global _periodic_sync_thread
-
-    def _sync_loop():
-        while not _periodic_sync_stop.wait(interval_seconds):
-            if is_dirty():
-                try:
-                    cleanup_expired_sessions()
-                    sync_auth_db_to_r2()
-                except Exception as e:
-                    logger.error(f"[AuthDB] Periodic sync failed: {e}")
-
-    _periodic_sync_thread = threading.Thread(target=_sync_loop, daemon=True, name="auth-db-sync")
-    _periodic_sync_thread.start()
-    logger.info(f"[AuthDB] Periodic sync started (every {interval_seconds}s)")
-
-
-def stop_periodic_sync():
-    """Stop the periodic sync thread."""
-    _periodic_sync_stop.set()
-    if _periodic_sync_thread:
-        _periodic_sync_thread.join(timeout=5)
-    logger.info("[AuthDB] Periodic sync stopped")
