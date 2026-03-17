@@ -28,7 +28,7 @@ export function AuthGateModal() {
       }
 
       const data = await res.json();
-      onAuthSuccess(data.email);
+      onAuthSuccess(data.email, data.user_id);
     } catch (err) {
       console.error('[AuthGateModal] Google auth failed:', err);
       setError(err.message);

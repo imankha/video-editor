@@ -10,11 +10,13 @@ after call_next() returns. By combining them, all ContextVar reads/writes
 happen in the same context — before and after a single call_next() boundary.
 
 Flow:
-1. Set user_id and profile_id from headers (or session init)
-2. Initialize write tracking context (mutable dict)
-3. call_next() — route handler runs, may write to DB
-4. Check mutable dict for writes, sync to R2 if needed
-5. Clean up context
+1. Resolve user_id: rb_session cookie → auth DB → user_id (T405)
+   Fallback: X-User-ID header (backward compat for tests/dev)
+2. Set profile_id from header (or session init)
+3. Initialize write tracking context (mutable dict)
+4. call_next() — route handler runs, may write to DB
+5. Check mutable dict for writes, sync to R2 if needed
+6. Clean up context
 
 Also tracks sync failure state per user and surfaces it via X-Sync-Status
 header so the frontend can show a warning indicator.
@@ -36,6 +38,7 @@ from ..database import (
 )
 from ..profile_context import set_current_profile_id
 from ..session_init import user_session_init
+from ..services.auth_db import validate_session
 from ..storage import R2_ENABLED
 from ..user_context import set_current_user_id
 
@@ -89,20 +92,39 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         """Set user context, process request, sync DB if writes occurred."""
 
-        # --- User context setup ---
-        raw_user_id = request.headers.get('X-User-ID')
-        user_id = raw_user_id if raw_user_id else DEFAULT_USER_ID
-        sanitized = ''.join(c for c in user_id if c.isalnum() or c in '_-')
-        if not sanitized:
-            sanitized = DEFAULT_USER_ID
+        # --- User context setup (T405: cookie-first, header-fallback) ---
+        user_id = None
+        auth_source = "none"
+
+        # 1. Try session cookie → central auth DB
+        session_id = request.cookies.get("rb_session")
+        if session_id:
+            session = validate_session(session_id)
+            if session:
+                user_id = session["user_id"]
+                auth_source = "session"
+
+        # 2. Fallback: X-User-ID header (backward compat for dev/tests)
+        if not user_id:
+            raw_user_id = request.headers.get('X-User-ID')
+            if raw_user_id:
+                sanitized = ''.join(c for c in raw_user_id if c.isalnum() or c in '_-')
+                if sanitized:
+                    user_id = sanitized
+                    auth_source = "header"
+
+        # 3. Final fallback: default user
+        if not user_id:
+            user_id = DEFAULT_USER_ID
+            auth_source = "default"
 
         logger.info(
             f"[REQ] {request.method} {request.url.path} | "
-            f"X-User-ID={repr(raw_user_id)} -> user={sanitized} | "
+            f"user={user_id} (via {auth_source}) | "
             f"origin={request.headers.get('origin', '-')}"
         )
 
-        set_current_user_id(sanitized)
+        set_current_user_id(user_id)
 
         profile_id = request.headers.get('X-Profile-ID')
         if profile_id and re.match(r'^[a-f0-9]{8}$', profile_id):

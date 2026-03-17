@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { API_BASE } from '../config';
+import { getUserId, setUserId, resetSession } from '../utils/sessionInit';
 
 export const useAuthStore = create((set, get) => ({
   // State
@@ -18,8 +20,26 @@ export const useAuthStore = create((set, get) => ({
   },
 
   // Called after successful Google sign-in (or OTP in T401)
-  onAuthSuccess: (email) => {
+  // T405: Also receives user_id for cross-device recovery (may differ from current guest)
+  onAuthSuccess: (email, userId) => {
     const { pendingAction } = get();
+
+    // T405: If the server returned a different user_id (cross-device recovery),
+    // update the session headers and reload to pick up the recovered user's data
+    const currentUserId = getUserId();
+    if (userId && userId !== currentUserId) {
+      setUserId(userId);
+      set({
+        isAuthenticated: true,
+        email,
+        showAuthModal: false,
+        pendingAction: null,
+      });
+      // Reload to initialize with the recovered user's data
+      window.location.reload();
+      return;
+    }
+
     set({
       isAuthenticated: true,
       email,
@@ -35,6 +55,27 @@ export const useAuthStore = create((set, get) => ({
   // Called on app load after session check
   setSessionState: (isAuthenticated, email = null) => {
     set({ isAuthenticated, email, isCheckingSession: false });
+  },
+
+  // T405: Logout — invalidate session and clear cookie
+  logout: async () => {
+    try {
+      await fetch(`${API_BASE}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // Best-effort — clear local state regardless
+    }
+    set({
+      isAuthenticated: false,
+      email: null,
+      showAuthModal: false,
+      pendingAction: null,
+      isCheckingSession: false,
+    });
+    resetSession();
+    window.location.reload();
   },
 
   // Close modal without authenticating

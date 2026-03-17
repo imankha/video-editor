@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronDown, Check, Settings, User, Plus } from 'lucide-react';
+import { ChevronDown, Check, Settings, User, Plus, LogIn, LogOut } from 'lucide-react';
 import { useProfileStore } from '../stores';
+import { useAuthStore } from '../stores/authStore';
 import { ManageProfilesModal } from './ManageProfilesModal';
-import { getUserId } from '../utils/sessionInit';
 
 /**
  * ProfileDropdown - Header component for switching between athlete profiles
@@ -23,10 +23,15 @@ export function ProfileDropdown() {
   const dropdownRef = useRef(null);
   const triggerRef = useRef(null);
 
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const email = useAuthStore(state => state.email);
+  const logout = useAuthStore(state => state.logout);
+  const requireAuth = useAuthStore(state => state.requireAuth);
+
   const currentProfile = profiles.find(p => p.id === currentProfileId);
   const hasMultiple = profiles.length >= 2;
-  const userId = getUserId();
-  const userTooltip = userId || undefined;
+  const displayName = isAuthenticated ? email : 'Guest';
+  const userTooltip = displayName;
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -58,17 +63,28 @@ export function ProfileDropdown() {
   // Don't render until profiles are loaded
   if (!isInitialized) return null;
 
-  // Single profile: show small user icon that opens manage modal
+  // Single profile: show user icon with auth status
   if (!hasMultiple) {
     return (
       <>
-        <button
-          onClick={() => setShowManageModal(true)}
-          className="flex items-center justify-center w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-          title={userTooltip || 'Add Profile'}
-        >
-          <User size={16} className="text-gray-300" />
-        </button>
+        {isAuthenticated ? (
+          <button
+            onClick={() => setShowManageModal(true)}
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            title={email || 'Profile'}
+          >
+            <User size={16} className="text-gray-300" />
+          </button>
+        ) : (
+          <button
+            onClick={() => requireAuth(() => {})}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+            title="Sign in to save your work across devices"
+          >
+            <LogIn size={14} className="text-blue-400" />
+            <span className="text-xs text-blue-400 font-medium">Sign In</span>
+          </button>
+        )}
 
         <ManageProfilesModal
           isOpen={showManageModal}
@@ -160,6 +176,37 @@ export function ProfileDropdown() {
               </div>
               <span className="text-sm text-gray-300">Manage Profiles</span>
             </button>
+
+            {/* Divider */}
+            <div className="border-t border-gray-700 my-1" />
+
+            {/* Auth section */}
+            {isAuthenticated ? (
+              <>
+                <div className="px-4 py-2 text-xs text-gray-500 truncate">
+                  {email}
+                </div>
+                <button
+                  onClick={() => { setShowDropdown(false); logout(); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"
+                >
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 flex-shrink-0">
+                    <LogOut size={14} className="text-gray-300" />
+                  </div>
+                  <span className="text-sm text-gray-300">Sign Out</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => { setShowDropdown(false); requireAuth(() => {}); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"
+              >
+                <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 flex-shrink-0">
+                  <LogIn size={14} className="text-blue-400" />
+                </div>
+                <span className="text-sm text-blue-400">Sign In</span>
+              </button>
+            )}
           </div>
         )}
       </div>

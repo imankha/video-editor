@@ -194,6 +194,12 @@ def _graceful_shutdown(signum, frame):
             logger.info("[Shutdown] R2 not enabled, skipping sync")
             sys.exit(0)
 
+        # T405: Sync central auth DB to R2
+        from app.services.auth_db import sync_auth_db_to_r2, stop_periodic_sync
+        stop_periodic_sync()
+        auth_synced = sync_auth_db_to_r2()
+        logger.info(f"[Shutdown] Auth DB sync: {'OK' if auth_synced else 'SKIPPED'}")
+
         # Find all user database files and checkpoint + sync each
         synced = 0
         failed = 0
@@ -269,6 +275,14 @@ async def startup_event():
         logger.info("[Startup] R2 enabled — databases will be lazy-restored from R2 on first user request")
     else:
         logger.info("[Startup] R2 disabled — using local database only")
+
+    # T405: Initialize central auth database
+    from app.services.auth_db import init_auth_db, sync_auth_db_from_r2, start_periodic_sync
+    if _r2:
+        sync_auth_db_from_r2()
+    init_auth_db()
+    start_periodic_sync(interval_seconds=600)  # Backup to R2 every 10 min if dirty
+    logger.info("[Startup] Central auth DB initialized")
 
     # Initialize the default user session (profile + database).
     # This ensures startup tasks that need DB access have a profile context.
