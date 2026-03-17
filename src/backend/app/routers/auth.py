@@ -43,6 +43,8 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Secure cookies require HTTPS — false for local dev, true for staging/production
 _SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
+# SameSite=none required for cross-origin (staging/prod) — strict for local dev
+_SAMESITE = "none" if _SECURE_COOKIES else "strict"
 
 
 class InitResponse(BaseModel):
@@ -195,7 +197,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
         value=session_id,
         max_age=30 * 24 * 60 * 60,  # 30 days
         httponly=True,
-        samesite="strict",
+        samesite=_SAMESITE,
         secure=_SECURE_COOKIES,
     )
     return response
@@ -274,7 +276,7 @@ async def init_guest(request: Request):
         value=session_id,
         max_age=30 * 24 * 60 * 60,  # 30 days
         httponly=True,
-        samesite="strict",
+        samesite=_SAMESITE,
         secure=_SECURE_COOKIES,
     )
     return response
@@ -290,5 +292,5 @@ async def logout(request: Request):
         invalidate_session(session_id)
 
     response = JSONResponse(content={"logged_out": True})
-    response.delete_cookie("rb_session")
+    response.delete_cookie("rb_session", samesite=_SAMESITE, secure=_SECURE_COOKIES)
     return response

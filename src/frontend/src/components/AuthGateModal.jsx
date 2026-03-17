@@ -18,6 +18,7 @@ export function AuthGateModal() {
     try {
       const res = await fetch(`${API_BASE}/api/auth/google`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: response.credential }),
       });
