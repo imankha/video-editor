@@ -1,5 +1,5 @@
 import { useMemo, useRef, useCallback, useEffect } from 'react';
-import { Home, Scissors } from 'lucide-react';
+import { Home, Scissors, LogIn } from 'lucide-react';
 import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { initSession, setGuestWriteCallback } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
@@ -99,18 +99,9 @@ function App() {
     });
   }, []);
 
-  // Warn guests before leaving if they've done any work
   const hasGuestActivity = useAuthStore(state => state.hasGuestActivity);
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
-  useEffect(() => {
-    if (!hasGuestActivity || isAuthenticated) return;
-    const handler = (e) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [hasGuestActivity, isAuthenticated]);
+  const requireAuth = useAuthStore(state => state.requireAuth);
 
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
@@ -287,6 +278,8 @@ function App() {
         <SyncStatusIndicator />
         {/* Auth Gate Modal - shows when GPU action requires authentication */}
         <AuthGateModal />
+        {/* Guest activity banner — only shown after guest does meaningful work */}
+        {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
       </>
     );
   }
@@ -297,6 +290,8 @@ function App() {
     <div className="h-screen overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
       {/* Connection status banner - shows when backend is unreachable */}
       <ConnectionStatus />
+      {/* Guest activity banner — only shown after guest does meaningful work */}
+      {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
       {editorMode === EDITOR_MODES.ANNOTATE && <AnnotateScreen onClearSelection={clearSelection} />}
 
@@ -425,6 +420,24 @@ function App() {
     </div>
     </AppStateProvider>
     </ProjectProvider>
+  );
+}
+
+function GuestSaveBanner({ onSignIn }) {
+  return (
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-800 border border-yellow-500/40 shadow-xl text-sm">
+      <span className="text-yellow-400">⚠</span>
+      <span className="text-gray-200">
+        You're a guest — your work is saved, but <span className="text-white font-medium">only on this browser</span>.
+      </span>
+      <button
+        onClick={onSignIn}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors text-white font-medium whitespace-nowrap"
+      >
+        <LogIn size={13} />
+        Sign in to keep it
+      </button>
+    </div>
   );
 }
 
