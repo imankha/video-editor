@@ -43,7 +43,9 @@ export const useAuthStore = create((set, get) => ({
         showAuthModal: false,
         pendingAction: null,
       });
-      // Reload to initialize with the recovered user's data
+      // Reload to initialize with the recovered user's data.
+      // Set flag so initSession can detect if the cookie didn't survive the reload.
+      sessionStorage.setItem('authExpected', email);
       window.location.reload();
       return;
     }

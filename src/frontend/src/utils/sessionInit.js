@@ -132,6 +132,8 @@ export async function initSession() {
     let userId = null;
 
     // Step 1: Check for existing session via cookie
+    const authExpected = sessionStorage.getItem('authExpected');
+    if (authExpected) sessionStorage.removeItem('authExpected');
     try {
       const meResponse = await fetch(`${API_BASE}/api/auth/me`, {
         credentials: 'include',
@@ -143,6 +145,9 @@ export async function initSession() {
         // Only authenticated if they have an email (Google sign-in).
         // A guest session has a user_id but no email — still not authenticated.
         useAuthStore.getState().setSessionState(!!meData.email, meData.email || null);
+      } else if (authExpected) {
+        console.error(`[Auth] Session cookie not received after sign-in for ${authExpected}. ` +
+          'Cross-origin cookie blocked? Check SameSite/Secure settings and CORS config.');
       }
     } catch {
       // No session — will create guest below
