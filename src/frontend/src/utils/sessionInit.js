@@ -121,7 +121,9 @@ export async function initSession() {
         const meData = await meResponse.json();
         userId = meData.user_id;
         _currentUserId = userId;
-        useAuthStore.getState().setSessionState(true, meData.email);
+        // Only authenticated if they have an email (Google sign-in).
+        // A guest session has a user_id but no email — still not authenticated.
+        useAuthStore.getState().setSessionState(!!meData.email, meData.email || null);
       }
     } catch {
       // No session — will create guest below
