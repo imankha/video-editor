@@ -41,6 +41,9 @@ from app.services.auth_db import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+# Secure cookies require HTTPS — false for local dev, true for staging/production
+_SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
+
 
 class InitResponse(BaseModel):
     user_id: str
@@ -193,7 +196,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
         max_age=30 * 24 * 60 * 60,  # 30 days
         httponly=True,
         samesite="strict",
-        secure=False,  # False for localhost dev — set True in production
+        secure=_SECURE_COOKIES,
     )
     return response
 
@@ -272,7 +275,7 @@ async def init_guest(request: Request):
         max_age=30 * 24 * 60 * 60,  # 30 days
         httponly=True,
         samesite="strict",
-        secure=False,
+        secure=_SECURE_COOKIES,
     )
     return response
 
