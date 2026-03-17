@@ -101,6 +101,7 @@ function App() {
 
   const hasGuestActivity = useAuthStore(state => state.hasGuestActivity);
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const isCheckingSession = useAuthStore(state => state.isCheckingSession);
   const requireAuth = useAuthStore(state => state.requireAuth);
 
   // Export recovery - reconnects to active exports on app startup
@@ -260,6 +261,10 @@ function App() {
     globalExportProgress,
     setGlobalExportProgress,
   ]);
+
+  // Block rendering until session is resolved — prevents data fetches from firing
+  // before the user identity is established (would fall back to DEFAULT_USER_ID)
+  if (isCheckingSession) return null;
 
   // If no project selected and not in annotate mode, show ProjectsScreen
   if (!selectedProject && editorMode !== EDITOR_MODES.ANNOTATE) {
@@ -428,14 +433,14 @@ function GuestSaveBanner({ onSignIn }) {
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-800 border border-yellow-500/40 shadow-xl text-sm">
       <span className="text-yellow-400">⚠</span>
       <span className="text-gray-200">
-        You're a guest — your work is saved, but <span className="text-white font-medium">only on this browser</span>.
+        You're a guest — your work <span className="text-white font-medium">won't be recoverable</span> without signing in.
       </span>
       <button
         onClick={onSignIn}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors text-white font-medium whitespace-nowrap"
       >
         <LogIn size={13} />
-        Sign in to keep it
+        Sign in to save
       </button>
     </div>
   );

@@ -96,15 +96,6 @@ export const useAuthStore = create((set, get) => ({
   closeAuthModal: () => {
     set({ showAuthModal: false, pendingAction: null });
   },
-
-  // Reset on profile switch
-  reset: () => set({
-    isAuthenticated: false,
-    email: null,
-    showAuthModal: false,
-    pendingAction: null,
-    isCheckingSession: false,
-  }),
 }));
 
 // Selector hooks
