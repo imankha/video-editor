@@ -16,6 +16,11 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    headers: {
+      // Required for Google Sign-In: allows OAuth popup to postMessage back to the opener.
+      // 'same-origin-allow-popups' is correct — 'same-origin' blocks the popup fallback flow.
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    },
     proxy: {
       '/api': {
         target: `http://localhost:${API_PORT}`,

@@ -5,6 +5,15 @@
  * to ensure consistent visual styling across modes.
  */
 
+// Rating adjectives for clip name generation (e.g. "Brilliant Goal")
+export const RATING_ADJECTIVES = {
+  5: 'Brilliant',
+  4: 'Good',
+  3: 'Interesting',
+  2: 'Technical Lapse',
+  1: 'Mental Lapse',
+};
+
 // Rating notation symbols (chess-style)
 export const RATING_NOTATION = {
   1: '??',   // Blunder

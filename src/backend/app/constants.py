@@ -78,8 +78,8 @@ RATING_ADJECTIVES: Dict[int, str] = {
     5: 'Brilliant',
     4: 'Good',
     3: 'Interesting',
-    2: 'Unfortunate',
-    1: 'Bad'
+    2: 'Technical Lapse',
+    1: 'Mental Lapse'
 }
 
 # Rating notation symbols (chess-inspired, for display overlays)

@@ -13,6 +13,10 @@ export function AuthGateModal() {
   const googleButtonRef = useRef(null);
 
   const handleGoogleResponse = useCallback(async (response) => {
+    if (!response?.credential) {
+      setError('Google sign-in failed — no credential received. Please try again.');
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
@@ -24,8 +28,8 @@ export function AuthGateModal() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || 'Authentication failed');
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.message || 'Authentication failed');
       }
 
       const data = await res.json();

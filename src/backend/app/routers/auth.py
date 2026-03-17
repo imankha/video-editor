@@ -142,14 +142,19 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     """
     current_user_id = get_current_user_id()
 
-    # Verify token with Google
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"https://oauth2.googleapis.com/tokeninfo?id_token={body.token}"
-        )
-        if resp.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid Google token")
-        token_data = resp.json()
+    # Verify token with Google (10s timeout — fail fast if Google API is unreachable)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"https://oauth2.googleapis.com/tokeninfo?id_token={body.token}"
+            )
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=503, detail="Google token verification timed out")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Could not reach Google: {e}")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+    token_data = resp.json()
 
     # Validate token audience matches our app's client ID
     expected_aud = os.getenv("GOOGLE_CLIENT_ID")

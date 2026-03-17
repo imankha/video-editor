@@ -1,3 +1,5 @@
+import { RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
+
 /**
  * Soccer tags organized by position for clip tagging
  */
@@ -70,17 +72,6 @@ export const positions = [
 ];
 
 /**
- * Rating adjectives for clip name generation
- */
-export const ratingAdjectives = {
-  5: 'Brilliant',
-  4: 'Good',
-  3: 'Interesting',
-  2: 'Unfortunate',
-  1: 'Bad'
-};
-
-/**
  * Get tags for a specific position
  * @param {string} position - Position ID (attacker, midfielder, defender, goalie)
  * @returns {Array} Array of tag objects for the position
@@ -114,7 +105,7 @@ export function generateClipName(rating, selectedTags) {
     return '';
   }
 
-  const adjective = ratingAdjectives[rating] || 'Interesting';
+  const adjective = RATING_ADJECTIVES[rating] || 'Interesting';
 
   // Join with "and" for multiple tags
   const tagPart = selectedTags.length === 1
