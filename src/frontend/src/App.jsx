@@ -99,6 +99,19 @@ function App() {
     initSession().then(() => {
       warmAllUserVideos();
       useProfileStore.getState().fetchProfiles();
+
+      // Restore navigation state after auth-triggered reload (cross-device recovery)
+      const returnMode = sessionStorage.getItem('authReturnMode');
+      if (returnMode) {
+        sessionStorage.removeItem('authReturnMode');
+        const returnProjectId = sessionStorage.getItem('authReturnProjectId');
+        sessionStorage.removeItem('authReturnProjectId');
+
+        if (returnProjectId) {
+          useProjectsStore.getState().selectProject(returnProjectId);
+        }
+        useEditorStore.getState().setEditorMode(returnMode);
+      }
     });
   }, []);
 

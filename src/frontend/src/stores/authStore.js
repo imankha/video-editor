@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { API_BASE } from '../config';
 import { getUserId, setUserId, resetSession } from '../utils/sessionInit';
 import { useCreditStore } from './creditStore';
+import { useEditorStore } from './editorStore';
+import { useProjectsStore } from './projectsStore';
 
 export const useAuthStore = create((set, get) => ({
   // State
@@ -44,6 +46,13 @@ export const useAuthStore = create((set, get) => ({
         showAuthModal: false,
         pendingAction: null,
       });
+      // Save navigation state so the user returns to the same screen after reload
+      const editorMode = useEditorStore.getState().editorMode;
+      sessionStorage.setItem('authReturnMode', editorMode);
+      const projectId = useProjectsStore.getState().selectedProjectId;
+      if (projectId) {
+        sessionStorage.setItem('authReturnProjectId', projectId.toString());
+      }
       // Reload to initialize with the recovered user's data.
       // Set flag so initSession can detect if the cookie didn't survive the reload.
       sessionStorage.setItem('authExpected', email);
