@@ -76,6 +76,9 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         onHighlightColorChange={onHighlightColorChange}
         HIGHLIGHT_EFFECT_LABELS={HIGHLIGHT_EFFECT_LABELS}
         EXPORT_CONFIG={EXPORT_CONFIG}
+        showInsufficientCredits={null}
+        onCloseInsufficientCredits={null}
+        isFirstFramingFree={false}
         handleExportRef={container.handleExportRef}
       />
     </div>

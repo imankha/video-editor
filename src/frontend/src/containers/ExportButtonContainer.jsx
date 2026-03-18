@@ -3,6 +3,7 @@ import axios from 'axios';
 import { toast } from '../components/shared';
 import { useAppState } from '../contexts';
 import { useExportStore, useAuthStore, EDITOR_MODES } from '../stores';
+import { useCreditStore } from '../stores/creditStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 import { ExportStatus } from '../constants/exportStatus';
@@ -178,6 +179,8 @@ export function ExportButtonContainer({
   const completeExportInStore = useExportStore(state => state.completeExport);
   const failExportInStore = useExportStore(state => state.failExport);
   const requireAuth = useAuthStore((s) => s.requireAuth);
+  const creditBalance = useCreditStore((s) => s.balance);
+  const firstFramingUsed = useCreditStore((s) => s.firstFramingUsed);
 
   // Use props if provided, otherwise fall back to context values
   const editorMode = editorModeProp ?? contextEditorMode ?? EDITOR_MODES.FRAMING;
@@ -224,6 +227,7 @@ export function ExportButtonContainer({
   const [error, setError] = useState(null);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
   const [disconnected, setDisconnected] = useState(false);
+  const [showInsufficientCredits, setShowInsufficientCredits] = useState(null);
 
   // Refs for tracking export state
   const exportIdRef = useRef(null);
@@ -385,6 +389,24 @@ export function ExportButtonContainer({
     if (editorMode === EDITOR_MODES.FRAMING) {
       if (!cropKeyframes || cropKeyframes.length === 0) {
         setError('No crop keyframes defined. Please add at least one crop keyframe.');
+        return;
+      }
+
+      // T530: Optimistic credit check (backend is authoritative)
+      const { canAffordExport, getRequiredCredits, balance, firstFramingUsed } = useCreditStore.getState();
+      const isMultiClip = clips && clips.length > 1;
+      let totalVideoSeconds = 0;
+      if (isMultiClip) {
+        totalVideoSeconds = clips.reduce((sum, c) => sum + calculateEffectiveDuration(c), 0);
+      } else if (clips && clips.length === 1) {
+        totalVideoSeconds = calculateEffectiveDuration(clips[0]);
+      }
+      if (totalVideoSeconds > 0 && firstFramingUsed && !canAffordExport(totalVideoSeconds)) {
+        setShowInsufficientCredits({
+          required: getRequiredCredits(totalVideoSeconds),
+          available: balance,
+          videoSeconds: totalVideoSeconds,
+        });
         return;
       }
     }
@@ -836,6 +858,23 @@ export function ExportButtonContainer({
         return;
       }
 
+      // T530: Handle 402 Insufficient Credits from backend
+      if (err.response?.status === 402) {
+        const detail = err.response.data?.detail;
+        if (detail?.error === 'insufficient_credits') {
+          setShowInsufficientCredits({
+            required: detail.required,
+            available: detail.available,
+            videoSeconds: detail.video_seconds,
+          });
+          // Refresh credit store with authoritative balance
+          useCreditStore.getState().setBalance(detail.available);
+        }
+        setIsExporting(false);
+        handleExportEnd();
+        return;
+      }
+
       if (exportIdRef.current) {
         failExportInStore(exportIdRef.current, err.message || 'Export failed');
         exportWebSocketManager.disconnect(exportIdRef.current);
@@ -989,6 +1028,12 @@ export function ExportButtonContainer({
     // Effect labels
     HIGHLIGHT_EFFECT_LABELS,
     EXPORT_CONFIG,
+
+    // T530: Credit system
+    showInsufficientCredits,
+    onCloseInsufficientCredits: () => setShowInsufficientCredits(null),
+    isFirstFramingFree: !firstFramingUsed,
+    creditBalance,
 
     // Refs (for external triggering)
     handleExportRef,

@@ -4,6 +4,7 @@ import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/c
 import { initSession, setGuestWriteCallback } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
+import { CreditBalance } from './components/CreditBalance';
 import { GalleryButton } from './components/GalleryButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
@@ -321,6 +322,7 @@ function App() {
               />
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
+              <CreditBalance />
               <GalleryButton />
               {/* Combined mode switcher with Annotate button */}
               <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">

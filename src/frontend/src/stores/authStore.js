@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 import { getUserId, setUserId, resetSession } from '../utils/sessionInit';
+import { useCreditStore } from './creditStore';
 
 export const useAuthStore = create((set, get) => ({
   // State
@@ -56,6 +57,8 @@ export const useAuthStore = create((set, get) => ({
       showAuthModal: false,
       pendingAction: null,
     });
+    // T530: Fetch credit balance after auth
+    useCreditStore.getState().fetchCredits();
     // Run the action that was blocked by the auth gate
     if (pendingAction) {
       pendingAction();
@@ -71,6 +74,10 @@ export const useAuthStore = create((set, get) => ({
       // Clear guest activity once authenticated — no need for exit warning
       ...(isAuthenticated ? { hasGuestActivity: false } : {}),
     });
+    // T530: Fetch credit balance if authenticated
+    if (isAuthenticated) {
+      useCreditStore.getState().fetchCredits();
+    }
   },
 
   // T405: Logout — invalidate session and clear cookie

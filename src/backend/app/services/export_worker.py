@@ -169,6 +169,21 @@ async def process_export_job(job_id: str):
         update_job_error(job_id, str(e))
         await send_progress(job_id, 0, f"Export failed: {e}", "error")
 
+        # T530: Refund credits on framing failure
+        if job_type == 'framing':
+            credits_deducted = config.get("credits_deducted", 0)
+            refund_user_id = config.get("credit_user_id")
+            if credits_deducted > 0 and refund_user_id:
+                from .auth_db import refund_credits
+                refund_credits(
+                    refund_user_id, credits_deducted, job_id,
+                    config.get("video_seconds"),
+                )
+                logger.info(
+                    f"[ExportWorker] Refunded {credits_deducted} credits to "
+                    f"{refund_user_id} for failed job {job_id}"
+                )
+
 
 async def process_framing_export(job_id: str, project_id: int, config: dict) -> tuple:
     """

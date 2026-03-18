@@ -18,6 +18,7 @@ from typing import Optional, List
 import uuid
 import json
 import logging
+import math
 import os
 import tempfile
 import shutil
@@ -527,6 +528,33 @@ async def start_framing_export(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to stage video: {e}")
 
+    # T530: Credit check — deduct before GPU dispatch, refund on failure
+    from ..services.auth_db import use_first_time_free, deduct_credits
+    from ..services.ffmpeg_service import get_video_duration
+
+    user_id = get_current_user_id()
+    video_seconds = get_video_duration(str(staged_video_path))
+    credits_required = math.ceil(video_seconds)
+    is_first_time = use_first_time_free(user_id, "framing")
+    credits_deducted = 0
+
+    if not is_first_time:
+        result = deduct_credits(
+            user_id, credits_required, "framing_usage", job_id, video_seconds
+        )
+        if not result["success"]:
+            staged_video_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_credits",
+                    "required": credits_required,
+                    "available": result["balance"],
+                    "video_seconds": video_seconds,
+                },
+            )
+        credits_deducted = credits_required
+
     # Build config
     config = {
         "video_path": str(staged_video_path),
@@ -534,7 +562,10 @@ async def start_framing_export(
         "target_fps": target_fps,
         "export_mode": export_mode,
         "segment_data": segment_data,
-        "include_audio": include_audio.lower() == "true"
+        "include_audio": include_audio.lower() == "true",
+        "credits_deducted": credits_deducted,
+        "video_seconds": video_seconds,
+        "credit_user_id": user_id,
     }
 
     # Create job in database

@@ -574,6 +574,11 @@ async def export_clips(
         'r2_prefix': user_id,  # Raw user_id — modal_client handles R2 prefix conversion
     }
 
+    # T530: Track first-time annotate (no credit charge — annotate is always free)
+    from app.services.auth_db import use_first_time_free
+    is_first_annotate = use_first_time_free(user_id, "annotate")
+    config["is_first_annotate"] = is_first_annotate
+
     # Create export job in database (status: pending)
     input_data = json.dumps(config)
     with get_db_connection() as conn:
