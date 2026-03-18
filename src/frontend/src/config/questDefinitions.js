@@ -88,7 +88,7 @@ export const QUESTS = [
       {
         id: 'create_mixed_project',
         title: 'Create a 4 & 5 Star Project',
-        description: 'Build a project combining your 4 and 5 star plays',
+        description: 'Go Home, then Projects, then New Project and click 4+ to select all great and brilliant clips for your new project. Click Create.',
       },
       {
         id: 'export_custom_project',
