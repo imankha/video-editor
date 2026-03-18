@@ -22,8 +22,7 @@ Stripe Checkout sessions for credit purchases. User clicks "Buy Credits" → red
 - `src/frontend/src/components/BuyCreditsModal.jsx` - NEW: pack selection UI
 
 ### Related Tasks
-- Depends on: T505 (credit system — grant with source="stripe_purchase")
-- Depends on: T520 (pricing — pack sizes and prices)
+- Depends on: T530 (credit system — grant with source="stripe_purchase")
 - Depends on: Auth epic complete (need user identity for Stripe customer)
 
 ### Technical Notes
@@ -40,12 +39,30 @@ POST /api/payments/checkout  → { pack: "medium" } → { checkout_url: "https:/
 POST /api/payments/webhook   → Stripe webhook → grant credits
 ```
 
-**Credit packs (finalized in T520, placeholder):**
-```
-small:  10 credits  → $4.99
-medium: 50 credits  → $19.99
-large:  200 credits → $59.99
-```
+**Credit packs (from T530 cost analysis):**
+
+1 credit = 1 second of Framing export. Our GPU cost = ~$0.0033/credit.
+
+| Pack | Credits | Price | Per Credit | Per Minute | Discount | GPU Cost | Stripe Fee | Net Profit | Margin |
+|------|---------|-------|-----------|------------|----------|----------|------------|------------|--------|
+| **Starter** | 120 | $4.99 | $0.042 | $2.50 | — | $0.40 | $0.44 | $4.15 | 83% |
+| **Popular** | 400 | $12.99 | $0.032 | $1.95 | 22% off | $1.32 | $0.68 | $10.99 | 85% |
+| **Pro** | 1,000 | $24.99 | $0.025 | $1.50 | 40% off | $3.30 | $1.02 | $20.67 | 83% |
+
+**Pricing rationale (growth phase):**
+- Starter ($4.99): Below impulse-buy threshold for sports parents. Buys one 2-min highlight. "Cheaper than a latte."
+- Popular ($12.99): Covers a tournament weekend (3-4 clips). "Most Popular" badge. Under "ask spouse" threshold.
+- Pro ($24.99): Full season of highlights. "Best Value" badge. Less than one private coaching lesson.
+- Never expire credits — brings parents back next season without re-acquisition cost.
+
+**Price anchoring:** Professional highlight reels cost $200-500. Recruiting services charge $800-4,000.
+ReelBallers: $4.99-$24.99 for the same output (40-100x cheaper).
+
+**Growth-phase notes:**
+- $4.99 floor avoids Stripe fixed-fee erosion ($0.30 eats 18% at $1.99 vs 9% at $4.99)
+- All packs profitable enough to fund ads + server costs
+- Prioritize conversion volume over per-user revenue at this stage
+- Can introduce $9.99/mo subscription later once repeat purchase data exists
 
 **Webhook security:**
 - Verify Stripe signature using webhook secret
