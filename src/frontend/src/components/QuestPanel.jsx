@@ -82,9 +82,6 @@ export function QuestPanel() {
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="quest-title text-base leading-tight">{questDef.title}</h3>
-            {questDef.hint && expanded && (
-              <p className="mt-1.5 text-xs font-semibold text-white bg-white/10 border border-white/15 rounded-md px-2.5 py-1.5 inline-block">{questDef.hint}</p>
-            )}
             {/* Mini progress bar in collapsed state */}
             {!expanded && (
               <div className="mt-1.5 flex items-center gap-2">
@@ -121,6 +118,13 @@ export function QuestPanel() {
                 {completedCount}/{totalCount}
               </span>
             </div>
+
+            {/* Hint callout */}
+            {questDef.hint && (
+              <div className="mx-5 mb-3 text-xs font-semibold text-white bg-white/10 border border-white/15 rounded-md px-3 py-2 text-center">
+                {questDef.hint}
+              </div>
+            )}
 
             {/* Steps */}
             <div className="px-5 pb-3">
