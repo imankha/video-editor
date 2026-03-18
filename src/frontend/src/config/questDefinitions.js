@@ -67,7 +67,7 @@ export const QUESTS = [
   },
   {
     id: 'quest_3',
-    title: 'Multiple Games',
+    title: 'Multiple Game Highlight Reel',
     reward: 100,
     steps: [
       {
