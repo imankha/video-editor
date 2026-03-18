@@ -31,11 +31,6 @@ export const QUESTS = [
         title: 'Create Your Annotated Video',
         description: 'Compile your annotations into a single instructive video',
       },
-      {
-        id: 'log_in',
-        title: 'Log In to Save Progress',
-        description: 'Sign in to keep your work across devices and earn credits',
-      },
     ],
   },
   {

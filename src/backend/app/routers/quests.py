@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException
 
 from ..user_context import get_current_user_id
 from ..database import get_db_connection
-from ..services.auth_db import get_user_by_id, grant_credits, get_credit_transactions
+from ..services.auth_db import grant_credits, get_credit_transactions
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,6 @@ QUEST_DEFINITIONS = [
             "annotate_brilliant",
             "annotate_unfortunate",
             "create_annotated_video",
-            "log_in",
         ],
     },
     {
@@ -83,10 +82,6 @@ def _check_all_steps(user_id: str, conn) -> dict:
     steps["create_annotated_video"] = cursor.execute(
         "SELECT 1 FROM export_jobs WHERE type = 'annotate' AND status = 'complete' LIMIT 1"
     ).fetchone() is not None
-
-    # Auth check (from auth.sqlite)
-    user = get_user_by_id(user_id)
-    steps["log_in"] = user is not None and user.get("email") is not None
 
     # --- Quest 2: Export Highlights ---
 
