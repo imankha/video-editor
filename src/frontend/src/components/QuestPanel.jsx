@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp, Sparkles, LogIn } from 'lucide-react';
 import { useQuestStore } from '../stores/questStore';
 import { QUESTS } from '../config/questDefinitions';
 import { toast } from './shared/Toast';
+import { useAuthStore } from '../stores/authStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
 /**
@@ -19,6 +20,7 @@ export function QuestPanel() {
   const loaded = useQuestStore((s) => s.loaded);
   const activeQuestId = useQuestStore((s) => s.activeQuestId);
   const fetchProgress = useQuestStore((s) => s.fetchProgress);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const claimReward = useQuestStore((s) => s.claimReward);
 
   const [expanded, setExpanded] = useState(true);  // Start expanded for new users
@@ -68,12 +70,6 @@ export function QuestPanel() {
 
   return (
     <div className="quest-overlay fixed bottom-10 left-6 z-50 w-[420px] max-w-[calc(100vw-2rem)] quest-fade-in">
-      {/* Hint banner — above the card */}
-      {questDef.hint && expanded && (
-        <div className="mb-2 text-xs font-semibold text-white bg-white/10 border border-white/15 rounded-lg px-3 py-2 text-center backdrop-blur-sm">
-          {questDef.hint}
-        </div>
-      )}
       <div className="quest-card rounded-2xl overflow-hidden">
         {/* Accent bar */}
         <div className="absolute top-0 left-0 right-0 h-1.5 quest-accent-bar rounded-t-2xl" />
@@ -124,6 +120,17 @@ export function QuestPanel() {
                 {completedCount}/{totalCount}
               </span>
             </div>
+
+            {/* Hint — login button for returning users, hidden once authenticated */}
+            {questDef.hint && !isAuthenticated && (
+              <button
+                onClick={() => useAuthStore.getState().requireAuth(() => {})}
+                className="mx-5 mb-3 w-[calc(100%-2.5rem)] flex items-center justify-center gap-2 text-sm font-semibold text-white bg-white/10 hover:bg-white/15 border border-white/15 rounded-lg px-3 py-2.5 transition-colors cursor-pointer"
+              >
+                <LogIn size={14} />
+                {questDef.hint}
+              </button>
+            )}
 
             {/* Steps */}
             <div className="px-5 pb-3">
