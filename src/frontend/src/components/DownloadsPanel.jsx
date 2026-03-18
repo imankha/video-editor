@@ -159,10 +159,14 @@ export function DownloadsPanel({
   const handlePlay = (e, download) => {
     e.stopPropagation();
     setPlayingVideo(download);
-    // T540: Record achievement for viewing gallery video
-    import('../stores/questStore').then(({ useQuestStore }) =>
-      useQuestStore.getState().recordAchievement('viewed_gallery_video')
-    );
+    // T540: Record achievements for viewing gallery video
+    import('../stores/questStore').then(({ useQuestStore }) => {
+      useQuestStore.getState().recordAchievement('viewed_gallery_video');
+      // Custom project video gets a separate achievement for Quest 3
+      if (download.source_type === SourceType.CUSTOM_PROJECT) {
+        useQuestStore.getState().recordAchievement('viewed_custom_project_video');
+      }
+    });
   };
 
   const handleOpenProject = async (e, download) => {

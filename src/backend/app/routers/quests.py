@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/quests", tags=["quests"])
 
 # Known achievement keys — only these can be recorded
-KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video"}
+KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "viewed_custom_project_video"}
 
 # Quest definitions — single source of truth for quest structure and rewards
 QUEST_DEFINITIONS = [
@@ -173,9 +173,9 @@ def _check_all_steps(user_id: str, conn) -> dict:
            LIMIT 1"""
     ).fetchone() is not None
 
-    # Watched a video from gallery (reuses viewed_gallery_video achievement)
+    # Watched a custom project video from gallery (separate from Quest 2's general gallery view)
     steps["watch_custom_video"] = cursor.execute(
-        "SELECT 1 FROM achievements WHERE key = 'viewed_gallery_video'"
+        "SELECT 1 FROM achievements WHERE key = 'viewed_custom_project_video'"
     ).fetchone() is not None
 
     # Project containing both 4-star and 5-star clips
