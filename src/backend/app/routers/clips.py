@@ -612,7 +612,7 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
     """Create a 9:16 project for a 5-star clip and return the project ID."""
     # Fetch tags and rating from the raw clip to generate a name if needed
     cursor.execute("""
-        SELECT rating, tags FROM raw_clips WHERE id = ?
+        SELECT rating, tags, notes FROM raw_clips WHERE id = ?
     """, (raw_clip_id,))
     clip_data = cursor.fetchone()
 
