@@ -424,7 +424,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
               disabled={!isValid || isSubmitting}
               className="w-full"
             >
-              {isSubmitting ? 'Creating Game...' : 'Create Game'}
+              {isSubmitting ? 'Adding Game...' : 'Add Game'}
             </Button>
           </div>
         </form>
