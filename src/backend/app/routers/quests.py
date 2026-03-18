@@ -26,7 +26,7 @@ QUEST_DEFINITIONS = [
     {
         "id": "quest_1",
         "title": "Get Started",
-        "reward": 30,
+        "reward": 25,
         "step_ids": [
             "upload_game",
             "annotate_brilliant",
@@ -49,12 +49,13 @@ QUEST_DEFINITIONS = [
     {
         "id": "quest_3",
         "title": "Multiple Games",
-        "reward": 50,
+        "reward": 100,
         "step_ids": [
             "upload_game_2",
             "annotate_brilliant_2",
             "annotate_4_star",
             "create_mixed_project",
+            "export_custom_project",
         ],
     },
 ]
@@ -119,6 +120,16 @@ def _check_all_steps(user_id: str, conn) -> dict:
     # Need ≥1 clip rated 4
     steps["annotate_4_star"] = cursor.execute(
         "SELECT 1 FROM raw_clips WHERE rating = 4 LIMIT 1"
+    ).fetchone() is not None
+
+    # Completed export from a custom (non-auto-created) project
+    steps["export_custom_project"] = cursor.execute(
+        """SELECT 1 FROM export_jobs ej
+           JOIN projects p ON ej.project_id = p.id
+           WHERE ej.status = 'complete'
+           AND ej.type IN ('framing', 'overlay')
+           AND p.is_auto_created = 0
+           LIMIT 1"""
     ).fetchone() is not None
 
     # Project containing both 4-star and 5-star clips

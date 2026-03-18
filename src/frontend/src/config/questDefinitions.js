@@ -9,12 +9,12 @@ export const QUESTS = [
   {
     id: 'quest_1',
     title: 'Get Started',
-    reward: 30,
+    reward: 25,
     steps: [
       {
         id: 'upload_game',
         title: 'Upload Your First Game',
-        description: 'Drop a game video to start annotating your best plays',
+        description: 'Upload a game video to get started',
       },
       {
         id: 'annotate_brilliant',
@@ -68,7 +68,7 @@ export const QUESTS = [
   {
     id: 'quest_3',
     title: 'Multiple Games',
-    reward: 50,
+    reward: 100,
     steps: [
       {
         id: 'upload_game_2',
@@ -89,6 +89,11 @@ export const QUESTS = [
         id: 'create_mixed_project',
         title: 'Create a 4 & 5 Star Project',
         description: 'Build a project combining your 4 and 5 star plays',
+      },
+      {
+        id: 'export_custom_project',
+        title: 'Export Your Highlight Reel',
+        description: 'Export a finished video from your custom project',
       },
     ],
   },
