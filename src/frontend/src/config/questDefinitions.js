@@ -44,6 +44,11 @@ export const QUESTS = [
         description: 'Go Home, then go to Projects, then select a project and enter Framing mode to crop and upscale your clips',
       },
       {
+        id: 'extract_clip',
+        title: 'Extract Clip',
+        description: 'Wait while the app extracts your selected clip',
+      },
+      {
         id: 'export_framing',
         title: 'Export Your First Frame Job',
         description: 'Click Export to render your cropped, upscaled video',

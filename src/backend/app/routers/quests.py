@@ -40,6 +40,7 @@ QUEST_DEFINITIONS = [
         "reward": 50,
         "step_ids": [
             "open_framing",
+            "extract_clip",
             "export_framing",
             "export_overlay",
             "view_gallery_video",
@@ -88,6 +89,11 @@ def _check_all_steps(user_id: str, conn) -> dict:
     # Achievement checks (per-user SQLite)
     steps["open_framing"] = cursor.execute(
         "SELECT 1 FROM achievements WHERE key = 'opened_framing_editor'"
+    ).fetchone() is not None
+
+    # Extraction creates a working_video — if one exists, extraction completed
+    steps["extract_clip"] = cursor.execute(
+        "SELECT 1 FROM working_videos LIMIT 1"
     ).fetchone() is not None
 
     steps["export_framing"] = cursor.execute(
