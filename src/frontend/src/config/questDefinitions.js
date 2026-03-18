@@ -41,7 +41,7 @@ export const QUESTS = [
       {
         id: 'open_framing',
         title: 'Open the Framing Editor',
-        description: 'Select a project and enter Framing mode to crop and upscale your clips',
+        description: 'Go Home, then go to Projects, then select a project and enter Framing mode to crop and upscale your clips',
       },
       {
         id: 'export_framing',
