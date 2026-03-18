@@ -56,7 +56,7 @@ export const QUESTS = [
       {
         id: 'export_overlay',
         title: 'Add Highlight Overlays',
-        description: 'Use the Overlay editor to spotlight key moments, then export',
+        description: 'Click on each of the green keyframes, then put the spotlight around your player by either clicking the box or moving the spotlight. Once all keyframes have a spotlight, click Add Overlay',
       },
       {
         id: 'view_gallery_video',
