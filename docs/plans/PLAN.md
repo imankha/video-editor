@@ -124,7 +124,7 @@ Per-second credit system for GPU operations. Credits earned through quests and a
 #### Epic: Guided Tutorial
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| **T540** | [**Quest System**](tasks/T540-quest-system.md) | **TODO** | **8** | **5** | **2 quests, 10 steps, earn credits; slide-out panel UI** |
+| **T540** | [**Quest System**](tasks/T540-quest-system.md) | **TESTING** | **8** | **5** | **2 quests, 9 steps, earn 80 credits; slide-out panel UI** |
 
 #### Epic: Admin
 | ID | Task | Status | Impact | Cmplx | Notes |
