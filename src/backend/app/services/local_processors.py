@@ -558,8 +558,9 @@ async def local_annotate_compilation(
                         return {"status": "error", "error": f"Failed to download video sequence {seq} from R2"}
                     source_paths[seq] = local_path
             else:
+                # Game videos are stored globally (no user prefix) — same as multi-video path
                 input_path = os.path.join(temp_dir, "input.mp4")
-                if not await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path)):
+                if not await asyncio.to_thread(download_from_r2_global, input_key, Path(input_path)):
                     return {"status": "error", "error": "Failed to download from R2"}
                 source_paths[None] = input_path
 
