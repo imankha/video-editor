@@ -313,9 +313,6 @@ export function ExportButtonContainer({
         setIsExporting(false);
         handleExportEnd();
 
-        // T530: Refresh credit balance after export
-        useCreditStore.getState().fetchCredits();
-
         if (onProceedToOverlay && editorMode === EDITOR_MODES.FRAMING) {
           onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
         }
