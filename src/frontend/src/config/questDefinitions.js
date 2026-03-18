@@ -73,7 +73,7 @@ export const QUESTS = [
       {
         id: 'upload_game_2',
         title: 'Upload a Second Game',
-        description: 'Expand your library with another game video',
+        description: 'Go Home, select Games, and then click Add Game to add another game',
       },
       {
         id: 'annotate_brilliant_2',
