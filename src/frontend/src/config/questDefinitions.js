@@ -50,8 +50,8 @@ export const QUESTS = [
       },
       {
         id: 'export_framing',
-        title: 'Export Your First Frame Job',
-        description: 'Click Export to render your cropped, upscaled video',
+        title: 'Frame Video',
+        description: 'Trim segments, slow down, crop video at different keyframes, and slowdown segments to frame your clip',
       },
       {
         id: 'export_overlay',

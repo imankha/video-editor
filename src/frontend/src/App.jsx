@@ -137,6 +137,8 @@ function App() {
   const handleExportComplete = useCallback(() => {
     fetchProjects();
     // Downloads count is auto-refreshed by DownloadsPanel via galleryStore
+    // T540: Refresh quest progress after any export completes
+    useQuestStore.getState().fetchProgress();
   }, [fetchProjects]);
 
   // Handler for loading saved games from ProjectManager
