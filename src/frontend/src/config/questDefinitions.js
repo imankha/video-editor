@@ -110,6 +110,11 @@ export const QUESTS = [
         title: 'Add Overlay',
         description: 'Switch to Overlay mode and add spotlight overlays to your highlights, then export',
       },
+      {
+        id: 'watch_custom_video',
+        title: 'Watch Your Video',
+        description: 'Open the Gallery and play back your finished custom project video',
+      },
     ],
   },
 ];

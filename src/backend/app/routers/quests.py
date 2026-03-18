@@ -59,6 +59,7 @@ QUEST_DEFINITIONS = [
             "frame_custom_project",
             "frame_custom_video",
             "overlay_custom_project",
+            "watch_custom_video",
         ],
     },
 ]
@@ -180,6 +181,11 @@ def _check_all_steps(user_id: str, conn) -> dict:
            WHERE ej.status = 'complete' AND ej.type = 'overlay'
            AND p.is_auto_created = 0
            LIMIT 1"""
+    ).fetchone() is not None
+
+    # Watched a video from gallery (reuses viewed_gallery_video achievement)
+    steps["watch_custom_video"] = cursor.execute(
+        "SELECT 1 FROM achievements WHERE key = 'viewed_gallery_video'"
     ).fetchone() is not None
 
     # Project containing both 4-star and 5-star clips
