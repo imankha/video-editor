@@ -3,38 +3,30 @@ import { useCreditStore } from './creditStore';
 
 describe('creditStore', () => {
   beforeEach(() => {
-    // Reset store state before each test
     useCreditStore.setState({
       balance: 0,
-      firstFramingUsed: true,
-      firstAnnotateUsed: true,
       loaded: false,
     });
   });
 
   describe('canAffordExport', () => {
     it('returns true when balance >= ceil(videoSeconds)', () => {
-      useCreditStore.setState({ balance: 30, firstFramingUsed: true });
+      useCreditStore.setState({ balance: 30 });
       expect(useCreditStore.getState().canAffordExport(25.5)).toBe(true);
     });
 
     it('returns false when balance < ceil(videoSeconds)', () => {
-      useCreditStore.setState({ balance: 10, firstFramingUsed: true });
+      useCreditStore.setState({ balance: 10 });
       expect(useCreditStore.getState().canAffordExport(25.5)).toBe(false);
     });
 
-    it('returns true when first framing not used (free)', () => {
-      useCreditStore.setState({ balance: 0, firstFramingUsed: false });
-      expect(useCreditStore.getState().canAffordExport(100)).toBe(true);
-    });
-
     it('handles exact balance match', () => {
-      useCreditStore.setState({ balance: 30, firstFramingUsed: true });
+      useCreditStore.setState({ balance: 30 });
       expect(useCreditStore.getState().canAffordExport(30)).toBe(true);
     });
 
     it('rounds up fractional seconds', () => {
-      useCreditStore.setState({ balance: 30, firstFramingUsed: true });
+      useCreditStore.setState({ balance: 30 });
       // 30.1 seconds requires 31 credits
       expect(useCreditStore.getState().canAffordExport(30.1)).toBe(false);
     });
@@ -55,39 +47,17 @@ describe('creditStore', () => {
     });
   });
 
-  describe('markFirstFramingUsed', () => {
-    it('sets firstFramingUsed to true', () => {
-      useCreditStore.setState({ firstFramingUsed: false });
-      useCreditStore.getState().markFirstFramingUsed();
-      expect(useCreditStore.getState().firstFramingUsed).toBe(true);
-    });
-  });
-
-  describe('markFirstAnnotateUsed', () => {
-    it('sets firstAnnotateUsed to true', () => {
-      useCreditStore.setState({ firstAnnotateUsed: false });
-      useCreditStore.getState().markFirstAnnotateUsed();
-      expect(useCreditStore.getState().firstAnnotateUsed).toBe(true);
-    });
-  });
-
   describe('fetchCredits', () => {
     it('updates store from API response', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          balance: 75,
-          first_framing_used: true,
-          first_annotate_used: false,
-        }),
+        json: () => Promise.resolve({ balance: 75 }),
       });
 
       await useCreditStore.getState().fetchCredits();
 
       const state = useCreditStore.getState();
       expect(state.balance).toBe(75);
-      expect(state.firstFramingUsed).toBe(true);
-      expect(state.firstAnnotateUsed).toBe(false);
       expect(state.loaded).toBe(true);
     });
 
@@ -96,7 +66,6 @@ describe('creditStore', () => {
 
       await useCreditStore.getState().fetchCredits();
 
-      // Should not crash, state unchanged
       expect(useCreditStore.getState().balance).toBe(0);
       expect(useCreditStore.getState().loaded).toBe(false);
     });

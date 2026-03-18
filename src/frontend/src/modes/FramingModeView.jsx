@@ -79,7 +79,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         EXPORT_CONFIG={EXPORT_CONFIG}
         showInsufficientCredits={container.showInsufficientCredits}
         onCloseInsufficientCredits={container.onCloseInsufficientCredits}
-        isFirstFramingFree={container.isFirstFramingFree}
         handleExportRef={container.handleExportRef}
       />
     </div>

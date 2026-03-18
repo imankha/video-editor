@@ -529,16 +529,15 @@ async def start_framing_export(
         raise HTTPException(status_code=500, detail=f"Failed to stage video: {e}")
 
     # T530: Credit check — deduct before GPU dispatch, refund on failure
-    from ..services.auth_db import use_first_time_free, deduct_credits
+    from ..services.auth_db import deduct_credits
     from ..services.ffmpeg_service import get_video_duration
 
     user_id = get_current_user_id()
     video_seconds = get_video_duration(str(staged_video_path))
     credits_required = math.ceil(video_seconds)
-    is_first_time = use_first_time_free(user_id, "framing")
     credits_deducted = 0
 
-    if not is_first_time:
+    if credits_required > 0:
         result = deduct_credits(
             user_id, credits_required, "framing_usage", job_id, video_seconds
         )

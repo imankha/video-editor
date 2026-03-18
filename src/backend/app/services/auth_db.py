@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 _AUTH_DB_DIR = Path(__file__).parent.parent.parent.parent.parent / "user_data"
 AUTH_DB_PATH = _AUTH_DB_DIR / "auth.sqlite"
 
+# T530: Credits granted to every new user on signup
+SIGNUP_CREDITS = 20
+
 # R2 key for backup (not under any user folder)
 AUTH_DB_R2_KEY_SUFFIX = "auth/auth.sqlite"
 
@@ -110,8 +113,6 @@ def init_auth_db():
         # T530: Credit system — add columns to users table (idempotent)
         for col, col_def in [
             ("credits", "INTEGER DEFAULT 0"),
-            ("first_framing_used", "INTEGER DEFAULT 0"),
-            ("first_annotate_used", "INTEGER DEFAULT 0"),
         ]:
             try:
                 db.execute(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
@@ -242,16 +243,22 @@ def create_user(
     """
     with get_auth_db() as db:
         db.execute(
-            """INSERT INTO users (user_id, email, google_id, verified_at)
-               VALUES (?, ?, ?, ?)""",
-            (user_id, email, google_id, verified_at),
+            """INSERT INTO users (user_id, email, google_id, verified_at, credits)
+               VALUES (?, ?, ?, ?, ?)""",
+            (user_id, email, google_id, verified_at, SIGNUP_CREDITS),
+        )
+        # T530: Record signup credit grant in ledger
+        db.execute(
+            """INSERT INTO credit_transactions (user_id, amount, source)
+               VALUES (?, ?, 'signup_bonus')""",
+            (user_id, SIGNUP_CREDITS),
         )
         db.commit()
 
     # Sync to R2 immediately — new user registration is critical
     sync_auth_db_to_r2()
 
-    logger.info(f"[AuthDB] Created user: {user_id} email={email}")
+    logger.info(f"[AuthDB] Created user: {user_id} email={email} credits={SIGNUP_CREDITS}")
     return {"user_id": user_id, "email": email, "google_id": google_id}
 
 
@@ -424,11 +431,16 @@ def create_guest_user() -> str:
     user_id = generate_user_id()
     with get_auth_db() as db:
         db.execute(
-            "INSERT INTO users (user_id) VALUES (?)",
-            (user_id,),
+            "INSERT INTO users (user_id, credits) VALUES (?, ?)",
+            (user_id, SIGNUP_CREDITS),
+        )
+        db.execute(
+            """INSERT INTO credit_transactions (user_id, amount, source)
+               VALUES (?, ?, 'signup_bonus')""",
+            (user_id, SIGNUP_CREDITS),
         )
         db.commit()
-    logger.info(f"[AuthDB] Created guest user: {user_id}")
+    logger.info(f"[AuthDB] Created guest user: {user_id} credits={SIGNUP_CREDITS}")
     return user_id
 
 
@@ -437,19 +449,15 @@ def create_guest_user() -> str:
 # ---------------------------------------------------------------------------
 
 def get_credit_balance(user_id: str) -> dict:
-    """Get credit balance and first-time flags for a user."""
+    """Get credit balance for a user."""
     with get_auth_db() as db:
         row = db.execute(
-            "SELECT credits, first_framing_used, first_annotate_used FROM users WHERE user_id = ?",
+            "SELECT credits FROM users WHERE user_id = ?",
             (user_id,)
         ).fetchone()
         if not row:
-            return {"balance": 0, "first_framing_used": False, "first_annotate_used": False}
-        return {
-            "balance": row["credits"],
-            "first_framing_used": bool(row["first_framing_used"]),
-            "first_annotate_used": bool(row["first_annotate_used"]),
-        }
+            return {"balance": 0}
+        return {"balance": row["credits"]}
 
 
 def grant_credits(user_id: str, amount: int, source: str, reference_id: Optional[str] = None) -> int:
@@ -504,27 +512,6 @@ def deduct_credits(
     logger.info(f"[AuthDB] Deducted {amount} credits from {user_id} (source={source}), balance={new_balance}")
     return {"success": True, "balance": new_balance, "required": amount}
 
-
-def use_first_time_free(user_id: str, export_type: str) -> bool:
-    """
-    Check and consume a first-time-free flag. Returns True if this was the first time.
-    export_type: 'framing' or 'annotate'
-    """
-    column = f"first_{export_type}_used"
-    with get_auth_db() as db:
-        row = db.execute(
-            f"SELECT {column} FROM users WHERE user_id = ?",
-            (user_id,),
-        ).fetchone()
-        if not row or row[column]:
-            return False  # Already used or user not found
-        db.execute(
-            f"UPDATE users SET {column} = 1 WHERE user_id = ?",
-            (user_id,),
-        )
-        db.commit()
-    logger.info(f"[AuthDB] First-time-free consumed for {user_id} (type={export_type})")
-    return True
 
 
 def refund_credits(

@@ -1221,7 +1221,7 @@ async def export_multi_clip(
     include_audio_bool = include_audio.lower() == "true"
 
     # T530: Credit check — calculate total duration from clips_data
-    from ...services.auth_db import use_first_time_free, deduct_credits
+    from ...services.auth_db import deduct_credits
     from ...highlight_transform import get_output_duration
 
     total_video_seconds = 0
@@ -1231,10 +1231,9 @@ async def export_multi_clip(
         total_video_seconds += get_output_duration(segments, clip_duration)
 
     credits_required = math.ceil(total_video_seconds) if total_video_seconds > 0 else 0
-    is_first_time = use_first_time_free(captured_user_id, "framing")
     credits_deducted = 0
 
-    if not is_first_time and credits_required > 0:
+    if credits_required > 0:
         credit_result = deduct_credits(
             captured_user_id, credits_required, "framing_usage", export_id, total_video_seconds
         )

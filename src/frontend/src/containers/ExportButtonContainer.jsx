@@ -180,7 +180,6 @@ export function ExportButtonContainer({
   const failExportInStore = useExportStore(state => state.failExport);
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const creditBalance = useCreditStore((s) => s.balance);
-  const firstFramingUsed = useCreditStore((s) => s.firstFramingUsed);
 
   // Use props if provided, otherwise fall back to context values
   const editorMode = editorModeProp ?? contextEditorMode ?? EDITOR_MODES.FRAMING;
@@ -393,7 +392,7 @@ export function ExportButtonContainer({
       }
 
       // T530: Optimistic credit check (backend is authoritative)
-      const { canAffordExport, getRequiredCredits, balance, firstFramingUsed } = useCreditStore.getState();
+      const { canAffordExport, getRequiredCredits, balance } = useCreditStore.getState();
       const isMultiClip = clips && clips.length > 1;
       let totalVideoSeconds = 0;
       if (isMultiClip) {
@@ -401,7 +400,7 @@ export function ExportButtonContainer({
       } else if (clips && clips.length === 1) {
         totalVideoSeconds = calculateEffectiveDuration(clips[0]);
       }
-      if (totalVideoSeconds > 0 && firstFramingUsed && !canAffordExport(totalVideoSeconds)) {
+      if (totalVideoSeconds > 0 && !canAffordExport(totalVideoSeconds)) {
         setShowInsufficientCredits({
           required: getRequiredCredits(totalVideoSeconds),
           available: balance,
@@ -1032,7 +1031,6 @@ export function ExportButtonContainer({
     // T530: Credit system
     showInsufficientCredits,
     onCloseInsufficientCredits: () => setShowInsufficientCredits(null),
-    isFirstFramingFree: !firstFramingUsed,
     creditBalance,
 
     // Refs (for external triggering)

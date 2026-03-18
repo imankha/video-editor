@@ -551,7 +551,7 @@ async def render_project(request: RenderRequest, http_request: Request):
 
     # T530: Credit check — deduct before GPU dispatch, refund on failure
     import math
-    from ...services.auth_db import use_first_time_free, deduct_credits
+    from ...services.auth_db import deduct_credits
 
     source_duration = clip['raw_duration'] or 0
     segments_raw = None
@@ -562,10 +562,9 @@ async def render_project(request: RenderRequest, http_request: Request):
             pass
     video_seconds = get_output_duration(segments_raw, source_duration) if source_duration else source_duration
     credits_required = math.ceil(video_seconds) if video_seconds > 0 else 0
-    is_first_time = use_first_time_free(captured_user_id, "framing")
     credits_deducted = 0
 
-    if not is_first_time and credits_required > 0:
+    if credits_required > 0:
         credit_result = deduct_credits(
             captured_user_id, credits_required, "framing_usage", export_id, video_seconds
         )

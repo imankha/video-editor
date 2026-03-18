@@ -32,7 +32,7 @@ class GrantRequest(BaseModel):
 
 @router.get("")
 async def get_balance():
-    """Get current credit balance and first-time-free flags."""
+    """Get current credit balance."""
     user_id = get_current_user_id()
     return get_credit_balance(user_id)
 

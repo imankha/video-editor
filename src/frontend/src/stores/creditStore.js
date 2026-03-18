@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { API_BASE } from '../config';
 
 /**
- * Credit Store - Manages credit balance and first-time-free flags (T530)
+ * Credit Store - Manages credit balance (T530)
  *
  * Backend is authoritative — this store provides optimistic checks
  * to prevent unnecessary API calls and give instant UI feedback.
@@ -16,8 +16,6 @@ import { API_BASE } from '../config';
  */
 export const useCreditStore = create((set, get) => ({
   balance: 0,
-  firstFramingUsed: true,   // Safe default: assume used (no free pass)
-  firstAnnotateUsed: true,
   loaded: false,
 
   fetchCredits: async () => {
@@ -27,8 +25,6 @@ export const useCreditStore = create((set, get) => ({
       const data = await res.json();
       set({
         balance: data.balance,
-        firstFramingUsed: data.first_framing_used,
-        firstAnnotateUsed: data.first_annotate_used,
         loaded: true,
       });
     } catch {
@@ -38,13 +34,9 @@ export const useCreditStore = create((set, get) => ({
 
   setBalance: (balance) => set({ balance }),
 
-  markFirstFramingUsed: () => set({ firstFramingUsed: true }),
-  markFirstAnnotateUsed: () => set({ firstAnnotateUsed: true }),
-
   // Optimistic check — backend is authoritative
   canAffordExport: (videoSeconds) => {
-    const { balance, firstFramingUsed } = get();
-    if (!firstFramingUsed) return true;
+    const { balance } = get();
     return balance >= Math.ceil(videoSeconds);
   },
 
