@@ -4,6 +4,23 @@ import { API_BASE } from '../config';
 const API_BASE_URL = `${API_BASE}/api`;
 
 /**
+ * T540: Refresh quest progress after any clip mutation.
+ *
+ * All rating-based quest steps (annotate_brilliant, annotate_unfortunate,
+ * annotate_4_star, annotate_brilliant_2, create_mixed_project) are derived
+ * from raw_clips data — no flags, just DB queries. This function tells the
+ * quest store to re-derive progress after any clip change.
+ *
+ * Called from saveClip, updateClip, and deleteClip so that any current or
+ * future rating-based quest step auto-detects completion.
+ */
+function refreshQuestProgress() {
+  import('../stores/questStore').then(({ useQuestStore }) =>
+    useQuestStore.getState().fetchProgress()
+  );
+}
+
+/**
  * useRawClipSave - Manages real-time clip saving during annotation
  *
  * Provides:
@@ -71,11 +88,7 @@ export function useRawClipSave() {
         console.log('[useRawClipSave] Auto-created project:', result.project_id);
       }
 
-      // T540: Refresh quest progress after clip creation (rating is set at creation time)
-      import('../stores/questStore').then(({ useQuestStore }) =>
-        useQuestStore.getState().fetchProgress()
-      );
-
+      refreshQuestProgress();
       return result;
     } catch (err) {
       setError(err.message);
@@ -121,13 +134,7 @@ export function useRawClipSave() {
         console.log('[useRawClipSave] Auto-created project:', result.project_id);
       }
 
-      // T540: Refresh quest progress after rating change
-      if (updates.rating !== undefined) {
-        import('../stores/questStore').then(({ useQuestStore }) =>
-          useQuestStore.getState().fetchProgress()
-        );
-      }
-
+      refreshQuestProgress();
       return result;
     } catch (err) {
       setError(err.message);
@@ -163,6 +170,7 @@ export function useRawClipSave() {
       }
 
       console.log('[useRawClipSave] Deleted clip:', clipId);
+      refreshQuestProgress();
       return true;
     } catch (err) {
       setError(err.message);
