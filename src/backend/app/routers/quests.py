@@ -113,18 +113,25 @@ def _check_all_steps(user_id: str, conn) -> dict:
     ).fetchone() is not None
 
     # --- Quest 3: Multiple Games ---
+    # Quest 3 annotation steps check the SECOND+ game only (not the first game).
+    # This ensures users are working with the new game, not reusing Quest 1 progress.
 
     # Count-based: need ≥2 games
     row = cursor.execute("SELECT count(*) as cnt FROM games").fetchone()
     steps["upload_game_2"] = row["cnt"] >= 2
 
-    # Count-based: need ≥2 clips rated 5
-    row = cursor.execute("SELECT count(*) as cnt FROM raw_clips WHERE rating = 5").fetchone()
+    # Need ≥2 clips rated 5 on the second+ game (exclude first game)
+    row = cursor.execute(
+        """SELECT count(*) as cnt FROM raw_clips
+           WHERE rating = 5 AND game_id != (SELECT MIN(id) FROM games)"""
+    ).fetchone()
     steps["annotate_brilliant_2"] = row["cnt"] >= 2
 
-    # Need ≥1 clip rated 4
+    # Need ≥1 clip rated 4 on the second+ game
     steps["annotate_4_star"] = cursor.execute(
-        "SELECT 1 FROM raw_clips WHERE rating = 4 LIMIT 1"
+        """SELECT 1 FROM raw_clips
+           WHERE rating = 4 AND game_id != (SELECT MIN(id) FROM games)
+           LIMIT 1"""
     ).fetchone() is not None
 
     # Completed export from a custom (non-auto-created) project
