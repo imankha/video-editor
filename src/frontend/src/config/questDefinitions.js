@@ -19,7 +19,7 @@ export const QUESTS = [
       {
         id: 'annotate_brilliant',
         title: 'Annotate a 5 Star Play',
-        description: 'Find your best moment and give it 5 stars',
+        description: 'Watch the footage and when your player makes a great play, click the Add Clip button and give that play 5 stars',
       },
       {
         id: 'annotate_unfortunate',
