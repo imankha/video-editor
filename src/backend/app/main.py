@@ -62,7 +62,7 @@ logging.getLogger("boto3").setLevel(logging.WARNING)
 logging.getLogger("s3transfer").setLevel(logging.WARNING)
 
 # Import routers and websocket handler
-from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router, profiles_router
+from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router, profiles_router, credits_router
 from app.routers.exports import router as exports_router
 from app.websocket import websocket_export_progress, websocket_extractions
 from app.services.export_worker import recover_orphaned_jobs
@@ -120,6 +120,7 @@ app.include_router(auth_router)
 app.include_router(storage_router)
 app.include_router(settings_router)
 app.include_router(profiles_router)
+app.include_router(credits_router, prefix="/api")
 app.include_router(exports_router, prefix="/api")
 
 

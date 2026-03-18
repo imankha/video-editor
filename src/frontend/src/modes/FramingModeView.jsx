@@ -77,6 +77,8 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         onHighlightEffectTypeChange={null}
         HIGHLIGHT_EFFECT_LABELS={HIGHLIGHT_EFFECT_LABELS}
         EXPORT_CONFIG={EXPORT_CONFIG}
+        showInsufficientCredits={container.showInsufficientCredits}
+        onCloseInsufficientCredits={container.onCloseInsufficientCredits}
         handleExportRef={container.handleExportRef}
       />
     </div>

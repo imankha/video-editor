@@ -511,7 +511,8 @@ async def render_project(request: RenderRequest, http_request: Request):
                 wc.segments_data,
                 wc.sort_order,
                 rc.filename as raw_filename,
-                rc.name as clip_name
+                rc.name as clip_name,
+                (rc.end_time - rc.start_time) as raw_duration
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             WHERE wc.project_id = ?
@@ -547,6 +548,37 @@ async def render_project(request: RenderRequest, http_request: Request):
         )
 
     clip = working_clips[0]
+
+    # T530: Credit check — deduct before GPU dispatch, refund on failure
+    import math
+    from ...services.auth_db import deduct_credits
+
+    source_duration = clip['raw_duration'] or 0
+    segments_raw = None
+    if clip['segments_data']:
+        try:
+            segments_raw = json.loads(clip['segments_data'])
+        except (json.JSONDecodeError, TypeError):
+            pass
+    video_seconds = get_output_duration(segments_raw, source_duration) if source_duration else source_duration
+    credits_required = math.ceil(video_seconds) if video_seconds > 0 else 0
+    credits_deducted = 0
+
+    if credits_required > 0:
+        credit_result = deduct_credits(
+            captured_user_id, credits_required, "framing_usage", export_id, video_seconds
+        )
+        if not credit_result["success"]:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_credits",
+                    "required": credits_required,
+                    "available": credit_result["balance"],
+                    "video_seconds": video_seconds,
+                },
+            )
+        credits_deducted = credits_required
 
     # Step 2: Validate clip has required data
     if not clip['crop_data']:
@@ -858,6 +890,12 @@ async def render_project(request: RenderRequest, http_request: Request):
         error_msg = str(e.detail) if hasattr(e, 'detail') else str(e)
         logger.error(f"[Render] HTTPException: {error_msg}")
 
+        # T530: Refund credits on failure
+        if credits_deducted > 0:
+            from ...services.auth_db import refund_credits
+            refund_credits(captured_user_id, credits_deducted, export_id, video_seconds)
+            logger.info(f"[Render] Refunded {credits_deducted} credits to {captured_user_id}")
+
         # Update export_jobs record to error
         try:
             with get_db_connection() as conn:
@@ -885,6 +923,12 @@ async def render_project(request: RenderRequest, http_request: Request):
 
     except Exception as e:
         logger.error(f"[Render] Failed: {str(e)}", exc_info=True)
+
+        # T530: Refund credits on failure
+        if credits_deducted > 0:
+            from ...services.auth_db import refund_credits
+            refund_credits(captured_user_id, credits_deducted, export_id, video_seconds)
+            logger.info(f"[Render] Refunded {credits_deducted} credits to {captured_user_id}")
 
         # Update export_jobs record to error
         try:

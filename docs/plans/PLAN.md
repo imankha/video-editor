@@ -109,32 +109,41 @@ Gate GPU operations behind email verification. Google OAuth primary, Email OTP s
 #### Epic: Monetization
 [tasks/monetization/EPIC.md](tasks/monetization/EPIC.md)
 
-Prepaid credits for GPU operations. Credit system built Stripe-ready, Stripe snaps in after auth is working.
+Per-second credit system for GPU operations. Credits earned through quests and admin grants, Stripe purchase planned separately.
 
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| T500 | [Credits UI Shell](tasks/monetization/T500-credits-ui-shell.md) | TODO | 7 | 2 | Balance display + insufficient modal (mock data) |
-| T505 | [Credit System Backend](tasks/monetization/T505-credit-system-backend.md) | TODO | 8 | 4 | D1 schema, balance/deduct/grant API, ledger |
-| T510 | [GPU Cost Gate](tasks/monetization/T510-gpu-cost-gate.md) | TODO | 9 | 3 | Check credits before GPU, deduct, refund on failure |
-| T515 | [Free Trial Credits](tasks/monetization/T515-free-trial-credits.md) | TODO | 7 | 2 | Grant on email verify, one-time |
-| T520 | [Pricing Exploration](tasks/monetization/T520-pricing-exploration.md) | TODO | 6 | 1 | AI-assisted pricing research (placeholder) |
+| **T530** | [**Credit System**](tasks/monetization/T530-credit-system.md) | **TESTING** | **9** | **5** | **1 credit/sec for Framing; first-time-free; supersedes T500/T505/T510/T515** |
+| T500 | [Credits UI Shell](tasks/monetization/T500-credits-ui-shell.md) | SUPERSEDED | 7 | 2 | Superseded by T530 (per-second model) |
+| T505 | [Credit System Backend](tasks/monetization/T505-credit-system-backend.md) | SUPERSEDED | 8 | 4 | Superseded by T530 (auth.sqlite, not D1) |
+| T510 | [GPU Cost Gate](tasks/monetization/T510-gpu-cost-gate.md) | SUPERSEDED | 9 | 3 | Superseded by T530 (per-second gate) |
+| T515 | [Free Trial Credits](tasks/monetization/T515-free-trial-credits.md) | SUPERSEDED | 7 | 2 | Superseded by T530 (first-time-free) + T540 (quest rewards) |
+| T520 | [Pricing Exploration](tasks/monetization/T520-pricing-exploration.md) | DONE | 6 | 1 | Completed as part of T530 cost analysis |
 | T525 | [Stripe Integration](tasks/monetization/T525-stripe-integration.md) | TODO | 8 | 5 | Checkout, webhooks, credit packages (LAST) |
+
+#### Epic: Guided Tutorial
+| ID | Task | Status | Impact | Cmplx | Notes |
+|----|------|--------|--------|-------|-------|
+| **T540** | [**Quest System**](tasks/T540-quest-system.md) | **TODO** | **8** | **5** | **2 quests, 10 steps, earn credits; slide-out panel UI** |
+
+#### Epic: Admin
+| ID | Task | Status | Impact | Cmplx | Notes |
+|----|------|--------|--------|-------|-------|
+| **T550** | [**Admin Panel**](tasks/T550-admin-panel.md) | **TODO** | **7** | **6** | **User stats, credit grants, GPU usage, Cloudflare analytics** |
 
 #### Recommended Build Order (feedback velocity)
 
 Each task delivers working functionality users can test:
 
-1. **T400** — Auth gate + Google OAuth (real sign-in, testable immediately)
-2. **T401** — Email OTP (real Resend, second auth method)
-3. **T500** — Credits UI (real balance display + insufficient modal, mock data)
-4. **T505** — Credit system backend (real D1 balance, wires to frontend)
-5. **T510** — GPU cost gate (enforces credits on exports)
-6. **T515** — Free trial credits (grants on first auth)
-7. **T405** — Central auth DB + cross-device recovery (D1 migration)
-8. **T420** — Session management (single-session, expiry)
-9. **T520** — Pricing exploration (can happen anytime)
-10. **T525** — Stripe integration (LAST — after auth is solid)
-11. **T430** — Account settings (polish)
+1. **T400** — Auth gate + Google OAuth (real sign-in, testable immediately) ✅ DONE
+2. **T530** — Credit system (per-second pricing, first-time-free, credit balance UI)
+3. **T540** — Quest system (onboarding tutorial, earns credits)
+4. **T550** — Admin panel (user stats, credit grants, GPU tracking)
+5. **T405** — Central auth DB + cross-device recovery ✅ DONE
+6. **T401** — Email OTP (real Resend, second auth method)
+7. **T420** — Session management (single-session, expiry)
+8. **T525** — Stripe integration (LAST — after credits + quests are working)
+9. **T430** — Account settings (polish)
 
 ### Phase 3: Production Infrastructure
 

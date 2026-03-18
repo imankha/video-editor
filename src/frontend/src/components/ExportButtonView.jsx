@@ -3,6 +3,7 @@ import { Download, Loader, AlertCircle, Check } from 'lucide-react';
 import { Button, Toggle, ExportProgress } from './shared';
 import { HighlightColor, HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { HighlightEffect } from '../constants/highlightEffects';
+import { InsufficientCreditsModal } from './InsufficientCreditsModal';
 
 /**
  * ExportButtonView - Pure presentational component for export UI
@@ -54,6 +55,10 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   EXPORT_CONFIG,
   highlightEffectType,
   highlightColor,
+
+  // T530: Credit system
+  showInsufficientCredits,
+  onCloseInsufficientCredits,
 
   // Refs for external triggering
   handleExportRef,
@@ -241,6 +246,16 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         <div className="text-green-400 text-sm bg-green-900/20 border border-green-800 rounded p-2">
           Export complete! Video downloaded.
         </div>
+      )}
+
+      {/* T530: Insufficient Credits Modal */}
+      {showInsufficientCredits && (
+        <InsufficientCreditsModal
+          required={showInsufficientCredits.required}
+          available={showInsufficientCredits.available}
+          videoSeconds={showInsufficientCredits.videoSeconds}
+          onClose={onCloseInsufficientCredits}
+        />
       )}
     </div>
   );

@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 _AUTH_DB_DIR = Path(__file__).parent.parent.parent.parent.parent / "user_data"
 AUTH_DB_PATH = _AUTH_DB_DIR / "auth.sqlite"
 
+# T530: Credits granted to every new user on signup
+SIGNUP_CREDITS = 20
+
 # R2 key for backup (not under any user folder)
 AUTH_DB_R2_KEY_SUFFIX = "auth/auth.sqlite"
 
@@ -106,6 +109,32 @@ def init_auth_db():
             CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
             CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes(email);
         """)
+
+        # T530: Credit system — add columns to users table (idempotent)
+        for col, col_def in [
+            ("credits", "INTEGER DEFAULT 0"),
+        ]:
+            try:
+                db.execute(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+        # T530: Credit transactions ledger
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS credit_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL REFERENCES users(user_id),
+                amount INTEGER NOT NULL,
+                source TEXT NOT NULL,
+                reference_id TEXT,
+                video_seconds REAL,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_credit_tx_user
+                ON credit_transactions(user_id);
+        """)
+
     logger.info("[AuthDB] Tables initialized")
 
 
@@ -214,16 +243,22 @@ def create_user(
     """
     with get_auth_db() as db:
         db.execute(
-            """INSERT INTO users (user_id, email, google_id, verified_at)
-               VALUES (?, ?, ?, ?)""",
-            (user_id, email, google_id, verified_at),
+            """INSERT INTO users (user_id, email, google_id, verified_at, credits)
+               VALUES (?, ?, ?, ?, ?)""",
+            (user_id, email, google_id, verified_at, SIGNUP_CREDITS),
+        )
+        # T530: Record signup credit grant in ledger
+        db.execute(
+            """INSERT INTO credit_transactions (user_id, amount, source)
+               VALUES (?, ?, 'signup_bonus')""",
+            (user_id, SIGNUP_CREDITS),
         )
         db.commit()
 
     # Sync to R2 immediately — new user registration is critical
     sync_auth_db_to_r2()
 
-    logger.info(f"[AuthDB] Created user: {user_id} email={email}")
+    logger.info(f"[AuthDB] Created user: {user_id} email={email} credits={SIGNUP_CREDITS}")
     return {"user_id": user_id, "email": email, "google_id": google_id}
 
 
@@ -396,9 +431,141 @@ def create_guest_user() -> str:
     user_id = generate_user_id()
     with get_auth_db() as db:
         db.execute(
-            "INSERT INTO users (user_id) VALUES (?)",
-            (user_id,),
+            "INSERT INTO users (user_id, credits) VALUES (?, ?)",
+            (user_id, SIGNUP_CREDITS),
+        )
+        db.execute(
+            """INSERT INTO credit_transactions (user_id, amount, source)
+               VALUES (?, ?, 'signup_bonus')""",
+            (user_id, SIGNUP_CREDITS),
         )
         db.commit()
-    logger.info(f"[AuthDB] Created guest user: {user_id}")
+    logger.info(f"[AuthDB] Created guest user: {user_id} credits={SIGNUP_CREDITS}")
     return user_id
+
+
+# ---------------------------------------------------------------------------
+# Credit operations (T530)
+# ---------------------------------------------------------------------------
+
+def _ensure_signup_bonus(user_id: str) -> None:
+    """Grant signup bonus to existing users who predate T530."""
+    with get_auth_db() as db:
+        row = db.execute(
+            "SELECT count(*) as cnt FROM credit_transactions WHERE user_id = ? AND source = 'signup_bonus'",
+            (user_id,),
+        ).fetchone()
+        if row["cnt"] == 0:
+            db.execute("UPDATE users SET credits = credits + ? WHERE user_id = ?", (SIGNUP_CREDITS, user_id))
+            db.execute(
+                "INSERT INTO credit_transactions (user_id, amount, source) VALUES (?, ?, 'signup_bonus')",
+                (user_id, SIGNUP_CREDITS),
+            )
+            db.commit()
+            logger.info(f"[AuthDB] Backfilled signup bonus for existing user {user_id}")
+
+
+def get_credit_balance(user_id: str) -> dict:
+    """Get credit balance for a user. Backfills signup bonus if missing."""
+    _ensure_signup_bonus(user_id)
+    with get_auth_db() as db:
+        row = db.execute(
+            "SELECT credits FROM users WHERE user_id = ?",
+            (user_id,)
+        ).fetchone()
+        if not row:
+            return {"balance": 0}
+        return {"balance": row["credits"]}
+
+
+def grant_credits(user_id: str, amount: int, source: str, reference_id: Optional[str] = None) -> int:
+    """Grant credits to a user. Returns new balance. Syncs to R2."""
+    with get_auth_db() as db:
+        db.execute(
+            "UPDATE users SET credits = credits + ? WHERE user_id = ?",
+            (amount, user_id),
+        )
+        db.execute(
+            """INSERT INTO credit_transactions (user_id, amount, source, reference_id)
+               VALUES (?, ?, ?, ?)""",
+            (user_id, amount, source, reference_id),
+        )
+        db.commit()
+        row = db.execute("SELECT credits FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        new_balance = row["credits"]
+    sync_auth_db_to_r2()
+    logger.info(f"[AuthDB] Granted {amount} credits to {user_id} (source={source}), balance={new_balance}")
+    return new_balance
+
+
+def deduct_credits(
+    user_id: str,
+    amount: int,
+    source: str,
+    reference_id: Optional[str] = None,
+    video_seconds: Optional[float] = None,
+) -> dict:
+    """
+    Deduct credits atomically. Returns {success, balance, required}.
+    Reads + writes in a single connection for atomicity.
+    """
+    with get_auth_db() as db:
+        row = db.execute("SELECT credits FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        if not row:
+            return {"success": False, "balance": 0, "required": amount}
+        current = row["credits"]
+        if current < amount:
+            return {"success": False, "balance": current, "required": amount}
+        db.execute(
+            "UPDATE users SET credits = credits - ? WHERE user_id = ?",
+            (amount, user_id),
+        )
+        db.execute(
+            """INSERT INTO credit_transactions (user_id, amount, source, reference_id, video_seconds)
+               VALUES (?, ?, ?, ?, ?)""",
+            (user_id, -amount, source, reference_id, video_seconds),
+        )
+        db.commit()
+        new_balance = current - amount
+    logger.info(f"[AuthDB] Deducted {amount} credits from {user_id} (source={source}), balance={new_balance}")
+    return {"success": True, "balance": new_balance, "required": amount}
+
+
+
+def refund_credits(
+    user_id: str,
+    amount: int,
+    reference_id: str,
+    video_seconds: Optional[float] = None,
+) -> int:
+    """Refund credits for a failed export. Returns new balance."""
+    with get_auth_db() as db:
+        db.execute(
+            "UPDATE users SET credits = credits + ? WHERE user_id = ?",
+            (amount, user_id),
+        )
+        db.execute(
+            """INSERT INTO credit_transactions (user_id, amount, source, reference_id, video_seconds)
+               VALUES (?, ?, 'framing_refund', ?, ?)""",
+            (user_id, amount, reference_id, video_seconds),
+        )
+        db.commit()
+        row = db.execute("SELECT credits FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        new_balance = row["credits"]
+    sync_auth_db_to_r2()
+    logger.info(f"[AuthDB] Refunded {amount} credits to {user_id} (job={reference_id}), balance={new_balance}")
+    return new_balance
+
+
+def get_credit_transactions(user_id: str, limit: int = 50) -> list:
+    """Get recent credit transactions for a user."""
+    with get_auth_db() as db:
+        rows = db.execute(
+            """SELECT id, amount, source, reference_id, video_seconds, created_at
+               FROM credit_transactions
+               WHERE user_id = ?
+               ORDER BY created_at DESC
+               LIMIT ?""",
+            (user_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
