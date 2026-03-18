@@ -6,6 +6,8 @@ import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { CreditBalance } from './components/CreditBalance';
 import { GalleryButton } from './components/GalleryButton';
+import { QuestIcon } from './components/QuestIcon';
+import { QuestPanel } from './components/QuestPanel';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
@@ -19,6 +21,7 @@ import { AppStateProvider, ProjectProvider } from './contexts';
 import { AuthGateModal } from './components/AuthGateModal';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
+import { useQuestStore } from './stores/questStore';
 
 /**
  * App.jsx - Main application shell
@@ -107,6 +110,13 @@ function App() {
 
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
+
+  // T540: Record achievement when user enters framing mode
+  useEffect(() => {
+    if (editorMode === EDITOR_MODES.FRAMING) {
+      useQuestStore.getState().recordAchievement('opened_framing_editor');
+    }
+  }, [editorMode]);
 
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);
@@ -322,6 +332,7 @@ function App() {
               />
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
+              <QuestIcon />
               <CreditBalance />
               <GalleryButton />
               {/* Combined mode switcher with Annotate button */}
@@ -395,6 +406,9 @@ function App() {
         }}
         onOpenGame={handleLoadGame}
       />
+
+      {/* Quest Panel (T540) */}
+      <QuestPanel />
 
       {/* Mode Switch Confirmation Dialog */}
       <ConfirmationDialog

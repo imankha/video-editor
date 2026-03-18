@@ -159,6 +159,10 @@ export function DownloadsPanel({
   const handlePlay = (e, download) => {
     e.stopPropagation();
     setPlayingVideo(download);
+    // T540: Record achievement for viewing gallery video
+    import('../stores/questStore').then(({ useQuestStore }) =>
+      useQuestStore.getState().recordAchievement('viewed_gallery_video')
+    );
   };
 
   const handleOpenProject = async (e, download) => {

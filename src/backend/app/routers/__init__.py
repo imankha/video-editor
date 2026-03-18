@@ -29,5 +29,6 @@ from .storage import router as storage_router
 from .settings import router as settings_router
 from .profiles import router as profiles_router
 from .credits import router as credits_router
+from .quests import router as quests_router
 
-__all__ = ['health_router', 'export_router', 'detection_router', 'annotate_router', 'projects_router', 'clips_router', 'games_router', 'games_upload_router', 'downloads_router', 'auth_router', 'storage_router', 'settings_router', 'profiles_router', 'credits_router']
+__all__ = ['health_router', 'export_router', 'detection_router', 'annotate_router', 'projects_router', 'clips_router', 'games_router', 'games_upload_router', 'downloads_router', 'auth_router', 'storage_router', 'settings_router', 'profiles_router', 'credits_router', 'quests_router']

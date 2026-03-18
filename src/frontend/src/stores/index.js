@@ -24,3 +24,4 @@ export { useSyncStore, checkSyncStatus } from './syncStore';
 export { useProfileStore, useCurrentProfile, useHasMultipleProfiles, useProfilesLoading } from './profileStore';
 export { useAuthStore, useIsAuthenticated, useAuthEmail, useShowAuthModal } from './authStore';
 export { useCreditStore } from './creditStore';
+export { useQuestStore, useQuestIsOpen, useQuestProgress } from './questStore';

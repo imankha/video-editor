@@ -14,8 +14,10 @@ export const useGalleryStore = create((set) => ({
   // Downloads count (for badge display)
   count: 0,
 
-  // Actions
+  // Actions — mutual exclusion with Quest panel (T540)
   open: () => {
+    // Dynamic import to avoid circular dependency (questStore imports galleryStore)
+    import('./questStore').then(({ useQuestStore }) => useQuestStore.getState().close());
     setWarmupPriority(WARMUP_PRIORITY.GALLERY);
     set({ isOpen: true });
   },

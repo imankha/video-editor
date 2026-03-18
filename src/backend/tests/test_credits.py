@@ -1,9 +1,9 @@
 """
-Tests for the credit system (T530).
+Tests for the credit system (T530, updated for T540 quest system).
 
 Tests cover:
 - Schema initialization (columns + transactions table)
-- Signup credits (20 on user creation)
+- New users start with 0 credits (signup credits removed in T540)
 - Grant credits
 - Deduct credits (success + insufficient)
 - Refund on failure
@@ -24,7 +24,7 @@ def isolated_auth_db(tmp_path):
          patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True):
         from app.services.auth_db import init_auth_db, create_user
         init_auth_db()
-        # Create a test user (gets 20 signup credits)
+        # Create a test user (starts with 0 credits — T540 removed signup bonus)
         create_user("test-user-1", email="test@example.com")
         yield db_path
 
@@ -37,42 +37,42 @@ class TestSchema:
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT credits FROM users WHERE user_id = 'test-user-1'").fetchone()
         conn.close()
-        assert row["credits"] == 20  # signup bonus
+        assert row["credits"] == 0  # T540: no signup bonus
 
     def test_credit_transactions_table_exists(self, isolated_auth_db):
         conn = sqlite3.connect(str(isolated_auth_db))
         row = conn.execute("SELECT count(*) as cnt FROM credit_transactions").fetchone()
         conn.close()
-        assert row[0] == 1  # signup_bonus transaction
+        assert row[0] == 0  # T540: no signup_bonus transaction
 
 
-class TestSignupCredits:
-    def test_new_user_gets_signup_credits(self, isolated_auth_db):
+class TestNoSignupCredits:
+    """T540: Users start with 0 credits, earning them via quests."""
+
+    def test_new_user_starts_at_zero(self, isolated_auth_db):
         from app.services.auth_db import get_credit_balance
         balance = get_credit_balance("test-user-1")
-        assert balance["balance"] == 20
+        assert balance["balance"] == 0
 
-    def test_signup_transaction_recorded(self, isolated_auth_db):
+    def test_no_signup_transaction(self, isolated_auth_db):
         from app.services.auth_db import get_credit_transactions
         txns = get_credit_transactions("test-user-1")
-        assert len(txns) == 1
-        assert txns[0]["amount"] == 20
-        assert txns[0]["source"] == "signup_bonus"
+        assert len(txns) == 0
 
-    def test_guest_user_gets_signup_credits(self, isolated_auth_db):
+    def test_guest_user_starts_at_zero(self, isolated_auth_db):
         from app.services.auth_db import create_guest_user, get_credit_balance
         guest_id = create_guest_user()
         balance = get_credit_balance(guest_id)
-        assert balance["balance"] == 20
+        assert balance["balance"] == 0
 
 
 class TestGrantCredits:
     def test_grant_increases_balance(self, isolated_auth_db):
         from app.services.auth_db import grant_credits, get_credit_balance
         new_balance = grant_credits("test-user-1", 50, "admin_grant", "test-ref")
-        assert new_balance == 70  # 20 signup + 50 grant
+        assert new_balance == 50
         balance = get_credit_balance("test-user-1")
-        assert balance["balance"] == 70
+        assert balance["balance"] == 50
 
     def test_grant_records_transaction(self, isolated_auth_db):
         from app.services.auth_db import grant_credits, get_credit_transactions
@@ -87,12 +87,13 @@ class TestGrantCredits:
         grant_credits("test-user-1", 10, "admin_grant")
         grant_credits("test-user-1", 20, "quest_reward")
         balance = get_credit_balance("test-user-1")
-        assert balance["balance"] == 50  # 20 signup + 10 + 20
+        assert balance["balance"] == 30  # 0 + 10 + 20
 
 
 class TestDeductCredits:
     def test_deduct_success(self, isolated_auth_db):
-        from app.services.auth_db import deduct_credits
+        from app.services.auth_db import grant_credits, deduct_credits
+        grant_credits("test-user-1", 20, "quest_reward", "quest_1")
         result = deduct_credits("test-user-1", 10, "framing_usage", "job_1", 10.0)
         assert result["success"] is True
         assert result["balance"] == 10  # 20 - 10
@@ -101,11 +102,12 @@ class TestDeductCredits:
         from app.services.auth_db import deduct_credits
         result = deduct_credits("test-user-1", 50, "framing_usage", "job_1", 50.0)
         assert result["success"] is False
-        assert result["balance"] == 20
+        assert result["balance"] == 0
         assert result["required"] == 50
 
     def test_deduct_records_negative_transaction(self, isolated_auth_db):
-        from app.services.auth_db import deduct_credits, get_credit_transactions
+        from app.services.auth_db import grant_credits, deduct_credits, get_credit_transactions
+        grant_credits("test-user-1", 20, "quest_reward", "quest_1")
         deduct_credits("test-user-1", 15, "framing_usage", "job_1", 15.0)
         txns = get_credit_transactions("test-user-1")
         usage_txn = [t for t in txns if t["source"] == "framing_usage"][0]
@@ -113,7 +115,8 @@ class TestDeductCredits:
         assert usage_txn["video_seconds"] == 15.0
 
     def test_deduct_exact_balance(self, isolated_auth_db):
-        from app.services.auth_db import deduct_credits
+        from app.services.auth_db import grant_credits, deduct_credits
+        grant_credits("test-user-1", 20, "quest_reward", "quest_1")
         result = deduct_credits("test-user-1", 20, "framing_usage", "job_1", 20.0)
         assert result["success"] is True
         assert result["balance"] == 0
@@ -127,14 +130,16 @@ class TestDeductCredits:
 
 class TestRefund:
     def test_refund_restores_balance(self, isolated_auth_db):
-        from app.services.auth_db import deduct_credits, refund_credits, get_credit_balance
+        from app.services.auth_db import grant_credits, deduct_credits, refund_credits, get_credit_balance
+        grant_credits("test-user-1", 20, "quest_reward", "quest_1")
         deduct_credits("test-user-1", 15, "framing_usage", "job_1", 15.0)
         refund_credits("test-user-1", 15, "job_1", 15.0)
         balance = get_credit_balance("test-user-1")
         assert balance["balance"] == 20  # fully restored
 
     def test_refund_records_transaction(self, isolated_auth_db):
-        from app.services.auth_db import deduct_credits, refund_credits, get_credit_transactions
+        from app.services.auth_db import grant_credits, deduct_credits, refund_credits, get_credit_transactions
+        grant_credits("test-user-1", 20, "quest_reward", "quest_1")
         deduct_credits("test-user-1", 10, "framing_usage", "job_1", 10.0)
         refund_credits("test-user-1", 10, "job_1", 10.0)
         txns = get_credit_transactions("test-user-1")
@@ -149,9 +154,9 @@ class TestTransactionHistory:
         grant_credits("test-user-1", 100, "admin_grant", "ref_1")
         deduct_credits("test-user-1", 30, "framing_usage", "ref_2")
         txns = get_credit_transactions("test-user-1")
-        assert len(txns) == 3  # signup_bonus + admin_grant + framing_usage
+        assert len(txns) == 2  # admin_grant + framing_usage
         sources = {t["source"] for t in txns}
-        assert sources == {"signup_bonus", "admin_grant", "framing_usage"}
+        assert sources == {"admin_grant", "framing_usage"}
 
     def test_transactions_limit(self, isolated_auth_db):
         from app.services.auth_db import grant_credits, get_credit_transactions
