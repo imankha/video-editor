@@ -83,7 +83,7 @@ export function QuestPanel() {
           <div className="flex-1 min-w-0">
             <h3 className="quest-title text-base leading-tight">{questDef.title}</h3>
             {questDef.hint && expanded && (
-              <p className="text-xs text-amber-400/50 mt-0.5">{questDef.hint}</p>
+              <p className="mt-1.5 text-xs font-semibold text-white bg-white/10 border border-white/15 rounded-md px-2.5 py-1.5 inline-block">{questDef.hint}</p>
             )}
             {/* Mini progress bar in collapsed state */}
             {!expanded && (
