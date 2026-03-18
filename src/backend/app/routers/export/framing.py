@@ -512,7 +512,7 @@ async def render_project(request: RenderRequest, http_request: Request):
                 wc.sort_order,
                 rc.filename as raw_filename,
                 rc.name as clip_name,
-                rc.duration as raw_duration
+                (rc.end_time - rc.start_time) as raw_duration
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             WHERE wc.project_id = ?
