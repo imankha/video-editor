@@ -3,6 +3,7 @@ import { Home, Scissors, List, X } from 'lucide-react';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
+import { CreditBalance } from '../components/CreditBalance';
 import { GalleryButton } from '../components/GalleryButton';
 import { Breadcrumb, Button } from '../components/shared';
 import { useVideo } from '../hooks/useVideo';
@@ -434,6 +435,7 @@ export function AnnotateScreen({ onClearSelection }) {
                 <List size={16} />
                 <span className="text-xs font-medium">{clipCountDisplay}</span>
               </button>
+              <CreditBalance />
               <GalleryButton />
               {/* Annotate mode indicator */}
               <div className="flex items-center gap-2 px-2 sm:px-4 py-2 bg-green-600/20 border border-green-600/40 rounded-lg">
