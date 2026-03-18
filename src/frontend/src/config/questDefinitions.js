@@ -9,7 +9,6 @@ export const QUESTS = [
   {
     id: 'quest_1',
     title: 'Get Started',
-    description: 'Learn the basics and create your first highlight reel',
     reward: 30,
     steps: [
       {
@@ -19,13 +18,13 @@ export const QUESTS = [
       },
       {
         id: 'annotate_brilliant',
-        title: 'Mark a Brilliant Play',
-        description: 'Find your best moment and rate it 5 stars',
+        title: 'Annotate a 5 Star Play',
+        description: 'Find your best moment and give it 5 stars',
       },
       {
         id: 'annotate_unfortunate',
-        title: 'Mark an Unfortunate Play',
-        description: 'Every player has off moments — mark one with 1 or 2 stars to learn from it',
+        title: 'Annotate a 1 or 2 Star Play',
+        description: 'Every player has off moments — mark one to learn from it',
       },
       {
         id: 'create_annotated_video',
@@ -34,15 +33,14 @@ export const QUESTS = [
       },
       {
         id: 'log_in',
-        title: 'Create Your Account',
-        description: 'Sign in to save your work across devices and earn credits',
+        title: 'Log In to Save Progress',
+        description: 'Sign in to keep your work across devices and earn credits',
       },
     ],
   },
   {
     id: 'quest_2',
     title: 'Master the Pipeline',
-    description: 'Take your highlights to the next level with framing and overlays',
     reward: 50,
     steps: [
       {

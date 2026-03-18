@@ -116,6 +116,13 @@ export function useRawClipSave() {
         console.log('[useRawClipSave] Auto-created project:', result.project_id);
       }
 
+      // T540: Refresh quest progress after rating change
+      if (updates.rating !== undefined) {
+        import('../stores/questStore').then(({ useQuestStore }) =>
+          useQuestStore.getState().fetchProgress()
+        );
+      }
+
       return result;
     } catch (err) {
       setError(err.message);

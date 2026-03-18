@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trophy, X, Check, Gift, Coins, ChevronRight, Sparkles } from 'lucide-react';
+import { Compass, X, Check, Gem, ChevronRight, Sparkles } from 'lucide-react';
 import { useQuestStore } from '../stores/questStore';
 import { QUESTS } from '../config/questDefinitions';
 import { toast } from './shared/Toast';
@@ -7,12 +7,9 @@ import { toast } from './shared/Toast';
 /**
  * QuestPanel — floating overlay card for quest progress (T540).
  *
- * Design principles (from NUF research):
- * - Auto-shows for new users, dismissible, re-opens via QuestIcon
- * - Floating card (not slide-out) — visually distinct from app chrome
- * - Progressive disclosure: shows one quest at a time
- * - Current step highlighted, completed steps have animated checkmarks
- * - Reward celebration when all steps complete
+ * Anchored bottom-left with generous padding from edges.
+ * Visually distinct from app chrome — larger text, warm accent colors,
+ * rounded card with shadow. Feels like a game overlay, not a settings panel.
  */
 export function QuestPanel() {
   const isOpen = useQuestStore((s) => s.isOpen);
@@ -24,7 +21,6 @@ export function QuestPanel() {
 
   if (!isOpen) return null;
 
-  // Find the active quest definition and progress
   const questDef = QUESTS.find(q => q.id === activeQuestId) || QUESTS[0];
   const questProgress = quests.find(q => q.id === activeQuestId);
   const steps = questProgress?.steps || {};
@@ -33,11 +29,7 @@ export function QuestPanel() {
   const isComplete = completedCount === totalCount;
   const rewardClaimed = questProgress?.reward_claimed || false;
   const progressPercent = (completedCount / totalCount) * 100;
-
-  // Find the first incomplete step (the "current" step to highlight)
   const currentStepId = questDef.steps.find(s => !steps[s.id])?.id;
-
-  // Check if all quests are done
   const allQuestsDone = quests.every(q => q.reward_claimed);
 
   const handleClaimReward = async () => {
@@ -58,49 +50,44 @@ export function QuestPanel() {
   };
 
   return (
-    <div className="quest-overlay fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-2rem)] quest-fade-in">
-      {/* Card */}
-      <div className="rounded-2xl overflow-hidden shadow-2xl shadow-purple-900/30 border border-purple-500/20 bg-gradient-to-br from-gray-900 via-gray-900 to-purple-950">
+    <div className="quest-overlay fixed bottom-10 left-6 z-50 w-[420px] max-w-[calc(100vw-2rem)] quest-fade-in">
+      <div className="quest-card rounded-2xl overflow-hidden">
 
-        {/* Header — gradient accent bar */}
-        <div className="relative px-5 pt-4 pb-3">
-          {/* Accent gradient line at top */}
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-amber-400" />
+        {/* Header */}
+        <div className="relative px-6 pt-5 pb-4">
+          <div className="absolute top-0 left-0 right-0 h-1.5 quest-accent-bar" />
 
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/25">
-                <Trophy size={16} className="text-white" />
+            <div className="flex items-center gap-3">
+              <div className="quest-icon-badge w-10 h-10 rounded-xl flex items-center justify-center">
+                <Compass size={20} className="text-white" />
               </div>
-              <div>
-                <h3 className="text-white font-bold text-sm leading-tight">{questDef.title}</h3>
-                <p className="text-purple-300/70 text-xs">{questDef.description}</p>
-              </div>
+              <h3 className="quest-title text-lg">{questDef.title}</h3>
             </div>
             <button
               onClick={close}
-              className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
+              className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/10 transition-colors"
             >
-              <X size={14} />
+              <X size={16} />
             </button>
           </div>
 
           {/* Progress bar */}
-          <div className="mt-3 flex items-center gap-3">
-            <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+          <div className="mt-4 flex items-center gap-3">
+            <div className="flex-1 h-2.5 bg-black/30 rounded-full overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-700 ease-out"
+                className="h-full rounded-full quest-progress-fill transition-all duration-700 ease-out"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            <span className="text-xs font-bold text-purple-300 tabular-nums">
+            <span className="quest-progress-text text-sm tabular-nums">
               {completedCount}/{totalCount}
             </span>
           </div>
         </div>
 
         {/* Steps */}
-        <div className="px-5 pb-2">
+        <div className="px-6 pb-3">
           {questDef.steps.map((step, index) => {
             const done = steps[step.id] || false;
             const isCurrent = step.id === currentStepId;
@@ -109,7 +96,7 @@ export function QuestPanel() {
               <div
                 key={step.id}
                 className={`
-                  flex items-start gap-3 py-2.5
+                  flex items-start gap-3.5 py-3
                   ${index < questDef.steps.length - 1 ? 'border-b border-white/5' : ''}
                   ${isCurrent ? 'quest-step-current' : ''}
                 `}
@@ -117,35 +104,34 @@ export function QuestPanel() {
                 {/* Checkbox */}
                 <div className="flex-shrink-0 mt-0.5">
                   {done ? (
-                    <div className="quest-check-done w-5 h-5 rounded-md bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-sm shadow-green-500/30">
-                      <Check size={12} className="text-white" strokeWidth={3} />
+                    <div className="quest-check-done w-6 h-6 rounded-lg quest-check-bg flex items-center justify-center">
+                      <Check size={14} className="text-white" strokeWidth={3} />
                     </div>
                   ) : isCurrent ? (
-                    <div className="w-5 h-5 rounded-md border-2 border-purple-400 bg-purple-400/10 quest-pulse" />
+                    <div className="w-6 h-6 rounded-lg border-2 quest-current-border quest-pulse" />
                   ) : (
-                    <div className="w-5 h-5 rounded-md border-2 border-gray-700 bg-gray-800/50" />
+                    <div className="w-6 h-6 rounded-lg border-2 border-white/10" />
                   )}
                 </div>
 
                 {/* Text */}
                 <div className="min-w-0 flex-1">
-                  <p className={`text-sm font-medium leading-tight ${
-                    done ? 'text-green-400/80 line-through decoration-green-500/30' :
-                    isCurrent ? 'text-white' :
-                    'text-gray-500'
+                  <p className={`leading-tight ${
+                    done ? 'quest-step-done text-base' :
+                    isCurrent ? 'quest-step-active text-base' :
+                    'quest-step-inactive text-base'
                   }`}>
                     {step.title}
                   </p>
                   {isCurrent && (
-                    <p className="text-xs text-purple-300/60 mt-0.5 leading-snug">
+                    <p className="quest-step-description text-sm mt-1 leading-snug">
                       {step.description}
                     </p>
                   )}
                 </div>
 
-                {/* Current indicator */}
                 {isCurrent && (
-                  <ChevronRight size={14} className="text-purple-400 flex-shrink-0 mt-0.5" />
+                  <ChevronRight size={16} className="quest-chevron flex-shrink-0 mt-0.5" />
                 )}
               </div>
             );
@@ -153,42 +139,29 @@ export function QuestPanel() {
         </div>
 
         {/* Reward footer */}
-        <div className="px-5 pb-4 pt-1">
-          {rewardClaimed && !allQuestsDone ? (
-            // Quest claimed, but more quests to go — this shouldn't show since we advance activeQuestId
-            <div className="flex items-center gap-2 py-2 text-green-400">
-              <Coins size={14} className="text-yellow-400" />
-              <span className="text-xs font-medium">{questDef.reward} credits earned</span>
-            </div>
-          ) : allQuestsDone ? (
-            // All done!
-            <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20">
-              <Sparkles size={16} className="text-yellow-400" />
-              <span className="text-sm font-bold text-green-400">All quests complete!</span>
+        <div className="px-6 pb-5 pt-1">
+          {allQuestsDone ? (
+            <div className="flex items-center justify-center gap-2 py-3 rounded-xl quest-all-done-bg">
+              <Sparkles size={18} className="text-amber-300" />
+              <span className="quest-all-done-text text-base">All quests complete!</span>
             </div>
           ) : isComplete ? (
-            // All steps done, claim reward
             <button
               onClick={handleClaimReward}
               disabled={claiming}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl
-                bg-gradient-to-r from-purple-600 to-pink-600
-                hover:from-purple-500 hover:to-pink-500
+              className="quest-claim-btn w-full flex items-center justify-center gap-2 py-3 rounded-xl
                 disabled:opacity-50 disabled:cursor-not-allowed
-                text-white font-bold text-sm
-                shadow-lg shadow-purple-500/25
-                transition-all duration-200 hover:shadow-purple-500/40 hover:scale-[1.02]
-                active:scale-[0.98]"
+                text-white font-bold text-base
+                transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
             >
-              <Gift size={16} />
+              <Gem size={18} />
               {claiming ? 'Claiming...' : `Claim ${questDef.reward} Credits`}
             </button>
           ) : (
-            // Still in progress
             <div className="flex items-center gap-2 py-1.5">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/20">
-                <Gift size={12} className="text-purple-400" />
-                <span className="text-xs font-medium text-purple-300">{questDef.reward} credits on completion</span>
+              <div className="quest-reward-badge flex items-center gap-2 px-3 py-1.5 rounded-full">
+                <Gem size={14} />
+                <span className="text-sm font-semibold">{questDef.reward} credits</span>
               </div>
             </div>
           )}

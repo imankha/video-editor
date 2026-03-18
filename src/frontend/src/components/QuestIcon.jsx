@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Trophy } from 'lucide-react';
+import { Compass } from 'lucide-react';
 import { useQuestStore } from '../stores/questStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
@@ -48,8 +48,8 @@ export function QuestIcon() {
         w-9 h-9 rounded-lg
         transition-all duration-200
         ${isOpen
-          ? 'bg-purple-600/30 text-purple-300'
-          : 'text-gray-400 hover:text-white hover:bg-white/10'
+          ? 'bg-amber-600/30 text-amber-300'
+          : 'text-gray-400 hover:text-amber-300 hover:bg-white/10'
         }
       `}
     >
@@ -76,7 +76,7 @@ export function QuestIcon() {
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke={allDone ? '#22c55e' : '#a855f7'}
+            stroke={allDone ? '#22c55e' : '#fbbf24'}
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             strokeDasharray={circumference}
@@ -87,7 +87,7 @@ export function QuestIcon() {
       </svg>
 
       {/* Trophy icon */}
-      <Trophy size={14} className={allDone ? 'text-green-400' : ''} />
+      <Compass size={14} className={allDone ? 'text-green-400' : ''} />
     </button>
   );
 }
