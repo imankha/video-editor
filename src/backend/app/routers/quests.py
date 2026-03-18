@@ -91,9 +91,13 @@ def _check_all_steps(user_id: str, conn) -> dict:
         "SELECT 1 FROM achievements WHERE key = 'opened_framing_editor'"
     ).fetchone() is not None
 
-    # Extraction creates a working_video — if one exists, extraction completed
+    # A clip is "extracted" when its raw_clip has a non-empty filename (video file exists)
+    # and it's assigned to a project via working_clips
     steps["extract_clip"] = cursor.execute(
-        "SELECT 1 FROM working_videos LIMIT 1"
+        """SELECT 1 FROM working_clips wc
+           JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+           WHERE rc.filename IS NOT NULL AND rc.filename != ''
+           LIMIT 1"""
     ).fetchone() is not None
 
     steps["export_framing"] = cursor.execute(
