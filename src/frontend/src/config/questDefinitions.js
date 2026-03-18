@@ -78,7 +78,7 @@ export const QUESTS = [
       {
         id: 'annotate_brilliant_2',
         title: 'Annotate 2 5-Star Plays',
-        description: 'Find at least 2 five-star moments across your games',
+        description: 'Find and annotate at least 2 five-star moments across the game',
       },
       {
         id: 'annotate_4_star',
