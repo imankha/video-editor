@@ -71,6 +71,11 @@ export function useRawClipSave() {
         console.log('[useRawClipSave] Auto-created project:', result.project_id);
       }
 
+      // T540: Refresh quest progress after clip creation (rating is set at creation time)
+      import('../stores/questStore').then(({ useQuestStore }) =>
+        useQuestStore.getState().fetchProgress()
+      );
+
       return result;
     } catch (err) {
       setError(err.message);
