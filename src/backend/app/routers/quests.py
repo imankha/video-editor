@@ -26,7 +26,6 @@ QUEST_DEFINITIONS = [
     {
         "id": "quest_1",
         "title": "Get Started",
-        "description": "Learn the basics and create your first highlight reel",
         "reward": 30,
         "step_ids": [
             "upload_game",
@@ -38,14 +37,24 @@ QUEST_DEFINITIONS = [
     },
     {
         "id": "quest_2",
-        "title": "Master the Pipeline",
-        "description": "Take your highlights to the next level with framing and overlays",
+        "title": "Export Highlights",
         "reward": 50,
         "step_ids": [
             "open_framing",
             "export_framing",
             "export_overlay",
             "view_gallery_video",
+        ],
+    },
+    {
+        "id": "quest_3",
+        "title": "Multiple Games",
+        "reward": 50,
+        "step_ids": [
+            "upload_game_2",
+            "annotate_brilliant_2",
+            "annotate_4_star",
+            "create_mixed_project",
         ],
     },
 ]
@@ -56,7 +65,8 @@ def _check_all_steps(user_id: str, conn) -> dict:
     cursor = conn.cursor()
     steps = {}
 
-    # Derived checks (per-user SQLite)
+    # --- Quest 1: Get Started ---
+
     steps["upload_game"] = cursor.execute(
         "SELECT 1 FROM games LIMIT 1"
     ).fetchone() is not None
@@ -73,6 +83,17 @@ def _check_all_steps(user_id: str, conn) -> dict:
         "SELECT 1 FROM export_jobs WHERE type = 'annotate' AND status = 'complete' LIMIT 1"
     ).fetchone() is not None
 
+    # Auth check (from auth.sqlite)
+    user = get_user_by_id(user_id)
+    steps["log_in"] = user is not None and user.get("email") is not None
+
+    # --- Quest 2: Export Highlights ---
+
+    # Achievement checks (per-user SQLite)
+    steps["open_framing"] = cursor.execute(
+        "SELECT 1 FROM achievements WHERE key = 'opened_framing_editor'"
+    ).fetchone() is not None
+
     steps["export_framing"] = cursor.execute(
         "SELECT 1 FROM export_jobs WHERE type = 'framing' AND status = 'complete' LIMIT 1"
     ).fetchone() is not None
@@ -81,17 +102,39 @@ def _check_all_steps(user_id: str, conn) -> dict:
         "SELECT 1 FROM export_jobs WHERE type = 'overlay' AND status = 'complete' LIMIT 1"
     ).fetchone() is not None
 
-    # Auth check (from auth.sqlite)
-    user = get_user_by_id(user_id)
-    steps["log_in"] = user is not None and user.get("email") is not None
-
-    # Achievement checks (per-user SQLite)
-    steps["open_framing"] = cursor.execute(
-        "SELECT 1 FROM achievements WHERE key = 'opened_framing_editor'"
-    ).fetchone() is not None
-
     steps["view_gallery_video"] = cursor.execute(
         "SELECT 1 FROM achievements WHERE key = 'viewed_gallery_video'"
+    ).fetchone() is not None
+
+    # --- Quest 3: Multiple Games ---
+
+    # Count-based: need ≥2 games
+    row = cursor.execute("SELECT count(*) as cnt FROM games").fetchone()
+    steps["upload_game_2"] = row["cnt"] >= 2
+
+    # Count-based: need ≥2 clips rated 5
+    row = cursor.execute("SELECT count(*) as cnt FROM raw_clips WHERE rating = 5").fetchone()
+    steps["annotate_brilliant_2"] = row["cnt"] >= 2
+
+    # Need ≥1 clip rated 4
+    steps["annotate_4_star"] = cursor.execute(
+        "SELECT 1 FROM raw_clips WHERE rating = 4 LIMIT 1"
+    ).fetchone() is not None
+
+    # Project containing both 4-star and 5-star clips
+    steps["create_mixed_project"] = cursor.execute(
+        """SELECT 1 FROM projects p
+           WHERE EXISTS (
+               SELECT 1 FROM working_clips wc
+               JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+               WHERE wc.project_id = p.id AND rc.rating = 5
+           )
+           AND EXISTS (
+               SELECT 1 FROM working_clips wc
+               JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+               WHERE wc.project_id = p.id AND rc.rating = 4
+           )
+           LIMIT 1"""
     ).fetchone() is not None
 
     return steps

@@ -28,8 +28,8 @@ export const QUESTS = [
       },
       {
         id: 'create_annotated_video',
-        title: 'Create Your Highlight Reel',
-        description: 'Compile your annotated clips into a single video',
+        title: 'Create Your Annotated Video',
+        description: 'Compile your annotations into a single instructive video',
       },
       {
         id: 'log_in',
@@ -40,7 +40,7 @@ export const QUESTS = [
   },
   {
     id: 'quest_2',
-    title: 'Master the Pipeline',
+    title: 'Export Highlights',
     reward: 50,
     steps: [
       {
@@ -62,6 +62,33 @@ export const QUESTS = [
         id: 'view_gallery_video',
         title: 'Watch Your Finished Video',
         description: 'Open the Gallery and play back your completed highlight reel',
+      },
+    ],
+  },
+  {
+    id: 'quest_3',
+    title: 'Multiple Games',
+    reward: 50,
+    steps: [
+      {
+        id: 'upload_game_2',
+        title: 'Upload a Second Game',
+        description: 'Expand your library with another game video',
+      },
+      {
+        id: 'annotate_brilliant_2',
+        title: 'Annotate 2 Brilliant Plays',
+        description: 'Find at least 2 five-star moments across your games',
+      },
+      {
+        id: 'annotate_4_star',
+        title: 'Annotate a 4 Star Play',
+        description: 'Mark a solid play worth remembering',
+      },
+      {
+        id: 'create_mixed_project',
+        title: 'Create a 4 & 5 Star Project',
+        description: 'Build a project combining your 4 and 5 star plays',
       },
     ],
   },
