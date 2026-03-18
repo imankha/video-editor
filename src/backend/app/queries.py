@@ -11,7 +11,7 @@ from typing import List, Optional
 from app.constants import RATING_ADJECTIVES, get_rating_adjective
 
 
-def derive_clip_name(stored_name: Optional[str], rating: int, tags: List[str]) -> str:
+def derive_clip_name(stored_name: Optional[str], rating: int, tags: List[str], notes: str = '') -> str:
     """
     Derive a clip name from rating and tags if no custom name is stored.
 
@@ -22,6 +22,7 @@ def derive_clip_name(stored_name: Optional[str], rating: int, tags: List[str]) -
         stored_name: The name stored in the database (None or empty = auto-generate)
         rating: Star rating 1-5
         tags: List of tag short names (e.g., ["Goal", "Dribble"])
+        notes: Optional notes text to use as fallback when no tags
 
     Returns:
         The stored name if present, otherwise a generated name like "Brilliant Goal and Dribble"
@@ -30,8 +31,17 @@ def derive_clip_name(stored_name: Optional[str], rating: int, tags: List[str]) -
     if stored_name:
         return stored_name
 
-    # No tags = no auto-generated name
+    # No tags: use first words from notes that fit in ~30 characters
     if not tags:
+        if notes and notes.strip():
+            words = notes.strip().split()
+            result = words[0]
+            for word in words[1:]:
+                next_result = result + ' ' + word
+                if len(next_result) > 30:
+                    break
+                result = next_result
+            return result
         return ''
 
     adjective = get_rating_adjective(rating)

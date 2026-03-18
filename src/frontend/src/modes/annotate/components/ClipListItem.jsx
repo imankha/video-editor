@@ -27,7 +27,7 @@ export function ClipListItem({ region, index, isSelected, onClick, isMobile = fa
   const { notation, badgeColor, backgroundColor } = getRatingDisplay(rating);
 
   // Derive display name from stored name or auto-generate from rating+tags
-  const displayName = region.name || generateClipName(rating, region.tags || []) || '';
+  const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || '';
 
   // Tooltip shows end timestamp before clip name
   const tooltipText = `${formatTime(region.endTime)} | ${displayName}`;

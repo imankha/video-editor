@@ -11,7 +11,7 @@ import { generateClipName } from '../modes/annotate/constants/soccerTags';
  */
 export function getClipDisplayName(clip, fallback = '') {
   if (!clip) return fallback;
-  return clip.name || generateClipName(clip.rating, clip.tags) || fallback;
+  return clip.name || generateClipName(clip.rating, clip.tags, clip.notes) || fallback;
 }
 
 /**

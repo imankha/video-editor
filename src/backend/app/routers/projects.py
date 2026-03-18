@@ -619,7 +619,7 @@ async def preview_clips(request: ClipsPreviewRequest):
             total_duration += duration
 
             tags = json.loads(clip['tags']) if clip['tags'] else []
-            clip_name = derive_clip_name(clip['name'], clip['rating'] or 0, tags) or f"Clip {clip['id']}"
+            clip_name = derive_clip_name(clip['name'], clip['rating'] or 0, tags, clip['notes'] or '') or f"Clip {clip['id']}"
             clips_info.append({
                 'id': clip['id'],
                 'name': clip_name,
@@ -1113,7 +1113,8 @@ async def check_outdated_clips(project_id: int):
                 rc.end_time,
                 rc.name as clip_name,
                 rc.rating,
-                rc.tags
+                rc.tags,
+                rc.notes
             FROM working_clips wc
             JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             WHERE wc.id IN ({latest_working_clips_subquery()})
@@ -1133,7 +1134,8 @@ async def check_outdated_clips(project_id: int):
                 clip_name = derive_clip_name(
                     row['clip_name'],
                     row['rating'] or 3,
-                    tags
+                    tags,
+                    row['notes'] or ''
                 )
 
                 outdated_clips.append(OutdatedClipInfo(

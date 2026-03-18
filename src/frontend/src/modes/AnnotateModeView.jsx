@@ -161,7 +161,7 @@ export function AnnotateModeView({
 
                     // Derive display name from rating+tags if no explicit name is set
                     const displayName = regionAtPlayhead.name ||
-                      generateClipName(regionAtPlayhead.rating, regionAtPlayhead.tags);
+                      generateClipName(regionAtPlayhead.rating, regionAtPlayhead.tags, regionAtPlayhead.notes);
 
                     return (displayName || regionAtPlayhead.notes) ? (
                       <NotesOverlay

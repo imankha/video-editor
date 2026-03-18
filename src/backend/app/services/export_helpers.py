@@ -290,7 +290,7 @@ def derive_project_name(project_id: int, cursor) -> Optional[str]:
 
     # Import here to avoid circular imports
     from app.queries import derive_clip_name
-    derived_name = derive_clip_name(raw_clip['name'], raw_clip['rating'] or 0, tags)
+    derived_name = derive_clip_name(raw_clip['name'], raw_clip['rating'] or 0, tags, raw_clip['notes'] or '')
 
     return derived_name if derived_name else project_name
 

@@ -114,7 +114,7 @@ export default function ClipRegionLayer({
           const color = RATING_COLORS[rating];
           const showTooltip = isSelected || isHovered;
           // Use same fallback logic as ClipListItem
-          const displayName = region.name || generateClipName(rating, region.tags || []) || '';
+          const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || '';
 
           return (
             <div
