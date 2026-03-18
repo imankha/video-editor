@@ -14,7 +14,7 @@ export const QUESTS = [
       {
         id: 'upload_game',
         title: 'Upload Your First Game',
-        description: 'Upload a game video to get started',
+        description: 'Upload a game video by clicking the Add Game button',
       },
       {
         id: 'annotate_brilliant',
