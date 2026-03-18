@@ -1,7 +1,9 @@
 """
-Reset a user's data for fresh new-user-flow testing.
+Reset a user for fresh new-user-flow testing.
 
-Clears all profile data locally AND in R2 so the reset survives server restarts.
+Deletes the user record from auth.sqlite so the next Google login
+creates a fresh account link (no cross-device recovery). Also clears
+all profile data locally and in R2.
 
 Usage (from project root):
     cd src/backend && .venv\\Scripts\\python.exe ..\\..\\scripts\\reset-test-user.py imankh@gmail.com --env dev
@@ -10,14 +12,14 @@ Usage (from project root):
 What it does:
 1. Loads R2 credentials from the appropriate .env file
 2. Looks up user_id by email in auth.sqlite
-3. Clears all tables in every profile database (games, clips, projects, exports, achievements)
-4. Resets credits to 0 and clears credit_transactions in auth.sqlite
+3. Clears all tables in every profile database
+4. Deletes the user record, sessions, and credit_transactions from auth.sqlite
 5. Uploads cleared databases back to R2
-6. Does NOT delete the user account, profiles, or profile directories
+6. Next Google login with this email will link to the current guest session
+   (no user_id switch, no data loss, true new-user experience)
 """
 
 import argparse
-import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -96,7 +98,7 @@ def checkpoint_and_upload(db_path, r2_client, bucket, r2_key):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reset a user's data for testing")
+    parser = argparse.ArgumentParser(description="Reset a user for NUF testing")
     parser.add_argument("email", help="User email (e.g., imankh@gmail.com)")
     parser.add_argument("--env", required=True, choices=["dev", "staging"],
                         help="Environment (determines R2 prefix and .env file)")
@@ -117,9 +119,9 @@ def main():
     conn.row_factory = sqlite3.Row
     row = conn.execute("SELECT user_id FROM users WHERE email = ?", (args.email,)).fetchone()
     if not row:
-        print(f"ERROR: No user found with email '{args.email}'")
+        print(f"No user found with email '{args.email}' — nothing to reset.")
         conn.close()
-        sys.exit(1)
+        sys.exit(0)
 
     user_id = row["user_id"]
     print(f"\n=== Resetting user '{user_id}' ({args.email}) in {args.env} ===")
@@ -150,19 +152,24 @@ def main():
             r2_key = f"{app_env}/users/{user_id}/profiles/{profile_id}/database.sqlite"
             checkpoint_and_upload(db_path, r2_client, bucket, r2_key)
 
-    # Reset credits in auth.sqlite
-    print("\n--- Resetting credits ---")
-    conn.execute("UPDATE users SET credits = 0 WHERE user_id = ?", (user_id,))
+    # Delete user record entirely from auth.sqlite
+    # This ensures the next Google login with this email creates a fresh link
+    # to whatever guest session is active (no cross-device recovery, no user switch)
+    print("\n--- Deleting user from auth.sqlite ---")
     conn.execute("DELETE FROM credit_transactions WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
-    print("  Credits: 0, transactions: cleared")
+    print(f"  Deleted: user record, sessions, credit_transactions for '{user_id}'")
 
-    # Upload cleared auth.sqlite to R2
+    # Upload cleaned auth.sqlite to R2
     auth_r2_key = f"{app_env}/auth/auth.sqlite"
     checkpoint_and_upload(AUTH_DB, r2_client, bucket, auth_r2_key)
 
-    print(f"\n=== Done. Local + R2 ({args.env}) reset for {args.email}. ===")
+    print(f"\n=== Done. User '{args.email}' fully removed from {args.env}. ===")
+    print(f"Next Google login with this email will create a fresh account.")
+    print(f"IMPORTANT: Clear browser cookies or use incognito to start as a new guest.")
 
 
 if __name__ == "__main__":
