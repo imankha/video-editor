@@ -68,6 +68,12 @@ export function QuestPanel() {
 
   return (
     <div className="quest-overlay fixed bottom-10 left-6 z-50 w-[420px] max-w-[calc(100vw-2rem)] quest-fade-in">
+      {/* Hint banner — above the card */}
+      {questDef.hint && expanded && (
+        <div className="mb-2 text-xs font-semibold text-white bg-white/10 border border-white/15 rounded-lg px-3 py-2 text-center backdrop-blur-sm">
+          {questDef.hint}
+        </div>
+      )}
       <div className="quest-card rounded-2xl overflow-hidden">
         {/* Accent bar */}
         <div className="absolute top-0 left-0 right-0 h-1.5 quest-accent-bar rounded-t-2xl" />
@@ -118,13 +124,6 @@ export function QuestPanel() {
                 {completedCount}/{totalCount}
               </span>
             </div>
-
-            {/* Hint callout */}
-            {questDef.hint && (
-              <div className="mx-5 mb-3 text-xs font-semibold text-white bg-white/10 border border-white/15 rounded-md px-3 py-2 text-center">
-                {questDef.hint}
-              </div>
-            )}
 
             {/* Steps */}
             <div className="px-5 pb-3">
