@@ -296,6 +296,8 @@ function App() {
         <AuthGateModal />
         {/* Guest activity banner — only shown after guest does meaningful work */}
         {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
+        {/* Quest overlay — auto-shows for new users (T540) */}
+        <QuestPanel />
       </>
     );
   }
