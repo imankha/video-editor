@@ -91,9 +91,24 @@ export const QUESTS = [
         description: 'Go Home, then Projects, then New Project and click 4+ to select all great and brilliant clips for your new project. Click Create.',
       },
       {
-        id: 'export_custom_project',
-        title: 'Export Your Highlight Reel',
-        description: 'Export a finished video from your custom project',
+        id: 'extract_custom_clips',
+        title: 'Extract Clips for Custom Project',
+        description: 'Wait while the app extracts all clips in your custom project',
+      },
+      {
+        id: 'frame_custom_project',
+        title: 'Frame Project',
+        description: 'Open your new custom project and frame each clip individually',
+      },
+      {
+        id: 'frame_custom_video',
+        title: 'Frame Video',
+        description: 'Click the Frame Video button',
+      },
+      {
+        id: 'overlay_custom_project',
+        title: 'Add Overlay',
+        description: 'Switch to Overlay mode and add spotlight overlays to your highlights, then export',
       },
     ],
   },

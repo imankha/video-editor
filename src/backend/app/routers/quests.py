@@ -55,7 +55,10 @@ QUEST_DEFINITIONS = [
             "annotate_brilliant_2",
             "annotate_4_star",
             "create_mixed_project",
-            "export_custom_project",
+            "extract_custom_clips",
+            "frame_custom_project",
+            "frame_custom_video",
+            "overlay_custom_project",
         ],
     },
 ]
@@ -134,12 +137,47 @@ def _check_all_steps(user_id: str, conn) -> dict:
            LIMIT 1"""
     ).fetchone() is not None
 
-    # Completed export from a custom (non-auto-created) project
-    steps["export_custom_project"] = cursor.execute(
+    # All clips in a custom project have been extracted (raw_clip.filename != '')
+    steps["extract_custom_clips"] = cursor.execute(
+        """SELECT 1 FROM projects p
+           WHERE p.is_auto_created = 0
+           AND EXISTS (SELECT 1 FROM working_clips WHERE project_id = p.id)
+           AND NOT EXISTS (
+               SELECT 1 FROM working_clips wc
+               JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+               WHERE wc.project_id = p.id
+               AND (rc.filename IS NULL OR rc.filename = '')
+           )
+           LIMIT 1"""
+    ).fetchone() is not None
+
+    # All clips in a custom project have crop_data (framed individually)
+    steps["frame_custom_project"] = cursor.execute(
+        """SELECT 1 FROM projects p
+           WHERE p.is_auto_created = 0
+           AND EXISTS (SELECT 1 FROM working_clips WHERE project_id = p.id)
+           AND NOT EXISTS (
+               SELECT 1 FROM working_clips wc
+               WHERE wc.project_id = p.id
+               AND (wc.crop_data IS NULL OR wc.crop_data = '')
+           )
+           LIMIT 1"""
+    ).fetchone() is not None
+
+    # Framing export completed for a custom project
+    steps["frame_custom_video"] = cursor.execute(
         """SELECT 1 FROM export_jobs ej
            JOIN projects p ON ej.project_id = p.id
-           WHERE ej.status = 'complete'
-           AND ej.type IN ('framing', 'overlay')
+           WHERE ej.status = 'complete' AND ej.type = 'framing'
+           AND p.is_auto_created = 0
+           LIMIT 1"""
+    ).fetchone() is not None
+
+    # Overlay export completed for a custom project
+    steps["overlay_custom_project"] = cursor.execute(
+        """SELECT 1 FROM export_jobs ej
+           JOIN projects p ON ej.project_id = p.id
+           WHERE ej.status = 'complete' AND ej.type = 'overlay'
            AND p.is_auto_created = 0
            LIMIT 1"""
     ).fetchone() is not None
