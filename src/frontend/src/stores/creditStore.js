@@ -34,6 +34,8 @@ export const useCreditStore = create((set, get) => ({
 
   setBalance: (balance) => set({ balance }),
 
+  reset: () => set({ balance: 0, loaded: false }),
+
   // Optimistic check — backend is authoritative
   canAffordExport: (videoSeconds) => {
     const { balance } = get();
