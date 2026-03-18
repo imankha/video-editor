@@ -448,8 +448,26 @@ def create_guest_user() -> str:
 # Credit operations (T530)
 # ---------------------------------------------------------------------------
 
+def _ensure_signup_bonus(user_id: str) -> None:
+    """Grant signup bonus to existing users who predate T530."""
+    with get_auth_db() as db:
+        row = db.execute(
+            "SELECT count(*) as cnt FROM credit_transactions WHERE user_id = ? AND source = 'signup_bonus'",
+            (user_id,),
+        ).fetchone()
+        if row["cnt"] == 0:
+            db.execute("UPDATE users SET credits = credits + ? WHERE user_id = ?", (SIGNUP_CREDITS, user_id))
+            db.execute(
+                "INSERT INTO credit_transactions (user_id, amount, source) VALUES (?, ?, 'signup_bonus')",
+                (user_id, SIGNUP_CREDITS),
+            )
+            db.commit()
+            logger.info(f"[AuthDB] Backfilled signup bonus for existing user {user_id}")
+
+
 def get_credit_balance(user_id: str) -> dict:
-    """Get credit balance for a user."""
+    """Get credit balance for a user. Backfills signup bonus if missing."""
+    _ensure_signup_bonus(user_id)
     with get_auth_db() as db:
         row = db.execute(
             "SELECT credits FROM users WHERE user_id = ?",
