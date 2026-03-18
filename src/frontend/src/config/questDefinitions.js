@@ -101,14 +101,9 @@ export const QUESTS = [
         description: 'Open your new custom project and frame each clip individually',
       },
       {
-        id: 'frame_custom_video',
-        title: 'Frame Video',
-        description: 'Click the Frame Video button',
-      },
-      {
         id: 'overlay_custom_project',
         title: 'Add Overlay',
-        description: 'Switch to Overlay mode and add spotlight overlays to your highlights, then export',
+        description: 'In Overlay mode, add spotlight overlays to your highlights, then export',
       },
       {
         id: 'watch_custom_video',
