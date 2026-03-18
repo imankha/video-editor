@@ -14,7 +14,6 @@ import { RATING_NOTATION, RATING_BADGE_COLORS } from './shared/clipConstants';
 import { getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
 import { ProfileDropdown } from './ProfileDropdown';
 import { CreditBalance } from './CreditBalance';
-import { QuestIcon } from './QuestIcon';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -428,7 +427,6 @@ export function ProjectManager({
 
       {/* Top right controls - Quests + Credits + Gallery + Profile switcher */}
       <div className="fixed top-4 right-4 z-30 flex items-center gap-2 sm:gap-4">
-        <QuestIcon />
         <CreditBalance />
         {onOpenDownloads && (
           <Button

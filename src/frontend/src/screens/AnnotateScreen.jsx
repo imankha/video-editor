@@ -5,7 +5,6 @@ import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
 import { CreditBalance } from '../components/CreditBalance';
 import { GalleryButton } from '../components/GalleryButton';
-import { QuestIcon } from '../components/QuestIcon';
 import { Breadcrumb, Button } from '../components/shared';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
@@ -436,7 +435,6 @@ export function AnnotateScreen({ onClearSelection }) {
                 <List size={16} />
                 <span className="text-xs font-medium">{clipCountDisplay}</span>
               </button>
-              <QuestIcon />
               <CreditBalance />
               <GalleryButton />
               {/* Annotate mode indicator */}

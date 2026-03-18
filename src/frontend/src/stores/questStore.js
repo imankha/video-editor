@@ -2,22 +2,17 @@ import { create } from 'zustand';
 import { API_BASE } from '../config';
 import { QUESTS, TOTAL_STEPS } from '../config/questDefinitions';
 import { useCreditStore } from './creditStore';
-import { useGalleryStore } from './galleryStore';
 
 /**
- * Quest Store — manages quest progress, overlay state, and reward claiming (T540).
+ * Quest Store — manages quest progress and reward claiming (T540).
  *
- * The quest overlay auto-shows for users who haven't completed all quests.
- * Users can dismiss it, and re-open via the header QuestIcon.
- * Progressive disclosure: shows Quest 1 first, reveals Quest 2 after Quest 1 is claimed.
+ * Backend is authoritative for progress derivation. This store caches the
+ * latest progress response. The QuestPanel component manages its own
+ * collapsed/expanded/hidden UI state independently.
  */
 export const useQuestStore = create((set, get) => ({
-  // Overlay state
-  isOpen: false,
-  dismissed: false,  // User explicitly closed — don't auto-reopen until next session
-
   // Quest progress from backend
-  quests: [],          // [{id, steps: {step_id: bool}, completed: bool, reward_claimed: bool}]
+  quests: [],
   loaded: false,
 
   // Derived totals (computed on fetch)
@@ -25,22 +20,7 @@ export const useQuestStore = create((set, get) => ({
   totalSteps: TOTAL_STEPS,
 
   // Which quest is currently active (progressive disclosure)
-  // null = auto-detect, 'quest_1' or 'quest_2'
   activeQuestId: null,
-
-  // Open/close — opening closes Gallery (mutual exclusion)
-  open: () => {
-    useGalleryStore.getState().close();
-    set({ isOpen: true, dismissed: false });
-  },
-  close: () => set({ isOpen: false, dismissed: true }),
-  toggle: () => {
-    const { isOpen } = get();
-    if (!isOpen) {
-      useGalleryStore.getState().close();
-    }
-    set({ isOpen: !isOpen, dismissed: isOpen ? true : false });
-  },
 
   fetchProgress: async () => {
     try {
@@ -48,22 +28,16 @@ export const useQuestStore = create((set, get) => ({
       if (!res.ok) return;
       const data = await res.json();
 
-      // Compute totals
       let totalCompleted = 0;
       for (const quest of data.quests) {
         totalCompleted += Object.values(quest.steps).filter(Boolean).length;
       }
 
-      // Determine active quest (progressive disclosure)
       const q1 = data.quests.find(q => q.id === 'quest_1');
-      const q2 = data.quests.find(q => q.id === 'quest_2');
       let activeQuestId = 'quest_1';
       if (q1?.reward_claimed) {
         activeQuestId = 'quest_2';
       }
-
-      const { dismissed, isOpen } = get();
-      const allDone = totalCompleted === TOTAL_STEPS && q1?.reward_claimed && q2?.reward_claimed;
 
       set({
         quests: data.quests,
@@ -71,11 +45,6 @@ export const useQuestStore = create((set, get) => ({
         totalCompleted,
         activeQuestId,
       });
-
-      // Auto-show for users who haven't dismissed and haven't completed everything
-      if (!dismissed && !isOpen && !allDone) {
-        set({ isOpen: true });
-      }
     } catch {
       // Best-effort
     }
@@ -91,13 +60,8 @@ export const useQuestStore = create((set, get) => ({
       throw new Error(err.detail || 'Failed to claim reward');
     }
     const data = await res.json();
-
-    // Update credit store
     useCreditStore.getState().setBalance(data.new_balance);
-
-    // Refresh quest progress (will auto-advance activeQuestId)
     await get().fetchProgress();
-
     return data;
   },
 
@@ -114,8 +78,6 @@ export const useQuestStore = create((set, get) => ({
   },
 
   reset: () => set({
-    isOpen: false,
-    dismissed: false,
     quests: [],
     loaded: false,
     totalCompleted: 0,
@@ -124,7 +86,6 @@ export const useQuestStore = create((set, get) => ({
 }));
 
 // Selector hooks
-export const useQuestIsOpen = () => useQuestStore((s) => s.isOpen);
 export const useQuestProgress = () => useQuestStore((s) => ({
   quests: s.quests,
   loaded: s.loaded,
