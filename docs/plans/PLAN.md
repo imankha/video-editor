@@ -129,7 +129,7 @@ Per-second credit system for GPU operations. Credits earned through quests and a
 #### Epic: Admin
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| **T550** | [**Admin Panel**](tasks/T550-admin-panel.md) | **TODO** | **7** | **6** | **User stats, credit grants, GPU usage, Cloudflare analytics** |
+| **T550** | [**Admin Panel**](tasks/T550-admin-panel.md) | **TESTING** | **7** | **6** | **User stats, credit grants, GPU usage, Cloudflare analytics** |
 
 #### Recommended Build Order (feedback velocity)
 
