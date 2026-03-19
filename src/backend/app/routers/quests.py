@@ -57,6 +57,8 @@ QUEST_DEFINITIONS = [
             "create_mixed_project",
             "extract_custom_clips",
             "frame_custom_project",
+            "start_custom_framing",
+            "complete_custom_framing",
             "overlay_custom_project",
             "watch_custom_video",
         ],
@@ -161,6 +163,23 @@ def _check_all_steps(user_id: str, conn) -> dict:
                WHERE wc.project_id = p.id
                AND (wc.crop_data IS NULL OR wc.crop_data = '')
            )
+           LIMIT 1"""
+    ).fetchone() is not None
+
+    # Framing export started for a custom project (any status)
+    steps["start_custom_framing"] = cursor.execute(
+        """SELECT 1 FROM export_jobs ej
+           JOIN projects p ON ej.project_id = p.id
+           WHERE ej.type = 'framing' AND p.is_auto_created = 0
+           LIMIT 1"""
+    ).fetchone() is not None
+
+    # Framing export completed for a custom project
+    steps["complete_custom_framing"] = cursor.execute(
+        """SELECT 1 FROM export_jobs ej
+           JOIN projects p ON ej.project_id = p.id
+           WHERE ej.status = 'complete' AND ej.type = 'framing'
+           AND p.is_auto_created = 0
            LIMIT 1"""
     ).fetchone() is not None
 

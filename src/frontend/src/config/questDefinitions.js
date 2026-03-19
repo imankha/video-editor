@@ -102,6 +102,16 @@ export const QUESTS = [
         description: 'Open your new custom project and frame each clip individually',
       },
       {
+        id: 'start_custom_framing',
+        title: 'Start Framing',
+        description: 'Click the Frame Video button to begin the framing export',
+      },
+      {
+        id: 'complete_custom_framing',
+        title: 'Complete Framing',
+        description: 'Wait for the framing export to finish',
+      },
+      {
         id: 'overlay_custom_project',
         title: 'Add Overlay',
         description: 'In Overlay mode, add spotlight overlays to your highlights, then export',
