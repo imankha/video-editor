@@ -306,7 +306,16 @@ export function FramingContainer({
         origin: 'user'
       }).catch(err => console.error('[FramingContainer] Failed to sync addCropKeyframe:', err));
     }
-  }, [currentTime, framerate, duration, addOrUpdateKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
+
+    // Optimistically update clip store so sidebar framing indicator reflects the change immediately.
+    // (crop_data in the store is otherwise only written on export via saveCurrentClipState)
+    if (selectedClipId) {
+      const newKf = { frame, x: cropData.x, y: cropData.y, width: cropData.width, height: cropData.height, origin: 'user' };
+      const existingKfs = clipCropKeyframes(selectedClip) || [];
+      const updatedKfs = [...existingKfs.filter(kf => kf.frame !== frame), newKf];
+      updateClipData(selectedClipId, { crop_data: JSON.stringify(updatedKfs) });
+    }
+  }, [currentTime, framerate, duration, addOrUpdateKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
 
   /**
    * Coordinated segment trim handler
