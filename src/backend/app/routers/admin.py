@@ -200,6 +200,7 @@ async def _compute_quest_progress(user_id: str) -> dict:
             "completed": completed,
             "total": len(step_ids),
             "reward_claimed": reward_claimed[qid],
+            "steps": {sid: merged.get(sid, False) for sid in step_ids},
         }
     return result
 

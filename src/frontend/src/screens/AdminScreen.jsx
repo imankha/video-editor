@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { useAdminStore } from '../stores/adminStore';
 import { UserTable } from '../components/admin/UserTable';
+import { QuestFunnelChart } from '../components/admin/QuestFunnelChart';
 
 /**
  * AdminScreen — Full-page admin panel.
@@ -18,6 +19,9 @@ export function AdminScreen({ onBack }) {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  // Guests (no email) are hidden from the table but included in the funnel chart
+  const knownUsers = users.filter(u => u.email);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -37,6 +41,14 @@ export function AdminScreen({ onBack }) {
           </div>
         </div>
 
+        {/* Quest Funnel */}
+        {!loading && !error && users.length > 0 && (
+          <div className="bg-white/5 rounded-xl p-6 border border-white/10 mb-6">
+            <h2 className="text-gray-300 font-medium mb-4">Quest Funnel</h2>
+            <QuestFunnelChart users={users} />
+          </div>
+        )}
+
         {/* Users section */}
         <div className="bg-white/5 rounded-xl p-6 border border-white/10">
           <h2 className="text-gray-300 font-medium mb-4">Users</h2>
@@ -49,12 +61,12 @@ export function AdminScreen({ onBack }) {
             <p className="text-red-400 text-sm">Error: {error}</p>
           )}
 
-          {!loading && !error && users.length === 0 && (
-            <p className="text-gray-500 text-sm">No users found.</p>
+          {!loading && !error && knownUsers.length === 0 && (
+            <p className="text-gray-500 text-sm">No recognised users found.</p>
           )}
 
-          {!loading && !error && users.length > 0 && (
-            <UserTable users={users} />
+          {!loading && !error && knownUsers.length > 0 && (
+            <UserTable users={knownUsers} />
           )}
         </div>
       </div>
