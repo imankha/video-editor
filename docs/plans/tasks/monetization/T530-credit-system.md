@@ -1,6 +1,6 @@
 # T530: Credit System
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-03-17

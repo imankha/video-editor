@@ -113,7 +113,7 @@ Per-second credit system for GPU operations. Credits earned through quests and a
 
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| **T530** | [**Credit System**](tasks/monetization/T530-credit-system.md) | **TESTING** | **9** | **5** | **1 credit/sec for Framing; first-time-free; supersedes T500/T505/T510/T515** |
+| **T530** | [**Credit System**](tasks/monetization/T530-credit-system.md) | **DONE** | **9** | **5** | **1 credit/sec for Framing; first-time-free; supersedes T500/T505/T510/T515** |
 | T500 | [Credits UI Shell](tasks/monetization/T500-credits-ui-shell.md) | SUPERSEDED | 7 | 2 | Superseded by T530 (per-second model) |
 | T505 | [Credit System Backend](tasks/monetization/T505-credit-system-backend.md) | SUPERSEDED | 8 | 4 | Superseded by T530 (auth.sqlite, not D1) |
 | T510 | [GPU Cost Gate](tasks/monetization/T510-gpu-cost-gate.md) | SUPERSEDED | 9 | 3 | Superseded by T530 (per-second gate) |
@@ -172,7 +172,7 @@ Deploy to production domains with proper scaling.
 | T355 | [Permanent Keyframe Selection](tasks/T355-permanent-keyframe-selection.md) | DONE | 5 | 3 | Permanent keyframes (frame 0/end) can't be selected by clicking diamonds |
 | T252 | [E2E Project Manager Default Tab](tasks/T252-e2e-project-manager-default-tab.md) | DONE | 3 | 1 | Test expects Projects tab but UI defaults to Games; blocks 8 downstream tests |
 | T253 | [E2E Framing Export Working Video](tasks/T253-e2e-framing-export-working-video.md) | TESTING | 3 | 2 | has_working_video undefined after export |
-| T254 | [Export Network Resilience](tasks/T254-export-network-resilience.md) | TESTING | 6 | 4 | Survive network disconnects during export — don't fail when server is still rendering |
+| T254 | [Export Network Resilience](tasks/T254-export-network-resilience.md) | DONE | 6 | 4 | Survive network disconnects during export — don't fail when server is still rendering |
 | T570 | [Framing Clip Icon State](tasks/T570-framing-clip-icon-state.md) | TESTING | 4 | 2 | "!" icon didn't clear after framing; optimistically update crop_data in store on keyframe add |
 | T580 | [Can't Reframe — Shows Exported Video](tasks/T580-reframing-shows-exported-video.md) | TODO | 7 | 4 | Multi-clip projects load exported video in framing screen instead of source; blocks reframing |
 

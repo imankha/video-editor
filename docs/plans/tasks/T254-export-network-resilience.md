@@ -1,6 +1,6 @@
 # T254: Export Network Resilience — Survive Disconnects During Export
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-03-12
