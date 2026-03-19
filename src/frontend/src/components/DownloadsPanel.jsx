@@ -335,7 +335,7 @@ export function DownloadsPanel({
               <Download size={16} className="text-gray-400 hover:text-white" />
             )}
           </button>
-          {download.source_type !== 'annotated_game' && (
+          {!import.meta.env.PROD && download.source_type !== 'annotated_game' && (
             <button
               onClick={(e) => handleBeforeAfter(e, download)}
               disabled={exportingBeforeAfter === download.id}
