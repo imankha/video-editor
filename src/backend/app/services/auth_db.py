@@ -116,6 +116,18 @@ def init_auth_db():
             except sqlite3.OperationalError:
                 pass  # Column already exists
 
+        # T550: Admin users — table-driven admin list
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS admin_users (
+                email TEXT PRIMARY KEY
+            );
+        """)
+        db.execute(
+            "INSERT OR IGNORE INTO admin_users (email) VALUES (?)",
+            ("imankh@gmail.com",),
+        )
+        db.commit()
+
         # T530: Credit transactions ledger
         db.executescript("""
             CREATE TABLE IF NOT EXISTS credit_transactions (
@@ -523,6 +535,34 @@ def refund_credits(
     sync_auth_db_to_r2()
     logger.info(f"[AuthDB] Refunded {amount} credits to {user_id} (job={reference_id}), balance={new_balance}")
     return new_balance
+
+
+# ---------------------------------------------------------------------------
+# Admin operations (T550)
+# ---------------------------------------------------------------------------
+
+def is_admin(user_id: str) -> bool:
+    """Check if user's email is in admin_users table."""
+    with get_auth_db() as db:
+        row = db.execute(
+            "SELECT email FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if not row or not row["email"]:
+            return False
+        return db.execute(
+            "SELECT 1 FROM admin_users WHERE email = ?", (row["email"],)
+        ).fetchone() is not None
+
+
+def get_all_users_for_admin() -> list:
+    """Return all users for the admin panel. Returns base user data only (no per-profile stats)."""
+    with get_auth_db() as db:
+        rows = db.execute(
+            """SELECT user_id, email, credits, created_at, last_seen_at
+               FROM users
+               ORDER BY created_at DESC"""
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def get_credit_transactions(user_id: str, limit: int = 50) -> list:

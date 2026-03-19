@@ -16,3 +16,4 @@ export { FramingScreen } from './FramingScreen';
 export { OverlayScreen } from './OverlayScreen';
 export { AnnotateScreen } from './AnnotateScreen';
 export { ProjectsScreen } from './ProjectsScreen';
+export { AdminScreen } from './AdminScreen';

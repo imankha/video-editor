@@ -541,7 +541,10 @@ async def call_modal_framing_ai(
             "fps_actual": round(frames_processed / total_elapsed, 1) if total_elapsed > 0 else 0
         })
         logger.info(f"[Modal] AI framing job {job_id} completed: {result}")
-        return result or {"status": "error", "error": "No result received from Modal"}
+        final = result or {"status": "error", "error": "No result received from Modal"}
+        final["gpu_seconds"] = round(total_elapsed, 2)
+        final["modal_function"] = "framing"
+        return final
 
     except Exception as e:
         total_elapsed = time.time() - job_start_time
@@ -709,7 +712,10 @@ async def call_modal_clips_ai(
                 "clips": clips_processed
             })
             logger.info(f"[Modal] Clips AI job {job_id} completed: {result}")
-            return result or {"status": "error", "error": "No result received from Modal"}
+            final = result or {"status": "error", "error": "No result received from Modal"}
+            final["gpu_seconds"] = round(total_elapsed, 2)
+            final["modal_function"] = "overlay"
+            return final
 
         except Exception as e:
             last_error = e
@@ -1049,7 +1055,10 @@ async def call_modal_overlay(
             "fps_actual": round(estimated_frames / total_elapsed, 1) if total_elapsed > 0 else 0
         })
         logger.info(f"[Modal] Overlay job {job_id} completed: {result}")
-        return result or {"status": "error", "error": "No result received from Modal"}
+        final = result or {"status": "error", "error": "No result received from Modal"}
+        final["gpu_seconds"] = round(total_elapsed, 2)
+        final["modal_function"] = "overlay"
+        return final
 
     except Exception as e:
         total_elapsed = time.time() - job_start_time

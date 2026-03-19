@@ -8,11 +8,24 @@ import { useProjectsStore } from './projectsStore';
 export const useAuthStore = create((set, get) => ({
   // State
   isAuthenticated: false,
+  isAdmin: false,
   email: null,
   showAuthModal: false,
   pendingAction: null,
   isCheckingSession: true,  // true until initial session check completes
   hasGuestActivity: false,  // true once a guest user has done any write operation
+
+  // T550: Check if the current user is an admin
+  checkAdmin: async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/me`, { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      set({ isAdmin: data.is_admin });
+    } catch {
+      // Best-effort — non-critical
+    }
+  },
 
   // Mark that a guest has done meaningful work (triggers exit warning)
   markGuestActivity: () => {
@@ -68,6 +81,8 @@ export const useAuthStore = create((set, get) => ({
     });
     // T530: Fetch credit balance after auth
     useCreditStore.getState().fetchCredits();
+    // T550: Check admin status after auth
+    get().checkAdmin();
     // Run the action that was blocked by the auth gate
     if (pendingAction) {
       pendingAction();
@@ -87,6 +102,10 @@ export const useAuthStore = create((set, get) => ({
     if (isAuthenticated) {
       useCreditStore.getState().fetchCredits();
     }
+    // T550: Check admin status
+    if (isAuthenticated) {
+      useAuthStore.getState().checkAdmin();
+    }
   },
 
   // T405: Logout — invalidate session and clear cookie
@@ -101,6 +120,7 @@ export const useAuthStore = create((set, get) => ({
     }
     set({
       isAuthenticated: false,
+      isAdmin: false,
       email: null,
       showAuthModal: false,
       pendingAction: null,

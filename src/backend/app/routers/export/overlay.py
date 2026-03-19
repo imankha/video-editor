@@ -1868,11 +1868,12 @@ async def render_overlay(request: OverlayRenderRequest):
             # Update project
             cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
 
-            # Update export_jobs
+            # Update export_jobs (T550: store GPU cost)
             cursor.execute("""
-                UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
+                UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?,
+                    completed_at = CURRENT_TIMESTAMP, gpu_seconds = ?, modal_function = ?
                 WHERE id = ?
-            """, (final_video_id, output_filename, export_id))
+            """, (final_video_id, output_filename, result.get("gpu_seconds"), result.get("modal_function"), export_id))
 
             conn.commit()
 

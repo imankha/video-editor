@@ -758,6 +758,9 @@ def ensure_database():
             "ALTER TABLE modal_tasks ADD COLUMN retry_count INTEGER DEFAULT 0",
             # T251: Track how much video the user has watched/scrubbed in annotate mode
             "ALTER TABLE games ADD COLUMN viewed_duration REAL DEFAULT 0",
+            # T550: GPU cost tracking per export job
+            "ALTER TABLE export_jobs ADD COLUMN gpu_seconds REAL",
+            "ALTER TABLE export_jobs ADD COLUMN modal_function TEXT",
         ]
 
         for migration in migrations:
