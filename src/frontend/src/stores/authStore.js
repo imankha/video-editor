@@ -4,6 +4,7 @@ import { getUserId, setUserId, resetSession } from '../utils/sessionInit';
 import { useCreditStore } from './creditStore';
 import { useEditorStore } from './editorStore';
 import { useProjectsStore } from './projectsStore';
+import { track } from '../utils/analytics';
 
 export const useAuthStore = create((set, get) => ({
   // State
@@ -79,6 +80,7 @@ export const useAuthStore = create((set, get) => ({
       showAuthModal: false,
       pendingAction: null,
     });
+    track('login');
     // T530: Fetch credit balance after auth
     useCreditStore.getState().fetchCredits();
     // T550: Check admin status after auth

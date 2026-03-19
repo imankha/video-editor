@@ -149,9 +149,10 @@ Each task delivers working functionality users can test:
 
 Deploy to production domains with proper scaling.
 
-| ID | Task | Status | Notes |
-|----|------|--------|-------|
-| T105 | [Production Backend Scaling](tasks/deployment/T105-production-backend-scaling.md) | TODO | Capacity planning |
+| ID | Task | Status | Impact | Cmplx | Notes |
+|----|------|--------|--------|-------|-------|
+| **T590** | [**Prod Environment Launch**](tasks/T590-prod-environment-launch.md) | **TODO** | **10** | **5** | CF Pages + Fly.io prod deploy, custom domain, feature gates, analytics verify, v1.0.0 tag |
+| T105 | [Production Backend Scaling](tasks/deployment/T105-production-backend-scaling.md) | TODO | 6 | 7 | Capacity planning |
 | T115 | [Cloudflare Pages Production](tasks/deployment/T115-cloudflare-pages-production.md) | TODO | `app.reelballers.com` |
 | T120 | [DNS & SSL](tasks/deployment/T120-dns-ssl.md) | TODO | Custom domains |
 
