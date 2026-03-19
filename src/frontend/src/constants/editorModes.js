@@ -6,6 +6,7 @@ export const EditorMode = {
   FRAMING: 'framing',
   OVERLAY: 'overlay',
   PROJECT_MANAGER: 'project-manager',
+  ADMIN: 'admin',
 };
 
 export default EditorMode;

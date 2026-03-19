@@ -1,0 +1,33 @@
+app = "reel-ballers-api"
+primary_region = "lax"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ENV = "production"
+  APP_ENV = "production"
+  DEBUG = "false"
+  CLEAR_PENDING_JOBS_ON_STARTUP = "false"
+  MODAL_ENABLED = "true"
+  CORS_ORIGINS = "https://app.reelballers.com"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
+
+kill_signal = "SIGTERM"
+kill_timeout = 30
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 1024

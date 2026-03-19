@@ -11,6 +11,7 @@ export const EDITOR_MODES = {
   OVERLAY: 'overlay',
   ANNOTATE: 'annotate',
   PROJECT_MANAGER: 'project-manager',
+  ADMIN: 'admin',
 };
 
 /**

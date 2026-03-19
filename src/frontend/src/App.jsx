@@ -1,5 +1,5 @@
 import { useMemo, useRef, useCallback, useEffect } from 'react';
-import { Home, Scissors, LogIn } from 'lucide-react';
+import { Home, Scissors, LogIn, ShieldCheck } from 'lucide-react';
 import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { initSession, setGuestWriteCallback } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
@@ -15,7 +15,7 @@ import { Breadcrumb, Button, ConfirmationDialog, ModeSwitcher, ToastContainer } 
 import DebugInfo from './components/DebugInfo';
 import { getProjectDisplayName } from './utils/clipDisplayName';
 // Screen components (self-contained, own their hooks)
-import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen } from './screens';
+import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen, AdminScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AuthGateModal } from './components/AuthGateModal';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, EDITOR_MODES } from './stores';
@@ -117,6 +117,7 @@ function App() {
 
   const hasGuestActivity = useAuthStore(state => state.hasGuestActivity);
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const isAdmin = useAuthStore(state => state.isAdmin);
   const isCheckingSession = useAuthStore(state => state.isCheckingSession);
   const requireAuth = useAuthStore(state => state.requireAuth);
 
@@ -291,6 +292,16 @@ function App() {
   // before the user identity is established (would fall back to DEFAULT_USER_ID)
   if (isCheckingSession) return null;
 
+  // T550: Admin panel — rendered regardless of project selection
+  if (editorMode === EDITOR_MODES.ADMIN) {
+    return (
+      <>
+        <AdminScreen onBack={() => setEditorMode(EDITOR_MODES.PROJECT_MANAGER)} />
+        <ToastContainer />
+      </>
+    );
+  }
+
   // If no project selected and not in annotate mode, show ProjectsScreen
   if (!selectedProject && editorMode !== EDITOR_MODES.ANNOTATE) {
     return (
@@ -312,6 +323,8 @@ function App() {
         {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
         {/* Quest overlay — auto-shows for new users (T540) */}
         <QuestPanel />
+        {/* Admin button — fixed top-right, visible only to admins */}
+        {isAdmin && <AdminButton onClick={() => setEditorMode(EDITOR_MODES.ADMIN)} />}
       </>
     );
   }
@@ -350,6 +363,7 @@ function App() {
             <div className="flex items-center gap-1 sm:gap-2">
               <CreditBalance />
               <GalleryButton />
+              {isAdmin && <AdminButton onClick={() => setEditorMode(EDITOR_MODES.ADMIN)} />}
               {/* Combined mode switcher with Annotate button */}
               <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
                 {/* Edit in Annotate button - styled like mode tabs */}
@@ -456,6 +470,19 @@ function App() {
     </div>
     </AppStateProvider>
     </ProjectProvider>
+  );
+}
+
+function AdminButton({ onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white text-sm"
+      title="Admin Panel"
+    >
+      <ShieldCheck size={15} />
+      <span className="hidden sm:inline font-medium">Admin</span>
+    </button>
   );
 }
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useToastStore } from '../components/shared/Toast';
+import { track } from '../utils/analytics';
 
 /**
  * Export Store - Manages export progress and status tracking
@@ -98,6 +99,7 @@ export const useExportStore = create((set, get) => ({
    * @param {string} type - Export type ('framing', 'overlay', 'annotate')
    */
   startExport: (exportId, projectIdOrOptions, type) => {
+    track('export_started', { type });
     set((state) => {
       // Guard against duplicate adds (e.g., React StrictMode double-render)
       if (state.activeExports[exportId]) {
@@ -236,6 +238,8 @@ export const useExportStore = create((set, get) => ({
    * Mark export as complete - called by WebSocket handler
    */
   completeExport: (exportId, outputVideoId = null, outputFilename = null) => {
+    const existing = get().activeExports[exportId];
+    if (existing) track('export_complete', { type: existing.type });
     set((state) => {
       const existing = state.activeExports[exportId];
       if (!existing) return state;

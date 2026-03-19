@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { API_BASE } from '../config';
 import { QUESTS, TOTAL_STEPS } from '../config/questDefinitions';
 import { useCreditStore } from './creditStore';
+import { track } from '../utils/analytics';
 
 /**
  * Quest Store — manages quest progress and reward claiming (T540).
@@ -61,6 +62,7 @@ export const useQuestStore = create((set, get) => ({
       throw new Error(err.detail || 'Failed to claim reward');
     }
     const data = await res.json();
+    track('quest_reward_claimed', { questId });
     useCreditStore.getState().setBalance(data.new_balance);
     await get().fetchProgress();
     return data;

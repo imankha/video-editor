@@ -848,11 +848,12 @@ async def render_project(request: RenderRequest, http_request: Request):
             # Update project with new working_video_id
             cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
 
-            # Update export_jobs record to complete
+            # Update export_jobs record to complete (T550: store GPU cost)
             cursor.execute("""
-                UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
+                UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?,
+                    completed_at = CURRENT_TIMESTAMP, gpu_seconds = ?, modal_function = ?
                 WHERE id = ?
-            """, (working_video_id, working_filename, export_id))
+            """, (working_video_id, working_filename, result.get("gpu_seconds"), result.get("modal_function"), export_id))
 
             # Set exported_at for working clips
             cursor.execute(f"""
