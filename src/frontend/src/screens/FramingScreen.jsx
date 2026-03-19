@@ -514,11 +514,11 @@ export function FramingScreen({
   // user never sees stale video or a "no video loaded" flash.
   useLayoutEffect(() => {
     if (clips.length === 0) return;
-    const firstClip = clips[0];
-    if (!isExtracted(firstClip)) return;
-    const clipUrl = getClipFileUrlSelector(firstClip, projectId);
+    const targetClip = (selectedClipId && clips.find(c => c.id === selectedClipId)) || clips[0];
+    if (!isExtracted(targetClip)) return;
+    const clipUrl = getClipFileUrlSelector(targetClip, projectId);
     if (!clipUrl || clipUrl.startsWith('blob:')) return;
-    const meta = clipMetadataCache[firstClip.id];
+    const meta = clipMetadataCache[targetClip.id];
     loadVideoFromStreamingUrl(clipUrl, meta?.metadata || null);
     lastLoadedUrlRef.current = clipUrl;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only, mirrors initial load effect
