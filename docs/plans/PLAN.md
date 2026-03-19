@@ -174,6 +174,7 @@ Deploy to production domains with proper scaling.
 | T253 | [E2E Framing Export Working Video](tasks/T253-e2e-framing-export-working-video.md) | TESTING | 3 | 2 | has_working_video undefined after export |
 | T254 | [Export Network Resilience](tasks/T254-export-network-resilience.md) | TESTING | 6 | 4 | Survive network disconnects during export — don't fail when server is still rendering |
 | T570 | [Framing Clip Icon State](tasks/T570-framing-clip-icon-state.md) | TESTING | 4 | 2 | "!" icon didn't clear after framing; optimistically update crop_data in store on keyframe add |
+| T580 | [Can't Reframe — Shows Exported Video](tasks/T580-reframing-shows-exported-video.md) | TODO | 7 | 4 | Multi-clip projects load exported video in framing screen instead of source; blocks reframing |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
