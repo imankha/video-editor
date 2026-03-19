@@ -9,8 +9,9 @@ import { Button } from './shared/Button';
  *   available: number - user's current balance
  *   videoSeconds: number - video duration in seconds
  *   onClose: () => void - close handler
+ *   onBuyCredits: () => void - open BuyCreditsModal (T525)
  */
-export function InsufficientCreditsModal({ required, available, videoSeconds, onClose }) {
+export function InsufficientCreditsModal({ required, available, videoSeconds, onClose, onBuyCredits }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10">
@@ -43,13 +44,14 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, on
           <Button variant="secondary" onClick={onClose} className="flex-1">
             Cancel
           </Button>
-          <button
-            disabled
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-purple-600/50 text-white/50 cursor-not-allowed text-sm font-medium"
+          <Button
+            variant="primary"
+            onClick={() => { onClose(); onBuyCredits?.(); }}
+            className="flex-1"
+            icon={Coins}
           >
-            <Coins size={16} />
-            Coming Soon: Purchase
-          </button>
+            Buy Credits
+          </Button>
         </div>
       </div>
     </div>

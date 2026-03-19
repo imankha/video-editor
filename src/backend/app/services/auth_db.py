@@ -538,6 +538,42 @@ def refund_credits(
 
 
 # ---------------------------------------------------------------------------
+# Stripe customer management (T525)
+# ---------------------------------------------------------------------------
+
+
+def get_stripe_customer_id(user_id: str) -> Optional[str]:
+    """Get stripe_customer_id for a user. Returns None if not set."""
+    with get_auth_db() as db:
+        row = db.execute(
+            "SELECT stripe_customer_id FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        return row["stripe_customer_id"] if row else None
+
+
+def set_stripe_customer_id(user_id: str, stripe_customer_id: str):
+    """Save stripe_customer_id to users table. Syncs to R2."""
+    with get_auth_db() as db:
+        db.execute(
+            "UPDATE users SET stripe_customer_id = ? WHERE user_id = ?",
+            (stripe_customer_id, user_id),
+        )
+        db.commit()
+    sync_auth_db_to_r2()
+    logger.info(f"[AuthDB] Set stripe_customer_id for {user_id}")
+
+
+def has_processed_payment(reference_id: str) -> bool:
+    """Check if a payment has already been processed (idempotency guard)."""
+    with get_auth_db() as db:
+        row = db.execute(
+            "SELECT 1 FROM credit_transactions WHERE reference_id = ? AND source = 'stripe_purchase'",
+            (reference_id,),
+        ).fetchone()
+        return row is not None
+
+
+# ---------------------------------------------------------------------------
 # Admin operations (T550)
 # ---------------------------------------------------------------------------
 

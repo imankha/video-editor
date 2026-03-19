@@ -119,7 +119,7 @@ Per-second credit system for GPU operations. Credits earned through quests and a
 | T510 | [GPU Cost Gate](tasks/monetization/T510-gpu-cost-gate.md) | SUPERSEDED | 9 | 3 | Superseded by T530 (per-second gate) |
 | T515 | [Free Trial Credits](tasks/monetization/T515-free-trial-credits.md) | SUPERSEDED | 7 | 2 | Superseded by T530 (first-time-free) + T540 (quest rewards) |
 | T520 | [Pricing Exploration](tasks/monetization/T520-pricing-exploration.md) | DONE | 6 | 1 | Completed as part of T530 cost analysis |
-| T525 | [Stripe Integration](tasks/monetization/T525-stripe-integration.md) | TODO | 8 | 5 | Checkout, webhooks, credit packages (LAST) |
+| T525 | [Stripe Integration](tasks/monetization/T525-stripe-integration.md) | TESTING | 8 | 5 | Checkout, webhooks, credit packages (LAST) |
 
 #### Epic: Guided Tutorial
 | ID | Task | Status | Impact | Cmplx | Notes |
@@ -129,7 +129,7 @@ Per-second credit system for GPU operations. Credits earned through quests and a
 #### Epic: Admin
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| **T550** | [**Admin Panel**](tasks/T550-admin-panel.md) | **TESTING** | **7** | **6** | **User stats, credit grants, GPU usage, Cloudflare analytics** |
+| **T550** | [**Admin Panel**](tasks/T550-admin-panel.md) | **DONE** | **7** | **6** | **User stats, credit grants, GPU usage, Cloudflare analytics** |
 
 #### Recommended Build Order (feedback velocity)
 
@@ -151,7 +151,7 @@ Deploy to production domains with proper scaling.
 
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| **T590** | [**Prod Environment Launch**](tasks/T590-prod-environment-launch.md) | **TODO** | **10** | **5** | CF Pages + Fly.io prod deploy, custom domain, feature gates, analytics verify, v1.0.0 tag |
+| **T590** | [**Prod Environment Launch**](tasks/T590-prod-environment-launch.md) | **DONE** | **10** | **5** | CF Pages + Fly.io prod deploy, custom domain, feature gates, analytics verify, v1.0.0 tag |
 | T105 | [Production Backend Scaling](tasks/deployment/T105-production-backend-scaling.md) | TODO | 6 | 7 | Capacity planning |
 | T115 | [Cloudflare Pages Production](tasks/deployment/T115-cloudflare-pages-production.md) | TODO | `app.reelballers.com` |
 | T120 | [DNS & SSL](tasks/deployment/T120-dns-ssl.md) | TODO | Custom domains |
@@ -172,9 +172,9 @@ Deploy to production domains with proper scaling.
 | T350 | [Sync Strategy Overhaul](tasks/T350-sync-strategy-overhaul.md) | DONE | 9 | 6 | DB writes only on user gestures; reactive sync effect corrupts keyframe data |
 | T355 | [Permanent Keyframe Selection](tasks/T355-permanent-keyframe-selection.md) | DONE | 5 | 3 | Permanent keyframes (frame 0/end) can't be selected by clicking diamonds |
 | T252 | [E2E Project Manager Default Tab](tasks/T252-e2e-project-manager-default-tab.md) | DONE | 3 | 1 | Test expects Projects tab but UI defaults to Games; blocks 8 downstream tests |
-| T253 | [E2E Framing Export Working Video](tasks/T253-e2e-framing-export-working-video.md) | TESTING | 3 | 2 | has_working_video undefined after export |
+| T253 | [E2E Framing Export Working Video](tasks/T253-e2e-framing-export-working-video.md) | DONE | 3 | 2 | has_working_video undefined after export |
 | T254 | [Export Network Resilience](tasks/T254-export-network-resilience.md) | DONE | 6 | 4 | Survive network disconnects during export — don't fail when server is still rendering |
-| T570 | [Framing Clip Icon State](tasks/T570-framing-clip-icon-state.md) | TESTING | 4 | 2 | "!" icon didn't clear after framing; optimistically update crop_data in store on keyframe add |
+| T570 | [Framing Clip Icon State](tasks/T570-framing-clip-icon-state.md) | DONE | 4 | 2 | "!" icon didn't clear after framing; optimistically update crop_data in store on keyframe add |
 | T580 | [Can't Reframe — Shows Exported Video](tasks/T580-reframing-shows-exported-video.md) | DONE | 7 | 4 | Fix: reset shared videoStore on mode switch + useLayoutEffect guard in FramingScreen |
 
 ### Mobile Responsive (TODO)

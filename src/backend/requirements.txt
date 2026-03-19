@@ -163,6 +163,7 @@ sportslabkit==0.3.1
 SQLAlchemy==2.0.45
 stack-data==0.6.3
 starlette==0.32.0.post1
+stripe==14.4.1
 StrEnum==0.4.15
 supervision==0.27.0
 sympy==1.14.0

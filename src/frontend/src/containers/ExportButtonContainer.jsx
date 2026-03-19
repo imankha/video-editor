@@ -227,6 +227,7 @@ export function ExportButtonContainer({
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
   const [disconnected, setDisconnected] = useState(false);
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(null);
+  const [showBuyCredits, setShowBuyCredits] = useState(false);
 
   // Refs for tracking export state
   const exportIdRef = useRef(null);
@@ -1032,6 +1033,10 @@ export function ExportButtonContainer({
     showInsufficientCredits,
     onCloseInsufficientCredits: () => setShowInsufficientCredits(null),
     creditBalance,
+    // T525: Stripe purchase
+    showBuyCredits,
+    onOpenBuyCredits: () => setShowBuyCredits(true),
+    onCloseBuyCredits: () => setShowBuyCredits(false),
 
     // Refs (for external triggering)
     handleExportRef,

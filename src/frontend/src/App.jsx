@@ -21,6 +21,8 @@ import { AuthGateModal } from './components/AuthGateModal';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
 import { useQuestStore } from './stores/questStore';
+import { useCreditStore } from './stores/creditStore';
+import { toast } from './components/shared';
 
 /**
  * App.jsx - Main application shell
@@ -123,6 +125,23 @@ function App() {
 
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
+
+  // T525: Handle return from Stripe checkout
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get('payment');
+    if (!payment) return;
+
+    // Remove query param without reload
+    const url = new URL(window.location.href);
+    url.searchParams.delete('payment');
+    window.history.replaceState({}, '', url.pathname + url.hash);
+
+    if (payment === 'success') {
+      toast.success('Payment received! Credits added to your balance.');
+      useCreditStore.getState().fetchCredits();
+    }
+  }, []);
 
   // T540: Record achievement when user enters framing mode
   useEffect(() => {

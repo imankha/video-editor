@@ -4,6 +4,7 @@ import { Button, Toggle, ExportProgress } from './shared';
 import { HighlightColor, HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { InsufficientCreditsModal } from './InsufficientCreditsModal';
+import { BuyCreditsModal } from './BuyCreditsModal';
 
 /**
  * ExportButtonView - Pure presentational component for export UI
@@ -59,6 +60,10 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // T530: Credit system
   showInsufficientCredits,
   onCloseInsufficientCredits,
+  // T525: Stripe purchase
+  showBuyCredits,
+  onOpenBuyCredits,
+  onCloseBuyCredits,
 
   // Refs for external triggering
   handleExportRef,
@@ -255,7 +260,13 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           available={showInsufficientCredits.available}
           videoSeconds={showInsufficientCredits.videoSeconds}
           onClose={onCloseInsufficientCredits}
+          onBuyCredits={onOpenBuyCredits}
         />
+      )}
+
+      {/* T525: Buy Credits Modal */}
+      {showBuyCredits && (
+        <BuyCreditsModal onClose={onCloseBuyCredits} />
       )}
     </div>
   );
