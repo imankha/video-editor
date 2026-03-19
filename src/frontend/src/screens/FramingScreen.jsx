@@ -507,13 +507,21 @@ export function FramingScreen({
   // Track the last loaded URL to detect when extraction completes
   const lastLoadedUrlRef = useRef(null);
 
-  // T580: Clear stale video from shared videoStore before first paint.
-  // When switching from overlay to framing, the store may still hold the
-  // working video (cropped/exported). Reset it so the first render shows
-  // a blank player instead of briefly flashing the exported video.
+  // T580: On mount, immediately load the first clip's video before first paint.
+  // When switching from overlay → framing, the shared videoStore may still hold
+  // the working video (cropped/exported). Loading the correct clip URL here
+  // (in useLayoutEffect) updates the store before the browser paints, so the
+  // user never sees stale video or a "no video loaded" flash.
   useLayoutEffect(() => {
-    useVideoStore.getState().reset();
-  }, []);
+    if (clips.length === 0) return;
+    const firstClip = clips[0];
+    if (!isExtracted(firstClip)) return;
+    const clipUrl = getClipFileUrlSelector(firstClip, projectId);
+    if (!clipUrl || clipUrl.startsWith('blob:')) return;
+    const meta = clipMetadataCache[firstClip.id];
+    loadVideoFromStreamingUrl(clipUrl, meta?.metadata || null);
+    lastLoadedUrlRef.current = clipUrl;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only, mirrors initial load effect
 
   // Initialize video playback when entering framing mode
   // T250: Clips are raw backend data. Get metadata from cache.
