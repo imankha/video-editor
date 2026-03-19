@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp, Sparkles, LogIn } from 'lucide-react';
 import { useQuestStore } from '../stores/questStore';
 import { QUESTS } from '../config/questDefinitions';
@@ -26,6 +26,43 @@ export function QuestPanel() {
   const [expanded, setExpanded] = useState(true);  // Start expanded for new users
   const [hidden, setHidden] = useState(false);       // User fully dismissed
   const [claiming, setClaiming] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);  // Quest complete celebration
+  const prevCompletedRef = useRef(null);  // Track step count to detect new completions
+
+  // Play sound effects
+  const playSound = (type) => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === 'check') {
+        // Quick bright ping for step completion
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.setValueAtTime(1320, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.25);
+      } else if (type === 'fanfare') {
+        // Celebratory ascending arpeggio for quest completion
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        osc.frequency.setValueAtTime(523, ctx.currentTime);         // C5
+        osc.frequency.setValueAtTime(659, ctx.currentTime + 0.12);  // E5
+        osc.frequency.setValueAtTime(784, ctx.currentTime + 0.24);  // G5
+        osc.frequency.setValueAtTime(1047, ctx.currentTime + 0.36); // C6
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.6);
+      }
+    } catch {
+      // Audio not available — no-op
+    }
+  };
 
   // Fetch quest progress on mount
   useEffect(() => {
@@ -38,12 +75,37 @@ export function QuestPanel() {
     return () => { unsub(); };
   }, [fetchProgress]);
 
+  // Detect step completions and quest completions for audio/animation
+  const questDef = QUESTS.find(q => q.id === activeQuestId) || QUESTS[0];
+  const questProgress = quests.find(q => q.id === activeQuestId);
+  const currentCompleted = questProgress
+    ? Object.values(questProgress.steps).filter(Boolean).length
+    : 0;
+
+  useEffect(() => {
+    if (prevCompletedRef.current === null) {
+      // First load — just record, don't play sound
+      prevCompletedRef.current = currentCompleted;
+      return;
+    }
+    if (currentCompleted > prevCompletedRef.current) {
+      const questStepCount = questDef.steps.length;
+      if (currentCompleted === questStepCount && !questProgress?.reward_claimed) {
+        // All steps done — fanfare + celebration animation
+        playSound('fanfare');
+        setCelebrating(true);
+        setExpanded(true);
+      } else {
+        // Individual step completed
+        playSound('check');
+      }
+    }
+    prevCompletedRef.current = currentCompleted;
+  }, [currentCompleted]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   // Don't render if hidden, not loaded, or all quests fully done
   const allQuestsDone = loaded && quests.length > 0 && quests.every(q => q.reward_claimed);
   if (hidden || !loaded || allQuestsDone) return null;
-
-  const questDef = QUESTS.find(q => q.id === activeQuestId) || QUESTS[0];
-  const questProgress = quests.find(q => q.id === activeQuestId);
   const steps = questProgress?.steps || {};
   const completedCount = Object.values(steps).filter(Boolean).length;
   const totalCount = questDef.steps.length;
@@ -53,9 +115,11 @@ export function QuestPanel() {
 
   const handleClaimReward = async () => {
     setClaiming(true);
+    setCelebrating(false);
     try {
       const result = await claimReward(questDef.id);
       if (!result.already_claimed) {
+        playSound('fanfare');
         toast.success(`You earned ${questDef.reward} credits!`, {
           message: 'Keep going — more quests await!',
           duration: 6000,
@@ -70,7 +134,7 @@ export function QuestPanel() {
 
   return (
     <div className="quest-overlay fixed bottom-10 left-6 z-50 w-[420px] max-w-[calc(100vw-2rem)] quest-fade-in">
-      <div className="quest-card rounded-2xl overflow-hidden">
+      <div className={`quest-card rounded-2xl overflow-hidden ${celebrating ? 'quest-celebrate' : ''}`}>
         {/* Accent bar */}
         <div className="absolute top-0 left-0 right-0 h-1.5 quest-accent-bar rounded-t-2xl" />
 
@@ -188,7 +252,7 @@ export function QuestPanel() {
                 <button
                   onClick={handleClaimReward}
                   disabled={claiming}
-                  className="quest-claim-btn w-full flex items-center justify-center gap-2 py-3 rounded-xl
+                  className="quest-claim-btn quest-claim-pulse w-full flex items-center justify-center gap-2 py-3 rounded-xl
                     disabled:opacity-50 disabled:cursor-not-allowed
                     text-white font-bold text-base
                     transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
