@@ -101,6 +101,10 @@ export const useProjectsStore = create((set, get) => ({
       const project = await response.json();
 
       await get().fetchProjects();
+      // T540: Refresh quest progress after project creation
+      import('./questStore').then(({ useQuestStore }) =>
+        useQuestStore.getState().fetchProgress()
+      );
       return project;
     } catch (err) {
       set({ error: err.message, loading: false });
