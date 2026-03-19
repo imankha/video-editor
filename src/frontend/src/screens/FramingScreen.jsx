@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { List, X } from 'lucide-react';
 import extractionWebSocketManager from '../services/ExtractionWebSocketManager';
 import { FramingModeView } from '../modes';
@@ -19,7 +19,7 @@ import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUt
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { isExtracted, isExtracting, isFailed, isRetrying, clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
-import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useNavigationStore } from '../stores';
+import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useNavigationStore, useVideoStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 
 /**
@@ -506,6 +506,22 @@ export function FramingScreen({
 
   // Track the last loaded URL to detect when extraction completes
   const lastLoadedUrlRef = useRef(null);
+
+  // T580: On mount, immediately load the first clip's video before first paint.
+  // When switching from overlay → framing, the shared videoStore may still hold
+  // the working video (cropped/exported). Loading the correct clip URL here
+  // (in useLayoutEffect) updates the store before the browser paints, so the
+  // user never sees stale video or a "no video loaded" flash.
+  useLayoutEffect(() => {
+    if (clips.length === 0) return;
+    const targetClip = (selectedClipId && clips.find(c => c.id === selectedClipId)) || clips[0];
+    if (!isExtracted(targetClip)) return;
+    const clipUrl = getClipFileUrlSelector(targetClip, projectId);
+    if (!clipUrl || clipUrl.startsWith('blob:')) return;
+    const meta = clipMetadataCache[targetClip.id];
+    loadVideoFromStreamingUrl(clipUrl, meta?.metadata || null);
+    lastLoadedUrlRef.current = clipUrl;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only, mirrors initial load effect
 
   // Initialize video playback when entering framing mode
   // T250: Clips are raw backend data. Get metadata from cache.
