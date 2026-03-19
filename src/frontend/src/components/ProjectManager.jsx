@@ -425,7 +425,7 @@ export function ProjectManager({
         className="hidden"
       />
 
-      {/* Top right controls - Credits + Gallery + Profile switcher */}
+      {/* Top right controls - Quests + Credits + Gallery + Profile switcher */}
       <div className="fixed top-4 right-4 z-30 flex items-center gap-2 sm:gap-4">
         <CreditBalance />
         {onOpenDownloads && (

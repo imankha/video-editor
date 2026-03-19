@@ -523,7 +523,7 @@ async def list_raw_clips(game_id: Optional[int] = None, min_rating: Optional[int
                 file_url=get_raw_clip_url(clip['filename']),
                 rating=clip['rating'],
                 tags=tags,
-                name=derive_clip_name(clip['name'], clip['rating'], tags),
+                name=derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or ''),
                 notes=clip['notes'],
                 start_time=clip['start_time'],
                 end_time=clip['end_time'],
@@ -556,7 +556,7 @@ async def get_raw_clip(clip_id: int):
             file_url=get_raw_clip_url(clip['filename']),
             rating=clip['rating'],
             tags=tags,
-            name=derive_clip_name(clip['name'], clip['rating'], tags),
+            name=derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or ''),
             notes=clip['notes'],
             start_time=clip['start_time'],
             end_time=clip['end_time'],
@@ -612,7 +612,7 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
     """Create a 9:16 project for a 5-star clip and return the project ID."""
     # Fetch tags and rating from the raw clip to generate a name if needed
     cursor.execute("""
-        SELECT rating, tags FROM raw_clips WHERE id = ?
+        SELECT rating, tags, notes FROM raw_clips WHERE id = ?
     """, (raw_clip_id,))
     clip_data = cursor.fetchone()
 
@@ -622,7 +622,8 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
     elif clip_data:
         rating = clip_data['rating'] or 5
         tags = json.loads(clip_data['tags']) if clip_data['tags'] else []
-        project_name = derive_clip_name(None, rating, tags) or f"Clip {raw_clip_id}"
+        notes = clip_data['notes'] or ''
+        project_name = derive_clip_name(None, rating, tags, notes) or f"Clip {raw_clip_id}"
     else:
         project_name = f"Clip {raw_clip_id}"
 
@@ -1083,7 +1084,7 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 uploaded_filename=uploaded_filename,
                 filename=filename,
                 file_url=file_url,
-                name=derive_clip_name(clip['raw_name'], rating, tags),
+                name=derive_clip_name(clip['raw_name'], rating, tags, clip['raw_notes'] or ''),
                 notes=clip['raw_notes'],
                 exported_at=clip['exported_at'],
                 sort_order=clip['sort_order'],
@@ -1491,7 +1492,7 @@ async def upload_clip_with_metadata(
             raw_clip_id=raw_clip_id,
             uploaded_filename=None,
             filename=clip_filename,
-            name=derive_clip_name(unique_name, rating, tags_list),
+            name=derive_clip_name(unique_name, rating, tags_list, notes or ''),
             notes=notes,
             exported_at=None,
             sort_order=next_order

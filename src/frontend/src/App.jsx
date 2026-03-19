@@ -6,6 +6,7 @@ import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { CreditBalance } from './components/CreditBalance';
 import { GalleryButton } from './components/GalleryButton';
+import { QuestPanel } from './components/QuestPanel';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
@@ -19,6 +20,7 @@ import { AppStateProvider, ProjectProvider } from './contexts';
 import { AuthGateModal } from './components/AuthGateModal';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
+import { useQuestStore } from './stores/questStore';
 
 /**
  * App.jsx - Main application shell
@@ -97,6 +99,19 @@ function App() {
     initSession().then(() => {
       warmAllUserVideos();
       useProfileStore.getState().fetchProfiles();
+
+      // Restore navigation state after auth-triggered reload (cross-device recovery)
+      const returnMode = sessionStorage.getItem('authReturnMode');
+      if (returnMode) {
+        sessionStorage.removeItem('authReturnMode');
+        const returnProjectId = sessionStorage.getItem('authReturnProjectId');
+        sessionStorage.removeItem('authReturnProjectId');
+
+        if (returnProjectId) {
+          useProjectsStore.getState().selectProject(returnProjectId);
+        }
+        useEditorStore.getState().setEditorMode(returnMode);
+      }
     });
   }, []);
 
@@ -108,6 +123,13 @@ function App() {
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
 
+  // T540: Record achievement when user enters framing mode
+  useEffect(() => {
+    if (editorMode === EDITOR_MODES.FRAMING) {
+      useQuestStore.getState().recordAchievement('opened_framing_editor');
+    }
+  }, [editorMode]);
+
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);
 
@@ -115,6 +137,8 @@ function App() {
   const handleExportComplete = useCallback(() => {
     fetchProjects();
     // Downloads count is auto-refreshed by DownloadsPanel via galleryStore
+    // T540: Refresh quest progress after any export completes
+    useQuestStore.getState().fetchProgress();
   }, [fetchProjects]);
 
   // Handler for loading saved games from ProjectManager
@@ -286,6 +310,8 @@ function App() {
         <AuthGateModal />
         {/* Guest activity banner — only shown after guest does meaningful work */}
         {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
+        {/* Quest overlay — auto-shows for new users (T540) */}
+        <QuestPanel />
       </>
     );
   }
@@ -395,6 +421,9 @@ function App() {
         }}
         onOpenGame={handleLoadGame}
       />
+
+      {/* Quest Panel (T540) */}
+      <QuestPanel />
 
       {/* Mode Switch Confirmation Dialog */}
       <ConfirmationDialog

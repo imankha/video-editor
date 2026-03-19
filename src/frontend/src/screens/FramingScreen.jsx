@@ -176,6 +176,10 @@ export function FramingScreen({
 
     const unsubComplete = extractionWebSocketManager.addEventListener('extraction_complete', (data) => {
       console.log('[FramingScreen] Extraction complete:', data);
+      // T540: Refresh quest progress after extraction
+      import('../stores/questStore').then(({ useQuestStore }) =>
+        useQuestStore.getState().fetchProgress()
+      );
       if (data.project_id === projectId || !data.project_id) {
         fetchProjectClips().then(async (freshClips) => {
           // Load metadata for newly extracted clips

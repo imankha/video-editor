@@ -204,11 +204,13 @@ async function _resetDataStores() {
   stores.useGalleryStore.getState().reset();
   stores.useSettingsStore.getState().reset();
   stores.useCreditStore.getState().reset();
+  stores.useQuestStore.getState().reset();
 
   // Phase 3: Re-fetch data for the new profile
   stores.useProjectsStore.getState().fetchProjects();
   stores.useGamesDataStore.getState().fetchGames();
   stores.useCreditStore.getState().fetchCredits();
+  stores.useQuestStore.getState().fetchProgress();
 }
 
 // Selector hooks

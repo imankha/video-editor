@@ -32,9 +32,6 @@ logger = logging.getLogger(__name__)
 _AUTH_DB_DIR = Path(__file__).parent.parent.parent.parent.parent / "user_data"
 AUTH_DB_PATH = _AUTH_DB_DIR / "auth.sqlite"
 
-# T530: Credits granted to every new user on signup
-SIGNUP_CREDITS = 20
-
 # R2 key for backup (not under any user folder)
 AUTH_DB_R2_KEY_SUFFIX = "auth/auth.sqlite"
 
@@ -244,21 +241,15 @@ def create_user(
     with get_auth_db() as db:
         db.execute(
             """INSERT INTO users (user_id, email, google_id, verified_at, credits)
-               VALUES (?, ?, ?, ?, ?)""",
-            (user_id, email, google_id, verified_at, SIGNUP_CREDITS),
-        )
-        # T530: Record signup credit grant in ledger
-        db.execute(
-            """INSERT INTO credit_transactions (user_id, amount, source)
-               VALUES (?, ?, 'signup_bonus')""",
-            (user_id, SIGNUP_CREDITS),
+               VALUES (?, ?, ?, ?, 0)""",
+            (user_id, email, google_id, verified_at),
         )
         db.commit()
 
     # Sync to R2 immediately — new user registration is critical
     sync_auth_db_to_r2()
 
-    logger.info(f"[AuthDB] Created user: {user_id} email={email} credits={SIGNUP_CREDITS}")
+    logger.info(f"[AuthDB] Created user: {user_id} email={email} credits=0")
     return {"user_id": user_id, "email": email, "google_id": google_id}
 
 
@@ -431,16 +422,11 @@ def create_guest_user() -> str:
     user_id = generate_user_id()
     with get_auth_db() as db:
         db.execute(
-            "INSERT INTO users (user_id, credits) VALUES (?, ?)",
-            (user_id, SIGNUP_CREDITS),
-        )
-        db.execute(
-            """INSERT INTO credit_transactions (user_id, amount, source)
-               VALUES (?, ?, 'signup_bonus')""",
-            (user_id, SIGNUP_CREDITS),
+            "INSERT INTO users (user_id, credits) VALUES (?, 0)",
+            (user_id,),
         )
         db.commit()
-    logger.info(f"[AuthDB] Created guest user: {user_id} credits={SIGNUP_CREDITS}")
+    logger.info(f"[AuthDB] Created guest user: {user_id} credits=0")
     return user_id
 
 
@@ -448,26 +434,8 @@ def create_guest_user() -> str:
 # Credit operations (T530)
 # ---------------------------------------------------------------------------
 
-def _ensure_signup_bonus(user_id: str) -> None:
-    """Grant signup bonus to existing users who predate T530."""
-    with get_auth_db() as db:
-        row = db.execute(
-            "SELECT count(*) as cnt FROM credit_transactions WHERE user_id = ? AND source = 'signup_bonus'",
-            (user_id,),
-        ).fetchone()
-        if row["cnt"] == 0:
-            db.execute("UPDATE users SET credits = credits + ? WHERE user_id = ?", (SIGNUP_CREDITS, user_id))
-            db.execute(
-                "INSERT INTO credit_transactions (user_id, amount, source) VALUES (?, ?, 'signup_bonus')",
-                (user_id, SIGNUP_CREDITS),
-            )
-            db.commit()
-            logger.info(f"[AuthDB] Backfilled signup bonus for existing user {user_id}")
-
-
 def get_credit_balance(user_id: str) -> dict:
-    """Get credit balance for a user. Backfills signup bonus if missing."""
-    _ensure_signup_bonus(user_id)
+    """Get credit balance for a user."""
     with get_auth_db() as db:
         row = db.execute(
             "SELECT credits FROM users WHERE user_id = ?",

@@ -1220,6 +1220,10 @@ async def export_multi_clip(
 
     include_audio_bool = include_audio.lower() == "true"
 
+    # Capture user + profile context early (needed for credit deduction and async operations)
+    captured_user_id = get_current_user_id()
+    captured_profile_id = get_current_profile_id()
+
     # T530: Credit check — calculate total duration from clips_data
     from ...services.auth_db import deduct_credits
     from ...highlight_transform import get_output_duration
@@ -1274,10 +1278,7 @@ async def export_multi_clip(
     temp_dir = tempfile.mkdtemp()
     processed_paths: List[str] = []
 
-    # Capture user + profile context before async operations (context vars may drift in threads)
-    captured_user_id = get_current_user_id()
-    captured_profile_id = get_current_profile_id()
-    logger.info(f"[Multi-Clip Export] Captured user context: {captured_user_id}, profile: {captured_profile_id}")
+    logger.info(f"[Multi-Clip Export] User context: {captured_user_id}, profile: {captured_profile_id}")
 
     try:
         # Calculate consistent target resolution for all clips

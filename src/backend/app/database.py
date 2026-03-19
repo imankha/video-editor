@@ -661,6 +661,14 @@ def ensure_database():
             ON before_after_tracks(final_video_id)
         """)
 
+        # T540: Achievements — non-derivable quest step completion (e.g., opened_framing_editor)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS achievements (
+                key TEXT PRIMARY KEY,
+                achieved_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+
         # Migration: Add new columns to existing tables (silently ignore if already exists)
         migrations = [
             # raw_clips new columns

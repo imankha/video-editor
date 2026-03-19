@@ -114,6 +114,10 @@ export const useUploadStore = create((set, get) => ({
         }
       });
       set({ activeUpload: null, onCompleteCallbacks: [] });
+      // T540: Refresh quest progress after game upload
+      import('./questStore').then(({ useQuestStore }) =>
+        useQuestStore.getState().fetchProgress()
+      );
     };
 
     const onUploadError = (error) => {

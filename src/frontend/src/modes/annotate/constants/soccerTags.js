@@ -100,8 +100,19 @@ export function getAllTags() {
  * @param {Array} selectedTags - Array of selected tag names
  * @returns {string} Generated clip name
  */
-export function generateClipName(rating, selectedTags) {
+export function generateClipName(rating, selectedTags, notes = '') {
   if (!selectedTags || selectedTags.length === 0) {
+    // No tags: use first words from notes that fit in ~30 characters
+    if (notes && notes.trim()) {
+      const words = notes.trim().split(/\s+/);
+      let result = words[0];
+      for (let i = 1; i < words.length; i++) {
+        const next = result + ' ' + words[i];
+        if (next.length > 30) break;
+        result = next;
+      }
+      return result;
+    }
     return '';
   }
 
