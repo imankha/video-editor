@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { List, X } from 'lucide-react';
 import extractionWebSocketManager from '../services/ExtractionWebSocketManager';
 import { FramingModeView } from '../modes';
@@ -19,7 +19,7 @@ import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUt
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { isExtracted, isExtracting, isFailed, isRetrying, clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
-import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useNavigationStore } from '../stores';
+import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useNavigationStore, useVideoStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 
 /**
@@ -506,6 +506,14 @@ export function FramingScreen({
 
   // Track the last loaded URL to detect when extraction completes
   const lastLoadedUrlRef = useRef(null);
+
+  // T580: Clear stale video from shared videoStore before first paint.
+  // When switching from overlay to framing, the store may still hold the
+  // working video (cropped/exported). Reset it so the first render shows
+  // a blank player instead of briefly flashing the exported video.
+  useLayoutEffect(() => {
+    useVideoStore.getState().reset();
+  }, []);
 
   // Initialize video playback when entering framing mode
   // T250: Clips are raw backend data. Get metadata from cache.

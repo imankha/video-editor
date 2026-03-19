@@ -18,7 +18,7 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen, AdminScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AuthGateModal } from './components/AuthGateModal';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, EDITOR_MODES } from './stores';
+import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
 import { useQuestStore } from './stores/questStore';
 
@@ -203,6 +203,10 @@ function App() {
       clearSelection();
       fetchProjects();
     }
+
+    // T580: Reset shared video store on mode switch to prevent stale video
+    // from the previous mode (e.g., working video from overlay showing in framing)
+    useVideoStore.getState().reset();
 
     setEditorMode(newMode);
   }, [editorMode, hasOverlayVideo, framingChangedSinceExport, overlayChangedSinceExport, selectedProject?.has_final_video, openModeSwitchDialog, setEditorMode, clearSelection, fetchProjects]);
