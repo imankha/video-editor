@@ -133,8 +133,8 @@ export function ClipsSidePanel({
             </div>
             <p className="text-xs text-gray-500 mb-3">Click timeline to add clip</p>
 
-            {/* Import/Export - desktop only */}
-            {!isMobile && (
+            {/* Import/Export - desktop only, dev only */}
+            {!isMobile && !import.meta.env.PROD && (
               <div className="flex gap-2">
                 <Button
                   variant="secondary"

@@ -11,7 +11,7 @@
     "build:staging": "vite build --mode staging",
     "build:production": "vite build --mode production",
     "deploy:staging": "npm run build:staging && wrangler pages deploy dist --project-name reel-ballers-staging",
-    "deploy:production": "npm run build:production && wrangler pages deploy dist --project-name reel-ballers-prod",
+    "deploy:production": "npm run build:production && wrangler pages deploy dist --project-name reel-ballers-prod --branch main",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
