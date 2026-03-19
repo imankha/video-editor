@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp, Sparkles, LogIn } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp, LogIn } from 'lucide-react';
 import { useQuestStore } from '../stores/questStore';
 import { QUESTS } from '../config/questDefinitions';
 import { toast } from './shared/Toast';
@@ -28,6 +28,62 @@ export function QuestPanel() {
   const [claiming, setClaiming] = useState(false);
   const [celebrating, setCelebrating] = useState(false);  // Quest complete celebration
   const prevCompletedRef = useRef(null);  // Track step count to detect new completions
+  const panelRef = useRef(null);
+  const [position, setPosition] = useState({ left: null, bottom: null });
+
+  // Smart positioning: avoid overlapping active UI (sidebars, panels)
+  const updatePosition = useCallback(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    // Default position (matches CSS: bottom-3 left-3 → 12px, sm: bottom-10 left-6 → 40px/24px)
+    const isSm = window.innerWidth >= 640;
+    const defaultLeft = isSm ? 24 : 12;
+    const defaultBottom = isSm ? 40 : 12;
+
+    // Check if any UI element occupies our default spot
+    // Look for sidebars/panels on the left side that extend to the bottom
+    const panelRect = panel.getBoundingClientRect();
+    const panelHeight = panelRect.height;
+    const panelWidth = panelRect.width;
+
+    // Query elements that might overlap at bottom-left
+    const checkPoint = { x: defaultLeft + panelWidth / 2, y: window.innerHeight - defaultBottom - panelHeight / 2 };
+    const elementsAtPoint = document.elementsFromPoint(checkPoint.x, checkPoint.y);
+    const overlapping = elementsAtPoint.find(el =>
+      el !== panel && !panel.contains(el) && !el.contains(panel) &&
+      el.closest('[data-sidebar], [class*="sidebar"], [class*="side-panel"], [class*="SidePanel"]')
+    );
+
+    if (overlapping) {
+      const overlapRect = overlapping.closest('[data-sidebar], [class*="sidebar"], [class*="side-panel"], [class*="SidePanel"]').getBoundingClientRect();
+      // Position just to the right of the overlapping element
+      const newLeft = overlapRect.right + 12;
+      // Check if it fits on screen; if not, try bottom-right
+      if (newLeft + panelWidth < window.innerWidth - 12) {
+        setPosition({ left: newLeft, bottom: defaultBottom });
+      } else {
+        // Fall back to bottom-right
+        setPosition({ left: null, right: isSm ? 24 : 12, bottom: defaultBottom });
+      }
+    } else {
+      setPosition({ left: defaultLeft, bottom: defaultBottom });
+    }
+  }, []);
+
+  useEffect(() => {
+    // Run after render to measure
+    const raf = requestAnimationFrame(updatePosition);
+    window.addEventListener('resize', updatePosition);
+    // Re-check when layout changes (sidebar open/close)
+    const observer = new MutationObserver(updatePosition);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', updatePosition);
+      observer.disconnect();
+    };
+  }, [updatePosition, expanded]);
 
   // Play sound effects
   const playSound = (type) => {
@@ -132,8 +188,18 @@ export function QuestPanel() {
     }
   };
 
+  const positionStyle = {
+    ...(position.left != null ? { left: position.left } : {}),
+    ...(position.right != null ? { right: position.right } : {}),
+    ...(position.bottom != null ? { bottom: position.bottom } : {}),
+  };
+
   return (
-    <div className="quest-overlay fixed bottom-3 left-3 right-3 sm:right-auto sm:bottom-10 sm:left-6 z-50 sm:w-[420px] sm:max-w-[calc(100vw-2rem)] quest-fade-in">
+    <div
+      ref={panelRef}
+      className={`quest-overlay fixed z-50 quest-fade-in transition-all duration-300 ${expanded ? 'sm:w-[420px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
+      style={positionStyle}
+    >
       <div className={`quest-card rounded-2xl overflow-hidden ${celebrating ? 'quest-celebrate' : ''}`}>
         {/* Accent bar */}
         <div className="absolute top-0 left-0 right-0 h-1.5 quest-accent-bar rounded-t-2xl" />
@@ -141,40 +207,36 @@ export function QuestPanel() {
         {/* Collapsed / Header — always visible, clickable to toggle */}
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center gap-3 px-5 pt-5 pb-4 text-left hover:bg-white/[0.02] transition-colors"
+          className={`w-full flex items-center text-left hover:bg-white/[0.02] transition-colors ${
+            expanded ? 'gap-3 px-5 pt-5 pb-4' : 'gap-2 px-3 py-2.5'
+          }`}
         >
-          <div className="quest-icon-badge w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
-            <ListChecks size={18} className="text-white" />
+          <div className={`quest-icon-badge rounded-xl flex items-center justify-center flex-shrink-0 ${
+            expanded ? 'w-9 h-9' : 'w-7 h-7'
+          }`}>
+            <ListChecks size={expanded ? 18 : 14} className="text-white" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="quest-title text-base leading-tight">{questDef.title}</h3>
-              {/* Inline reward badge — mobile only */}
-              {!isComplete && (
+              <h3 className={`quest-title leading-tight ${expanded ? 'text-base' : 'text-sm'}`}>{questDef.title}</h3>
+              {/* Progress count — shown inline when collapsed */}
+              {!expanded && (
+                <span className="quest-progress-text text-xs tabular-nums flex-shrink-0 ml-auto">
+                  {completedCount}/{totalCount}
+                </span>
+              )}
+              {/* Inline reward badge — mobile only, expanded */}
+              {expanded && !isComplete && (
                 <div className="sm:hidden quest-reward-badge flex items-center gap-1 px-1.5 py-0.5 rounded-full flex-shrink-0 ml-auto">
                   <Gem size={10} />
                   <span className="text-xs font-semibold">{questDef.reward}</span>
                 </div>
               )}
             </div>
-            {/* Mini progress bar in collapsed state */}
-            {!expanded && (
-              <div className="mt-1.5 flex items-center gap-2">
-                <div className="flex-1 h-1.5 bg-black/30 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full quest-progress-fill transition-all duration-700 ease-out"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-                <span className="quest-progress-text text-xs tabular-nums flex-shrink-0">
-                  {completedCount}/{totalCount}
-                </span>
-              </div>
-            )}
           </div>
           {expanded
             ? <ChevronDown size={16} className="text-white/30 flex-shrink-0" />
-            : <ChevronUp size={16} className="text-white/30 flex-shrink-0" />
+            : <ChevronUp size={14} className="text-white/30 flex-shrink-0" />
           }
         </button>
 

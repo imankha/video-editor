@@ -96,7 +96,7 @@ export function ClipsSidePanel({
   };
 
   return (
-    <div className={`${isMobile ? 'w-full' : 'w-[352px]'} bg-gray-900/95 border-r border-gray-700 flex flex-col h-full`}>
+    <div data-sidebar="clips" className={`${isMobile ? 'w-full' : 'w-[352px]'} bg-gray-900/95 border-r border-gray-700 flex flex-col h-full`}>
       {/* Mobile Detail View - full panel takeover when clip selected */}
       {mobileShowDetail ? (
         <>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Code, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Code, X, ChevronUp } from 'lucide-react';
 import versionInfo from '../version.json';
 
 /**
@@ -10,8 +10,8 @@ import versionInfo from '../version.json';
 export default function DebugInfo() {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Don't render in production
-  if (versionInfo.environment === 'production') {
+  // Don't render in production (use Vite's build-time flag — more reliable than version.json)
+  if (import.meta.env.PROD) {
     return null;
   }
 
