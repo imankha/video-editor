@@ -49,7 +49,7 @@ export function QuestFunnelChart({ users }) {
     <div>
       <div className="flex items-end justify-between mb-1">
         <span className="text-gray-400 text-xs">Users</span>
-        <div className="flex items-center gap-4 text-xs text-gray-500">
+        <div className="flex items-center gap-4 text-xs text-gray-300">
           <span><span className="inline-block w-2 h-2 rounded-sm bg-purple-500 mr-1" />Q1 Get Started</span>
           <span><span className="inline-block w-2 h-2 rounded-sm bg-blue-500 mr-1" />Q2 Export Highlights</span>
           <span><span className="inline-block w-2 h-2 rounded-sm bg-emerald-500 mr-1" />Q3 Highlight Reel</span>
@@ -62,8 +62,8 @@ export function QuestFunnelChart({ users }) {
         <div className="absolute inset-0 flex flex-col justify-between pointer-events-none" style={{ paddingBottom: '28px' }}>
           {[maxCount, Math.round(maxCount / 2), 0].map((v, i) => (
             <div key={i} className="flex items-center gap-1">
-              <span className="text-gray-600 text-[10px] w-4 text-right">{v}</span>
-              <div className="flex-1 border-t border-white/5" />
+              <span className="text-gray-400 text-[10px] w-4 text-right">{v}</span>
+              <div className="flex-1 border-t border-white/10" />
             </div>
           ))}
         </div>
@@ -110,7 +110,7 @@ export function QuestFunnelChart({ users }) {
           {QUESTS.map((quest, qi) => (
             <div
               key={quest.id}
-              className="text-center text-[10px] text-gray-600"
+              className="text-center text-[10px] text-gray-400"
               style={{ flex: quest.steps.length }}
             >
               Q{qi + 1}
