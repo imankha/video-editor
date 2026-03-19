@@ -133,7 +133,7 @@ export function QuestPanel() {
   };
 
   return (
-    <div className="quest-overlay fixed bottom-10 left-6 z-50 w-[420px] max-w-[calc(100vw-2rem)] quest-fade-in">
+    <div className="quest-overlay fixed bottom-3 left-3 right-3 sm:right-auto sm:bottom-10 sm:left-6 z-50 sm:w-[420px] sm:max-w-[calc(100vw-2rem)] quest-fade-in">
       <div className={`quest-card rounded-2xl overflow-hidden ${celebrating ? 'quest-celebrate' : ''}`}>
         {/* Accent bar */}
         <div className="absolute top-0 left-0 right-0 h-1.5 quest-accent-bar rounded-t-2xl" />
@@ -147,7 +147,16 @@ export function QuestPanel() {
             <ListChecks size={18} className="text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="quest-title text-base leading-tight">{questDef.title}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="quest-title text-base leading-tight">{questDef.title}</h3>
+              {/* Inline reward badge — mobile only */}
+              {!isComplete && (
+                <div className="sm:hidden quest-reward-badge flex items-center gap-1 px-1.5 py-0.5 rounded-full flex-shrink-0 ml-auto">
+                  <Gem size={10} />
+                  <span className="text-xs font-semibold">{questDef.reward}</span>
+                </div>
+              )}
+            </div>
             {/* Mini progress bar in collapsed state */}
             {!expanded && (
               <div className="mt-1.5 flex items-center gap-2">
@@ -206,8 +215,8 @@ export function QuestPanel() {
                   <div
                     key={step.id}
                     className={`
-                      flex items-start gap-3.5 py-3
-                      ${index < questDef.steps.length - 1 ? 'border-b border-white/5' : ''}
+                      ${isCurrent ? 'flex' : 'hidden sm:flex'} items-start gap-3.5 py-3
+                      ${index < questDef.steps.length - 1 ? 'sm:border-b border-white/5' : ''}
                       ${isCurrent ? 'quest-step-current' : ''}
                     `}
                   >
@@ -246,8 +255,8 @@ export function QuestPanel() {
               })}
             </div>
 
-            {/* Reward footer */}
-            <div className="px-5 pb-5 pt-1">
+            {/* Reward footer — hidden on mobile unless quest is complete (reward shown inline in header) */}
+            <div className={`px-5 pb-5 pt-1 ${isComplete ? '' : 'hidden sm:block'}`}>
               {isComplete ? (
                 <button
                   onClick={handleClaimReward}
@@ -261,7 +270,7 @@ export function QuestPanel() {
                   {claiming ? 'Claiming...' : `Claim ${questDef.reward} Credits`}
                 </button>
               ) : (
-                <div className="flex items-center gap-2 py-1.5">
+                <div className="hidden sm:flex items-center gap-2 py-1.5">
                   <div className="quest-reward-badge flex items-center gap-2 px-3 py-1.5 rounded-full">
                     <Gem size={14} />
                     <span className="text-sm font-semibold">{questDef.reward} credits</span>
