@@ -117,8 +117,40 @@ function App() {
       }
 
       // Payment return: do NOT restore mode — user stays on Projects screen.
-      // paymentReturnProjectId is kept in sessionStorage for the "Frame Video"
-      // button in PaymentResultModal to use via normal project selection flow.
+      // Verify payment and show toast after session is ready (needs auth cookie).
+      const paymentParams = new URLSearchParams(window.location.search);
+      const payment = paymentParams.get('payment');
+      const paymentSessionId = paymentParams.get('session_id');
+      if (payment) {
+        // Remove query params without reload
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('payment');
+        cleanUrl.searchParams.delete('session_id');
+        window.history.replaceState({}, '', cleanUrl.pathname + cleanUrl.hash);
+
+        if (payment === 'success' && paymentSessionId) {
+          fetch(`${API_BASE}/api/payments/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ session_id: paymentSessionId }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              useCreditStore.getState().fetchCredits();
+              if (data.status === 'credits_granted' || data.status === 'already_processed') {
+                const credits = data.credits || 0;
+                toast.success(`${credits} credits added to your balance!`);
+              } else {
+                toast.info('Payment is still processing. Your credits will appear shortly.');
+              }
+            })
+            .catch(() => {
+              useCreditStore.getState().fetchCredits();
+              toast.error('Could not verify payment. Your credits may still be added shortly.');
+            });
+        }
+      }
     });
   }, []);
 
@@ -131,45 +163,8 @@ function App() {
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
 
-  // T525: Handle return from Stripe checkout
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const payment = params.get('payment');
-    if (!payment) return;
-
-    const sessionId = params.get('session_id');
-
-    // Remove query params without reload
-    const url = new URL(window.location.href);
-    url.searchParams.delete('payment');
-    url.searchParams.delete('session_id');
-    window.history.replaceState({}, '', url.pathname + url.hash);
-
-    if (payment === 'success' && sessionId) {
-      // Navigation restore happens in initSession().then(...) above.
-      // Here we only verify payment and show the result modal.
-      fetch(`${API_BASE}/api/payments/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ session_id: sessionId }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          useCreditStore.getState().fetchCredits();
-          if (data.status === 'credits_granted' || data.status === 'already_processed') {
-            const credits = data.credits || 0;
-            toast.success(`${credits} credits added to your balance!`);
-          } else {
-            toast.info('Payment is still processing. Your credits will appear shortly.');
-          }
-        })
-        .catch(() => {
-          useCreditStore.getState().fetchCredits();
-          toast.error('Could not verify payment. Your credits may still be added shortly.');
-        });
-    }
-  }, []);
+  // T525: Payment return is handled inside initSession().then(...) above
+  // so the session cookie is ready before the verify API call.
 
   // T540: Record achievement when user enters framing mode
   useEffect(() => {
