@@ -23,6 +23,7 @@ import { useAuthStore } from './stores/authStore';
 import { useQuestStore } from './stores/questStore';
 import { useCreditStore } from './stores/creditStore';
 import { toast } from './components/shared';
+import { API_BASE } from './config';
 
 /**
  * App.jsx - Main application shell
@@ -132,14 +133,36 @@ function App() {
     const payment = params.get('payment');
     if (!payment) return;
 
-    // Remove query param without reload
+    const sessionId = params.get('session_id');
+
+    // Remove query params without reload
     const url = new URL(window.location.href);
     url.searchParams.delete('payment');
+    url.searchParams.delete('session_id');
     window.history.replaceState({}, '', url.pathname + url.hash);
 
-    if (payment === 'success') {
-      toast.success('Payment received! Credits added to your balance.');
-      useCreditStore.getState().fetchCredits();
+    if (payment === 'success' && sessionId) {
+      // Verify session with backend — grants credits if webhook hasn't already
+      fetch(`${API_BASE}/api/payments/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ session_id: sessionId }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.status === 'credits_granted') {
+            toast.success(`${data.credits} credits added to your balance!`);
+          } else if (data.status === 'already_processed') {
+            toast.success('Credits already added to your balance.');
+          }
+          useCreditStore.getState().fetchCredits();
+        })
+        .catch(() => {
+          // Fallback: just refresh balance (webhook may have already handled it)
+          toast.success('Payment received! Updating balance...');
+          useCreditStore.getState().fetchCredits();
+        });
     }
   }, []);
 

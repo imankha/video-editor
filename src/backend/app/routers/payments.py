@@ -99,7 +99,7 @@ async def create_checkout(request: CheckoutRequest):
             "pack": request.pack,
             "credits": str(pack["credits"]),
         },
-        success_url=f"{FRONTEND_URL}?payment=success",
+        success_url=f"{FRONTEND_URL}?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{FRONTEND_URL}?payment=cancelled",
     )
 
@@ -164,3 +164,67 @@ async def stripe_webhook(request: Request):
 
     # Return 200 for all other event types (Stripe expects it)
     return {"status": "ignored", "type": event["type"]}
+
+
+# ---------------------------------------------------------------------------
+# Session verification endpoint (works without webhook — needed for local dev)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/verify")
+async def verify_session(request: Request):
+    """
+    Verify a Stripe Checkout Session and grant credits if paid.
+
+    Called by the frontend after returning from Stripe checkout. This provides
+    immediate credit granting without waiting for the webhook — essential for
+    local dev (where webhooks can't reach localhost) and as a reliability
+    fallback in production.
+
+    Same idempotency guard as the webhook: won't double-grant.
+    """
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Payments not configured")
+
+    body = await request.json()
+    session_id = body.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id required")
+
+    user_id = get_current_user_id()
+
+    # Already processed (by webhook or previous verify call)
+    if has_processed_payment(session_id):
+        from ..services.auth_db import get_credit_balance
+        balance = get_credit_balance(user_id)
+        return {"status": "already_processed", "balance": balance["balance"]}
+
+    # Retrieve session from Stripe to verify payment
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+    except stripe.StripeError as e:
+        logger.error(f"[Payments] Failed to retrieve session {session_id}: {e}")
+        raise HTTPException(status_code=400, detail="Invalid session")
+
+    if session.payment_status != "paid":
+        return {"status": "unpaid", "payment_status": session.payment_status}
+
+    # Verify this session belongs to the current user
+    metadata = session.metadata or {}
+    session_user_id = metadata.get("user_id")
+    if session_user_id != user_id:
+        logger.warning(f"[Payments] Session {session_id} user mismatch: {session_user_id} != {user_id}")
+        raise HTTPException(status_code=403, detail="Session does not belong to this user")
+
+    credits = int(metadata.get("credits", 0))
+    pack = metadata.get("pack", "unknown")
+
+    if credits <= 0:
+        raise HTTPException(status_code=400, detail="Invalid credits in session metadata")
+
+    new_balance = grant_credits(user_id, credits, "stripe_purchase", session_id)
+    logger.info(
+        f"[Payments] Verified + granted {credits} credits to {user_id} "
+        f"(pack={pack}, session={session_id}), balance={new_balance}"
+    )
+    return {"status": "credits_granted", "credits": credits, "balance": new_balance}
