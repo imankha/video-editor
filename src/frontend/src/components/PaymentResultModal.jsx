@@ -47,7 +47,7 @@ export function PaymentResultModal({ result, onClose, onExport }) {
           </Button>
           {isSuccess && onExport && (
             <Button variant="primary" onClick={() => { onClose(); onExport(); }} className="flex-1">
-              Export Now
+              Frame Video
             </Button>
           )}
         </div>
