@@ -37,6 +37,10 @@ from app.storage import (
     save_profiles_json,
     upload_to_r2,
     R2ReadError,
+    R2_ENABLED,
+    get_r2_client,
+    R2_BUCKET,
+    APP_ENV,
 )
 from app.services.auth_db import (
     get_user_by_email,
@@ -44,13 +48,52 @@ from app.services.auth_db import (
     create_session,
     validate_session,
     invalidate_session,
+    invalidate_user_sessions,
     create_guest_user,
     link_google_to_user,
     get_user_by_id,
     update_last_seen,
+    sync_auth_db_to_r2,
 )
 
+# Test account that auto-resets on every login (fresh new-user experience)
+TEST_RESET_EMAIL = os.getenv("TEST_RESET_EMAIL")
+
 logger = logging.getLogger(__name__)
+
+
+def _reset_test_account(user_id: str, email: str) -> None:
+    """Wipe all data for a test account so next login is a fresh new-user experience."""
+    logger.info(f"[Auth] Resetting test account: {email} (user_id={user_id})")
+
+    # 1. Delete local user folder
+    user_path = USER_DATA_BASE / user_id
+    if user_path.exists():
+        shutil.rmtree(user_path)
+        logger.info(f"[Auth] Deleted local folder: {user_path}")
+
+    # 2. Delete R2 user data (current environment only)
+    if R2_ENABLED:
+        client = get_r2_client()
+        if client:
+            prefix = f"{APP_ENV}/users/{user_id}/"
+            paginator = client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=R2_BUCKET, Prefix=prefix):
+                objects = page.get("Contents", [])
+                if objects:
+                    keys = [{"Key": obj["Key"]} for obj in objects]
+                    client.delete_objects(Bucket=R2_BUCKET, Delete={"Objects": keys})
+            logger.info(f"[Auth] Deleted R2 data under {prefix}")
+
+    # 3. Delete auth DB records (sessions, credit transactions, user row)
+    from app.services.auth_db import AUTH_DB_PATH
+    conn = sqlite3.connect(str(AUTH_DB_PATH))
+    for table, col in [("credit_transactions", "user_id"), ("sessions", "user_id"), ("users", "user_id")]:
+        conn.execute(f"DELETE FROM {table} WHERE {col} = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    sync_auth_db_to_r2()
+    logger.info(f"[Auth] Cleared auth DB records for {user_id}")
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Secure cookies require HTTPS — false for local dev, true for staging/production
@@ -109,14 +152,6 @@ async def delete_user():
     if not user_path.exists():
         logger.info(f"User folder does not exist: {user_id}")
         return {"message": f"User {user_id} has no data to delete", "deleted": False}
-
-    # Safety check: don't delete the default user in production
-    if user_id == "a" and not user_id.startswith("e2e_"):
-        logger.warning(f"Attempted to delete default user 'a' - blocking for safety")
-        raise HTTPException(
-            status_code=403,
-            detail="Cannot delete default user. Use a test user ID for cleanup."
-        )
 
     try:
         logger.info(f"Deleting user folder: {user_path}")
@@ -258,6 +293,13 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     if not email or token_data.get("email_verified") != "true":
         raise HTTPException(status_code=401, detail="Email not verified by Google")
 
+    # Auto-reset test account: wipe all data so login is always fresh (dev only)
+    if TEST_RESET_EMAIL and email == TEST_RESET_EMAIL and APP_ENV != "production":
+        existing_test = get_user_by_email(email)
+        if existing_test:
+            _reset_test_account(existing_test['user_id'], email)
+            # After reset, fall through to the first-time flow below
+
     # Look up in central auth DB: does this email already have a user?
     existing = get_user_by_email(email)
 
@@ -321,6 +363,9 @@ async def auth_me(request: Request):
     if not session:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
+    # T610: Track activity for account cleanup
+    update_last_seen(session["user_id"])
+
     return {
         "email": session.get("email"),
         "user_id": session["user_id"],
@@ -361,6 +406,9 @@ async def init_guest(request: Request):
         user_id = create_guest_user()
 
     session_id = create_session(user_id)
+
+    # T610: Track activity for account cleanup
+    update_last_seen(user_id)
 
     # Initialize the user's data (profile, database, etc.)
     set_current_user_id(user_id)

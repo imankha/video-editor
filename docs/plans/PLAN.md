@@ -199,6 +199,8 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
 | T600 | [Auto-Generate Annotation Titles (TF-IDF)](tasks/T600-auto-generate-annotation-titles.md) | DONE | 5 | 4 | Extract keyword titles from notes using scikit-learn TfidfVectorizer; zero API cost |
+| T610 | [Track last_seen_at on Every Visit](tasks/T610-track-last-seen.md) | IN_PROGRESS | 6 | 1 | Update last_seen_at on /auth/me and /init-guest, not just Google login |
+| T620 | [Account Cleanup (Trigger: high R2 fees)](tasks/T620-account-cleanup.md) | TODO | 5 | 5 | Auto-delete abandoned guests (7d), dormant free (90d), warn paid (180d). Blocked by T610 |
 
 ### Phase 4: Post-Launch Polish
 
