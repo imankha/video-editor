@@ -416,6 +416,7 @@ export function ExportButtonContainer({
           available: balance,
           videoSeconds: totalVideoSeconds,
         });
+        setShowBuyCredits(true);
         return;
       }
       // Fail-closed: if we still can't determine duration, block export
@@ -883,6 +884,7 @@ export function ExportButtonContainer({
             available: detail.available,
             videoSeconds: detail.video_seconds,
           });
+          setShowBuyCredits(true);
           // Refresh credit store with authoritative balance
           useCreditStore.getState().setBalance(detail.available);
         }

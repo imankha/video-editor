@@ -3,7 +3,6 @@ import { Download, Loader, AlertCircle, Check } from 'lucide-react';
 import { Button, Toggle, ExportProgress } from './shared';
 import { HighlightColor, HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { HighlightEffect } from '../constants/highlightEffects';
-import { InsufficientCreditsModal } from './InsufficientCreditsModal';
 import { BuyCreditsModal } from './BuyCreditsModal';
 
 /**
@@ -253,20 +252,12 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         </div>
       )}
 
-      {/* T530: Insufficient Credits Modal */}
-      {showInsufficientCredits && (
-        <InsufficientCreditsModal
-          required={showInsufficientCredits.required}
-          available={showInsufficientCredits.available}
-          videoSeconds={showInsufficientCredits.videoSeconds}
-          onClose={onCloseInsufficientCredits}
-          onBuyCredits={onOpenBuyCredits}
-        />
-      )}
-
-      {/* T525: Buy Credits Modal */}
+      {/* T525: Buy Credits Modal (merged with insufficient credits info) */}
       {showBuyCredits && (
-        <BuyCreditsModal onClose={onCloseBuyCredits} />
+        <BuyCreditsModal
+          onClose={() => { onCloseBuyCredits(); onCloseInsufficientCredits(); }}
+          insufficientCredits={showInsufficientCredits}
+        />
       )}
     </div>
   );

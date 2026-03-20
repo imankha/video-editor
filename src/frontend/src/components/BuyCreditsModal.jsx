@@ -10,8 +10,12 @@ import { useEditorStore, useProjectsStore } from '../stores';
  * Shows three credit packs. Clicking one creates a Stripe Checkout Session
  * and redirects to Stripe's hosted payment page.
  *
+ * When triggered from an export with insufficient credits, shows the
+ * credit shortage info at the top (merged from InsufficientCreditsModal).
+ *
  * Props:
  *   onClose: () => void - close handler
+ *   insufficientCredits: { required, available, videoSeconds } | null - if set, shows shortage info
  */
 
 const PACKS = [
@@ -47,7 +51,7 @@ const PACKS = [
   },
 ];
 
-export function BuyCreditsModal({ onClose }) {
+export function BuyCreditsModal({ onClose, insufficientCredits }) {
   const [loadingPack, setLoadingPack] = useState(null);
   const [error, setError] = useState(null);
 
@@ -101,6 +105,21 @@ export function BuyCreditsModal({ onClose }) {
             <X size={20} />
           </button>
         </div>
+
+        {insufficientCredits && (
+          <div className="mb-4 p-3 rounded-lg bg-red-900/20 border border-red-500/20 text-sm text-gray-300">
+            <p>
+              This export requires{' '}
+              <strong className="text-white">{insufficientCredits.required} credits</strong>{' '}
+              ({Math.round(insufficientCredits.videoSeconds)}s of video).
+            </p>
+            <p className="mt-1">
+              Your balance:{' '}
+              <strong className="text-white">{insufficientCredits.available} credits</strong>.
+              You need <strong className="text-white">{insufficientCredits.required - insufficientCredits.available}</strong> more.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-3">
           {PACKS.map((pack) => {
