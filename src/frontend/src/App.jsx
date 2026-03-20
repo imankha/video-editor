@@ -1,4 +1,4 @@
-import { useMemo, useRef, useCallback, useEffect } from 'react';
+import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { Home, Scissors, LogIn, ShieldCheck } from 'lucide-react';
 import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { initSession, setGuestWriteCallback } from './utils/sessionInit';
@@ -22,8 +22,8 @@ import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, usePr
 import { useAuthStore } from './stores/authStore';
 import { useQuestStore } from './stores/questStore';
 import { useCreditStore } from './stores/creditStore';
-import { toast } from './components/shared';
 import { API_BASE } from './config';
+import { PaymentResultModal } from './components/PaymentResultModal';
 
 /**
  * App.jsx - Main application shell
@@ -164,17 +164,26 @@ function App() {
       })
         .then((res) => res.json())
         .then((data) => {
-          if (data.status === 'credits_granted') {
-            toast.success(`${data.credits} credits added to your balance!`);
-          } else if (data.status === 'already_processed') {
-            toast.success('Credits already added to your balance.');
-          }
           useCreditStore.getState().fetchCredits();
+          if (data.status === 'credits_granted' || data.status === 'already_processed') {
+            setPaymentResult({
+              status: 'success',
+              credits: data.credits || 0,
+              balance: data.balance || 0,
+            });
+          } else {
+            setPaymentResult({
+              status: 'error',
+              message: 'Payment is still processing. Your credits will appear shortly.',
+            });
+          }
         })
         .catch(() => {
-          // Fallback: just refresh balance (webhook may have already handled it)
-          toast.success('Payment received! Updating balance...');
           useCreditStore.getState().fetchCredits();
+          setPaymentResult({
+            status: 'error',
+            message: 'Could not verify payment right now. Your credits may still be added shortly.',
+          });
         });
     }
   }, []);
@@ -188,6 +197,9 @@ function App() {
 
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);
+
+  // T525: Payment result modal state
+  const [paymentResult, setPaymentResult] = useState(null);
 
   // Export completion callback - used by Screen components to refresh data
   const handleExportComplete = useCallback(() => {
@@ -526,6 +538,17 @@ function App() {
 
       {/* Auth Gate Modal - shows when GPU action requires authentication */}
       <AuthGateModal />
+
+      {/* T525: Payment result modal after Stripe checkout return */}
+      {paymentResult && (
+        <PaymentResultModal
+          result={paymentResult}
+          onClose={() => setPaymentResult(null)}
+          onExport={paymentResult.status === 'success' ? () => {
+            exportButtonRef.current?.triggerExport?.();
+          } : undefined}
+        />
+      )}
     </div>
     </AppStateProvider>
     </ProjectProvider>
