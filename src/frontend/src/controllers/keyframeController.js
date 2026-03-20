@@ -243,9 +243,9 @@ export function keyframeReducer(state, action) {
     case ActionTypes.RESTORE_KEYFRAMES: {
       const { keyframes, endFrame, framerate } = action.payload;
 
-      // Validate keyframes array
-      if (!keyframes || !Array.isArray(keyframes) || keyframes.length < 2) {
-        console.warn('[keyframeController] Cannot restore - invalid keyframes array');
+      // Validate keyframes array (allow 1+ keyframes; ensurePermanentKeyframes adds boundaries)
+      if (!keyframes || !Array.isArray(keyframes) || keyframes.length === 0) {
+        console.warn('[keyframeController] Cannot restore - empty or invalid keyframes array');
         return state;
       }
 
