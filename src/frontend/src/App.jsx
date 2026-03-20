@@ -103,21 +103,22 @@ function App() {
       warmAllUserVideos();
       useProfileStore.getState().fetchProfiles();
 
-      // Restore navigation state after auth-triggered reload or Stripe payment return
-      // Must happen after initSession so the user session is ready for clip fetches.
-      const returnMode = sessionStorage.getItem('authReturnMode') || sessionStorage.getItem('paymentReturnMode');
-      const returnProjectId = sessionStorage.getItem('authReturnProjectId') || sessionStorage.getItem('paymentReturnProjectId');
+      // Restore navigation state after auth-triggered reload (cross-device recovery)
+      const authReturnMode = sessionStorage.getItem('authReturnMode');
+      const authReturnProjectId = sessionStorage.getItem('authReturnProjectId');
       sessionStorage.removeItem('authReturnMode');
       sessionStorage.removeItem('authReturnProjectId');
-      sessionStorage.removeItem('paymentReturnMode');
-      sessionStorage.removeItem('paymentReturnProjectId');
 
-      if (returnMode) {
-        if (returnProjectId) {
-          useProjectsStore.getState().selectProject(returnProjectId);
+      if (authReturnMode) {
+        if (authReturnProjectId) {
+          useProjectsStore.getState().selectProject(authReturnProjectId);
         }
-        useEditorStore.getState().setEditorMode(returnMode);
+        useEditorStore.getState().setEditorMode(authReturnMode);
       }
+
+      // Payment return: do NOT restore mode — user stays on Projects screen.
+      // paymentReturnProjectId is kept in sessionStorage for the "Frame Video"
+      // button in PaymentResultModal to use via normal project selection flow.
     });
   }, []);
 
@@ -536,7 +537,13 @@ function App() {
           result={paymentResult}
           onClose={() => setPaymentResult(null)}
           onExport={paymentResult.status === 'success' ? () => {
-            exportButtonRef.current?.triggerExport?.();
+            // Navigate into the saved project via normal ProjectsScreen flow
+            const pid = sessionStorage.getItem('paymentReturnProjectId');
+            sessionStorage.removeItem('paymentReturnProjectId');
+            sessionStorage.removeItem('paymentReturnMode');
+            if (pid) {
+              selectProject(pid);
+            }
           } : undefined}
         />
       )}
