@@ -89,7 +89,8 @@ class TestGuestMigration:
         with patch("app.routers.auth.USER_DATA_BASE", env["tmp_path"]):
             _migrate_guest_profile(env["guest_user_id"], env["recovered_user_id"])
 
-        # Verify profiles.json was updated with "second" profile
+        # Verify profiles.json was updated with "Guest 1" profile
+        # (1 existing profile → "Guest 1")
         saved_data = mock_save_profiles.call_args[0][1]
         new_profiles = {
             pid: meta for pid, meta in saved_data["profiles"].items()
@@ -97,7 +98,7 @@ class TestGuestMigration:
         }
         assert len(new_profiles) == 1
         new_pid, new_meta = list(new_profiles.items())[0]
-        assert new_meta["name"] == "second"
+        assert new_meta["name"] == "Guest 1"
         assert new_meta["color"] == "#4A90D9"
 
         # Verify local DB was copied

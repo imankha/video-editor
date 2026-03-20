@@ -189,8 +189,11 @@ def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
             logger.warning(f"[Auth] Migration: could not read profiles.json for {recovered_user_id}")
             return
 
+        existing_count = len(profiles_data.get("profiles", {}))
+        profile_name = f"Guest {existing_count}"
+
         profiles_data["profiles"][new_profile_id] = {
-            "name": "second",
+            "name": profile_name,
             "color": "#4A90D9",
         }
         save_profiles_json(recovered_user_id, profiles_data)
