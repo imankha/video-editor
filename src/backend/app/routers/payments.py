@@ -195,9 +195,16 @@ async def verify_session(request: Request):
 
     # Already processed (by webhook or previous verify call)
     if has_processed_payment(session_id):
-        from ..services.auth_db import get_credit_balance
+        from ..services.auth_db import get_credit_balance, get_credit_transactions
         balance = get_credit_balance(user_id)
-        return {"status": "already_processed", "balance": balance["balance"]}
+        # Look up how many credits were granted for this session
+        txns = get_credit_transactions(user_id, limit=50)
+        granted = 0
+        for tx in txns:
+            if tx.get("reference_id") == session_id and tx.get("source") == "stripe_purchase":
+                granted = tx.get("amount", 0)
+                break
+        return {"status": "already_processed", "balance": balance["balance"], "credits": granted}
 
     # Retrieve session from Stripe to verify payment
     try:
