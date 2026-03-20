@@ -907,10 +907,17 @@ def r2_delete_object_global(key: str) -> bool:
 # Profile Management Functions (user-level, outside profiles/)
 # ==============================================================================
 
+class R2ReadError(Exception):
+    """Raised when R2 read fails due to a transient error (not 'key missing')."""
+    pass
+
+
 def read_selected_profile_from_r2(user_id: str) -> Optional[str]:
     """Read selected-profile.json from R2 for a user.
 
-    Returns the profile_id string, or None if not found or R2 disabled.
+    Returns the profile_id string, or None if the key doesn't exist in R2.
+    Raises R2ReadError on transient failures so callers don't mistake errors
+    for "new user".
     """
     client = get_r2_sync_client()
     if not client:
@@ -935,8 +942,14 @@ def read_selected_profile_from_r2(user_id: str) -> Optional[str]:
         logger.debug(f"No selected-profile.json for user {user_id}")
         return None
     except Exception as e:
-        logger.warning(f"Failed to read selected-profile.json for user {user_id}: {e}")
-        return None
+        # download_file uses HeadObject which returns ClientError with 404
+        # instead of NoSuchKey — treat any 404 as "not found"
+        from botocore.exceptions import ClientError
+        if isinstance(e, ClientError) and e.response.get('Error', {}).get('Code') in ('404', 'NoSuchKey'):
+            logger.debug(f"No selected-profile.json for user {user_id} (404)")
+            return None
+        logger.error(f"R2 error reading selected-profile.json for user {user_id}: {e}")
+        raise R2ReadError(str(e)) from e
     finally:
         try:
             os.unlink(tmp_path)

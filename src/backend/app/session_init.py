@@ -19,6 +19,7 @@ from uuid import uuid4
 from .profile_context import set_current_profile_id
 from .storage import (
     R2_ENABLED,
+    R2ReadError,
     read_selected_profile_from_r2,
     upload_profiles_json,
     upload_selected_profile_json,
@@ -72,10 +73,17 @@ def user_session_init(user_id: str) -> dict:
     is_new_user = False
 
     if R2_ENABLED:
-        profile_id = read_selected_profile_from_r2(user_id)
+        try:
+            profile_id = read_selected_profile_from_r2(user_id)
+        except R2ReadError:
+            # R2 failed but the user may have existing data — do NOT create
+            # a new profile (that would overwrite their real profile selection).
+            # Let the request fail visibly rather than silently reset the user.
+            logger.error(f"R2 read failed for user {user_id} — refusing to create new profile")
+            raise
 
     if not profile_id:
-        # New user or R2 disabled — create default profile
+        # Genuinely new user (NoSuchKey) or R2 disabled — create default profile
         profile_id = uuid4().hex[:8]
         is_new_user = True
         if R2_ENABLED:
