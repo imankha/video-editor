@@ -24,9 +24,20 @@ import logging
 import os
 import shutil
 
+import sqlite3
+from uuid import uuid4
+
 from app.user_context import get_current_user_id, set_current_user_id
+from app.profile_context import get_current_profile_id, set_current_profile_id
 from app.database import USER_DATA_BASE
 from app.session_init import user_session_init
+from app.storage import (
+    read_selected_profile_from_r2,
+    read_profiles_json,
+    save_profiles_json,
+    upload_to_r2,
+    R2ReadError,
+)
 from app.services.auth_db import (
     get_user_by_email,
     create_user,
@@ -117,6 +128,82 @@ async def delete_user():
         raise HTTPException(status_code=500, detail=f"Failed to delete user data: {e}")
 
 
+# --- T410: Guest profile migration ---
+
+def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
+    """Copy guest's active profile to recovered account if guest has games.
+
+    Called during cross-device recovery (Google login with existing email).
+    Best-effort: logs errors but never blocks login.
+    """
+    try:
+        # Skip if same user (re-login from same device)
+        if guest_user_id == recovered_user_id:
+            return
+
+        # 1. Resolve guest's active profile
+        try:
+            guest_profile_id = read_selected_profile_from_r2(guest_user_id)
+        except R2ReadError:
+            logger.warning(f"[Auth] Migration skip: R2 error reading guest profile for {guest_user_id}")
+            return
+        if not guest_profile_id:
+            logger.info(f"[Auth] Migration skip: no profile found for guest {guest_user_id}")
+            return
+
+        # 2. Check if guest has games
+        guest_db_path = USER_DATA_BASE / guest_user_id / "profiles" / guest_profile_id / "database.sqlite"
+        if not guest_db_path.exists():
+            logger.info(f"[Auth] Migration skip: no local DB for guest {guest_user_id}")
+            return
+
+        conn = sqlite3.connect(str(guest_db_path), timeout=5)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM games")
+            game_count = cursor.fetchone()[0]
+        finally:
+            conn.close()
+
+        if game_count == 0:
+            logger.info(f"[Auth] Migration skip: guest {guest_user_id} has no games")
+            return
+
+        # 3. Copy guest profile DB to recovered account
+        new_profile_id = uuid4().hex[:8]
+        dest_db_path = USER_DATA_BASE / recovered_user_id / "profiles" / new_profile_id / "database.sqlite"
+        dest_db_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(guest_db_path), str(dest_db_path))
+
+        # Upload copied DB to R2
+        original_profile_id = get_current_profile_id()
+        try:
+            set_current_profile_id(new_profile_id)
+            upload_to_r2(recovered_user_id, "database.sqlite", dest_db_path)
+        finally:
+            set_current_profile_id(original_profile_id)
+
+        # 4. Add new profile to recovered account's profiles.json
+        profiles_data = read_profiles_json(recovered_user_id)
+        if not profiles_data:
+            logger.warning(f"[Auth] Migration: could not read profiles.json for {recovered_user_id}")
+            return
+
+        profiles_data["profiles"][new_profile_id] = {
+            "name": "second",
+            "color": "#4A90D9",
+        }
+        save_profiles_json(recovered_user_id, profiles_data)
+
+        logger.info(
+            f"[Auth] Migrated guest {guest_user_id} profile {guest_profile_id} "
+            f"({game_count} games) → {recovered_user_id} profile {new_profile_id}"
+        )
+
+    except Exception as e:
+        logger.error(f"[Auth] Migration failed (login continues): {e}")
+
+
 # --- T405: Google OAuth + Session management (shared auth DB) ---
 
 class GoogleAuthRequest(BaseModel):
@@ -176,6 +263,8 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
         user_id = existing['user_id']
         logger.info(f"[Auth] Google login — existing user found: {user_id} ({email})")
         update_last_seen(user_id)
+        # T410: Migrate guest progress before switching user
+        _migrate_guest_profile(current_user_id, user_id)
     else:
         # First-time Google auth
         # Check if current user already exists in auth DB (guest who's now signing in)
