@@ -142,6 +142,19 @@ function App() {
     window.history.replaceState({}, '', url.pathname + url.hash);
 
     if (payment === 'success' && sessionId) {
+      // Restore navigation state saved before Stripe redirect
+      const returnMode = sessionStorage.getItem('paymentReturnMode');
+      const returnProjectId = sessionStorage.getItem('paymentReturnProjectId');
+      sessionStorage.removeItem('paymentReturnMode');
+      sessionStorage.removeItem('paymentReturnProjectId');
+
+      if (returnProjectId) {
+        useProjectsStore.getState().selectProject(returnProjectId);
+      }
+      if (returnMode) {
+        useEditorStore.getState().setEditorMode(returnMode);
+      }
+
       // Verify session with backend — grants credits if webhook hasn't already
       fetch(`${API_BASE}/api/payments/verify`, {
         method: 'POST',

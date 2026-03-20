@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, Coins, Star, Gem, Loader2 } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
+import { useEditorStore, useProjectsStore } from '../stores';
 
 /**
  * BuyCreditsModal - Credit pack selection for Stripe purchase (T525)
@@ -70,6 +71,13 @@ export function BuyCreditsModal({ onClose }) {
       }
 
       const { checkout_url } = await res.json();
+
+      // Save navigation state so we return to the same screen after Stripe checkout
+      const editorMode = useEditorStore.getState().editorMode;
+      const projectId = useProjectsStore.getState().selectedProjectId;
+      sessionStorage.setItem('paymentReturnMode', editorMode);
+      if (projectId) sessionStorage.setItem('paymentReturnProjectId', String(projectId));
+
       window.location.href = checkout_url;
     } catch (err) {
       setError(err.message);
