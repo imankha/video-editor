@@ -22,6 +22,7 @@ import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, usePr
 import { useAuthStore } from './stores/authStore';
 import { useQuestStore } from './stores/questStore';
 import { useCreditStore } from './stores/creditStore';
+import { toast } from './components/shared';
 import { API_BASE } from './config';
 import { PaymentResultModal } from './components/PaymentResultModal';
 
@@ -158,9 +159,11 @@ function App() {
         .then((data) => {
           useCreditStore.getState().fetchCredits();
           if (data.status === 'credits_granted' || data.status === 'already_processed') {
+            const credits = data.credits || 0;
+            toast.success(`${credits} credits added to your balance!`);
             setPaymentResult({
               status: 'success',
-              credits: data.credits || 0,
+              credits,
               balance: data.balance || 0,
             });
           } else {
