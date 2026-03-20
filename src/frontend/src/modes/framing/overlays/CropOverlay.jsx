@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import versionInfo from '../../../version.json';
 
 /**
@@ -30,12 +30,14 @@ export default function CropOverlay({
   /**
    * Update video display dimensions when video size changes or zoom/pan changes
    */
-  useEffect(() => {
+  // useLayoutEffect ensures videoDisplayRect is calculated before paint,
+  // so the crop rectangle is visible on first render (not delayed by useEffect).
+  useLayoutEffect(() => {
     if (!videoRef?.current) return;
 
     const updateVideoRect = () => {
       const video = videoRef.current;
-      const rect = video.getBoundingClientRect();
+      if (!video) return;
 
       // The video element's natural dimensions
       const videoAspect = videoMetadata.width / videoMetadata.height;
