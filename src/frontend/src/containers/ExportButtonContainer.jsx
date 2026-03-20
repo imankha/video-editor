@@ -1059,7 +1059,7 @@ export function ExportButtonContainer({
     creditBalance,
     // T525: Stripe purchase
     showBuyCredits,
-    onOpenBuyCredits: () => setShowBuyCredits(true),
+    onOpenBuyCredits: () => { console.log('[ExportButtonContainer] Opening BuyCreditsModal'); setShowBuyCredits(true); },
     onCloseBuyCredits: () => setShowBuyCredits(false),
 
     // Refs (for external triggering)

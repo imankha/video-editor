@@ -50,6 +50,8 @@ export function BuyCreditsModal({ onClose }) {
   const [loadingPack, setLoadingPack] = useState(null);
   const [error, setError] = useState(null);
 
+  console.log('[BuyCreditsModal] Rendered');
+
   async function handleSelectPack(packKey) {
     setLoadingPack(packKey);
     setError(null);
