@@ -120,6 +120,7 @@ Per-second credit system for GPU operations. Credits earned through quests and a
 | T515 | [Free Trial Credits](tasks/monetization/T515-free-trial-credits.md) | SUPERSEDED | 7 | 2 | Superseded by T530 (first-time-free) + T540 (quest rewards) |
 | T520 | [Pricing Exploration](tasks/monetization/T520-pricing-exploration.md) | DONE | 6 | 1 | Completed as part of T530 cost analysis |
 | T525 | [Stripe Integration](tasks/monetization/T525-stripe-integration.md) | TESTING | 8 | 5 | Checkout, webhooks, credit packages (LAST) |
+| T526 | [Embedded Stripe Payment](tasks/monetization/T526-embedded-stripe-payment.md) | TODO | 7 | 4 | Inline Payment Element, no redirect, auto-export after purchase |
 
 #### Epic: Guided Tutorial
 | ID | Task | Status | Impact | Cmplx | Notes |
