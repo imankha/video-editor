@@ -227,6 +227,7 @@ export function ExportButtonContainer({
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
   const [disconnected, setDisconnected] = useState(false);
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(null);
+  const [showBuyCredits, setShowBuyCredits] = useState(false);
 
   // Refs for tracking export state
   const exportIdRef = useRef(null);
@@ -392,20 +393,36 @@ export function ExportButtonContainer({
       }
 
       // T530: Optimistic credit check (backend is authoritative)
+      // Refresh balance first to avoid stale-balance false positives
+      await useCreditStore.getState().fetchCredits();
       const { canAffordExport, getRequiredCredits, balance } = useCreditStore.getState();
       const isMultiClip = clips && clips.length > 1;
       let totalVideoSeconds = 0;
       if (isMultiClip) {
-        totalVideoSeconds = clips.reduce((sum, c) => sum + calculateEffectiveDuration(c), 0);
+        totalVideoSeconds = clips.reduce((sum, c) => sum + (calculateEffectiveDuration(c) || 0), 0);
       } else if (clips && clips.length === 1) {
         totalVideoSeconds = calculateEffectiveDuration(clips[0]);
       }
+      // Fail-closed: if duration is NaN/undefined, fall back to clip.duration or metadata
+      if (!totalVideoSeconds || isNaN(totalVideoSeconds)) {
+        const fallbackDuration = clips?.[0]?.duration || 0;
+        totalVideoSeconds = fallbackDuration;
+        console.warn(`[ExportButtonContainer] Credit check: duration calc returned NaN, using fallback=${fallbackDuration}`);
+      }
+      console.log(`[ExportButtonContainer] Credit check: balance=${balance}, required=${getRequiredCredits(totalVideoSeconds)}, videoSecs=${totalVideoSeconds.toFixed(1)}`);
       if (totalVideoSeconds > 0 && !canAffordExport(totalVideoSeconds)) {
         setShowInsufficientCredits({
           required: getRequiredCredits(totalVideoSeconds),
           available: balance,
           videoSeconds: totalVideoSeconds,
         });
+        setShowBuyCredits(true);
+        return;
+      }
+      // Fail-closed: if we still can't determine duration, block export
+      if (!totalVideoSeconds || totalVideoSeconds <= 0) {
+        console.error('[ExportButtonContainer] Cannot determine video duration for credit check');
+        setError('Cannot determine video duration. Please reload and try again.');
         return;
       }
     }
@@ -859,6 +876,7 @@ export function ExportButtonContainer({
 
       // T530: Handle 402 Insufficient Credits from backend
       if (err.response?.status === 402) {
+        console.log('[ExportButtonContainer] 402 Insufficient Credits — cleaning up export state');
         const detail = err.response.data?.detail;
         if (detail?.error === 'insufficient_credits') {
           setShowInsufficientCredits({
@@ -866,10 +884,19 @@ export function ExportButtonContainer({
             available: detail.available,
             videoSeconds: detail.video_seconds,
           });
+          setShowBuyCredits(true);
           // Refresh credit store with authoritative balance
           useCreditStore.getState().setBalance(detail.available);
         }
+        // Full cleanup: disconnect WS, clear export ref, reset all state
+        if (exportIdRef.current) {
+          exportWebSocketManager.disconnect(exportIdRef.current);
+          failExportInStore(exportIdRef.current, 'Insufficient credits');
+          exportIdRef.current = null;
+        }
         setIsExporting(false);
+        setLocalProgress(0);
+        setProgressMessage('');
         handleExportEnd();
         return;
       }
@@ -1032,6 +1059,10 @@ export function ExportButtonContainer({
     showInsufficientCredits,
     onCloseInsufficientCredits: () => setShowInsufficientCredits(null),
     creditBalance,
+    // T525: Stripe purchase
+    showBuyCredits,
+    onOpenBuyCredits: () => { console.log('[ExportButtonContainer] Opening BuyCreditsModal'); setShowBuyCredits(true); },
+    onCloseBuyCredits: () => setShowBuyCredits(false),
 
     // Refs (for external triggering)
     handleExportRef,

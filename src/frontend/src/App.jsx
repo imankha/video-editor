@@ -21,6 +21,9 @@ import { AuthGateModal } from './components/AuthGateModal';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
 import { useQuestStore } from './stores/questStore';
+import { useCreditStore } from './stores/creditStore';
+import { toast } from './components/shared';
+import { API_BASE } from './config';
 
 /**
  * App.jsx - Main application shell
@@ -101,16 +104,58 @@ function App() {
       useProfileStore.getState().fetchProfiles();
 
       // Restore navigation state after auth-triggered reload (cross-device recovery)
-      const returnMode = sessionStorage.getItem('authReturnMode');
-      if (returnMode) {
-        sessionStorage.removeItem('authReturnMode');
-        const returnProjectId = sessionStorage.getItem('authReturnProjectId');
-        sessionStorage.removeItem('authReturnProjectId');
+      const authReturnMode = sessionStorage.getItem('authReturnMode');
+      const authReturnProjectId = sessionStorage.getItem('authReturnProjectId');
+      sessionStorage.removeItem('authReturnMode');
+      sessionStorage.removeItem('authReturnProjectId');
 
-        if (returnProjectId) {
-          useProjectsStore.getState().selectProject(returnProjectId);
+      if (authReturnMode) {
+        if (authReturnProjectId) {
+          useProjectsStore.getState().selectProject(authReturnProjectId);
         }
-        useEditorStore.getState().setEditorMode(returnMode);
+        useEditorStore.getState().setEditorMode(authReturnMode);
+      }
+
+      // Payment return: do NOT restore mode — user stays on Projects screen.
+      // Verify payment and show toast after session is ready (needs auth cookie).
+      const paymentParams = new URLSearchParams(window.location.search);
+      const payment = paymentParams.get('payment');
+      const paymentSessionId = paymentParams.get('session_id');
+      console.log(`[App] Payment return check: payment=${payment}, session_id=${paymentSessionId}, url=${window.location.search}`);
+      if (payment) {
+        // Remove query params without reload
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('payment');
+        cleanUrl.searchParams.delete('session_id');
+        window.history.replaceState({}, '', cleanUrl.pathname + cleanUrl.hash);
+
+        if (payment === 'success' && paymentSessionId) {
+          console.log('[App] Verifying Stripe session with backend...');
+          fetch(`${API_BASE}/api/payments/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ session_id: paymentSessionId }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              console.log('[App] Verify response:', data);
+              useCreditStore.getState().fetchCredits();
+              if (data.status === 'credits_granted' || data.status === 'already_processed') {
+                const credits = data.credits || 0;
+                console.log(`[App] Showing toast: ${credits} credits`);
+                toast.success(`${credits} credits added to your balance!`, { duration: 0 });
+              } else {
+                console.log('[App] Payment still processing, status:', data.status);
+                toast.info('Payment is still processing. Your credits will appear shortly.');
+              }
+            })
+            .catch((err) => {
+              console.error('[App] Verify failed:', err);
+              useCreditStore.getState().fetchCredits();
+              toast.error('Could not verify payment. Your credits may still be added shortly.');
+            });
+        }
       }
     });
   }, []);
@@ -124,6 +169,9 @@ function App() {
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
 
+  // T525: Payment return is handled inside initSession().then(...) above
+  // so the session cookie is ready before the verify API call.
+
   // T540: Record achievement when user enters framing mode
   useEffect(() => {
     if (editorMode === EDITOR_MODES.FRAMING) {
@@ -133,6 +181,7 @@ function App() {
 
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);
+
 
   // Export completion callback - used by Screen components to refresh data
   const handleExportComplete = useCallback(() => {
@@ -323,6 +372,8 @@ function App() {
         <SyncStatusIndicator />
         {/* Auth Gate Modal - shows when GPU action requires authentication */}
         <AuthGateModal />
+        {/* Toast Notifications */}
+        <ToastContainer />
         {/* Guest activity banner — only shown after guest does meaningful work */}
         {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
         {/* Quest overlay — auto-shows for new users (T540) */}
@@ -471,6 +522,7 @@ function App() {
 
       {/* Auth Gate Modal - shows when GPU action requires authentication */}
       <AuthGateModal />
+
     </div>
     </AppStateProvider>
     </ProjectProvider>

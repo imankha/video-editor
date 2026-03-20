@@ -79,6 +79,9 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         EXPORT_CONFIG={EXPORT_CONFIG}
         showInsufficientCredits={container.showInsufficientCredits}
         onCloseInsufficientCredits={container.onCloseInsufficientCredits}
+        showBuyCredits={container.showBuyCredits}
+        onOpenBuyCredits={container.onOpenBuyCredits}
+        onCloseBuyCredits={container.onCloseBuyCredits}
         handleExportRef={container.handleExportRef}
       />
     </div>

@@ -340,3 +340,24 @@ async def admin_grant_credits(user_id: str, request: GrantCreditsRequest):
 
     new_balance = grant_credits(user_id, request.amount, source="admin_grant")
     return {"balance": new_balance}
+
+
+class SetCreditsRequest(BaseModel):
+    amount: int
+
+
+@router.post("/users/{user_id}/set-credits")
+async def admin_set_credits(user_id: str, request: SetCreditsRequest):
+    """Set a user's credit balance to an exact value. Admin only."""
+    _require_admin()
+
+    if request.amount < 0:
+        raise HTTPException(status_code=400, detail="Amount cannot be negative")
+
+    user = get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from ..services.auth_db import set_credits
+    new_balance = set_credits(user_id, request.amount)
+    return {"balance": new_balance}

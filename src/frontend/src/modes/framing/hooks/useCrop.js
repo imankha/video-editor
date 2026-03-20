@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { timeToFrame } from '../../../utils/videoUtils';
 import { interpolateCropSpline } from '../../../utils/splineInterpolation';
 import useKeyframeController from '../../../hooks/useKeyframeController';
@@ -160,9 +160,10 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
 
   /**
    * Restore saved keyframes when they change (new clip selected)
-   * This runs BEFORE the auto-init effect because it's declared first
+   * useLayoutEffect ensures keyframes are set before paint, so the crop
+   * rectangle is visible on first render (avoids flash of no-crop state).
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (savedKeyframes && savedKeyframes.length > 0) {
       // Only restore if these are different keyframes than we already processed
       const keyframesKey = JSON.stringify(savedKeyframes.map(k => ({ frame: k.frame, x: k.x, y: k.y })));
