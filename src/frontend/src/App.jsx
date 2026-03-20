@@ -103,13 +103,16 @@ function App() {
       warmAllUserVideos();
       useProfileStore.getState().fetchProfiles();
 
-      // Restore navigation state after auth-triggered reload (cross-device recovery)
-      const returnMode = sessionStorage.getItem('authReturnMode');
-      if (returnMode) {
-        sessionStorage.removeItem('authReturnMode');
-        const returnProjectId = sessionStorage.getItem('authReturnProjectId');
-        sessionStorage.removeItem('authReturnProjectId');
+      // Restore navigation state after auth-triggered reload or Stripe payment return
+      // Must happen after initSession so the user session is ready for clip fetches.
+      const returnMode = sessionStorage.getItem('authReturnMode') || sessionStorage.getItem('paymentReturnMode');
+      const returnProjectId = sessionStorage.getItem('authReturnProjectId') || sessionStorage.getItem('paymentReturnProjectId');
+      sessionStorage.removeItem('authReturnMode');
+      sessionStorage.removeItem('authReturnProjectId');
+      sessionStorage.removeItem('paymentReturnMode');
+      sessionStorage.removeItem('paymentReturnProjectId');
 
+      if (returnMode) {
         if (returnProjectId) {
           useProjectsStore.getState().selectProject(returnProjectId);
         }
@@ -142,20 +145,8 @@ function App() {
     window.history.replaceState({}, '', url.pathname + url.hash);
 
     if (payment === 'success' && sessionId) {
-      // Restore navigation state saved before Stripe redirect
-      const returnMode = sessionStorage.getItem('paymentReturnMode');
-      const returnProjectId = sessionStorage.getItem('paymentReturnProjectId');
-      sessionStorage.removeItem('paymentReturnMode');
-      sessionStorage.removeItem('paymentReturnProjectId');
-
-      if (returnProjectId) {
-        useProjectsStore.getState().selectProject(returnProjectId);
-      }
-      if (returnMode) {
-        useEditorStore.getState().setEditorMode(returnMode);
-      }
-
-      // Verify session with backend — grants credits if webhook hasn't already
+      // Navigation restore happens in initSession().then(...) above.
+      // Here we only verify payment and show the result modal.
       fetch(`${API_BASE}/api/payments/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
