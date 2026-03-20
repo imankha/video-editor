@@ -198,7 +198,7 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| T600 | [Auto-Generate Annotation Titles (TF-IDF)](tasks/T600-auto-generate-annotation-titles.md) | TESTING | 5 | 4 | Extract keyword titles from notes using scikit-learn TfidfVectorizer; zero API cost |
+| T600 | [Auto-Generate Annotation Titles (TF-IDF)](tasks/T600-auto-generate-annotation-titles.md) | DONE | 5 | 4 | Extract keyword titles from notes using scikit-learn TfidfVectorizer; zero API cost |
 
 ### Phase 4: Post-Launch Polish
 
