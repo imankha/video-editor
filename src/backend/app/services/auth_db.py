@@ -537,6 +537,27 @@ def refund_credits(
     return new_balance
 
 
+def set_credits(user_id: str, amount: int) -> int:
+    """Set a user's credit balance to an exact value. Records a transaction. Syncs to R2."""
+    with get_auth_db() as db:
+        row = db.execute("SELECT credits FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        old_balance = row["credits"] if row else 0
+        delta = amount - old_balance
+        db.execute(
+            "UPDATE users SET credits = ? WHERE user_id = ?",
+            (amount, user_id),
+        )
+        db.execute(
+            """INSERT INTO credit_transactions (user_id, amount, source, reference_id)
+               VALUES (?, ?, 'admin_set', ?)""",
+            (user_id, delta, f"set_to_{amount}"),
+        )
+        db.commit()
+    sync_auth_db_to_r2()
+    logger.info(f"[AuthDB] Set credits for {user_id} to {amount} (was {old_balance})")
+    return amount
+
+
 # ---------------------------------------------------------------------------
 # Stripe customer management (T525)
 # ---------------------------------------------------------------------------

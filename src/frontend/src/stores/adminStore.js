@@ -79,4 +79,35 @@ export const useAdminStore = create((set, get) => ({
       throw err;
     }
   },
+
+  setCredits: async (userId, amount) => {
+    set(state => ({
+      grantState: { ...state.grantState, [userId]: { loading: true, error: null } },
+    }));
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/users/${userId}/set-credits`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const { balance } = await res.json();
+      set(state => ({
+        grantState: { ...state.grantState, [userId]: { loading: false, error: null } },
+        users: state.users.map(u =>
+          u.user_id === userId ? { ...u, credits: balance } : u
+        ),
+      }));
+      return balance;
+    } catch (err) {
+      set(state => ({
+        grantState: { ...state.grantState, [userId]: { loading: false, error: err.message } },
+      }));
+      throw err;
+    }
+  },
 }));
