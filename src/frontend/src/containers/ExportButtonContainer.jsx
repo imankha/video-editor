@@ -393,6 +393,8 @@ export function ExportButtonContainer({
       }
 
       // T530: Optimistic credit check (backend is authoritative)
+      // Refresh balance first to avoid stale-balance false positives
+      await useCreditStore.getState().fetchCredits();
       const { canAffordExport, getRequiredCredits, balance } = useCreditStore.getState();
       const isMultiClip = clips && clips.length > 1;
       let totalVideoSeconds = 0;
@@ -401,6 +403,7 @@ export function ExportButtonContainer({
       } else if (clips && clips.length === 1) {
         totalVideoSeconds = calculateEffectiveDuration(clips[0]);
       }
+      console.log(`[ExportButtonContainer] Credit check: balance=${balance}, required=${getRequiredCredits(totalVideoSeconds)}, videoSecs=${totalVideoSeconds.toFixed(1)}`);
       if (totalVideoSeconds > 0 && !canAffordExport(totalVideoSeconds)) {
         setShowInsufficientCredits({
           required: getRequiredCredits(totalVideoSeconds),
@@ -860,6 +863,7 @@ export function ExportButtonContainer({
 
       // T530: Handle 402 Insufficient Credits from backend
       if (err.response?.status === 402) {
+        console.log('[ExportButtonContainer] 402 Insufficient Credits — cleaning up export state');
         const detail = err.response.data?.detail;
         if (detail?.error === 'insufficient_credits') {
           setShowInsufficientCredits({
@@ -870,7 +874,15 @@ export function ExportButtonContainer({
           // Refresh credit store with authoritative balance
           useCreditStore.getState().setBalance(detail.available);
         }
+        // Full cleanup: disconnect WS, clear export ref, reset all state
+        if (exportIdRef.current) {
+          exportWebSocketManager.disconnect(exportIdRef.current);
+          failExportInStore(exportIdRef.current, 'Insufficient credits');
+          exportIdRef.current = null;
+        }
         setIsExporting(false);
+        setLocalProgress(0);
+        setProgressMessage('');
         handleExportEnd();
         return;
       }
