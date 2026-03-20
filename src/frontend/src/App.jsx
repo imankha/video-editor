@@ -121,6 +121,7 @@ function App() {
       const paymentParams = new URLSearchParams(window.location.search);
       const payment = paymentParams.get('payment');
       const paymentSessionId = paymentParams.get('session_id');
+      console.log(`[App] Payment return check: payment=${payment}, session_id=${paymentSessionId}, url=${window.location.search}`);
       if (payment) {
         // Remove query params without reload
         const cleanUrl = new URL(window.location.href);
@@ -129,6 +130,7 @@ function App() {
         window.history.replaceState({}, '', cleanUrl.pathname + cleanUrl.hash);
 
         if (payment === 'success' && paymentSessionId) {
+          console.log('[App] Verifying Stripe session with backend...');
           fetch(`${API_BASE}/api/payments/verify`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -137,15 +139,19 @@ function App() {
           })
             .then((res) => res.json())
             .then((data) => {
+              console.log('[App] Verify response:', data);
               useCreditStore.getState().fetchCredits();
               if (data.status === 'credits_granted' || data.status === 'already_processed') {
                 const credits = data.credits || 0;
-                toast.success(`${credits} credits added to your balance!`);
+                console.log(`[App] Showing toast: ${credits} credits`);
+                toast.success(`${credits} credits added to your balance!`, { duration: 0 });
               } else {
+                console.log('[App] Payment still processing, status:', data.status);
                 toast.info('Payment is still processing. Your credits will appear shortly.');
               }
             })
-            .catch(() => {
+            .catch((err) => {
+              console.error('[App] Verify failed:', err);
               useCreditStore.getState().fetchCredits();
               toast.error('Could not verify payment. Your credits may still be added shortly.');
             });
@@ -366,6 +372,8 @@ function App() {
         <SyncStatusIndicator />
         {/* Auth Gate Modal - shows when GPU action requires authentication */}
         <AuthGateModal />
+        {/* Toast Notifications */}
+        <ToastContainer />
         {/* Guest activity banner — only shown after guest does meaningful work */}
         {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
         {/* Quest overlay — auto-shows for new users (T540) */}
