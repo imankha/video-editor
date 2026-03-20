@@ -405,7 +405,7 @@ export function ExportButtonContainer({
       }
       // Fail-closed: if duration is NaN/undefined, fall back to clip.duration or metadata
       if (!totalVideoSeconds || isNaN(totalVideoSeconds)) {
-        const fallbackDuration = clips?.[0]?.duration || metadata?.duration || 0;
+        const fallbackDuration = clips?.[0]?.duration || 0;
         totalVideoSeconds = fallbackDuration;
         console.warn(`[ExportButtonContainer] Credit check: duration calc returned NaN, using fallback=${fallbackDuration}`);
       }
