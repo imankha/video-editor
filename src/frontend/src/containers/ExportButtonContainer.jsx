@@ -399,9 +399,15 @@ export function ExportButtonContainer({
       const isMultiClip = clips && clips.length > 1;
       let totalVideoSeconds = 0;
       if (isMultiClip) {
-        totalVideoSeconds = clips.reduce((sum, c) => sum + calculateEffectiveDuration(c), 0);
+        totalVideoSeconds = clips.reduce((sum, c) => sum + (calculateEffectiveDuration(c) || 0), 0);
       } else if (clips && clips.length === 1) {
         totalVideoSeconds = calculateEffectiveDuration(clips[0]);
+      }
+      // Fail-closed: if duration is NaN/undefined, fall back to clip.duration or metadata
+      if (!totalVideoSeconds || isNaN(totalVideoSeconds)) {
+        const fallbackDuration = clips?.[0]?.duration || metadata?.duration || 0;
+        totalVideoSeconds = fallbackDuration;
+        console.warn(`[ExportButtonContainer] Credit check: duration calc returned NaN, using fallback=${fallbackDuration}`);
       }
       console.log(`[ExportButtonContainer] Credit check: balance=${balance}, required=${getRequiredCredits(totalVideoSeconds)}, videoSecs=${totalVideoSeconds.toFixed(1)}`);
       if (totalVideoSeconds > 0 && !canAffordExport(totalVideoSeconds)) {
@@ -410,6 +416,12 @@ export function ExportButtonContainer({
           available: balance,
           videoSeconds: totalVideoSeconds,
         });
+        return;
+      }
+      // Fail-closed: if we still can't determine duration, block export
+      if (!totalVideoSeconds || totalVideoSeconds <= 0) {
+        console.error('[ExportButtonContainer] Cannot determine video duration for credit check');
+        setError('Cannot determine video duration. Please reload and try again.');
         return;
       }
     }

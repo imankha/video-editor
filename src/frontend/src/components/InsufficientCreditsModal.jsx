@@ -46,7 +46,11 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, on
           </Button>
           <Button
             variant="primary"
-            onClick={() => { onClose(); onBuyCredits?.(); }}
+            onClick={() => {
+              console.log('[InsufficientCreditsModal] Buy Credits clicked');
+              onClose();
+              onBuyCredits?.();
+            }}
             className="flex-1"
             icon={Coins}
           >

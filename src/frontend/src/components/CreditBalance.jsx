@@ -39,7 +39,10 @@ export function CreditBalance() {
   return (
     <>
       <button
-        onClick={() => setShowBuyCredits(true)}
+        onClick={() => {
+          console.log('[CreditBalance] Clicked — opening BuyCreditsModal');
+          setShowBuyCredits(true);
+        }}
         className="flex items-center gap-1 px-2 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm text-white/80 transition-colors cursor-pointer"
         title={`${balance} credits — click to buy more`}
       >
