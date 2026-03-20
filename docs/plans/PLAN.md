@@ -194,6 +194,12 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 | T330 | [Mobile Video Players](tasks/mobile-responsive/T330-mobile-video-players.md) | DONE | 7 | 4 | Touch controls, scrubbing, iOS/Android quirks |
 | T335 | [Mobile Annotate Clips](tasks/mobile-responsive/T335-mobile-annotate-clips.md) | DONE | 7 | 5 | Clips panel crushed to 0px, video wastes 60% screen, markers untappable |
 
+### Phase 4: Post-Launch Features
+
+| ID | Task | Status | Impact | Cmplx | Notes |
+|----|------|--------|--------|-------|-------|
+| T600 | [Auto-Generate Annotation Titles (TF-IDF)](tasks/T600-auto-generate-annotation-titles.md) | TESTING | 5 | 4 | Extract keyword titles from notes using scikit-learn TfidfVectorizer; zero API cost |
+
 ### Phase 4: Post-Launch Polish
 
 Improvements after real user traffic.

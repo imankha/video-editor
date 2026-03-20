@@ -11,18 +11,21 @@ from typing import List, Optional
 from app.constants import RATING_ADJECTIVES, get_rating_adjective
 
 
-def derive_clip_name(stored_name: Optional[str], rating: int, tags: List[str], notes: str = '') -> str:
+def derive_clip_name(stored_name: Optional[str], rating: int, tags: List[str], notes: str = '', generated_title: str = '') -> str:
     """
     Derive a clip name from rating and tags if no custom name is stored.
 
     This is the single source of truth for clip name derivation. The algorithm
-    matches the frontend generateClipName() in soccerTags.js.
+    matches the frontend generateClipName() in soccerTags.js for tag-based names.
+    When notes exist but no tags, uses TF-IDF generated title if provided,
+    otherwise falls back to truncated notes.
 
     Args:
         stored_name: The name stored in the database (None or empty = auto-generate)
         rating: Star rating 1-5
         tags: List of tag short names (e.g., ["Goal", "Dribble"])
         notes: Optional notes text to use as fallback when no tags
+        generated_title: Optional TF-IDF generated title from notes (pre-computed)
 
     Returns:
         The stored name if present, otherwise a generated name like "Brilliant Goal and Dribble"
@@ -31,8 +34,10 @@ def derive_clip_name(stored_name: Optional[str], rating: int, tags: List[str], n
     if stored_name:
         return stored_name
 
-    # No tags: use first words from notes that fit in ~30 characters
+    # No tags: use TF-IDF generated title if available, else truncate notes
     if not tags:
+        if generated_title:
+            return generated_title
         if notes and notes.strip():
             words = notes.strip().split()
             result = words[0]

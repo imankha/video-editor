@@ -25,11 +25,25 @@ from app.database import (
     get_uploads_path,
 )
 from app.queries import latest_working_clips_subquery, derive_clip_name
+from app.tfidf_titles import extract_keywords_tfidf
 from app.user_context import get_current_user_id
 from app.storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2
 from app.services.project_archive import clear_restored_flag
 
 logger = logging.getLogger(__name__)
+
+
+def _get_notes_corpus(cursor) -> list[str]:
+    """Fetch all non-empty notes from raw_clips for TF-IDF corpus."""
+    cursor.execute("SELECT notes FROM raw_clips WHERE notes IS NOT NULL AND notes != ''")
+    return [row['notes'] for row in cursor.fetchall()]
+
+
+def _compute_tfidf_title(notes: str, corpus: list[str]) -> str:
+    """Compute TF-IDF title for a clip's notes, given the user's corpus."""
+    if not notes or not notes.strip():
+        return ''
+    return extract_keywords_tfidf(notes, corpus)
 
 
 def get_raw_clip_url(filename: str) -> Optional[str]:
@@ -514,16 +528,22 @@ async def list_raw_clips(game_id: Optional[int] = None, min_rating: Optional[int
         cursor.execute(query, params)
         clips = cursor.fetchall()
 
+        # Pre-fetch notes corpus for TF-IDF title generation
+        corpus = _get_notes_corpus(cursor)
+
         result = []
         for clip in clips:
             tags = json.loads(clip['tags']) if clip['tags'] else []
+            generated_title = ''
+            if not clip['name'] and not tags and clip['notes']:
+                generated_title = _compute_tfidf_title(clip['notes'], corpus)
             result.append(RawClipResponse(
                 id=clip['id'],
                 filename=clip['filename'],
                 file_url=get_raw_clip_url(clip['filename']),
                 rating=clip['rating'],
                 tags=tags,
-                name=derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or ''),
+                name=derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or '', generated_title),
                 notes=clip['notes'],
                 start_time=clip['start_time'],
                 end_time=clip['end_time'],
@@ -550,13 +570,17 @@ async def get_raw_clip(clip_id: int):
             raise HTTPException(status_code=404, detail="Raw clip not found")
 
         tags = json.loads(clip['tags']) if clip['tags'] else []
+        generated_title = ''
+        if not clip['name'] and not tags and clip['notes']:
+            corpus = _get_notes_corpus(cursor)
+            generated_title = _compute_tfidf_title(clip['notes'], corpus)
         return RawClipResponse(
             id=clip['id'],
             filename=clip['filename'],
             file_url=get_raw_clip_url(clip['filename']),
             rating=clip['rating'],
             tags=tags,
-            name=derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or ''),
+            name=derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or '', generated_title),
             notes=clip['notes'],
             start_time=clip['start_time'],
             end_time=clip['end_time'],
@@ -623,7 +647,11 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
         rating = clip_data['rating'] or 5
         tags = json.loads(clip_data['tags']) if clip_data['tags'] else []
         notes = clip_data['notes'] or ''
-        project_name = derive_clip_name(None, rating, tags, notes) or f"Clip {raw_clip_id}"
+        generated_title = ''
+        if not tags and notes:
+            corpus = _get_notes_corpus(cursor)
+            generated_title = _compute_tfidf_title(notes, corpus)
+        project_name = derive_clip_name(None, rating, tags, notes, generated_title) or f"Clip {raw_clip_id}"
     else:
         project_name = f"Clip {raw_clip_id}"
 
@@ -1055,6 +1083,9 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 if status:
                     extraction_statuses[rc_id] = status
 
+        # Pre-fetch notes corpus for TF-IDF title generation
+        corpus = _get_notes_corpus(cursor)
+
         result = []
         for clip in clips:
             tags = json.loads(clip['raw_tags']) if clip['raw_tags'] else []
@@ -1084,7 +1115,8 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 uploaded_filename=uploaded_filename,
                 filename=filename,
                 file_url=file_url,
-                name=derive_clip_name(clip['raw_name'], rating, tags, clip['raw_notes'] or ''),
+                name=derive_clip_name(clip['raw_name'], rating, tags, clip['raw_notes'] or '',
+                                     _compute_tfidf_title(clip['raw_notes'] or '', corpus) if not clip['raw_name'] and not tags and clip['raw_notes'] else ''),
                 notes=clip['raw_notes'],
                 exported_at=clip['exported_at'],
                 sort_order=clip['sort_order'],
@@ -1492,7 +1524,8 @@ async def upload_clip_with_metadata(
             raw_clip_id=raw_clip_id,
             uploaded_filename=None,
             filename=clip_filename,
-            name=derive_clip_name(unique_name, rating, tags_list, notes or ''),
+            name=derive_clip_name(unique_name, rating, tags_list, notes or '',
+                                 _compute_tfidf_title(notes or '', _get_notes_corpus(cursor)) if not unique_name and not tags_list and notes else ''),
             notes=notes,
             exported_at=None,
             sort_order=next_order
