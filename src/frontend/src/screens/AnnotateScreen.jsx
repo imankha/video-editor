@@ -83,6 +83,8 @@ export function AnnotateScreen({ onClearSelection }) {
     error: videoError,
     togglePlay,
     seek,
+    seekForward,
+    seekBackward,
     stepForward,
     stepBackward,
     restart,
@@ -276,12 +278,12 @@ export function AnnotateScreen({ onClearSelection }) {
         event.preventDefault();
         const isLeft = event.code === 'ArrowLeft';
 
-        // Playhead layer: step frames
+        // Playhead layer: seek by seconds (back 4s, forward 8s)
         if (annotateSelectedLayer === 'playhead') {
           if (isLeft) {
-            stepBackward();
+            seekBackward(4);
           } else {
-            stepForward();
+            seekForward(8);
           }
           return;
         }
@@ -320,8 +322,8 @@ export function AnnotateScreen({ onClearSelection }) {
     annotateSelectedRegionId,
     selectAnnotateRegion,
     togglePlay,
-    stepForward,
-    stepBackward,
+    seekForward,
+    seekBackward,
     seek,
     showAnnotateOverlay,
     handleAddClipFromButton,
