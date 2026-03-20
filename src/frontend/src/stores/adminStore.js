@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import { useCreditStore } from './creditStore';
 
 /**
  * Admin Store — manages admin panel data (T550).
@@ -71,6 +72,8 @@ export const useAdminStore = create((set, get) => ({
           u.user_id === userId ? { ...u, credits: balance } : u
         ),
       }));
+      // Refresh current user's credit store in case admin changed their own balance
+      useCreditStore.getState().fetchCredits();
       return balance;
     } catch (err) {
       set(state => ({
@@ -102,6 +105,8 @@ export const useAdminStore = create((set, get) => ({
           u.user_id === userId ? { ...u, credits: balance } : u
         ),
       }));
+      // Refresh current user's credit store in case admin changed their own balance
+      useCreditStore.getState().fetchCredits();
       return balance;
     } catch (err) {
       set(state => ({
