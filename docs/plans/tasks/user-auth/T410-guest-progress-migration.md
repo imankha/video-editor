@@ -40,6 +40,10 @@ During Google OAuth login, when cross-device recovery activates (existing email 
 
 **Discovery context:** This was discovered when a Google login triggered cross-device recovery but `read_selected_profile_from_r2` failed (R2 returned 404 via HeadObject instead of NoSuchKey). `user_session_init` treated the error as "new user" and created a fresh empty profile, overwriting the user's real profile selection. The R2ReadError fix (separate commit) prevents the data loss, but the guest progress migration feature would make the cross-device recovery experience seamless.
 
+**Exact insertion point:** The migration check goes in `auth.py:174-193`, inside the `if existing:` branch of `google_auth()`. At that point both `current_user_id` (the guest) and `user_id` (the recovered account) are available. The check must happen **after** resolving the recovered user_id but **before** creating the session.
+
+**Live reference state:** User `29f4f6f1-b444-4237-886d-a5a0378f5f01` (imankh@gmail.com) currently has exactly the state T410 would intentionally create: profile `6c495850` (real data, 2 games, 5 projects) and profile `1ad4b55b` (empty, accidentally created by the bug). This can serve as a test reference for what the end state should look like — minus the naming (the empty one should have been named "second").
+
 **Flow:**
 1. Guest browses, uploads games, creates clips/projects under guest user_id
 2. Guest clicks "Sign In" with Google
