@@ -95,30 +95,41 @@ export function getAllTags() {
 }
 
 /**
- * Generate a clip name based on rating and selected tags
+ * Generate a clip name from notes, falling back to rating+tags.
+ *
+ * Priority:
+ *  1. Note fits as a title (≤ 40 chars) → use it verbatim
+ *  2. Note is longer → truncate to first ~40 chars at a word boundary
+ *  3. No note → "Adjective Tag1 and Tag2" from rating + tags
+ *
  * @param {number} rating - Star rating (1-5)
  * @param {Array} selectedTags - Array of selected tag names
+ * @param {string} notes - Optional clip notes
  * @returns {string} Generated clip name
  */
 export function generateClipName(rating, selectedTags, notes = '') {
-  if (!selectedTags || selectedTags.length === 0) {
-    // No tags: use first words from notes that fit in ~30 characters
-    if (notes && notes.trim()) {
-      const words = notes.trim().split(/\s+/);
-      let result = words[0];
-      for (let i = 1; i < words.length; i++) {
-        const next = result + ' ' + words[i];
-        if (next.length > 30) break;
-        result = next;
-      }
-      return result;
+  const MAX_TITLE_LENGTH = 40;
+
+  // Notes take priority over tags
+  if (notes && notes.trim()) {
+    const trimmed = notes.trim();
+    if (trimmed.length <= MAX_TITLE_LENGTH) return trimmed;
+
+    // Truncate at word boundary
+    const words = trimmed.split(/\s+/);
+    let result = words[0];
+    for (let i = 1; i < words.length; i++) {
+      const next = result + ' ' + words[i];
+      if (next.length > MAX_TITLE_LENGTH) break;
+      result = next;
     }
-    return '';
+    return result;
   }
 
-  const adjective = RATING_ADJECTIVES[rating] || 'Interesting';
+  // Fallback: rating + tags
+  if (!selectedTags || selectedTags.length === 0) return '';
 
-  // Join with "and" for multiple tags
+  const adjective = RATING_ADJECTIVES[rating] || 'Interesting';
   const tagPart = selectedTags.length === 1
     ? selectedTags[0]
     : selectedTags.slice(0, -1).join(', ') + ' and ' + selectedTags[selectedTags.length - 1];

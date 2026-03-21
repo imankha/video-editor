@@ -148,13 +148,13 @@ export function AnnotateFullscreenOverlay({
     }
   }, [existingClip]);
 
-  // Auto-generate clip name when rating or tags change (unless manually edited)
+  // Auto-generate clip name when rating, tags, or notes change (unless manually edited)
   useEffect(() => {
-    if (!isNameManuallyEdited && selectedTags.length > 0) {
-      const generatedName = generateClipName(rating, selectedTags);
+    if (!isNameManuallyEdited) {
+      const generatedName = generateClipName(rating, selectedTags, notes);
       setClipName(generatedName);
     }
-  }, [rating, selectedTags, isNameManuallyEdited]);
+  }, [rating, selectedTags, notes, isNameManuallyEdited]);
 
   // Focus notes input when overlay appears
   useEffect(() => {
