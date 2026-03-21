@@ -252,7 +252,11 @@ export function AnnotateFullscreenOverlay({
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-start pl-4 pointer-events-none">
-      <div className="bg-gray-900 rounded-xl p-6 w-full max-w-md shadow-2xl border border-gray-700 max-h-[90vh] overflow-y-auto pointer-events-auto">
+      <div
+        className="bg-gray-900 rounded-xl p-6 w-full max-w-md shadow-2xl border border-gray-700 max-h-[90vh] overflow-y-auto pointer-events-auto"
+        onMouseDown={(e) => e.stopPropagation()}
+        onWheel={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">
@@ -321,7 +325,9 @@ export function AnnotateFullscreenOverlay({
             step={0.5}
             value={duration}
             onChange={(e) => setDuration(parseFloat(e.target.value))}
-            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500
+                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                [&::-webkit-slider-thumb]:bg-green-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
           />
           <div className="relative w-full h-5 mt-1">
             <span className="absolute left-0 text-xs text-gray-500">{MIN_CLIP_DURATION}s</span>

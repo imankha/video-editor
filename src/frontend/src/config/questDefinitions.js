@@ -20,7 +20,7 @@ export const QUESTS = [
       {
         id: 'annotate_brilliant',
         title: 'Annotate a 5 Star Play',
-        description: 'Watch the footage and when your player makes a great play, click the Add Clip button and give that play 5 stars. The clip will end at the time you clicked the button by default. Play with duration and end time in the annotation panel to get the timing right.',
+        description: 'When you spot a great play, click Add Clip and rate it 5 stars. The clip ends where you clicked — adjust the duration and end time in the annotation panel.',
       },
       {
         id: 'annotate_unfortunate',

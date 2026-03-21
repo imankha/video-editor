@@ -294,7 +294,9 @@ export function ClipDetailsEditor({
                     step={0.5}
                     value={clipDuration}
                     onChange={handleDurationChange}
-                    className="w-full h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+                    className="w-full h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500
+                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                      [&::-webkit-slider-thumb]:bg-green-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -332,7 +334,9 @@ export function ClipDetailsEditor({
                 step={0.5}
                 value={clipDuration}
                 onChange={handleDurationChange}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500
+                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                  [&::-webkit-slider-thumb]:bg-green-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
               />
               <div className="relative w-full h-4 mt-0.5">
                 <span className="absolute left-0 text-xs text-gray-500">{MIN_CLIP_DURATION}s</span>
