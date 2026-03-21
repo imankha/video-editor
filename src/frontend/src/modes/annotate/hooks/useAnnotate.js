@@ -200,7 +200,7 @@ export function validateTsvContent(content) {
   return { success: true, annotations };
 }
 
-const DEFAULT_CLIP_DURATION = 5.0; // seconds
+const DEFAULT_CLIP_DURATION = 8.0; // seconds
 const MIN_CLIP_DURATION = 1.0; // seconds (enforced)
 const MAX_CLIP_DURATION = 60.0; // seconds (max for slider)
 const MAX_NOTES_LENGTH = 280; // characters (like a tweet)

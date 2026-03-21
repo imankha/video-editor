@@ -11,7 +11,7 @@ const RATING_NOTATION = {
   5: '!!'
 };
 
-const DEFAULT_CLIP_DURATION = 5;
+const DEFAULT_CLIP_DURATION = 8;
 const MIN_CLIP_DURATION = 1;
 const MAX_CLIP_DURATION = 60;
 const DEFAULT_RATING = 4; // "Good"

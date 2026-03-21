@@ -5,7 +5,7 @@ import { soccerTags, positions, generateClipName } from '../constants/soccerTags
 // Constants
 const MIN_CLIP_DURATION = 1.0;
 const MAX_CLIP_DURATION = 60.0;
-const DEFAULT_CLIP_DURATION = 5.0;
+const DEFAULT_CLIP_DURATION = 8.0;
 
 // Rating-based background colors (used for tinting the details panel)
 const RATING_COLORS = {
