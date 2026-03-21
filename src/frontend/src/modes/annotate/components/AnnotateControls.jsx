@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, SkipBack, SkipForward, RotateCcw, Maximize, Minimize, Plus } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, RotateCcw, Maximize, Minimize, Plus, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
 import { formatTime } from '../../../utils/timeFormat';
 
@@ -81,7 +81,28 @@ export function AnnotateControls({
   isFullscreen,
   onToggleFullscreen,
   onAddClip,
+  videoRef,
 }) {
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+
+  const handleVolumeChange = (e) => {
+    const newVolume = parseFloat(e.target.value);
+    setVolume(newVolume);
+    setIsMuted(newVolume === 0);
+    if (videoRef?.current) {
+      videoRef.current.volume = newVolume;
+      videoRef.current.muted = newVolume === 0;
+    }
+  };
+
+  const handleToggleMute = () => {
+    const newMuted = !isMuted;
+    setIsMuted(newMuted);
+    if (videoRef?.current) {
+      videoRef.current.muted = newMuted;
+    }
+  };
   return (
     <div className={`controls-container flex flex-wrap items-center justify-between gap-y-1 py-2 px-2 sm:px-4 ${
       isFullscreen ? 'bg-gray-900/90' : 'bg-gray-800 rounded-b-lg'
@@ -162,6 +183,29 @@ export function AnnotateControls({
             className="flex sm:hidden"
           />
         )}
+
+        {/* Volume control */}
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={isMuted || volume === 0 ? VolumeX : Volume2}
+            iconOnly
+            onClick={handleToggleMute}
+            title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
+          />
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.1"
+            value={isMuted ? 0 : volume}
+            onChange={handleVolumeChange}
+            className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer
+              [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
+              [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
+          />
+        </div>
 
         {/* Speed control */}
         <SpeedControl speed={playbackSpeed} onSpeedChange={onSpeedChange} />

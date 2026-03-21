@@ -1189,6 +1189,7 @@ export function AnnotateVideoControls({
   isFullscreen,
   onToggleFullscreen,
   onAddClip,
+  videoRef,
 }) {
   return (
     <AnnotateControls
@@ -1204,6 +1205,7 @@ export function AnnotateVideoControls({
       isFullscreen={isFullscreen}
       onToggleFullscreen={onToggleFullscreen}
       onAddClip={onAddClip}
+      videoRef={videoRef}
     />
   );
 }
