@@ -139,7 +139,7 @@ export function AnnotateModeView({
             <div
               className={annotateFullscreen ? 'relative w-full' : 'contents'}
               style={annotateFullscreen ? {
-                maxHeight: 'calc(100vh - 140px)',
+                maxHeight: 'calc(100vh - 180px)',
                 aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}`
               } : undefined}
             >
@@ -221,7 +221,7 @@ export function AnnotateModeView({
 
             {/* Fullscreen timeline - right below controls */}
             {annotateFullscreen && (
-              <div className="w-full shrink-0 bg-gray-900/95 border-t border-gray-700 px-4 py-2">
+              <div className="w-full shrink-0 bg-gray-900/95 border-t border-gray-700 px-4 py-1">
                 <AnnotateMode
                   currentTime={currentTime}
                   duration={annotateVideoMetadata?.duration || 0}

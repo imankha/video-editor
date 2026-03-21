@@ -27,7 +27,7 @@ export default function AnnotateMode({
   if (!duration) return null;
 
   return (
-    <div className="mt-6">
+    <div>
       <AnnotateTimeline
         currentTime={currentTime}
         duration={duration}
