@@ -24,6 +24,7 @@ import { useStandaloneVideo } from '../hooks/useStandaloneVideo';
 export function MediaPlayer({ src, autoPlay = true, onClose }) {
   const containerRef = useRef(null);
   const [showControls, setShowControls] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const hideControlsTimeoutRef = useRef(null);
 
   // Use shared video state hook
@@ -45,6 +46,25 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
     toggleMute,
     handlers,
   } = useStandaloneVideo({ autoPlay });
+
+  // Fullscreen toggle
+  const toggleFullscreen = useCallback(() => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  }, []);
+
+  // Sync fullscreen state with browser
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   // Auto-hide controls after inactivity
   const scheduleHideControls = useCallback(() => {
@@ -88,16 +108,25 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
           toggleMute();
           scheduleHideControls();
           break;
+        case 'KeyF':
+          e.preventDefault();
+          toggleFullscreen();
+          scheduleHideControls();
+          break;
         case 'Escape':
           e.preventDefault();
-          onClose?.();
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else {
+            onClose?.();
+          }
           break;
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, seekForward, seekBackward, toggleMute, onClose, scheduleHideControls]);
+  }, [togglePlay, seekForward, seekBackward, toggleMute, toggleFullscreen, onClose, scheduleHideControls]);
 
   // Mouse movement to show controls
   const handleMouseMove = useCallback(() => {
@@ -157,6 +186,8 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
         onVolumeChange={setVolume}
         onToggleMute={toggleMute}
         visible={showControls}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
       />
 
       {/* Big Play Button (when paused and loaded) */}

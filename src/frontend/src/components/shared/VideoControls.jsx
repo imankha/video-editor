@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, Volume2, VolumeX, Rewind, FastForward } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Rewind, FastForward, Maximize, Minimize } from 'lucide-react';
 import { Button } from './Button';
 import { formatTime } from '../../utils/timeFormat';
 
@@ -38,6 +38,8 @@ export function VideoControls({
   onToggleMute,
   showVolume = true,
   visible = true,
+  isFullscreen = false,
+  onToggleFullscreen,
 }) {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -123,30 +125,43 @@ export function VideoControls({
         </div>
 
         {/* Right Controls - Volume */}
-        {showVolume && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          {showVolume && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={isMuted || volume === 0 ? VolumeX : Volume2}
+                iconOnly
+                onClick={onToggleMute}
+                title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
+                className="text-white hover:text-purple-400"
+              />
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={isMuted ? 0 : volume}
+                onChange={handleVolumeInput}
+                className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer
+                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
+                  [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
+              />
+            </>
+          )}
+          {onToggleFullscreen && (
             <Button
               variant="ghost"
               size="sm"
-              icon={isMuted || volume === 0 ? VolumeX : Volume2}
+              icon={isFullscreen ? Minimize : Maximize}
               iconOnly
-              onClick={onToggleMute}
-              title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
+              onClick={onToggleFullscreen}
+              title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
               className="text-white hover:text-purple-400"
             />
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={isMuted ? 0 : volume}
-              onChange={handleVolumeInput}
-              className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer
-                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-                [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
-            />
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
