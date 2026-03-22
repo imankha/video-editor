@@ -52,7 +52,7 @@ export const QUESTS = [
       {
         id: 'export_framing',
         title: 'Frame Video',
-        description: 'Trim segments, slow down, crop video at different keyframes, and slowdown segments to frame your clip',
+        description: 'Crop, trim, and slow down segments to frame your clip. When you export, we AI upscale your video to crisp 1080p.',
       },
       {
         id: 'export_overlay',

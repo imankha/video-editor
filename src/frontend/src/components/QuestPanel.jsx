@@ -27,6 +27,7 @@ export function QuestPanel() {
   const [hidden, setHidden] = useState(false);       // User fully dismissed
   const [claiming, setClaiming] = useState(false);
   const [celebrating, setCelebrating] = useState(false);  // Quest complete celebration
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
   const prevCompletedRef = useRef(null);  // Track step count to detect new completions
   const panelRef = useRef(null);
   const [position, setPosition] = useState({ left: null, bottom: null });
@@ -151,14 +152,6 @@ export function QuestPanel() {
         playSound('fanfare');
         setCelebrating(true);
         setExpanded(true);
-
-        // Special message when the final quest (quest_3) is completed
-        if (activeQuestId === 'quest_3') {
-          toast.success('Congratulations! You\'ve used all of our major features.', {
-            message: 'Now finish annotating your games — make sure to annotate every touch so your baller can take their game to the next level. Once in the system, you can extract highlights anytime to post to Insta or send to college coaches.',
-            duration: 15000,
-          });
-        }
       } else {
         // Individual step completed
         playSound('check');
@@ -184,10 +177,14 @@ export function QuestPanel() {
       const result = await claimReward(questDef.id);
       if (!result.already_claimed) {
         playSound('fanfare');
-        toast.success(`You earned ${questDef.reward} credits!`, {
-          message: 'Keep going — more quests await!',
-          duration: 6000,
-        });
+        if (questDef.id === 'quest_3') {
+          setShowCompletionModal(true);
+        } else {
+          toast.success(`You earned ${questDef.reward} credits!`, {
+            message: 'Keep going — more quests await!',
+            duration: 6000,
+          });
+        }
       }
     } catch (err) {
       toast.error('Failed to claim reward', { message: err.message });
@@ -351,6 +348,30 @@ export function QuestPanel() {
           </>
         )}
       </div>
+
+      {/* Quest 3 completion modal */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60" onClick={() => setShowCompletionModal(false)}>
+          <div className="bg-gray-800 border border-gray-600 rounded-2xl p-8 max-w-lg mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-6">
+              <div className="text-4xl mb-3">🎉</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Congratulations!</h2>
+              <p className="text-green-400 font-semibold text-lg mb-4">+{questDef.reward} credits earned</p>
+            </div>
+            <div className="space-y-4 text-gray-300 text-sm leading-relaxed">
+              <p>You've used all of our major features! Now finish annotating your games — make sure to annotate every touch so your baller can take their game to the next level.</p>
+              <p>Once in the system, you can extract highlights anytime to post to Insta or send to college coaches.</p>
+              <p className="text-white font-medium">Use your credits to create more highlights — each framing export uses credits to AI upscale your clips to crisp 1080p.</p>
+            </div>
+            <button
+              onClick={() => setShowCompletionModal(false)}
+              className="mt-6 w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl transition-colors"
+            >
+              Let's Go!
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
