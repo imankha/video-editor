@@ -656,6 +656,10 @@ export function AnnotateContainer({
 
           if (result.project_created) {
             console.log('[AnnotateContainer] Auto-created 5-star project:', result.project_id);
+            toast.success('Project created for your 5-star clip!', {
+              message: 'We automatically create a highlight project for every brilliant play so you can export it anytime.',
+              duration: 8000,
+            });
           }
         }
       } else if (isUploadingFromStore) {
@@ -708,6 +712,10 @@ export function AnnotateContainer({
 
         if (result.project_created) {
           console.log('[AnnotateContainer] Auto-created 5-star project:', result.project_id);
+          toast.success('Project created for your 5-star clip!', {
+            message: 'We automatically create a highlight project for every brilliant play so you can export it anytime.',
+            duration: 8000,
+          });
         }
       }
     } else {
@@ -734,6 +742,10 @@ export function AnnotateContainer({
         const result = await updateClipRemote(region.rawClipId, backendUpdates);
         if (result?.project_created) {
           console.log('[AnnotateContainer] Auto-created 5-star project:', result.project_id);
+          toast.success('Project created for your 5-star clip!', {
+            message: 'We automatically create a highlight project for every brilliant play so you can export it anytime.',
+            duration: 8000,
+          });
         }
       }
     }

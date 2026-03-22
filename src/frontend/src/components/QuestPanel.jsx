@@ -151,6 +151,14 @@ export function QuestPanel() {
         playSound('fanfare');
         setCelebrating(true);
         setExpanded(true);
+
+        // Special message when the final quest (quest_3) is completed
+        if (activeQuestId === 'quest_3') {
+          toast.success('Congratulations! You\'ve used all of our major features.', {
+            message: 'Now finish annotating your games — make sure to annotate every touch so your baller can take their game to the next level. Once in the system, you can extract highlights anytime to post to Insta or send to college coaches.',
+            duration: 15000,
+          });
+        }
       } else {
         // Individual step completed
         playSound('check');
