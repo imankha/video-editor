@@ -137,9 +137,9 @@ export function DownloadsPanel({
   // State for project restore (T66)
   const [restoringProjectId, setRestoringProjectId] = useState(null);
 
-  if (!isOpen) return null;
+  if (!isOpen && !playingVideo) return null;
 
-  const groups = groupedDownloads();
+  const groups = isOpen ? groupedDownloads() : [];
 
   const handleDelete = async (e, download) => {
     e.stopPropagation();
@@ -159,6 +159,7 @@ export function DownloadsPanel({
   const handlePlay = (e, download) => {
     e.stopPropagation();
     setPlayingVideo(download);
+    close();
     // T540: Record achievements for viewing gallery video
     import('../stores/questStore').then(({ useQuestStore }) => {
       useQuestStore.getState().recordAchievement('viewed_gallery_video');

@@ -204,20 +204,20 @@ export function QuestPanel() {
     {/* Quest 3 completion modal — rendered outside quest panel to ensure centering */}
     {showCompletionModal && (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60" onClick={() => setShowCompletionModal(false)}>
-        <div className="bg-gray-800 border border-gray-600 rounded-2xl p-10 max-w-xl mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-          <div className="text-center mb-8">
-            <div className="text-5xl mb-4">🎉</div>
-            <h2 className="text-3xl font-bold text-white mb-3">Congratulations!</h2>
-            <p className="text-green-400 font-semibold text-xl">+{questDef.reward} credits earned</p>
+        <div className="bg-gray-800 border border-gray-600 rounded-2xl p-12 max-w-2xl mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="text-center mb-10">
+            <div className="text-6xl mb-5">🎉</div>
+            <h2 className="text-4xl font-bold text-white mb-3">Congratulations!</h2>
+            <p className="text-green-400 font-semibold text-2xl">+{questDef.reward} credits earned</p>
           </div>
-          <div className="space-y-4 text-gray-300 text-lg leading-relaxed">
+          <div className="space-y-5 text-gray-300 text-xl leading-relaxed">
             <p>Annotate every touch so your baller can take their game to the next level.</p>
             <p>Extract highlights anytime to post to Insta or send to college coaches.</p>
             <p className="text-white font-medium">Use your credits to create more AI-upscaled highlights!</p>
           </div>
           <button
             onClick={() => setShowCompletionModal(false)}
-            className="mt-8 w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold text-lg rounded-xl transition-colors"
+            className="mt-10 w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold text-xl rounded-xl transition-colors"
           >
             Vamos!
           </button>
