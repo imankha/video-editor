@@ -114,7 +114,7 @@ export const QUESTS = [
       {
         id: 'overlay_custom_project',
         title: 'Add Overlay',
-        description: 'In Overlay mode, add spotlight overlays to your highlights, then export',
+        description: 'In Overlay mode, add spotlight overlays to your highlights. Scroll to see each clip\'s highlight region. Move regions with the levers, then click the green boxes and click your player to set spotlights.',
       },
       {
         id: 'watch_custom_video',
