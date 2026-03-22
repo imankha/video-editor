@@ -160,9 +160,9 @@ export function QuestPanel() {
     prevCompletedRef.current = currentCompleted;
   }, [currentCompleted]);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Don't render if hidden, not loaded, or all quests fully done
+  // Don't render if hidden, not loaded, or all quests fully done (unless modal is showing)
   const allQuestsDone = loaded && quests.length > 0 && quests.every(q => q.reward_claimed);
-  if (hidden || !loaded || allQuestsDone) return null;
+  if ((hidden || !loaded || allQuestsDone) && !showCompletionModal) return null;
   const steps = questProgress?.steps || {};
   const completedCount = Object.values(steps).filter(Boolean).length;
   const totalCount = questDef.steps.length;
@@ -200,6 +200,31 @@ export function QuestPanel() {
   };
 
   return (
+    <>
+    {/* Quest 3 completion modal — rendered outside quest panel to ensure centering */}
+    {showCompletionModal && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60" onClick={() => setShowCompletionModal(false)}>
+        <div className="bg-gray-800 border border-gray-600 rounded-2xl p-8 max-w-lg mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="text-center mb-6">
+            <div className="text-4xl mb-3">🎉</div>
+            <h2 className="text-2xl font-bold text-white mb-2">Congratulations!</h2>
+            <p className="text-green-400 font-semibold text-lg mb-4">+{questDef.reward} credits earned</p>
+          </div>
+          <div className="space-y-3 text-gray-300 text-base leading-relaxed">
+            <p>Annotate every touch so your baller can take their game to the next level.</p>
+            <p>Extract highlights anytime to post to Insta or send to college coaches.</p>
+            <p className="text-white font-medium">Use your credits to create more AI-upscaled highlights!</p>
+          </div>
+          <button
+            onClick={() => setShowCompletionModal(false)}
+            className="mt-6 w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl transition-colors"
+          >
+            Vamos!
+          </button>
+        </div>
+      </div>
+    )}
+    {!allQuestsDone && (
     <div
       ref={panelRef}
       className={`quest-overlay fixed z-50 quest-fade-in transition-all duration-300 ${expanded ? 'sm:w-[420px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
@@ -349,30 +374,9 @@ export function QuestPanel() {
         )}
       </div>
 
-      {/* Quest 3 completion modal */}
-      {showCompletionModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60" onClick={() => setShowCompletionModal(false)}>
-          <div className="bg-gray-800 border border-gray-600 rounded-2xl p-8 max-w-lg mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="text-center mb-6">
-              <div className="text-4xl mb-3">🎉</div>
-              <h2 className="text-2xl font-bold text-white mb-2">Congratulations!</h2>
-              <p className="text-green-400 font-semibold text-lg mb-4">+{questDef.reward} credits earned</p>
-            </div>
-            <div className="space-y-4 text-gray-300 text-sm leading-relaxed">
-              <p>You've used all of our major features! Now finish annotating your games — make sure to annotate every touch so your baller can take their game to the next level.</p>
-              <p>Once in the system, you can extract highlights anytime to post to Insta or send to college coaches.</p>
-              <p className="text-white font-medium">Use your credits to create more highlights — each framing export uses credits to AI upscale your clips to crisp 1080p.</p>
-            </div>
-            <button
-              onClick={() => setShowCompletionModal(false)}
-              className="mt-6 w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl transition-colors"
-            >
-              Let's Go!
-            </button>
-          </div>
-        </div>
-      )}
     </div>
+    )}
+    </>
   );
 }
 
