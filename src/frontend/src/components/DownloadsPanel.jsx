@@ -475,6 +475,7 @@ export function DownloadsPanel({
 
   return (
     <>
+      {isOpen && <>
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/50 z-40"
@@ -545,6 +546,7 @@ export function DownloadsPanel({
           animation: slideInRight 0.2s ease-out forwards;
         }
       `}</style>
+      </>}
 
       {/* Video Preview Modal */}
       {playingVideo && (
