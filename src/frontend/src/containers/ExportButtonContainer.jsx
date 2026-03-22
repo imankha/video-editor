@@ -1000,9 +1000,11 @@ export function ExportButtonContainer({
   const isMultiClipMode = clips && clips.length > 0;
   const extractedClips = clips?.filter(c => isExtractedSel(c)) || [];
   const clipsNotFramed = extractedClips.filter(c => {
-    const kfs = c.cropKeyframes || clipCropKeyframes(c);
-    return !kfs || kfs.length === 0;
+    // Use saved crop_data from DB, not runtime cropKeyframes (which includes defaults)
+    const savedKfs = clipCropKeyframes(c);
+    return !savedKfs || savedKfs.length === 0;
   });
+
 
   const hasUnframedClips = isMultiClipMode
     ? clipsNotFramed.length > 0
@@ -1017,10 +1019,11 @@ export function ExportButtonContainer({
     (isFramingMode && (hasUnextractedClips || hasUnframedClips));
 
   // Button title/tooltip
+  const framedCount = totalExtractedClips - unframedCount;
   const buttonTitle = isFramingMode && hasUnextractedClips
     ? 'Wait for all clips to be extracted before framing'
     : isFramingMode && hasUnframedClips
-      ? 'All clips must be framed before exporting'
+      ? `${framedCount}/${totalExtractedClips} clips framed — ${unframedCount} still need${unframedCount === 1 ? 's' : ''} framing`
       : undefined;
 
   return {

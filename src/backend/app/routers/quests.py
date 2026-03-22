@@ -197,19 +197,11 @@ def _check_all_steps(user_id: str, conn) -> dict:
         "SELECT 1 FROM achievements WHERE key = 'viewed_custom_project_video'"
     ).fetchone() is not None
 
-    # Project containing both 4-star and 5-star clips
+    # Any custom (non-auto) project with clips
     steps["create_mixed_project"] = cursor.execute(
         """SELECT 1 FROM projects p
-           WHERE EXISTS (
-               SELECT 1 FROM working_clips wc
-               JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-               WHERE wc.project_id = p.id AND rc.rating = 5
-           )
-           AND EXISTS (
-               SELECT 1 FROM working_clips wc
-               JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-               WHERE wc.project_id = p.id AND rc.rating = 4
-           )
+           WHERE p.is_auto_created = 0
+           AND EXISTS (SELECT 1 FROM working_clips WHERE project_id = p.id)
            LIMIT 1"""
     ).fetchone() is not None
 

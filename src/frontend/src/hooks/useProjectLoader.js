@@ -117,7 +117,6 @@ export function useProjectLoader() {
 
       // Determine target mode
       const targetMode = mode || (project.working_video_id ? 'overlay' : 'framing');
-      console.log(`[useProjectLoader] Mode determination: working_video_id=${project.working_video_id}, mode override=${mode}, targetMode=${targetMode}`);
 
       // Update last_opened_at (non-blocking)
       fetch(`${API_BASE}/api/projects/${projectId}/state?update_last_opened=true`, {

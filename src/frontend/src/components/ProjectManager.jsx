@@ -384,6 +384,15 @@ export function ProjectManager({
     }
   }, [onFetchGames]);
 
+  // Switch to projects tab once projects load (initial state may be wrong since data isn't fetched yet at mount)
+  const hasSetInitialTab = useRef(false);
+  useEffect(() => {
+    if (!hasSetInitialTab.current && !loading && projects.length > 0) {
+      setActiveTab('projects');
+      hasSetInitialTab.current = true;
+    }
+  }, [projects, loading]);
+
   // Also refetch when switching to games tab or when opening modal
   useEffect(() => {
     if ((activeTab === 'games' || showNewProjectModal) && onFetchGames) {

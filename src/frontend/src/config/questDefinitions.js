@@ -89,7 +89,7 @@ export const QUESTS = [
       {
         id: 'create_mixed_project',
         title: 'Create Highlights Project',
-        description: 'Go Home, then Projects, then New Project and click 4+ to select all great and brilliant clips for your new project. Click Create.',
+        description: 'Go Home, then Projects, then New Project. Select clips for your highlight reel and click Create.',
       },
       {
         id: 'extract_custom_clips',
@@ -103,12 +103,12 @@ export const QUESTS = [
       },
       {
         id: 'start_custom_framing',
-        title: 'Start Framing',
+        title: 'Start Frame Export',
         description: 'Click the Frame Video button to begin the framing export',
       },
       {
         id: 'complete_custom_framing',
-        title: 'Complete Framing',
+        title: 'Complete Frame Export',
         description: 'Wait for the framing export to finish',
       },
       {

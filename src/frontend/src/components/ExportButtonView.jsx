@@ -218,7 +218,11 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       >
         {isCurrentlyExporting
           ? (isExternallyExporting && !isExporting ? 'Export in progress...' : 'Exporting...')
-          : (isFramingMode ? 'Frame Video' : 'Add Overlay')
+          : isFramingMode
+            ? (hasUnframedClips && isMultiClipMode
+              ? `Frame Video (${totalExtractedClips - unframedCount}/${totalExtractedClips})`
+              : 'Frame Video')
+            : 'Add Overlay'
         }
       </Button>
 
