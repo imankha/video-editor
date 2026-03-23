@@ -601,17 +601,28 @@ export async function listDedupeGames() {
 }
 
 /**
- * List pending uploads that can be resumed
+ * List pending uploads that can be resumed.
+ * Deduped: concurrent callers share the same promise.
  * @returns {Promise<Array>} - Array of pending upload objects
  */
+let _pendingUploadsPromise = null;
 export async function listPendingUploads() {
-  const response = await fetch(`${API_BASE}/api/games/pending-uploads`);
+  if (_pendingUploadsPromise) return _pendingUploadsPromise;
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `List failed: ${response.status}`);
-  }
+  _pendingUploadsPromise = (async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/games/pending-uploads`);
 
-  const data = await response.json();
-  return data.pending_uploads;
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || `List failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.pending_uploads;
+    } finally {
+      _pendingUploadsPromise = null;
+    }
+  })();
+  return _pendingUploadsPromise;
 }

@@ -4,6 +4,7 @@ import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { toast } from '../components/shared';
 import { API_BASE } from '../config';
 import { ExportStatus } from '../constants/exportStatus';
+import { initSession } from '../utils/sessionInit';
 
 // Re-poll Modal status after this many ms of WebSocket silence
 const SILENCE_TIMEOUT_MS = 60000; // 60 seconds
@@ -35,6 +36,9 @@ export function useExportRecovery() {
     hasRecovered.current = true;
 
     async function loadExportsFromBackend() {
+      // T635: Wait for auth to complete before fetching exports
+      // initSession() returns the cached promise if already resolved
+      await initSession();
       console.log('[ExportRecovery] Fetching active exports from backend...');
 
       try {

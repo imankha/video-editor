@@ -18,7 +18,7 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen, AdminScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AuthGateModal } from './components/AuthGateModal';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, EDITOR_MODES } from './stores';
+import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
 import { useQuestStore } from './stores/questStore';
 import { useCreditStore } from './stores/creditStore';
@@ -107,6 +107,7 @@ function App() {
       useGamesDataStore.getState().fetchGames();
       useQuestStore.getState().fetchProgress();
       useSettingsStore.getState().loadSettings();
+      useGalleryStore.getState().fetchCount();
 
       // Restore navigation state after auth-triggered reload (cross-device recovery)
       const authReturnMode = sessionStorage.getItem('authReturnMode');

@@ -310,21 +310,31 @@ export function useDownloads(isOpen = false) {
     };
   }, [isOpen, filter, fetchDownloads]);
 
-  // Fetch count on mount or after profile switch (for badge)
+  // T635: Count is fetched centrally by galleryStore.fetchCount() in App.jsx startup.
+  // Only fetch here on profile switch (galleryStore.reset clears the count).
   useEffect(() => {
-    fetchCount();
-  }, [fetchCount, currentProfileId]);
+    if (currentProfileId) {
+      // After profile switch, galleryStore was reset — refetch count
+      import('../stores/galleryStore').then(({ useGalleryStore }) => {
+        if (!useGalleryStore.getState().countLoaded) {
+          useGalleryStore.getState().fetchCount();
+        }
+      });
+    }
+  }, [currentProfileId]);
 
   // Refresh count when an export completes (new download available)
   useEffect(() => {
     const unsubComplete = exportWebSocketManager.addEventListener('*', 'complete', () => {
-      fetchCount();
+      import('../stores/galleryStore').then(({ useGalleryStore }) => {
+        useGalleryStore.getState().fetchCount({ force: true });
+      });
     });
 
     return () => {
       unsubComplete();
     };
-  }, [fetchCount]);
+  }, []);
 
   return {
     // State
