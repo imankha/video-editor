@@ -53,6 +53,7 @@ export function ProjectManager({
   // Active upload props (in-progress upload from uploadStore)
   activeUpload = null, // { fileName, progress, phase, message }
   onClickActiveUpload, // Navigate back to annotate mode
+  onCancelActiveUpload, // Cancel active upload
 }) {
   // Get downloads and export state from context
   const { downloadsCount: contextDownloadsCount, exportingProject: contextExportingProject } = useAppState();
@@ -644,6 +645,7 @@ export function ProjectManager({
                 <ActiveUploadCard
                   upload={activeUpload}
                   onClick={onClickActiveUpload}
+                  onCancel={onCancelActiveUpload}
                 />
               </div>
             )}
@@ -1021,7 +1023,7 @@ function PendingUploadCard({ upload, onResume, onCancel }) {
  * ActiveUploadCard - Shows an in-progress upload with progress bar
  * Clicking navigates back to annotate mode
  */
-function ActiveUploadCard({ upload, onClick }) {
+function ActiveUploadCard({ upload, onClick, onCancel }) {
   // Format file size
   const formatSize = (bytes) => {
     if (!bytes) return '';
@@ -1041,6 +1043,15 @@ function ActiveUploadCard({ upload, onClick }) {
           <div className="flex items-center gap-2">
             <FileVideo size={18} className="text-green-400" />
             <h3 className="text-white font-medium truncate">{upload.fileName}</h3>
+            {onCancel && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onCancel(); }}
+                className="ml-auto p-1 text-gray-500 hover:text-red-400 transition-colors"
+                title="Cancel upload"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
             {upload.fileSize && <span>{formatSize(upload.fileSize)}</span>}

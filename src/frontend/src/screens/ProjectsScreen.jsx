@@ -87,6 +87,7 @@ export function ProjectsScreen({
 
   // Active upload from uploadStore (in-progress upload that persists across navigation)
   const activeUpload = useUploadStore(state => state.activeUpload);
+  const cancelUpload = useUploadStore(state => state.cancelUpload);
 
   // Project loading
   const { loadProject } = useProjectLoader();
@@ -343,6 +344,7 @@ export function ProjectsScreen({
           // Active upload props (in-progress upload)
           activeUpload={activeUpload}
           onClickActiveUpload={handleClickActiveUpload}
+          onCancelActiveUpload={cancelUpload}
         />
 
         {/* Downloads Panel */}

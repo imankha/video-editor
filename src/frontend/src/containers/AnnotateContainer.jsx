@@ -285,9 +285,7 @@ export function AnnotateContainer({
             annotateGameIdRef.current = result.game_id;
             setAnnotateGameId(result.game_id);
             setAnnotateGameName(result.name);
-            if (result.deduplicated) {
-              console.log('[AnnotateContainer] DEDUPLICATION: File already existed on server.');
-            }
+            // Toast shown by uploadStore.onUploadComplete
           },
           { blobUrl: blobUrls[0], gameName: displayName }
         );

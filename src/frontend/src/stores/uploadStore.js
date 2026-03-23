@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { uploadGame, uploadMultiVideoGame, UPLOAD_PHASE } from '../services/uploadManager';
+import { toast } from '../components/shared';
 
 /**
  * Upload Store - Manages game video uploads that persist across page navigation
@@ -105,6 +106,8 @@ export const useUploadStore = create((set, get) => ({
     // annotateGameId is still null, causing TSV imports to skip saving clips.
     const onUploadComplete = (result) => {
       console.log('[UploadStore] Upload complete:', result);
+      // Don't fire callbacks or toast if upload was cancelled
+      if (!get().activeUpload) return;
       const callbacks = get().onCompleteCallbacks;
       callbacks.forEach(cb => {
         try {
@@ -113,7 +116,13 @@ export const useUploadStore = create((set, get) => ({
           console.error('[UploadStore] Callback error:', e);
         }
       });
+      const gameName = get().activeUpload?.gameName;
       set({ activeUpload: null, onCompleteCallbacks: [] });
+      toast.success('Game ready!', {
+        message: result.deduplicated
+          ? `${gameName || 'Video'} was already uploaded`
+          : `${gameName || 'Video'} uploaded successfully`,
+      });
       // T540: Refresh quest progress after game upload
       import('./questStore').then(({ useQuestStore }) =>
         useQuestStore.getState().fetchProgress()
@@ -187,6 +196,17 @@ export const useUploadStore = create((set, get) => ({
   isUploading: () => {
     const upload = get().activeUpload;
     return upload !== null && upload.phase !== UPLOAD_PHASE.ERROR;
+  },
+
+  /**
+   * Cancel an active upload. Clears state and shows toast.
+   * In-flight XHR continues (aborting multipart R2 uploads is complex),
+   * but the completion callback is discarded so it won't affect anything.
+   */
+  cancelUpload: () => {
+    if (!get().activeUpload) return;
+    set({ activeUpload: null, onCompleteCallbacks: [] });
+    toast.info('Upload cancelled');
   },
 
   /**
