@@ -31,6 +31,9 @@ SQLAlchemy==2.0.45
 # TF-IDF title generation
 scikit-learn==1.8.0
 
+# Payments
+stripe==14.4.1
+
 # Utilities
 python-dotenv==0.21.1
 python-multipart==0.0.6
