@@ -404,7 +404,7 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
 
         # Update games table with video metadata
         cursor.execute("""
-            SELECT COUNT(*) as cnt, SUM(duration) as total_duration, SUM(file_size) as total_size
+            SELECT COUNT(*) as cnt, SUM(duration) as total_duration, SUM(video_size) as total_size
             FROM game_videos WHERE game_id = ?
         """, (game_id,))
         agg = cursor.fetchone()
