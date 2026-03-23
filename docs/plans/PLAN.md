@@ -212,7 +212,7 @@ User feedback from first NUF session. Two groups: game addition flow and clip cr
 |----|------|--------|--------|-------|-------|
 | T640 | [Game Upload Drop Zone](tasks/T640-game-upload-drop-zone.md) | TODO | 4 | 2 | Drag-and-drop onto file upload area in GameDetailsModal |
 | T670 | [Consistent Game Terminology](tasks/T670-consistent-game-terminology.md) | DONE | 5 | 1 | Standardize "Add a Game" vs "Upload" across UI |
-| T680 | [Upload Progress Bar Visibility](tasks/T680-upload-progress-bar-visibility.md) | TODO | 4 | 2 | Investigate — progress bar exists but NUF user didn't notice it |
+| T680 | [Upload Progress Bar Visibility](tasks/T680-upload-progress-bar-visibility.md) | TESTING | 4 | 2 | Investigate — progress bar exists but NUF user didn't notice it |
 
 #### Clip Creation Flow
 
