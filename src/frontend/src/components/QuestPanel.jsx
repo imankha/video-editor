@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp, LogIn } from 'lucide-react';
+import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { useQuestStore } from '../stores/questStore';
 import { QUESTS } from '../config/questDefinitions';
 import { toast } from './shared/Toast';
-import { useAuthStore } from '../stores/authStore';
+
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
 /**
@@ -20,7 +20,7 @@ export function QuestPanel() {
   const loaded = useQuestStore((s) => s.loaded);
   const activeQuestId = useQuestStore((s) => s.activeQuestId);
   const fetchProgress = useQuestStore((s) => s.fetchProgress);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   const claimReward = useQuestStore((s) => s.claimReward);
 
   const [expanded, setExpanded] = useState(true);  // Start expanded for new users
@@ -280,17 +280,6 @@ export function QuestPanel() {
                 {completedCount}/{totalCount}
               </span>
             </div>
-
-            {/* Hint — login button for returning users, hidden once authenticated */}
-            {questDef.hint && !isAuthenticated && (
-              <button
-                onClick={() => useAuthStore.getState().requireAuth(() => {})}
-                className="mx-4 mb-2 w-[calc(100%-2rem)] flex items-center justify-center gap-1.5 text-xs font-semibold text-white/70 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-md px-2 py-1.5 transition-colors cursor-pointer"
-              >
-                <LogIn size={12} />
-                {questDef.hint}
-              </button>
-            )}
 
             {/* Steps */}
             <div className="px-4 pb-2">

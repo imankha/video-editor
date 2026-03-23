@@ -9,7 +9,6 @@ export const QUESTS = [
   {
     id: 'quest_1',
     title: 'Get Started',
-    hint: 'Already added a game? Just log in',
     reward: 25,
     steps: [
       {
