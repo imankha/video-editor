@@ -1,6 +1,6 @@
 # T635: Startup Request Dedup — Remaining Duplicates
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 4
 **Complexity:** 4
 **Created:** 2026-03-22
