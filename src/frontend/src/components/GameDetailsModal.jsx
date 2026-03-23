@@ -26,6 +26,8 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const [videoMode, setVideoMode] = useState(VideoMode.PER_GAME);
   const [halfFiles, setHalfFiles] = useState([null, null]); // [firstHalf, secondHalf]
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggingHalfIndex, setDraggingHalfIndex] = useState(null);
   const fileInputRef = useRef(null);
   const halfFileInputRefs = [useRef(null), useRef(null)];
   const tournamentInputRef = useRef(null);
@@ -80,6 +82,65 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
       });
     }
   }, []);
+
+  const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'];
+
+  const getVideoFile = useCallback((dataTransfer) => {
+    const file = dataTransfer.files?.[0];
+    if (file && ACCEPTED_VIDEO_TYPES.includes(file.type)) return file;
+    return null;
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDragEnter = useCallback((e, halfIndex) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (halfIndex !== undefined) {
+      setDraggingHalfIndex(halfIndex);
+    } else {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e, halfIndex) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only reset when leaving the drop zone (not entering a child)
+    if (e.currentTarget.contains(e.relatedTarget)) return;
+    if (halfIndex !== undefined) {
+      setDraggingHalfIndex(null);
+    } else {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (isSubmitting) return;
+    const file = getVideoFile(e.dataTransfer);
+    if (file) setSelectedFile(file);
+  }, [isSubmitting, getVideoFile]);
+
+  const handleHalfDrop = useCallback((index, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingHalfIndex(null);
+    if (isSubmitting) return;
+    const file = getVideoFile(e.dataTransfer);
+    if (file) {
+      setHalfFiles(prev => {
+        const updated = [...prev];
+        updated[index] = file;
+        return updated;
+      });
+    }
+  }, [isSubmitting, getVideoFile]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -338,7 +399,12 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
             </label>
 
             {videoMode === VideoMode.PER_GAME ? (
-              <>
+              <div
+                onDragOver={handleDragOver}
+                onDragEnter={(e) => handleDragEnter(e)}
+                onDragLeave={(e) => handleDragLeave(e)}
+                onDrop={handleDrop}
+              >
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -347,15 +413,18 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                   className="hidden"
                   disabled={isSubmitting}
                 />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isSubmitting}
-                  className={`w-full px-4 py-3 border-2 border-dashed rounded-lg transition-colors ${
-                    selectedFile
-                      ? 'border-green-500 bg-green-900/20'
-                      : 'border-gray-600 hover:border-gray-500 bg-gray-900/50'
-                  } disabled:opacity-50`}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => !isSubmitting && fileInputRef.current?.click()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
+                  className={`w-full px-4 py-3 border-2 border-dashed rounded-lg transition-colors cursor-pointer ${
+                    isDragging
+                      ? 'border-blue-400 bg-blue-900/30'
+                      : selectedFile
+                        ? 'border-green-500 bg-green-900/20'
+                        : 'border-gray-600 hover:border-gray-500 bg-gray-900/50'
+                  } ${isSubmitting ? 'opacity-50 pointer-events-none' : ''}`}
                 >
                   {selectedFile ? (
                     <div className="text-center">
@@ -367,16 +436,22 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                   ) : (
                     <div className="text-center text-gray-400">
                       <Upload size={24} className="mx-auto mb-2" />
-                      <p className="font-medium">Click to upload video</p>
+                      <p className="font-medium">{isDragging ? 'Drop video here' : 'Click or drag to upload video'}</p>
                       <p className="text-xs text-gray-500 mt-1">MP4, MOV, or WebM</p>
                     </div>
                   )}
-                </button>
-              </>
+                </div>
+              </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {['First Half', 'Second Half'].map((label, index) => (
-                  <div key={label}>
+                  <div
+                    key={label}
+                    onDragOver={handleDragOver}
+                    onDragEnter={(e) => handleDragEnter(e, index)}
+                    onDragLeave={(e) => handleDragLeave(e, index)}
+                    onDrop={(e) => handleHalfDrop(index, e)}
+                  >
                     <input
                       ref={halfFileInputRefs[index]}
                       type="file"
@@ -385,15 +460,18 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                       className="hidden"
                       disabled={isSubmitting}
                     />
-                    <button
-                      type="button"
-                      onClick={() => halfFileInputRefs[index].current?.click()}
-                      disabled={isSubmitting}
-                      className={`w-full px-3 py-3 border-2 border-dashed rounded-lg transition-colors ${
-                        halfFiles[index]
-                          ? 'border-green-500 bg-green-900/20'
-                          : 'border-gray-600 hover:border-gray-500 bg-gray-900/50'
-                      } disabled:opacity-50`}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => !isSubmitting && halfFileInputRefs[index].current?.click()}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); halfFileInputRefs[index].current?.click(); } }}
+                      className={`w-full px-3 py-3 border-2 border-dashed rounded-lg transition-colors cursor-pointer ${
+                        draggingHalfIndex === index
+                          ? 'border-blue-400 bg-blue-900/30'
+                          : halfFiles[index]
+                            ? 'border-green-500 bg-green-900/20'
+                            : 'border-gray-600 hover:border-gray-500 bg-gray-900/50'
+                      } ${isSubmitting ? 'opacity-50 pointer-events-none' : ''}`}
                     >
                       {halfFiles[index] ? (
                         <div className="text-center">
@@ -405,10 +483,10 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                       ) : (
                         <div className="text-center text-gray-400">
                           <Upload size={18} className="mx-auto mb-1" />
-                          <p className="text-xs font-medium">{label}</p>
+                          <p className="text-xs font-medium">{draggingHalfIndex === index ? 'Drop here' : label}</p>
                         </div>
                       )}
-                    </button>
+                    </div>
                   </div>
                 ))}
               </div>
