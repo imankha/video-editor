@@ -268,18 +268,7 @@ export function QuestPanel() {
         {/* Expanded content */}
         {expanded && (
           <>
-            {/* Progress bar */}
-            <div className="px-4 pb-2 flex items-center gap-3">
-              <div className="flex-1 h-2.5 bg-black/30 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full quest-progress-fill transition-all duration-700 ease-out"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-              <span className="quest-progress-text text-sm tabular-nums">
-                {completedCount}/{totalCount}
-              </span>
-            </div>
+
 
             {/* Steps */}
             <div className="px-4 pb-2">
