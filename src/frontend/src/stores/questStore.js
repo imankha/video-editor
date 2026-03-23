@@ -4,6 +4,9 @@ import { QUESTS, TOTAL_STEPS } from '../config/questDefinitions';
 import { useCreditStore } from './creditStore';
 import { track } from '../utils/analytics';
 
+// Module-level ref for fetch dedup
+let _fetchProgressPromise = null;
+
 /**
  * Quest Store — manages quest progress and reward claiming (T540).
  *
@@ -23,33 +26,41 @@ export const useQuestStore = create((set, get) => ({
   // Which quest is currently active (progressive disclosure)
   activeQuestId: null,
 
-  fetchProgress: async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/quests/progress`, { credentials: 'include' });
-      if (!res.ok) return;
-      const data = await res.json();
+  fetchProgress: async ({ force = false } = {}) => {
+    // Dedup: if a fetch is already in flight, return the existing promise
+    if (_fetchProgressPromise && !force) return _fetchProgressPromise;
 
-      let totalCompleted = 0;
-      for (const quest of data.quests) {
-        totalCompleted += Object.values(quest.steps).filter(Boolean).length;
+    _fetchProgressPromise = (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/quests/progress`, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+
+        let totalCompleted = 0;
+        for (const quest of data.quests) {
+          totalCompleted += Object.values(quest.steps).filter(Boolean).length;
+        }
+
+        // Progressive disclosure: show first unclaimed quest
+        const q1 = data.quests.find(q => q.id === 'quest_1');
+        const q2 = data.quests.find(q => q.id === 'quest_2');
+        let activeQuestId = 'quest_1';
+        if (q1?.reward_claimed) activeQuestId = 'quest_2';
+        if (q1?.reward_claimed && q2?.reward_claimed) activeQuestId = 'quest_3';
+
+        set({
+          quests: data.quests,
+          loaded: true,
+          totalCompleted,
+          activeQuestId,
+        });
+      } catch {
+        // Best-effort
+      } finally {
+        _fetchProgressPromise = null;
       }
-
-      // Progressive disclosure: show first unclaimed quest
-      const q1 = data.quests.find(q => q.id === 'quest_1');
-      const q2 = data.quests.find(q => q.id === 'quest_2');
-      let activeQuestId = 'quest_1';
-      if (q1?.reward_claimed) activeQuestId = 'quest_2';
-      if (q1?.reward_claimed && q2?.reward_claimed) activeQuestId = 'quest_3';
-
-      set({
-        quests: data.quests,
-        loaded: true,
-        totalCompleted,
-        activeQuestId,
-      });
-    } catch {
-      // Best-effort
-    }
+    })();
+    return _fetchProgressPromise;
   },
 
   claimReward: async (questId) => {
@@ -64,7 +75,7 @@ export const useQuestStore = create((set, get) => ({
     const data = await res.json();
     track('quest_reward_claimed', { questId });
     useCreditStore.getState().setBalance(data.new_balance);
-    await get().fetchProgress();
+    await get().fetchProgress({ force: true });
     return data;
   },
 
@@ -77,15 +88,18 @@ export const useQuestStore = create((set, get) => ({
     } catch {
       // Best-effort
     }
-    get().fetchProgress();
+    get().fetchProgress({ force: true });
   },
 
-  reset: () => set({
-    quests: [],
-    loaded: false,
-    totalCompleted: 0,
-    activeQuestId: null,
-  }),
+  reset: () => {
+    _fetchProgressPromise = null;
+    set({
+      quests: [],
+      loaded: false,
+      totalCompleted: 0,
+      activeQuestId: null,
+    });
+  },
 }));
 
 // Selector hooks

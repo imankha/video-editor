@@ -17,6 +17,7 @@ const API_BASE_URL = `${API_BASE}/api`;
 
 // Module-level ref for fetch cancellation (prevents stale data on rapid profile switch)
 let _fetchController = null;
+let _fetchPromise = null;
 
 export const useProjectsStore = create((set, get) => ({
   projects: [],
@@ -33,24 +34,32 @@ export const useProjectsStore = create((set, get) => ({
    * Cancels any in-flight fetch to prevent stale data from a previous
    * profile overwriting the current one (race condition on rapid switch).
    */
-  fetchProjects: async () => {
+  fetchProjects: async ({ force = false } = {}) => {
+    // Dedup: if a fetch is already in flight, return the existing promise
+    if (_fetchPromise && !force) return _fetchPromise;
+
     if (_fetchController) _fetchController.abort();
     _fetchController = new AbortController();
     const { signal } = _fetchController;
 
     set({ loading: true, error: null });
-    try {
-      const response = await fetch(`${API_BASE_URL}/projects`, { signal });
-      if (!response.ok) throw new Error('Failed to fetch projects');
-      const data = await response.json();
-      set({ projects: data, loading: false });
-      return data;
-    } catch (err) {
-      if (err.name === 'AbortError') return get().projects;
-      set({ error: err.message, loading: false });
-      console.error('[projectsStore] fetchProjects error:', err);
-      return [];
-    }
+    _fetchPromise = (async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/projects`, { signal });
+        if (!response.ok) throw new Error('Failed to fetch projects');
+        const data = await response.json();
+        set({ projects: data, loading: false });
+        return data;
+      } catch (err) {
+        if (err.name === 'AbortError') return get().projects;
+        set({ error: err.message, loading: false });
+        console.error('[projectsStore] fetchProjects error:', err);
+        return [];
+      } finally {
+        _fetchPromise = null;
+      }
+    })();
+    return _fetchPromise;
   },
 
   /**
@@ -204,6 +213,7 @@ export const useProjectsStore = create((set, get) => ({
    */
   reset: () => {
     if (_fetchController) { _fetchController.abort(); _fetchController = null; }
+    _fetchPromise = null;
     set({
       projects: [],
       selectedProjectId: null,

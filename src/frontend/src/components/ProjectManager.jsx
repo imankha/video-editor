@@ -376,13 +376,8 @@ export function ProjectManager({
     }
   }, [onAnnotateWithFile]);
 
-  // Fetch games on mount and when switching to games tab or when opening modal
-  // We always fetch on mount so the "Continue Where You Left Off" section works
-  useEffect(() => {
-    if (onFetchGames) {
-      onFetchGames();
-    }
-  }, [onFetchGames]);
+  // ProjectsScreen already fetches games on mount — no need to duplicate here.
+  // The tab-switch effect below handles refreshing when user switches to games tab.
 
   // Switch to projects tab once projects load (initial state may be wrong since data isn't fetched yet at mount)
   const hasSetInitialTab = useRef(false);

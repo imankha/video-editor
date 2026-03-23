@@ -20,6 +20,7 @@ import { uploadGame as uploadGameService } from '../services/uploadManager';
 // Module-level refs for debounced save and fetch cancellation
 let _saveTimeout = null;
 let _fetchController = null;
+let _fetchPromise = null;
 
 export const useGamesDataStore = create((set, get) => ({
   games: [],
@@ -37,7 +38,7 @@ export const useGamesDataStore = create((set, get) => ({
    */
   invalidateGames: () => {
     set(state => ({ gamesVersion: state.gamesVersion + 1 }));
-    get().fetchGames();
+    get().fetchGames({ force: true });
   },
 
   /**
@@ -45,27 +46,35 @@ export const useGamesDataStore = create((set, get) => ({
    * Cancels any in-flight fetch to prevent stale data from a previous
    * profile overwriting the current one (race condition on rapid switch).
    */
-  fetchGames: async () => {
+  fetchGames: async ({ force = false } = {}) => {
+    // Dedup: if a fetch is already in flight, return the existing promise
+    if (_fetchPromise && !force) return _fetchPromise;
+
     if (_fetchController) _fetchController.abort();
     _fetchController = new AbortController();
     const { signal } = _fetchController;
 
     set({ isLoading: true, error: null });
-    try {
-      const response = await fetch(`${API_BASE}/api/games`, { signal });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch games: ${response.status}`);
+    _fetchPromise = (async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/games`, { signal });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch games: ${response.status}`);
+        }
+        const data = await response.json();
+        const gamesList = data.games || [];
+        set({ games: gamesList, isLoading: false });
+        return gamesList;
+      } catch (err) {
+        if (err.name === 'AbortError') return get().games;
+        console.error('[gamesDataStore] Failed to fetch games:', err);
+        set({ error: err.message, isLoading: false });
+        return [];
+      } finally {
+        _fetchPromise = null;
       }
-      const data = await response.json();
-      const gamesList = data.games || [];
-      set({ games: gamesList, isLoading: false });
-      return gamesList;
-    } catch (err) {
-      if (err.name === 'AbortError') return get().games;
-      console.error('[gamesDataStore] Failed to fetch games:', err);
-      set({ error: err.message, isLoading: false });
-      return [];
-    }
+    })();
+    return _fetchPromise;
   },
 
   /**
@@ -313,6 +322,7 @@ export const useGamesDataStore = create((set, get) => ({
   reset: () => {
     if (_fetchController) { _fetchController.abort(); _fetchController = null; }
     if (_saveTimeout) { clearTimeout(_saveTimeout); _saveTimeout = null; }
+    _fetchPromise = null;
     set({
       games: [],
       selectedGame: null,

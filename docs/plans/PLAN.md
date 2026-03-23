@@ -209,6 +209,7 @@ Improvements after real user traffic.
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
 | T340 | [Keyframe Integrity Guards](tasks/T340-keyframe-integrity-guards.md) | DONE | Missing permanent keyframes, min spacing, selection disambiguation |
+| T630 | [Startup Request Optimization](tasks/T630-startup-optimization.md) | TESTING | Parallelize post-auth fetches, dedup /games calls, gate achievements, combine auth endpoints |
 | T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | TODO | Multi-tab conflict handling |
 | T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | Faster video loads (needs T415) |
 | T74 | [Incremental Framing Export](tasks/T74-incremental-framing-export.md) | TODO | Cache rendered clips |
