@@ -179,11 +179,12 @@ function App() {
   // so the session cookie is ready before the verify API call.
 
   // T540: Record achievement when user enters framing mode
+  // T635: Gate on !isCheckingSession to avoid firing before auth completes
   useEffect(() => {
-    if (editorMode === EDITOR_MODES.FRAMING) {
+    if (!isCheckingSession && editorMode === EDITOR_MODES.FRAMING) {
       useQuestStore.getState().recordAchievement('opened_framing_editor');
     }
-  }, [editorMode]);
+  }, [editorMode, isCheckingSession]);
 
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);

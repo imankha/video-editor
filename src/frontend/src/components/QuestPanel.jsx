@@ -121,10 +121,8 @@ export function QuestPanel() {
     }
   };
 
-  // Fetch quest progress on mount
-  useEffect(() => {
-    fetchProgress();
-  }, [fetchProgress]);
+  // T635: Quest progress is fetched centrally in App.jsx after auth resolves.
+  // No need to fetch on mount here — the store is already populated.
 
   // Subscribe to export events to refresh quest progress
   useEffect(() => {
