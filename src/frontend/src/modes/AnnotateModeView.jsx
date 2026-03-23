@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Download, Loader } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import ZoomControls from '../components/ZoomControls';
@@ -88,6 +89,18 @@ export function AnnotateModeView({
   // Read exportProgress directly from store for proper reactivity during SSE updates
   const { exportProgress } = useExportStore();
 
+  // Freeze existingClip when overlay opens so handle dragging (which seeks the
+  // playhead in/out of clip regions) doesn't toggle existingClip and reset handles.
+  // Must be computed during render (not in useEffect) so it's available on the
+  // first render when the overlay appears.
+  const frozenExistingClipRef = useRef(null);
+  const wasOverlayOpenRef = useRef(false);
+  if (showAnnotateOverlay && !wasOverlayOpenRef.current) {
+    // Overlay just opened — capture the clip at current playhead
+    frozenExistingClipRef.current = getAnnotateRegionAtTime(currentTime);
+  }
+  wasOverlayOpenRef.current = showAnnotateOverlay;
+
   return (
     <>
       {/* Video Metadata - Annotate mode (hidden on mobile) */}
@@ -155,7 +168,8 @@ export function AnnotateModeView({
                 loadingMessage="Loading video..."
                 overlays={[
                   // NotesOverlay - shows name, rating, notes for region at playhead
-                  (() => {
+                  // Hidden while the Add/Edit Clip panel is open to prevent layout jumps during scrub
+                  !showAnnotateOverlay && (() => {
                     const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
                     if (!regionAtPlayhead) return null;
 
@@ -175,19 +189,21 @@ export function AnnotateModeView({
                     ) : null;
                   })(),
                   // AnnotateFullscreenOverlay - appears when paused in fullscreen
+                  // Uses frozenExistingClipRef so seeking during scrub doesn't toggle edit/create mode
                   showAnnotateOverlay && (() => {
-                    const existingClip = getAnnotateRegionAtTime(currentTime);
                     return (
                       <AnnotateFullscreenOverlay
                         key="annotate-fullscreen"
                         isVisible={showAnnotateOverlay}
                         currentTime={currentTime}
                         videoDuration={annotateVideoMetadata?.duration || 0}
-                        existingClip={existingClip}
+                        existingClip={frozenExistingClipRef.current}
                         onCreateClip={onFullscreenCreateClip}
                         onUpdateClip={onFullscreenUpdateClip}
                         onResume={onOverlayResume}
                         onClose={onOverlayClose}
+                        onSeek={seek}
+                        videoRef={videoRef}
                       />
                     );
                   })(),
@@ -197,7 +213,7 @@ export function AnnotateModeView({
                 onZoomChange={onZoomChange}
                 onPanChange={onPanChange}
                 isFullscreen={annotateFullscreen}
-                clipRating={getAnnotateRegionAtTime(currentTime)?.rating ?? null}
+                clipRating={showAnnotateOverlay ? null : (getAnnotateRegionAtTime(currentTime)?.rating ?? null)}
               />
             </div>
 
@@ -216,7 +232,7 @@ export function AnnotateModeView({
                 isFullscreen={annotateFullscreen}
                 onToggleFullscreen={onToggleFullscreen}
                 onAddClip={onAddClip}
-                isEditMode={!!annotateSelectedRegionId && getAnnotateRegionAtTime(currentTime)?.id === annotateSelectedRegionId}
+                isEditMode={!showAnnotateOverlay && !!annotateSelectedRegionId && getAnnotateRegionAtTime(currentTime)?.id === annotateSelectedRegionId}
                 videoRef={videoRef}
               />
             </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Star, X, Check } from 'lucide-react';
 import { positions, soccerTags, generateClipName } from '../constants/soccerTags';
+import { ClipScrubRegion } from './ClipScrubRegion';
 
 // Rating notation map
 const RATING_NOTATION = {
@@ -12,18 +13,7 @@ const RATING_NOTATION = {
 };
 
 const DEFAULT_CLIP_DURATION = 8;
-const MIN_CLIP_DURATION = 1;
-const MAX_CLIP_DURATION = 60;
 const DEFAULT_RATING = 4; // "Good"
-
-/**
- * Format seconds to MM:SS.s for display
- */
-function formatTimeDisplay(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins.toString().padStart(2, '0')}:${secs.toFixed(1).padStart(4, '0')}`;
-}
 
 /**
  * StarRating - Clickable star rating
@@ -118,6 +108,8 @@ export function AnnotateFullscreenOverlay({
   onUpdateClip,
   onResume,
   onClose,
+  onSeek,
+  videoRef,
 }) {
   const isEditMode = !!existingClip;
 
@@ -125,25 +117,40 @@ export function AnnotateFullscreenOverlay({
   const [selectedTags, setSelectedTags] = useState([]);
   const [clipName, setClipName] = useState('');
   const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
-  const [duration, setDuration] = useState(DEFAULT_CLIP_DURATION);
+  // Capture the currentTime when the overlay first opens so handle resets
+  // don't fight with seek-driven currentTime updates during drag
+  const initialTimeRef = useRef(currentTime);
+  useEffect(() => {
+    if (isVisible) {
+      initialTimeRef.current = currentTime;
+    }
+  }, [isVisible]); // only on visibility change, not on currentTime updates
+
+  const [scrubStartTime, setScrubStartTime] = useState(
+    Math.max(0, currentTime - DEFAULT_CLIP_DURATION)
+  );
+  const [scrubEndTime, setScrubEndTime] = useState(currentTime);
   const [notes, setNotes] = useState('');
   const notesRef = useRef(null);
 
   // Reset form when existingClip changes (switching between create/edit mode)
   useEffect(() => {
+    const t = initialTimeRef.current;
     if (existingClip) {
       setRating(existingClip.rating || DEFAULT_RATING);
       setSelectedTags(existingClip.tags || []);
       setClipName(existingClip.name || '');
       setIsNameManuallyEdited(!!existingClip.name);
-      setDuration(existingClip.endTime - existingClip.startTime);
+      setScrubStartTime(existingClip.startTime);
+      setScrubEndTime(existingClip.endTime);
       setNotes(existingClip.notes || '');
     } else {
       setRating(DEFAULT_RATING);
       setSelectedTags([]);
       setClipName('');
       setIsNameManuallyEdited(false);
-      setDuration(DEFAULT_CLIP_DURATION);
+      setScrubStartTime(Math.max(0, t - DEFAULT_CLIP_DURATION));
+      setScrubEndTime(t);
       setNotes('');
     }
   }, [existingClip]);
@@ -191,7 +198,7 @@ export function AnnotateFullscreenOverlay({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isVisible, rating, duration, notes, existingClip, selectedTags, clipName]);
+  }, [isVisible, rating, scrubStartTime, scrubEndTime, notes, existingClip, selectedTags, clipName]);
 
   const handleTagToggle = (tagName) => {
     setSelectedTags((prev) =>
@@ -207,23 +214,24 @@ export function AnnotateFullscreenOverlay({
   };
 
   const handleSave = () => {
+    const clipDuration = scrubEndTime - scrubStartTime;
     if (isEditMode) {
-      // Update existing clip
+      // Update existing clip with new start/end times
       // Only include name if it was manually edited, otherwise leave empty for auto-generation
       onUpdateClip(existingClip.id, {
-        duration,
+        startTime: scrubStartTime,
+        endTime: scrubEndTime,
         rating,
         tags: selectedTags,
         name: isNameManuallyEdited ? clipName : '',
         notes,
       });
     } else {
-      // Create new clip - currentTime is the END time, so start = end - duration
-      const calculatedStartTime = Math.max(0, currentTime - duration);
+      // Create new clip using scrub region start/end
       // Only include name if it was manually edited, otherwise leave empty for auto-generation
       const clipData = {
-        startTime: calculatedStartTime,
-        duration,
+        startTime: scrubStartTime,
+        duration: clipDuration,
         rating,
         tags: selectedTags,
         name: isNameManuallyEdited ? clipName : '',
@@ -236,17 +244,12 @@ export function AnnotateFullscreenOverlay({
     setSelectedTags([]);
     setClipName('');
     setIsNameManuallyEdited(false);
-    setDuration(DEFAULT_CLIP_DURATION);
+    setScrubStartTime(Math.max(0, initialTimeRef.current - DEFAULT_CLIP_DURATION));
+    setScrubEndTime(initialTimeRef.current);
     setNotes('');
     // Resume playback
     onResume();
   };
-
-  // Calculate times for display
-  // For new clips: currentTime is the END time, start = end - duration
-  // For editing: use existing clip's start time
-  const endTime = isEditMode ? existingClip.endTime : currentTime;
-  const startTime = isEditMode ? existingClip.startTime : Math.max(0, currentTime - duration);
 
   if (!isVisible) return null;
 
@@ -271,12 +274,18 @@ export function AnnotateFullscreenOverlay({
           </button>
         </div>
 
-        {/* Time info */}
-        <div className="mb-4 text-sm text-gray-400">
-          Start: <span className="font-mono text-white">{formatTimeDisplay(startTime)}</span>
-          {' '}&rarr;{' '}
-          End: <span className="font-mono text-white">{formatTimeDisplay(endTime)}</span>
-        </div>
+        {/* Clip scrub region - visual timeline for selecting start/end */}
+        <ClipScrubRegion
+          currentTime={currentTime}
+          videoDuration={videoDuration}
+          existingClip={existingClip}
+          startTime={scrubStartTime}
+          endTime={scrubEndTime}
+          onStartTimeChange={setScrubStartTime}
+          onEndTimeChange={setScrubEndTime}
+          onSeek={onSeek}
+          videoRef={videoRef}
+        />
 
         {/* Star Rating */}
         <div className="mb-4">
@@ -293,47 +302,21 @@ export function AnnotateFullscreenOverlay({
           />
         </div>
 
-        {/* Clip Name */}
-        {(selectedTags.length > 0 || clipName) && (
-          <div className="mb-4">
-            <label className="block text-gray-400 text-sm mb-2">
-              Clip Name
-              {!isNameManuallyEdited && selectedTags.length > 0 && (
-                <span className="text-gray-500 ml-2">(auto-generated)</span>
-              )}
-            </label>
-            <input
-              type="text"
-              value={clipName}
-              onChange={handleNameChange}
-              placeholder="Enter clip name..."
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
-            />
-          </div>
-        )}
-
-        {/* Duration Slider */}
+        {/* Clip Name - always rendered to keep panel height stable */}
         <div className="mb-4">
-          <div className="flex justify-between items-center mb-2">
-            <label className="text-gray-400 text-sm">Duration</label>
-            <span className="text-white font-mono text-sm">{duration.toFixed(1)}s</span>
-          </div>
+          <label className="block text-gray-400 text-sm mb-2">
+            Clip Name
+            {!isNameManuallyEdited && selectedTags.length > 0 && (
+              <span className="text-gray-500 ml-2">(auto-generated)</span>
+            )}
+          </label>
           <input
-            type="range"
-            min={MIN_CLIP_DURATION}
-            max={MAX_CLIP_DURATION}
-            step={0.5}
-            value={duration}
-            onChange={(e) => setDuration(parseFloat(e.target.value))}
-            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500
-                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
-                [&::-webkit-slider-thumb]:bg-green-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
+            type="text"
+            value={clipName}
+            onChange={handleNameChange}
+            placeholder="Enter clip name..."
+            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
-          <div className="relative w-full h-5 mt-1">
-            <span className="absolute left-0 text-xs text-gray-500">{MIN_CLIP_DURATION}s</span>
-            <span className="absolute text-xs text-gray-500" style={{ left: `${((DEFAULT_CLIP_DURATION - MIN_CLIP_DURATION) / (MAX_CLIP_DURATION - MIN_CLIP_DURATION)) * 100}%`, transform: 'translateX(-50%)' }}>{DEFAULT_CLIP_DURATION}s</span>
-            <span className="absolute right-0 text-xs text-gray-500">{MAX_CLIP_DURATION}s</span>
-          </div>
         </div>
 
         {/* Notes */}

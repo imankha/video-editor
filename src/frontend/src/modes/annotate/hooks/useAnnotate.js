@@ -427,16 +427,24 @@ export default function useAnnotate(videoMetadata) {
 
       const updated = { ...region };
 
-      // Handle end time update (recalculate start time based on current duration)
-      if (updates.endTime !== undefined) {
+      // Handle combined startTime + endTime update (set both directly)
+      if (updates.startTime !== undefined && updates.endTime !== undefined) {
+        updated.startTime = Math.max(0, updates.startTime);
+        updated.endTime = Math.min(updates.endTime, duration || Infinity);
+        // Ensure minimum duration
+        if (updated.endTime - updated.startTime < MIN_CLIP_DURATION) {
+          updated.endTime = Math.min(updated.startTime + MIN_CLIP_DURATION, duration || Infinity);
+        }
+      }
+      // Handle end time update only (recalculate start time based on current duration)
+      else if (updates.endTime !== undefined) {
         const currentDuration = region.endTime - region.startTime;
         updated.endTime = Math.max(MIN_CLIP_DURATION, Math.min(updates.endTime, duration || Infinity));
         // Recalculate start time to maintain duration
         updated.startTime = Math.max(0, updated.endTime - currentDuration);
       }
-
-      // Handle start time update (recalculate end time based on current duration)
-      if (updates.startTime !== undefined) {
+      // Handle start time update only (recalculate end time based on current duration)
+      else if (updates.startTime !== undefined) {
         const currentDuration = region.endTime - region.startTime;
         updated.startTime = Math.max(0, Math.min(updates.startTime, (duration || Infinity) - MIN_CLIP_DURATION));
         // Recalculate end time to maintain duration
