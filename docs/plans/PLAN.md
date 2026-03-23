@@ -218,8 +218,8 @@ User feedback from first NUF session. Two groups: game addition flow and clip cr
 
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| T650 | [Clip Scrub Region UI](tasks/T650-clip-scrub-region-ui.md) | TESTING | 8 | 5 | Visual scrub handles for clip start/end with real-time video preview; replaces time inputs |
-| T660 | [Clip Edit Button Clarity](tasks/T660-clip-edit-button-clarity.md) | TESTING | 5 | 1 | "Add Clip" → "Edit Clip" (amber) when clip selected; depends on T650 |
+| T650 | [Clip Scrub Region UI](tasks/T650-clip-scrub-region-ui.md) | DONE | 8 | 5 | Visual scrub handles for clip start/end with real-time video preview; replaces time inputs |
+| T660 | [Clip Edit Button Clarity](tasks/T660-clip-edit-button-clarity.md) | DONE | 5 | 1 | "Add Clip" → "Edit Clip" (amber) when clip selected; depends on T650 |
 
 ### Phase 4: Post-Launch Polish
 
@@ -229,7 +229,7 @@ Improvements after real user traffic.
 |----|------|--------|-------|
 | T340 | [Keyframe Integrity Guards](tasks/T340-keyframe-integrity-guards.md) | DONE | Missing permanent keyframes, min spacing, selection disambiguation |
 | T630 | [Startup Request Optimization](tasks/T630-startup-optimization.md) | DONE | Parallelize post-auth fetches, dedup /games calls, gate achievements, combine auth endpoints |
-| T635 | [Startup Dedup — Remaining](tasks/T635-startup-dedup-remaining.md) | TESTING | Dedup profiles/settings/downloads, gate pre-auth renders, fix duplicate achievement POST |
+| T635 | [Startup Dedup — Remaining](tasks/T635-startup-dedup-remaining.md) | DONE | Dedup profiles/settings/downloads, gate pre-auth renders, fix duplicate achievement POST |
 | T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | TODO | Multi-tab conflict handling |
 | T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | Faster video loads (needs T415) |
 | T74 | [Incremental Framing Export](tasks/T74-incremental-framing-export.md) | TODO | Cache rendered clips |
