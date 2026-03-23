@@ -30,7 +30,6 @@ QUEST_DEFINITIONS = [
         "step_ids": [
             "upload_game",
             "annotate_brilliant",
-            "annotate_unfortunate",
             "create_annotated_video",
         ],
     },
@@ -79,10 +78,6 @@ def _check_all_steps(user_id: str, conn) -> dict:
 
     steps["annotate_brilliant"] = cursor.execute(
         "SELECT 1 FROM raw_clips WHERE rating = 5 LIMIT 1"
-    ).fetchone() is not None
-
-    steps["annotate_unfortunate"] = cursor.execute(
-        "SELECT 1 FROM raw_clips WHERE rating IN (1, 2) LIMIT 1"
     ).fetchone() is not None
 
     steps["create_annotated_video"] = cursor.execute(

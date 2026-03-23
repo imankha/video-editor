@@ -32,7 +32,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 # Quest definitions — mirrors quests.py (step IDs per quest)
 _QUEST_STEP_IDS = {
-    "quest_1": ["upload_game", "annotate_brilliant", "annotate_unfortunate", "create_annotated_video"],
+    "quest_1": ["upload_game", "annotate_brilliant", "create_annotated_video"],
     "quest_2": ["open_framing", "extract_clip", "export_framing", "export_overlay", "view_gallery_video"],
     "quest_3": [
         "upload_game_2", "annotate_brilliant_2", "annotate_4_star", "create_mixed_project",
@@ -83,7 +83,6 @@ def _check_steps_on_conn(conn) -> dict[str, bool]:
     # Quest 1
     steps["upload_game"] = one("SELECT 1 FROM games LIMIT 1")
     steps["annotate_brilliant"] = one("SELECT 1 FROM raw_clips WHERE rating = 5 LIMIT 1")
-    steps["annotate_unfortunate"] = one("SELECT 1 FROM raw_clips WHERE rating IN (1, 2) LIMIT 1")
     steps["create_annotated_video"] = one(
         "SELECT 1 FROM export_jobs WHERE type = 'annotate' AND status = 'complete' LIMIT 1"
     )

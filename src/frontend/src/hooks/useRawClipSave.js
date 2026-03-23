@@ -6,8 +6,8 @@ const API_BASE_URL = `${API_BASE}/api`;
 /**
  * T540: Refresh quest progress after any clip mutation.
  *
- * All rating-based quest steps (annotate_brilliant, annotate_unfortunate,
- * annotate_4_star, annotate_brilliant_2, create_mixed_project) are derived
+ * All rating-based quest steps (annotate_brilliant, annotate_4_star,
+ * annotate_brilliant_2, create_mixed_project) are derived
  * from raw_clips data — no flags, just DB queries. This function tells the
  * quest store to re-derive progress after any clip change.
  *

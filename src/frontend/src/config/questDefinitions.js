@@ -23,11 +23,6 @@ export const QUESTS = [
         description: 'When you spot a great play, click Add Clip and rate it 5 stars. The clip ends where you clicked — adjust the duration and end time in the annotation panel.',
       },
       {
-        id: 'annotate_unfortunate',
-        title: 'Annotate a 1 or 2 Star Play',
-        description: 'Every player has off moments — mark one to learn from it',
-      },
-      {
         id: 'create_annotated_video',
         title: 'Create Your Annotated Video',
         description: 'Compile your annotations into a single instructive video',
