@@ -18,7 +18,7 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen, AdminScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AuthGateModal } from './components/AuthGateModal';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, EDITOR_MODES } from './stores';
+import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
 import { useQuestStore } from './stores/questStore';
 import { useCreditStore } from './stores/creditStore';
@@ -100,12 +100,13 @@ function App() {
     setGuestWriteCallback(() => useAuthStore.getState().markGuestActivity());
 
     initSession().then(() => {
-      // T630: Fire all initial data fetches in parallel after auth resolves
+      // T630/T635: Fire all initial data fetches in parallel after auth resolves
       warmAllUserVideos();
       useProfileStore.getState().fetchProfiles();
       useProjectsStore.getState().fetchProjects();
       useGamesDataStore.getState().fetchGames();
       useQuestStore.getState().fetchProgress();
+      useSettingsStore.getState().loadSettings();
 
       // Restore navigation state after auth-triggered reload (cross-device recovery)
       const authReturnMode = sessionStorage.getItem('authReturnMode');

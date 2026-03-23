@@ -10,6 +10,9 @@ import { reinstallProfileHeader } from '../utils/sessionInit';
  * data stores and re-fetches from the new profile's database.
  */
 
+// Module-level ref for fetch dedup
+let _fetchPromise = null;
+
 export const useProfileStore = create((set, get) => ({
   profiles: [],
   currentProfileId: null,
@@ -17,28 +20,36 @@ export const useProfileStore = create((set, get) => ({
   isInitialized: false,
   error: null,
 
-  fetchProfiles: async () => {
+  fetchProfiles: async ({ force = false } = {}) => {
+    // Dedup: if a fetch is already in flight, return the existing promise
+    if (_fetchPromise && !force) return _fetchPromise;
+
     set({ isLoading: true, error: null });
 
-    try {
-      const response = await fetch(`${API_BASE}/api/profiles`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch profiles: ${response.status}`);
+    _fetchPromise = (async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/profiles`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch profiles: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const current = data.profiles.find(p => p.isCurrent);
+
+        set({
+          profiles: data.profiles,
+          currentProfileId: current?.id || null,
+          isLoading: false,
+          isInitialized: true,
+        });
+      } catch (error) {
+        console.error('[ProfileStore] Failed to fetch profiles:', error);
+        set({ isLoading: false, isInitialized: true, error: error.message });
+      } finally {
+        _fetchPromise = null;
       }
-
-      const data = await response.json();
-      const current = data.profiles.find(p => p.isCurrent);
-
-      set({
-        profiles: data.profiles,
-        currentProfileId: current?.id || null,
-        isLoading: false,
-        isInitialized: true,
-      });
-    } catch (error) {
-      console.error('[ProfileStore] Failed to fetch profiles:', error);
-      set({ isLoading: false, isInitialized: true, error: error.message });
-    }
+    })();
+    return _fetchPromise;
   },
 
   switchProfile: async (profileId) => {
@@ -100,7 +111,7 @@ export const useProfileStore = create((set, get) => ({
       const newProfile = await response.json();
 
       // Refetch profiles to get updated list, then switch to the new one
-      await get().fetchProfiles();
+      await get().fetchProfiles({ force: true });
       await get().switchProfile(newProfile.id);
 
       return newProfile;
@@ -126,7 +137,7 @@ export const useProfileStore = create((set, get) => ({
       }
 
       // Refetch to get updated list
-      await get().fetchProfiles();
+      await get().fetchProfiles({ force: true });
     } catch (error) {
       console.error('[ProfileStore] Failed to update profile:', error);
       set({ error: error.message });
@@ -149,7 +160,7 @@ export const useProfileStore = create((set, get) => ({
       const wasCurrentProfile = profileId === get().currentProfileId;
 
       // Refetch profiles
-      await get().fetchProfiles();
+      await get().fetchProfiles({ force: true });
 
       // If we deleted the current profile, the backend auto-switched.
       // We need to update our header and reset stores.

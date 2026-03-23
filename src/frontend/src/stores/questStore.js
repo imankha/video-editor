@@ -6,6 +6,8 @@ import { track } from '../utils/analytics';
 
 // Module-level ref for fetch dedup
 let _fetchProgressPromise = null;
+// Track achievements already recorded this session to prevent duplicate POSTs
+const _recordedAchievements = new Set();
 
 /**
  * Quest Store — manages quest progress and reward claiming (T540).
@@ -80,6 +82,10 @@ export const useQuestStore = create((set, get) => ({
   },
 
   recordAchievement: async (key) => {
+    // Dedup: skip if already recorded this session
+    if (_recordedAchievements.has(key)) return;
+    _recordedAchievements.add(key);
+
     try {
       await fetch(`${API_BASE}/api/quests/achievements/${key}`, {
         method: 'POST',
@@ -93,6 +99,7 @@ export const useQuestStore = create((set, get) => ({
 
   reset: () => {
     _fetchProgressPromise = null;
+    _recordedAchievements.clear();
     set({
       quests: [],
       loaded: false,

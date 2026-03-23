@@ -15,6 +15,9 @@ import { HighlightEffect } from '../constants/highlightEffects';
  * - overlay: { highlightEffectType }
  */
 
+// Module-level ref for fetch dedup
+let _loadPromise = null;
+
 // Default settings (must match backend defaults)
 const DEFAULT_SETTINGS = {
   projectFilters: {
@@ -43,22 +46,29 @@ export const useSettingsStore = create((set, get) => ({
   loadSettings: async () => {
     // Only load once
     if (get().isInitialized) return get().settings;
+    // Dedup: if a load is already in flight, return the existing promise
+    if (_loadPromise) return _loadPromise;
 
     set({ isLoading: true, error: null });
 
-    try {
-      const response = await fetch(`${API_BASE}/api/settings`);
-      if (!response.ok) {
-        throw new Error(`Failed to load settings: ${response.status}`);
+    _loadPromise = (async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/settings`);
+        if (!response.ok) {
+          throw new Error(`Failed to load settings: ${response.status}`);
+        }
+        const settings = await response.json();
+        set({ settings, isLoading: false, isInitialized: true });
+        return settings;
+      } catch (error) {
+        console.error('[SettingsStore] Failed to load settings:', error);
+        set({ isLoading: false, isInitialized: true, error: error.message });
+        return get().settings; // Return defaults on error
+      } finally {
+        _loadPromise = null;
       }
-      const settings = await response.json();
-      set({ settings, isLoading: false, isInitialized: true });
-      return settings;
-    } catch (error) {
-      console.error('[SettingsStore] Failed to load settings:', error);
-      set({ isLoading: false, isInitialized: true, error: error.message });
-      return get().settings; // Return defaults on error
-    }
+    })();
+    return _loadPromise;
   },
 
   // Save settings to backend (debounced in practice via React)
@@ -123,7 +133,10 @@ export const useSettingsStore = create((set, get) => ({
   },
 
   // Reset on profile switch — clears to defaults and forces re-fetch
-  reset: () => set({ settings: DEFAULT_SETTINGS, isLoading: true, isInitialized: false, error: null }),
+  reset: () => {
+    _loadPromise = null;
+    set({ settings: DEFAULT_SETTINGS, isLoading: true, isInitialized: false, error: null });
+  },
 
   // Reset to defaults (persists to backend)
   resetSettings: async () => {
