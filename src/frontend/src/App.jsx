@@ -369,7 +369,6 @@ function App() {
         <ProjectsScreen
             onStateReset={clearSelection}
             onLoadGame={handleLoadGame}
-            onProjectSelected={selectProject}
           />
         {/* Global Export Indicator - shows progress on ProjectsScreen too */}
         <GlobalExportIndicator />

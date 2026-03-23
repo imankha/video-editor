@@ -58,7 +58,7 @@ export function clearPendingGameFile() {
 export function ProjectsScreen({
   onStateReset, // Called before loading new project
   onLoadGame: onLoadGameProp, // Callback to set pendingGameId in App.jsx
-  onProjectSelected, // Callback to sync selectedProject with App.jsx's useProjects
+  // onProjectSelected removed — selectProject updates Zustand store directly
 }) {
   const navigate = useNavigationStore(state => state.navigate);
   const setEditorMode = useEditorStore(state => state.setEditorMode);
@@ -161,13 +161,9 @@ export function ProjectsScreen({
         onStateReset();
       }
 
-      // Fetch project details
+      // Fetch project details (selectProject updates the Zustand store,
+      // which App.jsx reads reactively — no separate callback needed)
       const project = await selectProject(projectId);
-
-      // Sync selectedProject with App.jsx's useProjects instance
-      if (onProjectSelected) {
-        await onProjectSelected(projectId);
-      }
 
       // Load project with all associated data
       const result = await loadProject(project);
@@ -181,7 +177,7 @@ export function ProjectsScreen({
     } finally {
       setLoadingProjectId(null);
     }
-  }, [selectProject, loadProject, setEditorMode, onStateReset, onProjectSelected]);
+  }, [selectProject, loadProject, setEditorMode, onStateReset]);
 
   // Handle project selection with mode override
   const handleSelectProjectWithMode = useCallback(async (projectId, options = {}) => {
@@ -196,11 +192,6 @@ export function ProjectsScreen({
 
       // Fetch project details
       const project = await selectProject(projectId);
-
-      // Sync selectedProject with App.jsx's useProjects instance
-      if (onProjectSelected) {
-        await onProjectSelected(projectId);
-      }
 
       // Load project with all associated data
       const result = await loadProject(project, {
@@ -217,7 +208,7 @@ export function ProjectsScreen({
     } finally {
       setLoadingProjectId(null);
     }
-  }, [selectProject, loadProject, setEditorMode, onStateReset, onProjectSelected]);
+  }, [selectProject, loadProject, setEditorMode, onStateReset]);
 
   // Handle game loading (navigate to annotate)
   const handleLoadGame = useCallback((gameId) => {
