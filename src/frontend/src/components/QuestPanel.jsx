@@ -225,7 +225,7 @@ export function QuestPanel() {
     {!allQuestsDone && (
     <div
       ref={panelRef}
-      className={`quest-overlay fixed z-50 quest-fade-in transition-all duration-300 ${expanded ? 'sm:w-[420px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
+      className={`quest-overlay fixed z-50 quest-fade-in transition-all duration-300 ${expanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
       style={positionStyle}
     >
       <div className={`quest-card rounded-2xl overflow-hidden ${celebrating ? 'quest-celebrate' : ''}`}>
@@ -236,7 +236,7 @@ export function QuestPanel() {
         <button
           onClick={() => setExpanded(!expanded)}
           className={`w-full flex items-center text-left hover:bg-white/[0.02] transition-colors ${
-            expanded ? 'gap-3 px-5 pt-5 pb-4' : 'gap-2 px-3 py-2.5'
+            expanded ? 'gap-3 px-4 pt-4 pb-3' : 'gap-2 px-3 py-2.5'
           }`}
         >
           <div className={`quest-icon-badge rounded-xl flex items-center justify-center flex-shrink-0 ${
@@ -272,7 +272,7 @@ export function QuestPanel() {
         {expanded && (
           <>
             {/* Progress bar */}
-            <div className="px-5 pb-3 flex items-center gap-3">
+            <div className="px-4 pb-2 flex items-center gap-3">
               <div className="flex-1 h-2.5 bg-black/30 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full quest-progress-fill transition-all duration-700 ease-out"
@@ -288,15 +288,15 @@ export function QuestPanel() {
             {questDef.hint && !isAuthenticated && (
               <button
                 onClick={() => useAuthStore.getState().requireAuth(() => {})}
-                className="mx-5 mb-3 w-[calc(100%-2.5rem)] flex items-center justify-center gap-2 text-sm font-semibold text-white bg-white/10 hover:bg-white/15 border border-white/15 rounded-lg px-3 py-2.5 transition-colors cursor-pointer"
+                className="mx-4 mb-2 w-[calc(100%-2rem)] flex items-center justify-center gap-1.5 text-xs font-semibold text-white/70 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-md px-2 py-1.5 transition-colors cursor-pointer"
               >
-                <LogIn size={14} />
+                <LogIn size={12} />
                 {questDef.hint}
               </button>
             )}
 
             {/* Steps */}
-            <div className="px-5 pb-3">
+            <div className="px-4 pb-2">
               {questDef.steps.map((step, index) => {
                 const done = steps[step.id] || false;
                 const isCurrent = step.id === currentStepId;
@@ -346,7 +346,7 @@ export function QuestPanel() {
             </div>
 
             {/* Reward footer — hidden on mobile unless quest is complete (reward shown inline in header) */}
-            <div className={`px-5 pb-5 pt-1 ${isComplete ? '' : 'hidden sm:block'}`}>
+            <div className={`px-4 pb-4 pt-1 ${isComplete ? '' : 'hidden sm:block'}`}>
               {isComplete ? (
                 <button
                   onClick={handleClaimReward}
