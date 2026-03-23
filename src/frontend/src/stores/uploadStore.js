@@ -64,11 +64,6 @@ export const useUploadStore = create((set, get) => ({
       onCompleteCallbacks: onComplete ? [onComplete] : [],
     });
 
-    // Optimistically complete the "upload_game" quest step immediately
-    import('./questStore').then(({ useQuestStore }) =>
-      useQuestStore.getState().optimisticComplete('upload_game')
-    );
-
     // Build upload options
     const options = {};
     if (gameDetails) {

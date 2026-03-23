@@ -81,23 +81,6 @@ export const useQuestStore = create((set, get) => ({
     return data;
   },
 
-  /**
-   * Optimistically mark a step as complete in local state (before backend confirms).
-   * Backend will confirm on next fetchProgress call.
-   */
-  optimisticComplete: (stepId) => {
-    const { quests, activeQuestId } = get();
-    const updated = quests.map(q => {
-      if (q.id !== activeQuestId) return q;
-      if (q.steps[stepId]) return q; // Already done
-      return { ...q, steps: { ...q.steps, [stepId]: true } };
-    });
-    const totalCompleted = updated.reduce(
-      (sum, q) => sum + Object.values(q.steps).filter(Boolean).length, 0
-    );
-    set({ quests: updated, totalCompleted });
-  },
-
   recordAchievement: async (key) => {
     // Dedup: skip if already recorded this session
     if (_recordedAchievements.has(key)) return;

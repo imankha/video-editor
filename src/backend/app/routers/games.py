@@ -402,16 +402,39 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
         # Insert new game_videos rows
         _insert_game_videos(cursor, game_id, request.videos)
 
-        # Update total duration on games table
+        # Update games table with video metadata
         cursor.execute("""
-            SELECT SUM(duration) as total_duration FROM game_videos WHERE game_id = ?
+            SELECT COUNT(*) as cnt, SUM(duration) as total_duration, SUM(file_size) as total_size
+            FROM game_videos WHERE game_id = ?
         """, (game_id,))
-        total = cursor.fetchone()
-        if total and total['total_duration']:
-            cursor.execute(
-                "UPDATE games SET video_duration = ? WHERE id = ?",
-                (total['total_duration'], game_id)
-            )
+        agg = cursor.fetchone()
+
+        updates = []
+        params = []
+        if agg and agg['total_duration']:
+            updates.append("video_duration = ?")
+            params.append(agg['total_duration'])
+        if agg and agg['total_size']:
+            updates.append("video_size = ?")
+            params.append(agg['total_size'])
+
+        # For single-video games, set legacy fields + dimensions
+        total_videos = agg['cnt'] if agg else 0
+        if total_videos == 1:
+            v = request.videos[0]
+            h = v.blake3_hash.lower()
+            updates += ["blake3_hash = ?", "video_filename = ?"]
+            params += [h, f"{h}.mp4"]
+            if v.width:
+                updates.append("video_width = ?")
+                params.append(v.width)
+            if v.height:
+                updates.append("video_height = ?")
+                params.append(v.height)
+
+        if updates:
+            params.append(game_id)
+            cursor.execute(f"UPDATE games SET {', '.join(updates)} WHERE id = ?", params)
 
         conn.commit()
 

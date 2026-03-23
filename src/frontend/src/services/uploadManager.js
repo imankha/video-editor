@@ -403,11 +403,31 @@ async function createGame(options, videos) {
 }
 
 /**
+ * Attach video(s) to an existing game via POST /api/games/{id}/videos
+ */
+async function addVideosToGame(gameId, videos) {
+  const res = await fetch(`${API_BASE}/api/games/${gameId}/videos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ videos }),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.detail || `Add videos failed: ${res.status}`);
+  }
+  return await res.json();
+}
+
+/**
  * Upload a game with deduplication support (single video)
  *
  * Flow:
- * 1. Hash file → check R2 → upload if needed (ensureVideoInR2)
- * 2. Create game via POST /api/games with video reference
+ * 1. Create game immediately via POST /api/games (no videos)
+ * 2. Hash file → check R2 → upload if needed (ensureVideoInR2)
+ * 3. Attach video to game via POST /api/games/{id}/videos
+ *
+ * The game exists in the DB from step 1, so quest progress and UI
+ * update immediately. The video uploads in the background.
  *
  * @param {File} file - Video file to upload
  * @param {function} onProgress - Progress callback: ({ phase, percent, message }) => void
@@ -422,12 +442,25 @@ export async function uploadGame(file, onProgress, options = {}) {
   };
 
   try {
-    // Step 1: Ensure video is in R2 (hash + dedup + upload)
+    // Step 1: Create game immediately (no videos yet)
+    // This makes the game visible in the DB right away for quest progress etc.
+    const gameResult = await createGame(options, []);
+
+    // Refresh quest progress now that the game row exists
+    import('../stores/questStore').then(({ useQuestStore }) =>
+      useQuestStore.getState().fetchProgress({ force: true })
+    );
+    // Refresh games list so the game appears in the UI
+    import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
+      useGamesDataStore.getState().invalidateGames()
+    );
+
+    // Step 2: Ensure video is in R2 (hash + dedup + upload)
     const r2Result = await ensureVideoInR2(file, onProgress, options);
 
-    // Step 2: Create game with video reference
-    notify(UPLOAD_PHASE.FINALIZING, 90, 'Creating game...');
-    const gameResult = await createGame(options, [{
+    // Step 3: Attach video to the game
+    notify(UPLOAD_PHASE.FINALIZING, 90, 'Linking video...');
+    const attachResult = await addVideosToGame(gameResult.game_id, [{
       blake3_hash: r2Result.blake3_hash,
       sequence: 1,
       duration: options.videoDuration || null,
@@ -436,18 +469,18 @@ export async function uploadGame(file, onProgress, options = {}) {
       file_size: r2Result.file_size || file.size,
     }]);
 
-    const deduplicated = !r2Result.uploaded || gameResult.status === UPLOAD_STATUS.ALREADY_OWNED;
+    const videoUrl = attachResult.videos?.[0]?.video_url || null;
 
-    notify(UPLOAD_PHASE.COMPLETE, 100, deduplicated ? 'Game linked' : 'Upload complete');
+    notify(UPLOAD_PHASE.COMPLETE, 100, r2Result.uploaded ? 'Upload complete' : 'Game linked');
 
     return {
       status: gameResult.status,
       game_id: gameResult.game_id,
       name: gameResult.name,
-      video_url: gameResult.video_url,
+      video_url: videoUrl,
       blake3_hash: r2Result.blake3_hash,
       file_size: r2Result.file_size,
-      deduplicated,
+      deduplicated: !r2Result.uploaded,
     };
   } catch (error) {
     notify(UPLOAD_PHASE.ERROR, 0, error.message);
@@ -475,10 +508,21 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
   };
 
   try {
+    // Step 1: Create game immediately (no videos yet)
+    const gameResult = await createGame(options, []);
+
+    // Refresh quest progress and games list
+    import('../stores/questStore').then(({ useQuestStore }) =>
+      useQuestStore.getState().fetchProgress({ force: true })
+    );
+    import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
+      useGamesDataStore.getState().invalidateGames()
+    );
+
     const videoRefs = [];
     const fileCount = files.length;
 
-    // Step 1: Upload each video to R2 sequentially
+    // Step 2: Upload each video to R2 sequentially
     for (let i = 0; i < fileCount; i++) {
       const file = files[i];
       const sequence = i + 1;
@@ -513,9 +557,9 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       });
     }
 
-    // Step 2: Create game with all video references
-    notify(UPLOAD_PHASE.FINALIZING, 95, 'Creating game...');
-    const gameResult = await createGame(options, videoRefs);
+    // Step 3: Attach all videos to the game
+    notify(UPLOAD_PHASE.FINALIZING, 95, 'Linking videos...');
+    const attachResult = await addVideosToGame(gameResult.game_id, videoRefs);
 
     notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
 
@@ -523,8 +567,8 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       status: gameResult.status,
       game_id: gameResult.game_id,
       name: gameResult.name,
-      video_url: gameResult.video_url,
-      videos: gameResult.videos,
+      video_url: attachResult.videos?.[0]?.video_url || null,
+      videos: attachResult.videos,
       deduplicated: false,
     };
   } catch (error) {
