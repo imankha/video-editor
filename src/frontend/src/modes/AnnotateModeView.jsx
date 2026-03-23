@@ -119,6 +119,32 @@ export function AnnotateModeView({
               <span className="text-gray-400">Size:</span>{' '}
               {annotateVideoMetadata.sizeFormatted || `${(annotateVideoMetadata.size / (1024 * 1024)).toFixed(2)} MB`}
             </span>
+            {uploadProgress && (
+              <span className="flex items-center gap-2 ml-auto">
+                <span className="text-blue-400">Uploading… {uploadProgress.percent}%</span>
+                <span className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <span
+                    className="block h-full bg-blue-500 transition-all duration-300 rounded-full"
+                    style={{ width: `${uploadProgress.percent}%` }}
+                  />
+                </span>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Compact upload indicator when no metadata bar is visible */}
+      {uploadProgress && (!annotateVideoMetadata || annotateFullscreen) && (
+        <div className="hidden sm:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-4 border border-white/20">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-blue-400">Uploading… {uploadProgress.percent}%</span>
+            <span className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+              <span
+                className="block h-full bg-blue-500 transition-all duration-300 rounded-full"
+                style={{ width: `${uploadProgress.percent}%` }}
+              />
+            </span>
           </div>
         </div>
       )}
