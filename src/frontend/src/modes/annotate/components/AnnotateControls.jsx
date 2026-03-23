@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, SkipBack, SkipForward, RotateCcw, Maximize, Minimize, Plus, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, RotateCcw, Maximize, Minimize, Plus, Pencil, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
 import { formatTime } from '../../../utils/timeFormat';
 
@@ -81,6 +81,7 @@ export function AnnotateControls({
   isFullscreen,
   onToggleFullscreen,
   onAddClip,
+  isEditMode = false,
   videoRef,
 }) {
   const [volume, setVolume] = useState(1);
@@ -158,28 +159,28 @@ export function AnnotateControls({
 
       {/* Right side controls */}
       <div className="flex items-center gap-2">
-        {/* Add Clip button - show when not in fullscreen, or when paused in fullscreen */}
+        {/* Add/Edit Clip button - show when not in fullscreen, or when paused in fullscreen */}
         {((!isFullscreen) || (isFullscreen && !isPlaying)) && onAddClip && (
           <Button
-            variant="success"
+            variant={isEditMode ? 'warning' : 'success'}
             size="sm"
-            icon={Plus}
+            icon={isEditMode ? Pencil : Plus}
             onClick={onAddClip}
-            title="Add clip ending at current time (A)"
+            title={isEditMode ? 'Edit selected clip (A)' : 'Add clip ending at current time (A)'}
             className="hidden sm:flex"
           >
-            Add Clip
+            {isEditMode ? 'Edit Clip' : 'Add Clip'}
           </Button>
         )}
-        {/* Mobile: icon-only Add Clip */}
+        {/* Mobile: icon-only Add/Edit Clip */}
         {((!isFullscreen) || (isFullscreen && !isPlaying)) && onAddClip && (
           <Button
-            variant="success"
+            variant={isEditMode ? 'warning' : 'success'}
             size="sm"
-            icon={Plus}
+            icon={isEditMode ? Pencil : Plus}
             iconOnly
             onClick={onAddClip}
-            title="Add clip ending at current time (A)"
+            title={isEditMode ? 'Edit selected clip (A)' : 'Add clip ending at current time (A)'}
             className="flex sm:hidden"
           />
         )}

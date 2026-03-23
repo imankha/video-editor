@@ -202,6 +202,25 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 | T610 | [Track last_seen_at on Every Visit](tasks/T610-track-last-seen.md) | IN_PROGRESS | 6 | 1 | Update last_seen_at on /auth/me and /init-guest, not just Google login |
 | T620 | [Account Cleanup (Trigger: high R2 fees)](tasks/T620-account-cleanup.md) | TODO | 5 | 5 | Auto-delete abandoned guests (7d), dormant free (90d), warn paid (180d). Blocked by T610 |
 
+### UX Feedback (NUF Tester — 2026-03-23)
+
+User feedback from first NUF session. Two groups: game addition flow and clip creation flow.
+
+#### Game Addition Flow
+
+| ID | Task | Status | Impact | Cmplx | Notes |
+|----|------|--------|--------|-------|-------|
+| T640 | [Game Upload Drop Zone](tasks/T640-game-upload-drop-zone.md) | TODO | 4 | 2 | Drag-and-drop onto file upload area in GameDetailsModal |
+| T670 | [Consistent Game Terminology](tasks/T670-consistent-game-terminology.md) | TODO | 5 | 1 | Standardize "Add a Game" vs "Upload" across UI |
+| T680 | [Upload Progress Bar Visibility](tasks/T680-upload-progress-bar-visibility.md) | TODO | 4 | 2 | Investigate — progress bar exists but NUF user didn't notice it |
+
+#### Clip Creation Flow
+
+| ID | Task | Status | Impact | Cmplx | Notes |
+|----|------|--------|--------|-------|-------|
+| T650 | [Clip Scrub Region UI](tasks/T650-clip-scrub-region-ui.md) | TODO | 8 | 5 | Visual scrub handles for clip start/end with real-time video preview; replaces time inputs |
+| T660 | [Clip Edit Button Clarity](tasks/T660-clip-edit-button-clarity.md) | TESTING | 5 | 1 | "Add Clip" → "Edit Clip" (amber) when clip selected; depends on T650 |
+
 ### Phase 4: Post-Launch Polish
 
 Improvements after real user traffic.
