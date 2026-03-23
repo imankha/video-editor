@@ -103,7 +103,7 @@ Gate GPU operations behind email verification. Google OAuth primary, Email OTP s
 | T400 | [Auth Gate + Google OAuth](tasks/user-auth/T400-auth-gate-ui.md) | DONE | 9 | 4 | Modal + real Google sign-in (per-user SQLite) |
 | T401 | [Email OTP Auth](tasks/user-auth/T401-email-otp.md) | TODO | 9 | 4 | Real Resend integration (per-user SQLite) |
 | T405 | [Central Auth + Cross-Device](tasks/user-auth/T405-central-auth-db.md) | DONE | 7 | 5 | Shared auth.sqlite+R2, server-issued UUIDs, session cookies, remove ?user= param |
-| T410 | [Guest Progress Migration](tasks/user-auth/T410-guest-progress-migration.md) | TESTING | 6 | 5 | On login, migrate guest profile (if has games) as "second" profile on recovered account |
+| T410 | [Guest Progress Migration](tasks/user-auth/T410-guest-progress-migration.md) | DONE | 6 | 5 | On login, migrate guest profile (if has games) as "second" profile on recovered account |
 | T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 7 | 3 | Single-session enforcement, expiry |
 | T430 | [Account Settings](tasks/user-auth/T430-account-settings.md) | TODO | 4 | 2 | Email display, linking, logout |
 
@@ -120,7 +120,7 @@ Per-second credit system for GPU operations. Credits earned through quests and a
 | T510 | [GPU Cost Gate](tasks/monetization/T510-gpu-cost-gate.md) | SUPERSEDED | 9 | 3 | Superseded by T530 (per-second gate) |
 | T515 | [Free Trial Credits](tasks/monetization/T515-free-trial-credits.md) | SUPERSEDED | 7 | 2 | Superseded by T530 (first-time-free) + T540 (quest rewards) |
 | T520 | [Pricing Exploration](tasks/monetization/T520-pricing-exploration.md) | DONE | 6 | 1 | Completed as part of T530 cost analysis |
-| T525 | [Stripe Integration](tasks/monetization/T525-stripe-integration.md) | TESTING | 8 | 5 | Checkout, webhooks, credit packages (LAST) |
+| T525 | [Stripe Integration](tasks/monetization/T525-stripe-integration.md) | DONE | 8 | 5 | Checkout, webhooks, credit packages (LAST) |
 | T526 | [Embedded Stripe Payment](tasks/monetization/T526-embedded-stripe-payment.md) | TODO | 7 | 4 | Inline Payment Element, no redirect, auto-export after purchase |
 
 #### Epic: Guided Tutorial
@@ -199,7 +199,7 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
 | T600 | [Auto-Generate Annotation Titles (TF-IDF)](tasks/T600-auto-generate-annotation-titles.md) | DONE | 5 | 4 | Extract keyword titles from notes using scikit-learn TfidfVectorizer; zero API cost |
-| T610 | [Track last_seen_at on Every Visit](tasks/T610-track-last-seen.md) | IN_PROGRESS | 6 | 1 | Update last_seen_at on /auth/me and /init-guest, not just Google login |
+| T610 | [Track last_seen_at on Every Visit](tasks/T610-track-last-seen.md) | DONE | 6 | 1 | Update last_seen_at on /auth/me and /init-guest, not just Google login |
 | T620 | [Account Cleanup (Trigger: high R2 fees)](tasks/T620-account-cleanup.md) | TODO | 5 | 5 | Auto-delete abandoned guests (7d), dormant free (90d), warn paid (180d). Blocked by T610 |
 
 ### UX Feedback (NUF Tester — 2026-03-23)
@@ -211,7 +211,7 @@ User feedback from first NUF session. Two groups: game addition flow and clip cr
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
 | T640 | [Game Upload Drop Zone](tasks/T640-game-upload-drop-zone.md) | TODO | 4 | 2 | Drag-and-drop onto file upload area in GameDetailsModal |
-| T670 | [Consistent Game Terminology](tasks/T670-consistent-game-terminology.md) | TESTING | 5 | 1 | Standardize "Add a Game" vs "Upload" across UI |
+| T670 | [Consistent Game Terminology](tasks/T670-consistent-game-terminology.md) | DONE | 5 | 1 | Standardize "Add a Game" vs "Upload" across UI |
 | T680 | [Upload Progress Bar Visibility](tasks/T680-upload-progress-bar-visibility.md) | TODO | 4 | 2 | Investigate — progress bar exists but NUF user didn't notice it |
 
 #### Clip Creation Flow
