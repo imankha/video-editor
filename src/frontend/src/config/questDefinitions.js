@@ -9,13 +9,13 @@ export const QUESTS = [
   {
     id: 'quest_1',
     title: 'Get Started',
-    hint: 'Already uploaded a game? Just log in',
+    hint: 'Already added a game? Just log in',
     reward: 25,
     steps: [
       {
         id: 'upload_game',
-        title: 'Upload Your First Game',
-        description: 'Upload a game video by clicking the Add Game button',
+        title: 'Add Your First Game',
+        description: 'Add a game to start clipping highlights',
       },
       {
         id: 'annotate_brilliant',
@@ -73,8 +73,8 @@ export const QUESTS = [
     steps: [
       {
         id: 'upload_game_2',
-        title: 'Upload a Second Game',
-        description: 'Go Home, select Games, and then click Add Game to add another game',
+        title: 'Add a Second Game',
+        description: 'Go Home, select Games, and click Add Game to add another game',
       },
       {
         id: 'annotate_brilliant_2',

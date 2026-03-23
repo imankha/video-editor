@@ -450,8 +450,8 @@ export function FramingModeView({
             <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4 text-sm">
               <div className="bg-white/5 rounded-lg p-4">
                 <div className="text-2xl mb-2">📤</div>
-                <h3 className="font-semibold text-white mb-1">1. Upload</h3>
-                <p>Upload your game footage to get started</p>
+                <h3 className="font-semibold text-white mb-1">1. Add a Game</h3>
+                <p>Add your game footage to start clipping highlights</p>
               </div>
               <div className="bg-white/5 rounded-lg p-4">
                 <div className="text-2xl mb-2">✂️</div>
