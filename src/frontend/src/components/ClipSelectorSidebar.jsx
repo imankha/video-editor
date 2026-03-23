@@ -159,7 +159,7 @@ export function ClipSelectorSidebar({
   };
 
   return (
-    <div className="w-56 bg-gray-900/95 border-r border-gray-700 flex flex-col h-full">
+    <div data-sidebar="clips" className="w-56 bg-gray-900/95 border-r border-gray-700 flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b border-gray-700">
         <div className="flex items-center gap-2 mb-3">

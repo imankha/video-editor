@@ -32,43 +32,32 @@ export function QuestPanel() {
   const panelRef = useRef(null);
   const [position, setPosition] = useState({ left: null, bottom: null });
 
-  // Smart positioning: avoid overlapping active UI (sidebars, panels)
+  // Smart positioning: sit in the bottom-left clear space, avoiding sidebars and controls
   const updatePosition = useCallback(() => {
     const panel = panelRef.current;
     if (!panel) return;
 
-    // Default position (matches CSS: bottom-3 left-3 → 12px, sm: bottom-10 left-6 → 40px/24px)
     const isSm = window.innerWidth >= 640;
-    const defaultLeft = isSm ? 24 : 12;
+    const gap = 12;
     const defaultBottom = isSm ? 40 : 12;
+    const panelWidth = panel.getBoundingClientRect().width;
 
-    // Check if any UI element occupies our default spot
-    // Look for sidebars/panels on the left side that extend to the bottom
-    const panelRect = panel.getBoundingClientRect();
-    const panelHeight = panelRect.height;
-    const panelWidth = panelRect.width;
-
-    // Query elements that might overlap at bottom-left
-    const checkPoint = { x: defaultLeft + panelWidth / 2, y: window.innerHeight - defaultBottom - panelHeight / 2 };
-    const elementsAtPoint = document.elementsFromPoint(checkPoint.x, checkPoint.y);
-    const overlapping = elementsAtPoint.find(el =>
-      el !== panel && !panel.contains(el) && !el.contains(panel) &&
-      el.closest('[data-sidebar], [class*="sidebar"], [class*="side-panel"], [class*="SidePanel"]')
-    );
-
-    if (overlapping) {
-      const overlapRect = overlapping.closest('[data-sidebar], [class*="sidebar"], [class*="side-panel"], [class*="SidePanel"]').getBoundingClientRect();
-      // Position just to the right of the overlapping element
-      const newLeft = overlapRect.right + 12;
-      // Check if it fits on screen; if not, try bottom-right
-      if (newLeft + panelWidth < window.innerWidth - 12) {
-        setPosition({ left: newLeft, bottom: defaultBottom });
-      } else {
-        // Fall back to bottom-right
-        setPosition({ left: null, right: isSm ? 24 : 12, bottom: defaultBottom });
+    // Find the rightmost edge of any visible sidebar on the left
+    let leftEdge = isSm ? 24 : 12;
+    const sidebars = document.querySelectorAll('[data-sidebar]');
+    for (const sb of sidebars) {
+      const rect = sb.getBoundingClientRect();
+      // Only count sidebars that are visible and on the left side of the screen
+      if (rect.width > 0 && rect.left < window.innerWidth / 2) {
+        leftEdge = Math.max(leftEdge, rect.right + gap);
       }
+    }
+
+    // Check if it fits; if not, fall back to bottom-right
+    if (leftEdge + panelWidth < window.innerWidth - gap) {
+      setPosition({ left: leftEdge, bottom: defaultBottom });
     } else {
-      setPosition({ left: defaultLeft, bottom: defaultBottom });
+      setPosition({ left: null, right: isSm ? 24 : 12, bottom: defaultBottom });
     }
   }, []);
 
