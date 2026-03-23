@@ -218,7 +218,7 @@ User feedback from first NUF session. Two groups: game addition flow and clip cr
 
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| T650 | [Clip Scrub Region UI](tasks/T650-clip-scrub-region-ui.md) | TODO | 8 | 5 | Visual scrub handles for clip start/end with real-time video preview; replaces time inputs |
+| T650 | [Clip Scrub Region UI](tasks/T650-clip-scrub-region-ui.md) | TESTING | 8 | 5 | Visual scrub handles for clip start/end with real-time video preview; replaces time inputs |
 | T660 | [Clip Edit Button Clarity](tasks/T660-clip-edit-button-clarity.md) | TESTING | 5 | 1 | "Add Clip" → "Edit Clip" (amber) when clip selected; depends on T650 |
 
 ### Phase 4: Post-Launch Polish
