@@ -201,7 +201,11 @@ export function ClipDetailsEditor({
           Clip Details
         </div>
 
-        {/* Clip scrub region — same visual timeline used in the Add/Edit overlay */}
+        {/* Clip scrub region — same visual timeline used in the Add/Edit overlay.
+            onSeek is NOT passed: sidebar drag should NOT seek the video (which would
+            trigger auto-deselect since currentTime moves outside the original clip range
+            before the clip boundaries are updated). The overlay can seek because EDITING
+            state is immune to deselect; SELECTED state is not. */}
         <ClipScrubRegion
           currentTime={region.startTime + (region.endTime - region.startTime) / 2}
           videoDuration={videoDuration}
@@ -210,7 +214,6 @@ export function ClipDetailsEditor({
           endTime={scrubEndTime}
           onStartTimeChange={handleStartTimeChange}
           onEndTimeChange={handleEndTimeChange}
-          onSeek={onSeek}
           videoRef={videoRef}
         />
 

@@ -118,7 +118,7 @@ export function ClipScrubRegion({
     const handleTime = handle === 'start' ? startTimeRef.current : endTimeRef.current;
     dragOffsetRef.current = clickTime - handleTime;
     // Seek immediately so the video shows this handle's frame (no jump on first move)
-    onSeekRef.current(handleTime);
+    onSeekRef.current?.(handleTime);
     // Set ref immediately (no async state delay)
     draggingRef.current = handle;
     setDragging(handle);
@@ -142,14 +142,14 @@ export function ClipScrubRegion({
         Math.min(time, en - MIN_REGION_DURATION)
       );
       onStartTimeChangeRef.current(clamped);
-      onSeekRef.current(clamped);
+      onSeekRef.current?.(clamped);
     } else if (d === 'end') {
       const clamped = Math.min(
         Math.min(videoDuration, windowEnd),
         Math.max(time, s + MIN_REGION_DURATION)
       );
       onEndTimeChangeRef.current(clamped);
-      onSeekRef.current(clamped);
+      onSeekRef.current?.(clamped);
     }
   }, [pixelToTime, windowStart, windowEnd, videoDuration]);
 
