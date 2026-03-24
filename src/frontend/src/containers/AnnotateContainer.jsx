@@ -802,52 +802,46 @@ export function AnnotateContainer({
   /**
    * Handle annotate region selection - selects the region AND seeks to its start
    */
+  const userSelectRef = useRef(false);
   const handleSelectRegion = useCallback((regionId) => {
-    console.log('[AnnotateContainer] handleSelectRegion called with regionId:', regionId);
     const region = clipRegions.find(r => r.id === regionId);
+    console.log('[ClipSelect] handleSelectRegion:', regionId,
+      'range:', region ? `${region.startTime.toFixed(2)}-${region.endTime.toFixed(2)}` : 'NOT FOUND');
     if (region) {
+      userSelectRef.current = true; // Flag to skip auto-deselect while seek is pending
       selectAnnotateRegion(regionId);
       seek(region.startTime);
       setAnnotateSelectedLayer('clips');
-    } else {
-      console.warn('[AnnotateContainer] Region not found! Available IDs:', clipRegions.map(r => r.id));
     }
   }, [clipRegions, selectAnnotateRegion, seek]);
 
   // Effect: Auto-select/deselect annotate clip based on playhead position
   useEffect(() => {
     if (!annotateVideoUrl) return;
+    if (showAnnotateOverlay) return;
 
-    const time = videoRef.current?.currentTime ?? currentTime;
-    const selectedRegion = annotateSelectedRegionId
-      ? clipRegions.find(r => r.id === annotateSelectedRegionId)
-      : null;
-
-    console.log('[ClipSelect] Effect fired — time:', time?.toFixed(2),
-      'selectedId:', annotateSelectedRegionId,
-      'overlay:', showAnnotateOverlay,
-      'selectedRange:', selectedRegion ? `${selectedRegion.startTime.toFixed(2)}-${selectedRegion.endTime.toFixed(2)}` : 'none',
-      'currentTime state:', currentTime?.toFixed(2));
-
-    // Don't change selection while the edit overlay is open
-    if (showAnnotateOverlay) {
-      console.log('[ClipSelect] Overlay open, skipping');
+    // Skip one cycle after user-initiated selection (seek is async)
+    if (userSelectRef.current) {
+      userSelectRef.current = false;
       return;
     }
 
+    const time = videoRef.current?.currentTime ?? currentTime;
+
+    // Deselect if playhead is outside the selected clip's range
     if (annotateSelectedRegionId) {
+      const selectedRegion = clipRegions.find(r => r.id === annotateSelectedRegionId);
       if (selectedRegion && (time < selectedRegion.startTime || time > selectedRegion.endTime)) {
-        console.log('[ClipSelect] DESELECTING — playhead outside clip range');
+        console.log('[ClipSelect] Deselecting — playhead', time.toFixed(2),
+          'outside', selectedRegion.startTime.toFixed(2), '-', selectedRegion.endTime.toFixed(2));
         selectAnnotateRegion(null);
         return;
-      } else {
-        console.log('[ClipSelect] Keeping selection — playhead in range (or region not found)');
       }
     }
 
+    // Auto-select clip at playhead
     const regionAtPlayhead = getAnnotateRegionAtTime(time);
     if (regionAtPlayhead && regionAtPlayhead.id !== annotateSelectedRegionId) {
-      console.log('[ClipSelect] Auto-selecting clip:', regionAtPlayhead.id);
       selectAnnotateRegion(regionAtPlayhead.id);
     }
   }, [annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions, showAnnotateOverlay, videoRef]);
