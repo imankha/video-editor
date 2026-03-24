@@ -116,11 +116,13 @@ export function ClipDetailsEditor({
   const [scrubStartTime, setScrubStartTime] = useState(region.startTime);
   const [scrubEndTime, setScrubEndTime] = useState(region.endTime);
 
-  // Sync local state when the region changes (e.g., switching clips)
+  // Sync local state only when switching to a different clip.
+  // Do NOT sync on region.startTime/endTime changes — during drag, local state
+  // is authoritative and the parent round-trip would fight with it.
   useEffect(() => {
     setScrubStartTime(region.startTime);
     setScrubEndTime(region.endTime);
-  }, [region.id, region.startTime, region.endTime]);
+  }, [region.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const notesLength = region.notes?.length || 0;
 
