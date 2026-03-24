@@ -40,6 +40,7 @@ export function ClipScrubRegion({
   onStartTimeChange,
   onEndTimeChange,
   onSeek,
+  onDragEnd,
   videoRef,
 }) {
   const trackRef = useRef(null);
@@ -101,9 +102,11 @@ export function ClipScrubRegion({
   const onStartTimeChangeRef = useRef(onStartTimeChange);
   const onEndTimeChangeRef = useRef(onEndTimeChange);
   const onSeekRef = useRef(onSeek);
+  const onDragEndRef = useRef(onDragEnd);
   useEffect(() => { onStartTimeChangeRef.current = onStartTimeChange; }, [onStartTimeChange]);
   useEffect(() => { onEndTimeChangeRef.current = onEndTimeChange; }, [onEndTimeChange]);
   useEffect(() => { onSeekRef.current = onSeek; }, [onSeek]);
+  useEffect(() => { onDragEndRef.current = onDragEnd; }, [onDragEnd]);
 
   // Handle pointer down on a handle
   const handlePointerDown = useCallback((handle, e) => {
@@ -153,10 +156,11 @@ export function ClipScrubRegion({
     }
   }, [pixelToTime, windowStart, windowEnd, videoDuration]);
 
-  // Handle pointer up
+  // Handle pointer up — notify parent that drag is complete
   const handlePointerUp = useCallback((e) => {
     if (draggingRef.current) {
       e.preventDefault();
+      onDragEndRef.current?.(startTimeRef.current, endTimeRef.current);
       draggingRef.current = null;
       setDragging(null);
     }

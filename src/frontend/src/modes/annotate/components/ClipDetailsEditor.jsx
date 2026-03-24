@@ -150,20 +150,19 @@ export function ClipDetailsEditor({
     onUpdate({ tags: newTags });
   };
 
-  // Persist scrub times to parent when local state settles (drag end or single click)
-  const persistScrubTimes = useCallback((start, end) => {
-    onUpdate({ startTime: start, endTime: end });
-  }, [onUpdate]);
-
+  // During drag: only update local state (instant, no parent re-render)
   const handleStartTimeChange = useCallback((newStart) => {
     setScrubStartTime(newStart);
-    persistScrubTimes(newStart, scrubEndTime);
-  }, [scrubEndTime, persistScrubTimes]);
+  }, []);
 
   const handleEndTimeChange = useCallback((newEnd) => {
     setScrubEndTime(newEnd);
-    persistScrubTimes(scrubStartTime, newEnd);
-  }, [scrubStartTime, persistScrubTimes]);
+  }, []);
+
+  // On drag end: single persist to parent (one API call, not 48)
+  const handleDragEnd = useCallback((finalStart, finalEnd) => {
+    onUpdate({ startTime: finalStart, endTime: finalEnd });
+  }, [onUpdate]);
 
   const handleNotesChange = (e) => {
     const newNotes = e.target.value.slice(0, maxNotesLength);
@@ -214,6 +213,7 @@ export function ClipDetailsEditor({
           endTime={scrubEndTime}
           onStartTimeChange={handleStartTimeChange}
           onEndTimeChange={handleEndTimeChange}
+          onDragEnd={handleDragEnd}
           videoRef={videoRef}
         />
 
