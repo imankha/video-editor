@@ -242,6 +242,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         : Math.max(0, Math.min(time, effectiveDuration));
 
       setIsSeeking(true);
+      console.log(`[useVideo] seek: optimistic setCurrentTime(${validTime.toFixed(3)}) before video element update`);
       setCurrentTime(validTime); // Optimistic update: UI responds instantly (playhead, timestamps, selection)
       videoRef.current.currentTime = validTime;
       // The seeked event (handleSeeked) will refine with the actual displayed frame time

@@ -33,25 +33,38 @@ export function useClipSelection() {
   const [state, setState] = useState({ type: SELECTION_STATES.NONE });
 
   const selectClip = useCallback((clipId) => {
-    setState({ type: SELECTION_STATES.SELECTED, clipId });
+    setState(prev => {
+      const next = { type: SELECTION_STATES.SELECTED, clipId };
+      console.log(`[ClipSelection] ${prev.type}${prev.clipId ? `(${prev.clipId.slice(-6)})` : ''} → SELECTED(${clipId?.slice(-6)})`);
+      return next;
+    });
   }, []);
 
   const editClip = useCallback((clipId) => {
-    setState({ type: SELECTION_STATES.EDITING, clipId });
+    setState(prev => {
+      console.log(`[ClipSelection] ${prev.type}${prev.clipId ? `(${prev.clipId.slice(-6)})` : ''} → EDITING(${clipId?.slice(-6)})`);
+      return { type: SELECTION_STATES.EDITING, clipId };
+    });
   }, []);
 
   const startCreating = useCallback(() => {
-    setState({ type: SELECTION_STATES.CREATING });
+    setState(prev => {
+      console.log(`[ClipSelection] ${prev.type} → CREATING`);
+      return { type: SELECTION_STATES.CREATING };
+    });
   }, []);
 
   const closeOverlay = useCallback(() => {
     setState(prev => {
       if (prev.type === SELECTION_STATES.EDITING) {
+        console.log(`[ClipSelection] EDITING(${prev.clipId?.slice(-6)}) → SELECTED(${prev.clipId?.slice(-6)}) [closeOverlay]`);
         return { type: SELECTION_STATES.SELECTED, clipId: prev.clipId };
       }
       if (prev.type === SELECTION_STATES.CREATING) {
+        console.log(`[ClipSelection] CREATING → NONE [closeOverlay]`);
         return { type: SELECTION_STATES.NONE };
       }
+      console.log(`[ClipSelection] closeOverlay no-op (state=${prev.type})`);
       return prev;
     });
   }, []);
@@ -60,8 +73,10 @@ export function useClipSelection() {
     setState(prev => {
       // EDITING and CREATING are immune to deselect (scrub handles, overlay open)
       if (prev.type === SELECTION_STATES.EDITING || prev.type === SELECTION_STATES.CREATING) {
+        console.log(`[ClipSelection] deselectClip BLOCKED (state=${prev.type}, immune to deselect)`);
         return prev;
       }
+      console.log(`[ClipSelection] ${prev.type}${prev.clipId ? `(${prev.clipId.slice(-6)})` : ''} → NONE [deselect]`);
       return { type: SELECTION_STATES.NONE };
     });
   }, []);

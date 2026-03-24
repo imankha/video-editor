@@ -618,10 +618,13 @@ export function AnnotateContainer({
    */
   const handleToggleFullscreen = useCallback(() => {
     const newFS = !annotateFullscreen;
+    console.log(`[AnnotateContainer] handleToggleFullscreen: ${annotateFullscreen} → ${newFS}, selectionState=${selectionState.type}`);
     setAnnotateFullscreen(newFS);
     if (newFS && selectionState.type === 'SELECTED') {
+      console.log(`[AnnotateContainer] Enter fullscreen with SELECTED → opening overlay`);
       editClip(selectionState.clipId);
     } else if (!newFS && (selectionState.type === 'EDITING' || selectionState.type === 'CREATING')) {
+      console.log(`[AnnotateContainer] Exit fullscreen with ${selectionState.type} → closing overlay`);
       closeOverlay();
     }
   }, [annotateFullscreen, setAnnotateFullscreen, selectionState, editClip, closeOverlay]);
@@ -633,12 +636,15 @@ export function AnnotateContainer({
    * Handle Add Clip button click (non-fullscreen mode)
    */
   const handleAddClipFromButton = useCallback(() => {
+    console.log(`[AnnotateContainer] handleAddClipFromButton: selectionState=${selectionState.type}`);
     if (videoRef.current && !videoRef.current.paused) {
       videoRef.current.pause();
     }
     if (selectionState.type === 'SELECTED') {
+      console.log(`[AnnotateContainer] SELECTED → opening edit overlay`);
       editClip(selectionState.clipId);
     } else {
+      console.log(`[AnnotateContainer] No selection → opening create overlay`);
       startCreating();
     }
   }, [videoRef, selectionState, editClip, startCreating]);
@@ -805,6 +811,7 @@ export function AnnotateContainer({
    * Handle closing the fullscreen overlay without creating a clip
    */
   const handleOverlayClose = useCallback(() => {
+    console.log(`[AnnotateContainer] handleOverlayClose`);
     closeOverlay();
   }, [closeOverlay]);
 
@@ -812,6 +819,7 @@ export function AnnotateContainer({
    * Handle resuming playback from fullscreen overlay
    */
   const handleOverlayResume = useCallback(() => {
+    console.log(`[AnnotateContainer] handleOverlayResume`);
     closeOverlay();
     togglePlay();
   }, [closeOverlay, togglePlay]);
@@ -849,10 +857,19 @@ export function AnnotateContainer({
     if (type === 'SELECTED') {
       const selectedClip = clipRegions.find(r => r.id === clipId);
       if (selectedClip && (currentTime < selectedClip.startTime || currentTime > selectedClip.endTime)) {
-        regionAtPlayhead ? selectClip(regionAtPlayhead.id) : deselectClip();
+        if (regionAtPlayhead) {
+          console.log(`[AnnotateContainer] Auto-select: playhead left clip → entering new clip ${regionAtPlayhead.id.slice(-6)} at t=${currentTime.toFixed(2)}`);
+          selectClip(regionAtPlayhead.id);
+        } else {
+          console.log(`[AnnotateContainer] Auto-deselect: playhead left clip ${clipId?.slice(-6)} at t=${currentTime.toFixed(2)}`);
+          deselectClip();
+        }
       }
     } else {
-      if (regionAtPlayhead) selectClip(regionAtPlayhead.id);
+      if (regionAtPlayhead) {
+        console.log(`[AnnotateContainer] Auto-select: playhead entered clip ${regionAtPlayhead.id.slice(-6)} at t=${currentTime.toFixed(2)}`);
+        selectClip(regionAtPlayhead.id);
+      }
     }
   }, [annotateVideoUrl, currentTime, selectionState, getAnnotateRegionAtTime, clipRegions, selectClip, deselectClip]);
 
