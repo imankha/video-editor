@@ -374,6 +374,8 @@ export function AnnotateScreen({ onClearSelection }) {
           videoDuration={annotateVideoMetadata?.duration}
           isLoading={isLoadingAnnotations}
           isVideoUploading={isUploadingGameVideo}
+          onSeek={seek}
+          videoRef={videoRef}
         />
       </div>
       {/* Mobile sidebar overlay */}
@@ -394,6 +396,8 @@ export function AnnotateScreen({ onClearSelection }) {
               isLoading={isLoadingAnnotations}
               isVideoUploading={isUploadingGameVideo}
               isMobile
+              onSeek={seek}
+              videoRef={videoRef}
               onJumpToClip={(regionId, endTime) => {
                 handleSelectAnnotateRegion(regionId);
                 seek(endTime);
