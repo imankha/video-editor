@@ -401,7 +401,81 @@ test.describe('T690: Clip Selection State Machine', () => {
     }
 
     // ========================================================================
-    // EDITING immune to deselect
+    // BUG FIX: Timeline click in FS while EDITING → close overlay + Add Clip appears
+    // ========================================================================
+    console.log('\n[Test] === TIMELINE CLICK: FS + EDITING → click outside → overlay closes ===');
+
+    // Deselect first (hides ClipDetailsEditor that overlaps clip list items)
+    await seekVideoDirect(page, 2);
+    await page.waitForTimeout(800);
+
+    // Re-enter fullscreen with a selected clip
+    const clipForTimeline = getClipItem(page, 0);
+    if (await clipForTimeline.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await clipForTimeline.click({ timeout: 5000 });
+      await page.waitForTimeout(500);
+    }
+    const fsBtn2 = page.locator('button[title="Fullscreen"]');
+    if (await fsBtn2.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await fsBtn2.click();
+      await page.waitForTimeout(1500);
+
+      // We should now be in EDITING state with overlay open
+      const overlayOpen = await page.locator('button:has-text("Save & Continue"), button:has-text("Update & Continue")').first()
+        .isVisible({ timeout: 3000 }).catch(() => false);
+      console.log(`[Test] TIMELINE: Overlay open after entering FS: ${overlayOpen}`);
+
+      if (overlayOpen) {
+        const timelineLogsBefore = logs.length;
+
+        // Click the timeline track near the very end (far past any clips at 30s/90s)
+        // TimelineBase track: <div class="...bg-gray-700...cursor-pointer select-none touch-none">
+        // Use touch-none to uniquely identify the timeline track (not other bg-gray-700 elements)
+        const timelineTrack = page.locator('.bg-gray-700.cursor-pointer.touch-none');
+        const trackCount = await timelineTrack.count();
+        console.log(`    Timeline tracks found: ${trackCount}`);
+
+        // Use the last one (fullscreen timeline, not the one behind the overlay)
+        const track = timelineTrack.last();
+        if (await track.isVisible({ timeout: 2000 }).catch(() => false)) {
+          const box = await track.boundingBox();
+          if (box) {
+            // Click near the right end of the timeline (far past all clips)
+            const clickX = box.x + box.width * 0.95;
+            const clickY = box.y + box.height / 2;
+            console.log(`    Clicking timeline at x=${clickX.toFixed(0)}, y=${clickY.toFixed(0)} (95% of width)`);
+            await page.mouse.click(clickX, clickY);
+            await page.waitForTimeout(1500);
+
+            const timelineLogs = logs.slice(timelineLogsBefore);
+            const closeEvents = timelineLogs.filter(l =>
+              l.includes('Timeline seek outside clips') || l.includes('closeOverlay')
+            );
+            console.log(`[Test] TIMELINE: Close events after click: ${closeEvents.length}`);
+            timelineLogs.forEach(l => console.log(`    ${l}`));
+
+            // Overlay should be closed now
+            const overlayGone = !(await page.locator('button:has-text("Save & Continue"), button:has-text("Update & Continue")').first()
+              .isVisible().catch(() => false));
+            console.log(`[Test] TIMELINE: Overlay closed: ${overlayGone}`);
+
+            // Add Clip button should appear (NONE state, paused, fullscreen)
+            const addAppears = await page.locator('button:has-text("Add Clip")').first()
+              .isVisible({ timeout: 2000 }).catch(() => false);
+            console.log(`[Test] TIMELINE: "Add Clip" appeared: ${addAppears}`);
+          }
+        } else {
+          console.log('[Test] TIMELINE: Timeline bar not found');
+        }
+      }
+
+      // Press Escape to exit fullscreen
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(500);
+    }
+
+    // ========================================================================
+    // EDITING immune to deselect (scrub handles)
     // ========================================================================
     console.log('\n[Test] === Immunity check ===');
     const blocked = logs.filter(l => l.includes('deselectClip BLOCKED'));

@@ -171,6 +171,7 @@ export function AnnotateScreen({ onClearSelection }) {
     handleOverlayClose,
     handleOverlayResume,
     handleSelectRegion: handleSelectAnnotateRegion,
+    handleTimelineSeek,
     setAnnotatePlaybackSpeed,
     setAnnotateSelectedLayer,
     // Clip region actions
@@ -495,6 +496,7 @@ export function AnnotateScreen({ onClearSelection }) {
         stepBackward={stepBackward}
         restart={restart}
         seek={seek}
+        onTimelineSeek={handleTimelineSeek}
         annotatePlaybackSpeed={annotatePlaybackSpeed}
         onSpeedChange={setAnnotatePlaybackSpeed}
         // Clips/regions

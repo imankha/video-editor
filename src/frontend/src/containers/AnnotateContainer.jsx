@@ -827,6 +827,23 @@ export function AnnotateContainer({
   /**
    * Handle annotate region selection - selects the region AND seeks to its start
    */
+  /**
+   * Timeline seek — wraps seek() with overlay management.
+   * When the user clicks the timeline (a gesture) while the overlay is open,
+   * and the target time has no clip, close the overlay. This is distinct from
+   * scrub handle drags (which use seek() directly and should NOT close the overlay).
+   */
+  const handleTimelineSeek = useCallback((time) => {
+    seek(time);
+    if (selectionState.type === 'EDITING' || selectionState.type === 'CREATING') {
+      const regionAtTarget = getAnnotateRegionAtTime(time);
+      if (!regionAtTarget) {
+        console.log(`[AnnotateContainer] Timeline seek outside clips (t=${time.toFixed(2)}) → closing overlay`);
+        closeOverlay();
+      }
+    }
+  }, [seek, selectionState, getAnnotateRegionAtTime, closeOverlay]);
+
   const handleSelectRegion = useCallback((regionId) => {
     console.log('[AnnotateContainer] handleSelectRegion called with regionId:', regionId);
     const region = clipRegions.find(r => r.id === regionId);
@@ -1112,6 +1129,7 @@ export function AnnotateContainer({
     handleOverlayClose,
     handleOverlayResume,
     handleSelectRegion,
+    handleTimelineSeek, // Seek + close overlay if target outside clips (timeline gesture)
     setAnnotatePlaybackSpeed,
     setAnnotateSelectedLayer,
 

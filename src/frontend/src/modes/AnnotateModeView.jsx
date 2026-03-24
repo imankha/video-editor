@@ -41,6 +41,7 @@ export function AnnotateModeView({
   stepBackward,
   restart,
   seek,
+  onTimelineSeek, // Seek + close overlay if target outside clips (timeline gesture)
   annotatePlaybackSpeed,
   onSpeedChange,
 
@@ -271,7 +272,7 @@ export function AnnotateModeView({
                   currentTime={currentTime}
                   duration={annotateVideoMetadata?.duration || 0}
                   isPlaying={isPlaying}
-                  onSeek={seek}
+                  onSeek={onTimelineSeek || seek}
                   regions={annotateRegionsWithLayout}
                   selectedRegionId={annotateSelectedRegionId}
                   onSelectRegion={onSelectRegion}
@@ -290,7 +291,7 @@ export function AnnotateModeView({
                 currentTime={currentTime}
                 duration={annotateVideoMetadata?.duration || 0}
                 isPlaying={isPlaying}
-                onSeek={seek}
+                onSeek={onTimelineSeek || seek}
                 regions={annotateRegionsWithLayout}
                 selectedRegionId={annotateSelectedRegionId}
                 onSelectRegion={onSelectRegion}
