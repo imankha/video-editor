@@ -33,21 +33,14 @@ This is the simplest rule that preserves all good states and fixes the bad state
 
 ### Implementation
 
-The quest panel is rendered in `App.jsx` and doesn't have direct access to annotate selection state. Two approaches:
+The quest panel is rendered in `App.jsx` and doesn't have direct access to annotate selection state. Expose the selection state via the existing editor store so QuestPanel can read it.
 
-**Option A (preferred): Check for ClipDetailsEditor in DOM**
-```javascript
-// In QuestPanel.jsx — check if the details editor is taking the space
-const detailsVisible = document.querySelector('.border-t-2 .cursor-col-resize') !== null;
-if (detailsVisible) return null; // Hide panel
-```
-Re-check on a React-level signal (editorMode change, not MutationObserver).
+1. **Add `annotateHasSelectedClip` to `editorStore`** (or whichever Zustand store holds `editorMode`)
+2. **AnnotateContainer sets it** when `annotateSelectedRegionId` changes (non-null = true, null = false)
+3. **QuestPanel reads it**: `if (editorMode === 'annotate' && annotateHasSelectedClip) return null;`
+4. **Clear on mode exit**: reset to false when leaving annotate mode
 
-**Option B: Expose selection state via context or store**
-- Add `hasSelectedClip` to a Zustand store or React context
-- QuestPanel reads it and hides when true + annotate mode
-
-Option A is simpler (no plumbing), Option B is cleaner (no DOM queries).
+No DOM queries, no MutationObserver, no timers. Pure React state flow.
 
 ## Context
 
