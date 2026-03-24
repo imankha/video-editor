@@ -212,6 +212,44 @@ test.describe('T690: Clip Selection State Machine', () => {
     expect(seekEvents.length).toBeGreaterThan(0);
 
     // ========================================================================
+    // BUG FIX: Selection stays stable after click (no flash/deselect)
+    // The seeked event snaps to frame boundaries — selection must survive
+    // ========================================================================
+    console.log('\n[Test] === STABILITY: Selection stays after sidebar click ===');
+
+    // Deselect first
+    await seekVideoDirect(page, 2);
+    await page.waitForTimeout(800);
+
+    // Click a clip and wait long enough for seeked event to fire
+    const stabilityBefore = logs.length;
+    await firstClip.click();
+    await page.waitForTimeout(2000); // Wait for seeked event + any effects
+
+    const stabilityLogs = logs.slice(stabilityBefore);
+    const selectEvents = stabilityLogs.filter(l => l.includes('→ SELECTED'));
+    const deselectAfterClick = stabilityLogs.filter(l => l.includes('→ NONE [deselect]'));
+    console.log(`[Test] STABILITY: SELECTED: ${selectEvents.length}, deselects after click: ${deselectAfterClick.length}`);
+    stabilityLogs.forEach(l => console.log(`  ${l}`));
+
+    // The clip should stay selected — no deselect after sidebar click
+    expect(deselectAfterClick.length).toBe(0);
+
+    // Verify clip detail panel is still visible (not flashing)
+    const clipDetail = page.locator('input[placeholder*="name" i], input[placeholder*="clip" i], [class*="ClipDetailsEditor"]').first();
+    const detailVisible = await clipDetail.isVisible({ timeout: 2000 }).catch(() => false);
+    // Also check: sidebar should show the selected clip with a highlighted border
+    const selectedHighlight = page.locator('.border-l-2:not(.border-l-transparent)');
+    const highlightVisible = await selectedHighlight.isVisible({ timeout: 1000 }).catch(() => false);
+    console.log(`[Test] STABILITY: Detail panel: ${detailVisible}, highlight: ${highlightVisible}`);
+
+    // Also verify Add Clip button is hidden (clip is selected in non-FS)
+    const addBtnAfterStable = page.locator('button:has-text("Add Clip")').first();
+    const addHiddenStable = !(await addBtnAfterStable.isVisible().catch(() => false));
+    console.log(`[Test] STABILITY: Add Clip hidden while selected: ${addHiddenStable} (expect true)`);
+    expect(addHiddenStable).toBe(true);
+
+    // ========================================================================
     // REQ 2: Playhead leaving clip → auto-deselect
     // ========================================================================
     console.log('\n[Test] === REQ 2: Auto-deselect ===');
@@ -314,11 +352,14 @@ test.describe('T690: Clip Selection State Machine', () => {
       console.log(`  REQ 12: EDITING→SELECTED: ${closeLogs.length}`);
       closeLogs.forEach(l => console.log(`    ${l}`));
 
-      // --- REQ 5: Edit Clip visible in FS + SELECTED ---
+      // --- REQ 5: Edit Clip visible in FS + SELECTED (not "Add Clip") ---
       console.log('\n  --- REQ 5: Edit Clip in FS + SELECTED ---');
       const editBtnFS = page.locator('button:has-text("Edit Clip")').first();
       const editVisFS = await editBtnFS.isVisible({ timeout: 2000 }).catch(() => false);
-      console.log(`  REQ 5: Edit Clip visible: ${editVisFS}`);
+      const addBtnFSHidden = !(await page.locator('button:has-text("Add Clip")').isVisible().catch(() => false));
+      console.log(`  REQ 5: "Edit Clip" visible: ${editVisFS}, "Add Clip" hidden: ${addBtnFSHidden}`);
+      expect(editVisFS).toBe(true);
+      expect(addBtnFSHidden).toBe(true);
 
       // --- REQ 6: Edit Clip visible during playback ---
       console.log('\n  --- REQ 6: Edit Clip during FS playback ---');
@@ -326,6 +367,7 @@ test.describe('T690: Clip Selection State Machine', () => {
       await page.waitForTimeout(1500);
       const editPlay = await editBtnFS.isVisible().catch(() => false);
       console.log(`  REQ 6: Edit Clip during play: ${editPlay}`);
+      expect(editPlay).toBe(true);
       await ensurePaused(page);
 
       // --- REQ 11: Clip switch during overlay reloads data ---

@@ -846,17 +846,21 @@ export function AnnotateContainer({
 
   // Effect: Auto-select/deselect based on playhead position
   // EDITING and CREATING are immune — scrub handles move playhead without deselecting
+  // FRAME_TOLERANCE: the browser's seeked event snaps to frame boundaries, which can be
+  // slightly before startTime (e.g., seek(30) → seeked fires with 29.967). Without
+  // tolerance, this would immediately deselect the clip the user just clicked.
   useEffect(() => {
     if (!annotateVideoUrl) return;
     const { type, clipId } = selectionState;
 
     if (type === 'EDITING' || type === 'CREATING') return;
 
+    const FRAME_TOLERANCE = 0.15; // ~4 frames at 30fps — handles seek snapping
     const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
 
     if (type === 'SELECTED') {
       const selectedClip = clipRegions.find(r => r.id === clipId);
-      if (selectedClip && (currentTime < selectedClip.startTime || currentTime > selectedClip.endTime)) {
+      if (selectedClip && (currentTime < selectedClip.startTime - FRAME_TOLERANCE || currentTime > selectedClip.endTime + FRAME_TOLERANCE)) {
         if (regionAtPlayhead) {
           console.log(`[AnnotateContainer] Auto-select: playhead left clip → entering new clip ${regionAtPlayhead.id.slice(-6)} at t=${currentTime.toFixed(2)}`);
           selectClip(regionAtPlayhead.id);
