@@ -159,10 +159,12 @@ export function ClipDetailsEditor({
     setScrubEndTime(newEnd);
   }, []);
 
-  // On drag end: single persist to parent (one API call, not 48)
+  // On drag end: persist + seek to new start so currentTime is within the
+  // updated clip range (prevents auto-deselect from firing)
   const handleDragEnd = useCallback((finalStart, finalEnd) => {
     onUpdate({ startTime: finalStart, endTime: finalEnd });
-  }, [onUpdate]);
+    onSeek?.(finalStart);
+  }, [onUpdate, onSeek]);
 
   const handleNotesChange = (e) => {
     const newNotes = e.target.value.slice(0, maxNotesLength);
