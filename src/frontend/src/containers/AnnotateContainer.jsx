@@ -802,13 +802,14 @@ export function AnnotateContainer({
   /**
    * Handle annotate region selection - selects the region AND seeks to its start
    */
-  const userSelectRef = useRef(false);
+  // Timestamp of last user-initiated selection — suppress deselect for 500ms after
+  const userSelectTimeRef = useRef(0);
   const handleSelectRegion = useCallback((regionId) => {
     const region = clipRegions.find(r => r.id === regionId);
     console.log('[ClipSelect] handleSelectRegion:', regionId,
       'range:', region ? `${region.startTime.toFixed(2)}-${region.endTime.toFixed(2)}` : 'NOT FOUND');
     if (region) {
-      userSelectRef.current = true; // Flag to skip auto-deselect while seek is pending
+      userSelectTimeRef.current = Date.now();
       selectAnnotateRegion(regionId);
       seek(region.startTime);
       setAnnotateSelectedLayer('clips');
@@ -820,11 +821,8 @@ export function AnnotateContainer({
     if (!annotateVideoUrl) return;
     if (showAnnotateOverlay) return;
 
-    // Skip one cycle after user-initiated selection (seek is async)
-    if (userSelectRef.current) {
-      userSelectRef.current = false;
-      return;
-    }
+    // Don't deselect within 500ms of a user-initiated selection (seek is async)
+    if (Date.now() - userSelectTimeRef.current < 500) return;
 
     const time = videoRef.current?.currentTime ?? currentTime;
 
