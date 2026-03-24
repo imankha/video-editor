@@ -663,12 +663,11 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
 
     // Select the first imported clip
     if (newRegions.length > 0) {
-      setSelectedRegionId(newRegions[0].id);
+      onSelect?.(newRegions[0].id);
     }
 
-    console.log(`[useAnnotate] Imported ${newRegions.length} annotations`);
     return newRegions.length;
-  }, [duration, colorIndex]);
+  }, [duration, colorIndex, onSelect]);
 
   /**
    * Check if we have any clips defined
