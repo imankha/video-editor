@@ -19,6 +19,15 @@ The clip selection and edit mode system has grown through incremental patches in
 
 **Root cause:** Selection state is managed reactively through effects that trigger on `currentTime` changes, but `currentTime` updates are async (tied to video element events). This creates race conditions where effects make decisions based on stale data.
 
+### Coding Standards Violations
+
+Per `.claude/references/coding-standards.md`:
+
+1. **Derive, Don't Duplicate** — `showAnnotateOverlay`, `selectedRegionId`, and `isEditMode` are managed independently when overlay visibility and edit mode should be derived from a single selection state. They can disagree (overlay open but no clip selected, or clip selected but isEditMode false).
+2. **Single Source of Truth** — Selection state is split across `useAnnotate` (`selectedRegionId`), `useAnnotateState` (`showAnnotateOverlay`), and a computed prop in `AnnotateModeView` (`isEditMode`). Three locations for one concept.
+3. **No Stored Flags** — `showAnnotateOverlay` is a stored boolean when it should be derived (`selectionState === 'EDITING'`).
+4. **Gesture-Based Persistence** — The auto-select effect mutates selection state reactively from `currentTime` changes, not from user gestures. This is the source of the race conditions.
+
 ## Current Data Store
 
 ### Where State Lives
@@ -160,7 +169,11 @@ Transitions:
   EDITING(id) + close_overlay     → SELECTED(id)   [stay selected]
   EDITING(id) + exit_fullscreen   → SELECTED(id)   [close overlay]
   EDITING(id) + select_clip(other)→ EDITING(other)  [reload overlay]
-  ANY + playhead_leaves_clip      → NONE            [close overlay if open]
+  EDITING(id) + playhead_leaves   → EDITING(id)    [NO-OP: overlay stays open during scrub]
+
+Note: playhead_leaves does NOT trigger deselect while EDITING. The overlay
+form has scrub handles that move the playhead — deselecting during scrub
+would destroy the form state. Only SELECTED reacts to playhead position.
 ```
 
 ### Target State → UI Mapping
@@ -176,7 +189,7 @@ Transitions:
 - **No cooldown timers.** The seek-is-async problem is solved by updating `currentTime` optimistically in `seek()`, not by suppressing effects with timeouts.
 - **Single source of truth.** The state machine value drives all UI. `showAnnotateOverlay` and `isEditMode` are derived, not independently managed.
 - **Views reflect state.** The button text, overlay visibility, sidebar highlight — all derived from the state machine. No imperative show/hide calls scattered across handlers.
-- **`frozenExistingClipRef` may not be needed.** If the state machine keeps `EDITING(id)` stable during scrub, the overlay can just look up the clip by ID instead of freezing a snapshot.
+- **`frozenExistingClipRef` is no longer needed.** The state machine keeps `EDITING(id)` stable during scrub (playhead_leaves is a no-op in EDITING state). The overlay looks up the clip by ID from `clipRegions` directly — no frozen snapshot required. This eliminates the stale-data bug where the overlay showed outdated values.
 
 ## Context
 
