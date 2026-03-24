@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useMemo } from 'react';
 import { Download, Loader } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import ZoomControls from '../components/ZoomControls';
@@ -48,6 +48,8 @@ export function AnnotateModeView({
   annotateRegionsWithLayout,
   annotateSelectedRegionId,
   hasAnnotateClips,
+  clipRegions,
+  isEditMode,
 
   // Handlers
   onSelectRegion,
@@ -89,17 +91,12 @@ export function AnnotateModeView({
   // Read exportProgress directly from store for proper reactivity during SSE updates
   const { exportProgress } = useExportStore();
 
-  // Freeze existingClip when overlay opens so handle dragging (which seeks the
-  // playhead in/out of clip regions) doesn't toggle existingClip and reset handles.
-  // Must be computed during render (not in useEffect) so it's available on the
-  // first render when the overlay appears.
-  const frozenExistingClipRef = useRef(null);
-  const wasOverlayOpenRef = useRef(false);
-  if (showAnnotateOverlay && !wasOverlayOpenRef.current) {
-    // Overlay just opened — capture the clip at current playhead
-    frozenExistingClipRef.current = getAnnotateRegionAtTime(currentTime);
-  }
-  wasOverlayOpenRef.current = showAnnotateOverlay;
+  // Derive existingClip from state machine's selectedRegionId.
+  // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
+  const existingClip = useMemo(() => {
+    if (!annotateSelectedRegionId || !showAnnotateOverlay) return null;
+    return clipRegions?.find(r => r.id === annotateSelectedRegionId) || null;
+  }, [annotateSelectedRegionId, showAnnotateOverlay, clipRegions]);
 
   return (
     <>
@@ -214,8 +211,8 @@ export function AnnotateModeView({
                       />
                     ) : null;
                   })(),
-                  // AnnotateFullscreenOverlay - appears when paused in fullscreen
-                  // Uses frozenExistingClipRef so seeking during scrub doesn't toggle edit/create mode
+                  // AnnotateFullscreenOverlay - appears when overlay state is active
+                  // existingClip derived from state machine ID — stable during scrub
                   showAnnotateOverlay && (() => {
                     return (
                       <AnnotateFullscreenOverlay
@@ -223,7 +220,7 @@ export function AnnotateModeView({
                         isVisible={showAnnotateOverlay}
                         currentTime={currentTime}
                         videoDuration={annotateVideoMetadata?.duration || 0}
-                        existingClip={frozenExistingClipRef.current}
+                        existingClip={existingClip}
                         onCreateClip={onFullscreenCreateClip}
                         onUpdateClip={onFullscreenUpdateClip}
                         onResume={onOverlayResume}
@@ -258,7 +255,7 @@ export function AnnotateModeView({
                 isFullscreen={annotateFullscreen}
                 onToggleFullscreen={onToggleFullscreen}
                 onAddClip={onAddClip}
-                isEditMode={!showAnnotateOverlay && !!annotateSelectedRegionId && getAnnotateRegionAtTime(currentTime)?.id === annotateSelectedRegionId}
+                isEditMode={isEditMode}
                 videoRef={videoRef}
               />
             </div>

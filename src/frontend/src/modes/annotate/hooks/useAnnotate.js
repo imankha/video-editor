@@ -244,12 +244,9 @@ function generateClipId() {
   return `clip_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-export default function useAnnotate(videoMetadata) {
+export default function useAnnotate(videoMetadata, { selectedRegionId = null, onSelect } = {}) {
   // Clip regions
   const [clipRegions, setClipRegions] = useState([]);
-
-  // Selected region for editing
-  const [selectedRegionId, setSelectedRegionId] = useState(null);
 
   // Source video duration
   const [duration, setDuration] = useState(null);
@@ -304,14 +301,14 @@ export default function useAnnotate(videoMetadata) {
       setColorIndex(prev => prev + newRegions.length);
 
       if (newRegions.length > 0) {
-        setSelectedRegionId(newRegions[0].id);
+        onSelect?.(newRegions[0].id);
       }
 
       console.log(`[useAnnotate] Imported ${newRegions.length} pending annotations`);
       setPendingAnnotations(null);
       setIsLoadingAnnotations(false);
     }
-  }, [duration, pendingAnnotations, colorIndex]);
+  }, [duration, pendingAnnotations, colorIndex, onSelect]);
 
   /**
    * Initialize with video duration
@@ -319,19 +316,19 @@ export default function useAnnotate(videoMetadata) {
   const initialize = useCallback((videoDuration) => {
     setDuration(videoDuration);
     setClipRegions([]);
-    setSelectedRegionId(null);
+    onSelect?.(null);
     setColorIndex(0);
-  }, []);
+  }, [onSelect]);
 
   /**
    * Reset all state
    */
   const reset = useCallback(() => {
     setClipRegions([]);
-    setSelectedRegionId(null);
+    onSelect?.(null);
     setDuration(null);
     setColorIndex(0);
-  }, []);
+  }, [onSelect]);
 
   /**
    * Derived: Regions with visual layout info, sorted by endTime for display
@@ -411,10 +408,10 @@ export default function useAnnotate(videoMetadata) {
 
     setClipRegions(prev => [...prev, newRegion]);
     setColorIndex(prev => prev + 1);
-    setSelectedRegionId(newRegion.id);
+    onSelect?.(newRegion.id);
 
     return newRegion;
-  }, [duration, colorIndex]);
+  }, [duration, colorIndex, onSelect]);
 
   /**
    * Update a clip region's properties
@@ -513,32 +510,27 @@ export default function useAnnotate(videoMetadata) {
    * @param {string} regionId - Region ID to delete
    */
   const deleteClipRegion = useCallback((regionId) => {
-    setClipRegions(prev => {
-      const newRegions = prev.filter(r => r.id !== regionId);
-
-      // If deleted region was selected, select another one
-      if (selectedRegionId === regionId) {
-        const deletedIndex = prev.findIndex(r => r.id === regionId);
-        if (newRegions.length > 0) {
-          // Select the previous region, or the first one if deleting the first
-          const newSelectedIndex = Math.max(0, deletedIndex - 1);
-          setSelectedRegionId(newRegions[newSelectedIndex]?.id || null);
-        } else {
-          setSelectedRegionId(null);
-        }
+    // Compute next selection before updating regions
+    if (selectedRegionId === regionId) {
+      const remaining = clipRegions.filter(r => r.id !== regionId);
+      if (remaining.length > 0) {
+        const deletedIndex = clipRegions.findIndex(r => r.id === regionId);
+        const nextIndex = Math.max(0, deletedIndex - 1);
+        onSelect?.(remaining[nextIndex]?.id || null);
+      } else {
+        onSelect?.(null);
       }
-
-      return newRegions;
-    });
-  }, [selectedRegionId]);
+    }
+    setClipRegions(prev => prev.filter(r => r.id !== regionId));
+  }, [selectedRegionId, clipRegions, onSelect]);
 
   /**
-   * Select a clip region
+   * Select a clip region — delegates to state machine via onSelect callback
    * @param {string} regionId - Region ID to select (null to deselect)
    */
   const selectRegion = useCallback((regionId) => {
-    setSelectedRegionId(regionId);
-  }, []);
+    onSelect?.(regionId);
+  }, [onSelect]);
 
   /**
    * Move a region's start time (for lever dragging)

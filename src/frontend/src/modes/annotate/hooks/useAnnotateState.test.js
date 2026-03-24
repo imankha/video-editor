@@ -60,7 +60,7 @@ describe('useAnnotateState', () => {
     it('starts with default UI state', () => {
       const { result } = renderHook(() => useAnnotateState());
 
-      expect(result.current.showAnnotateOverlay).toBe(false);
+      // showAnnotateOverlay removed — now derived from useClipSelection state machine
       expect(result.current.annotateSelectedLayer).toBe('clips');
     });
 
@@ -169,7 +169,6 @@ describe('useAnnotateState', () => {
         await result.current.loadAnnotateVideoFromUrl('http://example.com/game.mp4', 'game-123');
         result.current.setAnnotatePlaybackSpeed(2);
         result.current.setAnnotateFullscreen(true);
-        result.current.setShowAnnotateOverlay(true);
         result.current.setAnnotateSelectedLayer('playhead');
       });
 
@@ -188,7 +187,6 @@ describe('useAnnotateState', () => {
       expect(result.current.isUploadingGameVideo).toBe(false);
       expect(result.current.annotatePlaybackSpeed).toBe(1);
       expect(result.current.annotateFullscreen).toBe(false);
-      expect(result.current.showAnnotateOverlay).toBe(false);
       expect(result.current.annotateSelectedLayer).toBe('clips');
       expect(result.current.hasAnnotateVideo).toBe(false);
     });
@@ -323,15 +321,7 @@ describe('useAnnotateState', () => {
   // ============================================================================
 
   describe('UI state', () => {
-    it('setShowAnnotateOverlay updates overlay visibility', () => {
-      const { result } = renderHook(() => useAnnotateState());
-
-      act(() => {
-        result.current.setShowAnnotateOverlay(true);
-      });
-
-      expect(result.current.showAnnotateOverlay).toBe(true);
-    });
+    // showAnnotateOverlay test removed — now managed by useClipSelection state machine
 
     it('setAnnotateSelectedLayer updates layer selection', () => {
       const { result } = renderHook(() => useAnnotateState());

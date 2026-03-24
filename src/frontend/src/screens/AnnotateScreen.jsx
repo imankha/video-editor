@@ -180,6 +180,7 @@ export function AnnotateScreen({ onClearSelection }) {
     getAnnotateRegionAtTime,
     getAnnotateExportData,
     selectAnnotateRegion,
+    isEditMode,
     // Cleanup
     clearAnnotateState,
     // T82: Multi-video
@@ -500,11 +501,13 @@ export function AnnotateScreen({ onClearSelection }) {
         annotateRegionsWithLayout={isMultiVideo ? filteredRegionsWithLayout : annotateRegionsWithLayout}
         annotateSelectedRegionId={annotateSelectedRegionId}
         hasAnnotateClips={isMultiVideo ? filteredClipRegions.length > 0 : hasAnnotateClips}
+        clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
+        isEditMode={isEditMode}
         // Handlers
         onSelectRegion={handleSelectAnnotateRegion}
         onDeleteRegion={deleteClipRegion}
         onToggleFullscreen={handleToggleFullscreen}
-        onAddClip={handleAddClipFromButton}
+        onAddClip={showAnnotateOverlay ? undefined : handleAddClipFromButton}
         getAnnotateRegionAtTime={getAnnotateRegionAtTime}
         getAnnotateExportData={getAnnotateExportData}
         // Fullscreen overlay handlers

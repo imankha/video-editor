@@ -42,7 +42,7 @@ export default function useAnnotateState() {
   const [annotateFullscreen, setAnnotateFullscreen] = useState(false);
 
   // UI state
-  const [showAnnotateOverlay, setShowAnnotateOverlay] = useState(false);
+  // NOTE: showAnnotateOverlay removed — now derived from useClipSelection state machine
   const [annotateSelectedLayer, setAnnotateSelectedLayer] = useState(DEFAULT_SELECTED_LAYER);
 
   // Ref for fullscreen container
@@ -118,7 +118,6 @@ export default function useAnnotateState() {
     setUploadProgress(null);
     setAnnotatePlaybackSpeed(DEFAULT_PLAYBACK_SPEED);
     setAnnotateFullscreen(false);
-    setShowAnnotateOverlay(false);
     setAnnotateSelectedLayer(DEFAULT_SELECTED_LAYER);
   }, [annotateVideoUrl, annotateVideoFile]);
 
@@ -193,8 +192,6 @@ export default function useAnnotateState() {
     cyclePlaybackSpeed,
 
     // UI state
-    showAnnotateOverlay,
-    setShowAnnotateOverlay,
     annotateSelectedLayer,
     setAnnotateSelectedLayer,
 

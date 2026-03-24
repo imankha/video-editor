@@ -242,9 +242,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         : Math.max(0, Math.min(time, effectiveDuration));
 
       setIsSeeking(true);
+      setCurrentTime(validTime); // Optimistic update: UI responds instantly (playhead, timestamps, selection)
       videoRef.current.currentTime = validTime;
-      // DON'T update currentTime here - wait for seeked event (handleSeeked)
-      // to ensure tracking squares sync with the actual displayed frame
+      // The seeked event (handleSeeked) will refine with the actual displayed frame time
     }
   };
 

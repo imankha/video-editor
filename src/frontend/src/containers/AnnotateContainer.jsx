@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Download, Loader, Upload, Settings } from 'lucide-react';
-import { useAnnotateState, useAnnotate, AnnotateMode, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from '../modes/annotate';
+import { useAnnotateState, useAnnotate, useClipSelection, AnnotateMode, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from '../modes/annotate';
 import { FileUpload } from '../components/FileUpload';
 import { toast } from '../components/shared';
 import { extractVideoMetadata } from '../utils/videoMetadata';
@@ -74,8 +74,6 @@ export function AnnotateContainer({
     setAnnotatePlaybackSpeed,
     annotateFullscreen,
     setAnnotateFullscreen,
-    showAnnotateOverlay,
-    setShowAnnotateOverlay,
     annotateSelectedLayer,
     setAnnotateSelectedLayer,
     annotateContainerRef,
@@ -90,11 +88,23 @@ export function AnnotateContainer({
   // Current video's sequence number (1-based, for clip tagging)
   const currentVideoSequence = gameVideos ? gameVideos[activeVideoIndex]?.sequence : null;
 
-  // Annotate clip management hook
+  // Clip selection state machine — single source of truth for selection + overlay
+  const {
+    selectionState,
+    selectClip,
+    editClip,
+    startCreating,
+    closeOverlay,
+    deselectClip,
+    selectedRegionId: annotateSelectedRegionId,
+    isOverlayOpen: showAnnotateOverlay,
+    isEditMode,
+  } = useClipSelection();
+
+  // Annotate clip management hook — selection delegated to state machine
   const {
     clipRegions,
     regionsWithLayout: annotateRegionsWithLayout,
-    selectedRegionId: annotateSelectedRegionId,
     hasClips: hasAnnotateClips,
     clipCount: annotateClipCount,
     isLoadingAnnotations,
@@ -108,7 +118,10 @@ export function AnnotateContainer({
     importAnnotations,
     setRawClipId,
     MAX_NOTES_LENGTH: ANNOTATE_MAX_NOTES_LENGTH,
-  } = useAnnotate(annotateVideoMetadata);
+  } = useAnnotate(annotateVideoMetadata, {
+    selectedRegionId: annotateSelectedRegionId,
+    onSelect: useCallback((id) => id ? selectClip(id) : deselectClip(), [selectClip, deselectClip]),
+  });
 
   // Real-time clip saving hook
   const {
@@ -604,8 +617,14 @@ export function AnnotateContainer({
    * Handle fullscreen toggle - uses CSS fixed positioning instead of browser API
    */
   const handleToggleFullscreen = useCallback(() => {
-    setAnnotateFullscreen(prev => !prev);
-  }, [setAnnotateFullscreen]);
+    const newFS = !annotateFullscreen;
+    setAnnotateFullscreen(newFS);
+    if (newFS && selectionState.type === 'SELECTED') {
+      editClip(selectionState.clipId);
+    } else if (!newFS && (selectionState.type === 'EDITING' || selectionState.type === 'CREATING')) {
+      closeOverlay();
+    }
+  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, editClip, closeOverlay]);
 
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);
@@ -617,8 +636,12 @@ export function AnnotateContainer({
     if (videoRef.current && !videoRef.current.paused) {
       videoRef.current.pause();
     }
-    setShowAnnotateOverlay(true);
-  }, [videoRef]);
+    if (selectionState.type === 'SELECTED') {
+      editClip(selectionState.clipId);
+    } else {
+      startCreating();
+    }
+  }, [videoRef, selectionState, editClip, startCreating]);
 
   /**
    * Handle creating a clip from fullscreen overlay
@@ -666,7 +689,7 @@ export function AnnotateContainer({
         console.log('[AnnotateContainer] Video still uploading, clip will be saved when annotations sync');
       }
     }
-    setShowAnnotateOverlay(false);
+    // Overlay closes automatically: addClipRegion calls onSelect → selectClip → CREATING→SELECTED
   }, [addClipRegion, seek, annotateGameId, isUploadingFromStore, saveClip, setRawClipId, currentVideoSequence]);
 
   /**
@@ -757,8 +780,8 @@ export function AnnotateContainer({
    */
   const handleFullscreenUpdateClip = useCallback(async (regionId, updates) => {
     await updateClipRegionWithSync(regionId, updates);
-    setShowAnnotateOverlay(false);
-  }, [updateClipRegionWithSync]);
+    closeOverlay();
+  }, [updateClipRegionWithSync, closeOverlay]);
 
   /**
    * Delete a clip region - syncs to backend if the clip has been saved
@@ -782,16 +805,16 @@ export function AnnotateContainer({
    * Handle closing the fullscreen overlay without creating a clip
    */
   const handleOverlayClose = useCallback(() => {
-    setShowAnnotateOverlay(false);
-  }, []);
+    closeOverlay();
+  }, [closeOverlay]);
 
   /**
    * Handle resuming playback from fullscreen overlay
    */
   const handleOverlayResume = useCallback(() => {
-    setShowAnnotateOverlay(false);
+    closeOverlay();
     togglePlay();
-  }, [togglePlay]);
+  }, [closeOverlay, togglePlay]);
 
   /**
    * Handle annotate region selection - selects the region AND seeks to its start
@@ -800,27 +823,38 @@ export function AnnotateContainer({
     console.log('[AnnotateContainer] handleSelectRegion called with regionId:', regionId);
     const region = clipRegions.find(r => r.id === regionId);
     if (region) {
-      selectAnnotateRegion(regionId);
+      // If overlay is open (EDITING), stay in EDITING with new clip; otherwise SELECTED
+      if (selectionState.type === 'EDITING') {
+        editClip(regionId);
+      } else {
+        selectClip(regionId);
+      }
       seek(region.startTime);
       setAnnotateSelectedLayer('clips');
     } else {
       console.warn('[AnnotateContainer] Region not found! Available IDs:', clipRegions.map(r => r.id));
     }
-  }, [clipRegions, selectAnnotateRegion, seek]);
+  }, [clipRegions, selectionState, selectClip, editClip, seek]);
 
-  // Effect: Auto-select annotate clip when playhead is over a region
+  // Effect: Auto-select/deselect based on playhead position
+  // EDITING and CREATING are immune — scrub handles move playhead without deselecting
   useEffect(() => {
     if (!annotateVideoUrl) return;
+    const { type, clipId } = selectionState;
+
+    if (type === 'EDITING' || type === 'CREATING') return;
 
     const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
-    if (regionAtPlayhead && regionAtPlayhead.id !== annotateSelectedRegionId) {
-      const currentSelection = clipRegions.find(r => r.id === annotateSelectedRegionId);
-      if (currentSelection && currentTime >= currentSelection.startTime && currentTime <= currentSelection.endTime) {
-        return;
+
+    if (type === 'SELECTED') {
+      const selectedClip = clipRegions.find(r => r.id === clipId);
+      if (selectedClip && (currentTime < selectedClip.startTime || currentTime > selectedClip.endTime)) {
+        regionAtPlayhead ? selectClip(regionAtPlayhead.id) : deselectClip();
       }
-      selectAnnotateRegion(regionAtPlayhead.id);
+    } else {
+      if (regionAtPlayhead) selectClip(regionAtPlayhead.id);
     }
-  }, [annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions]);
+  }, [annotateVideoUrl, currentTime, selectionState, getAnnotateRegionAtTime, clipRegions, selectClip, deselectClip]);
 
   // Effect: Sync playback speed with video element
   useEffect(() => {
@@ -883,13 +917,15 @@ export function AnnotateContainer({
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && annotateFullscreen) {
         setAnnotateFullscreen(false);
-        setShowAnnotateOverlay(false);
+        if (selectionState.type === 'EDITING' || selectionState.type === 'CREATING') {
+          closeOverlay();
+        }
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [annotateFullscreen, setAnnotateFullscreen]);
+  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, closeOverlay]);
 
   // Track playing state for other effects that may need it
   useEffect(() => {
@@ -1065,6 +1101,7 @@ export function AnnotateContainer({
     getAnnotateRegionAtTime,
     getAnnotateExportData,
     selectAnnotateRegion, // Raw select for keyboard shortcuts (doesn't seek)
+    isEditMode, // Derived from state machine: true when SELECTED
 
     // Computed
     effectiveDuration,
