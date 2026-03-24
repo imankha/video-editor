@@ -62,19 +62,14 @@ export function QuestPanel() {
   }, []);
 
   useEffect(() => {
-    // Run after render to measure (double-RAF ensures children have painted)
-    const raf = requestAnimationFrame(() => requestAnimationFrame(updatePosition));
-    window.addEventListener('resize', updatePosition);
-    // Re-check when layout changes (sidebar open/close, route navigation)
-    const observer = new MutationObserver(() => {
-      // Debounce: wait for DOM to settle after batch mutations
-      requestAnimationFrame(updatePosition);
+    // Measure after paint (double-RAF ensures sidebar has rendered)
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(updatePosition);
     });
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'data-sidebar'] });
+    window.addEventListener('resize', updatePosition);
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', updatePosition);
-      observer.disconnect();
     };
   }, [updatePosition, expanded]);
 
