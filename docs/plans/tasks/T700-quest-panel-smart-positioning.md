@@ -2,75 +2,70 @@
 
 **Status:** TODO
 **Impact:** 4
-**Complexity:** 3
+**Complexity:** 1
 **Created:** 2026-03-23
-**Updated:** 2026-03-23
+**Updated:** 2026-03-24
 
 ## Problem
 
-The quest panel (floating NUF overlay) overlaps interactive UI elements — sidebar clip lists, clip details, form inputs — when positioned at its default bottom-left location. Previous attempts to fix this used increasingly complex JavaScript positioning (MutationObserver, elementsFromPoint sampling, sidebar detection, debounced re-checks) which caused:
+The quest panel (floating NUF overlay) overlaps the sidebar clip list and ClipDetailsEditor when a clip is selected in annotate mode.
 
-- Panel jumping/thrashing on every DOM mutation
-- Panel moving when it shouldn't (resize, style changes)
-- Stale positioning after navigation (sidebar appears but panel doesn't move)
-- Race conditions between panel measurement and sidebar rendering
+## Screenshot Analysis
 
-**Root cause:** Using imperative JavaScript to solve a layout problem. The panel's position should be determined by the page layout, not by JavaScript measuring DOM elements after the fact.
+| State | Quest Panel | Result |
+|-------|------------|--------|
+| Projects screen (no sidebar) | Bottom-left | **Good** — no overlap |
+| Annotate, no clip selected | Bottom-left | **Good** — sidebar content is short, panel fits below |
+| Framing, small sidebar | Bottom-left | **Good** — sidebar content is short, panel fits below |
+| **Annotate, clip selected** | Bottom-left | **Bad** — ClipDetailsEditor + clip list fills sidebar vertically, panel overlaps |
 
-## Requirements
-
-1. Quest panel must not overlap interactive UI (sidebars, form controls, buttons, text inputs)
-2. Panel should prefer bottom-left position when there's clear space
-3. When a sidebar is present (annotate, framing), panel should sit to its right or in another clear area
-4. Panel must not jump or thrash during normal interaction (typing, clicking, scrolling)
-5. Position should update on route navigation (different screens have different layouts)
-6. Mobile/desktop breakpoint should be respected (different padding)
-7. Solution should be CSS-first where possible, with minimal JavaScript
+**Pattern:** Overlap occurs ONLY when a clip is selected in annotate mode. The ClipDetailsEditor (scrub handles, rating, tags, name, notes, delete button) takes significant vertical space, pushing sidebar content down into the quest panel's area.
 
 ## Solution
 
-Consider these approaches (in order of preference):
+**Hide the quest panel when a clip is selected in annotate mode.**
 
-### Option A: CSS-based positioning with layout awareness
-- Render the quest panel inside the main content area's layout flow rather than as a fixed overlay
-- Use CSS `position: sticky` or place it in a known layout slot
-- The parent layout already knows about sidebars — let CSS handle the offset
+This is the simplest rule that preserves all good states and fixes the bad state:
+- Projects screen → show (no sidebar)
+- Annotate, no selection → show (sidebar content is short)
+- Annotate, clip selected → **hide** (ClipDetailsEditor fills the space)
+- Framing → show (sidebar is always small)
 
-### Option B: Simple sidebar-aware fixed positioning
-- On mount, check for `[data-sidebar]` elements once
-- Set `left` offset based on sidebar width
-- Re-check only on route changes (detect via `useLocation` or similar React hook, NOT MutationObserver)
-- No resize listener, no DOM observation, no elementsFromPoint
+### Implementation
 
-### Option C: Portal into a layout-aware container
-- Each screen provides a "quest panel slot" in its layout
-- Quest panel renders via portal into whatever slot is available
-- The slot is already positioned correctly by the screen's CSS layout
+The quest panel is rendered in `App.jsx` and doesn't have direct access to annotate selection state. Two approaches:
+
+**Option A (preferred): Check for ClipDetailsEditor in DOM**
+```javascript
+// In QuestPanel.jsx — check if the details editor is taking the space
+const detailsVisible = document.querySelector('.border-t-2 .cursor-col-resize') !== null;
+if (detailsVisible) return null; // Hide panel
+```
+Re-check on a React-level signal (editorMode change, not MutationObserver).
+
+**Option B: Expose selection state via context or store**
+- Add `hasSelectedClip` to a Zustand store or React context
+- QuestPanel reads it and hides when true + annotate mode
+
+Option A is simpler (no plumbing), Option B is cleaner (no DOM queries).
 
 ## Context
 
 ### Relevant Files
-- `src/frontend/src/components/QuestPanel.jsx` — Current positioning logic (updatePosition, ensurePosition, hasUIOverlap)
-- `src/frontend/src/components/ClipSelectorSidebar.jsx` — Has `data-sidebar` attribute
-- `src/frontend/src/modes/annotate/components/ClipsSidePanel.jsx` — Has `data-sidebar` attribute
-- `src/frontend/src/screens/AnnotateScreen.jsx` — Annotate layout with sidebar
-- `src/frontend/src/screens/FramingScreen.jsx` — Framing layout with sidebar
-- `src/frontend/src/screens/ProjectsScreen.jsx` — No sidebar
+- `src/frontend/src/components/QuestPanel.jsx` — Positioning logic
+- `src/frontend/src/modes/annotate/components/ClipsSidePanel.jsx` — Sidebar with ClipDetailsEditor
+- `src/frontend/src/modes/annotate/components/ClipDetailsEditor.jsx` — Takes vertical space when clip selected
+- `src/frontend/src/App.jsx` — Renders QuestPanel at app level
 
 ### Related Tasks
-- Depends on: None
+- Depends on: T690 (state machine determines selection)
 - Blocks: None
-
-### Technical Notes
-- The quest panel is rendered in `App.jsx` at the app level, not inside any specific screen. This is why it doesn't know about sidebars — it's outside their layout context.
-- The panel already has compact sizing (340px width, reduced padding) from earlier work — that should be kept.
-- The `data-sidebar` attribute exists on both ClipsSidePanel (annotate) and ClipSelectorSidebar (framing).
 
 ## Acceptance Criteria
 
-- [ ] Panel doesn't overlap sidebars or interactive UI on any screen
-- [ ] Panel doesn't jump or thrash during normal interaction
-- [ ] Panel position updates correctly when navigating between screens
-- [ ] Mobile/desktop breakpoint respected
+- [ ] Quest panel hidden when a clip is selected in annotate mode
+- [ ] Quest panel visible on Projects screen (no sidebar)
+- [ ] Quest panel visible in annotate mode with no clip selected
+- [ ] Quest panel visible in framing mode
 - [ ] No MutationObserver, no elementsFromPoint, no debounce timers
-- [ ] Solution uses CSS-first approach or minimal JS (route change detection only)
+- [ ] No panel jumping or thrashing
