@@ -781,8 +781,7 @@ export function AnnotateContainer({
    */
   const handleOverlayClose = useCallback(() => {
     setShowAnnotateOverlay(false);
-    selectAnnotateRegion(null);
-  }, [selectAnnotateRegion]);
+  }, []);
 
   /**
    * Handle resuming playback from fullscreen overlay
@@ -814,12 +813,15 @@ export function AnnotateContainer({
     // Don't change selection while the edit overlay is open
     if (showAnnotateOverlay) return;
 
-    const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
+    // Use live video time (currentTime state can be stale when paused)
+    const time = videoRef.current?.currentTime ?? currentTime;
+
+    const regionAtPlayhead = getAnnotateRegionAtTime(time);
     if (regionAtPlayhead) {
       // Playhead is on a clip — select it if not already selected
       if (regionAtPlayhead.id !== annotateSelectedRegionId) {
         const currentSelection = clipRegions.find(r => r.id === annotateSelectedRegionId);
-        if (currentSelection && currentTime >= currentSelection.startTime && currentTime <= currentSelection.endTime) {
+        if (currentSelection && time >= currentSelection.startTime && time <= currentSelection.endTime) {
           return;
         }
         selectAnnotateRegion(regionAtPlayhead.id);
@@ -828,7 +830,7 @@ export function AnnotateContainer({
       // Playhead moved off all clips — deselect
       selectAnnotateRegion(null);
     }
-  }, [annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions, showAnnotateOverlay]);
+  }, [annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions, showAnnotateOverlay, videoRef]);
 
   // Effect: Sync playback speed with video element
   useEffect(() => {
