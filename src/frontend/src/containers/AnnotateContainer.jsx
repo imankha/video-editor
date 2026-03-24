@@ -818,24 +818,37 @@ export function AnnotateContainer({
   // Effect: Auto-select/deselect annotate clip based on playhead position
   useEffect(() => {
     if (!annotateVideoUrl) return;
-    // Don't change selection while the edit overlay is open
-    if (showAnnotateOverlay) return;
 
-    // Use live video time (currentTime state can be stale when paused)
     const time = videoRef.current?.currentTime ?? currentTime;
+    const selectedRegion = annotateSelectedRegionId
+      ? clipRegions.find(r => r.id === annotateSelectedRegionId)
+      : null;
+
+    console.log('[ClipSelect] Effect fired — time:', time?.toFixed(2),
+      'selectedId:', annotateSelectedRegionId,
+      'overlay:', showAnnotateOverlay,
+      'selectedRange:', selectedRegion ? `${selectedRegion.startTime.toFixed(2)}-${selectedRegion.endTime.toFixed(2)}` : 'none',
+      'currentTime state:', currentTime?.toFixed(2));
+
+    // Don't change selection while the edit overlay is open
+    if (showAnnotateOverlay) {
+      console.log('[ClipSelect] Overlay open, skipping');
+      return;
+    }
 
     if (annotateSelectedRegionId) {
-      const selectedRegion = clipRegions.find(r => r.id === annotateSelectedRegionId);
       if (selectedRegion && (time < selectedRegion.startTime || time > selectedRegion.endTime)) {
-        console.log('[AnnotateContainer] Deselecting clip — playhead at', time.toFixed(2),
-          'outside range', selectedRegion.startTime.toFixed(2), '-', selectedRegion.endTime.toFixed(2));
+        console.log('[ClipSelect] DESELECTING — playhead outside clip range');
         selectAnnotateRegion(null);
         return;
+      } else {
+        console.log('[ClipSelect] Keeping selection — playhead in range (or region not found)');
       }
     }
 
     const regionAtPlayhead = getAnnotateRegionAtTime(time);
     if (regionAtPlayhead && regionAtPlayhead.id !== annotateSelectedRegionId) {
+      console.log('[ClipSelect] Auto-selecting clip:', regionAtPlayhead.id);
       selectAnnotateRegion(regionAtPlayhead.id);
     }
   }, [annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions, showAnnotateOverlay, videoRef]);
