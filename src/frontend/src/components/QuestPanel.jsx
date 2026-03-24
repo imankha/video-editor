@@ -31,9 +31,28 @@ export function QuestPanel() {
   const prevCompletedRef = useRef(null);  // Track step count to detect new completions
   const panelRef = useRef(null);
   const [position, setPosition] = useState({ left: null, bottom: null });
+  // Sidebar offset measured once on mount, then reused on resize
+  const sidebarOffsetRef = useRef(null);
 
-  // Smart positioning: sit in the bottom-left clear space, avoiding sidebars and controls
-  const updatePosition = useCallback(() => {
+  // Measure sidebar offset once (run on mount/expanded change, NOT on resize)
+  const measureSidebar = useCallback(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const gap = 12;
+    let sidebarRight = 0;
+    const sidebars = document.querySelectorAll('[data-sidebar]');
+    for (const sb of sidebars) {
+      const rect = sb.getBoundingClientRect();
+      if (rect.width > 0 && rect.left < window.innerWidth / 2) {
+        sidebarRight = Math.max(sidebarRight, rect.right);
+      }
+    }
+    sidebarOffsetRef.current = sidebarRight > 0 ? sidebarRight + gap : 0;
+  }, []);
+
+  // Apply position using cached sidebar offset + current breakpoint
+  const applyPosition = useCallback(() => {
     const panel = panelRef.current;
     if (!panel) return;
 
@@ -41,19 +60,9 @@ export function QuestPanel() {
     const gap = 12;
     const defaultBottom = isSm ? 40 : 12;
     const panelWidth = panel.getBoundingClientRect().width;
+    const sidebarOffset = sidebarOffsetRef.current || 0;
+    const leftEdge = Math.max(isSm ? 24 : 12, sidebarOffset);
 
-    // Find the rightmost edge of any visible sidebar on the left
-    let leftEdge = isSm ? 24 : 12;
-    const sidebars = document.querySelectorAll('[data-sidebar]');
-    for (const sb of sidebars) {
-      const rect = sb.getBoundingClientRect();
-      // Only count sidebars that are visible and on the left side of the screen
-      if (rect.width > 0 && rect.left < window.innerWidth / 2) {
-        leftEdge = Math.max(leftEdge, rect.right + gap);
-      }
-    }
-
-    // Check if it fits; if not, fall back to bottom-right
     if (leftEdge + panelWidth < window.innerWidth - gap) {
       setPosition({ left: leftEdge, bottom: defaultBottom });
     } else {
@@ -61,17 +70,22 @@ export function QuestPanel() {
     }
   }, []);
 
+  // Measure sidebar once after paint, then apply position
   useEffect(() => {
-    // Measure after paint (double-RAF ensures sidebar has rendered)
     let raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(updatePosition);
+      raf = requestAnimationFrame(() => {
+        measureSidebar();
+        applyPosition();
+      });
     });
-    window.addEventListener('resize', updatePosition);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', updatePosition);
-    };
-  }, [updatePosition, expanded]);
+    return () => cancelAnimationFrame(raf);
+  }, [measureSidebar, applyPosition, expanded]);
+
+  // Resize only updates breakpoint-dependent values, never re-detects sidebar
+  useEffect(() => {
+    window.addEventListener('resize', applyPosition);
+    return () => window.removeEventListener('resize', applyPosition);
+  }, [applyPosition]);
 
   // Play sound effects
   const playSound = (type) => {
