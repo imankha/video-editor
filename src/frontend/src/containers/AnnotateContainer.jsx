@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Download, Loader, Upload, Settings } from 'lucide-react';
-import { useAnnotateState, useAnnotate, AnnotateMode, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from '../modes/annotate';
+import { useAnnotateState, useAnnotate, useClipSelection, AnnotateMode, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from '../modes/annotate';
 import { FileUpload } from '../components/FileUpload';
 import { toast } from '../components/shared';
 import { extractVideoMetadata } from '../utils/videoMetadata';
@@ -74,8 +74,6 @@ export function AnnotateContainer({
     setAnnotatePlaybackSpeed,
     annotateFullscreen,
     setAnnotateFullscreen,
-    showAnnotateOverlay,
-    setShowAnnotateOverlay,
     annotateSelectedLayer,
     setAnnotateSelectedLayer,
     annotateContainerRef,
@@ -90,11 +88,23 @@ export function AnnotateContainer({
   // Current video's sequence number (1-based, for clip tagging)
   const currentVideoSequence = gameVideos ? gameVideos[activeVideoIndex]?.sequence : null;
 
-  // Annotate clip management hook
+  // Clip selection state machine — single source of truth for selection + overlay
+  const {
+    selectionState,
+    selectClip,
+    editClip,
+    startCreating,
+    closeOverlay,
+    deselectClip,
+    selectedRegionId: annotateSelectedRegionId,
+    isOverlayOpen: showAnnotateOverlay,
+    isEditMode,
+  } = useClipSelection();
+
+  // Annotate clip management hook — selection delegated to state machine
   const {
     clipRegions,
     regionsWithLayout: annotateRegionsWithLayout,
-    selectedRegionId: annotateSelectedRegionId,
     hasClips: hasAnnotateClips,
     clipCount: annotateClipCount,
     isLoadingAnnotations,
@@ -108,7 +118,10 @@ export function AnnotateContainer({
     importAnnotations,
     setRawClipId,
     MAX_NOTES_LENGTH: ANNOTATE_MAX_NOTES_LENGTH,
-  } = useAnnotate(annotateVideoMetadata);
+  } = useAnnotate(annotateVideoMetadata, {
+    selectedRegionId: annotateSelectedRegionId,
+    onSelect: useCallback((id) => id ? selectClip(id) : deselectClip(), [selectClip, deselectClip]),
+  });
 
   // Real-time clip saving hook
   const {
@@ -170,7 +183,6 @@ export function AnnotateContainer({
   // Skip if we just started the upload from this same mount (not a navigation back)
   useEffect(() => {
     if (activeUpload?.blobUrl && !annotateVideoUrl && !uploadInitiatedHereRef.current) {
-      console.log('[AnnotateContainer] Restoring video from active upload:', activeUpload.gameName);
       setAnnotateVideoUrl(activeUpload.blobUrl);
       // For multi-video, videoMetadata is an array - don't override with it
       if (activeUpload.videoMetadata && !Array.isArray(activeUpload.videoMetadata)) {
@@ -198,8 +210,6 @@ export function AnnotateContainer({
     if (!files[0]) return;
 
     try {
-      console.log('[AnnotateContainer] handleGameVideoSelect:', isMultiVideo ? `${files.length} files (per half)` : files[0].name);
-
       // Extract metadata for all files
       const metadataList = [];
       for (const f of files) {
@@ -286,7 +296,6 @@ export function AnnotateContainer({
             setAnnotateGameId(result.game_id);
             setAnnotateGameName(result.name);
             if (result.deduplicated) {
-              console.log('[AnnotateContainer] DEDUPLICATION: File already existed on server.');
             }
           },
           { blobUrl: blobUrls[0], gameName: displayName }
@@ -304,11 +313,9 @@ export function AnnotateContainer({
    * Supports both single-video and multi-video games.
    */
   const handleLoadGame = useCallback(async (gameId) => {
-    console.log('[AnnotateContainer] Loading game:', gameId);
 
     try {
       const gameData = await getGame(gameId);
-      console.log('[AnnotateContainer] Loaded game data:', gameData);
 
       // T82: Check if multi-video game
       const isMultiVideo = gameData.videos && gameData.videos.length > 1;
@@ -318,7 +325,6 @@ export function AnnotateContainer({
 
       if (isMultiVideo) {
         // Multi-video game: load first video, each video has its own timeline
-        console.log('[AnnotateContainer] Multi-video game:', gameData.videos.length, 'videos');
         videoUrl = gameData.videos[0].video_url;
 
         videoMetadata = {
@@ -334,9 +340,6 @@ export function AnnotateContainer({
       } else {
         // Single-video game (legacy or single game_videos row)
         videoUrl = gameData.videos?.[0]?.video_url || getGameVideoUrl(gameId, gameData);
-        const urlType = gameData.video_url ? 'R2 presigned - STREAMING' : 'local proxy - STREAMING';
-        console.log(`[AnnotateContainer] Game video URL (${urlType}):`, videoUrl?.substring(0, 60));
-
         if (gameData.video_duration && gameData.video_width && gameData.video_height) {
           videoMetadata = {
             duration: gameData.video_duration,
@@ -392,7 +395,6 @@ export function AnnotateContainer({
         const gameDuration = isMultiVideo
           ? Math.max(...gameData.videos.map(v => v.duration || 0))
           : (videoMetadata?.duration || gameData.video_duration);
-        console.log('[AnnotateContainer] Importing', gameData.annotations.length, 'saved annotations with duration:', gameDuration);
 
         const annotationsWithoutRawClips = gameData.annotations.filter(a => !a.id);
 
@@ -422,7 +424,6 @@ export function AnnotateContainer({
       }
 
       setEditorMode('annotate');
-      console.log('[AnnotateContainer] Successfully loaded game:', gameId);
     } catch (err) {
       console.error('[AnnotateContainer] Failed to load game:', err);
     }
@@ -470,11 +471,9 @@ export function AnnotateContainer({
     try {
       await exportWebSocketManager.connect(exportId, {
         onProgress: (progress, message) => {
-          console.log('[AnnotateContainer] WS progress:', progress, '%', message);
           setExportProgress({ current: progress, total: 100, message, done: false });
         },
         onComplete: (data) => {
-          console.log('[AnnotateContainer] WS complete:', data);
           setExportProgress({ current: 100, total: 100, message: 'Export complete!', done: true });
           wsResolve(data);
         },
@@ -519,7 +518,6 @@ export function AnnotateContainer({
     }
 
     try {
-      console.log('[AnnotateContainer] Sending export request to /api/annotate/export');
       const response = await fetch(`${API_BASE}/api/annotate/export`, {
         method: 'POST',
         body: formData,
@@ -533,7 +531,6 @@ export function AnnotateContainer({
         throw new Error(errorMessage);
       }
 
-      console.log('[AnnotateContainer] Export request accepted, waiting for background job...');
 
       // Wait for the background job to complete via WebSocket
       // Set a timeout of 30 minutes for long exports
@@ -542,7 +539,6 @@ export function AnnotateContainer({
       });
 
       const result = await Promise.race([wsCompletionPromise, timeoutPromise]);
-      console.log('[AnnotateContainer] Background job completed:', result);
 
       // Clear progress after success
       setTimeout(() => setExportProgress(null), 2000);
@@ -560,7 +556,6 @@ export function AnnotateContainer({
    * Create Annotated Video - Creates compilation and adds to gallery, stays on annotate screen
    */
   const handleCreateAnnotatedVideo = useCallback(async (clipData) => {
-    console.log('[AnnotateContainer] Create annotated video requested with clips:', clipData);
 
     const hasVideoSource = annotateVideoFile || annotateGameId;
     if (!hasVideoSource || !clipData || clipData.length === 0) {
@@ -570,14 +565,8 @@ export function AnnotateContainer({
 
     setIsCreatingAnnotatedVideo(true);
     try {
-      console.log('[AnnotateContainer] Creating annotated video (adds to gallery)...');
-
       const result = await callAnnotateExportApi(clipData, false);
 
-      console.log('[AnnotateContainer] Annotated video created:', {
-        success: result.success,
-        message: result.message
-      });
 
       // Show persistent toast - video is in the gallery for download
       const toastId = toast.success('Annotated video created!', {
@@ -585,7 +574,6 @@ export function AnnotateContainer({
         duration: 0  // Persistent - dismissed when user makes changes
       });
       setExportCompleteToastId(toastId);
-      console.log('[AnnotateContainer] Create annotated video complete - added to gallery');
 
     } catch (err) {
       console.error('[AnnotateContainer] Create annotated video failed:', err);
@@ -604,8 +592,14 @@ export function AnnotateContainer({
    * Handle fullscreen toggle - uses CSS fixed positioning instead of browser API
    */
   const handleToggleFullscreen = useCallback(() => {
-    setAnnotateFullscreen(prev => !prev);
-  }, [setAnnotateFullscreen]);
+    const newFS = !annotateFullscreen;
+    setAnnotateFullscreen(newFS);
+    if (newFS && selectionState.type === 'SELECTED') {
+      editClip(selectionState.clipId);
+    } else if (!newFS && (selectionState.type === 'EDITING' || selectionState.type === 'CREATING')) {
+      closeOverlay();
+    }
+  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, editClip, closeOverlay]);
 
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);
@@ -617,8 +611,12 @@ export function AnnotateContainer({
     if (videoRef.current && !videoRef.current.paused) {
       videoRef.current.pause();
     }
-    setShowAnnotateOverlay(true);
-  }, [videoRef]);
+    if (selectionState.type === 'SELECTED') {
+      editClip(selectionState.clipId);
+    } else {
+      startCreating();
+    }
+  }, [videoRef, selectionState, editClip, startCreating]);
 
   /**
    * Handle creating a clip from fullscreen overlay
@@ -652,10 +650,8 @@ export function AnnotateContainer({
 
         if (result?.raw_clip_id) {
           setRawClipId(newRegion.id, result.raw_clip_id);
-          console.log('[AnnotateContainer] Clip saved to backend:', result.raw_clip_id);
 
           if (result.project_created) {
-            console.log('[AnnotateContainer] Auto-created 5-star project:', result.project_id);
             toast.success('Project created for your 5-star clip!', {
               message: 'We automatically create a highlight project for every brilliant play so you can export it anytime.',
               duration: 8000,
@@ -663,10 +659,9 @@ export function AnnotateContainer({
           }
         }
       } else if (isUploadingFromStore) {
-        console.log('[AnnotateContainer] Video still uploading, clip will be saved when annotations sync');
       }
     }
-    setShowAnnotateOverlay(false);
+    // Overlay closes automatically: addClipRegion calls onSelect → selectClip → CREATING→SELECTED
   }, [addClipRegion, seek, annotateGameId, isUploadingFromStore, saveClip, setRawClipId, currentVideoSequence]);
 
   /**
@@ -686,13 +681,11 @@ export function AnnotateContainer({
 
     // Skip backend sync if video is still uploading or no game ID
     if (!annotateGameId || isUploadingFromStore) {
-      console.log('[AnnotateContainer] Skipping backend sync - video uploading or no game ID');
       return;
     }
 
     // If clip doesn't have rawClipId, save it to backend first
     if (!region.rawClipId) {
-      console.log('[AnnotateContainer] Clip has no rawClipId, saving to backend first');
 
       // Merge current values with updates for the save
       const clipData = {
@@ -708,10 +701,8 @@ export function AnnotateContainer({
       const result = await saveClip(annotateGameId, clipData);
       if (result?.raw_clip_id) {
         setRawClipId(region.id, result.raw_clip_id);
-        console.log('[AnnotateContainer] Clip saved to backend:', result.raw_clip_id);
 
         if (result.project_created) {
-          console.log('[AnnotateContainer] Auto-created 5-star project:', result.project_id);
           toast.success('Project created for your 5-star clip!', {
             message: 'We automatically create a highlight project for every brilliant play so you can export it anytime.',
             duration: 8000,
@@ -733,15 +724,12 @@ export function AnnotateContainer({
       if (updates.duration !== undefined && updates.startTime === undefined) {
         const newStartTime = Math.max(0, region.endTime - updates.duration);
         backendUpdates.start_time = newStartTime;
-        console.log('[AnnotateContainer] Duration change detected, computed start_time:', newStartTime);
       }
 
-      console.log('[AnnotateContainer] Backend updates being sent:', backendUpdates, 'for rawClipId:', region.rawClipId);
 
       if (Object.keys(backendUpdates).length > 0) {
         const result = await updateClipRemote(region.rawClipId, backendUpdates);
         if (result?.project_created) {
-          console.log('[AnnotateContainer] Auto-created 5-star project:', result.project_id);
           toast.success('Project created for your 5-star clip!', {
             message: 'We automatically create a highlight project for every brilliant play so you can export it anytime.',
             duration: 8000,
@@ -757,8 +745,8 @@ export function AnnotateContainer({
    */
   const handleFullscreenUpdateClip = useCallback(async (regionId, updates) => {
     await updateClipRegionWithSync(regionId, updates);
-    setShowAnnotateOverlay(false);
-  }, [updateClipRegionWithSync]);
+    closeOverlay();
+  }, [updateClipRegionWithSync, closeOverlay]);
 
   /**
    * Delete a clip region - syncs to backend if the clip has been saved
@@ -774,7 +762,6 @@ export function AnnotateContainer({
     // Sync to backend if the clip was saved
     if (rawClipId) {
       await deleteClipRemote(rawClipId);
-      console.log('[AnnotateContainer] Clip deleted from backend:', rawClipId);
     }
   }, [clipRegions, deleteClipRegionLocal, deleteClipRemote]);
 
@@ -782,45 +769,74 @@ export function AnnotateContainer({
    * Handle closing the fullscreen overlay without creating a clip
    */
   const handleOverlayClose = useCallback(() => {
-    setShowAnnotateOverlay(false);
-  }, []);
+    closeOverlay();
+  }, [closeOverlay]);
 
   /**
    * Handle resuming playback from fullscreen overlay
    */
   const handleOverlayResume = useCallback(() => {
-    setShowAnnotateOverlay(false);
+    closeOverlay();
     togglePlay();
-  }, [togglePlay]);
+  }, [closeOverlay, togglePlay]);
 
   /**
    * Handle annotate region selection - selects the region AND seeks to its start
    */
+  /**
+   * Timeline seek — wraps seek() with overlay management.
+   * When the user clicks the timeline (a gesture) while the overlay is open,
+   * and the target time has no clip, close the overlay. This is distinct from
+   * scrub handle drags (which use seek() directly and should NOT close the overlay).
+   */
+  const handleTimelineSeek = useCallback((time) => {
+    seek(time);
+    if (selectionState.type === 'EDITING' || selectionState.type === 'CREATING') {
+      if (!getAnnotateRegionAtTime(time)) {
+        closeOverlay();
+      }
+    }
+  }, [seek, selectionState, getAnnotateRegionAtTime, closeOverlay]);
+
   const handleSelectRegion = useCallback((regionId) => {
-    console.log('[AnnotateContainer] handleSelectRegion called with regionId:', regionId);
     const region = clipRegions.find(r => r.id === regionId);
     if (region) {
-      selectAnnotateRegion(regionId);
+      // If overlay is open (EDITING), stay in EDITING with new clip; otherwise SELECTED
+      if (selectionState.type === 'EDITING') {
+        editClip(regionId);
+      } else {
+        selectClip(regionId);
+      }
       seek(region.startTime);
       setAnnotateSelectedLayer('clips');
     } else {
       console.warn('[AnnotateContainer] Region not found! Available IDs:', clipRegions.map(r => r.id));
     }
-  }, [clipRegions, selectAnnotateRegion, seek]);
+  }, [clipRegions, selectionState, selectClip, editClip, seek]);
 
-  // Effect: Auto-select annotate clip when playhead is over a region
+  // Effect: Auto-select/deselect based on playhead position
+  // EDITING and CREATING are immune — scrub handles move playhead without deselecting
+  // FRAME_TOLERANCE: the browser's seeked event snaps to frame boundaries, which can be
+  // slightly before startTime (e.g., seek(30) → seeked fires with 29.967). Without
+  // tolerance, this would immediately deselect the clip the user just clicked.
   useEffect(() => {
     if (!annotateVideoUrl) return;
+    const { type, clipId } = selectionState;
 
+    if (type === 'EDITING' || type === 'CREATING') return;
+
+    const FRAME_TOLERANCE = 0.15; // ~4 frames at 30fps — handles seek snapping
     const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
-    if (regionAtPlayhead && regionAtPlayhead.id !== annotateSelectedRegionId) {
-      const currentSelection = clipRegions.find(r => r.id === annotateSelectedRegionId);
-      if (currentSelection && currentTime >= currentSelection.startTime && currentTime <= currentSelection.endTime) {
-        return;
+
+    if (type === 'SELECTED') {
+      const selectedClip = clipRegions.find(r => r.id === clipId);
+      if (selectedClip && (currentTime < selectedClip.startTime - FRAME_TOLERANCE || currentTime > selectedClip.endTime + FRAME_TOLERANCE)) {
+        regionAtPlayhead ? selectClip(regionAtPlayhead.id) : deselectClip();
       }
-      selectAnnotateRegion(regionAtPlayhead.id);
+    } else {
+      if (regionAtPlayhead) selectClip(regionAtPlayhead.id);
     }
-  }, [annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions]);
+  }, [annotateVideoUrl, currentTime, selectionState, getAnnotateRegionAtTime, clipRegions, selectClip, deselectClip]);
 
   // Effect: Sync playback speed with video element
   useEffect(() => {
@@ -856,7 +872,6 @@ export function AnnotateContainer({
 
     const handleLoadedMetadata = () => {
       if (!annotateVideoMetadata || !annotateVideoMetadata.duration) {
-        console.log('[AnnotateContainer] Video loaded, extracting metadata from element');
         setAnnotateVideoMetadata({
           duration: video.duration,
           width: video.videoWidth,
@@ -883,13 +898,15 @@ export function AnnotateContainer({
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && annotateFullscreen) {
         setAnnotateFullscreen(false);
-        setShowAnnotateOverlay(false);
+        if (selectionState.type === 'EDITING' || selectionState.type === 'CREATING') {
+          closeOverlay();
+        }
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [annotateFullscreen, setAnnotateFullscreen]);
+  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, closeOverlay]);
 
   // Track playing state for other effects that may need it
   useEffect(() => {
@@ -934,7 +951,6 @@ export function AnnotateContainer({
 
     // First, import annotations to show clips in UI immediately
     const count = importAnnotations(annotations, overrideDuration);
-    console.log('[AnnotateContainer] Imported', count, 'annotations to UI');
 
     // Read gameId from ref to get the latest value (not a stale closure).
     // The upload completion callback sets annotateGameId, but useCallback's closure
@@ -943,7 +959,6 @@ export function AnnotateContainer({
 
     // Then save raw_clips in background (don't block UI)
     if (gameId) {
-      console.log('[AnnotateContainer] Starting background raw_clip saves for', annotations.length, 'annotations...');
 
       // Fire off all saves in parallel (don't await each one sequentially)
       const savePromises = annotations
@@ -963,7 +978,6 @@ export function AnnotateContainer({
             if (result) {
               // Store raw_clip_id for later reference (e.g., when updating clip)
               annotation.raw_clip_id = result.raw_clip_id;
-              console.log('[AnnotateContainer] Created raw_clip', result.raw_clip_id, 'for annotation');
             }
             return result;
           } catch (err) {
@@ -975,7 +989,6 @@ export function AnnotateContainer({
       // Wait for all saves to complete (but UI already updated)
       Promise.all(savePromises).then(results => {
         const successCount = results.filter(r => r !== null).length;
-        console.log('[AnnotateContainer] Completed', successCount, '/', annotations.length, 'raw_clip saves');
       });
     } else {
       console.warn('[AnnotateContainer] No gameId available - clips will not be saved to library');
@@ -993,7 +1006,6 @@ export function AnnotateContainer({
     const video = gameVideos[index];
     const newUrl = video.url || video.serverUrl;
 
-    console.log(`[AnnotateContainer] Switching to video ${index + 1} (sequence ${video.sequence})`);
     setActiveVideoIndex(index);
     setAnnotateVideoUrl(newUrl);
     // Update metadata to this video's duration
@@ -1055,6 +1067,7 @@ export function AnnotateContainer({
     handleOverlayClose,
     handleOverlayResume,
     handleSelectRegion,
+    handleTimelineSeek, // Seek + close overlay if target outside clips (timeline gesture)
     setAnnotatePlaybackSpeed,
     setAnnotateSelectedLayer,
 
@@ -1065,6 +1078,7 @@ export function AnnotateContainer({
     getAnnotateRegionAtTime,
     getAnnotateExportData,
     selectAnnotateRegion, // Raw select for keyboard shortcuts (doesn't seek)
+    isEditMode, // Derived from state machine: true when SELECTED
 
     // Computed
     effectiveDuration,

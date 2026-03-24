@@ -1,11 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Trash2, Star, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Trash2, Star, Check } from 'lucide-react';
 import { soccerTags, positions, generateClipName } from '../constants/soccerTags';
-
-// Constants
-const MIN_CLIP_DURATION = 1.0;
-const MAX_CLIP_DURATION = 60.0;
-const DEFAULT_CLIP_DURATION = 8.0;
+import ClipScrubRegion from './ClipScrubRegion';
 
 // Rating-based background colors (used for tinting the details panel)
 const RATING_COLORS = {
@@ -24,28 +20,6 @@ const RATING_BORDER_COLORS = {
   2: '#f97316', // orange
   1: '#ef4444', // red
 };
-
-/**
- * Format seconds to MM:SS.ms string for display
- */
-function formatTimeForDisplay(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins.toString().padStart(2, '0')}:${secs.toFixed(1).padStart(4, '0')}`;
-}
-
-/**
- * Parse MM:SS.ms string to seconds
- */
-function parseTimeInput(timeStr) {
-  const parts = timeStr.split(':');
-  if (parts.length === 2) {
-    const mins = parseInt(parts[0], 10) || 0;
-    const secs = parseFloat(parts[1]) || 0;
-    return mins * 60 + secs;
-  }
-  return parseFloat(timeStr) || 0;
-}
 
 /**
  * StarRating - 5-star rating selector
@@ -132,20 +106,25 @@ export function ClipDetailsEditor({
   onDelete,
   maxNotesLength = 280,
   videoDuration,
-  compact = false,
+  onSeek,
+  videoRef,
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [endTimeInput, setEndTimeInput] = useState('');
-  const [showTiming, setShowTiming] = useState(!compact);
 
-  // Calculate current duration
-  const clipDuration = region.endTime - region.startTime;
-  const notesLength = region.notes?.length || 0;
+  // Local scrub state — same pattern as AnnotateFullscreenOverlay.
+  // Dragging updates local state instantly; persisted to parent on change.
+  const [scrubStartTime, setScrubStartTime] = useState(region.startTime);
+  const [scrubEndTime, setScrubEndTime] = useState(region.endTime);
 
-  // Sync end time input when region changes
+  // Sync local state only when switching to a different clip.
+  // Do NOT sync on region.startTime/endTime changes — during drag, local state
+  // is authoritative and the parent round-trip would fight with it.
   useEffect(() => {
-    setEndTimeInput(formatTimeForDisplay(region.endTime));
-  }, [region.endTime]);
+    setScrubStartTime(region.startTime);
+    setScrubEndTime(region.endTime);
+  }, [region.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const notesLength = region.notes?.length || 0;
 
   // Derive display name from region.name or auto-generate from rating+tags
   const displayName = region.name || generateClipName(region.rating || 3, region.tags || [], region.notes || '') || '';
@@ -171,22 +150,21 @@ export function ClipDetailsEditor({
     onUpdate({ tags: newTags });
   };
 
-  const handleEndTimeChange = (e) => {
-    setEndTimeInput(e.target.value);
-  };
+  // During drag: only update local state (instant, no parent re-render)
+  const handleStartTimeChange = useCallback((newStart) => {
+    setScrubStartTime(newStart);
+  }, []);
 
-  const handleEndTimeBlur = () => {
-    const newEndTime = parseTimeInput(endTimeInput);
-    // Clamp to valid range (must be at least MIN_CLIP_DURATION and at most videoDuration)
-    const clampedEnd = Math.max(MIN_CLIP_DURATION, Math.min(newEndTime, videoDuration || Infinity));
-    onUpdate({ endTime: clampedEnd });
-    setEndTimeInput(formatTimeForDisplay(clampedEnd));
-  };
+  const handleEndTimeChange = useCallback((newEnd) => {
+    setScrubEndTime(newEnd);
+  }, []);
 
-  const handleDurationChange = (e) => {
-    const newDuration = parseFloat(e.target.value);
-    onUpdate({ duration: newDuration });
-  };
+  // On drag end: persist + seek to new start so currentTime is within the
+  // updated clip range (prevents auto-deselect from firing)
+  const handleDragEnd = useCallback((finalStart, finalEnd) => {
+    onUpdate({ startTime: finalStart, endTime: finalEnd });
+    onSeek?.(finalStart);
+  }, [onUpdate, onSeek]);
 
   const handleNotesChange = (e) => {
     const newNotes = e.target.value.slice(0, maxNotesLength);
@@ -224,6 +202,23 @@ export function ClipDetailsEditor({
           Clip Details
         </div>
 
+        {/* Clip scrub region — same visual timeline used in the Add/Edit overlay.
+            onSeek is NOT passed: sidebar drag should NOT seek the video (which would
+            trigger auto-deselect since currentTime moves outside the original clip range
+            before the clip boundaries are updated). The overlay can seek because EDITING
+            state is immune to deselect; SELECTED state is not. */}
+        <ClipScrubRegion
+          currentTime={region.startTime + (region.endTime - region.startTime) / 2}
+          videoDuration={videoDuration}
+          existingClip={region}
+          startTime={scrubStartTime}
+          endTime={scrubEndTime}
+          onStartTimeChange={handleStartTimeChange}
+          onEndTimeChange={handleEndTimeChange}
+          onDragEnd={handleDragEnd}
+          videoRef={videoRef}
+        />
+
         {/* Star Rating */}
         <div className="flex items-center gap-2">
           <label className="text-gray-400 text-xs w-16 shrink-0">Rating</label>
@@ -239,7 +234,6 @@ export function ClipDetailsEditor({
           <TagSelector
             selectedTags={region.tags || []}
             onTagToggle={handleTagToggle}
-            compact={compact}
           />
         </div>
 
@@ -257,104 +251,6 @@ export function ClipDetailsEditor({
             placeholder="Clip name"
           />
         </div>
-
-        {/* Timing Section - collapsible when compact */}
-        {compact ? (
-          <div>
-            <button
-              onClick={() => setShowTiming(!showTiming)}
-              className="flex items-center gap-1 text-gray-400 text-xs mb-1 hover:text-gray-300 transition-colors"
-            >
-              {showTiming ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              <span>Timing</span>
-              <span className="text-gray-500 ml-1 font-mono">{clipDuration.toFixed(1)}s</span>
-            </button>
-            {showTiming && (
-              <div className="space-y-2 ml-1 pl-3 border-l border-gray-700">
-                <div className="flex items-center gap-2">
-                  <label className="text-gray-400 text-xs w-16 shrink-0">End Time</label>
-                  <input
-                    type="text"
-                    value={endTimeInput}
-                    onChange={handleEndTimeChange}
-                    onBlur={handleEndTimeBlur}
-                    className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm font-mono focus:outline-none focus:border-green-500"
-                    placeholder="00:00.0"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-gray-400 text-xs">Duration</label>
-                    <span className="text-white text-xs font-mono">{clipDuration.toFixed(1)}s</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={MIN_CLIP_DURATION}
-                    max={MAX_CLIP_DURATION}
-                    step={0.5}
-                    value={clipDuration}
-                    onChange={handleDurationChange}
-                    className="w-full h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500
-                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
-                      [&::-webkit-slider-thumb]:bg-green-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-gray-400 text-xs w-16 shrink-0">Start</label>
-                  <span className="text-gray-400 text-sm font-mono">{formatTimeForDisplay(region.startTime)}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <>
-            {/* End Time (editable) */}
-            <div className="flex items-center gap-2">
-              <label className="text-gray-400 text-xs w-16 shrink-0">End Time</label>
-              <input
-                type="text"
-                value={endTimeInput}
-                onChange={handleEndTimeChange}
-                onBlur={handleEndTimeBlur}
-                className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm font-mono focus:outline-none focus:border-green-500"
-                placeholder="00:00.0"
-              />
-            </div>
-
-            {/* Duration Slider */}
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-gray-400 text-xs">Duration</label>
-                <span className="text-white text-xs font-mono">{clipDuration.toFixed(1)}s</span>
-              </div>
-              <input
-                type="range"
-                min={MIN_CLIP_DURATION}
-                max={MAX_CLIP_DURATION}
-                step={0.5}
-                value={clipDuration}
-                onChange={handleDurationChange}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500
-                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
-                  [&::-webkit-slider-thumb]:bg-green-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
-              />
-              <div className="relative w-full h-4 mt-0.5">
-                <span className="absolute left-0 text-xs text-gray-500">{MIN_CLIP_DURATION}s</span>
-                {/* Position 15s label at correct slider position: (15-1)/(60-1) ≈ 24% */}
-                <span className="absolute text-xs text-gray-500" style={{ left: `${((DEFAULT_CLIP_DURATION - MIN_CLIP_DURATION) / (MAX_CLIP_DURATION - MIN_CLIP_DURATION)) * 100}%`, transform: 'translateX(-50%)' }}>{DEFAULT_CLIP_DURATION}s</span>
-                <span className="absolute right-0 text-xs text-gray-500">{MAX_CLIP_DURATION}s</span>
-              </div>
-            </div>
-
-            {/* Start Time (calculated, read-only) */}
-            <div className="flex items-center gap-2">
-              <label className="text-gray-400 text-xs w-16 shrink-0">Start Time</label>
-              <div className="flex-1 px-2 py-1.5 bg-gray-700/30 border border-gray-600/50 rounded text-gray-400 text-sm font-mono">
-                {formatTimeForDisplay(region.startTime)}
-              </div>
-            </div>
-          </>
-        )}
 
         {/* Notes Textarea */}
         <div>

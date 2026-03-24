@@ -220,7 +220,7 @@ User feedback from first NUF session. Two groups: game addition flow and clip cr
 |----|------|--------|--------|-------|-------|
 | T650 | [Clip Scrub Region UI](tasks/T650-clip-scrub-region-ui.md) | DONE | 8 | 5 | Visual scrub handles for clip start/end with real-time video preview; replaces time inputs |
 | T660 | [Clip Edit Button Clarity](tasks/T660-clip-edit-button-clarity.md) | DONE | 5 | 1 | "Add Clip" → "Edit Clip" (amber) when clip selected; depends on T650 |
-| T690 | [Clip Selection State Machine](tasks/T690-clip-selection-state-machine.md) | TODO | 7 | 5 | Redesign clip selection/edit mode as state machine; fix deselect races, fullscreen sync, overlay loading |
+| T690 | [Clip Selection State Machine](tasks/T690-clip-selection-state-machine.md) | TESTING | 7 | 5 | Redesign clip selection/edit mode as state machine; fix deselect races, fullscreen sync, overlay loading |
 
 #### UI Polish
 

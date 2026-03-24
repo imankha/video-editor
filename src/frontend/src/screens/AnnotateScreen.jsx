@@ -171,6 +171,7 @@ export function AnnotateScreen({ onClearSelection }) {
     handleOverlayClose,
     handleOverlayResume,
     handleSelectRegion: handleSelectAnnotateRegion,
+    handleTimelineSeek,
     setAnnotatePlaybackSpeed,
     setAnnotateSelectedLayer,
     // Clip region actions
@@ -180,6 +181,7 @@ export function AnnotateScreen({ onClearSelection }) {
     getAnnotateRegionAtTime,
     getAnnotateExportData,
     selectAnnotateRegion,
+    isEditMode,
     // Cleanup
     clearAnnotateState,
     // T82: Multi-video
@@ -372,6 +374,8 @@ export function AnnotateScreen({ onClearSelection }) {
           videoDuration={annotateVideoMetadata?.duration}
           isLoading={isLoadingAnnotations}
           isVideoUploading={isUploadingGameVideo}
+          onSeek={seek}
+          videoRef={videoRef}
         />
       </div>
       {/* Mobile sidebar overlay */}
@@ -392,6 +396,8 @@ export function AnnotateScreen({ onClearSelection }) {
               isLoading={isLoadingAnnotations}
               isVideoUploading={isUploadingGameVideo}
               isMobile
+              onSeek={seek}
+              videoRef={videoRef}
               onJumpToClip={(regionId, endTime) => {
                 handleSelectAnnotateRegion(regionId);
                 seek(endTime);
@@ -494,17 +500,20 @@ export function AnnotateScreen({ onClearSelection }) {
         stepBackward={stepBackward}
         restart={restart}
         seek={seek}
+        onTimelineSeek={handleTimelineSeek}
         annotatePlaybackSpeed={annotatePlaybackSpeed}
         onSpeedChange={setAnnotatePlaybackSpeed}
         // Clips/regions
         annotateRegionsWithLayout={isMultiVideo ? filteredRegionsWithLayout : annotateRegionsWithLayout}
         annotateSelectedRegionId={annotateSelectedRegionId}
         hasAnnotateClips={isMultiVideo ? filteredClipRegions.length > 0 : hasAnnotateClips}
+        clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
+        isEditMode={isEditMode}
         // Handlers
         onSelectRegion={handleSelectAnnotateRegion}
         onDeleteRegion={deleteClipRegion}
         onToggleFullscreen={handleToggleFullscreen}
-        onAddClip={handleAddClipFromButton}
+        onAddClip={showAnnotateOverlay ? undefined : handleAddClipFromButton}
         getAnnotateRegionAtTime={getAnnotateRegionAtTime}
         getAnnotateExportData={getAnnotateExportData}
         // Fullscreen overlay handlers

@@ -25,6 +25,8 @@ export function ClipsSidePanel({
   isVideoUploading = false,
   isMobile = false,
   onJumpToClip,
+  onSeek,
+  videoRef,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
   const fileInputRef = useRef(null);
@@ -118,7 +120,8 @@ export function ClipsSidePanel({
               onDelete={() => { onDeleteRegion(selectedRegion.id); setMobileForceList(true); }}
               maxNotesLength={maxNotesLength}
               videoDuration={videoDuration}
-              compact
+              onSeek={onSeek}
+              videoRef={videoRef}
             />
           </div>
         </>
@@ -238,6 +241,8 @@ export function ClipsSidePanel({
               onDelete={() => onDeleteRegion(selectedRegion.id)}
               maxNotesLength={maxNotesLength}
               videoDuration={videoDuration}
+              onSeek={onSeek}
+              videoRef={videoRef}
             />
           )}
         </>
