@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, Star, Check } from 'lucide-react';
 import { soccerTags, positions, generateClipName } from '../constants/soccerTags';
 import ClipScrubRegion from './ClipScrubRegion';
@@ -111,6 +111,17 @@ export function ClipDetailsEditor({
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Local scrub state — same pattern as AnnotateFullscreenOverlay.
+  // Dragging updates local state instantly; persisted to parent on change.
+  const [scrubStartTime, setScrubStartTime] = useState(region.startTime);
+  const [scrubEndTime, setScrubEndTime] = useState(region.endTime);
+
+  // Sync local state when the region changes (e.g., switching clips)
+  useEffect(() => {
+    setScrubStartTime(region.startTime);
+    setScrubEndTime(region.endTime);
+  }, [region.id, region.startTime, region.endTime]);
+
   const notesLength = region.notes?.length || 0;
 
   // Derive display name from region.name or auto-generate from rating+tags
@@ -137,13 +148,20 @@ export function ClipDetailsEditor({
     onUpdate({ tags: newTags });
   };
 
-  const handleStartTimeChange = (newStart) => {
-    onUpdate({ startTime: newStart, endTime: region.endTime });
-  };
+  // Persist scrub times to parent when local state settles (drag end or single click)
+  const persistScrubTimes = useCallback((start, end) => {
+    onUpdate({ startTime: start, endTime: end });
+  }, [onUpdate]);
 
-  const handleEndTimeChange = (newEnd) => {
-    onUpdate({ startTime: region.startTime, endTime: newEnd });
-  };
+  const handleStartTimeChange = useCallback((newStart) => {
+    setScrubStartTime(newStart);
+    persistScrubTimes(newStart, scrubEndTime);
+  }, [scrubEndTime, persistScrubTimes]);
+
+  const handleEndTimeChange = useCallback((newEnd) => {
+    setScrubEndTime(newEnd);
+    persistScrubTimes(scrubStartTime, newEnd);
+  }, [scrubStartTime, persistScrubTimes]);
 
   const handleNotesChange = (e) => {
     const newNotes = e.target.value.slice(0, maxNotesLength);
@@ -186,8 +204,8 @@ export function ClipDetailsEditor({
           currentTime={region.startTime + (region.endTime - region.startTime) / 2}
           videoDuration={videoDuration}
           existingClip={region}
-          startTime={region.startTime}
-          endTime={region.endTime}
+          startTime={scrubStartTime}
+          endTime={scrubEndTime}
           onStartTimeChange={handleStartTimeChange}
           onEndTimeChange={handleEndTimeChange}
           onSeek={onSeek}
