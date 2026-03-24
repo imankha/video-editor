@@ -781,7 +781,15 @@ export function AnnotateContainer({
    */
   const handleOverlayClose = useCallback(() => {
     setShowAnnotateOverlay(false);
-  }, []);
+    // Deselect if playhead is no longer within the selected clip
+    const time = videoRef.current?.currentTime;
+    if (time != null && annotateSelectedRegionId) {
+      const region = clipRegions.find(r => r.id === annotateSelectedRegionId);
+      if (!region || time < region.startTime || time > region.endTime) {
+        selectAnnotateRegion(null);
+      }
+    }
+  }, [videoRef, annotateSelectedRegionId, clipRegions, selectAnnotateRegion]);
 
   /**
    * Handle resuming playback from fullscreen overlay
@@ -816,19 +824,19 @@ export function AnnotateContainer({
     // Use live video time (currentTime state can be stale when paused)
     const time = videoRef.current?.currentTime ?? currentTime;
 
-    const regionAtPlayhead = getAnnotateRegionAtTime(time);
-    if (regionAtPlayhead) {
-      // Playhead is on a clip — select it if not already selected
-      if (regionAtPlayhead.id !== annotateSelectedRegionId) {
-        const currentSelection = clipRegions.find(r => r.id === annotateSelectedRegionId);
-        if (currentSelection && time >= currentSelection.startTime && time <= currentSelection.endTime) {
-          return;
-        }
-        selectAnnotateRegion(regionAtPlayhead.id);
+    if (annotateSelectedRegionId) {
+      const selectedRegion = clipRegions.find(r => r.id === annotateSelectedRegionId);
+      if (selectedRegion && (time < selectedRegion.startTime || time > selectedRegion.endTime)) {
+        console.log('[AnnotateContainer] Deselecting clip — playhead at', time.toFixed(2),
+          'outside range', selectedRegion.startTime.toFixed(2), '-', selectedRegion.endTime.toFixed(2));
+        selectAnnotateRegion(null);
+        return;
       }
-    } else if (annotateSelectedRegionId) {
-      // Playhead moved off all clips — deselect
-      selectAnnotateRegion(null);
+    }
+
+    const regionAtPlayhead = getAnnotateRegionAtTime(time);
+    if (regionAtPlayhead && regionAtPlayhead.id !== annotateSelectedRegionId) {
+      selectAnnotateRegion(regionAtPlayhead.id);
     }
   }, [annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions, showAnnotateOverlay, videoRef]);
 
