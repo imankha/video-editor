@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { useQuestStore } from '../stores/questStore';
+import { useEditorStore } from '../stores/editorStore';
 import { QUESTS } from '../config/questDefinitions';
 import { toast } from './shared/Toast';
 
@@ -30,31 +31,12 @@ export function QuestPanel() {
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const prevCompletedRef = useRef(null);  // Track step count to detect new completions
   const panelRef = useRef(null);
-  const [position, setPosition] = useState({ left: null, bottom: null });
 
-  // Simple positioning: bottom-left with sidebar awareness
-  const updatePosition = useCallback(() => {
-    const panel = panelRef.current;
-    if (!panel) return;
-
-    const isSm = window.innerWidth >= 640;
-    const defaultLeft = isSm ? 24 : 12;
-    const defaultBottom = isSm ? 40 : 12;
-
-    setPosition({ left: defaultLeft, bottom: defaultBottom });
-  }, []);
-
-  useEffect(() => {
-    const raf = requestAnimationFrame(updatePosition);
-    window.addEventListener('resize', updatePosition);
-    const observer = new MutationObserver(updatePosition);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', updatePosition);
-      observer.disconnect();
-    };
-  }, [updatePosition, expanded]);
+  // Auto-collapse when a clip is selected in annotate mode (avoids sidebar overlap)
+  const editorMode = useEditorStore((s) => s.editorMode);
+  const annotateHasSelectedClip = useEditorStore((s) => s.annotateHasSelectedClip);
+  const shouldForceCollapse = editorMode === 'annotate' && annotateHasSelectedClip;
+  const isExpanded = expanded && !shouldForceCollapse;
 
   // Play sound effects
   const playSound = (type) => {
@@ -161,11 +143,8 @@ export function QuestPanel() {
     }
   };
 
-  const positionStyle = {
-    ...(position.left != null ? { left: position.left } : {}),
-    ...(position.right != null ? { right: position.right } : {}),
-    ...(position.bottom != null ? { bottom: position.bottom } : {}),
-  };
+  const isSm = window.innerWidth >= 640;
+  const positionStyle = { left: isSm ? 24 : 12, bottom: isSm ? 40 : 12 };
 
   return (
     <>
@@ -195,7 +174,7 @@ export function QuestPanel() {
     {!allQuestsDone && (
     <div
       ref={panelRef}
-      className={`quest-overlay fixed z-50 quest-fade-in transition-all duration-300 ${expanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
+      className={`quest-overlay fixed z-50 quest-fade-in transition-all duration-300 ${isExpanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
       style={positionStyle}
     >
       <div className={`quest-card rounded-2xl overflow-hidden ${celebrating ? 'quest-celebrate' : ''}`}>
@@ -206,22 +185,22 @@ export function QuestPanel() {
         <button
           onClick={() => setExpanded(!expanded)}
           className={`w-full flex items-center text-left hover:bg-white/[0.02] transition-colors ${
-            expanded ? 'gap-3 px-4 pt-4 pb-3' : 'gap-2 px-3 py-2.5'
+            isExpanded ? 'gap-3 px-4 pt-4 pb-3' : 'gap-2 px-3 py-2.5'
           }`}
         >
           <div className={`quest-icon-badge rounded-lg flex items-center justify-center flex-shrink-0 ${
-            expanded ? 'w-7 h-7' : 'w-7 h-7'
+            isExpanded ? 'w-7 h-7' : 'w-7 h-7'
           }`}>
-            <ListChecks size={expanded ? 14 : 14} className="text-white" />
+            <ListChecks size={isExpanded ? 14 : 14} className="text-white" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className={`quest-title leading-tight ${expanded ? 'text-sm' : 'text-sm'}`}>{questDef.title}</h3>
+              <h3 className={`quest-title leading-tight ${isExpanded ? 'text-sm' : 'text-sm'}`}>{questDef.title}</h3>
               <span className="quest-progress-text text-xs tabular-nums flex-shrink-0 ml-auto">
                 {completedCount}/{totalCount}
               </span>
               {/* Inline reward badge */}
-              {expanded && !isComplete && (
+              {isExpanded && !isComplete && (
                 <div className="quest-reward-badge flex items-center gap-1 px-1.5 py-0.5 rounded-full flex-shrink-0">
                   <Gem size={10} />
                   <span className="text-xs font-semibold">{questDef.reward}</span>
@@ -229,14 +208,14 @@ export function QuestPanel() {
               )}
             </div>
           </div>
-          {expanded
+          {isExpanded
             ? <ChevronDown size={16} className="text-white/30 flex-shrink-0" />
             : <ChevronUp size={14} className="text-white/30 flex-shrink-0" />
           }
         </button>
 
         {/* Expanded content */}
-        {expanded && (
+        {isExpanded && (
           <>
 
 

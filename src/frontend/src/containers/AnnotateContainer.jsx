@@ -5,6 +5,7 @@ import { FileUpload } from '../components/FileUpload';
 import { toast } from '../components/shared';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore, useAuthStore } from '../stores';
+import { useEditorStore } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
@@ -141,6 +142,12 @@ export function AnnotateContainer({
   } = useExportStore();
 
   const requireAuth = useAuthStore((s) => s.requireAuth);
+  const setAnnotateHasSelectedClip = useEditorStore((s) => s.setAnnotateHasSelectedClip);
+
+  // Sync clip selection state to editorStore for quest panel auto-collapse
+  useEffect(() => {
+    setAnnotateHasSelectedClip(!!annotateSelectedRegionId);
+  }, [annotateSelectedRegionId, setAnnotateHasSelectedClip]);
 
   // Filter export progress to only show progress for current game (not other projects)
   const exportProgress = useMemo(() => {
@@ -1111,7 +1118,8 @@ export function AnnotateContainer({
       setGameVideos(null);
       setActiveVideoIndex(0);
       resetAnnotate();
-    }, [annotateVideoUrl, resetAnnotate]),
+      setAnnotateHasSelectedClip(false);
+    }, [annotateVideoUrl, resetAnnotate, setAnnotateHasSelectedClip]),
   };
 }
 

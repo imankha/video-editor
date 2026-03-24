@@ -226,7 +226,7 @@ User feedback from first NUF session. Two groups: game addition flow and clip cr
 
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| T700 | [Quest Panel Smart Positioning](tasks/T700-quest-panel-smart-positioning.md) | TODO | 4 | 3 | CSS-first positioning to avoid sidebar overlap; replace JS elementsFromPoint approach |
+| T700 | [Quest Panel Smart Positioning](tasks/T700-quest-panel-smart-positioning.md) | TESTING | 4 | 3 | CSS-first positioning to avoid sidebar overlap; replace JS elementsFromPoint approach |
 
 ### Phase 4: Post-Launch Polish
 

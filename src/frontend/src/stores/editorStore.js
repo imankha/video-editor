@@ -73,6 +73,10 @@ export const useEditorStore = create((set, get) => ({
   // Selected layer for arrow key navigation: 'playhead' | 'crop' | 'highlight'
   selectedLayer: 'playhead',
 
+  // Whether a clip is currently selected in annotate mode (drives quest panel auto-collapse)
+  annotateHasSelectedClip: false,
+  setAnnotateHasSelectedClip: (value) => set({ annotateHasSelectedClip: value }),
+
   // Actions
 
   /**
