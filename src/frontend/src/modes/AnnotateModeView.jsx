@@ -96,11 +96,7 @@ export function AnnotateModeView({
   // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
   const existingClip = useMemo(() => {
     if (!annotateSelectedRegionId || !showAnnotateOverlay) return null;
-    const clip = clipRegions?.find(r => r.id === annotateSelectedRegionId) || null;
-    if (clip) {
-      console.log(`[AnnotateModeView] existingClip resolved: name="${clip.name}", rating=${clip.rating}, tags=[${clip.tags}], startTime=${clip.startTime?.toFixed(2)}`);
-    }
-    return clip;
+    return clipRegions?.find(r => r.id === annotateSelectedRegionId) || null;
   }, [annotateSelectedRegionId, showAnnotateOverlay, clipRegions]);
 
   return (

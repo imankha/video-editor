@@ -137,7 +137,6 @@ export function AnnotateFullscreenOverlay({
   useEffect(() => {
     const t = initialTimeRef.current;
     if (existingClip) {
-      console.log(`[AnnotateOverlay] Loading clip data: name="${existingClip.name}", rating=${existingClip.rating}, tags=[${existingClip.tags}], start=${existingClip.startTime?.toFixed(2)}, end=${existingClip.endTime?.toFixed(2)}`);
       setRating(existingClip.rating || DEFAULT_RATING);
       setSelectedTags(existingClip.tags || []);
       setClipName(existingClip.name || '');
@@ -146,7 +145,6 @@ export function AnnotateFullscreenOverlay({
       setScrubEndTime(existingClip.endTime);
       setNotes(existingClip.notes || '');
     } else {
-      console.log(`[AnnotateOverlay] No existingClip — create mode, initialTime=${t?.toFixed(2)}`);
       setRating(DEFAULT_RATING);
       setSelectedTags([]);
       setClipName('');
