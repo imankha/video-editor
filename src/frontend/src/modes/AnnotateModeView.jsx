@@ -96,8 +96,9 @@ export function AnnotateModeView({
   const frozenExistingClipRef = useRef(null);
   const wasOverlayOpenRef = useRef(false);
   if (showAnnotateOverlay && !wasOverlayOpenRef.current) {
-    // Overlay just opened — capture the clip at current playhead
-    frozenExistingClipRef.current = getAnnotateRegionAtTime(currentTime);
+    // Overlay just opened — capture the clip at current playhead, or the selected clip
+    frozenExistingClipRef.current = getAnnotateRegionAtTime(currentTime)
+      || (annotateSelectedRegionId ? annotateRegionsWithLayout?.find(r => r.id === annotateSelectedRegionId) : null);
   }
   wasOverlayOpenRef.current = showAnnotateOverlay;
 
@@ -258,7 +259,7 @@ export function AnnotateModeView({
                 isFullscreen={annotateFullscreen}
                 onToggleFullscreen={onToggleFullscreen}
                 onAddClip={onAddClip}
-                isEditMode={!showAnnotateOverlay && !!annotateSelectedRegionId}
+                isEditMode={annotateFullscreen && !showAnnotateOverlay && !!annotateSelectedRegionId}
                 videoRef={videoRef}
               />
             </div>
