@@ -801,6 +801,7 @@ export function AnnotateContainer({
       selectAnnotateRegion(regionId);
       seek(region.startTime);
       setAnnotateSelectedLayer('clips');
+      setShowAnnotateOverlay(true);
     } else {
       console.warn('[AnnotateContainer] Region not found! Available IDs:', clipRegions.map(r => r.id));
     }
