@@ -781,7 +781,8 @@ export function AnnotateContainer({
    */
   const handleOverlayClose = useCallback(() => {
     setShowAnnotateOverlay(false);
-  }, []);
+    selectAnnotateRegion(null);
+  }, [selectAnnotateRegion]);
 
   /**
    * Handle resuming playback from fullscreen overlay
