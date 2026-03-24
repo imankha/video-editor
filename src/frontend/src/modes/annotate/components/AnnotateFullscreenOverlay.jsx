@@ -54,7 +54,7 @@ function TagSelector({ selectedTags, onTagToggle }) {
         const positionTags = soccerTags[pos.id] || [];
         return (
           <div key={pos.id}>
-            <div className="text-gray-400 text-xs mb-1.5">{pos.name}</div>
+            {/* Position groups rendered without labels */}
             <div className="flex flex-wrap gap-2">
               {positionTags.map((tag) => {
                 const isSelected = selectedTags.includes(tag.name);
