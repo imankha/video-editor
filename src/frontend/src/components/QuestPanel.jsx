@@ -31,61 +31,100 @@ export function QuestPanel() {
   const prevCompletedRef = useRef(null);  // Track step count to detect new completions
   const panelRef = useRef(null);
   const [position, setPosition] = useState({ left: null, bottom: null });
-  // Sidebar offset measured once on mount, then reused on resize
-  const sidebarOffsetRef = useRef(null);
 
-  // Measure sidebar offset once (run on mount/expanded change, NOT on resize)
-  const measureSidebar = useCallback(() => {
-    const panel = panelRef.current;
-    if (!panel) return;
-
-    const gap = 12;
-    let sidebarRight = 0;
-    const sidebars = document.querySelectorAll('[data-sidebar]');
-    for (const sb of sidebars) {
-      const rect = sb.getBoundingClientRect();
-      if (rect.width > 0 && rect.left < window.innerWidth / 2) {
-        sidebarRight = Math.max(sidebarRight, rect.right);
+  // Check if a candidate rectangle overlaps meaningful UI
+  // Temporarily hides the panel so it doesn't detect itself
+  const hasUIOverlap = useCallback((panel, left, bottom, panelW, panelH) => {
+    const top = window.innerHeight - bottom - panelH;
+    const savedDisplay = panel.style.display;
+    panel.style.display = 'none';
+    try {
+      // Sample corners + center (inset 8px to avoid edge detection)
+      const points = [
+        [left + 8, top + 8],
+        [left + panelW - 8, top + 8],
+        [left + 8, top + panelH - 8],
+        [left + panelW - 8, top + panelH - 8],
+        [left + panelW / 2, top + panelH / 2],
+      ];
+      for (const [x, y] of points) {
+        for (const el of document.elementsFromPoint(x, y)) {
+          if (el === document.body || el === document.documentElement) continue;
+          // Interactive elements
+          if (el.matches('button, input, select, textarea, a, [role="button"]')) return true;
+          // Known panels/sidebars
+          if (el.closest('[data-sidebar]')) return true;
+          // Elements with visible text content (not wrappers)
+          if (el.matches('p, span, h1, h2, h3, h4, label, li')) return true;
+        }
       }
+      return false;
+    } finally {
+      panel.style.display = savedDisplay;
     }
-    sidebarOffsetRef.current = sidebarRight > 0 ? sidebarRight + gap : 0;
   }, []);
 
-  // Apply position using cached sidebar offset + current breakpoint
-  const applyPosition = useCallback(() => {
+  // Find the best position: stay put if clear, otherwise find nearby clear space
+  const ensurePosition = useCallback(() => {
     const panel = panelRef.current;
     if (!panel) return;
 
     const isSm = window.innerWidth >= 640;
     const gap = 12;
-    const defaultBottom = isSm ? 40 : 12;
-    const panelWidth = panel.getBoundingClientRect().width;
-    const sidebarOffset = sidebarOffsetRef.current || 0;
-    const leftEdge = Math.max(isSm ? 24 : 12, sidebarOffset);
+    const bottom = isSm ? 40 : 12;
+    const defaultLeft = isSm ? 24 : 12;
+    const panelW = panel.getBoundingClientRect().width;
+    const panelH = panel.getBoundingClientRect().height;
 
-    if (leftEdge + panelWidth < window.innerWidth - gap) {
-      setPosition({ left: leftEdge, bottom: defaultBottom });
-    } else {
-      setPosition({ left: null, right: isSm ? 24 : 12, bottom: defaultBottom });
+    // 1. Try default bottom-left
+    if (!hasUIOverlap(panel, defaultLeft, bottom, panelW, panelH)) {
+      setPosition({ left: defaultLeft, bottom });
+      return;
     }
-  }, []);
 
-  // Measure sidebar once after paint, then apply position
+    // 2. Find rightmost sidebar edge as a search hint
+    let searchStart = defaultLeft;
+    for (const sb of document.querySelectorAll('[data-sidebar]')) {
+      const rect = sb.getBoundingClientRect();
+      if (rect.width > 0 && rect.left < window.innerWidth / 2) {
+        searchStart = Math.max(searchStart, rect.right + gap);
+      }
+    }
+
+    // 3. Scan rightward from sidebar edge for clear space
+    for (let left = searchStart; left + panelW < window.innerWidth - gap; left += 20) {
+      if (!hasUIOverlap(panel, left, bottom, panelW, panelH)) {
+        setPosition({ left, bottom });
+        return;
+      }
+    }
+
+    // 4. Fall back to bottom-right
+    setPosition({ left: null, right: isSm ? 24 : 12, bottom });
+  }, [hasUIOverlap]);
+
+  // Run after paint on mount/expand, and debounced on DOM changes (catches navigation)
   useEffect(() => {
     let raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(() => {
-        measureSidebar();
-        applyPosition();
-      });
+      raf = requestAnimationFrame(ensurePosition);
     });
-    return () => cancelAnimationFrame(raf);
-  }, [measureSidebar, applyPosition, expanded]);
 
-  // Resize only updates breakpoint-dependent values, never re-detects sidebar
-  useEffect(() => {
-    window.addEventListener('resize', applyPosition);
-    return () => window.removeEventListener('resize', applyPosition);
-  }, [applyPosition]);
+    // Debounced observer: only re-check on significant DOM changes (route switches)
+    let debounceTimer = null;
+    const observer = new MutationObserver(() => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(ensurePosition, 500);
+    });
+    observer.observe(document.body, { childList: true, subtree: false });
+
+    window.addEventListener('resize', ensurePosition);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(debounceTimer);
+      observer.disconnect();
+      window.removeEventListener('resize', ensurePosition);
+    };
+  }, [ensurePosition, expanded]);
 
   // Play sound effects
   const playSound = (type) => {
