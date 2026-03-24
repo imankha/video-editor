@@ -156,13 +156,12 @@ export function AnnotateFullscreenOverlay({
   }, [existingClip]);
 
   // Auto-generate clip name when rating, tags, or notes change (unless manually edited)
-  // Skip when editing an existing clip that has a name — the existingClip effect handles that
   useEffect(() => {
-    if (!isNameManuallyEdited && !existingClip?.name) {
+    if (!isNameManuallyEdited) {
       const generatedName = generateClipName(rating, selectedTags, notes);
       setClipName(generatedName);
     }
-  }, [rating, selectedTags, notes, isNameManuallyEdited, existingClip]);
+  }, [rating, selectedTags, notes, isNameManuallyEdited]);
 
   // Focus notes input when overlay appears
   useEffect(() => {

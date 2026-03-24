@@ -32,99 +32,29 @@ export function QuestPanel() {
   const panelRef = useRef(null);
   const [position, setPosition] = useState({ left: null, bottom: null });
 
-  // Check if a candidate rectangle overlaps meaningful UI
-  // Temporarily hides the panel so it doesn't detect itself
-  const hasUIOverlap = useCallback((panel, left, bottom, panelW, panelH) => {
-    const top = window.innerHeight - bottom - panelH;
-    const savedDisplay = panel.style.display;
-    panel.style.display = 'none';
-    try {
-      // Sample corners + center (inset 8px to avoid edge detection)
-      const points = [
-        [left + 8, top + 8],
-        [left + panelW - 8, top + 8],
-        [left + 8, top + panelH - 8],
-        [left + panelW - 8, top + panelH - 8],
-        [left + panelW / 2, top + panelH / 2],
-      ];
-      for (const [x, y] of points) {
-        for (const el of document.elementsFromPoint(x, y)) {
-          if (el === document.body || el === document.documentElement) continue;
-          // Interactive elements
-          if (el.matches('button, input, select, textarea, a, [role="button"]')) return true;
-          // Known panels/sidebars
-          if (el.closest('[data-sidebar]')) return true;
-          // Elements with visible text content (not wrappers)
-          if (el.matches('p, span, h1, h2, h3, h4, label, li')) return true;
-        }
-      }
-      return false;
-    } finally {
-      panel.style.display = savedDisplay;
-    }
-  }, []);
-
-  // Find the best position: stay put if clear, otherwise find nearby clear space
-  const ensurePosition = useCallback(() => {
+  // Simple positioning: bottom-left with sidebar awareness
+  const updatePosition = useCallback(() => {
     const panel = panelRef.current;
     if (!panel) return;
 
     const isSm = window.innerWidth >= 640;
-    const gap = 12;
-    const bottom = isSm ? 40 : 12;
     const defaultLeft = isSm ? 24 : 12;
-    const panelW = panel.getBoundingClientRect().width;
-    const panelH = panel.getBoundingClientRect().height;
+    const defaultBottom = isSm ? 40 : 12;
 
-    // 1. Try default bottom-left
-    if (!hasUIOverlap(panel, defaultLeft, bottom, panelW, panelH)) {
-      setPosition({ left: defaultLeft, bottom });
-      return;
-    }
+    setPosition({ left: defaultLeft, bottom: defaultBottom });
+  }, []);
 
-    // 2. Find rightmost sidebar edge as a search hint
-    let searchStart = defaultLeft;
-    for (const sb of document.querySelectorAll('[data-sidebar]')) {
-      const rect = sb.getBoundingClientRect();
-      if (rect.width > 0 && rect.left < window.innerWidth / 2) {
-        searchStart = Math.max(searchStart, rect.right + gap);
-      }
-    }
-
-    // 3. Scan rightward from sidebar edge for clear space
-    for (let left = searchStart; left + panelW < window.innerWidth - gap; left += 20) {
-      if (!hasUIOverlap(panel, left, bottom, panelW, panelH)) {
-        setPosition({ left, bottom });
-        return;
-      }
-    }
-
-    // 4. Fall back to bottom-right
-    setPosition({ left: null, right: isSm ? 24 : 12, bottom });
-  }, [hasUIOverlap]);
-
-  // Run after paint on mount/expand, and debounced on DOM changes (catches navigation)
   useEffect(() => {
-    let raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(ensurePosition);
-    });
-
-    // Debounced observer: only re-check on significant DOM changes (route switches)
-    let debounceTimer = null;
-    const observer = new MutationObserver(() => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(ensurePosition, 500);
-    });
-    observer.observe(document.body, { childList: true, subtree: false });
-
-    window.addEventListener('resize', ensurePosition);
+    const raf = requestAnimationFrame(updatePosition);
+    window.addEventListener('resize', updatePosition);
+    const observer = new MutationObserver(updatePosition);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
     return () => {
       cancelAnimationFrame(raf);
-      clearTimeout(debounceTimer);
+      window.removeEventListener('resize', updatePosition);
       observer.disconnect();
-      window.removeEventListener('resize', ensurePosition);
     };
-  }, [ensurePosition, expanded]);
+  }, [updatePosition, expanded]);
 
   // Play sound effects
   const playSound = (type) => {

@@ -285,7 +285,9 @@ export function AnnotateContainer({
             annotateGameIdRef.current = result.game_id;
             setAnnotateGameId(result.game_id);
             setAnnotateGameName(result.name);
-            // Toast shown by uploadStore.onUploadComplete
+            if (result.deduplicated) {
+              console.log('[AnnotateContainer] DEDUPLICATION: File already existed on server.');
+            }
           },
           { blobUrl: blobUrls[0], gameName: displayName }
         );
@@ -602,15 +604,8 @@ export function AnnotateContainer({
    * Handle fullscreen toggle - uses CSS fixed positioning instead of browser API
    */
   const handleToggleFullscreen = useCallback(() => {
-    userSelectTimeRef.current = Date.now(); // Suppress deselect during fullscreen transition
-    const goingFullscreen = !annotateFullscreen;
-    setAnnotateFullscreen(goingFullscreen);
-    if (goingFullscreen && annotateSelectedRegionId) {
-      setShowAnnotateOverlay(true);
-    } else if (!goingFullscreen) {
-      setShowAnnotateOverlay(false);
-    }
-  }, [annotateFullscreen, setAnnotateFullscreen, annotateSelectedRegionId]);
+    setAnnotateFullscreen(prev => !prev);
+  }, [setAnnotateFullscreen]);
 
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);
@@ -788,15 +783,7 @@ export function AnnotateContainer({
    */
   const handleOverlayClose = useCallback(() => {
     setShowAnnotateOverlay(false);
-    // Deselect if playhead is no longer within the selected clip
-    const time = videoRef.current?.currentTime;
-    if (time != null && annotateSelectedRegionId) {
-      const region = clipRegions.find(r => r.id === annotateSelectedRegionId);
-      if (!region || time < region.startTime || time > region.endTime) {
-        selectAnnotateRegion(null);
-      }
-    }
-  }, [videoRef, annotateSelectedRegionId, clipRegions, selectAnnotateRegion]);
+  }, []);
 
   /**
    * Handle resuming playback from fullscreen overlay
@@ -809,47 +796,31 @@ export function AnnotateContainer({
   /**
    * Handle annotate region selection - selects the region AND seeks to its start
    */
-  // Timestamp of last user-initiated selection — suppress deselect for 500ms after
-  const userSelectTimeRef = useRef(0);
   const handleSelectRegion = useCallback((regionId) => {
+    console.log('[AnnotateContainer] handleSelectRegion called with regionId:', regionId);
     const region = clipRegions.find(r => r.id === regionId);
-    console.log('[ClipSelect] handleSelectRegion:', regionId,
-      'range:', region ? `${region.startTime.toFixed(2)}-${region.endTime.toFixed(2)}` : 'NOT FOUND');
     if (region) {
-      userSelectTimeRef.current = Date.now();
       selectAnnotateRegion(regionId);
       seek(region.startTime);
       setAnnotateSelectedLayer('clips');
+    } else {
+      console.warn('[AnnotateContainer] Region not found! Available IDs:', clipRegions.map(r => r.id));
     }
   }, [clipRegions, selectAnnotateRegion, seek]);
 
-  // Effect: Auto-select/deselect annotate clip based on playhead position
+  // Effect: Auto-select annotate clip when playhead is over a region
   useEffect(() => {
     if (!annotateVideoUrl) return;
-    if (showAnnotateOverlay) return;
 
-    // Don't deselect within 500ms of a user-initiated selection (seek is async)
-    if (Date.now() - userSelectTimeRef.current < 500) return;
-
-    const time = videoRef.current?.currentTime ?? currentTime;
-
-    // Deselect if playhead is outside the selected clip's range
-    if (annotateSelectedRegionId) {
-      const selectedRegion = clipRegions.find(r => r.id === annotateSelectedRegionId);
-      if (selectedRegion && (time < selectedRegion.startTime || time > selectedRegion.endTime)) {
-        console.log('[ClipSelect] Deselecting — playhead', time.toFixed(2),
-          'outside', selectedRegion.startTime.toFixed(2), '-', selectedRegion.endTime.toFixed(2));
-        selectAnnotateRegion(null);
+    const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
+    if (regionAtPlayhead && regionAtPlayhead.id !== annotateSelectedRegionId) {
+      const currentSelection = clipRegions.find(r => r.id === annotateSelectedRegionId);
+      if (currentSelection && currentTime >= currentSelection.startTime && currentTime <= currentSelection.endTime) {
         return;
       }
-    }
-
-    // Auto-select clip at playhead
-    const regionAtPlayhead = getAnnotateRegionAtTime(time);
-    if (regionAtPlayhead && regionAtPlayhead.id !== annotateSelectedRegionId) {
       selectAnnotateRegion(regionAtPlayhead.id);
     }
-  }, [annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions, showAnnotateOverlay, videoRef]);
+  }, [annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions]);
 
   // Effect: Sync playback speed with video element
   useEffect(() => {
