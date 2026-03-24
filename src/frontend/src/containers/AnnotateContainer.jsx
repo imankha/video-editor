@@ -807,19 +807,27 @@ export function AnnotateContainer({
     }
   }, [clipRegions, selectAnnotateRegion, seek]);
 
-  // Effect: Auto-select annotate clip when playhead is over a region
+  // Effect: Auto-select/deselect annotate clip based on playhead position
   useEffect(() => {
     if (!annotateVideoUrl) return;
+    // Don't change selection while the edit overlay is open
+    if (showAnnotateOverlay) return;
 
     const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
-    if (regionAtPlayhead && regionAtPlayhead.id !== annotateSelectedRegionId) {
-      const currentSelection = clipRegions.find(r => r.id === annotateSelectedRegionId);
-      if (currentSelection && currentTime >= currentSelection.startTime && currentTime <= currentSelection.endTime) {
-        return;
+    if (regionAtPlayhead) {
+      // Playhead is on a clip — select it if not already selected
+      if (regionAtPlayhead.id !== annotateSelectedRegionId) {
+        const currentSelection = clipRegions.find(r => r.id === annotateSelectedRegionId);
+        if (currentSelection && currentTime >= currentSelection.startTime && currentTime <= currentSelection.endTime) {
+          return;
+        }
+        selectAnnotateRegion(regionAtPlayhead.id);
       }
-      selectAnnotateRegion(regionAtPlayhead.id);
+    } else if (annotateSelectedRegionId) {
+      // Playhead moved off all clips — deselect
+      selectAnnotateRegion(null);
     }
-  }, [annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions]);
+  }, [annotateVideoUrl, currentTime, getAnnotateRegionAtTime, annotateSelectedRegionId, selectAnnotateRegion, clipRegions, showAnnotateOverlay]);
 
   // Effect: Sync playback speed with video element
   useEffect(() => {
