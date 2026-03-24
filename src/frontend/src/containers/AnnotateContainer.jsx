@@ -602,6 +602,7 @@ export function AnnotateContainer({
    * Handle fullscreen toggle - uses CSS fixed positioning instead of browser API
    */
   const handleToggleFullscreen = useCallback(() => {
+    userSelectTimeRef.current = Date.now(); // Suppress deselect during fullscreen transition
     setAnnotateFullscreen(prev => !prev);
   }, [setAnnotateFullscreen]);
 
