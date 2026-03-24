@@ -258,7 +258,7 @@ export function AnnotateModeView({
                 isFullscreen={annotateFullscreen}
                 onToggleFullscreen={onToggleFullscreen}
                 onAddClip={onAddClip}
-                isEditMode={!showAnnotateOverlay && !!annotateSelectedRegionId && getAnnotateRegionAtTime(currentTime)?.id === annotateSelectedRegionId}
+                isEditMode={!showAnnotateOverlay && !!annotateSelectedRegionId}
                 videoRef={videoRef}
               />
             </div>
