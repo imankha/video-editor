@@ -603,18 +603,14 @@ export function AnnotateContainer({
    */
   const handleToggleFullscreen = useCallback(() => {
     userSelectTimeRef.current = Date.now(); // Suppress deselect during fullscreen transition
-    setAnnotateFullscreen(prev => {
-      const goingFullscreen = !prev;
-      if (goingFullscreen && annotateSelectedRegionId) {
-        // Entering fullscreen with a selected clip — show edit overlay
-        setShowAnnotateOverlay(true);
-      } else if (!goingFullscreen) {
-        // Leaving fullscreen — close overlay
-        setShowAnnotateOverlay(false);
-      }
-      return goingFullscreen;
-    });
-  }, [setAnnotateFullscreen, annotateSelectedRegionId]);
+    const goingFullscreen = !annotateFullscreen;
+    setAnnotateFullscreen(goingFullscreen);
+    if (goingFullscreen && annotateSelectedRegionId) {
+      setShowAnnotateOverlay(true);
+    } else if (!goingFullscreen) {
+      setShowAnnotateOverlay(false);
+    }
+  }, [annotateFullscreen, setAnnotateFullscreen, annotateSelectedRegionId]);
 
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);
