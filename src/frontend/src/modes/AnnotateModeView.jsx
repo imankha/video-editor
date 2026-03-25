@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { Play } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import ZoomControls from '../components/ZoomControls';
@@ -94,6 +94,27 @@ export function AnnotateModeView({
 
   const isPlaybackMode = playback?.isPlaybackMode;
 
+  // Playback fullscreen — independent from annotate fullscreen (CSS fixed positioning)
+  const [playbackFullscreen, setPlaybackFullscreen] = useState(false);
+  const togglePlaybackFullscreen = useCallback(() => {
+    setPlaybackFullscreen(prev => !prev);
+  }, []);
+  // Exit fullscreen when leaving playback mode
+  const handleExitPlayback = useCallback(() => {
+    setPlaybackFullscreen(false);
+    playback?.exitPlaybackMode();
+  }, [playback]);
+
+  // Escape key exits playback fullscreen
+  useEffect(() => {
+    if (!playbackFullscreen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setPlaybackFullscreen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [playbackFullscreen]);
+
   // In playback mode, find the active clip for NotesOverlay
   const activePlaybackClip = useMemo(() => {
     if (!isPlaybackMode || !playback?.activeClipId) return null;
@@ -103,78 +124,107 @@ export function AnnotateModeView({
   // --- PLAYBACK MODE ---
   if (isPlaybackMode && playback) {
     const activeLabel = playback.activeVideoLabel;
+    const isFS = playbackFullscreen;
+
+    const videoContainer = (
+      <div className={`relative bg-gray-900 ${isFS ? '' : 'rounded-lg'} overflow-hidden`}>
+        <div className={`relative ${isFS ? '' : 'h-[40vh] sm:h-[60vh]'}`}
+          style={isFS ? {
+            maxHeight: 'calc(100vh - 80px)',
+            aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}`,
+          } : undefined}
+        >
+          {/* Video A */}
+          <video
+            ref={playback.videoARef}
+            className={`absolute inset-0 w-full h-full object-contain`}
+            style={{
+              opacity: activeLabel === 'A' ? 1 : 0,
+              transition: `opacity 80ms ease-in-out`,
+              zIndex: activeLabel === 'A' ? 2 : 1,
+            }}
+            playsInline
+            preload="auto"
+          />
+          {/* Video B */}
+          <video
+            ref={playback.videoBRef}
+            className={`absolute inset-0 w-full h-full object-contain`}
+            style={{
+              opacity: activeLabel === 'B' ? 1 : 0,
+              transition: `opacity 80ms ease-in-out`,
+              zIndex: activeLabel === 'B' ? 2 : 1,
+            }}
+            playsInline
+            preload="auto"
+          />
+
+          {/* Loading overlay */}
+          {playback.isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30">
+              <div className="text-center">
+                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-600 border-t-green-500" />
+                <p className="mt-3 text-sm text-gray-300">Preparing playback...</p>
+              </div>
+            </div>
+          )}
+
+          {/* NotesOverlay for active clip */}
+          {!playback.isLoading && activePlaybackClip && (() => {
+            const displayName = activePlaybackClip.name ||
+              generateClipName(activePlaybackClip.rating, activePlaybackClip.tags, activePlaybackClip.notes);
+            return (displayName || activePlaybackClip.notes) ? (
+              <NotesOverlay
+                key="playback-notes"
+                name={displayName}
+                notes={activePlaybackClip.notes}
+                rating={activePlaybackClip.rating}
+                isVisible={true}
+                isFullscreen={isFS}
+              />
+            ) : null;
+          })()}
+        </div>
+      </div>
+    );
+
+    const controls = (
+      <PlaybackControls
+        isPlaying={playback.isPlaying}
+        virtualTime={playback.virtualTime}
+        totalVirtualDuration={playback.timeline?.totalVirtualDuration || 0}
+        segments={playback.timeline?.segments}
+        activeClipId={playback.activeClipId}
+        onTogglePlay={playback.togglePlay}
+        onSeek={playback.seekVirtual}
+        onStartScrub={playback.startScrub}
+        onEndScrub={playback.endScrub}
+        onExitPlayback={handleExitPlayback}
+        playbackRate={playback.playbackRate}
+        onPlaybackRateChange={playback.changePlaybackRate}
+        isFullscreen={isFS}
+        onToggleFullscreen={togglePlaybackFullscreen}
+      />
+    );
+
+    // Fullscreen: fixed overlay covering the whole screen
+    if (isFS) {
+      return (
+        <div className="fixed inset-0 z-[100] bg-gray-900 flex flex-col">
+          <div className="flex-1 min-h-0 flex items-center justify-center">
+            {videoContainer}
+          </div>
+          <div className="shrink-0">
+            {controls}
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20">
-        {/* Dual video container — only one visible at a time */}
-        <div className="relative bg-gray-900 rounded-lg overflow-hidden">
-          <div className="relative h-[40vh] sm:h-[60vh]">
-            {/* Video A */}
-            <video
-              ref={playback.videoARef}
-              className="absolute inset-0 w-full h-full object-contain"
-              style={{
-                opacity: activeLabel === 'A' ? 1 : 0,
-                transition: `opacity ${80}ms ease-in-out`,
-                zIndex: activeLabel === 'A' ? 2 : 1,
-              }}
-              playsInline
-              preload="auto"
-            />
-            {/* Video B */}
-            <video
-              ref={playback.videoBRef}
-              className="absolute inset-0 w-full h-full object-contain"
-              style={{
-                opacity: activeLabel === 'B' ? 1 : 0,
-                transition: `opacity ${80}ms ease-in-out`,
-                zIndex: activeLabel === 'B' ? 2 : 1,
-              }}
-              playsInline
-              preload="auto"
-            />
-
-            {/* Loading overlay — shown while seeking/buffering before auto-play */}
-            {playback.isLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30">
-                <div className="text-center">
-                  <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-600 border-t-green-500" />
-                  <p className="mt-3 text-sm text-gray-300">Preparing playback...</p>
-                </div>
-              </div>
-            )}
-
-            {/* NotesOverlay for active clip */}
-            {!playback.isLoading && activePlaybackClip && (() => {
-              const displayName = activePlaybackClip.name ||
-                generateClipName(activePlaybackClip.rating, activePlaybackClip.tags, activePlaybackClip.notes);
-              return (displayName || activePlaybackClip.notes) ? (
-                <NotesOverlay
-                  key="playback-notes"
-                  name={displayName}
-                  notes={activePlaybackClip.notes}
-                  rating={activePlaybackClip.rating}
-                  isVisible={true}
-                  isFullscreen={false}
-                />
-              ) : null;
-            })()}
-          </div>
-        </div>
-
-        {/* Playback Controls */}
-        <PlaybackControls
-          isPlaying={playback.isPlaying}
-          virtualTime={playback.virtualTime}
-          totalVirtualDuration={playback.timeline?.totalVirtualDuration || 0}
-          segments={playback.timeline?.segments}
-          activeClipId={playback.activeClipId}
-          onTogglePlay={playback.togglePlay}
-          onSeek={playback.seekVirtual}
-          onExitPlayback={playback.exitPlaybackMode}
-          playbackRate={playback.playbackRate}
-          onPlaybackRateChange={playback.changePlaybackRate}
-        />
+        {videoContainer}
+        {controls}
       </div>
     );
   }

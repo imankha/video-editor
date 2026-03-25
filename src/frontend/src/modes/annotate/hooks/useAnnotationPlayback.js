@@ -372,8 +372,13 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     }
   }, [getVideos]);
 
+  // Track whether we were playing before a scrub started, so we can resume after
+  const wasPlayingBeforeScrubRef = useRef(false);
+  const isScrrubbingRef = useRef(false);
+
   /**
    * Seek to a virtual time position.
+   * During scrub, the video is paused and each seek shows the frame.
    */
   const seekVirtual = useCallback((vt) => {
     const timeline = timelineRef.current;
@@ -401,11 +406,51 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     setVirtualTime(vt);
     setActiveClipId(segment.clipId);
 
-    // Preload next segment
-    if (segmentIndex + 1 < timeline.segments.length) {
+    // Only preload next segment if not scrubbing (avoid thrashing during drag)
+    if (!isScrrubbingRef.current && segmentIndex + 1 < timeline.segments.length) {
       setTimeout(() => preloadNextSegment(segmentIndex + 1), 100);
     }
   }, [getVideos, getSegmentVideoUrl, preloadNextSegment]);
+
+  /**
+   * Start scrubbing — pauses playback so each seekVirtual shows the frame.
+   */
+  const startScrub = useCallback(() => {
+    isScrrubbingRef.current = true;
+    wasPlayingBeforeScrubRef.current = isPlayingRef.current;
+    if (isPlayingRef.current) {
+      const { active } = getVideos();
+      if (active) active.pause();
+      isPlayingRef.current = false;
+      setIsPlaying(false);
+      stopTimeUpdateLoop();
+    }
+  }, [getVideos, stopTimeUpdateLoop]);
+
+  /**
+   * End scrubbing — resumes playback if it was playing before the scrub.
+   */
+  const endScrub = useCallback(async () => {
+    isScrrubbingRef.current = false;
+
+    // Preload the next segment from wherever we landed
+    const timeline = timelineRef.current;
+    const segIndex = currentSegmentIndexRef.current;
+    if (timeline && segIndex + 1 < timeline.segments.length) {
+      preloadNextSegment(segIndex + 1);
+    }
+
+    if (wasPlayingBeforeScrubRef.current) {
+      const { active } = getVideos();
+      if (active) {
+        active.playbackRate = playbackRateRef.current;
+        await active.play().catch(() => {});
+      }
+      isPlayingRef.current = true;
+      setIsPlaying(true);
+      startTimeUpdateLoop();
+    }
+  }, [getVideos, preloadNextSegment, startTimeUpdateLoop]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -443,6 +488,8 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     exitPlaybackMode,
     togglePlay,
     seekVirtual,
+    startScrub,
+    endScrub,
     changePlaybackRate,
   };
 }
