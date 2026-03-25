@@ -437,7 +437,7 @@ export function AnnotateModeView({
           )}
         </div>
 
-        {/* Play Annotations button - replaces old "Create Annotated Video" */}
+        {/* Playback Annotations button - replaces old "Create Annotated Video" */}
         {!annotateFullscreen && (
           <div className="mt-3 sm:mt-6">
             <div className="space-y-2">
@@ -471,7 +471,7 @@ export function AnnotateModeView({
                 }`}
               >
                 <Play size={18} />
-                <span>Play Annotations</span>
+                <span>Playback Annotations</span>
               </button>
 
               <p className="text-xs text-gray-500 text-center">

@@ -1,16 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Download, Loader, Upload, Settings } from 'lucide-react';
-import { useAnnotateState, useAnnotate, useClipSelection, AnnotateMode, ClipsSidePanel, NotesOverlay, AnnotateControls, AnnotateFullscreenOverlay } from '../modes/annotate';
-import { FileUpload } from '../components/FileUpload';
+import { useAnnotateState, useAnnotate, useClipSelection } from '../modes/annotate';
 import { toast } from '../components/shared';
 import { extractVideoMetadata } from '../utils/videoMetadata';
-import { useExportStore, useAuthStore } from '../stores';
+import { useExportStore } from '../stores';
 import { useEditorStore } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
-import { API_BASE } from '../config';
 import { VideoMode, GameType } from '../constants/gameConstants';
 
 /**
@@ -136,7 +133,6 @@ export function AnnotateContainer({
   // Export state from Zustand store (used for dismiss-on-change only)
   const { dismissExportCompleteToast } = useExportStore();
 
-  const requireAuth = useAuthStore((s) => s.requireAuth);
   const setAnnotateHasSelectedClip = useEditorStore((s) => s.setAnnotateHasSelectedClip);
 
   // Sync clip selection state to editorStore for quest panel auto-collapse
@@ -915,7 +911,6 @@ export function AnnotateContainer({
     deleteClipRegion,
     importAnnotations: importAnnotationsWithRawClips,
     getAnnotateRegionAtTime,
-    getAnnotateExportData,
     selectAnnotateRegion, // Raw select for keyboard shortcuts (doesn't seek)
     isEditMode, // Derived from state machine: true when SELECTED
     lockScrub, // Suppress auto-deselect during sidebar scrub
@@ -958,284 +953,6 @@ export function AnnotateContainer({
       setAnnotateHasSelectedClip(false);
     }, [annotateVideoUrl, resetAnnotate, setAnnotateHasSelectedClip]),
   };
-}
-
-/**
- * AnnotateSidebar - Sidebar component for Annotate mode
- */
-export function AnnotateSidebar({
-  clipRegions,
-  selectedRegionId,
-  onSelectRegion,
-  onUpdateRegion,
-  onDeleteRegion,
-  onImportAnnotations,
-  maxNotesLength,
-  clipCount,
-  videoDuration,
-  isLoading,
-  isVideoUploading,
-}) {
-  return (
-    <ClipsSidePanel
-      clipRegions={clipRegions}
-      selectedRegionId={selectedRegionId}
-      onSelectRegion={onSelectRegion}
-      onUpdateRegion={onUpdateRegion}
-      onDeleteRegion={onDeleteRegion}
-      onImportAnnotations={onImportAnnotations}
-      maxNotesLength={maxNotesLength}
-      clipCount={clipCount}
-      videoDuration={videoDuration}
-      isLoading={isLoading}
-      isVideoUploading={isVideoUploading}
-    />
-  );
-}
-
-/**
- * AnnotateVideoOverlays - Video overlay components for Annotate mode
- */
-export function AnnotateVideoOverlays({
-  annotateVideoUrl,
-  currentTime,
-  showAnnotateOverlay,
-  annotateFullscreen,
-  annotateVideoMetadata,
-  getAnnotateRegionAtTime,
-  onCreateClip,
-  onUpdateClip,
-  onResume,
-  onClose,
-}) {
-  if (!annotateVideoUrl) return null;
-
-  const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
-
-  return (
-    <>
-      {/* Notes overlay - shows name, rating notation, and notes for region at playhead */}
-      {(regionAtPlayhead?.name || regionAtPlayhead?.notes) && (
-        <NotesOverlay
-          key="annotate-notes"
-          name={regionAtPlayhead.name}
-          notes={regionAtPlayhead.notes}
-          rating={regionAtPlayhead.rating}
-          isVisible={true}
-          isFullscreen={annotateFullscreen}
-        />
-      )}
-
-      {/* Fullscreen overlay - appears when paused in fullscreen */}
-      {showAnnotateOverlay && (
-        <AnnotateFullscreenOverlay
-          key="annotate-fullscreen"
-          isVisible={showAnnotateOverlay}
-          currentTime={currentTime}
-          videoDuration={annotateVideoMetadata?.duration || 0}
-          existingClip={regionAtPlayhead}
-          onCreateClip={onCreateClip}
-          onUpdateClip={onUpdateClip}
-          onResume={onResume}
-          onClose={onClose}
-        />
-      )}
-    </>
-  );
-}
-
-/**
- * AnnotateVideoControls - Video controls for Annotate mode
- */
-export function AnnotateVideoControls({
-  isPlaying,
-  currentTime,
-  duration,
-  onTogglePlay,
-  onStepForward,
-  onStepBackward,
-  onRestart,
-  playbackSpeed,
-  onSpeedChange,
-  isFullscreen,
-  onToggleFullscreen,
-  onAddClip,
-  videoRef,
-}) {
-  return (
-    <AnnotateControls
-      isPlaying={isPlaying}
-      currentTime={currentTime}
-      duration={duration}
-      onTogglePlay={onTogglePlay}
-      onStepForward={onStepForward}
-      onStepBackward={onStepBackward}
-      onRestart={onRestart}
-      playbackSpeed={playbackSpeed}
-      onSpeedChange={onSpeedChange}
-      isFullscreen={isFullscreen}
-      onToggleFullscreen={onToggleFullscreen}
-      onAddClip={onAddClip}
-      videoRef={videoRef}
-    />
-  );
-}
-
-/**
- * AnnotateTimeline - Timeline component for Annotate mode
- */
-export function AnnotateTimeline({
-  currentTime,
-  duration,
-  isPlaying,
-  onSeek,
-  regions,
-  selectedRegionId,
-  onSelectRegion,
-  onDeleteRegion,
-  selectedLayer,
-  onLayerSelect,
-}) {
-  return (
-    <AnnotateMode
-      currentTime={currentTime}
-      duration={duration}
-      isPlaying={isPlaying}
-      onSeek={onSeek}
-      regions={regions}
-      selectedRegionId={selectedRegionId}
-      onSelectRegion={onSelectRegion}
-      onDeleteRegion={onDeleteRegion}
-      selectedLayer={selectedLayer}
-      onLayerSelect={onLayerSelect}
-    />
-  );
-}
-
-/**
- * AnnotateExportPanel - Export panel for Annotate mode
- */
-export function AnnotateExportPanel({
-  hasClips,
-  isCreatingAnnotatedVideo,
-  isImportingToProjects,
-  isUploadingFromStore,
-  exportProgress,
-  onCreateAnnotatedVideo,
-  onImportIntoProjects,
-  onOpenSettings,
-  getExportData,
-}) {
-  return (
-    <div className="mt-6">
-      <div className="space-y-3">
-        {/* Export Settings */}
-        <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
-          <div className="text-sm font-medium text-gray-300 mb-3">
-            Annotate Settings
-          </div>
-          <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
-            Extracts marked clips and loads them into Framing mode
-          </div>
-        </div>
-
-        {/* Export buttons */}
-        <div className="space-y-2">
-          {/* Progress bar (shown during export) */}
-          {exportProgress && (
-            <div className="bg-gray-800 rounded-lg p-3 mb-2">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-300">{exportProgress.message}</span>
-                {exportProgress.total > 0 && (
-                  <span className="text-xs text-gray-500">
-                    {Math.round((exportProgress.current / exportProgress.total) * 100)}%
-                  </span>
-                )}
-              </div>
-              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-300 ${
-                    exportProgress.error ? 'bg-red-500' : exportProgress.done ? 'bg-green-500' : 'bg-blue-500'
-                  }`}
-                  style={{
-                    width: exportProgress.total > 0
-                      ? `${(exportProgress.current / exportProgress.total) * 100}%`
-                      : '0%'
-                  }}
-                />
-              </div>
-              {exportProgress.phase === 'clips' && (
-                <div className="text-xs text-gray-500 mt-1">
-                  {exportProgress.current > 0 && 'Using cache for unchanged clips'}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Create Annotated Video - stays on screen */}
-          <button
-            onClick={() => onCreateAnnotatedVideo(getExportData())}
-            disabled={!hasClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingFromStore}
-            className={`w-full px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-              !hasClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingFromStore
-                ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                : 'bg-green-600 hover:bg-green-700 text-white'
-            }`}
-          >
-            {isUploadingFromStore ? (
-              <>
-                <Loader className="animate-spin" size={18} />
-                <span>Uploading video...</span>
-              </>
-            ) : isCreatingAnnotatedVideo ? (
-              <>
-                <Loader className="animate-spin" size={18} />
-                <span>Processing...</span>
-              </>
-            ) : (
-              <>
-                <Download size={18} />
-                <span>Create Annotated Video</span>
-              </>
-            )}
-          </button>
-
-          {/* Import Into Projects - navigates to projects */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => onImportIntoProjects(getExportData())}
-              disabled={!hasClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingFromStore}
-              className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                !hasClips || isCreatingAnnotatedVideo || isImportingToProjects || isUploadingFromStore
-                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-              }`}
-            >
-              {isImportingToProjects ? (
-                <>
-                  <Loader className="animate-spin" size={18} />
-                  <span>Processing...</span>
-                </>
-              ) : (
-                <>
-                  <Upload size={18} />
-                  <span>Import Into Projects</span>
-                </>
-              )}
-            </button>
-            {/* Settings button */}
-            <button
-              onClick={onOpenSettings}
-              className="px-3 py-3 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
-              title="Project creation settings"
-            >
-              <Settings size={18} />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default AnnotateContainer;
