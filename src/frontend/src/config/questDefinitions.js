@@ -18,13 +18,13 @@ export const QUESTS = [
       },
       {
         id: 'annotate_brilliant',
-        title: 'Annotate a 5 Star Play',
+        title: 'Annotate at Least 1 5 Star Play',
         description: 'When you spot a great play, click Add Clip and rate it 5 stars.',
       },
       {
-        id: 'create_annotated_video',
-        title: 'Create Your Annotated Video',
-        description: 'Compile your annotations into a single instructive video',
+        id: 'playback_annotations',
+        title: 'Playback Annotations',
+        description: 'Review the annotations you made with your athlete',
       },
     ],
   },

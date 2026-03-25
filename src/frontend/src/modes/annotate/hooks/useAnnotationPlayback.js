@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { buildVirtualTimeline } from './useVirtualTimeline';
+import { useQuestStore } from '../../../stores/questStore';
 
 /**
  * Default playback rate for annotated clips — 0.5x slow-motion for study/coaching.
@@ -46,6 +47,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
   const isPlayingRef = useRef(false);
   const hasPreloadedNextRef = useRef(false);
   const playbackRateRef = useRef(DEFAULT_PLAYBACK_RATE);
+  const hasRecordedPlaybackAchievementRef = useRef(false);
 
   // Keep ref in sync with state for use in RAF loop
   useEffect(() => {
@@ -195,6 +197,12 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       // Update virtual time
       const vt = timeline.actualToVirtual(currentSegmentIndexRef.current, actualTime);
       setVirtualTime(vt);
+
+      // Record quest achievement after 2s of watching
+      if (!hasRecordedPlaybackAchievementRef.current && vt >= 2) {
+        hasRecordedPlaybackAchievementRef.current = true;
+        useQuestStore.getState().recordAchievement('played_annotations');
+      }
 
       rafIdRef.current = requestAnimationFrame(tick);
     };

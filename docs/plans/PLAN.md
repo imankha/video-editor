@@ -202,6 +202,7 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 | T610 | [Track last_seen_at on Every Visit](tasks/T610-track-last-seen.md) | DONE | 6 | 1 | Update last_seen_at on /auth/me and /init-guest, not just Google login |
 | T620 | [Account Cleanup (Trigger: high R2 fees)](tasks/T620-account-cleanup.md) | TODO | 5 | 5 | Auto-delete abandoned guests (7d), dormant free (90d), warn paid (180d). Blocked by T610 |
 | T710 | [Play Annotations Mode](tasks/T710-play-annotations-mode.md) | TESTING | 9 | 7 | Replace "Create Annotated Video" with frontend-only playback; virtual timeline, Phase 2 adds bridge segments |
+| T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 8 | 7 | Pen drawing on frozen clip frames; displayed during Play Annotations with configurable pause (1–10s). Depends on T710 |
 
 ### UX Feedback (NUF Tester — 2026-03-23)
 
