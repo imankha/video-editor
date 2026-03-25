@@ -375,10 +375,41 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
   // Track whether we were playing before a scrub started, so we can resume after
   const wasPlayingBeforeScrubRef = useRef(false);
   const isScrrubbingRef = useRef(false);
+  // Throttle state updates during scrub — seek video immediately, batch React renders
+  const scrubStateRafRef = useRef(null);
+  const pendingScrubVtRef = useRef(null);
+  const pendingScrubClipIdRef = useRef(null);
+
+  /**
+   * Flush any pending scrub state to React (called on RAF or endScrub).
+   */
+  const flushScrubState = useCallback(() => {
+    if (pendingScrubVtRef.current !== null) {
+      setVirtualTime(pendingScrubVtRef.current);
+      pendingScrubVtRef.current = null;
+    }
+    if (pendingScrubClipIdRef.current !== null) {
+      setActiveClipId(pendingScrubClipIdRef.current);
+      pendingScrubClipIdRef.current = null;
+    }
+    scrubStateRafRef.current = null;
+  }, []);
+
+  /**
+   * Schedule a batched state update during scrub (once per animation frame).
+   */
+  const scheduleScrubStateUpdate = useCallback((vt, clipId) => {
+    pendingScrubVtRef.current = vt;
+    pendingScrubClipIdRef.current = clipId;
+    if (!scrubStateRafRef.current) {
+      scrubStateRafRef.current = requestAnimationFrame(flushScrubState);
+    }
+  }, [flushScrubState]);
 
   /**
    * Seek to a virtual time position.
-   * During scrub, the video is paused and each seek shows the frame.
+   * During scrub: seeks video immediately, batches React state updates per frame.
+   * Outside scrub: seeks video and updates state synchronously.
    */
   const seekVirtual = useCallback((vt) => {
     const timeline = timelineRef.current;
@@ -403,17 +434,49 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     active.currentTime = actualTime;
     active.playbackRate = playbackRateRef.current;
 
-    setVirtualTime(vt);
-    setActiveClipId(segment.clipId);
-
-    // Only preload next segment if not scrubbing (avoid thrashing during drag)
-    if (!isScrrubbingRef.current && segmentIndex + 1 < timeline.segments.length) {
-      setTimeout(() => preloadNextSegment(segmentIndex + 1), 100);
+    if (isScrrubbingRef.current) {
+      // During scrub: batch state updates to avoid choking video decode
+      scheduleScrubStateUpdate(vt, segment.clipId);
+    } else {
+      setVirtualTime(vt);
+      setActiveClipId(segment.clipId);
+      // Preload next segment
+      if (segmentIndex + 1 < timeline.segments.length) {
+        setTimeout(() => preloadNextSegment(segmentIndex + 1), 100);
+      }
     }
-  }, [getVideos, getSegmentVideoUrl, preloadNextSegment]);
+  }, [getVideos, getSegmentVideoUrl, preloadNextSegment, scheduleScrubStateUpdate]);
 
   /**
-   * Start scrubbing — pauses playback so each seekVirtual shows the frame.
+   * Seek to a specific actual time within the current segment.
+   * Used by the clip scrub bar for frame-level control.
+   * Seeks video immediately; batches React state update during drag.
+   */
+  const seekWithinSegment = useCallback((actualTime) => {
+    const timeline = timelineRef.current;
+    const segIndex = currentSegmentIndexRef.current;
+    const seg = timeline?.segments[segIndex];
+    if (!seg) return;
+
+    // Clamp to segment bounds
+    const clamped = Math.max(seg.startTime, Math.min(actualTime, seg.endTime));
+
+    const { active } = getVideos();
+    if (active) {
+      active.currentTime = clamped;
+    }
+
+    // Keep virtual time in sync (batched during scrub)
+    const vt = timeline.actualToVirtual(segIndex, clamped);
+    if (isScrrubbingRef.current) {
+      scheduleScrubStateUpdate(vt, seg.clipId);
+    } else {
+      setVirtualTime(vt);
+    }
+  }, [getVideos, scheduleScrubStateUpdate]);
+
+  /**
+   * Start scrubbing — pauses playback so seeks show each frame.
    */
   const startScrub = useCallback(() => {
     isScrrubbingRef.current = true;
@@ -432,6 +495,13 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
    */
   const endScrub = useCallback(async () => {
     isScrrubbingRef.current = false;
+
+    // Flush any pending state updates from the drag
+    if (scrubStateRafRef.current) {
+      cancelAnimationFrame(scrubStateRafRef.current);
+      scrubStateRafRef.current = null;
+    }
+    flushScrubState();
 
     // Preload the next segment from wherever we landed
     const timeline = timelineRef.current;
@@ -461,29 +531,6 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     return timeline.segments[currentSegmentIndexRef.current] || null;
   }, []);
 
-  /**
-   * Seek to a specific actual time within the current segment.
-   * Used by the clip scrub bar for frame-level control.
-   * Updates virtualTime to keep the main playhead in sync.
-   */
-  const seekWithinSegment = useCallback((actualTime) => {
-    const timeline = timelineRef.current;
-    const segIndex = currentSegmentIndexRef.current;
-    const seg = timeline?.segments[segIndex];
-    if (!seg) return;
-
-    // Clamp to segment bounds
-    const clamped = Math.max(seg.startTime, Math.min(actualTime, seg.endTime));
-
-    const { active } = getVideos();
-    if (active) {
-      active.currentTime = clamped;
-    }
-
-    // Keep virtual time in sync
-    const vt = timeline.actualToVirtual(segIndex, clamped);
-    setVirtualTime(vt);
-  }, [getVideos]);
 
   /**
    * Restart playback from the beginning.
