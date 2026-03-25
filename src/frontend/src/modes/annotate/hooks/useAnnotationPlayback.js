@@ -2,14 +2,9 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { buildVirtualTimeline } from './useVirtualTimeline';
 
 /**
- * PLAYBACK_RATE for annotated clips — 0.5x slow-motion for study/coaching.
+ * Default playback rate for annotated clips — 0.5x slow-motion for study/coaching.
  */
-const PLAYBACK_RATE = 0.5;
-
-/**
- * CSS opacity transition duration in ms for the swap crossfade.
- */
-const CROSSFADE_MS = 80;
+const DEFAULT_PLAYBACK_RATE = 0.5;
 
 /**
  * How far before segment end (in seconds of actual video time) to trigger preload
@@ -28,7 +23,6 @@ const PRELOAD_AHEAD_SECONDS = 1.0;
  * @param {Array} params.clips — clip regions (sorted by startTime)
  * @param {Array|null} params.gameVideos — multi-video game videos array
  * @param {string} params.videoUrl — current single-video URL
- * @param {Function} params.getGameVideoUrl — (gameVideos, sequence) → URL
  * @returns {Object} playback state and controls
  */
 export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
@@ -38,9 +32,11 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
 
   // --- State ---
   const [isPlaybackMode, setIsPlaybackMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [virtualTime, setVirtualTime] = useState(0);
   const [activeClipId, setActiveClipId] = useState(null);
+  const [playbackRate, setPlaybackRate] = useState(DEFAULT_PLAYBACK_RATE);
 
   // Internal refs (not state to avoid re-render storms during playback)
   const activeVideoRef = useRef('A');       // 'A' or 'B'
@@ -49,6 +45,12 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
   const rafIdRef = useRef(null);
   const isPlayingRef = useRef(false);
   const hasPreloadedNextRef = useRef(false);
+  const playbackRateRef = useRef(DEFAULT_PLAYBACK_RATE);
+
+  // Keep ref in sync with state for use in RAF loop
+  useEffect(() => {
+    playbackRateRef.current = playbackRate;
+  }, [playbackRate]);
 
   // Build timeline from clips (stable reference via ref)
   const rebuildTimeline = useCallback(() => {
@@ -101,7 +103,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
 
     // Seek to next segment start
     inactive.currentTime = nextSeg.startTime;
-    inactive.playbackRate = PLAYBACK_RATE;
+    inactive.playbackRate = playbackRateRef.current;
     inactive.pause();
     hasPreloadedNextRef.current = true;
   }, [getVideos, getSegmentVideoUrl]);
@@ -137,10 +139,11 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       }
 
       const actualTime = active.currentTime;
+      const rate = playbackRateRef.current;
 
       // Preload next segment when approaching end
       if (!hasPreloadedNextRef.current && segIndex + 1 < timeline.segments.length) {
-        const timeRemaining = (seg.endTime - actualTime) / PLAYBACK_RATE;
+        const timeRemaining = (seg.endTime - actualTime) / rate;
         if (timeRemaining <= PRELOAD_AHEAD_SECONDS) {
           preloadNextSegment(segIndex + 1);
         }
@@ -170,7 +173,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
         if (inactive) {
           // Start playing the preloaded video
           inactive.currentTime = nextSeg.startTime;
-          inactive.playbackRate = PLAYBACK_RATE;
+          inactive.playbackRate = rate;
           inactive.play().catch(() => {});
         }
 
@@ -185,7 +188,6 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
 
         // Preload the segment after next
         if (nextIndex + 1 < timeline.segments.length) {
-          // Use setTimeout to let the swap settle before preloading
           setTimeout(() => preloadNextSegment(nextIndex + 1), 100);
         }
       }
@@ -211,12 +213,49 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
   }, []);
 
   /**
-   * Enter playback mode.
+   * Wait for a video element to be ready (seeked + enough data).
+   * Returns a promise that resolves when the video can play from currentTime.
    */
-  const enterPlaybackMode = useCallback(() => {
+  const waitForVideoReady = useCallback((video, timeoutMs = 5000) => {
+    return new Promise((resolve) => {
+      // Already ready?
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        resolve();
+        return;
+      }
+
+      const cleanup = () => {
+        video.removeEventListener('canplay', onReady);
+        video.removeEventListener('seeked', onReady);
+        clearTimeout(timer);
+      };
+      const onReady = () => {
+        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          cleanup();
+          resolve();
+        }
+      };
+      // Timeout fallback — don't block forever
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve(); // proceed anyway
+      }, timeoutMs);
+
+      video.addEventListener('canplay', onReady);
+      video.addEventListener('seeked', onReady);
+    });
+  }, []);
+
+  /**
+   * Enter playback mode.
+   * Loads and seeks video A, waits until ready, then auto-plays.
+   */
+  const enterPlaybackMode = useCallback(async () => {
     const timeline = rebuildTimeline();
     if (!timeline || timeline.segments.length === 0) return;
 
+    // Show loading state while we prepare
+    setIsLoading(true);
     setIsPlaybackMode(true);
     setVirtualTime(0);
     currentSegmentIndexRef.current = 0;
@@ -226,23 +265,35 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     const firstSeg = timeline.segments[0];
     setActiveClipId(firstSeg.clipId);
 
-    // Setup video A with first segment
+    // Wait a frame for refs to mount (the dual video elements appear after isPlaybackMode=true)
+    await new Promise(r => requestAnimationFrame(r));
+
     const videoA = videoARef.current;
     if (videoA) {
       const url = getSegmentVideoUrl(firstSeg);
-      if (videoA.src !== url) {
-        videoA.src = url;
-        videoA.load();
-      }
+      videoA.src = url;
+      videoA.load();
       videoA.currentTime = firstSeg.startTime;
-      videoA.playbackRate = PLAYBACK_RATE;
+      videoA.playbackRate = playbackRateRef.current;
+
+      // Wait until the video has enough data to play
+      await waitForVideoReady(videoA);
+
+      // Auto-play
+      setIsLoading(false);
+      await videoA.play().catch(() => {});
+      isPlayingRef.current = true;
+      setIsPlaying(true);
+      startTimeUpdateLoop();
+    } else {
+      setIsLoading(false);
     }
 
     // Preload second segment into video B
     if (timeline.segments.length > 1) {
       setTimeout(() => preloadNextSegment(1), 200);
     }
-  }, [rebuildTimeline, getSegmentVideoUrl, preloadNextSegment]);
+  }, [rebuildTimeline, getSegmentVideoUrl, preloadNextSegment, waitForVideoReady, startTimeUpdateLoop]);
 
   /**
    * Exit playback mode.
@@ -252,6 +303,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     isPlayingRef.current = false;
     setIsPlaying(false);
     setIsPlaybackMode(false);
+    setIsLoading(false);
     setVirtualTime(0);
     setActiveClipId(null);
 
@@ -273,6 +325,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       setIsPlaying(false);
       stopTimeUpdateLoop();
     } else {
+      const rate = playbackRateRef.current;
       // If at the end, restart from beginning
       const timeline = timelineRef.current;
       if (timeline && virtualTime >= timeline.totalVirtualDuration - 0.1) {
@@ -288,7 +341,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
             videoA.load();
           }
           videoA.currentTime = firstSeg.startTime;
-          videoA.playbackRate = PLAYBACK_RATE;
+          videoA.playbackRate = rate;
           await videoA.play().catch(() => {});
         }
         setActiveClipId(firstSeg.clipId);
@@ -297,7 +350,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
           setTimeout(() => preloadNextSegment(1), 200);
         }
       } else {
-        active.playbackRate = PLAYBACK_RATE;
+        active.playbackRate = rate;
         await active.play().catch(() => {});
       }
       isPlayingRef.current = true;
@@ -305,6 +358,19 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       startTimeUpdateLoop();
     }
   }, [getVideos, stopTimeUpdateLoop, startTimeUpdateLoop, virtualTime, getSegmentVideoUrl, preloadNextSegment]);
+
+  /**
+   * Change playback speed. Updates the currently-playing video element immediately.
+   */
+  const changePlaybackRate = useCallback((newRate) => {
+    setPlaybackRate(newRate);
+    playbackRateRef.current = newRate;
+    // Apply immediately to the active video element
+    const { active } = getVideos();
+    if (active) {
+      active.playbackRate = newRate;
+    }
+  }, [getVideos]);
 
   /**
    * Seek to a virtual time position.
@@ -330,7 +396,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       active.load();
     }
     active.currentTime = actualTime;
-    active.playbackRate = PLAYBACK_RATE;
+    active.playbackRate = playbackRateRef.current;
 
     setVirtualTime(vt);
     setActiveClipId(segment.clipId);
@@ -362,9 +428,11 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
 
     // State
     isPlaybackMode,
+    isLoading,
     isPlaying,
     virtualTime,
     activeClipId,
+    playbackRate,
     activeVideoLabel: activeVideoRef.current,
 
     // Derived
@@ -375,6 +443,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     exitPlaybackMode,
     togglePlay,
     seekVirtual,
+    changePlaybackRate,
   };
 }
 

@@ -1,12 +1,67 @@
+import { useState, useRef, useEffect } from 'react';
 import { Play, Pause, ArrowLeft } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
-import { formatTime } from '../../../utils/timeFormat';
+
+// Speed options for annotation playback
+const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
+/**
+ * SpeedControl — YouTube-style playback speed selector.
+ * Reuses the same pattern as AnnotateControls' SpeedControl.
+ */
+function SpeedControl({ speed, onSpeedChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => setIsOpen(!isOpen)}
+        title="Playback speed"
+        className="font-mono"
+      >
+        {speed}x
+      </Button>
+      {isOpen && (
+        <div className="absolute bottom-full mb-1 right-0 bg-gray-800 border border-gray-600 rounded-lg shadow-lg py-1 z-50">
+          {SPEED_OPTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => {
+                onSpeedChange(s);
+                setIsOpen(false);
+              }}
+              className={`
+                w-full px-4 py-1.5 text-sm text-left font-mono transition-colors
+                ${s === speed ? 'bg-green-600 text-white' : 'text-gray-300 hover:bg-gray-700'}
+              `}
+            >
+              {s}x
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * PlaybackControls — Custom controls for annotation playback mode.
  *
  * Shows: play/pause, virtual time display, progress bar with segment markers,
- * and a "Back to Annotating" button.
+ * speed control, and a "Back to Annotating" button.
  */
 export function PlaybackControls({
   isPlaying,
@@ -17,13 +72,12 @@ export function PlaybackControls({
   onTogglePlay,
   onSeek,
   onExitPlayback,
+  playbackRate,
+  onPlaybackRateChange,
   isFullscreen = false,
 }) {
   const progress = totalVirtualDuration > 0 ? (virtualTime / totalVirtualDuration) * 100 : 0;
 
-  /**
-   * Handle click/drag on progress bar to seek.
-   */
   const handleProgressClick = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -31,9 +85,6 @@ export function PlaybackControls({
     onSeek(fraction * totalVirtualDuration);
   };
 
-  /**
-   * Format virtual time for display (MM:SS).
-   */
   const formatVirtualTime = (seconds) => {
     if (isNaN(seconds) || seconds < 0) return '0:00';
     const m = Math.floor(seconds / 60);
@@ -52,7 +103,7 @@ export function PlaybackControls({
       >
         {/* Segment markers — show boundaries between clips */}
         {segments && segments.length > 1 && segments.map((seg, i) => {
-          if (i === 0) return null; // No marker at the very start
+          if (i === 0) return null;
           const markerPos = (seg.virtualStart / totalVirtualDuration) * 100;
           return (
             <div
@@ -107,10 +158,8 @@ export function PlaybackControls({
           </span>
         </div>
 
-        {/* Right: Speed indicator */}
-        <div className="text-xs text-gray-400 font-mono">
-          0.5x
-        </div>
+        {/* Right: Speed control */}
+        <SpeedControl speed={playbackRate} onSpeedChange={onPlaybackRateChange} />
       </div>
     </div>
   );

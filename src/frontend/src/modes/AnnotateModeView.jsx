@@ -134,8 +134,18 @@ export function AnnotateModeView({
               preload="auto"
             />
 
+            {/* Loading overlay — shown while seeking/buffering before auto-play */}
+            {playback.isLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30">
+                <div className="text-center">
+                  <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-600 border-t-green-500" />
+                  <p className="mt-3 text-sm text-gray-300">Preparing playback...</p>
+                </div>
+              </div>
+            )}
+
             {/* NotesOverlay for active clip */}
-            {activePlaybackClip && (() => {
+            {!playback.isLoading && activePlaybackClip && (() => {
               const displayName = activePlaybackClip.name ||
                 generateClipName(activePlaybackClip.rating, activePlaybackClip.tags, activePlaybackClip.notes);
               return (displayName || activePlaybackClip.notes) ? (
@@ -162,6 +172,8 @@ export function AnnotateModeView({
           onTogglePlay={playback.togglePlay}
           onSeek={playback.seekVirtual}
           onExitPlayback={playback.exitPlaybackMode}
+          playbackRate={playback.playbackRate}
+          onPlaybackRateChange={playback.changePlaybackRate}
         />
       </div>
     );
