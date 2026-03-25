@@ -155,7 +155,7 @@ export function PlaybackControls({
       {/* Progress bar — supports click and drag */}
       <div
         ref={progressBarRef}
-        className="relative w-full h-3 bg-gray-700 rounded-full cursor-pointer group"
+        className="relative w-full h-6 bg-gray-800 rounded-lg cursor-pointer"
         onMouseDown={handleMouseDownWithListeners}
       >
         {/* Segment markers */}
@@ -165,7 +165,7 @@ export function PlaybackControls({
           return (
             <div
               key={seg.clipId}
-              className="absolute top-0 bottom-0 w-px bg-gray-500 z-10"
+              className="absolute top-0 bottom-0 w-px bg-gray-600 z-10"
               style={{ left: `${markerPos}%` }}
             />
           );
@@ -173,14 +173,14 @@ export function PlaybackControls({
 
         {/* Progress fill */}
         <div
-          className="absolute top-0 left-0 h-full bg-green-500 rounded-full transition-[width] duration-75"
+          className="absolute top-0 left-0 h-full bg-blue-600 rounded-l-lg pointer-events-none"
           style={{ width: `${progress}%` }}
         />
 
-        {/* Playhead thumb */}
+        {/* Playhead line */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-20"
-          style={{ left: `calc(${progress}% - 7px)` }}
+          className="absolute top-0 w-1 h-full bg-white shadow-lg pointer-events-none z-20"
+          style={{ left: `calc(${progress}% - 2px)` }}
         />
       </div>
 
