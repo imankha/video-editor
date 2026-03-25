@@ -188,8 +188,29 @@ export function PlaybackControls({
       <div className={`controls-container flex flex-wrap items-center justify-between gap-y-1 py-2 px-2 sm:px-4 ${
         isFullscreen ? 'bg-gray-900/90' : 'bg-gray-800 rounded-b-lg'
       }`}>
-        {/* Left: Playback transport */}
+        {/* Left: Back + Playback transport */}
         <div className="flex items-center gap-1">
+          {/* Back to Annotating */}
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={ArrowLeft}
+            iconOnly
+            onClick={onExitPlayback}
+            title="Back to Annotating"
+            className="sm:hidden"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={ArrowLeft}
+            onClick={onExitPlayback}
+            title="Back to Annotating"
+            className="hidden sm:flex text-gray-300 hover:text-white"
+          >
+            Back
+          </Button>
+
           {/* Play/Pause */}
           <Button
             variant="success"
@@ -219,16 +240,6 @@ export function PlaybackControls({
 
         {/* Right: controls */}
         <div className="flex items-center gap-2">
-          {/* Back to Annotating */}
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={ArrowLeft}
-            iconOnly
-            onClick={onExitPlayback}
-            title="Back to Annotating"
-          />
-
           {/* Volume control */}
           <div className="flex items-center gap-1">
             <Button
