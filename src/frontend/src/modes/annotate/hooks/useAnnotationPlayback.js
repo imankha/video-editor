@@ -453,6 +453,39 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
   }, [getVideos, preloadNextSegment, startTimeUpdateLoop]);
 
   /**
+   * Get the current segment object (for clip scrub bar).
+   */
+  const getCurrentSegment = useCallback(() => {
+    const timeline = timelineRef.current;
+    if (!timeline) return null;
+    return timeline.segments[currentSegmentIndexRef.current] || null;
+  }, []);
+
+  /**
+   * Seek to a specific actual time within the current segment.
+   * Used by the clip scrub bar for frame-level control.
+   * Updates virtualTime to keep the main playhead in sync.
+   */
+  const seekWithinSegment = useCallback((actualTime) => {
+    const timeline = timelineRef.current;
+    const segIndex = currentSegmentIndexRef.current;
+    const seg = timeline?.segments[segIndex];
+    if (!seg) return;
+
+    // Clamp to segment bounds
+    const clamped = Math.max(seg.startTime, Math.min(actualTime, seg.endTime));
+
+    const { active } = getVideos();
+    if (active) {
+      active.currentTime = clamped;
+    }
+
+    // Keep virtual time in sync
+    const vt = timeline.actualToVirtual(segIndex, clamped);
+    setVirtualTime(vt);
+  }, [getVideos]);
+
+  /**
    * Restart playback from the beginning.
    * Pauses, seeks to virtual time 0, and stops the loop.
    */
@@ -502,6 +535,8 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     togglePlay,
     restart,
     seekVirtual,
+    seekWithinSegment,
+    getCurrentSegment,
     startScrub,
     endScrub,
     changePlaybackRate,

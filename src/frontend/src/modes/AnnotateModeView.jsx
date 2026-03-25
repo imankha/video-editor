@@ -195,9 +195,14 @@ export function AnnotateModeView({
         totalVirtualDuration={playback.timeline?.totalVirtualDuration || 0}
         segments={playback.timeline?.segments}
         activeClipId={playback.activeClipId}
+        activeClipName={activePlaybackClip
+          ? (activePlaybackClip.name || generateClipName(activePlaybackClip.rating, activePlaybackClip.tags, activePlaybackClip.notes))
+          : null}
+        currentSegment={playback.getCurrentSegment()}
         onTogglePlay={playback.togglePlay}
         onRestart={playback.restart}
         onSeek={playback.seekVirtual}
+        onSeekWithinSegment={playback.seekWithinSegment}
         onStartScrub={playback.startScrub}
         onEndScrub={playback.endScrub}
         onExitPlayback={handleExitPlayback}
