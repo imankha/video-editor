@@ -191,22 +191,26 @@ export function AnnotateModeView({
                 error={error}
                 loadingMessage="Loading video..."
                 overlays={[
-                  // NotesOverlay - shows name, rating, notes for region at playhead
-                  // Hidden while the Add/Edit Clip panel is open to prevent layout jumps during scrub
+                  // NotesOverlay - shows name, rating, notes for the active clip.
+                  // Selected clip is the primary source of truth (instant on click);
+                  // playhead lookup is the fallback (auto-display during playback).
+                  // Hidden while the Add/Edit Clip panel is open to prevent layout jumps during scrub.
                   !showAnnotateOverlay && (() => {
-                    const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
-                    if (!regionAtPlayhead) return null;
+                    const selectedRegion = annotateSelectedRegionId
+                      && clipRegions.find(r => r.id === annotateSelectedRegionId);
+                    const region = selectedRegion || getAnnotateRegionAtTime(currentTime);
+                    if (!region) return null;
 
                     // Derive display name from rating+tags if no explicit name is set
-                    const displayName = regionAtPlayhead.name ||
-                      generateClipName(regionAtPlayhead.rating, regionAtPlayhead.tags, regionAtPlayhead.notes);
+                    const displayName = region.name ||
+                      generateClipName(region.rating, region.tags, region.notes);
 
-                    return (displayName || regionAtPlayhead.notes) ? (
+                    return (displayName || region.notes) ? (
                       <NotesOverlay
                         key="annotate-notes"
                         name={displayName}
-                        notes={regionAtPlayhead.notes}
-                        rating={regionAtPlayhead.rating}
+                        notes={region.notes}
+                        rating={region.rating}
                         isVisible={true}
                         isFullscreen={annotateFullscreen}
                       />
