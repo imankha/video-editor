@@ -49,13 +49,21 @@ export function ClipScrubRegion({
   const [previewTime, setPreviewTime] = useState(null); // null when not previewing
   const previewRafRef = useRef(null);
 
-  // Stable anchor: captured once on mount so the window doesn't shift during drag
-  // (onSeek updates currentTime, which would otherwise recalculate the window)
+  // Stable anchor: captured per-clip so the window doesn't shift during drag
+  // (onSeek updates currentTime, which would otherwise recalculate the window).
+  // Must update when existingClip changes so the window re-centers on the new clip.
   const anchorRef = useRef(
     existingClip
       ? (existingClip.startTime + existingClip.endTime) / 2
       : currentTime
   );
+  const prevClipIdRef = useRef(existingClip?.id ?? null);
+  if ((existingClip?.id ?? null) !== prevClipIdRef.current) {
+    prevClipIdRef.current = existingClip?.id ?? null;
+    anchorRef.current = existingClip
+      ? (existingClip.startTime + existingClip.endTime) / 2
+      : currentTime;
+  }
   const anchor = anchorRef.current;
   const windowStart = Math.max(0, anchor - WINDOW_BEFORE);
   const windowEnd = Math.min(videoDuration, anchor + WINDOW_AFTER);

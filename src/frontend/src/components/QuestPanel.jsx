@@ -35,8 +35,13 @@ export function QuestPanel() {
   // Auto-collapse when a clip is selected in annotate mode (avoids sidebar overlap)
   const editorMode = useEditorStore((s) => s.editorMode);
   const annotateHasSelectedClip = useEditorStore((s) => s.annotateHasSelectedClip);
-  const shouldForceCollapse = editorMode === 'annotate' && annotateHasSelectedClip;
-  const isExpanded = expanded && !shouldForceCollapse;
+  const shouldAutoCollapse = editorMode === 'annotate' && annotateHasSelectedClip;
+  const [userOverride, setUserOverride] = useState(false);
+  // Reset override when auto-collapse condition goes away
+  useEffect(() => {
+    if (!shouldAutoCollapse) setUserOverride(false);
+  }, [shouldAutoCollapse]);
+  const isExpanded = expanded && (!shouldAutoCollapse || userOverride);
 
   // Play sound effects
   const playSound = (type) => {
@@ -183,7 +188,13 @@ export function QuestPanel() {
 
         {/* Collapsed / Header — always visible, clickable to toggle */}
         <button
-          onClick={() => setExpanded(!expanded)}
+          onClick={(e) => {
+            const next = !expanded;
+            setExpanded(next);
+            // If user explicitly expands while auto-collapse is active, override it
+            if (next && shouldAutoCollapse) setUserOverride(true);
+            if (!next) setUserOverride(false);
+          }}
           className={`w-full flex items-center text-left hover:bg-white/[0.02] transition-colors ${
             isExpanded ? 'gap-3 px-4 pt-4 pb-3' : 'gap-2 px-3 py-2.5'
           }`}
