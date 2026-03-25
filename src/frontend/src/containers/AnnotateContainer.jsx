@@ -9,9 +9,9 @@ import { useEditorStore } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
+import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { API_BASE } from '../config';
 import { VideoMode, GameType } from '../constants/gameConstants';
-import exportWebSocketManager from '../services/ExportWebSocketManager';
 
 /**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
@@ -65,8 +65,6 @@ export function AnnotateContainer({
     setAnnotateGameId,
     annotateGameName,
     setAnnotateGameName,
-    isCreatingAnnotatedVideo,
-    setIsCreatingAnnotatedVideo,
     isImportingToProjects,
     setIsImportingToProjects,
     // Note: isUploadingGameVideo and uploadProgress from local state are NOT used
@@ -135,14 +133,8 @@ export function AnnotateContainer({
     isSaving: isClipSaving,
   } = useRawClipSave();
 
-  // Export state from Zustand store
-  const {
-    exportProgress: globalExportProgress,
-    setExportProgress,
-    setExportCompleteToastId,
-    dismissExportCompleteToast,
-    startExport: startExportInStore,
-  } = useExportStore();
+  // Export state from Zustand store (used for dismiss-on-change only)
+  const { dismissExportCompleteToast } = useExportStore();
 
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const setAnnotateHasSelectedClip = useEditorStore((s) => s.setAnnotateHasSelectedClip);
@@ -152,14 +144,6 @@ export function AnnotateContainer({
     setAnnotateHasSelectedClip(!!annotateSelectedRegionId);
   }, [annotateSelectedRegionId, setAnnotateHasSelectedClip]);
 
-  // Filter export progress to only show progress for current game (not other projects)
-  const exportProgress = useMemo(() => {
-    if (!globalExportProgress) return null;
-    // Only show progress if it's an annotate export for the current game
-    if (globalExportProgress.type !== 'annotate') return null;
-    if (globalExportProgress.gameId && annotateGameId && globalExportProgress.gameId !== annotateGameId) return null;
-    return globalExportProgress;
-  }, [globalExportProgress, annotateGameId]);
 
   // Upload state from Zustand store (persists across page navigation)
   const uploadStore = useUploadStore();
@@ -439,164 +423,12 @@ export function AnnotateContainer({
     }
   }, [getGame, getGameVideoUrl, annotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode, saveClip]);
 
-  /**
-   * Helper function to call the annotate export API
-   */
-  const callAnnotateExportApi = useCallback(async (clipData, saveToDb, settings = null) => {
-    // Quick health check before starting export
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout - server may be processing video
-      const healthResponse = await fetch(`${API_BASE}/api/health`, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (!healthResponse.ok) {
-        throw new Error(`Server returned ${healthResponse.status}: ${healthResponse.statusText}`);
-      }
-    } catch (healthErr) {
-      console.error('[AnnotateContainer] Server health check failed:', healthErr);
-      // Provide more specific error messages based on error type
-      if (healthErr.name === 'AbortError') {
-        throw new Error('Server connection timed out. The backend may be slow or unresponsive.');
-      } else if (healthErr.message.includes('Failed to fetch') || healthErr.message.includes('NetworkError')) {
-        throw new Error('Cannot connect to server. Please ensure the backend server is running on port 8000.');
-      } else {
-        throw new Error(`Server error: ${healthErr.message}`);
-      }
-    }
-
-    const exportId = `exp_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-
-    // T12: Register export in store IMMEDIATELY for instant progress bar display (0%)
-    startExportInStore(exportId, { gameId: annotateGameId, gameName: annotateGameName }, 'annotate');
-
-    // Create a promise that resolves when WebSocket receives complete/error
-    // This ensures we wait for the background task to finish
-    let wsResolve, wsReject;
-    const wsCompletionPromise = new Promise((resolve, reject) => {
-      wsResolve = resolve;
-      wsReject = reject;
-    });
-
-    // Connect to WebSocket for real-time progress updates
-    try {
-      await exportWebSocketManager.connect(exportId, {
-        onProgress: (progress, message) => {
-          setExportProgress({ current: progress, total: 100, message, done: false });
-        },
-        onComplete: (data) => {
-          setExportProgress({ current: 100, total: 100, message: 'Export complete!', done: true });
-          wsResolve(data);
-        },
-        onError: (error) => {
-          console.error('[AnnotateContainer] WS error:', error);
-          setExportProgress({ current: 0, total: 100, message: `Export failed: ${error}`, done: true, error: true });
-          wsReject(new Error(error || 'Export failed'));
-        }
-      });
-    } catch (e) {
-      console.warn('[AnnotateContainer] Failed to connect to WebSocket:', e);
-      wsReject(e);
-    }
-
-    const formData = new FormData();
-    formData.append('save_to_db', saveToDb ? 'true' : 'false');
-    formData.append('export_id', exportId);
-
-    if (saveToDb && settings) {
-      formData.append('settings_json', JSON.stringify(settings));
-    }
-
-    const clipsForApi = clipData.map(clip => ({
-      start_time: clip.start_time,
-      end_time: clip.end_time,
-      name: clip.name,
-      notes: clip.notes || '',
-      rating: clip.rating || 3,
-      tags: clip.tags || [],
-      video_sequence: clip.video_sequence || null,
-    }));
-
-    formData.append('clips_json', JSON.stringify(clipsForApi));
-
-    if (annotateGameId) {
-      formData.append('game_id', annotateGameId.toString());
-    } else if (annotateVideoFile) {
-      formData.append('video', annotateVideoFile);
-    } else {
-      exportWebSocketManager.disconnect(exportId);
-      throw new Error('No video source available');
-    }
-
-    try {
-      const response = await fetch(`${API_BASE}/api/annotate/export`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.detail || `Export failed with status ${response.status}: ${response.statusText}`;
-        console.error('[AnnotateContainer] Export request failed:', errorMessage);
-        exportWebSocketManager.disconnect(exportId);
-        throw new Error(errorMessage);
-      }
-
-
-      // Wait for the background job to complete via WebSocket
-      // Set a timeout of 30 minutes for long exports
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Export timed out after 30 minutes')), 30 * 60 * 1000);
-      });
-
-      const result = await Promise.race([wsCompletionPromise, timeoutPromise]);
-
-      // Clear progress after success
-      setTimeout(() => setExportProgress(null), 2000);
-      return { success: true, ...result };
-    } catch (err) {
-      console.error('[AnnotateContainer] Export error:', err);
-      // Don't clear progress on error - let it stay visible with red bar
-      throw err;
-    } finally {
-      exportWebSocketManager.disconnect(exportId);
-    }
-  }, [annotateVideoFile, annotateGameId, annotateGameName, startExportInStore]);
-
-  /**
-   * Create Annotated Video - Creates compilation and adds to gallery, stays on annotate screen
-   */
-  const handleCreateAnnotatedVideo = useCallback(async (clipData) => {
-
-    const hasVideoSource = annotateVideoFile || annotateGameId;
-    if (!hasVideoSource || !clipData || clipData.length === 0) {
-      console.error('[AnnotateContainer] Cannot export: no video source or clips');
-      return;
-    }
-
-    setIsCreatingAnnotatedVideo(true);
-    try {
-      const result = await callAnnotateExportApi(clipData, false);
-
-
-      // Show persistent toast - video is in the gallery for download
-      const toastId = toast.success('Annotated video created!', {
-        message: 'Your video has been added to the gallery.',
-        duration: 0  // Persistent - dismissed when user makes changes
-      });
-      setExportCompleteToastId(toastId);
-
-    } catch (err) {
-      console.error('[AnnotateContainer] Create annotated video failed:', err);
-      toast.error('Failed to create video', {
-        message: err.message
-      });
-    } finally {
-      setIsCreatingAnnotatedVideo(false);
-    }
-  }, [annotateVideoFile, annotateGameId, callAnnotateExportApi, setExportCompleteToastId]);
-
-  // NOTE: handleImportIntoProjects has been removed - clips are now saved in real-time during annotation
-  // The old batch import flow is no longer needed. See handleFullscreenCreateClip for real-time saving.
+  // T710: Annotation playback hook (dual-video ping-pong)
+  const playback = useAnnotationPlayback({
+    clips: clipRegions,
+    gameVideos,
+    videoUrl: annotateVideoUrl,
+  });
 
   /**
    * Handle fullscreen toggle - uses CSS fixed positioning instead of browser API
@@ -1051,13 +883,10 @@ export function AnnotateContainer({
     annotatePlaybackSpeed,
     annotateContainerRef,
     annotateFileInputRef,
-    isCreatingAnnotatedVideo,
-    isImportingToProjects, // Kept for backwards compatibility, may be removed later
-    isUploadingFromStore: isUploadingFromStore, // From global store (persists across navigation)
+    isUploadingGameVideo: isUploadingFromStore, // From global store (persists across navigation)
     uploadProgress: storeUploadProgress, // From global store
     isClipSaving, // Real-time clip save in progress
     hasAnnotateClips,
-    exportProgress,
 
     // Clip region state
     clipRegions,
@@ -1070,7 +899,6 @@ export function AnnotateContainer({
     // Handlers
     handleGameVideoSelect,
     handleLoadGame,
-    handleCreateAnnotatedVideo: (clipData) => requireAuth(() => handleCreateAnnotatedVideo(clipData)),
     handleToggleFullscreen: fullscreenWorthwhile ? handleToggleFullscreen : undefined,
     handleAddClipFromButton,
     handleFullscreenCreateClip,
@@ -1092,6 +920,9 @@ export function AnnotateContainer({
     isEditMode, // Derived from state machine: true when SELECTED
     lockScrub, // Suppress auto-deselect during sidebar scrub
     unlockScrub,
+
+    // T710: Annotation playback (dual-video ping-pong)
+    playback,
 
     // Computed
     effectiveDuration,

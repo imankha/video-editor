@@ -22,7 +22,7 @@ const formatTime = (seconds) => {
  * On mobile: two action buttons — "details" and "jump to clip".
  * On desktop: entire row is clickable to select.
  */
-export function ClipListItem({ region, index, isSelected, onClick, isMobile = false, onViewDetails, onJumpToClip }) {
+export function ClipListItem({ region, index, isSelected, isPlaybackActive = false, onClick, isMobile = false, onViewDetails, onJumpToClip }) {
   const rating = region.rating || 3;
   const { notation, badgeColor, backgroundColor } = getRatingDisplay(rating);
 
@@ -37,14 +37,18 @@ export function ClipListItem({ region, index, isSelected, onClick, isMobile = fa
       onClick={isMobile ? undefined : onClick}
       className={`
         ${isMobile ? '' : 'cursor-pointer'} border-b border-gray-800 transition-all
-        ${isSelected
-          ? 'border-l-2'
-          : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'
+        ${isPlaybackActive
+          ? 'border-l-3 animate-pulse'
+          : isSelected
+            ? 'border-l-2'
+            : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'
         }
       `}
       style={{
-        backgroundColor: isSelected ? backgroundColor : undefined,
-        borderLeftColor: isSelected ? badgeColor : undefined,
+        backgroundColor: isPlaybackActive
+          ? `${badgeColor}33`  // 20% opacity tint of rating color
+          : isSelected ? backgroundColor : undefined,
+        borderLeftColor: isPlaybackActive ? badgeColor : isSelected ? badgeColor : undefined,
       }}
     >
       <div className={`flex items-center px-2 ${isMobile ? 'py-3' : 'py-1.5'}`}>

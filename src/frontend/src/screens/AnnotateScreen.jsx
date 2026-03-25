@@ -150,7 +150,6 @@ export function AnnotateScreen({ onClearSelection }) {
     annotateSelectedLayer,
     annotatePlaybackSpeed,
     annotateContainerRef,
-    isCreatingAnnotatedVideo,
     isUploadingGameVideo,
     uploadProgress,
     hasAnnotateClips,
@@ -163,7 +162,6 @@ export function AnnotateScreen({ onClearSelection }) {
     // Handlers
     handleGameVideoSelect,
     handleLoadGame,
-    handleCreateAnnotatedVideo,
     handleToggleFullscreen,
     handleAddClipFromButton,
     handleFullscreenCreateClip,
@@ -179,7 +177,6 @@ export function AnnotateScreen({ onClearSelection }) {
     deleteClipRegion,
     importAnnotations,
     getAnnotateRegionAtTime,
-    getAnnotateExportData,
     selectAnnotateRegion,
     isEditMode,
     lockScrub,
@@ -193,6 +190,8 @@ export function AnnotateScreen({ onClearSelection }) {
     handleVideoTabSwitch,
     filteredClipRegions,
     filteredRegionsWithLayout,
+    // T710: Annotation playback
+    playback,
     // T251: View progress tracking
     getViewedDuration,
   } = annotate;
@@ -367,6 +366,7 @@ export function AnnotateScreen({ onClearSelection }) {
         <ClipsSidePanel
           clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
           selectedRegionId={annotateSelectedRegionId}
+          activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
           onSelectRegion={handleSelectAnnotateRegion}
           onUpdateRegion={updateClipRegion}
           onDeleteRegion={deleteClipRegion}
@@ -390,6 +390,7 @@ export function AnnotateScreen({ onClearSelection }) {
             <ClipsSidePanel
               clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
               selectedRegionId={annotateSelectedRegionId}
+              activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
               onSelectRegion={handleSelectAnnotateRegion}
               onUpdateRegion={updateClipRegion}
               onDeleteRegion={deleteClipRegion}
@@ -521,7 +522,6 @@ export function AnnotateScreen({ onClearSelection }) {
         onToggleFullscreen={handleToggleFullscreen}
         onAddClip={showAnnotateOverlay ? undefined : handleAddClipFromButton}
         getAnnotateRegionAtTime={getAnnotateRegionAtTime}
-        getAnnotateExportData={getAnnotateExportData}
         // Fullscreen overlay handlers
         onFullscreenCreateClip={handleFullscreenCreateClip}
         onFullscreenUpdateClip={handleFullscreenUpdateClip}
@@ -530,12 +530,11 @@ export function AnnotateScreen({ onClearSelection }) {
         // Layer selection
         annotateSelectedLayer={annotateSelectedLayer}
         onLayerSelect={setAnnotateSelectedLayer}
-        // Export state (exportProgress is read from store in AnnotateModeView)
-        isCreatingAnnotatedVideo={isCreatingAnnotatedVideo}
+        // Upload state
         isUploadingGameVideo={isUploadingGameVideo}
         uploadProgress={uploadProgress}
-        // Export handlers
-        onCreateAnnotatedVideo={handleCreateAnnotatedVideo}
+        // T710: Annotation playback
+        playback={playback}
         // Zoom (for video player)
         zoom={zoom}
         panOffset={panOffset}
