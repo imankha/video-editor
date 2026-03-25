@@ -182,6 +182,8 @@ export function AnnotateScreen({ onClearSelection }) {
     getAnnotateExportData,
     selectAnnotateRegion,
     isEditMode,
+    lockScrub,
+    unlockScrub,
     // Cleanup
     clearAnnotateState,
     // T82: Multi-video
@@ -376,6 +378,8 @@ export function AnnotateScreen({ onClearSelection }) {
           isVideoUploading={isUploadingGameVideo}
           onSeek={seek}
           videoRef={videoRef}
+          onScrubLock={lockScrub}
+          onScrubUnlock={unlockScrub}
         />
       </div>
       {/* Mobile sidebar overlay */}
@@ -398,6 +402,8 @@ export function AnnotateScreen({ onClearSelection }) {
               isMobile
               onSeek={seek}
               videoRef={videoRef}
+              onScrubLock={lockScrub}
+              onScrubUnlock={unlockScrub}
               onJumpToClip={(regionId, endTime) => {
                 handleSelectAnnotateRegion(regionId);
                 seek(endTime);

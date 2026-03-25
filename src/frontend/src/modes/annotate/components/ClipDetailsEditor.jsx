@@ -108,6 +108,8 @@ export function ClipDetailsEditor({
   videoDuration,
   onSeek,
   videoRef,
+  onScrubLock,
+  onScrubUnlock,
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -159,12 +161,18 @@ export function ClipDetailsEditor({
     setScrubEndTime(newEnd);
   }, []);
 
-  // On drag end: persist + seek to new start so currentTime is within the
-  // updated clip range (prevents auto-deselect from firing)
+  // Lock auto-deselect while scrubbing so onSeek doesn't close the sidebar
+  const handleDragStart = useCallback(() => {
+    onScrubLock?.();
+  }, [onScrubLock]);
+
+  // On drag end: persist, unlock auto-deselect, seek to new start so
+  // currentTime is within the updated clip range
   const handleDragEnd = useCallback((finalStart, finalEnd) => {
+    onScrubUnlock?.();
     onUpdate({ startTime: finalStart, endTime: finalEnd });
     onSeek?.(finalStart);
-  }, [onUpdate, onSeek]);
+  }, [onScrubUnlock, onUpdate, onSeek]);
 
   const handleNotesChange = (e) => {
     const newNotes = e.target.value.slice(0, maxNotesLength);
@@ -203,10 +211,8 @@ export function ClipDetailsEditor({
         </div>
 
         {/* Clip scrub region — same visual timeline used in the Add/Edit overlay.
-            onSeek is NOT passed: sidebar drag should NOT seek the video (which would
-            trigger auto-deselect since currentTime moves outside the original clip range
-            before the clip boundaries are updated). The overlay can seek because EDITING
-            state is immune to deselect; SELECTED state is not. */}
+            onScrubLock/onScrubUnlock suppress auto-deselect during drag so that
+            onSeek can preview frames without closing the sidebar. */}
         <ClipScrubRegion
           currentTime={region.startTime + (region.endTime - region.startTime) / 2}
           videoDuration={videoDuration}
@@ -215,7 +221,9 @@ export function ClipDetailsEditor({
           endTime={scrubEndTime}
           onStartTimeChange={handleStartTimeChange}
           onEndTimeChange={handleEndTimeChange}
+          onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
+          onSeek={onSeek}
           videoRef={videoRef}
         />
 

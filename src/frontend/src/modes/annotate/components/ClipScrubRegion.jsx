@@ -40,6 +40,7 @@ export function ClipScrubRegion({
   onStartTimeChange,
   onEndTimeChange,
   onSeek,
+  onDragStart,
   onDragEnd,
   videoRef,
 }) {
@@ -110,10 +111,12 @@ export function ClipScrubRegion({
   const onStartTimeChangeRef = useRef(onStartTimeChange);
   const onEndTimeChangeRef = useRef(onEndTimeChange);
   const onSeekRef = useRef(onSeek);
+  const onDragStartRef = useRef(onDragStart);
   const onDragEndRef = useRef(onDragEnd);
   useEffect(() => { onStartTimeChangeRef.current = onStartTimeChange; }, [onStartTimeChange]);
   useEffect(() => { onEndTimeChangeRef.current = onEndTimeChange; }, [onEndTimeChange]);
   useEffect(() => { onSeekRef.current = onSeek; }, [onSeek]);
+  useEffect(() => { onDragStartRef.current = onDragStart; }, [onDragStart]);
   useEffect(() => { onDragEndRef.current = onDragEnd; }, [onDragEnd]);
 
   // Handle pointer down on a handle
@@ -128,6 +131,8 @@ export function ClipScrubRegion({
     const clickTime = pixelToTime(e.clientX);
     const handleTime = handle === 'start' ? startTimeRef.current : endTimeRef.current;
     dragOffsetRef.current = clickTime - handleTime;
+    // Notify parent that drag is starting (e.g. to suppress auto-deselect)
+    onDragStartRef.current?.();
     // Seek immediately so the video shows this handle's frame (no jump on first move)
     onSeekRef.current?.(handleTime);
     // Set ref immediately (no async state delay)

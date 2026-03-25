@@ -100,6 +100,9 @@ export function AnnotateContainer({
     selectedRegionId: annotateSelectedRegionId,
     isOverlayOpen: showAnnotateOverlay,
     isEditMode,
+    scrubLockedRef,
+    lockScrub,
+    unlockScrub,
   } = useClipSelection();
 
   // Annotate clip management hook — selection delegated to state machine
@@ -831,6 +834,7 @@ export function AnnotateContainer({
     const { type, clipId } = selectionState;
 
     if (type === 'EDITING' || type === 'CREATING') return;
+    if (scrubLockedRef.current) return; // Sidebar scrub in progress — don't deselect
 
     const FRAME_TOLERANCE = 0.15; // ~4 frames at 30fps — handles seek snapping
     const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
@@ -1086,6 +1090,8 @@ export function AnnotateContainer({
     getAnnotateExportData,
     selectAnnotateRegion, // Raw select for keyboard shortcuts (doesn't seek)
     isEditMode, // Derived from state machine: true when SELECTED
+    lockScrub, // Suppress auto-deselect during sidebar scrub
+    unlockScrub,
 
     // Computed
     effectiveDuration,

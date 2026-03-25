@@ -27,6 +27,8 @@ export function ClipsSidePanel({
   onJumpToClip,
   onSeek,
   videoRef,
+  onScrubLock,
+  onScrubUnlock,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
   const fileInputRef = useRef(null);
@@ -122,6 +124,8 @@ export function ClipsSidePanel({
               videoDuration={videoDuration}
               onSeek={onSeek}
               videoRef={videoRef}
+              onScrubLock={onScrubLock}
+              onScrubUnlock={onScrubUnlock}
             />
           </div>
         </>
@@ -243,6 +247,8 @@ export function ClipsSidePanel({
               videoDuration={videoDuration}
               onSeek={onSeek}
               videoRef={videoRef}
+              onScrubLock={onScrubLock}
+              onScrubUnlock={onScrubUnlock}
             />
           )}
         </>

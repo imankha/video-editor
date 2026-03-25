@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 /**
  * Selection state types for the clip selection state machine.
@@ -31,6 +31,11 @@ export const SELECTION_STATES = {
  */
 export function useClipSelection() {
   const [state, setState] = useState({ type: SELECTION_STATES.NONE });
+
+  // Scrub lock: when true, auto-deselect is suppressed (sidebar scrub in progress)
+  const scrubLockedRef = useRef(false);
+  const lockScrub = useCallback(() => { scrubLockedRef.current = true; }, []);
+  const unlockScrub = useCallback(() => { scrubLockedRef.current = false; }, []);
 
   const selectClip = useCallback((clipId) => {
     setState({ type: SELECTION_STATES.SELECTED, clipId });
@@ -85,5 +90,8 @@ export function useClipSelection() {
     selectedRegionId,
     isOverlayOpen,
     isEditMode,
+    scrubLockedRef,
+    lockScrub,
+    unlockScrub,
   };
 }
