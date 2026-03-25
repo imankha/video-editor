@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Play, Pause, ArrowLeft, Maximize, Minimize } from 'lucide-react';
+import { Play, Pause, RotateCcw, Maximize, Minimize, Volume2, VolumeX, ArrowLeft } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
 
 // Speed options for annotation playback
@@ -57,14 +57,14 @@ function SpeedControl({ speed, onSpeedChange }) {
 }
 
 /**
- * PlaybackControls — Custom controls for annotation playback mode.
+ * PlaybackControls — Controls for annotation playback mode.
  *
- * Features:
- * - Draggable progress bar with frame-by-frame preview during scrub
- * - Play/pause, virtual time display
- * - Speed control dropdown
- * - Fullscreen toggle
- * - "Back to Annotating" button
+ * Matches AnnotateControls layout:
+ *   Left:   [Play/Pause] [Restart]
+ *   Center: Time display
+ *   Right:  [Back] [Volume] [Speed] [Fullscreen]
+ *
+ * Progress bar with drag-to-scrub sits above the controls row.
  */
 export function PlaybackControls({
   isPlaying,
@@ -73,6 +73,7 @@ export function PlaybackControls({
   segments,
   activeClipId,
   onTogglePlay,
+  onRestart,
   onSeek,
   onStartScrub,
   onEndScrub,
@@ -81,14 +82,37 @@ export function PlaybackControls({
   onPlaybackRateChange,
   isFullscreen = false,
   onToggleFullscreen,
+  videoARef,
+  videoBRef,
 }) {
   const progress = totalVirtualDuration > 0 ? (virtualTime / totalVirtualDuration) * 100 : 0;
   const progressBarRef = useRef(null);
   const isDraggingRef = useRef(false);
 
-  /**
-   * Convert a mouse/touch clientX to a virtual time position.
-   */
+  // Volume state
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+
+  const handleVolumeChange = (e) => {
+    const newVolume = parseFloat(e.target.value);
+    setVolume(newVolume);
+    setIsMuted(newVolume === 0);
+    // Apply to both video elements
+    [videoARef?.current, videoBRef?.current].forEach(v => {
+      if (v) { v.volume = newVolume; v.muted = newVolume === 0; }
+    });
+  };
+
+  const handleToggleMute = () => {
+    const newMuted = !isMuted;
+    setIsMuted(newMuted);
+    [videoARef?.current, videoBRef?.current].forEach(v => {
+      if (v) v.muted = newMuted;
+    });
+  };
+
+  // --- Drag-to-scrub ---
+
   const clientXToVirtualTime = useCallback((clientX) => {
     const rect = progressBarRef.current?.getBoundingClientRect();
     if (!rect) return 0;
@@ -96,54 +120,15 @@ export function PlaybackControls({
     return fraction * totalVirtualDuration;
   }, [totalVirtualDuration]);
 
-  /**
-   * Start dragging on mousedown.
-   */
-  const handleMouseDown = useCallback((e) => {
+  const handleMouseDownWithListeners = useCallback((e) => {
     e.preventDefault();
     isDraggingRef.current = true;
     onStartScrub?.();
-    const vt = clientXToVirtualTime(e.clientX);
-    onSeek(vt);
-  }, [clientXToVirtualTime, onSeek, onStartScrub]);
-
-  /**
-   * Global mousemove while dragging — seek to show each frame.
-   */
-  useEffect(() => {
-    if (!isDraggingRef.current) return;
-
-    const handleMouseMove = (e) => {
-      if (!isDraggingRef.current) return;
-      const vt = clientXToVirtualTime(e.clientX);
-      onSeek(vt);
-    };
-
-    const handleMouseUp = () => {
-      if (isDraggingRef.current) {
-        isDraggingRef.current = false;
-        onEndScrub?.();
-      }
-    };
-
-    // We attach on every render while drag state could be active
-    // This is a lightweight approach — the listeners only exist briefly
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  });
-
-  // Also attach listeners on mousedown (immediately, not waiting for next render)
-  const handleMouseDownWithListeners = useCallback((e) => {
-    handleMouseDown(e);
+    onSeek(clientXToVirtualTime(e.clientX));
 
     const handleMouseMove = (e2) => {
       if (!isDraggingRef.current) return;
-      const vt = clientXToVirtualTime(e2.clientX);
-      onSeek(vt);
+      onSeek(clientXToVirtualTime(e2.clientX));
     };
     const handleMouseUp = () => {
       isDraggingRef.current = false;
@@ -154,7 +139,7 @@ export function PlaybackControls({
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-  }, [handleMouseDown, clientXToVirtualTime, onSeek, onEndScrub]);
+  }, [clientXToVirtualTime, onSeek, onStartScrub, onEndScrub]);
 
   const formatVirtualTime = (seconds) => {
     if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -164,8 +149,8 @@ export function PlaybackControls({
   };
 
   return (
-    <div className={`flex flex-col gap-2 py-2 px-2 sm:px-4 ${
-      isFullscreen ? 'bg-gray-900/90' : 'bg-gray-800 rounded-b-lg'
+    <div className={`flex flex-col gap-1 ${
+      isFullscreen ? 'bg-gray-900/90' : ''
     }`}>
       {/* Progress bar — supports click and drag */}
       <div
@@ -173,7 +158,7 @@ export function PlaybackControls({
         className="relative w-full h-3 bg-gray-700 rounded-full cursor-pointer group"
         onMouseDown={handleMouseDownWithListeners}
       >
-        {/* Segment markers — show boundaries between clips */}
+        {/* Segment markers */}
         {segments && segments.length > 1 && segments.map((seg, i) => {
           if (i === 0) return null;
           const markerPos = (seg.virtualStart / totalVirtualDuration) * 100;
@@ -192,29 +177,20 @@ export function PlaybackControls({
           style={{ width: `${progress}%` }}
         />
 
-        {/* Playhead thumb — always visible during drag, hover otherwise */}
+        {/* Playhead thumb */}
         <div
           className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-20"
           style={{ left: `calc(${progress}% - 7px)` }}
         />
       </div>
 
-      {/* Controls row */}
-      <div className="flex items-center justify-between">
-        {/* Left: Back to Annotating */}
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={ArrowLeft}
-          onClick={onExitPlayback}
-          title="Back to Annotating"
-          className="text-gray-300 hover:text-white"
-        >
-          <span className="hidden sm:inline">Back to Annotating</span>
-        </Button>
-
-        {/* Center: Play/Pause + Time */}
-        <div className="flex items-center gap-3">
+      {/* Controls row — matches AnnotateControls layout */}
+      <div className={`controls-container flex flex-wrap items-center justify-between gap-y-1 py-2 px-2 sm:px-4 ${
+        isFullscreen ? 'bg-gray-900/90' : 'bg-gray-800 rounded-b-lg'
+      }`}>
+        {/* Left: Playback transport */}
+        <div className="flex items-center gap-1">
+          {/* Play/Pause */}
           <Button
             variant="success"
             size="sm"
@@ -224,15 +200,62 @@ export function PlaybackControls({
             title={isPlaying ? 'Pause' : 'Play'}
             className="rounded-full"
           />
-          <span className="text-white font-mono text-xs">
-            {formatVirtualTime(virtualTime)}
-            <span className="text-gray-400"> / {formatVirtualTime(totalVirtualDuration)}</span>
-          </span>
+
+          {/* Restart */}
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={RotateCcw}
+            iconOnly
+            onClick={onRestart}
+            title="Restart"
+          />
         </div>
 
-        {/* Right: Speed + Fullscreen */}
+        {/* Center: Time display */}
+        <div className="text-white font-mono text-xs">
+          {formatVirtualTime(virtualTime)}<span className="hidden sm:inline"> / {formatVirtualTime(totalVirtualDuration)}</span>
+        </div>
+
+        {/* Right: controls */}
         <div className="flex items-center gap-2">
+          {/* Back to Annotating */}
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={ArrowLeft}
+            iconOnly
+            onClick={onExitPlayback}
+            title="Back to Annotating"
+          />
+
+          {/* Volume control */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={isMuted || volume === 0 ? VolumeX : Volume2}
+              iconOnly
+              onClick={handleToggleMute}
+              title={isMuted ? 'Unmute' : 'Mute'}
+            />
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={isMuted ? 0 : volume}
+              onChange={handleVolumeChange}
+              className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer
+                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
+                [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
+            />
+          </div>
+
+          {/* Speed control */}
           <SpeedControl speed={playbackRate} onSpeedChange={onPlaybackRateChange} />
+
+          {/* Fullscreen */}
           {onToggleFullscreen && (
             <Button
               variant="ghost"

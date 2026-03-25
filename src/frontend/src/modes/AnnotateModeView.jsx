@@ -196,6 +196,7 @@ export function AnnotateModeView({
         segments={playback.timeline?.segments}
         activeClipId={playback.activeClipId}
         onTogglePlay={playback.togglePlay}
+        onRestart={playback.restart}
         onSeek={playback.seekVirtual}
         onStartScrub={playback.startScrub}
         onEndScrub={playback.endScrub}
@@ -204,6 +205,8 @@ export function AnnotateModeView({
         onPlaybackRateChange={playback.changePlaybackRate}
         isFullscreen={isFS}
         onToggleFullscreen={togglePlaybackFullscreen}
+        videoARef={playback.videoARef}
+        videoBRef={playback.videoBRef}
       />
     );
 

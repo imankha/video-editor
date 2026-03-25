@@ -372,6 +372,19 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     }
   }, [getVideos]);
 
+  /**
+   * Restart playback from the beginning.
+   * Pauses, seeks to virtual time 0, and stops the loop.
+   */
+  const restart = useCallback(() => {
+    const { active } = getVideos();
+    if (active) active.pause();
+    stopTimeUpdateLoop();
+    isPlayingRef.current = false;
+    setIsPlaying(false);
+    seekVirtual(0);
+  }, [getVideos, stopTimeUpdateLoop, seekVirtual]);
+
   // Track whether we were playing before a scrub started, so we can resume after
   const wasPlayingBeforeScrubRef = useRef(false);
   const isScrrubbingRef = useRef(false);
@@ -487,6 +500,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     enterPlaybackMode,
     exitPlaybackMode,
     togglePlay,
+    restart,
     seekVirtual,
     startScrub,
     endScrub,
