@@ -73,6 +73,8 @@ export function AnnotateModeView({
 
   // T710: Annotation playback
   playback,
+  lockScrub,
+  unlockScrub,
 
   // Zoom (for video player)
   zoom,
@@ -102,15 +104,19 @@ export function AnnotateModeView({
   // Exit fullscreen when leaving playback mode — sync active clip back to annotate selection
   const handleExitPlayback = useCallback(() => {
     const lastClipId = playback?.activeClipId;
-    console.log('[PlaybackSync] Exiting playback. lastClipId:', lastClipId, 'onSelectRegion:', !!onSelectRegion);
     setPlaybackFullscreen(false);
     playback?.exitPlaybackMode();
-    // Select the last-playing clip in annotate mode so sidebar stays in sync
+    // Select the last-playing clip in annotate mode so sidebar stays in sync.
+    // Lock scrub to suppress auto-deselect while the annotate video seeks to
+    // the clip's start time (seek is async — without the lock, the auto-deselect
+    // effect fires with the old currentTime and clears the selection).
     if (lastClipId && onSelectRegion) {
-      console.log('[PlaybackSync] Calling onSelectRegion with:', lastClipId);
+      lockScrub?.();
       onSelectRegion(lastClipId);
+      // Unlock after the seek settles (video needs time to update currentTime)
+      setTimeout(() => unlockScrub?.(), 500);
     }
-  }, [playback, onSelectRegion]);
+  }, [playback, onSelectRegion, lockScrub, unlockScrub]);
 
   // Escape key exits playback fullscreen
   useEffect(() => {

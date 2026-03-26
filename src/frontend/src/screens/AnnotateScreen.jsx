@@ -544,6 +544,8 @@ export function AnnotateScreen({ onClearSelection }) {
         uploadProgress={uploadProgress}
         // T710: Annotation playback
         playback={playback}
+        lockScrub={lockScrub}
+        unlockScrub={unlockScrub}
         // Zoom (for video player)
         zoom={zoom}
         panOffset={panOffset}

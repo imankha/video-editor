@@ -472,7 +472,6 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     const timeline = timelineRef.current;
     if (!timeline) return;
     const seg = timeline.segments.find(s => s.clipId === clipId);
-    console.log('[PlaybackSync] seekToClip:', clipId, 'found segment:', !!seg);
     if (seg) {
       seekVirtual(seg.virtualStart);
     }
