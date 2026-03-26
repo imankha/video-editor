@@ -381,11 +381,13 @@ export function FramingContainer({
 
 
       // Delete crop keyframes in trimmed range
+      console.log(`[KF-DEBUG] TRIM: deleting keyframes in range [${segment.start}, ${segment.end}], boundaryTime=${boundaryTime}`);
       deleteKeyframesInRange(segment.start, segment.end, duration);
 
       // Reconstitute permanent keyframe at boundary
       // This ensures there's always a keyframe at the new end/start of the visible timeline
       if (cropDataToPreserve && boundaryTime !== undefined) {
+        console.log(`[KF-DEBUG] TRIM: adding permanent keyframe at boundaryTime=${boundaryTime}`);
         addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration, 'permanent');
       } else if (boundaryTime !== undefined) {
         // Emergency fallback: if we couldn't preserve any data, get current interpolated crop
