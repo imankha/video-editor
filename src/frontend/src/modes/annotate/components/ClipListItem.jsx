@@ -47,7 +47,7 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
       style={{
         backgroundColor: isPlaybackActive
           ? `${badgeColor}33`  // 20% opacity tint of rating color
-          : isSelected ? `${badgeColor}30` : undefined,  // 19% opacity — visible against dark bg
+          : isSelected ? `${badgeColor}50` : undefined,  // 31% opacity
         borderLeftColor: isPlaybackActive ? badgeColor : isSelected ? badgeColor : undefined,
       }}
     >
