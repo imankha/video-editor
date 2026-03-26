@@ -170,16 +170,13 @@ function ensurePermanentKeyframes(keyframes, endFrame) {
   if (endFrame !== null && endFrame !== undefined) {
     const endIndex = result.findIndex(kf => kf.frame === endFrame);
     if (endIndex >= 0) {
-      console.log(`[KF-DEBUG] ensurePermanent: endFrame ${endFrame} already exists at index ${endIndex}`);
       result[endIndex] = { ...result[endIndex], origin: 'permanent' };
     } else {
       const nearbyEndIndex = result.findIndex(kf => kf.frame > endFrame - MIN_KEYFRAME_SPACING && kf.frame < endFrame);
       if (nearbyEndIndex >= 0) {
-        console.log(`[KF-DEBUG] ensurePermanent: absorbing nearby f${result[nearbyEndIndex].frame} → endFrame ${endFrame}`);
         // Absorb: move nearby keyframe to endFrame
         result[nearbyEndIndex] = { ...result[nearbyEndIndex], frame: endFrame, origin: 'permanent' };
       } else {
-        console.log(`[KF-DEBUG] ensurePermanent: reconstituting endFrame ${endFrame} from last keyframe`);
         // No nearby keyframe — reconstitute from last
         const { frame: _f, origin: _o, ...data } = result[result.length - 1];
         result = [...result, { ...data, frame: endFrame, origin: 'permanent' }];
@@ -270,9 +267,7 @@ export function keyframeReducer(state, action) {
 
       // Enforce permanent keyframe invariant at boundaries
       const resolvedEndFrame = endFrame || sortedKeyframes[sortedKeyframes.length - 1].frame;
-      console.log('[KF-DEBUG] RESTORE_KEYFRAMES input:', sortedKeyframes.map(kf => `f${kf.frame}(${kf.origin})`).join(', '), 'endFrame:', resolvedEndFrame);
       const guardedKeyframes = ensurePermanentKeyframes(sortedKeyframes, resolvedEndFrame);
-      console.log('[KF-DEBUG] RESTORE_KEYFRAMES output:', guardedKeyframes.map(kf => `f${kf.frame}(${kf.origin})`).join(', '));
 
       // Determine if end keyframe was explicitly set (not same as start)
       const startKf = guardedKeyframes[0];
@@ -305,12 +300,8 @@ export function keyframeReducer(state, action) {
       // Exception: permanent keyframes (trim boundaries) are never rejected
       if (nearbyIndex < 0 && requestedOrigin !== 'permanent') {
         const tooClose = keyframes.some(kf => Math.abs(kf.frame - frame) < MIN_KEYFRAME_SPACING);
-        if (tooClose) {
-          console.log(`[KF-DEBUG] ADD_KEYFRAME rejected: frame ${frame} too close to existing (origin: ${requestedOrigin})`);
-          return state;
-        }
+        if (tooClose) return state;
       }
-      console.log(`[KF-DEBUG] ADD_KEYFRAME: frame=${frame}, origin=${requestedOrigin}, nearbyIndex=${nearbyIndex}, existing=${keyframes.map(kf => `f${kf.frame}`).join(',')}`)
 
       const isEndKeyframe = endFrame !== null && targetFrame === endFrame;
       const isStartKeyframe = targetFrame === 0;
