@@ -127,10 +127,10 @@ export function AnnotateModeView({
     const isFS = playbackFullscreen;
 
     const videoContainer = (
-      <div className={`relative bg-gray-900 ${isFS ? '' : 'rounded-lg'} overflow-hidden`}>
-        <div className={`relative ${isFS ? '' : 'h-[40vh] sm:h-[60vh]'}`}
+      <div className={`relative bg-gray-900 ${isFS ? 'w-full' : 'rounded-lg'} overflow-hidden`}>
+        <div className={`relative ${isFS ? 'w-full' : 'h-[40vh] sm:h-[60vh]'}`}
           style={isFS ? {
-            maxHeight: 'calc(100vh - 80px)',
+            maxHeight: 'calc(100vh - 120px)',
             aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}`,
           } : undefined}
         >
