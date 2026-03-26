@@ -206,7 +206,8 @@ body {
   color: rgba(74, 222, 128, 0.7);
   font-weight: 600;
   text-decoration: line-through;
-  text-decoration-color: rgba(74, 222, 128, 0.25);
+  text-decoration-thickness: 2.5px;
+  text-decoration-color: rgba(251, 146, 60, 0.7);
 }
 .quest-step-inactive {
   color: rgba(255, 255, 255, 0.3);

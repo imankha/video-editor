@@ -55,7 +55,7 @@ export const QUESTS = [
       },
       {
         id: 'view_gallery_video',
-        title: 'Watch Your Finished Video',
+        title: 'Watch Your Highlight',
         description: 'Open the Gallery and play back your completed highlight reel',
       },
     ],
