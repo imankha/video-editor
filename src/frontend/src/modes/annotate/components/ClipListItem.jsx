@@ -36,12 +36,12 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
     <div
       onClick={isMobile ? undefined : onClick}
       className={`
-        ${isMobile ? '' : 'cursor-pointer'} border-b border-gray-800 transition-all
+        ${isMobile ? '' : 'cursor-pointer'} transition-all
         ${isPlaybackActive
-          ? 'border-l-3 animate-pulse'
+          ? 'border-l-3 border-b border-gray-800 animate-pulse'
           : isSelected
-            ? 'border-l-3 bg-white/10'
-            : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'
+            ? 'border-l-3 border border-white/30 rounded-sm'
+            : 'border-b border-gray-800 hover:bg-gray-800/50 border-l-2 border-l-transparent'
         }
       `}
       style={{
