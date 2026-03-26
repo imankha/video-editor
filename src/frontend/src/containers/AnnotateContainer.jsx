@@ -169,6 +169,9 @@ export function AnnotateContainer({
   // Previously persisted viewed_duration from the backend (loaded on game open)
   const persistedViewedDurationRef = useRef(0);
 
+  // T740: Pending clip selection from Framing → Annotate navigation
+  const pendingSelectSeekTimeRef = useRef(null);
+
   // Restore video state from active upload if navigating back from Games screen
   // This allows users to click on the uploading game card and return to annotation
   // Skip if we just started the upload from this same mount (not a navigation back)
@@ -412,6 +415,17 @@ export function AnnotateContainer({
         }
 
         importAnnotations(gameData.annotations, gameDuration);
+
+        // T740: If navigating from Framing, select the clip the user was editing
+        // (importAnnotations auto-selects the first clip; override with the intended one)
+        const pendingSeekTime = sessionStorage.getItem('pendingClipSeekTime');
+        if (pendingSeekTime != null) {
+          const seekTime = parseFloat(pendingSeekTime);
+          console.log('[AnnotateContainer] Navigated from Framing, finding clip at start_time:', seekTime);
+          // importAnnotations generates new region IDs — find the matching one by start_time
+          // clipRegions won't be updated until next render, so defer selection
+          pendingSelectSeekTimeRef.current = seekTime;
+        }
       }
 
       setEditorMode('annotate');
@@ -439,6 +453,20 @@ export function AnnotateContainer({
       closeOverlay();
     }
   }, [annotateFullscreen, setAnnotateFullscreen, selectionState, editClip, closeOverlay]);
+
+  // T740: After clipRegions update from importAnnotations, select the clip matching pendingSelectSeekTime
+  useEffect(() => {
+    if (pendingSelectSeekTimeRef.current == null || clipRegions.length === 0) return;
+    const seekTime = pendingSelectSeekTimeRef.current;
+    const match = clipRegions.find(r => Math.abs(r.startTime - seekTime) < 0.5);
+    if (match) {
+      console.log('[AnnotateContainer] Selecting clip from Framing navigation:', match.id, 'at', match.startTime);
+      selectClip(match.id);
+    } else {
+      console.log('[AnnotateContainer] No clip found matching seekTime:', seekTime);
+    }
+    pendingSelectSeekTimeRef.current = null;
+  }, [clipRegions, selectClip]);
 
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);
