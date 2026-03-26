@@ -297,7 +297,8 @@ export function keyframeReducer(state, action) {
 
       // Enforce minimum spacing: reject new keyframes too close to existing ones
       // (snapped updates are fine — this only blocks genuinely new keyframes)
-      if (nearbyIndex < 0) {
+      // Exception: permanent keyframes (trim boundaries) are never rejected
+      if (nearbyIndex < 0 && requestedOrigin !== 'permanent') {
         const tooClose = keyframes.some(kf => Math.abs(kf.frame - frame) < MIN_KEYFRAME_SPACING);
         if (tooClose) return state;
       }
