@@ -185,12 +185,17 @@ export function FramingContainer({
     const currentClipExportKeyframes = getKeyframesForExport();
 
     return clips.map(clip => {
+      // Ensure duration is always set from the metadata cache (raw clips from
+      // backend don't include duration — it's extracted from the video file)
+      const clipDuration = clipMetadataCache[clip.id]?.duration ?? clip.duration;
+
       if (clip.id === selectedClipId) {
         // Only override cropKeyframes when the hook has initialized.
         // Before useCrop auto-init, getKeyframesForExport() returns [] which
         // would erase the clip's existing crop_data.
         const merged = {
           ...clip,
+          duration: clipDuration,
           segments: {
             boundaries: segmentBoundaries,
             segmentSpeeds: segmentSpeeds,
@@ -213,12 +218,12 @@ export function FramingContainer({
 
       const sourceWidth = meta?.width;
       const sourceHeight = meta?.height;
-      const clipDuration = meta?.duration;
-      if (convertedKeyframes.length === 0 && sourceWidth && sourceHeight && clipDuration) {
+      const metaDuration = meta?.duration;
+      if (convertedKeyframes.length === 0 && sourceWidth && sourceHeight && metaDuration) {
         const defaultCrop = calculateDefaultCrop(sourceWidth, sourceHeight, globalAspectRatio);
         convertedKeyframes = [
           { time: 0, ...defaultCrop },
-          { time: clipDuration, ...defaultCrop }
+          { time: metaDuration, ...defaultCrop }
         ];
       }
 
@@ -227,7 +232,7 @@ export function FramingContainer({
         cropKeyframes: convertedKeyframes,
         sourceWidth,
         sourceHeight,
-        duration: clipDuration,
+        duration: clipDuration, // from metadata cache (set at top of map)
         framerate: clipFr,
       };
     });

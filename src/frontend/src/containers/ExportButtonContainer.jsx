@@ -33,10 +33,11 @@ export function generateExportId() {
  * 2. DB saved format: {segments: {trim_start, trim_end, segments: [{start, end, speed}]}}
  */
 export function calculateEffectiveDuration(clip) {
-  const segments = clip.segments || {};
+  if (!clip.duration && clip.duration !== 0) {
+    console.warn(`[calculateEffectiveDuration] clip ${clip.id} missing duration — caller must set it from metadata cache`);
+  }
 
-  // Resolve clip duration from multiple sources (clip.duration may be undefined for short clips)
-  const clipDuration = clip.duration || clip.video_duration || segments.videoDuration || 0;
+  const segments = clip.segments || {};
 
   // Handle trimRange - can be in segments.trimRange, clip.trimRange, or as segments.trim_start/trim_end
   let trimRange = segments.trimRange || clip.trimRange;
@@ -44,17 +45,17 @@ export function calculateEffectiveDuration(clip) {
     // DB saved format uses trim_start/trim_end
     trimRange = {
       start: segments.trim_start ?? 0,
-      end: segments.trim_end ?? clipDuration
+      end: segments.trim_end ?? clip.duration
     };
   }
 
   // Start with full duration or trimmed range
   const start = trimRange?.start ?? 0;
-  const end = trimRange?.end ?? clipDuration;
+  const end = trimRange?.end ?? clip.duration;
 
   // Handle speed data - can be segmentSpeeds object or segments array
   const segmentSpeeds = segments.segmentSpeeds || {};
-  const boundaries = segments.boundaries || [0, clipDuration];
+  const boundaries = segments.boundaries || [0, clip.duration];
   const speedSegmentsArray = segments.segments; // DB format: [{start, end, speed}]
 
   // Check if we have speed changes
@@ -92,7 +93,7 @@ export function calculateEffectiveDuration(clip) {
     }
   }
 
-  return totalDuration || (end - start) || clipDuration;
+  return totalDuration;
 }
 
 /**
