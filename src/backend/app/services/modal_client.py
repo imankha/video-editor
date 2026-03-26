@@ -339,6 +339,8 @@ async def call_modal_framing_ai(
     include_audio: bool = True,
     export_mode: str = "quality",
     test_mode: bool = False,
+    source_start_time: float = 0.0,
+    source_end_time: float = None,
 ) -> dict:
     """
     Call Modal process_framing_ai function for AI-upscaled crop exports.
@@ -351,7 +353,7 @@ async def call_modal_framing_ai(
     Args:
         job_id: Unique export job identifier
         user_id: Raw user ID (R2 prefix conversion handled internally)
-        input_key: R2 key for source video
+        input_key: R2 key for source video (games/{hash}.mp4 or raw_clips/{file})
         output_key: R2 key for output video
         keyframes: Crop keyframes [{time, x, y, width, height}, ...]
         output_width: Target width (default 810 for 9:16)
@@ -362,6 +364,8 @@ async def call_modal_framing_ai(
         progress_callback: async callable(progress: float, message: str, phase: str) for updates
         call_id_callback: Optional callable(call_id: str) - NOT USED with remote_gen
         test_mode: Skip AI upscaling, use fast FFmpeg crop+resize (for E2E tests)
+        source_start_time: Start time of clip in source video (seconds)
+        source_end_time: End time of clip in source video (seconds). None = full video.
 
     Returns:
         {"status": "success", "output_key": "..."} or
@@ -380,6 +384,8 @@ async def call_modal_framing_ai(
             output_width=output_width,
             output_height=output_height,
             progress_callback=progress_callback,
+            source_start_time=source_start_time,
+            source_end_time=source_end_time,
         )
 
     if not _modal_enabled:
@@ -400,6 +406,8 @@ async def call_modal_framing_ai(
             progress_callback=progress_callback,
             include_audio=include_audio,
             export_mode=export_mode,
+            source_start_time=source_start_time,
+            source_end_time=source_end_time,
         )
 
     # Convert raw user_id to R2-prefixed user_id for Modal
@@ -448,6 +456,8 @@ async def call_modal_framing_ai(
                     fps=fps,
                     num_chunks=num_chunks,
                     include_audio=include_audio,
+                    source_start_time=source_start_time,
+                    source_end_time=source_end_time,
                 )
         else:
             # Use sequential processing
@@ -469,6 +479,8 @@ async def call_modal_framing_ai(
                     fps=fps,
                     segment_data=segment_data,
                     include_audio=include_audio,
+                    source_start_time=source_start_time,
+                    source_end_time=source_end_time,
                 )
 
         # Get the generator in executor (Modal API is sync)

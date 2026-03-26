@@ -32,6 +32,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     isPlaying,
     currentTime,
     duration,
+    clipOffset,
+    clipDuration,
     isSeeking,
     isBuffering,
     error,
@@ -53,6 +55,12 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     setVideoElementReady,
     setLoadingProgress,
   } = useVideoStore();
+
+  // Clip offset translation — converts between 0-based clip time (what the app sees)
+  // and absolute video element time (what the <video> element uses).
+  // When clipOffset=0, these are identity functions (no-op for uploaded/extracted clips).
+  const clipToVideo = useCallback((clipTime) => clipTime + clipOffset, [clipOffset]);
+  const videoToClip = useCallback((videoTime) => videoTime - clipOffset, [clipOffset]);
 
   /**
    * Load a video file
@@ -156,8 +164,18 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * @param {string} url - Streaming URL (e.g., presigned R2 URL)
    * @param {Object} preloadedMetadata - Optional pre-extracted metadata
    */
-  const loadVideoFromStreamingUrl = (url, preloadedMetadata = null) => {
+  /**
+   * Load a video from a streaming URL (no blob download)
+   * Use this for presigned R2 URLs where streaming is preferred.
+   * @param {string} url - Streaming URL (e.g., presigned R2 URL)
+   * @param {Object} preloadedMetadata - Optional pre-extracted metadata
+   * @param {Object} clipRange - Optional {clipOffset, clipDuration} for playing a subset of the video
+   */
+  const loadVideoFromStreamingUrl = (url, preloadedMetadata = null, clipRange = null) => {
     console.log('[useVideo] loadVideoFromStreamingUrl (RANGE REQUESTS) called with:', url?.substring(0, 60));
+    if (clipRange) {
+      console.log(`[useVideo] Clip range: offset=${clipRange.clipOffset}s, duration=${clipRange.clipDuration}s`);
+    }
     setError(null);
     retryAttemptRef.current = 0; // Reset retry counter on new video load
 
@@ -167,13 +185,18 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       revokeVideoURL(videoUrl);
     }
 
+    // Use clip duration if provided, otherwise use metadata duration
+    const effectiveDuration = clipRange?.clipDuration || preloadedMetadata?.duration || 0;
+
     // Use URL directly - no blob download!
     // The browser will stream the video using HTTP Range requests
     setVideoLoaded({
       file: null, // No file for streaming URLs
       url: url,
       metadata: preloadedMetadata,
-      duration: preloadedMetadata?.duration || 0,
+      duration: effectiveDuration,
+      clipOffset: clipRange?.clipOffset || 0,
+      clipDuration: clipRange?.clipDuration || null,
     });
 
     console.log('[useVideo] Set streaming URL directly (instant)');
@@ -235,7 +258,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const seek = (time) => {
     if (videoRef.current && videoRef.current.src) {
       // Get duration from video element if not set (overlay mode)
-      const effectiveDuration = duration || videoRef.current.duration || 0;
+      const effectiveDuration = duration || (clipDuration ?? videoRef.current.duration) || 0;
       // Use centralized validation to prevent seeking to trimmed frames
       const validTime = clampToVisibleRange
         ? clampToVisibleRange(time)
@@ -243,7 +266,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
       setIsSeeking(true);
       setCurrentTime(validTime); // Optimistic update: UI responds instantly (playhead, timestamps, selection)
-      videoRef.current.currentTime = validTime;
+      videoRef.current.currentTime = clipToVideo(validTime); // Translate clip time → video element time
       // The seeked event (handleSeeked) will refine with the actual displayed frame time
     }
   };
@@ -325,7 +348,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // Video element event handlers
   const handleTimeUpdate = () => {
     if (videoRef.current && !isSeeking) {
-      setCurrentTime(videoRef.current.currentTime);
+      setCurrentTime(videoToClip(videoRef.current.currentTime));
     }
   };
 
@@ -384,8 +407,15 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         // Additional check: video has current frame data available
         const readyState = videoRef.current.readyState;
         if (readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          const newTime = videoRef.current.currentTime;
-          setCurrentTime(newTime);
+          const newTime = videoToClip(videoRef.current.currentTime);
+          // Clamp playback at clip end
+          if (clipDuration && newTime >= clipDuration) {
+            videoRef.current.pause();
+            videoRef.current.currentTime = clipToVideo(clipDuration);
+            setCurrentTime(clipDuration);
+          } else {
+            setCurrentTime(newTime);
+          }
         }
       }
       rafId = requestAnimationFrame(updateTime);
@@ -398,7 +428,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         cancelAnimationFrame(rafId);
       }
     };
-  }, [isPlaying, isSeeking, isBuffering]);
+  }, [isPlaying, isSeeking, isBuffering, clipDuration, clipToVideo, videoToClip]);
 
   const handleSeeking = () => {
     setIsSeeking(true);
@@ -407,26 +437,33 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const handleSeeked = () => {
     setIsSeeking(false);
     if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
+      setCurrentTime(videoToClip(videoRef.current.currentTime));
     }
   };
 
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       const video = videoRef.current;
-      setDuration(video.duration);
+      // Use clipDuration if set (playing subset of game video), else full video duration
+      const effectiveDuration = clipDuration ?? video.duration;
+      setDuration(effectiveDuration);
 
       // If metadata is not set (streaming URL case), extract from video element
       if (!metadata) {
         const extractedMetadata = {
           width: video.videoWidth,
           height: video.videoHeight,
-          duration: video.duration,
+          duration: effectiveDuration,
           framerate: getFramerate(video) || 30,
           format: 'mp4', // Assume mp4 for streaming
           size: 0, // Unknown for streaming
         };
         setMetadata(extractedMetadata);
+      }
+
+      // If clip offset is set, seek the video element to the clip start
+      if (clipOffset > 0) {
+        video.currentTime = clipOffset;
       }
     }
   };

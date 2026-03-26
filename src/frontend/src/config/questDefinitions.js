@@ -40,8 +40,8 @@ export const QUESTS = [
       },
       {
         id: 'extract_clip',
-        title: 'Extract Clip',
-        description: 'Wait while the app extracts your selected clip',
+        title: 'Open Project in Framing',
+        description: 'Your clip is ready to frame!',
       },
       {
         id: 'export_framing',
@@ -87,8 +87,8 @@ export const QUESTS = [
       },
       {
         id: 'extract_custom_clips',
-        title: 'Extract Clips for Custom Project',
-        description: 'Wait while the app extracts all clips in your custom project',
+        title: 'Open Custom Project in Framing',
+        description: 'Your clips are ready to frame!',
       },
       {
         id: 'frame_custom_project',

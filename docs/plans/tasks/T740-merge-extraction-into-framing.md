@@ -1,6 +1,6 @@
 # T740: Merge Clip Extraction into Framing Export
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-03-26

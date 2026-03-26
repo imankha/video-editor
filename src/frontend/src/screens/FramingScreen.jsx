@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { List, X } from 'lucide-react';
-import extractionWebSocketManager from '../services/ExtractionWebSocketManager';
+// T740: ExtractionWebSocketManager removed — extraction merged into framing export
 import { FramingModeView } from '../modes';
 import { FramingContainer } from '../containers';
 import { useCrop, useSegments } from '../modes/framing';
@@ -17,7 +17,7 @@ import { ConfirmationDialog } from '../components/shared';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
-import { isExtracted, isExtracting, isFailed, isRetrying, clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments } from '../utils/clipSelectors';
+import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useNavigationStore, useVideoStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
@@ -125,114 +125,8 @@ export function FramingScreen({
     return `${API_BASE}/api/clips/projects/${projectId}/clips/${clipId}/file`;
   }, [clips, projectId]);
 
-  // Extraction state - computed from raw clips using selectors
-  const extractionState = useMemo(() => {
-    if (!clips || clips.length === 0) {
-      return { allExtracting: false, anyExtracting: false, allFailed: false, extractedCount: 0, totalCount: 0 };
-    }
-    const extractedClips = clips.filter(c => isExtracted(c));
-    const extractingClips = clips.filter(c => isExtracting(c));
-    const failedClips = clips.filter(c => isFailed(c));
-    const retryingClips = clips.filter(c => isRetrying(c));
-    const pendingClips = clips.filter(c => !isExtracted(c) && !isExtracting(c) && !isFailed(c) && !isRetrying(c));
-    const activeExtracting = extractingClips.length > 0 || pendingClips.length > 0 || retryingClips.length > 0;
-    return {
-      allExtracting: extractedClips.length === 0 && activeExtracting && failedClips.length === 0,
-      anyExtracting: activeExtracting,
-      allFailed: extractedClips.length === 0 && failedClips.length > 0 && !activeExtracting,
-      extractedCount: extractedClips.length,
-      totalCount: clips.length,
-      extractingCount: extractingClips.length,
-      pendingCount: pendingClips.length,
-      failedCount: failedClips.length,
-      retryingCount: retryingClips.length,
-    };
-  }, [clips]);
-
-  // T249: Track extraction start time for spinner timeout message
-  const extractionStartRef = useRef(null);
-  const [extractionTimedOut, setExtractionTimedOut] = useState(false);
-
-  useEffect(() => {
-    if (extractionState.allExtracting) {
-      if (!extractionStartRef.current) {
-        extractionStartRef.current = Date.now();
-      }
-      const timer = setTimeout(() => setExtractionTimedOut(true), 300000);
-      return () => clearTimeout(timer);
-    } else {
-      extractionStartRef.current = null;
-      setExtractionTimedOut(false);
-    }
-  }, [extractionState.allExtracting]);
-
-  // Listen for extraction completion via WebSocket
-  useEffect(() => {
-    if (!extractionState.anyExtracting || !projectId) return;
-
-    console.log('[FramingScreen] Starting extraction WebSocket listener -', extractionState);
-
-    extractionWebSocketManager.connect();
-
-    const unsubComplete = extractionWebSocketManager.addEventListener('extraction_complete', (data) => {
-      console.log('[FramingScreen] Extraction complete:', data);
-      // T540: Refresh quest progress after extraction
-      import('../stores/questStore').then(({ useQuestStore }) =>
-        useQuestStore.getState().fetchProgress()
-      );
-      if (data.project_id === projectId || !data.project_id) {
-        fetchProjectClips().then(async (freshClips) => {
-          // Load metadata for newly extracted clips
-          if (freshClips) {
-            for (const clip of freshClips) {
-              if (isExtracted(clip) && !clipMetadataCache[clip.id]) {
-                const url = getClipFileUrlSelector(clip, projectId);
-                try {
-                  const meta = await extractVideoMetadataFromUrl(url);
-                  updateClipMetadata(clip.id, {
-                    duration: meta?.duration || 0,
-                    width: meta?.width || 0,
-                    height: meta?.height || 0,
-                    framerate: meta?.framerate || 30,
-                    metadata: meta,
-                  });
-                } catch (err) {
-                  console.warn('[FramingScreen] Failed to load metadata for clip', clip.id, err);
-                }
-              }
-            }
-          }
-        });
-      }
-    });
-
-    const unsubFailed = extractionWebSocketManager.addEventListener('extraction_failed', (data) => {
-      console.log('[FramingScreen] Extraction failed:', data);
-      if (data.project_id === projectId || !data.project_id) {
-        fetchProjectClips();
-      }
-    });
-
-    const unsubReconnect = extractionWebSocketManager.addEventListener('reconnect', () => {
-      console.log('[FramingScreen] WebSocket reconnected — refreshing clips');
-      fetchProjectClips();
-    });
-
-    const safetyTimeout = setTimeout(() => {
-      console.log('[FramingScreen] Safety-net refresh after 60s');
-      fetchProjectClips();
-    }, 60000);
-
-    return () => {
-      unsubComplete();
-      unsubFailed();
-      unsubReconnect();
-      clearTimeout(safetyTimeout);
-    };
-  }, [extractionState.anyExtracting, projectId, fetchProjectClips, clipMetadataCache, updateClipMetadata]);
-
-  // T250: No sync effect needed — clips in store ARE the raw backend data.
-  // Extraction status is computed via selectors, not stored boolean flags.
+  // T740: Extraction state, WebSocket listener, and timeout tracking removed.
+  // Extraction is now merged into framing export — no separate extraction step.
 
   // Fetch games on mount
   useEffect(() => {
@@ -504,8 +398,28 @@ export function FramingScreen({
     saveCurrentClipState: framingSaveCurrentClipState,
   } = framing;
 
-  // Track the last loaded URL to detect when extraction completes
+  // Track the last loaded URL to detect when clip changes
   const lastLoadedUrlRef = useRef(null);
+
+  /**
+   * Get the video URL and clip range for a clip.
+   * Game clips use the game video URL with a clip offset; uploaded/extracted clips use file_url directly.
+   */
+  const getClipVideoConfig = useCallback((clip) => {
+    if (clip.game_video_url && clip.start_time != null && clip.end_time != null) {
+      // Game clip: use game video with clip offset
+      return {
+        url: clip.game_video_url,
+        clipRange: {
+          clipOffset: clip.start_time,
+          clipDuration: clip.end_time - clip.start_time,
+        },
+      };
+    }
+    // Uploaded/extracted clip: use file_url directly (no offset)
+    const url = getClipFileUrlSelector(clip, projectId);
+    return { url, clipRange: null };
+  }, [projectId]);
 
   // T580: On mount, immediately load the first clip's video before first paint.
   // When switching from overlay → framing, the shared videoStore may still hold
@@ -515,11 +429,10 @@ export function FramingScreen({
   useLayoutEffect(() => {
     if (clips.length === 0) return;
     const targetClip = (selectedClipId && clips.find(c => c.id === selectedClipId)) || clips[0];
-    if (!isExtracted(targetClip)) return;
-    const clipUrl = getClipFileUrlSelector(targetClip, projectId);
+    const { url: clipUrl, clipRange } = getClipVideoConfig(targetClip);
     if (!clipUrl || clipUrl.startsWith('blob:')) return;
     const meta = clipMetadataCache[targetClip.id];
-    loadVideoFromStreamingUrl(clipUrl, meta?.metadata || null);
+    loadVideoFromStreamingUrl(clipUrl, meta?.metadata || null, clipRange);
     lastLoadedUrlRef.current = clipUrl;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only, mirrors initial load effect
 
@@ -529,15 +442,7 @@ export function FramingScreen({
     if (clips.length === 0) return;
 
     const firstClip = clips[0];
-    if (!isExtracted(firstClip)) {
-      if (!initialLoadDoneRef.current) {
-        console.log('[FramingScreen] First clip has no URL yet (extraction pending)');
-        initialLoadDoneRef.current = true;
-      }
-      return;
-    }
-
-    const clipUrl = getClipFileUrlSelector(firstClip, projectId);
+    const { url: clipUrl, clipRange } = getClipVideoConfig(firstClip);
     if (!clipUrl) return;
 
     if (lastLoadedUrlRef.current === clipUrl) return;
@@ -566,7 +471,7 @@ export function FramingScreen({
       }
 
       if (!clipUrl.startsWith('blob:')) {
-        loadVideoFromStreamingUrl(clipUrl, firstClipWithMeta?.metadata || null);
+        loadVideoFromStreamingUrl(clipUrl, firstClipWithMeta?.metadata || null, clipRange);
       } else {
         const file = await loadVideoFromUrl(clipUrl, firstClip.filename || 'clip.mp4');
         if (file) {
@@ -631,16 +536,14 @@ export function FramingScreen({
         }
 
         // 3. Load new clip's video
-        if (isExtracted(newClip)) {
-          const newClipUrl = getClipFileUrlSelector(newClip, projectId);
-          if (newClipUrl) {
-            if (!newClipUrl.startsWith('blob:')) {
-              loadVideoFromStreamingUrl(newClipUrl, newClipWithMeta?.metadata || null);
-            } else {
-              const file = await loadVideoFromUrl(newClipUrl, newClip.filename || 'clip.mp4');
-              if (file) {
-                setVideoFile(file);
-              }
+        const { url: newClipUrl, clipRange: newClipRange } = getClipVideoConfig(newClip);
+        if (newClipUrl) {
+          if (!newClipUrl.startsWith('blob:')) {
+            loadVideoFromStreamingUrl(newClipUrl, newClipWithMeta?.metadata || null, newClipRange);
+          } else {
+            const file = await loadVideoFromUrl(newClipUrl, newClip.filename || 'clip.mp4');
+            if (file) {
+              setVideoFile(file);
             }
           }
         }
@@ -1144,48 +1047,6 @@ export function FramingScreen({
             </button>
           </div>
         )}
-        {extractionState.allFailed ? (
-          <div className="flex-1 flex flex-col items-center justify-center h-full text-center px-8">
-            <div className="max-w-md">
-              <div className="mb-4 text-red-400">
-                <svg className="h-12 w-12 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.194-.833-2.964 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-medium text-white mb-2">Extraction Failed</h3>
-              <p className="text-gray-400 mb-4">
-                {extractionState.failedCount} clip{extractionState.failedCount > 1 ? 's' : ''} failed to extract.
-                Use the retry button in the sidebar to try again.
-              </p>
-            </div>
-          </div>
-        ) : extractionState.allExtracting ? (
-          <div className="flex-1 flex flex-col items-center justify-center h-full text-center px-8">
-            <div className="max-w-md">
-              <div className="mb-4">
-                <svg className="animate-spin h-12 w-12 text-purple-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              </div>
-              <h3 className="text-xl font-medium text-white mb-2">Extracting Clip{extractionState.totalCount > 1 ? 's' : ''}</h3>
-              <p className="text-gray-400 mb-4">
-                {extractionState.extractingCount > 0
-                  ? `Processing ${extractionState.extractingCount} clip${extractionState.extractingCount > 1 ? 's' : ''}...`
-                  : `${extractionState.pendingCount} clip${extractionState.pendingCount > 1 ? 's' : ''} waiting in queue`}
-              </p>
-              {extractionTimedOut ? (
-                <p className="text-amber-400 text-sm">
-                  Taking longer than expected. Extraction may have failed — check the sidebar for status.
-                </p>
-              ) : (
-                <p className="text-gray-500 text-sm">
-                  This page will automatically refresh when extraction completes.
-                </p>
-              )}
-            </div>
-          </div>
-        ) : (
         <FramingModeView
       videoRef={videoRef}
       videoUrl={videoUrl}
@@ -1274,7 +1135,6 @@ export function FramingScreen({
       saveCurrentClipState={framingSaveCurrentClipState}
       cropContextValue={cropContextValue}
     />
-        )}
       </div>
 
       {/* Outdated Clips Dialog */}

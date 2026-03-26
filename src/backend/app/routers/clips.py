@@ -166,10 +166,11 @@ class WorkingClipResponse(BaseModel):
     crop_data: Optional[str] = None
     timing_data: Optional[str] = None
     segments_data: Optional[str] = None
-    # Fields from raw_clips for Annotate navigation
+    # Fields from raw_clips for Annotate navigation and framing
     game_id: Optional[int] = None
     start_time: Optional[float] = None
     end_time: Optional[float] = None
+    game_video_url: Optional[str] = None  # Presigned URL for source game video (for framing preview)
     tags: Optional[List[str]] = None
     rating: Optional[int] = None
     # Extraction status: 'pending', 'processing', 'completed', 'failed', or None if no extraction needed
@@ -1038,7 +1039,7 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Get working clips with resolved filenames and metadata
+        # Get working clips with resolved filenames, metadata, and game video info
         # Only show the latest version of each clip (grouped by end_time)
         cursor.execute(f"""
             SELECT
@@ -1058,9 +1059,12 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 rc.tags as raw_tags,
                 rc.game_id as raw_game_id,
                 rc.start_time as raw_start_time,
-                rc.end_time as raw_end_time
+                rc.end_time as raw_end_time,
+                g.blake3_hash as game_blake3_hash,
+                g.video_filename as game_video_filename
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            LEFT JOIN games g ON rc.game_id = g.id
             WHERE wc.project_id = ?
             AND wc.id IN ({latest_working_clips_subquery()})
             ORDER BY wc.sort_order
@@ -1093,20 +1097,28 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
             raw_filename = clip['raw_filename']
             uploaded_filename = clip['uploaded_filename']
 
-            # Determine if clip is extracted
+            # Determine file URL based on source type
             if raw_filename:
                 filename = raw_filename
                 file_url = get_working_clip_url(filename, 'raw')
-                extraction_status = None  # Already extracted
+                extraction_status = None
             elif uploaded_filename:
                 filename = uploaded_filename
                 file_url = get_working_clip_url(filename, 'upload')
-                extraction_status = None  # Direct upload, no extraction needed
+                extraction_status = None
             else:
-                # Clip not yet extracted - don't return invalid URL
                 filename = None
                 file_url = None
-                extraction_status = extraction_statuses.get(clip['raw_clip_id'], 'pending')
+                extraction_status = None  # No longer tracking extraction status
+
+            # Generate game video presigned URL for framing preview
+            game_video_url = None
+            if clip['game_blake3_hash'] or clip['game_video_filename']:
+                from app.routers.games import get_game_video_url
+                game_video_url = get_game_video_url(
+                    clip['game_blake3_hash'],
+                    clip['game_video_filename']
+                )
 
             result.append(WorkingClipResponse(
                 id=clip['id'],
@@ -1126,71 +1138,13 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 game_id=clip['raw_game_id'],
                 start_time=clip['raw_start_time'],
                 end_time=clip['raw_end_time'],
+                game_video_url=game_video_url,
                 tags=tags,
                 rating=rating,
                 extraction_status=extraction_status
             ))
 
-    # Trigger extraction for clips that need it (outside DB connection)
-    # This enables on-demand extraction when user opens a project
-    clips_needing_extraction = [
-        clip for clip in clips
-        if not clip['raw_filename'] and not clip['uploaded_filename']
-        and clip['raw_clip_id'] and clip['raw_game_id']
-    ]
-
-    if clips_needing_extraction:
-        from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor
-        from app.profile_context import get_current_profile_id
-        user_id = get_current_user_id()
-        profile_id = get_current_profile_id()
-
-        # Get game video filenames for extraction
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            game_ids = list(set(c['raw_game_id'] for c in clips_needing_extraction))
-            placeholders = ','.join('?' * len(game_ids))
-            cursor.execute(f"""
-                SELECT id, video_filename FROM games WHERE id IN ({placeholders})
-            """, game_ids)
-            game_filenames = {row['id']: row['video_filename'] for row in cursor.fetchall()}
-
-        # T249: Check which clips already have active extraction tasks
-        # Uses is_clip_already_queued which also considers failed tasks with retries remaining
-        from app.services.modal_queue import is_clip_already_queued
-        raw_clip_ids = [c['raw_clip_id'] for c in clips_needing_extraction]
-        already_queued = {
-            rc_id for rc_id in raw_clip_ids
-            if is_clip_already_queued(rc_id)
-        }
-
-        clips_to_enqueue = []
-        for clip in clips_needing_extraction:
-            if clip['raw_clip_id'] in already_queued:
-                continue  # Already has a pending/running task
-            video_filename = game_filenames.get(clip['raw_game_id'])
-            if video_filename:
-                clips_to_enqueue.append({
-                    'clip_id': clip['raw_clip_id'],
-                    'game_id': clip['raw_game_id'],
-                    'video_filename': video_filename,
-                    'start_time': clip['raw_start_time'],
-                    'end_time': clip['raw_end_time'],
-                })
-
-        if clips_to_enqueue:
-            for clip_info in clips_to_enqueue:
-                enqueue_clip_extraction(
-                    clip_id=clip_info['clip_id'],
-                    project_id=project_id,
-                    game_id=clip_info['game_id'],
-                    video_filename=clip_info['video_filename'],
-                    start_time=clip_info['start_time'],
-                    end_time=clip_info['end_time'],
-                    user_id=user_id,
-                )
-            background_tasks.add_task(run_queue_processor, user_id, profile_id)
-            logger.info(f"Enqueued {len(clips_to_enqueue)} clips for extraction for project {project_id}")
+    # T740: Extraction no longer triggered here — framing export handles it directly
 
     return result
 

@@ -136,27 +136,49 @@ export function useProjectLoader() {
 
       console.log('[useProjectLoader] Fetched clips:', clipsData.length);
 
-      // Load video metadata in parallel for extracted clips
+      // Load video metadata in parallel for all clips
+      // Game clips use game_video_url, uploaded/extracted clips use file_url
       const metadataCache = {};
       await Promise.all(
         clipsData.map(async (clip) => {
-          if (!clip.filename) {
-            console.log('[useProjectLoader] Clip not extracted yet:', clip.id, 'status:', clip.extraction_status);
+          // Determine which URL to probe for metadata
+          let metadataUrl = null;
+          let clipDurationOverride = null;
+
+          if (clip.game_video_url && clip.start_time != null && clip.end_time != null) {
+            // Game clip: probe game video for resolution/framerate, but override duration with clip range
+            metadataUrl = clip.game_video_url;
+            clipDurationOverride = clip.end_time - clip.start_time;
+          } else if (clip.filename) {
+            // Extracted/uploaded clip: probe the clip file directly
+            metadataUrl = getClipFileUrlSelector(clip, projectId);
+          } else {
+            console.log('[useProjectLoader] Clip has no video source:', clip.id);
             return;
           }
 
-          const clipUrl = getClipFileUrlSelector(clip, projectId);
           try {
-            const metadata = await extractVideoMetadataFromUrl(clipUrl);
+            const metadata = await extractVideoMetadataFromUrl(metadataUrl);
+            const duration = clipDurationOverride ?? metadata?.duration ?? 0;
             metadataCache[clip.id] = {
-              duration: metadata?.duration || 0,
+              duration,
               width: metadata?.width || 0,
               height: metadata?.height || 0,
               framerate: metadata?.framerate || 30,
-              metadata,
+              metadata: { ...metadata, duration },
             };
           } catch (err) {
             console.warn(`[useProjectLoader] Failed to load metadata for clip ${clip.id}:`, err);
+            // For game clips, we can still provide duration from start/end times
+            if (clipDurationOverride != null) {
+              metadataCache[clip.id] = {
+                duration: clipDurationOverride,
+                width: 0,
+                height: 0,
+                framerate: 30,
+                metadata: { duration: clipDurationOverride, framerate: 30 },
+              };
+            }
           }
         })
       );

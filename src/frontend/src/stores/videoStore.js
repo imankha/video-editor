@@ -23,6 +23,14 @@ export const useVideoStore = create((set, get) => ({
   metadata: null,
   duration: 0,
 
+  // Clip offset — for playing a subset of a source video (e.g., 30s clip from a 3600s game video)
+  // clipOffset: seconds into the source video where the clip starts (0 for uploaded/extracted clips)
+  // clipDuration: duration of the clip in seconds (null = use video.duration)
+  // All other state (currentTime, duration, keyframes, segments) stays 0-based relative to clip start.
+  // Only useVideo.js translates between clip time and raw video element time.
+  clipOffset: 0,
+  clipDuration: null,
+
   // Playback state
   isPlaying: false,
   currentTime: 0,
@@ -54,10 +62,12 @@ export const useVideoStore = create((set, get) => ({
   setLoadingProgress: (loadingProgress) => set({ loadingProgress }),
   setLoadStartTime: (loadStartTime) => set({ loadStartTime }),
   setLoadingElapsedSeconds: (loadingElapsedSeconds) => set({ loadingElapsedSeconds }),
+  setClipOffset: (clipOffset) => set({ clipOffset }),
+  setClipDuration: (clipDuration) => set({ clipDuration }),
 
   // Batch update for video load (URL is set, but video element may still be buffering)
   // Note: Loading state is now set by handleLoadStart when video element starts loading
-  setVideoLoaded: ({ file, url, metadata, duration }) => set({
+  setVideoLoaded: ({ file, url, metadata, duration, clipOffset, clipDuration }) => set({
     videoFile: file,
     videoUrl: url,
     metadata,
@@ -66,6 +76,8 @@ export const useVideoStore = create((set, get) => ({
     isPlaying: false,
     error: null,
     isLoading: false,
+    clipOffset: clipOffset || 0,
+    clipDuration: clipDuration || null,
   }),
 
   // Called when video element has loaded enough data to play
@@ -83,6 +95,8 @@ export const useVideoStore = create((set, get) => ({
     videoUrl: null,
     metadata: null,
     duration: 0,
+    clipOffset: 0,
+    clipDuration: null,
     isPlaying: false,
     currentTime: 0,
     isSeeking: false,

@@ -500,7 +500,7 @@ async def render_project(request: RenderRequest, http_request: Request):
         except Exception as e:
             logger.warning(f"[Render] Failed to create export_jobs record: {e}")
 
-        # Get working_clips with their rendering data
+        # Get working_clips with their rendering data + game video info
         cursor.execute(f"""
             SELECT
                 wc.id,
@@ -512,9 +512,14 @@ async def render_project(request: RenderRequest, http_request: Request):
                 wc.sort_order,
                 rc.filename as raw_filename,
                 rc.name as clip_name,
-                (rc.end_time - rc.start_time) as raw_duration
+                rc.game_id,
+                rc.start_time as raw_start_time,
+                rc.end_time as raw_end_time,
+                (rc.end_time - rc.start_time) as raw_duration,
+                g.blake3_hash as game_blake3_hash
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            LEFT JOIN games g ON rc.game_id = g.id
             WHERE wc.project_id = ?
             AND wc.id IN ({latest_working_clips_subquery()})
             ORDER BY wc.sort_order
@@ -597,10 +602,9 @@ async def render_project(request: RenderRequest, http_request: Request):
             detail={"error": "missing_crop_data", "message": error_msg, "clip_id": clip['id']}
         )
 
-    # Determine source video filename
-    source_filename = clip['raw_filename'] or clip['uploaded_filename']
-    if not source_filename:
-        error_msg = "Clip has no source video"
+    # Verify clip has a source: either game_id (game clip) or raw_filename (uploaded clip)
+    if not clip['game_id'] and not clip['raw_filename']:
+        error_msg = "Clip has no source video (no game_id and no raw_filename)"
         error_data = {
             "progress": 0,
             "message": error_msg,
@@ -675,11 +679,15 @@ async def render_project(request: RenderRequest, http_request: Request):
     # Step 4: Process video (Modal cloud GPU or local)
     user_id = get_current_user_id()
 
-    # Determine R2 path based on source type
-    if clip['raw_filename']:
-        input_key = f"raw_clips/{clip['raw_filename']}"
+    # Determine source video: game clips use game video directly, uploaded clips use raw file
+    if clip['game_id']:
+        input_key = f"games/{clip['game_blake3_hash']}.mp4"
+        source_start_time = clip['raw_start_time']
+        source_end_time = clip['raw_end_time']
     else:
-        input_key = f"uploads/{clip['uploaded_filename']}"
+        input_key = f"raw_clips/{clip['raw_filename']}"
+        source_start_time = 0.0
+        source_end_time = clip['raw_duration']
 
     # Convert keyframes to dict format
     keyframes_dict = [
@@ -738,6 +746,8 @@ async def render_project(request: RenderRequest, http_request: Request):
             include_audio=request.include_audio,
             export_mode=request.export_mode,
             test_mode=is_test_mode,
+            source_start_time=source_start_time,
+            source_end_time=source_end_time,
         )
 
         if result.get("status") != "success":

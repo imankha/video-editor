@@ -872,26 +872,28 @@ def _get_realesrgan_model():
     return _realesrgan_model
 
 
-def _interpolate_crop(keyframes: list, time: float) -> dict:
-    """Interpolate crop position at a given time."""
-    if not keyframes:
+def _interpolate_crop(sorted_keyframes: list, time: float) -> dict:
+    """Interpolate crop position at a given time.
+
+    Args:
+        sorted_keyframes: Keyframes pre-sorted by time (caller must sort).
+        time: Time in seconds (relative to clip start, 0-based).
+    """
+    if not sorted_keyframes:
         return None
 
-    # Sort keyframes by time
-    sorted_kf = sorted(keyframes, key=lambda k: k['time'])
-
     # Before first keyframe - use first
-    if time <= sorted_kf[0]['time']:
-        return sorted_kf[0].copy()
+    if time <= sorted_keyframes[0]['time']:
+        return sorted_keyframes[0].copy()
 
     # After last keyframe - use last
-    if time >= sorted_kf[-1]['time']:
-        return sorted_kf[-1].copy()
+    if time >= sorted_keyframes[-1]['time']:
+        return sorted_keyframes[-1].copy()
 
     # Find surrounding keyframes
-    for i in range(len(sorted_kf) - 1):
-        kf1 = sorted_kf[i]
-        kf2 = sorted_kf[i + 1]
+    for i in range(len(sorted_keyframes) - 1):
+        kf1 = sorted_keyframes[i]
+        kf2 = sorted_keyframes[i + 1]
 
         if kf1['time'] <= time <= kf2['time']:
             # Linear interpolation
@@ -904,7 +906,7 @@ def _interpolate_crop(keyframes: list, time: float) -> dict:
                 'height': kf1['height'] + t * (kf2['height'] - kf1['height']),
             }
 
-    return sorted_kf[-1].copy()
+    return sorted_keyframes[-1].copy()
 
 
 @app.function(
@@ -924,6 +926,8 @@ def process_framing_ai(
     fps: int = 30,
     segment_data: dict = None,
     include_audio: bool = True,
+    source_start_time: float = 0.0,
+    source_end_time: float = None,
 ):
     """
     Process video with AI upscaling using Real-ESRGAN on GPU.
@@ -932,22 +936,27 @@ def process_framing_ai(
     Use .remote_gen() to consume progress, final yield has status="success".
 
     This function:
-    1. Downloads video from R2
-    2. Applies crop keyframe interpolation
-    3. Upscales each frame with Real-ESRGAN
-    4. Encodes to final video
-    5. Uploads to R2
+    1. Downloads source video from R2 (game video or uploaded clip)
+    2. Seeks to clip range (source_start_time → source_end_time)
+    3. Combines extraction range with user trim to read only needed frames
+    4. Applies crop keyframe interpolation
+    5. Upscales each frame with Real-ESRGAN
+    6. Encodes to final video
+    7. Uploads to R2
 
     Args:
         job_id: Unique export job identifier
         user_id: User folder in R2
-        input_key: R2 key for source video
+        input_key: R2 key for source video (games/{hash}.mp4 or raw_clips/{file})
         output_key: R2 key for output video
-        keyframes: Crop keyframes [{time, x, y, width, height}, ...]
+        keyframes: Crop keyframes [{time, x, y, width, height}, ...] (times relative to clip start, 0-based)
         output_width: Target width (default 810 for 9:16)
         output_height: Target height (default 1440)
         fps: Target frame rate
-        segment_data: Optional trim/speed data
+        segment_data: Optional trim/speed data (times relative to clip start, 0-based)
+        include_audio: Whether to include audio in output
+        source_start_time: Start time in source video (seconds). 0 for uploaded clips.
+        source_end_time: End time in source video (seconds). None = use full video duration.
 
     Yields:
         Progress updates: {"progress": 0-100, "phase": "...", "message": "..."}
@@ -960,23 +969,28 @@ def process_framing_ai(
     try:
         logger.info(f"[{job_id}] Starting AI upscaling for user {user_id}")
         logger.info(f"[{job_id}] Input: {input_key}, Output: {output_key}")
+        logger.info(f"[{job_id}] Source range: {source_start_time}s - {source_end_time}s")
         logger.info(f"[{job_id}] Target: {output_width}x{output_height} @ {fps}fps")
 
         # Yield initial progress
-        yield {"progress": 5, "phase": "initializing", "message": "Initializing..."}
+        yield {"progress": 2, "phase": "initializing", "message": "Initializing..."}
 
         r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Download input from R2
+            # Download source video from R2
+            # Game videos are global (no user prefix), uploaded clips are user-scoped
             input_path = os.path.join(temp_dir, "input.mp4")
-            full_input_key = f"{user_id}/{input_key}"
+            if input_key.startswith("games/"):
+                full_input_key = input_key  # Global, no user prefix
+            else:
+                full_input_key = f"{user_id}/{input_key}"
             logger.info(f"[{job_id}] Downloading {full_input_key}")
 
-            yield {"progress": 8, "phase": "downloading", "message": "Downloading source video..."}
+            yield {"progress": 3, "phase": "downloading", "message": "Downloading source video..."}
             r2.download_file(bucket, full_input_key, input_path)
-            yield {"progress": 12, "phase": "downloading", "message": "Download complete"}
+            yield {"progress": 10, "phase": "downloading", "message": "Download complete"}
 
             # Get video properties
             cap = cv2.VideoCapture(input_path)
@@ -987,51 +1001,68 @@ def process_framing_ai(
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            duration = total_frames / original_fps
+            video_duration = total_frames / original_fps
 
-            logger.info(f"[{job_id}] Source: {original_width}x{original_height} @ {original_fps:.2f}fps, {total_frames} frames")
+            logger.info(f"[{job_id}] Source: {original_width}x{original_height} @ {original_fps:.2f}fps, {total_frames} frames, {video_duration:.1f}s")
 
-            # Calculate trim range
-            start_frame = 0
-            end_frame = total_frames
+            # Determine clip range in source video
+            clip_start = source_start_time
+            clip_end = source_end_time if source_end_time is not None else video_duration
+            clip_duration = clip_end - clip_start
+
+            # Combine extraction range with user trim to read only needed frames
+            # Trim times are relative to clip start (0-based)
+            trim_start = 0.0
+            trim_end = clip_duration
             if segment_data:
                 if 'trim_start' in segment_data:
-                    start_frame = int(segment_data['trim_start'] * original_fps)
+                    trim_start = segment_data['trim_start']
                 if 'trim_end' in segment_data:
-                    end_frame = min(int(segment_data['trim_end'] * original_fps), total_frames)
+                    trim_end = min(segment_data['trim_end'], clip_duration)
+
+            # Absolute range in source video
+            absolute_start = clip_start + trim_start
+            absolute_end = clip_start + trim_end
+
+            start_frame = int(absolute_start * original_fps)
+            end_frame = min(int(absolute_end * original_fps), total_frames)
 
             frames_to_process = end_frame - start_frame
+            logger.info(f"[{job_id}] Clip range: {clip_start:.2f}s-{clip_end:.2f}s, trim: {trim_start:.2f}s-{trim_end:.2f}s")
+            logger.info(f"[{job_id}] Absolute range: {absolute_start:.2f}s-{absolute_end:.2f}s")
             logger.info(f"[{job_id}] Processing frames {start_frame}-{end_frame} ({frames_to_process} frames)")
 
-            # Sort keyframes
+            yield {"progress": 11, "phase": "seeking", "message": "Seeking to clip range..."}
+
+            # Sort keyframes once (pre-sorted for _interpolate_crop)
             sorted_keyframes = sorted(keyframes, key=lambda k: k['time'])
 
             # Load Real-ESRGAN model
-            yield {"progress": 14, "phase": "loading_model", "message": "Loading AI model..."}
+            yield {"progress": 12, "phase": "loading_model", "message": "Loading AI model..."}
             upsampler = _get_realesrgan_model()
-            yield {"progress": 18, "phase": "loading_model", "message": "AI model loaded"}
+            yield {"progress": 16, "phase": "loading_model", "message": "AI model loaded"}
 
             # Create frames directory
             frames_dir = os.path.join(temp_dir, "frames")
             os.makedirs(frames_dir, exist_ok=True)
 
-            # Progress range for upscaling: 18% to 75%
-            upscale_progress_start = 18
+            # Progress range for upscaling: 16% to 75%
+            upscale_progress_start = 16
             upscale_progress_end = 75
 
-            # Process frames
+            # Seek once, then read sequentially (no per-frame seek)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
             output_frame_idx = 0
             last_yield_frame = 0
             for frame_idx in range(start_frame, end_frame):
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
                 ret, frame = cap.read()
                 if not ret or frame is None:
                     logger.warning(f"[{job_id}] Could not read frame {frame_idx}")
                     continue
 
-                # Get interpolated crop for this time
-                time = frame_idx / original_fps
-                crop = _interpolate_crop(sorted_keyframes, time)
+                # Crop keyframe time is relative to clip start (0-based)
+                crop_time = (frame_idx / original_fps) - clip_start
+                crop = _interpolate_crop(sorted_keyframes, crop_time)
 
                 if crop:
                     # Apply crop
@@ -1107,7 +1138,7 @@ def process_framing_ai(
                 audio_labels = []
 
                 # Calculate the time offset in the output frame sequence
-                # Frames start at 0, but segment times reference source video times
+                # Frames start at 0, but segment times reference clip-relative times
                 trim_offset = segment_data.get('trim_start', 0) if segment_data else 0
 
                 for i, seg in enumerate(segments):
@@ -1136,9 +1167,10 @@ def process_framing_ai(
                     output_labels.append(f"[v{i}]")
 
                     # Audio: apply atempo for speed change (from source input) - only if source has audio
+                    # Audio times must be absolute in the source video (add clip_start offset)
                     if has_audio:
-                        audio_start = seg['start']
-                        audio_end = seg['end']
+                        audio_start = seg['start'] + clip_start
+                        audio_end = seg['end'] + clip_start
                         if speed != 1.0:
                             # atempo supports 0.5-2.0, chain for extreme values
                             atempo_val = max(0.5, min(2.0, speed))
@@ -1198,12 +1230,50 @@ def process_framing_ai(
                             output_path,
                         ]
                 else:
-                    # Fallback to simple encoding
+                    # Fallback to simple encoding (no valid speed segments)
+                    if has_audio:
+                        cmd = [
+                            "ffmpeg", "-y",
+                            "-framerate", str(fps),
+                            "-i", os.path.join(frames_dir, "frame_%06d.png"),
+                            "-ss", str(absolute_start),
+                            "-t", str(output_frame_idx / fps),
+                            "-i", input_path,
+                            "-map", "0:v",
+                            "-map", "1:a?",
+                            "-c:v", "libx264",
+                            "-pix_fmt", "yuv420p",
+                            "-preset", "fast",
+                            "-crf", "23",
+                            "-c:a", "aac",
+                            "-b:a", "192k",
+                            "-movflags", "+faststart",
+                            "-shortest",
+                            output_path,
+                        ]
+                    else:
+                        cmd = [
+                            "ffmpeg", "-y",
+                            "-framerate", str(fps),
+                            "-i", os.path.join(frames_dir, "frame_%06d.png"),
+                            "-c:v", "libx264",
+                            "-pix_fmt", "yuv420p",
+                            "-preset", "fast",
+                            "-crf", "23",
+                            "-movflags", "+faststart",
+                            output_path,
+                        ]
+            else:
+                # No speed changes - simple encoding
+                # Audio needs -ss to seek to the clip's start in the source video
+                if has_audio:
                     cmd = [
                         "ffmpeg", "-y",
                         "-framerate", str(fps),
                         "-i", os.path.join(frames_dir, "frame_%06d.png"),
-                        "-i", input_path,
+                        "-ss", str(absolute_start),
+                        "-t", str(output_frame_idx / fps),
+                        "-i", input_path,  # For audio
                         "-map", "0:v",
                         "-map", "1:a?",
                         "-c:v", "libx264",
@@ -1216,25 +1286,18 @@ def process_framing_ai(
                         "-shortest",
                         output_path,
                     ]
-            else:
-                # No speed changes - simple encoding
-                cmd = [
-                    "ffmpeg", "-y",
-                    "-framerate", str(fps),
-                    "-i", os.path.join(frames_dir, "frame_%06d.png"),
-                    "-i", input_path,  # For audio
-                    "-map", "0:v",
-                    "-map", "1:a?",
-                    "-c:v", "libx264",
-                    "-pix_fmt", "yuv420p",
-                    "-preset", "fast",
-                    "-crf", "23",
-                    "-c:a", "aac",
-                    "-b:a", "192k",
-                    "-movflags", "+faststart",
-                    "-shortest",
-                    output_path,
-                ]
+                else:
+                    cmd = [
+                        "ffmpeg", "-y",
+                        "-framerate", str(fps),
+                        "-i", os.path.join(frames_dir, "frame_%06d.png"),
+                        "-c:v", "libx264",
+                        "-pix_fmt", "yuv420p",
+                        "-preset", "fast",
+                        "-crf", "23",
+                        "-movflags", "+faststart",
+                        output_path,
+                    ]
 
             # Log the FFmpeg command for debugging
             logger.info(f"[{job_id}] FFmpeg command: {' '.join(cmd[:10])}... (truncated)")
@@ -1294,6 +1357,8 @@ def process_framing_ai_l4(
     output_height: int = 1440,
     fps: int = 30,
     segment_data: dict = None,
+    source_start_time: float = 0.0,
+    source_end_time: float = None,
 ) -> dict:
     """
     Process video with AI upscaling using Real-ESRGAN on L4 GPU.
@@ -1311,15 +1376,19 @@ def process_framing_ai_l4(
     try:
         logger.info(f"[{job_id}] Starting AI upscaling (L4 GPU) for user {user_id}")
         logger.info(f"[{job_id}] Input: {input_key}, Output: {output_key}")
+        logger.info(f"[{job_id}] Source range: {source_start_time}s - {source_end_time}s")
         logger.info(f"[{job_id}] Target: {output_width}x{output_height} @ {fps}fps")
 
         r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Download input from R2
+            # Download source video from R2
             input_path = os.path.join(temp_dir, "input.mp4")
-            full_input_key = f"{user_id}/{input_key}"
+            if input_key.startswith("games/"):
+                full_input_key = input_key
+            else:
+                full_input_key = f"{user_id}/{input_key}"
             logger.info(f"[{job_id}] Downloading {full_input_key}")
             r2.download_file(bucket, full_input_key, input_path)
 
@@ -1332,23 +1401,32 @@ def process_framing_ai_l4(
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            duration = total_frames / original_fps
+            video_duration = total_frames / original_fps
 
             logger.info(f"[{job_id}] Source: {original_width}x{original_height} @ {original_fps:.2f}fps, {total_frames} frames")
 
-            # Calculate trim range
-            start_frame = 0
-            end_frame = total_frames
+            # Determine clip range and combine with trim
+            clip_start = source_start_time
+            clip_end = source_end_time if source_end_time is not None else video_duration
+            clip_duration = clip_end - clip_start
+
+            trim_start = 0.0
+            trim_end = clip_duration
             if segment_data:
                 if 'trim_start' in segment_data:
-                    start_frame = int(segment_data['trim_start'] * original_fps)
+                    trim_start = segment_data['trim_start']
                 if 'trim_end' in segment_data:
-                    end_frame = min(int(segment_data['trim_end'] * original_fps), total_frames)
+                    trim_end = min(segment_data['trim_end'], clip_duration)
+
+            absolute_start = clip_start + trim_start
+            absolute_end = clip_start + trim_end
+            start_frame = int(absolute_start * original_fps)
+            end_frame = min(int(absolute_end * original_fps), total_frames)
 
             frames_to_process = end_frame - start_frame
             logger.info(f"[{job_id}] Processing frames {start_frame}-{end_frame} ({frames_to_process} frames)")
 
-            # Sort keyframes
+            # Sort keyframes once
             sorted_keyframes = sorted(keyframes, key=lambda k: k['time'])
 
             # Load Real-ESRGAN model
@@ -1358,27 +1436,25 @@ def process_framing_ai_l4(
             frames_dir = os.path.join(temp_dir, "frames")
             os.makedirs(frames_dir, exist_ok=True)
 
-            # Process frames
+            # Seek once, read sequentially
+            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
             output_frame_idx = 0
             for frame_idx in range(start_frame, end_frame):
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
                 ret, frame = cap.read()
                 if not ret or frame is None:
                     logger.warning(f"[{job_id}] Could not read frame {frame_idx}")
                     continue
 
-                # Get interpolated crop for this time
-                time = frame_idx / original_fps
-                crop = _interpolate_crop(sorted_keyframes, time)
+                # Crop keyframe time is relative to clip start (0-based)
+                crop_time = (frame_idx / original_fps) - clip_start
+                crop = _interpolate_crop(sorted_keyframes, crop_time)
 
                 if crop:
-                    # Apply crop
                     x = int(max(0, crop['x']))
                     y = int(max(0, crop['y']))
                     w = int(crop['width'])
                     h = int(crop['height'])
 
-                    # Ensure bounds
                     x = min(x, original_width - 1)
                     y = min(y, original_height - 1)
                     w = min(w, original_width - x)
@@ -1388,24 +1464,20 @@ def process_framing_ai_l4(
                 else:
                     cropped = frame
 
-                # AI upscale with Real-ESRGAN
                 try:
                     upscaled, _ = upsampler.enhance(cropped, outscale=4)
                 except Exception as e:
                     logger.warning(f"[{job_id}] Upscale failed for frame {frame_idx}: {e}, using resize")
                     upscaled = cv2.resize(cropped, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
 
-                # Resize to target resolution (Real-ESRGAN outputs 4x, may need adjustment)
                 if upscaled.shape[1] != output_width or upscaled.shape[0] != output_height:
                     upscaled = cv2.resize(upscaled, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
 
-                # Save frame
                 frame_path = os.path.join(frames_dir, f"frame_{output_frame_idx:06d}.png")
                 cv2.imwrite(frame_path, upscaled)
 
                 output_frame_idx += 1
 
-                # Log progress
                 if output_frame_idx % 30 == 0:
                     progress = int(output_frame_idx / frames_to_process * 100)
                     logger.info(f"[{job_id}] Progress: {progress}% ({output_frame_idx}/{frames_to_process})")
@@ -1417,23 +1489,39 @@ def process_framing_ai_l4(
             # Encode video with FFmpeg (simplified - no speed changes for benchmark)
             output_path = os.path.join(temp_dir, "output.mp4")
 
-            cmd = [
-                "ffmpeg", "-y",
-                "-framerate", str(fps),
-                "-i", os.path.join(frames_dir, "frame_%06d.png"),
-                "-i", input_path,  # For audio
-                "-map", "0:v",
-                "-map", "1:a?",
-                "-c:v", "libx264",
-                "-pix_fmt", "yuv420p",
-                "-preset", "fast",
-                "-crf", "23",
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-movflags", "+faststart",
-                "-shortest",
-                output_path,
-            ]
+            has_audio = _has_audio_stream(input_path)
+            if has_audio:
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-framerate", str(fps),
+                    "-i", os.path.join(frames_dir, "frame_%06d.png"),
+                    "-ss", str(absolute_start),
+                    "-t", str(output_frame_idx / fps),
+                    "-i", input_path,
+                    "-map", "0:v",
+                    "-map", "1:a?",
+                    "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p",
+                    "-preset", "fast",
+                    "-crf", "23",
+                    "-c:a", "aac",
+                    "-b:a", "192k",
+                    "-movflags", "+faststart",
+                    "-shortest",
+                    output_path,
+                ]
+            else:
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-framerate", str(fps),
+                    "-i", os.path.join(frames_dir, "frame_%06d.png"),
+                    "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p",
+                    "-preset", "fast",
+                    "-crf", "23",
+                    "-movflags", "+faststart",
+                    output_path,
+                ]
 
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
@@ -1484,6 +1572,7 @@ def process_framing_ai_chunk(
     output_width: int,
     output_height: int,
     original_fps: float,
+    source_start_time: float = 0.0,
 ) -> dict:
     """
     Process a single chunk of video with Real-ESRGAN upscaling.
@@ -1496,14 +1585,15 @@ def process_framing_ai_chunk(
         chunk_index: Index of this chunk (0-based)
         total_chunks: Total number of chunks
         user_id: User folder in R2
-        input_key: R2 key for source video
+        input_key: R2 key for source video (games/{hash}.mp4 or raw_clips/{file})
         output_chunk_key: R2 key for output chunk video
-        start_frame: First frame to process (inclusive)
-        end_frame: Last frame to process (exclusive)
-        keyframes: Crop keyframes for interpolation
+        start_frame: First frame to process (inclusive, absolute in source video)
+        end_frame: Last frame to process (exclusive, absolute in source video)
+        keyframes: Crop keyframes for interpolation (times relative to clip start, 0-based)
         output_width: Target width
         output_height: Target height
         original_fps: Source video FPS for time calculations
+        source_start_time: Start time of clip in source video (for crop time offset)
 
     Returns:
         {"status": "success", "output_chunk_key": "...", "frames_processed": N}
@@ -1522,9 +1612,12 @@ def process_framing_ai_chunk(
         bucket = os.environ["R2_BUCKET_NAME"]
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Download input from R2
+            # Download source video from R2
             input_path = os.path.join(temp_dir, "input.mp4")
-            full_input_key = f"{user_id}/{input_key}"
+            if input_key.startswith("games/"):
+                full_input_key = input_key
+            else:
+                full_input_key = f"{user_id}/{input_key}"
             logger.info(f"[{chunk_id}] Downloading {full_input_key}")
             r2.download_file(bucket, full_input_key, input_path)
 
@@ -1544,20 +1637,20 @@ def process_framing_ai_chunk(
             frames_dir = os.path.join(temp_dir, "frames")
             os.makedirs(frames_dir, exist_ok=True)
 
-            # Process frames in this chunk
+            # Seek once, read sequentially
+            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
             output_frame_idx = 0
             frames_to_process = end_frame - start_frame
 
             for frame_idx in range(start_frame, end_frame):
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
                 ret, frame = cap.read()
                 if not ret or frame is None:
                     logger.warning(f"[{chunk_id}] Could not read frame {frame_idx}")
                     continue
 
-                # Get interpolated crop for this time
-                time = frame_idx / original_fps
-                crop = _interpolate_crop(sorted_keyframes, time)
+                # Crop keyframe time is relative to clip start (0-based)
+                crop_time = (frame_idx / original_fps) - source_start_time
+                crop = _interpolate_crop(sorted_keyframes, crop_time)
 
                 if crop:
                     # Apply crop
@@ -1655,6 +1748,8 @@ def process_framing_ai_parallel(
     fps: int = 30,
     num_chunks: int = 2,
     include_audio: bool = True,
+    source_start_time: float = 0.0,
+    source_end_time: float = None,
 ):
     """
     Orchestrate parallel Real-ESRGAN processing using multiple GPUs.
@@ -1662,25 +1757,19 @@ def process_framing_ai_parallel(
     This is a GENERATOR function that yields progress updates.
     Use .remote_gen() to consume progress.
 
-    The orchestrator:
-    1. Gets video info (frame count, fps)
-    2. Splits into chunk configs
-    3. Calls process_framing_ai_chunk.map() for parallel processing
-    4. Concatenates chunk outputs
-    5. Adds audio from source
-    6. Uploads final result
-    7. Cleans up temp chunks
-
     Args:
         job_id: Unique export job identifier
         user_id: User folder in R2
-        input_key: R2 key for source video
+        input_key: R2 key for source video (games/{hash}.mp4 or raw_clips/{file})
         output_key: R2 key for output video
-        keyframes: Crop keyframes for interpolation
+        keyframes: Crop keyframes for interpolation (times relative to clip start, 0-based)
         output_width: Target width (default 810)
         output_height: Target height (default 1440)
         fps: Target frame rate (default 30)
         num_chunks: Number of parallel GPU workers (default 2)
+        include_audio: Whether to include audio in output
+        source_start_time: Start time of clip in source video (seconds)
+        source_end_time: End time of clip in source video (seconds). None = full video.
 
     Yields:
         Progress updates and final result
@@ -1690,15 +1779,19 @@ def process_framing_ai_parallel(
 
     try:
         logger.info(f"[{job_id}] Starting parallel framing with {num_chunks} chunks")
+        logger.info(f"[{job_id}] Source range: {source_start_time}s - {source_end_time}s")
         yield {"progress": 2, "phase": "initializing", "message": f"Starting {num_chunks}-GPU parallel processing..."}
 
         r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Download video to get frame count
+            # Download source video
             input_path = os.path.join(temp_dir, "input.mp4")
-            full_input_key = f"{user_id}/{input_key}"
+            if input_key.startswith("games/"):
+                full_input_key = input_key
+            else:
+                full_input_key = f"{user_id}/{input_key}"
             logger.info(f"[{job_id}] Downloading {full_input_key} to analyze")
             yield {"progress": 5, "phase": "downloading", "message": "Downloading video..."}
             r2.download_file(bucket, full_input_key, input_path)
@@ -1709,21 +1802,29 @@ def process_framing_ai_parallel(
                 raise ValueError("Could not open video file")
 
             original_fps = cap.get(cv2.CAP_PROP_FPS)
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            video_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            video_duration = video_total_frames / original_fps
             cap.release()
 
-            logger.info(f"[{job_id}] Video: {total_frames} frames @ {original_fps:.2f}fps")
-            yield {"progress": 8, "phase": "analyzing", "message": f"Video has {total_frames} frames"}
+            # Determine clip frame range in source video
+            clip_start = source_start_time
+            clip_end = source_end_time if source_end_time is not None else video_duration
+            clip_start_frame = int(clip_start * original_fps)
+            clip_end_frame = min(int(clip_end * original_fps), video_total_frames)
+            total_frames = clip_end_frame - clip_start_frame
 
-            # Calculate chunk boundaries
+            logger.info(f"[{job_id}] Video: {video_total_frames} frames @ {original_fps:.2f}fps")
+            logger.info(f"[{job_id}] Clip range: frames {clip_start_frame}-{clip_end_frame} ({total_frames} frames)")
+            yield {"progress": 8, "phase": "analyzing", "message": f"Processing {total_frames} frames"}
+
+            # Calculate chunk boundaries (within the clip frame range)
             frames_per_chunk = total_frames // num_chunks
             chunk_configs = []
             chunk_keys = []
 
             for i in range(num_chunks):
-                start_frame = i * frames_per_chunk
-                # Last chunk gets remaining frames
-                end_frame = total_frames if i == num_chunks - 1 else (i + 1) * frames_per_chunk
+                start_frame = clip_start_frame + i * frames_per_chunk
+                end_frame = clip_end_frame if i == num_chunks - 1 else clip_start_frame + (i + 1) * frames_per_chunk
 
                 chunk_key = f"temp_chunks/{job_id}_chunk{i}.mp4"
                 chunk_keys.append(chunk_key)
@@ -1741,6 +1842,7 @@ def process_framing_ai_parallel(
                     "output_width": output_width,
                     "output_height": output_height,
                     "original_fps": original_fps,
+                    "source_start_time": source_start_time,
                 })
 
                 logger.info(f"[{job_id}] Chunk {i}: frames {start_frame}-{end_frame}")
@@ -1750,7 +1852,6 @@ def process_framing_ai_parallel(
             # Dispatch chunks to parallel GPU workers using .map()
             logger.info(f"[{job_id}] Dispatching {num_chunks} chunks via .map()")
 
-            # Use starmap pattern - pass each config as kwargs
             chunk_results = list(process_framing_ai_chunk.starmap([
                 (
                     cfg["job_id"],
@@ -1765,6 +1866,7 @@ def process_framing_ai_parallel(
                     cfg["output_width"],
                     cfg["output_height"],
                     cfg["original_fps"],
+                    cfg["source_start_time"],
                 )
                 for cfg in chunk_configs
             ]))
@@ -1812,6 +1914,7 @@ def process_framing_ai_parallel(
             yield {"progress": 85, "phase": "audio", "message": "Adding audio..."}
 
             # Add audio from source (only if user wants it)
+            # Audio needs -ss to seek to the clip's start in the source video
             output_path = os.path.join(temp_dir, "output.mp4")
             has_audio = _has_audio_stream(input_path) and include_audio
 
@@ -1819,6 +1922,8 @@ def process_framing_ai_parallel(
                 audio_cmd = [
                     "ffmpeg", "-y",
                     "-i", concat_output,
+                    "-ss", str(clip_start),
+                    "-t", str(total_frames / original_fps),
                     "-i", input_path,
                     "-map", "0:v",
                     "-map", "1:a",
@@ -2730,14 +2835,18 @@ def _get_trim_range(segment_data: dict, duration: float) -> tuple:
     return 0, duration
 
 
-def _build_simple_ffmpeg_cmd(frame_pattern, source_path, output_path, fps, has_audio, trim_start, frame_count):
-    """Build FFmpeg command for simple encoding (no speed changes)."""
+def _build_simple_ffmpeg_cmd(frame_pattern, source_path, output_path, fps, has_audio, audio_start_time, frame_count):
+    """Build FFmpeg command for simple encoding (no speed changes).
+
+    Args:
+        audio_start_time: Absolute time in source video for audio extraction (seconds).
+    """
     if has_audio:
         return [
             "ffmpeg", "-y",
             "-framerate", str(fps),
             "-i", frame_pattern,
-            "-ss", str(trim_start),
+            "-ss", str(audio_start_time),
             "-t", str(frame_count / fps),
             "-i", source_path,
             "-map", "0:v",
@@ -2830,21 +2939,25 @@ def process_clips_ai(
         bucket = os.environ["R2_BUCKET_NAME"]
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # === PHASE 1: Download all source clips ===
-            logger.info(f"[{job_id}] Downloading {len(source_keys)} source clip(s)...")
+            # === PHASE 1: Download all source videos ===
+            # source_keys may include game videos (global) or uploaded clips (user-scoped)
+            logger.info(f"[{job_id}] Downloading {len(source_keys)} source video(s)...")
             source_paths = []
 
             for i, source_key in enumerate(source_keys):
                 yield {
                     "progress": 2 + int((i / len(source_keys)) * 8),
                     "phase": "downloading",
-                    "message": f"Downloading clip {i+1}/{len(source_keys)}...",
+                    "message": f"Downloading video {i+1}/{len(source_keys)}...",
                     "clip": i + 1,
                     "total_clips": total_clips
                 }
 
                 source_path = os.path.join(temp_dir, f"source_{i}.mp4")
-                full_key = f"{user_id}/{source_key}"
+                if source_key.startswith("games/"):
+                    full_key = source_key  # Global, no user prefix
+                else:
+                    full_key = f"{user_id}/{source_key}"
                 logger.info(f"[{job_id}] Downloading: {full_key}")
                 r2.download_file(bucket, full_key, source_path)
                 source_paths.append(source_path)
@@ -2920,22 +3033,32 @@ def process_clips_ai(
 
                 logger.info(f"[{job_id}] Clip {clip_idx+1}: {original_width}x{original_height} @ {original_fps:.1f}fps, {total_frames} frames")
 
-                # Calculate trim range
-                trim_start, trim_end = _get_trim_range(segment_data, duration)
-                start_frame = int(trim_start * original_fps)
-                end_frame = min(int(trim_end * original_fps), total_frames)
+                # Determine clip range in source video
+                clip_source_start = clip_data.get('source_start_time', 0.0)
+                clip_source_end = clip_data.get('source_end_time', None)
+                clip_start = clip_source_start
+                clip_end = clip_source_end if clip_source_end is not None else duration
+                clip_duration = clip_end - clip_start
+
+                # Combine extraction range with user trim
+                trim_start_rel, trim_end_rel = _get_trim_range(segment_data, clip_duration)
+                absolute_start = clip_start + trim_start_rel
+                absolute_end = clip_start + trim_end_rel
+                start_frame = int(absolute_start * original_fps)
+                end_frame = min(int(absolute_end * original_fps), total_frames)
                 frames_to_process = max(1, end_frame - start_frame)
 
+                logger.info(f"[{job_id}] Clip {clip_idx+1}: source range {clip_start:.2f}s-{clip_end:.2f}s, absolute {absolute_start:.2f}s-{absolute_end:.2f}s")
                 logger.info(f"[{job_id}] Clip {clip_idx+1}: Processing frames {start_frame}-{end_frame} ({frames_to_process} frames)")
 
-                # Sort keyframes by time
+                # Sort keyframes by time (pre-sorted for _interpolate_crop)
                 sorted_keyframes = sorted(keyframes, key=lambda k: k.get('time', 0)) if keyframes else []
 
                 # Create frames directory for this clip
                 frames_dir = os.path.join(temp_dir, f"frames_{clip_idx}")
                 os.makedirs(frames_dir, exist_ok=True)
 
-                # Process frames
+                # Seek once, read sequentially
                 cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
                 output_frame_idx = 0
                 last_yield_frame = 0
@@ -2946,7 +3069,8 @@ def process_clips_ai(
                         logger.warning(f"[{job_id}] Could not read frame {frame_num}")
                         continue
 
-                    frame_time = frame_num / original_fps
+                    # Crop keyframe time is relative to clip start (0-based)
+                    frame_time = (frame_num / original_fps) - clip_start
 
                     # Get interpolated crop or use smart center crop
                     if sorted_keyframes:
@@ -3051,7 +3175,7 @@ def process_clips_ai(
                     output_labels = []
                     audio_labels = []
 
-                    trim_offset = trim_start
+                    trim_offset = trim_start_rel
                     output_duration = output_frame_idx / fps
 
                     for seg_idx, seg in enumerate(segments):
@@ -3073,10 +3197,10 @@ def process_clips_ai(
                             )
                         output_labels.append(f"[v{seg_idx}]")
 
-                        # Audio speed
+                        # Audio speed — times must be absolute in source video
                         if has_audio:
-                            audio_start = seg['start']
-                            audio_end = seg['end']
+                            audio_start = seg['start'] + clip_start
+                            audio_end = seg['end'] + clip_start
                             if speed != 1.0:
                                 atempo_val = max(0.5, min(2.0, speed))
                                 audio_filter_parts.append(
@@ -3134,13 +3258,13 @@ def process_clips_ai(
                         # Fallback to simple encoding
                         ffmpeg_cmd = _build_simple_ffmpeg_cmd(
                             frame_pattern, source_path, clip_output_path,
-                            fps, has_audio, trim_start, output_frame_idx
+                            fps, has_audio, absolute_start, output_frame_idx
                         )
                 else:
                     # Simple encoding (no speed changes)
                     ffmpeg_cmd = _build_simple_ffmpeg_cmd(
                         frame_pattern, source_path, clip_output_path,
-                        fps, has_audio, trim_start, output_frame_idx
+                        fps, has_audio, absolute_start, output_frame_idx
                     )
 
                 logger.info(f"[{job_id}] FFmpeg command: {' '.join(ffmpeg_cmd[:8])}...")

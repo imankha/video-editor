@@ -255,6 +255,8 @@ async def local_framing(
     progress_callback=None,
     include_audio: bool = True,
     export_mode: str = "quality",
+    source_start_time: float = 0.0,
+    source_end_time: float = None,
 ) -> dict:
     """
     Local fallback for Modal process_framing_ai.
@@ -266,6 +268,7 @@ async def local_framing(
 
     logger.info(f"[LocalProcessor] Framing job {job_id} starting")
     logger.info(f"[LocalProcessor] User: {user_id}, Input: {input_key} -> Output: {output_key}")
+    logger.info(f"[LocalProcessor] Source range: {source_start_time}s - {source_end_time}s")
     logger.info(f"[LocalProcessor] Target: {output_width}x{output_height} @ {fps}fps")
 
     start_time = time.time()
@@ -288,8 +291,12 @@ async def local_framing(
             input_path = os.path.join(temp_dir, "input.mp4")
             output_path = os.path.join(temp_dir, "output.mp4")
 
-            # Download from R2
-            if not await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path)):
+            # Download from R2 — game videos are global (no user prefix)
+            if input_key.startswith("games/"):
+                download_result = await asyncio.to_thread(download_from_r2, None, input_key, Path(input_path))
+            else:
+                download_result = await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path))
+            if not download_result:
                 return {"status": "error", "error": "Failed to download from R2"}
 
             download_time = time.time() - start_time
@@ -398,6 +405,8 @@ async def local_framing_mock(
     output_width: int = 810,
     output_height: int = 1440,
     progress_callback=None,
+    source_start_time: float = 0.0,
+    source_end_time: float = None,
 ) -> dict:
     """
     Mock framing processor for E2E tests.
@@ -409,6 +418,7 @@ async def local_framing_mock(
     import ffmpeg as ffmpeg_lib
 
     logger.info(f"[LocalProcessor] Mock framing job {job_id} starting (test mode)")
+    logger.info(f"[LocalProcessor] Source range: {source_start_time}s - {source_end_time}s")
 
     start_time = time.time()
 
@@ -423,8 +433,12 @@ async def local_framing_mock(
             input_path = os.path.join(temp_dir, "input.mp4")
             output_path = os.path.join(temp_dir, "output.mp4")
 
-            # Download from R2
-            if not await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path)):
+            # Download from R2 — game videos are global (no user prefix)
+            if input_key.startswith("games/"):
+                download_result = await asyncio.to_thread(download_from_r2, None, input_key, Path(input_path))
+            else:
+                download_result = await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path))
+            if not download_result:
                 return {"status": "error", "error": "Failed to download from R2"}
 
             if progress_callback:
