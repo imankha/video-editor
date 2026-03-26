@@ -178,6 +178,7 @@ Deploy to production domains with proper scaling.
 | T254 | [Export Network Resilience](tasks/T254-export-network-resilience.md) | DONE | 6 | 4 | Survive network disconnects during export — don't fail when server is still rendering |
 | T570 | [Framing Clip Icon State](tasks/T570-framing-clip-icon-state.md) | DONE | 4 | 2 | "!" icon didn't clear after framing; optimistically update crop_data in store on keyframe add |
 | T580 | [Can't Reframe — Shows Exported Video](tasks/T580-reframing-shows-exported-video.md) | DONE | 7 | 4 | Fix: reset shared videoStore on mode switch + useLayoutEffect guard in FramingScreen |
+| T730 | [Missing End Detection Point](tasks/T730-missing-end-detection-point.md) | TODO | 5 | 4 | Short clips missing last player tracking point at end of overlay region (fence-post error in Modal) |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
