@@ -23,6 +23,7 @@ import httpx
 import logging
 import os
 import shutil
+from pathlib import Path
 
 import sqlite3
 from uuid import uuid4
@@ -56,8 +57,22 @@ from app.services.auth_db import (
     sync_auth_db_to_r2,
 )
 
-# Test account that auto-resets on every login (fresh new-user experience)
-TEST_RESET_EMAIL = os.getenv("TEST_RESET_EMAIL")
+# Test accounts that auto-reset on every login (fresh new-user experience).
+# Read from nuf-reset-emails.txt at module load time.
+def _load_nuf_reset_emails():
+    """Load NUF reset emails from config file. One email per line, # for comments."""
+    # __file__ = src/backend/app/routers/auth.py → project root is 5 levels up
+    config_path = Path(__file__).parent.parent.parent.parent.parent / "nuf-reset-emails.txt"
+    if not config_path.exists():
+        return set()
+    emails = set()
+    for line in config_path.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            emails.add(line.lower())
+    return emails
+
+NUF_RESET_EMAILS = _load_nuf_reset_emails()
 
 logger = logging.getLogger(__name__)
 
@@ -293,8 +308,8 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     if not email or token_data.get("email_verified") != "true":
         raise HTTPException(status_code=401, detail="Email not verified by Google")
 
-    # Auto-reset test account: wipe all data so login is always fresh (dev only)
-    if TEST_RESET_EMAIL and email == TEST_RESET_EMAIL and APP_ENV != "production":
+    # Auto-reset NUF test accounts: wipe all data so login is always fresh (non-prod only)
+    if email.lower() in NUF_RESET_EMAILS and APP_ENV != "production":
         existing_test = get_user_by_email(email)
         if existing_test:
             _reset_test_account(existing_test['user_id'], email)

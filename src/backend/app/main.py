@@ -308,67 +308,6 @@ async def startup_event():
         logger.warning(f"Failed to process modal queue: {e}")
 
 
-    # Auto-reset NUF test accounts so they start fresh every server restart
-    try:
-        _reset_nuf_accounts()
-    except Exception as e:
-        logger.warning(f"Failed to reset NUF accounts: {e}")
-
-
-# Emails that get fully reset on every server startup (for NUF testing)
-NUF_RESET_EMAILS = [
-    "imankh@gmail.com",
-]
-
-NUF_TABLES_TO_CLEAR = [
-    "games", "game_videos", "raw_clips", "projects", "working_clips",
-    "working_videos", "final_videos", "export_jobs", "achievements",
-    "before_after_tracks",
-]
-
-
-def _reset_nuf_accounts():
-    """Reset NUF test accounts so they start fresh on every server restart."""
-    import sqlite3 as _sqlite3
-    from app.database import USER_DATA_BASE
-
-    auth_db = USER_DATA_BASE / "auth.sqlite"
-    if not auth_db.exists():
-        return
-
-    conn = _sqlite3.connect(str(auth_db))
-    conn.row_factory = _sqlite3.Row
-
-    for email in NUF_RESET_EMAILS:
-        row = conn.execute("SELECT user_id FROM users WHERE email = ?", (email,)).fetchone()
-        if not row:
-            continue
-
-        user_id = row["user_id"]
-        logger.info(f"[NUF Reset] Resetting account: {email} (user_id={user_id})")
-
-        # Clear all profile databases
-        profiles_dir = USER_DATA_BASE / user_id / "profiles"
-        if profiles_dir.exists():
-            for db_path in profiles_dir.glob("*/database.sqlite"):
-                pconn = _sqlite3.connect(str(db_path))
-                for table in NUF_TABLES_TO_CLEAR:
-                    try:
-                        pconn.execute(f"DELETE FROM {table}")
-                    except _sqlite3.OperationalError:
-                        pass
-                pconn.commit()
-                pconn.close()
-
-        # Delete user record from auth DB (next login creates fresh link)
-        conn.execute("DELETE FROM credit_transactions WHERE user_id = ?", (user_id,))
-        conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
-        conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
-        conn.commit()
-        logger.info(f"[NUF Reset] Account reset complete: {email}")
-
-    conn.close()
-
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
