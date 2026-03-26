@@ -7,7 +7,6 @@
 export const SourceType = Object.freeze({
   BRILLIANT_CLIP: 'brilliant_clip',
   CUSTOM_PROJECT: 'custom_project',
-  ANNOTATED_GAME: 'annotated_game',
 });
 
 /**
@@ -16,7 +15,6 @@ export const SourceType = Object.freeze({
 export const SOURCE_TYPE_LABELS = Object.freeze({
   [SourceType.BRILLIANT_CLIP]: 'Brilliant Clip',
   [SourceType.CUSTOM_PROJECT]: 'Custom Project',
-  [SourceType.ANNOTATED_GAME]: 'Annotated Game',
 });
 
 /**

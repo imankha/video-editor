@@ -180,11 +180,13 @@ function App() {
 
   // T540: Record achievement when user enters framing mode
   // T635: Gate on !isCheckingSession to avoid firing before auth completes
+  // Also require a selected project — editorMode defaults to FRAMING on initial load
+  // before redirecting to Projects, which would falsely trigger the achievement.
   useEffect(() => {
-    if (!isCheckingSession && editorMode === EDITOR_MODES.FRAMING) {
+    if (!isCheckingSession && editorMode === EDITOR_MODES.FRAMING && selectedProjectId) {
       useQuestStore.getState().recordAchievement('opened_framing_editor');
     }
-  }, [editorMode, isCheckingSession]);
+  }, [editorMode, isCheckingSession, selectedProjectId]);
 
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);
@@ -494,7 +496,6 @@ function App() {
           // Always switch to overlay mode (handles case where user is in annotate)
           setEditorMode(EDITOR_MODES.OVERLAY);
         }}
-        onOpenGame={handleLoadGame}
       />
 
       {/* Quest Panel (T540) */}

@@ -16,11 +16,6 @@
 // Annotate mode container
 export {
   AnnotateContainer,
-  AnnotateSidebar,
-  AnnotateVideoOverlays,
-  AnnotateVideoControls,
-  AnnotateTimeline,
-  AnnotateExportPanel,
 } from './AnnotateContainer';
 
 // Overlay mode container

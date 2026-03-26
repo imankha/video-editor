@@ -14,6 +14,7 @@ import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
 export function ClipsSidePanel({
   clipRegions,
   selectedRegionId,
+  activePlaybackClipId = null,
   onSelectRegion,
   onUpdateRegion,
   onDeleteRegion,
@@ -228,6 +229,7 @@ export function ClipsSidePanel({
                   region={region}
                   index={index}
                   isSelected={region.id === selectedRegionId}
+                  isPlaybackActive={region.id === activePlaybackClipId}
                   onClick={() => onSelectRegion(region.id)}
                   isMobile={isMobile}
                   onViewDetails={isMobile ? () => handleMobileViewDetails(region.id) : undefined}

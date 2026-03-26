@@ -62,7 +62,7 @@ logging.getLogger("boto3").setLevel(logging.WARNING)
 logging.getLogger("s3transfer").setLevel(logging.WARNING)
 
 # Import routers and websocket handler
-from app.routers import health_router, export_router, detection_router, annotate_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router, profiles_router, credits_router, quests_router, admin_router, payments_router
+from app.routers import health_router, export_router, detection_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router, profiles_router, credits_router, quests_router, admin_router, payments_router
 from app.routers.exports import router as exports_router
 from app.websocket import websocket_export_progress, websocket_extractions
 from app.services.export_worker import recover_orphaned_jobs
@@ -110,7 +110,6 @@ app.add_middleware(RequestContextMiddleware)
 app.include_router(health_router)
 app.include_router(export_router)
 app.include_router(detection_router)
-app.include_router(annotate_router)
 app.include_router(projects_router)
 app.include_router(clips_router)
 app.include_router(games_router)
@@ -307,6 +306,7 @@ async def startup_event():
             logger.info("Modal queue: no pending tasks found")
     except Exception as e:
         logger.warning(f"Failed to process modal queue: {e}")
+
 
 
 @app.exception_handler(Exception)

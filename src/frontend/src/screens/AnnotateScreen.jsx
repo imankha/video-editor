@@ -150,7 +150,6 @@ export function AnnotateScreen({ onClearSelection }) {
     annotateSelectedLayer,
     annotatePlaybackSpeed,
     annotateContainerRef,
-    isCreatingAnnotatedVideo,
     isUploadingGameVideo,
     uploadProgress,
     hasAnnotateClips,
@@ -163,7 +162,6 @@ export function AnnotateScreen({ onClearSelection }) {
     // Handlers
     handleGameVideoSelect,
     handleLoadGame,
-    handleCreateAnnotatedVideo,
     handleToggleFullscreen,
     handleAddClipFromButton,
     handleFullscreenCreateClip,
@@ -179,7 +177,6 @@ export function AnnotateScreen({ onClearSelection }) {
     deleteClipRegion,
     importAnnotations,
     getAnnotateRegionAtTime,
-    getAnnotateExportData,
     selectAnnotateRegion,
     isEditMode,
     lockScrub,
@@ -193,6 +190,8 @@ export function AnnotateScreen({ onClearSelection }) {
     handleVideoTabSwitch,
     filteredClipRegions,
     filteredRegionsWithLayout,
+    // T710: Annotation playback
+    playback,
     // T251: View progress tracking
     getViewedDuration,
   } = annotate;
@@ -259,10 +258,14 @@ export function AnnotateScreen({ onClearSelection }) {
         return;
       }
 
-      // Space bar: Toggle play/pause
+      // Space bar: Toggle play/pause (works in both annotate and playback modes)
       if (event.code === 'Space' && annotateVideoUrl) {
         event.preventDefault();
-        togglePlay();
+        if (playback?.isPlaybackMode) {
+          playback.togglePlay();
+        } else {
+          togglePlay();
+        }
         return;
       }
 
@@ -326,6 +329,7 @@ export function AnnotateScreen({ onClearSelection }) {
     annotateSelectedRegionId,
     selectAnnotateRegion,
     togglePlay,
+    playback,
     seekForward,
     seekBackward,
     seek,
@@ -366,8 +370,9 @@ export function AnnotateScreen({ onClearSelection }) {
       <div className="hidden sm:flex">
         <ClipsSidePanel
           clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
-          selectedRegionId={annotateSelectedRegionId}
-          onSelectRegion={handleSelectAnnotateRegion}
+          selectedRegionId={playback?.isPlaybackMode ? playback.activeClipId : annotateSelectedRegionId}
+          activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
+          onSelectRegion={playback?.isPlaybackMode ? playback.seekToClip : handleSelectAnnotateRegion}
           onUpdateRegion={updateClipRegion}
           onDeleteRegion={deleteClipRegion}
           onImportAnnotations={importAnnotations}
@@ -389,8 +394,9 @@ export function AnnotateScreen({ onClearSelection }) {
           <div className="relative w-[85vw] max-w-[352px] h-full">
             <ClipsSidePanel
               clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
-              selectedRegionId={annotateSelectedRegionId}
-              onSelectRegion={handleSelectAnnotateRegion}
+              selectedRegionId={playback?.isPlaybackMode ? playback.activeClipId : annotateSelectedRegionId}
+              activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
+              onSelectRegion={playback?.isPlaybackMode ? playback.seekToClip : handleSelectAnnotateRegion}
               onUpdateRegion={updateClipRegion}
               onDeleteRegion={deleteClipRegion}
               onImportAnnotations={importAnnotations}
@@ -405,8 +411,12 @@ export function AnnotateScreen({ onClearSelection }) {
               onScrubLock={lockScrub}
               onScrubUnlock={unlockScrub}
               onJumpToClip={(regionId, endTime) => {
-                handleSelectAnnotateRegion(regionId);
-                seek(endTime);
+                if (playback?.isPlaybackMode) {
+                  playback.seekToClip(regionId);
+                } else {
+                  handleSelectAnnotateRegion(regionId);
+                  seek(endTime);
+                }
                 setShowMobileSidebar(false);
               }}
             />
@@ -521,7 +531,6 @@ export function AnnotateScreen({ onClearSelection }) {
         onToggleFullscreen={handleToggleFullscreen}
         onAddClip={showAnnotateOverlay ? undefined : handleAddClipFromButton}
         getAnnotateRegionAtTime={getAnnotateRegionAtTime}
-        getAnnotateExportData={getAnnotateExportData}
         // Fullscreen overlay handlers
         onFullscreenCreateClip={handleFullscreenCreateClip}
         onFullscreenUpdateClip={handleFullscreenUpdateClip}
@@ -530,12 +539,13 @@ export function AnnotateScreen({ onClearSelection }) {
         // Layer selection
         annotateSelectedLayer={annotateSelectedLayer}
         onLayerSelect={setAnnotateSelectedLayer}
-        // Export state (exportProgress is read from store in AnnotateModeView)
-        isCreatingAnnotatedVideo={isCreatingAnnotatedVideo}
+        // Upload state
         isUploadingGameVideo={isUploadingGameVideo}
         uploadProgress={uploadProgress}
-        // Export handlers
-        onCreateAnnotatedVideo={handleCreateAnnotatedVideo}
+        // T710: Annotation playback
+        playback={playback}
+        lockScrub={lockScrub}
+        unlockScrub={unlockScrub}
         // Zoom (for video player)
         zoom={zoom}
         panOffset={panOffset}

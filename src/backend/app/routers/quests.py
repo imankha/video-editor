@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/quests", tags=["quests"])
 
 # Known achievement keys — only these can be recorded
-KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "viewed_custom_project_video"}
+KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "viewed_custom_project_video", "played_annotations"}
 
 # Quest definitions — single source of truth for quest structure and rewards
 QUEST_DEFINITIONS = [
@@ -30,7 +30,7 @@ QUEST_DEFINITIONS = [
         "step_ids": [
             "upload_game",
             "annotate_brilliant",
-            "create_annotated_video",
+            "playback_annotations",
         ],
     },
     {
@@ -80,8 +80,8 @@ def _check_all_steps(user_id: str, conn) -> dict:
         "SELECT 1 FROM raw_clips WHERE rating = 5 LIMIT 1"
     ).fetchone() is not None
 
-    steps["create_annotated_video"] = cursor.execute(
-        "SELECT 1 FROM export_jobs WHERE type = 'annotate' AND status = 'complete' LIMIT 1"
+    steps["playback_annotations"] = cursor.execute(
+        "SELECT 1 FROM achievements WHERE key = 'played_annotations'"
     ).fetchone() is not None
 
     # --- Quest 2: Export Highlights ---

@@ -1,19 +1,17 @@
-import { useMemo } from 'react';
-import { Download, Loader } from 'lucide-react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
+import { Play } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
+import PlaybackControls from './annotate/components/PlaybackControls';
 import { generateClipName } from './annotate/constants/soccerTags';
-import { useExportStore } from '../stores';
-import { ExportProgress } from '../components/shared';
 
 /**
  * AnnotateModeView - Complete view for Annotate mode
  *
- * This component contains all annotate-specific JSX that was previously in App.jsx.
- * It receives state and handlers as props from App.jsx.
- *
- * @see DECOMPOSITION_ANALYSIS.md for refactoring context
+ * Two sub-modes:
+ * 1. Annotating (default) — normal video player, timeline, clip editing
+ * 2. Playback — dual-video ping-pong, virtual timeline, NotesOverlay per clip
  */
 export function AnnotateModeView({
   // Video state
@@ -58,7 +56,6 @@ export function AnnotateModeView({
   onToggleFullscreen,
   onAddClip,
   getAnnotateRegionAtTime,
-  getAnnotateExportData,
 
   // Fullscreen overlay handlers
   onFullscreenCreateClip,
@@ -70,13 +67,14 @@ export function AnnotateModeView({
   annotateSelectedLayer,
   onLayerSelect,
 
-  // Export state (exportProgress is read directly from store for reactivity)
-  isCreatingAnnotatedVideo,
+  // Upload state
   isUploadingGameVideo,
   uploadProgress,
 
-  // Export handlers
-  onCreateAnnotatedVideo,
+  // T710: Annotation playback
+  playback,
+  lockScrub,
+  unlockScrub,
 
   // Zoom (for video player)
   zoom,
@@ -89,9 +87,6 @@ export function AnnotateModeView({
   MIN_ZOOM,
   MAX_ZOOM,
 }) {
-  // Read exportProgress directly from store for proper reactivity during SSE updates
-  const { exportProgress } = useExportStore();
-
   // Derive existingClip from state machine's selectedRegionId.
   // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
   const existingClip = useMemo(() => {
@@ -99,6 +94,159 @@ export function AnnotateModeView({
     return clipRegions?.find(r => r.id === annotateSelectedRegionId) || null;
   }, [annotateSelectedRegionId, showAnnotateOverlay, clipRegions]);
 
+  const isPlaybackMode = playback?.isPlaybackMode;
+
+  // Playback fullscreen — independent from annotate fullscreen (CSS fixed positioning)
+  const [playbackFullscreen, setPlaybackFullscreen] = useState(false);
+  const togglePlaybackFullscreen = useCallback(() => {
+    setPlaybackFullscreen(prev => !prev);
+  }, []);
+  // Exit fullscreen when leaving playback mode — sync active clip back to annotate selection
+  const handleExitPlayback = useCallback(() => {
+    const lastClipId = playback?.activeClipId;
+    setPlaybackFullscreen(false);
+    playback?.exitPlaybackMode();
+    // Select the last-playing clip in annotate mode so sidebar stays in sync.
+    // Lock scrub to suppress auto-deselect while the annotate video seeks to
+    // the clip's start time (seek is async — without the lock, the auto-deselect
+    // effect fires with the old currentTime and clears the selection).
+    if (lastClipId && onSelectRegion) {
+      lockScrub?.();
+      onSelectRegion(lastClipId);
+      // Unlock after the seek settles (video needs time to update currentTime)
+      setTimeout(() => unlockScrub?.(), 500);
+    }
+  }, [playback, onSelectRegion, lockScrub, unlockScrub]);
+
+  // Escape key exits playback fullscreen
+  useEffect(() => {
+    if (!playbackFullscreen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setPlaybackFullscreen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [playbackFullscreen]);
+
+  // In playback mode, find the active clip for NotesOverlay
+  const activePlaybackClip = useMemo(() => {
+    if (!isPlaybackMode || !playback?.activeClipId) return null;
+    return clipRegions?.find(r => r.id === playback.activeClipId) || null;
+  }, [isPlaybackMode, playback?.activeClipId, clipRegions]);
+
+  // --- PLAYBACK MODE ---
+  // Single return tree — toggling fullscreen changes CSS classes, not DOM structure.
+  // This prevents video elements from unmounting/remounting (which loses loaded source).
+  if (isPlaybackMode && playback) {
+    const activeLabel = playback.activeVideoLabel;
+    const isFS = playbackFullscreen;
+
+    return (
+      <div className={isFS
+        ? 'fixed inset-0 z-[100] bg-gray-900 flex flex-col'
+        : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'
+      }>
+        {/* Video container */}
+        <div className={isFS
+          ? 'flex-1 min-h-0 flex items-center justify-center'
+          : ''
+        }>
+          <div
+            className={`relative bg-gray-900 ${isFS ? 'w-full' : 'rounded-lg'} overflow-hidden cursor-pointer`}
+            onClick={() => playback.togglePlay()}
+          >
+            <div className={`relative ${isFS ? 'w-full' : 'h-[40vh] sm:h-[60vh]'}`}
+              style={isFS ? {
+                maxHeight: 'calc(100vh - 120px)',
+                aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}`,
+              } : undefined}
+            >
+              {/* Video A */}
+              <video
+                ref={playback.videoARef}
+                className="absolute inset-0 w-full h-full object-contain"
+                style={{
+                  opacity: activeLabel === 'A' ? 1 : 0,
+                  transition: 'opacity 80ms ease-in-out',
+                  zIndex: activeLabel === 'A' ? 2 : 1,
+                }}
+                playsInline
+                preload="auto"
+              />
+              {/* Video B */}
+              <video
+                ref={playback.videoBRef}
+                className="absolute inset-0 w-full h-full object-contain"
+                style={{
+                  opacity: activeLabel === 'B' ? 1 : 0,
+                  transition: 'opacity 80ms ease-in-out',
+                  zIndex: activeLabel === 'B' ? 2 : 1,
+                }}
+                playsInline
+                preload="auto"
+              />
+
+              {/* Loading overlay */}
+              {playback.isLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30">
+                  <div className="text-center">
+                    <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-600 border-t-green-500" />
+                    <p className="mt-3 text-sm text-gray-300">Preparing playback...</p>
+                  </div>
+                </div>
+              )}
+
+              {/* NotesOverlay for active clip */}
+              {!playback.isLoading && activePlaybackClip && (() => {
+                const displayName = activePlaybackClip.name ||
+                  generateClipName(activePlaybackClip.rating, activePlaybackClip.tags, activePlaybackClip.notes);
+                return (displayName || activePlaybackClip.notes) ? (
+                  <NotesOverlay
+                    key="playback-notes"
+                    name={displayName}
+                    notes={activePlaybackClip.notes}
+                    rating={activePlaybackClip.rating}
+                    isVisible={true}
+                    isFullscreen={isFS}
+                  />
+                ) : null;
+              })()}
+            </div>
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className={isFS ? 'shrink-0' : ''}>
+          <PlaybackControls
+            isPlaying={playback.isPlaying}
+            virtualTime={playback.virtualTime}
+            totalVirtualDuration={playback.timeline?.totalVirtualDuration || 0}
+            segments={playback.timeline?.segments}
+            activeClipId={playback.activeClipId}
+            activeClipName={activePlaybackClip
+              ? (activePlaybackClip.name || generateClipName(activePlaybackClip.rating, activePlaybackClip.tags, activePlaybackClip.notes))
+              : null}
+            currentSegment={playback.getCurrentSegment()}
+            onTogglePlay={playback.togglePlay}
+            onRestart={playback.restart}
+            onSeek={playback.seekVirtual}
+            onSeekWithinSegment={playback.seekWithinSegment}
+            onStartScrub={playback.startScrub}
+            onEndScrub={playback.endScrub}
+            onExitPlayback={handleExitPlayback}
+            playbackRate={playback.playbackRate}
+            onPlaybackRateChange={playback.changePlaybackRate}
+            isFullscreen={isFS}
+            onToggleFullscreen={togglePlaybackFullscreen}
+            videoARef={playback.videoARef}
+            videoBRef={playback.videoBRef}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // --- ANNOTATING MODE (default) ---
   return (
     <>
       {/* Video Metadata - Annotate mode (hidden on mobile) */}
@@ -184,6 +332,7 @@ export function AnnotateModeView({
                 videoRef={videoRef}
                 videoUrl={annotateVideoUrl}
                 handlers={handlers}
+                onVideoClick={togglePlay}
                 isLoading={isLoading}
                 isVideoElementLoading={isVideoElementLoading}
                 loadingProgress={loadingProgress}
@@ -192,16 +341,12 @@ export function AnnotateModeView({
                 loadingMessage="Loading video..."
                 overlays={[
                   // NotesOverlay - shows name, rating, notes for the active clip.
-                  // Selected clip is the primary source of truth (instant on click);
-                  // playhead lookup is the fallback (auto-display during playback).
-                  // Hidden while the Add/Edit Clip panel is open to prevent layout jumps during scrub.
                   !showAnnotateOverlay && (() => {
                     const selectedRegion = annotateSelectedRegionId
                       && clipRegions.find(r => r.id === annotateSelectedRegionId);
                     const region = selectedRegion || getAnnotateRegionAtTime(currentTime);
                     if (!region) return null;
 
-                    // Derive display name from rating+tags if no explicit name is set
                     const displayName = region.name ||
                       generateClipName(region.rating, region.tags, region.notes);
 
@@ -216,8 +361,7 @@ export function AnnotateModeView({
                       />
                     ) : null;
                   })(),
-                  // AnnotateFullscreenOverlay - appears when overlay state is active
-                  // existingClip derived from state machine ID — stable during scrub
+                  // AnnotateFullscreenOverlay
                   showAnnotateOverlay && (() => {
                     return (
                       <AnnotateFullscreenOverlay
@@ -303,21 +447,9 @@ export function AnnotateModeView({
           )}
         </div>
 
-        {/* Export Section - hidden in fullscreen */}
+        {/* Playback Annotations button - replaces old "Create Annotated Video" */}
         {!annotateFullscreen && (
-        <div className="mt-3 sm:mt-6">
-          <div className="space-y-3">
-            {/* Export Settings (hidden on mobile) */}
-            <div className="hidden sm:block bg-gray-800/50 rounded-lg p-4 border border-gray-700 space-y-4">
-              <div className="text-sm font-medium text-gray-300 mb-3">
-                Annotate Settings
-              </div>
-              <div className="text-xs text-gray-500 border-t border-gray-700 pt-3">
-                Extracts marked clips and loads them into Framing mode
-              </div>
-            </div>
-
-            {/* Export buttons */}
+          <div className="mt-3 sm:mt-6">
             <div className="space-y-2">
               {/* Upload progress bar (shown during video upload) */}
               {uploadProgress && (
@@ -339,49 +471,24 @@ export function AnnotateModeView({
                 </div>
               )}
 
-              {/* Progress bar (shown during export) - uses same component as framing/overlay */}
-              <ExportProgress
-                isExporting={!!exportProgress}
-                progress={exportProgress?.total > 0 ? Math.round((exportProgress.current / exportProgress.total) * 100) : 0}
-                progressMessage={exportProgress?.message}
-                label="Creating Video"
-              />
-
-              {/* Create Annotated Video - stays on screen */}
               <button
-                onClick={() => onCreateAnnotatedVideo(getAnnotateExportData())}
-                disabled={!hasAnnotateClips || isCreatingAnnotatedVideo || isUploadingGameVideo}
+                onClick={() => playback?.enterPlaybackMode(annotateSelectedRegionId)}
+                disabled={!hasAnnotateClips || isUploadingGameVideo}
                 className={`w-full px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                  !hasAnnotateClips || isCreatingAnnotatedVideo || isUploadingGameVideo
+                  !hasAnnotateClips || isUploadingGameVideo
                     ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                     : 'bg-green-600 hover:bg-green-700 text-white'
                 }`}
               >
-                {isUploadingGameVideo ? (
-                  <>
-                    <Loader className="animate-spin" size={18} />
-                    <span>Uploading video...</span>
-                  </>
-                ) : isCreatingAnnotatedVideo ? (
-                  <>
-                    <Loader className="animate-spin" size={18} />
-                    <span>Processing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download size={18} />
-                    <span>Create Annotated Video</span>
-                  </>
-                )}
+                <Play size={18} />
+                <span>Playback Annotations</span>
               </button>
 
-              {/* Note: Clips are now saved in real-time to the library as you annotate */}
               <p className="text-xs text-gray-500 text-center">
                 Clips are automatically saved to your library as you annotate
               </p>
             </div>
           </div>
-        </div>
         )}
       </div>
     </>
