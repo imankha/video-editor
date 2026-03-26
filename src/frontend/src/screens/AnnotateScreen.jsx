@@ -367,7 +367,7 @@ export function AnnotateScreen({ onClearSelection }) {
           clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
           selectedRegionId={annotateSelectedRegionId}
           activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
-          onSelectRegion={handleSelectAnnotateRegion}
+          onSelectRegion={playback?.isPlaybackMode ? playback.seekToClip : handleSelectAnnotateRegion}
           onUpdateRegion={updateClipRegion}
           onDeleteRegion={deleteClipRegion}
           onImportAnnotations={importAnnotations}
@@ -391,7 +391,7 @@ export function AnnotateScreen({ onClearSelection }) {
               clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
               selectedRegionId={annotateSelectedRegionId}
               activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
-              onSelectRegion={handleSelectAnnotateRegion}
+              onSelectRegion={playback?.isPlaybackMode ? playback.seekToClip : handleSelectAnnotateRegion}
               onUpdateRegion={updateClipRegion}
               onDeleteRegion={deleteClipRegion}
               onImportAnnotations={importAnnotations}
@@ -406,8 +406,12 @@ export function AnnotateScreen({ onClearSelection }) {
               onScrubLock={lockScrub}
               onScrubUnlock={unlockScrub}
               onJumpToClip={(regionId, endTime) => {
-                handleSelectAnnotateRegion(regionId);
-                seek(endTime);
+                if (playback?.isPlaybackMode) {
+                  playback.seekToClip(regionId);
+                } else {
+                  handleSelectAnnotateRegion(regionId);
+                  seek(endTime);
+                }
                 setShowMobileSidebar(false);
               }}
             />

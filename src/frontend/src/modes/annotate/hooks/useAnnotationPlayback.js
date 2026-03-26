@@ -456,6 +456,19 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
   }, [getVideos, getSegmentVideoUrl, preloadNextSegment, scheduleScrubStateUpdate]);
 
   /**
+   * Seek playback to a specific clip by its ID.
+   * Finds the clip's segment and seeks to its virtual start.
+   */
+  const seekToClip = useCallback((clipId) => {
+    const timeline = timelineRef.current;
+    if (!timeline) return;
+    const seg = timeline.segments.find(s => s.clipId === clipId);
+    if (seg) {
+      seekVirtual(seg.virtualStart);
+    }
+  }, [seekVirtual]);
+
+  /**
    * Seek to a specific actual time within the current segment.
    * Used by the clip scrub bar for frame-level control.
    * Seeks video immediately; batches React state update during drag.
@@ -590,6 +603,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     togglePlay,
     restart,
     seekVirtual,
+    seekToClip,
     seekWithinSegment,
     getCurrentSegment,
     startScrub,
