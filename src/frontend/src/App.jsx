@@ -226,6 +226,9 @@ function App() {
       sessionStorage.setItem('pendingClipSeekTime', startTime.toString());
     }
 
+    // Reset video store to clear stale clipOffset/clipDuration from framing mode
+    useVideoStore.getState().reset();
+
     // Switch to annotate mode
     setEditorMode(EDITOR_MODES.ANNOTATE);
   }, [selectedClipForAnnotate, setEditorMode]);
