@@ -637,6 +637,7 @@ export function AnnotateContainer({
   }, [seek, selectionState, getAnnotateRegionAtTime, closeOverlay]);
 
   const handleSelectRegion = useCallback((regionId) => {
+    console.log('[PlaybackSync] handleSelectRegion called with:', regionId);
     const region = clipRegions.find(r => r.id === regionId);
     if (region) {
       // If overlay is open (EDITING), stay in EDITING with new clip; otherwise SELECTED

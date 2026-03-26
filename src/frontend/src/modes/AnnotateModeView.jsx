@@ -102,10 +102,12 @@ export function AnnotateModeView({
   // Exit fullscreen when leaving playback mode — sync active clip back to annotate selection
   const handleExitPlayback = useCallback(() => {
     const lastClipId = playback?.activeClipId;
+    console.log('[PlaybackSync] Exiting playback. lastClipId:', lastClipId, 'onSelectRegion:', !!onSelectRegion);
     setPlaybackFullscreen(false);
     playback?.exitPlaybackMode();
     // Select the last-playing clip in annotate mode so sidebar stays in sync
     if (lastClipId && onSelectRegion) {
+      console.log('[PlaybackSync] Calling onSelectRegion with:', lastClipId);
       onSelectRegion(lastClipId);
     }
   }, [playback, onSelectRegion]);
