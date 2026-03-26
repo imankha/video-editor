@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAnnotateState, useAnnotate, useClipSelection } from '../modes/annotate';
 import { toast } from '../components/shared';
 import { extractVideoMetadata } from '../utils/videoMetadata';
-import { useExportStore } from '../stores';
+import { useExportStore, useAuthStore } from '../stores';
 import { useEditorStore } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { useRawClipSave } from '../hooks/useRawClipSave';
@@ -133,6 +133,7 @@ export function AnnotateContainer({
   // Export state from Zustand store (used for dismiss-on-change only)
   const { dismissExportCompleteToast } = useExportStore();
 
+  const requireAuth = useAuthStore((s) => s.requireAuth);
   const setAnnotateHasSelectedClip = useEditorStore((s) => s.setAnnotateHasSelectedClip);
 
   // Sync clip selection state to editorStore for quest panel auto-collapse
@@ -443,7 +444,10 @@ export function AnnotateContainer({
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);
 
   /**
-   * Handle Add Clip button click (non-fullscreen mode)
+   * Handle Add Clip button click (non-fullscreen mode).
+   * Creating a new clip requires auth (shows login modal if guest).
+   * Editing an existing clip does not require auth.
+   * Context (paused video, timestamp) is preserved through the auth modal.
    */
   const handleAddClipFromButton = useCallback(() => {
     if (videoRef.current && !videoRef.current.paused) {
@@ -452,9 +456,9 @@ export function AnnotateContainer({
     if (selectionState.type === 'SELECTED') {
       editClip(selectionState.clipId);
     } else {
-      startCreating();
+      requireAuth(() => startCreating());
     }
-  }, [videoRef, selectionState, editClip, startCreating]);
+  }, [videoRef, selectionState, editClip, startCreating, requireAuth]);
 
   /**
    * Handle creating a clip from fullscreen overlay
