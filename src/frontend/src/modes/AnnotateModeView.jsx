@@ -99,11 +99,16 @@ export function AnnotateModeView({
   const togglePlaybackFullscreen = useCallback(() => {
     setPlaybackFullscreen(prev => !prev);
   }, []);
-  // Exit fullscreen when leaving playback mode
+  // Exit fullscreen when leaving playback mode — sync active clip back to annotate selection
   const handleExitPlayback = useCallback(() => {
+    const lastClipId = playback?.activeClipId;
     setPlaybackFullscreen(false);
     playback?.exitPlaybackMode();
-  }, [playback]);
+    // Select the last-playing clip in annotate mode so sidebar stays in sync
+    if (lastClipId && onSelectRegion) {
+      onSelectRegion(lastClipId);
+    }
+  }, [playback, onSelectRegion]);
 
   // Escape key exits playback fullscreen
   useEffect(() => {
@@ -455,7 +460,7 @@ export function AnnotateModeView({
               )}
 
               <button
-                onClick={() => playback?.enterPlaybackMode()}
+                onClick={() => playback?.enterPlaybackMode(annotateSelectedRegionId)}
                 disabled={!hasAnnotateClips || isUploadingGameVideo}
                 className={`w-full px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                   !hasAnnotateClips || isUploadingGameVideo

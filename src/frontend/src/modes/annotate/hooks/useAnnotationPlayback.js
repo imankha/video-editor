@@ -257,31 +257,40 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
   /**
    * Enter playback mode.
    * Loads and seeks video A, waits until ready, then auto-plays.
+   * @param {string} [startClipId] — optional clip ID to start from (syncs with annotate selection)
    */
-  const enterPlaybackMode = useCallback(async () => {
+  const enterPlaybackMode = useCallback(async (startClipId) => {
     const timeline = rebuildTimeline();
     if (!timeline || timeline.segments.length === 0) return;
+
+    // Find starting segment — default to first clip
+    let startSegIndex = 0;
+    if (startClipId) {
+      const idx = timeline.segments.findIndex(s => s.clipId === startClipId);
+      if (idx >= 0) startSegIndex = idx;
+    }
+
+    const startSeg = timeline.segments[startSegIndex];
 
     // Show loading state while we prepare
     setIsLoading(true);
     setIsPlaybackMode(true);
-    setVirtualTime(0);
-    currentSegmentIndexRef.current = 0;
+    setVirtualTime(startSeg.virtualStart);
+    currentSegmentIndexRef.current = startSegIndex;
     activeVideoRef.current = 'A';
     hasPreloadedNextRef.current = false;
 
-    const firstSeg = timeline.segments[0];
-    setActiveClipId(firstSeg.clipId);
+    setActiveClipId(startSeg.clipId);
 
     // Wait a frame for refs to mount (the dual video elements appear after isPlaybackMode=true)
     await new Promise(r => requestAnimationFrame(r));
 
     const videoA = videoARef.current;
     if (videoA) {
-      const url = getSegmentVideoUrl(firstSeg);
+      const url = getSegmentVideoUrl(startSeg);
       videoA.src = url;
       videoA.load();
-      videoA.currentTime = firstSeg.startTime;
+      videoA.currentTime = startSeg.startTime;
       videoA.playbackRate = playbackRateRef.current;
 
       // Wait until the video has enough data to play
@@ -297,9 +306,9 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       setIsLoading(false);
     }
 
-    // Preload second segment into video B
-    if (timeline.segments.length > 1) {
-      setTimeout(() => preloadNextSegment(1), 200);
+    // Preload next segment into video B
+    if (startSegIndex + 1 < timeline.segments.length) {
+      setTimeout(() => preloadNextSegment(startSegIndex + 1), 200);
     }
   }, [rebuildTimeline, getSegmentVideoUrl, preloadNextSegment, waitForVideoReady, startTimeUpdateLoop]);
 
