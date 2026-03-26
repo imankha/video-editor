@@ -494,7 +494,6 @@ function App() {
           // Always switch to overlay mode (handles case where user is in annotate)
           setEditorMode(EDITOR_MODES.OVERLAY);
         }}
-        onOpenGame={handleLoadGame}
       />
 
       {/* Quest Panel (T540) */}

@@ -352,7 +352,6 @@ export function ProjectsScreen({
           onOpenProject={(projectId) => {
             handleSelectProjectWithMode(projectId, { mode: 'overlay' });
           }}
-          onOpenGame={handleLoadGame}
         />
       </div>
     </AppStateProvider>

@@ -138,7 +138,6 @@ _process_multi_clip_fn = None
 _detect_players_fn = None
 _detect_players_batch_fn = None
 _extract_clip_fn = None
-_create_annotated_compilation_fn = None
 
 
 def modal_enabled() -> bool:
@@ -282,23 +281,6 @@ def _get_extract_clip_fn():
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to extract_clip_modal: {e}")
         raise RuntimeError(f"Modal extract_clip_modal not available: {e}")
-
-
-def _get_create_annotated_compilation_fn():
-    """Get a reference to the deployed create_annotated_compilation function."""
-    global _create_annotated_compilation_fn
-
-    if _create_annotated_compilation_fn is not None:
-        return _create_annotated_compilation_fn
-
-    try:
-        import modal
-        _create_annotated_compilation_fn = modal.Function.from_name(MODAL_APP_NAME, "create_annotated_compilation")
-        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/create_annotated_compilation")
-        return _create_annotated_compilation_fn
-    except Exception as e:
-        logger.error(f"[Modal] Failed to connect to create_annotated_compilation: {e}")
-        raise RuntimeError(f"Modal create_annotated_compilation not available: {e}")
 
 
 def _get_process_multi_clip_fn():
@@ -1290,146 +1272,6 @@ async def call_modal_extract_clip(
         return {"status": "error", "error": _translate_modal_error(e)}
 
 
-async def call_modal_annotate_compilation(
-    job_id: str,
-    user_id: str,
-    input_key: str,
-    output_key: str,
-    clips: list,
-    gallery_output_key: str = None,
-    progress_callback = None,
-    input_keys: dict = None,
-) -> dict:
-    """
-    Call Modal create_annotated_compilation function.
-
-    Creates a video compilation with burned-in text annotations on Modal cloud.
-    Avoids downloading large game videos locally.
-
-    When MODAL_ENABLED=false, uses local FFmpeg with the same interface.
-    This enables testing the full code path without Modal costs.
-
-    Args:
-        job_id: Unique job identifier
-        user_id: Raw user ID (R2 prefix conversion handled internally)
-        input_key: R2 key for source game video (e.g., "games/abc123.mp4")
-            Used for single-video games. Ignored when input_keys is provided.
-        output_key: R2 key for output compilation (e.g., "downloads/compilation.mp4")
-        clips: List of clip data with timestamps, names, ratings, tags, notes
-        gallery_output_key: Optional secondary R2 key for gallery
-        progress_callback: Optional async callable(progress: float, message: str)
-        input_keys: Optional dict mapping video_sequence (int) to R2 key for multi-video games.
-
-    Returns:
-        {"status": "success", "output_key": "...", "gallery_filename": "...", "clips_processed": N} or
-        {"status": "error", "error": "..."}
-    """
-    if not _modal_enabled:
-        # Use local fallback with same interface
-        from app.services.local_processors import local_annotate_compilation
-        logger.info(f"[Modal] Using local fallback for annotate job {job_id}")
-        return await local_annotate_compilation(
-            job_id=job_id,
-            user_id=user_id,
-            input_key=input_key,
-            output_key=output_key,
-            clips=clips,
-            progress_callback=progress_callback,
-            input_keys=input_keys,
-        )
-
-    # Convert raw user_id to R2-prefixed user_id for Modal
-    user_id = _resolve_modal_user_id(user_id)
-
-    create_annotated_compilation = _get_create_annotated_compilation_fn()
-
-    logger.info(f"[Modal] Calling create_annotated_compilation for job {job_id}")
-    logger.info(f"[Modal] User: {user_id}, Input: {input_key} -> Output: {output_key}")
-    logger.info(f"[Modal] Clips: {len(clips)}")
-
-    log_progress_event(job_id, "modal_start", extra={"type": "annotate", "clips": len(clips)})
-
-    try:
-        # Use remote_gen() to stream real progress from Modal
-        # Must iterate in executor to avoid blocking the event loop (like framing does)
-        loop = asyncio.get_running_loop()
-        start_time = time.time()
-
-        def get_generator():
-            return create_annotated_compilation.remote_gen(
-                job_id=job_id,
-                user_id=user_id,
-                input_key=input_key,
-                output_key=output_key,
-                clips=clips,
-                gallery_output_key=gallery_output_key,
-                input_keys=input_keys,
-            )
-
-        # Get the generator in executor (Modal API is sync)
-        gen = await loop.run_in_executor(None, get_generator)
-
-        log_progress_event(job_id, "modal_streaming_started")
-        logger.info(f"[Modal] Streaming progress for job {job_id}")
-
-        result = None
-        last_progress = 0
-
-        # Helper to get next item without blocking
-        def next_item(generator):
-            try:
-                return next(generator)
-            except StopIteration:
-                return None
-
-        # Stream progress updates from Modal (non-blocking iteration)
-        while True:
-            update = await loop.run_in_executor(None, next_item, gen)
-            if update is None:
-                break
-
-            if isinstance(update, dict):
-                status = update.get("status")
-                progress = update.get("progress", 0)
-                message = update.get("message") or update.get("error") or "Processing..."
-                phase = update.get("phase", "processing")
-
-                # Check for final result BEFORE sending progress callback
-                # (error dicts lack 'message' and would send misleading "Processing...")
-                if status == "success":
-                    result = update
-                    break
-                elif status == "error":
-                    result = update
-                    break
-
-                # Log progress updates
-                if progress != last_progress:
-                    logger.info(f"[Modal] Progress: {progress}% - {message}")
-                    last_progress = progress
-
-                # Send progress to callback (non-terminal updates only)
-                if progress_callback and progress < 100:
-                    try:
-                        await progress_callback(progress, message, phase)
-                        # Yield to event loop so WebSocket progress can be sent
-                        await asyncio.sleep(0)
-                    except Exception as e:
-                        logger.warning(f"[Modal] Progress callback failed: {e}")
-
-        elapsed = time.time() - start_time
-        log_progress_event(job_id, "modal_complete", elapsed=elapsed)
-
-        if result:
-            logger.info(f"[Modal] Annotated compilation job {job_id} completed: {result.get('clips_processed', 0)} clips in {elapsed:.1f}s")
-            return result
-        else:
-            return {"status": "error", "error": "No result from Modal function"}
-
-    except Exception as e:
-        logger.error(f"[Modal] Annotated compilation job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": _translate_modal_error(e)}
-
 
 # Test function
 if __name__ == "__main__":
@@ -1443,7 +1285,6 @@ if __name__ == "__main__":
             print("  - process_framing_ai: Crop with Real-ESRGAN AI upscaling (T4 GPU)")
             print("  - detect_players_modal: YOLO player detection (T4 GPU)")
             print("  - extract_clip_modal: FFmpeg clip extraction (CPU)")
-            print("  - create_annotated_compilation: Annotated video with text overlays (CPU)")
         else:
             print("Modal is disabled - set MODAL_ENABLED=true to enable")
 
