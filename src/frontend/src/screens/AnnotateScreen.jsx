@@ -370,7 +370,7 @@ export function AnnotateScreen({ onClearSelection }) {
       <div className="hidden sm:flex">
         <ClipsSidePanel
           clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
-          selectedRegionId={annotateSelectedRegionId}
+          selectedRegionId={playback?.isPlaybackMode ? playback.activeClipId : annotateSelectedRegionId}
           activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
           onSelectRegion={playback?.isPlaybackMode ? playback.seekToClip : handleSelectAnnotateRegion}
           onUpdateRegion={updateClipRegion}
@@ -394,7 +394,7 @@ export function AnnotateScreen({ onClearSelection }) {
           <div className="relative w-[85vw] max-w-[352px] h-full">
             <ClipsSidePanel
               clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
-              selectedRegionId={annotateSelectedRegionId}
+              selectedRegionId={playback?.isPlaybackMode ? playback.activeClipId : annotateSelectedRegionId}
               activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
               onSelectRegion={playback?.isPlaybackMode ? playback.seekToClip : handleSelectAnnotateRegion}
               onUpdateRegion={updateClipRegion}
