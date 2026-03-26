@@ -47,6 +47,7 @@ export function VideoPlayer({
   error = null,
   isUrlExpiredError = () => false,
   onRetryVideo,
+  onVideoClick,
   loadingMessage = 'Loading video...'
 }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -177,9 +178,17 @@ export function VideoPlayer({
       style={{ cursor: isPanning ? 'grabbing' : (zoom > 1 ? 'grab' : 'default') }}
     >
       {videoUrl ? (
-        <div className={`relative video-container overflow-hidden ${
-          isFullscreen ? 'w-full h-full' : 'h-[40vh] sm:h-[60vh]'
-        }`}>
+        <div
+          className={`relative video-container overflow-hidden ${
+            isFullscreen ? 'w-full h-full' : 'h-[40vh] sm:h-[60vh]'
+          }`}
+          onClick={(e) => {
+            // Only toggle play if clicking the video area (not overlays/controls)
+            if (onVideoClick && !isPanning && e.target.closest('.video-container')) {
+              onVideoClick();
+            }
+          }}
+        >
           <div
             className="absolute inset-0 flex items-center justify-center"
             style={{

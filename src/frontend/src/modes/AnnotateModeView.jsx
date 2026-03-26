@@ -151,7 +151,10 @@ export function AnnotateModeView({
           ? 'flex-1 min-h-0 flex items-center justify-center'
           : ''
         }>
-          <div className={`relative bg-gray-900 ${isFS ? 'w-full' : 'rounded-lg'} overflow-hidden`}>
+          <div
+            className={`relative bg-gray-900 ${isFS ? 'w-full' : 'rounded-lg'} overflow-hidden cursor-pointer`}
+            onClick={() => playback.togglePlay()}
+          >
             <div className={`relative ${isFS ? 'w-full' : 'h-[40vh] sm:h-[60vh]'}`}
               style={isFS ? {
                 maxHeight: 'calc(100vh - 120px)',
@@ -329,6 +332,7 @@ export function AnnotateModeView({
                 videoRef={videoRef}
                 videoUrl={annotateVideoUrl}
                 handlers={handlers}
+                onVideoClick={togglePlay}
                 isLoading={isLoading}
                 isVideoElementLoading={isVideoElementLoading}
                 loadingProgress={loadingProgress}
