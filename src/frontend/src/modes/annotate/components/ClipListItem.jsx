@@ -40,14 +40,14 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
         ${isPlaybackActive
           ? 'border-l-3 animate-pulse'
           : isSelected
-            ? 'border-l-2'
+            ? 'border-l-3 bg-white/10'
             : 'hover:bg-gray-800/50 border-l-2 border-l-transparent'
         }
       `}
       style={{
         backgroundColor: isPlaybackActive
           ? `${badgeColor}33`  // 20% opacity tint of rating color
-          : isSelected ? backgroundColor : undefined,
+          : isSelected ? `${badgeColor}30` : undefined,  // 19% opacity — visible against dark bg
         borderLeftColor: isPlaybackActive ? badgeColor : isSelected ? badgeColor : undefined,
       }}
     >
