@@ -115,6 +115,7 @@ def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_t
     try:
         # Get video properties
         fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -123,6 +124,9 @@ def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_t
         frame_number = seek_frame if seek_frame is not None else naive_frame
         if seek_frame is not None and seek_frame != naive_frame:
             logger.info(f"[Detection] Frame correction: naive int(ts*fps)={naive_frame}, pre-calculated ceil={seek_frame}, ts={timestamp:.6f}")
+
+        # Clamp to valid frame range (fence-post: N frames are indexed 0..N-1)
+        frame_number = max(0, min(frame_number, total_frames - 1))
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = cap.read()
 

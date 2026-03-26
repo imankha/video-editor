@@ -178,7 +178,7 @@ Deploy to production domains with proper scaling.
 | T254 | [Export Network Resilience](tasks/T254-export-network-resilience.md) | DONE | 6 | 4 | Survive network disconnects during export — don't fail when server is still rendering |
 | T570 | [Framing Clip Icon State](tasks/T570-framing-clip-icon-state.md) | DONE | 4 | 2 | "!" icon didn't clear after framing; optimistically update crop_data in store on keyframe add |
 | T580 | [Can't Reframe — Shows Exported Video](tasks/T580-reframing-shows-exported-video.md) | DONE | 7 | 4 | Fix: reset shared videoStore on mode switch + useLayoutEffect guard in FramingScreen |
-| T730 | [Missing End Detection Point](tasks/T730-missing-end-detection-point.md) | TODO | 5 | 4 | Short clips missing last player tracking point at end of overlay region (fence-post error in Modal) |
+| T730 | [Missing End Detection Point](tasks/T730-missing-end-detection-point.md) | TESTING | 5 | 4 | Short clips missing last player tracking point at end of overlay region (fence-post error in local detection) |
 | T740 | [Merge Extraction into Framing](tasks/T740-merge-extraction-into-framing.md) | TODO | 8 | 7 | Eliminate separate extraction step; framing takes source video + time range, extracts + processes in single pass |
 
 ### Mobile Responsive (TODO)
@@ -203,7 +203,7 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 | T600 | [Auto-Generate Annotation Titles (TF-IDF)](tasks/T600-auto-generate-annotation-titles.md) | DONE | 5 | 4 | Extract keyword titles from notes using scikit-learn TfidfVectorizer; zero API cost |
 | T610 | [Track last_seen_at on Every Visit](tasks/T610-track-last-seen.md) | DONE | 6 | 1 | Update last_seen_at on /auth/me and /init-guest, not just Google login |
 | T620 | [Account Cleanup (Trigger: high R2 fees)](tasks/T620-account-cleanup.md) | TODO | 5 | 5 | Auto-delete abandoned guests (7d), dormant free (90d), warn paid (180d). Blocked by T610 |
-| T710 | [Play Annotations Mode](tasks/T710-play-annotations-mode.md) | TESTING | 9 | 7 | Replace "Create Annotated Video" with frontend-only playback; virtual timeline, Phase 2 adds bridge segments |
+| T710 | [Play Annotations Mode](tasks/T710-play-annotations-mode.md) | DONE | 9 | 7 | Replace "Create Annotated Video" with frontend-only playback; virtual timeline, Phase 2 adds bridge segments |
 | T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 8 | 7 | Pen drawing on frozen clip frames; displayed during Play Annotations with configurable pause (1–10s). Depends on T710 |
 
 ### UX Feedback (NUF Tester — 2026-03-23)
@@ -214,9 +214,9 @@ User feedback from first NUF session. Two groups: game addition flow and clip cr
 
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| T640 | [Game Upload Drop Zone](tasks/T640-game-upload-drop-zone.md) | TESTING | 4 | 2 | Drag-and-drop onto file upload area in GameDetailsModal |
+| T640 | [Game Upload Drop Zone](tasks/T640-game-upload-drop-zone.md) | DONE | 4 | 2 | Drag-and-drop onto file upload area in GameDetailsModal |
 | T670 | [Consistent Game Terminology](tasks/T670-consistent-game-terminology.md) | DONE | 5 | 1 | Standardize "Add a Game" vs "Upload" across UI |
-| T680 | [Upload Progress Bar Visibility](tasks/T680-upload-progress-bar-visibility.md) | TESTING | 4 | 2 | Investigate — progress bar exists but NUF user didn't notice it |
+| T680 | [Upload Progress Bar Visibility](tasks/T680-upload-progress-bar-visibility.md) | DONE | 4 | 2 | Investigate — progress bar exists but NUF user didn't notice it |
 
 #### Clip Creation Flow
 
@@ -224,13 +224,13 @@ User feedback from first NUF session. Two groups: game addition flow and clip cr
 |----|------|--------|--------|-------|-------|
 | T650 | [Clip Scrub Region UI](tasks/T650-clip-scrub-region-ui.md) | DONE | 8 | 5 | Visual scrub handles for clip start/end with real-time video preview; replaces time inputs |
 | T660 | [Clip Edit Button Clarity](tasks/T660-clip-edit-button-clarity.md) | DONE | 5 | 1 | "Add Clip" → "Edit Clip" (amber) when clip selected; depends on T650 |
-| T690 | [Clip Selection State Machine](tasks/T690-clip-selection-state-machine.md) | TESTING | 7 | 5 | Redesign clip selection/edit mode as state machine; fix deselect races, fullscreen sync, overlay loading |
+| T690 | [Clip Selection State Machine](tasks/T690-clip-selection-state-machine.md) | DONE | 7 | 5 | Redesign clip selection/edit mode as state machine; fix deselect races, fullscreen sync, overlay loading |
 
 #### UI Polish
 
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
-| T700 | [Quest Panel Smart Positioning](tasks/T700-quest-panel-smart-positioning.md) | TESTING | 4 | 3 | CSS-first positioning to avoid sidebar overlap; replace JS elementsFromPoint approach |
+| T700 | [Quest Panel Smart Positioning](tasks/T700-quest-panel-smart-positioning.md) | DONE | 4 | 3 | CSS-first positioning to avoid sidebar overlap; replace JS elementsFromPoint approach |
 
 ### Phase 4: Post-Launch Polish
 
