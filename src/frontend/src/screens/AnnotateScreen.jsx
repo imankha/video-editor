@@ -220,7 +220,7 @@ export function AnnotateScreen({ onClearSelection }) {
         setPendingSeekTime(parseFloat(pendingClipSeekTime));
       }
 
-      handleLoadGame(parseInt(pendingGameId));
+      handleLoadGame(parseInt(pendingGameId), pendingClipSeekTime ? parseFloat(pendingClipSeekTime) : null);
     }
   }, [handleLoadGame, annotateVideoUrl]);
 

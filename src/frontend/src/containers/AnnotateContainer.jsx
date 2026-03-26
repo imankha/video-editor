@@ -306,7 +306,7 @@ export function AnnotateContainer({
    * Handle loading a saved game into annotate mode
    * Supports both single-video and multi-video games.
    */
-  const handleLoadGame = useCallback(async (gameId) => {
+  const handleLoadGame = useCallback(async (gameId, pendingClipSeekTime = null) => {
 
     try {
       const gameData = await getGame(gameId);
@@ -418,13 +418,10 @@ export function AnnotateContainer({
 
         // T740: If navigating from Framing, select the clip the user was editing
         // (importAnnotations auto-selects the first clip; override with the intended one)
-        const pendingSeekTime = sessionStorage.getItem('pendingClipSeekTime');
-        if (pendingSeekTime != null) {
-          const seekTime = parseFloat(pendingSeekTime);
-          console.log('[AnnotateContainer] Navigated from Framing, finding clip at start_time:', seekTime);
-          // importAnnotations generates new region IDs — find the matching one by start_time
-          // clipRegions won't be updated until next render, so defer selection
-          pendingSelectSeekTimeRef.current = seekTime;
+        if (pendingClipSeekTime != null) {
+          console.log('[AnnotateContainer] Navigated from Framing, will select clip at start_time:', pendingClipSeekTime);
+          // importAnnotations generates new region IDs — clipRegions won't update until next render
+          pendingSelectSeekTimeRef.current = pendingClipSeekTime;
         }
       }
 
