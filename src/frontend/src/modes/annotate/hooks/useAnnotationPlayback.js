@@ -199,7 +199,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       setVirtualTime(vt);
 
       // Record quest achievement after 2s of watching
-      if (!hasRecordedPlaybackAchievementRef.current && vt >= 2) {
+      if (!hasRecordedPlaybackAchievementRef.current && vt >= 0.5) {
         hasRecordedPlaybackAchievementRef.current = true;
         useQuestStore.getState().recordAchievement('played_annotations');
       }
