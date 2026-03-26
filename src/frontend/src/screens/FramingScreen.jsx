@@ -467,7 +467,9 @@ export function FramingScreen({
 
       if (parsedCropKfs && parsedCropKfs.length > 0) {
         const endFrame = Math.round((firstClipWithMeta?.duration || 0) * (firstClipWithMeta?.framerate || 30));
-        restoreCropState(parsedCropKfs, endFrame);
+        if (endFrame > 0) {
+          restoreCropState(parsedCropKfs, endFrame);
+        }
       }
 
       if (!clipUrl.startsWith('blob:')) {
@@ -530,7 +532,9 @@ export function FramingScreen({
         // 2. Restore new clip's crop keyframes BEFORE loading video
         if (newParsedCropKfs && newParsedCropKfs.length > 0) {
           const endFrame = Math.round((newClipWithMeta?.duration || 0) * (newClipWithMeta?.framerate || 30));
-          restoreCropState(newParsedCropKfs, endFrame);
+          if (endFrame > 0) {
+            restoreCropState(newParsedCropKfs, endFrame);
+          }
         } else {
           resetCrop();
         }
