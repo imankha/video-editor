@@ -258,10 +258,14 @@ export function AnnotateScreen({ onClearSelection }) {
         return;
       }
 
-      // Space bar: Toggle play/pause
+      // Space bar: Toggle play/pause (works in both annotate and playback modes)
       if (event.code === 'Space' && annotateVideoUrl) {
         event.preventDefault();
-        togglePlay();
+        if (playback?.isPlaybackMode) {
+          playback.togglePlay();
+        } else {
+          togglePlay();
+        }
         return;
       }
 
@@ -325,6 +329,7 @@ export function AnnotateScreen({ onClearSelection }) {
     annotateSelectedRegionId,
     selectAnnotateRegion,
     togglePlay,
+    playback,
     seekForward,
     seekBackward,
     seek,
