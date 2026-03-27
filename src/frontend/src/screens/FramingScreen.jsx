@@ -72,7 +72,7 @@ export function FramingScreen({
   const [selectedLayer, setSelectedLayer] = useState('playhead');
   const [videoFile, setVideoFile] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [outdatedClipsDialog, setOutdatedClipsDialog] = useState({ isOpen: false, clips: [] });
+  // T740: outdatedClipsDialog removed — auto-refresh applied silently
   // Mobile sidebar toggle
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const clipHasUserEditsRef = useRef(false);
@@ -133,33 +133,44 @@ export function FramingScreen({
     fetchGames();
   }, [fetchGames]);
 
-  // Check for outdated clips when entering framing mode
+  // T740: Auto-apply latest boundaries when clips are re-annotated.
+  // Rescales crop keyframes to fit the new duration instead of resetting them.
   useEffect(() => {
     if (!projectId || outdatedClipsCheckedRef.current) return;
     if (!project?.working_video_id) return;
 
     outdatedClipsCheckedRef.current = true;
 
-    const checkOutdatedClips = async () => {
+    const autoRefreshOutdatedClips = async () => {
       try {
         const response = await fetch(`${API_BASE}/api/projects/${projectId}/outdated-clips`);
-        if (!response.ok) {
-          console.warn('[FramingScreen] Failed to check outdated clips:', response.status);
-          return;
-        }
+        if (!response.ok) return;
 
         const data = await response.json();
-        if (data.has_outdated_clips && data.outdated_clips?.length > 0) {
-          console.log('[FramingScreen] Found outdated clips:', data.outdated_clips);
-          setOutdatedClipsDialog({ isOpen: true, clips: data.outdated_clips });
+        if (!data.has_outdated_clips || !data.outdated_clips?.length) return;
+
+        console.log('[FramingScreen] Auto-refreshing outdated clips:', data.outdated_clips.length);
+
+        const workingClipIds = data.outdated_clips.map(c => c.working_clip_id);
+        const refreshResponse = await fetch(`${API_BASE}/api/projects/${projectId}/refresh-outdated-clips`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ working_clip_ids: workingClipIds })
+        });
+
+        if (refreshResponse.ok) {
+          console.log('[FramingScreen] Auto-refresh complete, reloading clips');
+          await refreshProject();
+          initialLoadDoneRef.current = false;
+          await fetchProjectClips();
         }
       } catch (err) {
-        console.error('[FramingScreen] Error checking outdated clips:', err);
+        console.error('[FramingScreen] Error auto-refreshing outdated clips:', err);
       }
     };
 
-    checkOutdatedClips();
-  }, [projectId, project?.working_video_id]);
+    autoRefreshOutdatedClips();
+  }, [projectId, project?.working_video_id, refreshProject, fetchProjectClips]);
 
   useEffect(() => {
     outdatedClipsCheckedRef.current = false;
@@ -759,42 +770,7 @@ export function FramingScreen({
   }, [selectedClipWithMeta, clearError, loadVideoFromStreamingUrl, loadVideoFromUrl]);
 
   // Outdated clips dialog handlers
-  const handleContinueWithOriginal = useCallback(() => {
-    console.log('[FramingScreen] User chose to continue with original framing');
-    setOutdatedClipsDialog({ isOpen: false, clips: [] });
-  }, []);
-
-  const handleUseLatestClips = useCallback(async () => {
-    const workingClipIds = outdatedClipsDialog.clips.map(c => c.working_clip_id);
-    console.log('[FramingScreen] User chose to use latest clips:', workingClipIds);
-
-    try {
-      const response = await fetch(`${API_BASE}/api/projects/${projectId}/refresh-outdated-clips`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ working_clip_ids: workingClipIds })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to refresh clips: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('[FramingScreen] Refreshed clips:', data);
-
-      await refreshProject();
-
-      initialLoadDoneRef.current = false;
-
-      const freshClips = await fetchProjectClips();
-      console.log('[FramingScreen] Fetched fresh clips after refresh:', freshClips?.length);
-
-    } catch (err) {
-      console.error('[FramingScreen] Failed to refresh outdated clips:', err);
-    }
-
-    setOutdatedClipsDialog({ isOpen: false, clips: [] });
-  }, [outdatedClipsDialog.clips, projectId, refreshProject, fetchProjectClips]);
+  // T740: handleContinueWithOriginal and handleUseLatestClips removed — auto-refresh is silent
 
   // Handle Escape key to exit fullscreen
   useEffect(() => {
@@ -1141,29 +1117,7 @@ export function FramingScreen({
     />
       </div>
 
-      {/* Outdated Clips Dialog */}
-      <ConfirmationDialog
-        isOpen={outdatedClipsDialog.isOpen}
-        title="Updated Clip Boundaries"
-        message={
-          outdatedClipsDialog.clips.length === 1
-            ? `The clip "${outdatedClipsDialog.clips[0]?.clip_name}" has been re-annotated since you last framed it. Would you like to use the latest boundaries (your framing progress will be reset) or continue with the original boundaries?`
-            : `${outdatedClipsDialog.clips.length} clips have been re-annotated since you last framed them. Would you like to use the latest boundaries (framing progress will be reset for these clips) or continue with the original boundaries?`
-        }
-        onClose={handleContinueWithOriginal}
-        buttons={[
-          {
-            label: 'Continue with Original',
-            onClick: handleContinueWithOriginal,
-            variant: 'secondary'
-          },
-          {
-            label: 'Use Latest Clips',
-            onClick: handleUseLatestClips,
-            variant: 'primary'
-          }
-        ]}
-      />
+      {/* T740: Outdated clips dialog removed — boundaries auto-refreshed silently */}
     </div>
   );
 }

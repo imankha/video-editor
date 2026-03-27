@@ -1168,23 +1168,18 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
     """
     Refresh outdated working clips to use latest annotation boundaries.
 
-    This resets the framing data (crop_data, timing_data, segments_data) for the
-    specified working clips and updates their raw_clip_version to match the current
-    boundaries_version of the raw clip.
+    T740: Instead of resetting framing data, rescales crop keyframes and segment
+    boundaries to fit the new clip duration. This preserves the user's crop animation
+    within the new time range. No re-extraction needed (framing reads game video directly).
 
-    Also clears the raw_clip filename and triggers re-extraction with new boundaries.
-
-    Use this when the user chooses "Use Latest Clips" after being informed that
-    some clips have outdated annotation boundaries.
+    Rescaling: if old duration was 30s and new is 20s, a keyframe at frame 450 (15s @ 30fps)
+    maps to frame 300 (10s) — all frames multiplied by (newDuration / oldDuration).
     """
-    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor
-
-    clips_to_extract = []
+    import json
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Verify project exists
         cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Project not found")
@@ -1192,13 +1187,11 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
         refreshed_count = 0
 
         for working_clip_id in request.working_clip_ids:
-            # Verify clip belongs to project and get raw_clip info for extraction
             cursor.execute("""
-                SELECT wc.id, wc.raw_clip_id, rc.boundaries_version,
-                       rc.start_time, rc.end_time, rc.game_id, g.video_filename
+                SELECT wc.id, wc.raw_clip_id, wc.crop_data, wc.segments_data,
+                       rc.boundaries_version, rc.start_time, rc.end_time
                 FROM working_clips wc
                 JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-                LEFT JOIN games g ON rc.game_id = g.id
                 WHERE wc.id = ? AND wc.project_id = ?
             """, (working_clip_id, project_id))
 
@@ -1208,40 +1201,90 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
                 continue
 
             current_boundaries_version = row['boundaries_version'] or 1
+            new_duration = (row['end_time'] or 0) - (row['start_time'] or 0)
 
-            # Reset framing data and update raw_clip_version
+            # Rescale crop keyframes if they exist
+            new_crop_data = None
+            if row['crop_data']:
+                try:
+                    crop_keyframes = json.loads(row['crop_data'])
+                    if crop_keyframes and len(crop_keyframes) >= 2:
+                        # Old duration derived from last permanent keyframe's frame number
+                        # Keyframes are frame-based; last keyframe is at the old end frame
+                        old_end_frame = crop_keyframes[-1].get('frame', 0)
+                        framerate = 30  # Standard framerate
+                        new_end_frame = round(new_duration * framerate)
+
+                        if old_end_frame > 0 and new_end_frame > 0:
+                            scale = new_end_frame / old_end_frame
+                            rescaled = []
+                            for kf in crop_keyframes:
+                                new_kf = {**kf, 'frame': round(kf['frame'] * scale)}
+                                rescaled.append(new_kf)
+                            # Ensure first frame is 0 and last frame is new_end_frame
+                            rescaled[0]['frame'] = 0
+                            rescaled[-1]['frame'] = new_end_frame
+                            new_crop_data = json.dumps(rescaled)
+                            logger.info(f"Rescaled {len(rescaled)} keyframes for clip {working_clip_id}: "
+                                       f"old_end={old_end_frame} new_end={new_end_frame} scale={scale:.3f}")
+                        else:
+                            new_crop_data = row['crop_data']  # Keep as-is if can't determine scale
+                    else:
+                        new_crop_data = row['crop_data']
+                except (json.JSONDecodeError, TypeError):
+                    new_crop_data = None  # Corrupt data, reset
+
+            # Rescale segment boundaries if they exist
+            new_segments_data = None
+            if row['segments_data']:
+                try:
+                    seg_data = json.loads(row['segments_data'])
+                    # Get old duration from segment boundaries (last boundary = old duration)
+                    boundaries = seg_data.get('boundaries', [])
+                    old_duration = boundaries[-1] if boundaries else 0
+
+                    if old_duration > 0 and new_duration > 0:
+                        scale = new_duration / old_duration
+                        # Rescale boundaries
+                        new_boundaries = [round(b * scale, 3) for b in boundaries]
+                        new_boundaries[0] = 0
+                        new_boundaries[-1] = round(new_duration, 3)
+                        seg_data['boundaries'] = new_boundaries
+
+                        # Rescale trim range if present
+                        if seg_data.get('trimRange'):
+                            tr = seg_data['trimRange']
+                            seg_data['trimRange'] = {
+                                'start': round(tr.get('start', 0) * scale, 3),
+                                'end': round(tr.get('end', old_duration) * scale, 3),
+                            }
+
+                        # Rescale user splits
+                        if seg_data.get('userSplits'):
+                            seg_data['userSplits'] = [round(s * scale, 3) for s in seg_data['userSplits']]
+
+                        new_segments_data = json.dumps(seg_data)
+                    else:
+                        new_segments_data = row['segments_data']
+                except (json.JSONDecodeError, TypeError):
+                    new_segments_data = None
+
+            # Update working clip with rescaled data and new version
             cursor.execute("""
                 UPDATE working_clips
-                SET crop_data = NULL,
-                    timing_data = NULL,
-                    segments_data = NULL,
+                SET crop_data = ?,
+                    segments_data = ?,
                     raw_clip_version = ?,
                     exported_at = NULL
                 WHERE id = ?
-            """, (current_boundaries_version, working_clip_id))
-
-            # Clear raw_clip filename to mark for re-extraction
-            cursor.execute("""
-                UPDATE raw_clips SET filename = '' WHERE id = ?
-            """, (row['raw_clip_id'],))
-
-            # Collect info for extraction if we have game video
-            if row['game_id'] and row['video_filename']:
-                clips_to_extract.append({
-                    'clip_id': row['raw_clip_id'],
-                    'start_time': row['start_time'],
-                    'end_time': row['end_time'],
-                    'game_id': row['game_id'],
-                    'video_filename': row['video_filename'],
-                    'project_id': project_id,
-                })
+            """, (new_crop_data, new_segments_data, current_boundaries_version, working_clip_id))
 
             refreshed_count += 1
             logger.info(f"Refreshed working clip {working_clip_id} to boundaries version {current_boundaries_version}")
 
         conn.commit()
 
-        # If any clips were refreshed, clear project working video since framing is now incomplete
+        # Clear project working/final video since boundaries changed
         if refreshed_count > 0:
             cursor.execute("""
                 UPDATE projects
@@ -1251,27 +1294,10 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
             conn.commit()
             logger.info(f"Cleared working/final video for project {project_id} after refreshing clips")
 
-    # Trigger extraction for clips with updated boundaries (outside DB connection)
-    from app.profile_context import get_current_profile_id
-    user_id = get_current_user_id()
-    profile_id = get_current_profile_id()
-    for clip_info in clips_to_extract:
-        enqueue_clip_extraction(
-            clip_id=clip_info['clip_id'],
-            project_id=clip_info['project_id'],
-            game_id=clip_info['game_id'],
-            video_filename=clip_info['video_filename'],
-            start_time=clip_info['start_time'],
-            end_time=clip_info['end_time'],
-            user_id=user_id,
-        )
-
-    if clips_to_extract:
-        background_tasks.add_task(run_queue_processor, user_id, profile_id)
-        logger.info(f"Enqueued {len(clips_to_extract)} clips for re-extraction after boundary update")
+    # T740: No re-extraction needed — framing reads game video directly
 
     return RefreshClipsResponse(
         success=True,
         refreshed_count=refreshed_count,
-        extraction_triggered=len(clips_to_extract) > 0
+        extraction_triggered=False
     )
