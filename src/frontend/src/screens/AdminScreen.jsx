@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { useAdminStore } from '../stores/adminStore';
 import { UserTable } from '../components/admin/UserTable';
-import { QuestFunnelChart } from '../components/admin/QuestFunnelChart';
 
 /**
  * AdminScreen — Full-page admin panel.
@@ -25,7 +24,7 @@ export function AdminScreen({ onBack }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
+      <div className="mx-auto px-6 py-8 max-w-[1600px]">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <button
@@ -40,14 +39,6 @@ export function AdminScreen({ onBack }) {
             <h1 className="text-white text-xl font-semibold">Admin Panel</h1>
           </div>
         </div>
-
-        {/* Quest Funnel */}
-        {!loading && !error && users.length > 0 && (
-          <div className="bg-white/5 rounded-xl p-6 border border-white/10 mb-6">
-            <h2 className="text-gray-300 font-medium mb-4">Quest Funnel</h2>
-            <QuestFunnelChart users={users} />
-          </div>
-        )}
 
         {/* Users section */}
         <div className="bg-white/5 rounded-xl p-6 border border-white/10">
@@ -66,7 +57,7 @@ export function AdminScreen({ onBack }) {
           )}
 
           {!loading && !error && knownUsers.length > 0 && (
-            <UserTable users={knownUsers} />
+            <UserTable users={knownUsers} allUsers={users} />
           )}
         </div>
       </div>

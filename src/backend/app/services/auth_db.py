@@ -622,6 +622,60 @@ def get_all_users_for_admin() -> list:
         return [dict(r) for r in rows]
 
 
+def get_credit_stats_for_admin() -> dict:
+    """Return per-user credit stats from credit_transactions for the admin panel.
+
+    Returns dict keyed by user_id with:
+      credits_spent: total credits consumed (abs of negative non-refund amounts)
+      credits_purchased: total credits from stripe purchases
+      purchase_credit_amounts: list of individual stripe purchase credit amounts (for $ mapping)
+    """
+    with get_auth_db() as db:
+        # Credits spent: sum of negative amounts excluding refunds
+        spent_rows = db.execute(
+            """SELECT user_id, SUM(ABS(amount)) as total_spent
+               FROM credit_transactions
+               WHERE amount < 0 AND source != 'admin_set'
+               GROUP BY user_id"""
+        ).fetchall()
+
+        # Credits purchased via Stripe
+        purchased_rows = db.execute(
+            """SELECT user_id, SUM(amount) as total_purchased
+               FROM credit_transactions
+               WHERE source = 'stripe_purchase' AND amount > 0
+               GROUP BY user_id"""
+        ).fetchall()
+
+        # Individual purchase amounts (for dollar mapping)
+        purchase_detail_rows = db.execute(
+            """SELECT user_id, amount
+               FROM credit_transactions
+               WHERE source = 'stripe_purchase' AND amount > 0"""
+        ).fetchall()
+
+        stats: dict = {}
+        for row in spent_rows:
+            uid = row["user_id"]
+            if uid not in stats:
+                stats[uid] = {"credits_spent": 0, "credits_purchased": 0, "purchase_credit_amounts": []}
+            stats[uid]["credits_spent"] = row["total_spent"]
+
+        for row in purchased_rows:
+            uid = row["user_id"]
+            if uid not in stats:
+                stats[uid] = {"credits_spent": 0, "credits_purchased": 0, "purchase_credit_amounts": []}
+            stats[uid]["credits_purchased"] = row["total_purchased"]
+
+        for row in purchase_detail_rows:
+            uid = row["user_id"]
+            if uid not in stats:
+                stats[uid] = {"credits_spent": 0, "credits_purchased": 0, "purchase_credit_amounts": []}
+            stats[uid]["purchase_credit_amounts"].append(row["amount"])
+
+        return stats
+
+
 def get_credit_transactions(user_id: str, limit: int = 50) -> list:
     """Get recent credit transactions for a user."""
     with get_auth_db() as db:

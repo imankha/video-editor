@@ -22,6 +22,7 @@ from ..user_context import get_current_user_id
 from ..services.auth_db import (
     is_admin,
     get_all_users_for_admin,
+    get_credit_stats_for_admin,
     grant_credits,
     get_user_by_id,
 )
@@ -204,6 +205,72 @@ async def _compute_quest_progress(user_id: str) -> dict:
     return result
 
 
+async def _compute_activity_counts(user_id: str) -> dict:
+    """Count games, annotated clips, framed projects, and completed projects across all profiles."""
+    db_paths = _get_profile_db_paths(user_id)
+    if not db_paths:
+        return {"games_annotated": 0, "clips_annotated": 0, "projects_framed": 0, "projects_completed": 0}
+
+    games = 0
+    clips = 0
+    projects_framed = 0
+    projects_completed = 0
+
+    for db_path in db_paths:
+        try:
+            conn = sqlite3.connect(str(db_path), timeout=5)
+            cursor = conn.cursor()
+
+            row = cursor.execute("SELECT COUNT(*) FROM games").fetchone()
+            games += row[0] if row else 0
+
+            row = cursor.execute("SELECT COUNT(*) FROM raw_clips").fetchone()
+            clips += row[0] if row else 0
+
+            # Projects with at least one completed framing export
+            row = cursor.execute(
+                """SELECT COUNT(DISTINCT p.id) FROM projects p
+                   JOIN export_jobs ej ON ej.project_id = p.id
+                   WHERE ej.type = 'framing' AND ej.status = 'complete'"""
+            ).fetchone()
+            projects_framed += row[0] if row else 0
+
+            # Projects with at least one completed overlay export
+            row = cursor.execute(
+                """SELECT COUNT(DISTINCT p.id) FROM projects p
+                   JOIN export_jobs ej ON ej.project_id = p.id
+                   WHERE ej.type = 'overlay' AND ej.status = 'complete'"""
+            ).fetchone()
+            projects_completed += row[0] if row else 0
+
+            conn.close()
+        except Exception as e:
+            logger.warning(f"[Admin] Could not read activity counts from {db_path}: {e}")
+
+    return {
+        "games_annotated": games,
+        "clips_annotated": clips,
+        "projects_framed": projects_framed,
+        "projects_completed": projects_completed,
+    }
+
+
+# Credit amount → price in cents mapping (mirrors payments.py CREDIT_PACKS)
+_CREDIT_AMOUNT_TO_CENTS = {
+    120: 499,
+    400: 1299,
+    1000: 2499,
+}
+
+
+def _compute_money_spent_cents(purchase_credit_amounts: list[int]) -> int:
+    """Map individual Stripe purchase credit amounts to total dollars spent (in cents)."""
+    total = 0
+    for amount in purchase_credit_amounts:
+        total += _CREDIT_AMOUNT_TO_CENTS.get(amount, 0)
+    return total
+
+
 async def _compute_gpu_total(user_id: str) -> Optional[float]:
     """Sum gpu_seconds across all profiles for a user. Returns None if no data."""
     db_paths = _get_profile_db_paths(user_id)
@@ -228,17 +295,27 @@ async def _compute_gpu_total(user_id: str) -> Optional[float]:
     return round(total, 2) if found_any else None
 
 
-async def _get_user_stats(user: dict) -> dict:
-    """Fetch per-user stats in parallel (quest progress + GPU total)."""
+async def _get_user_stats(user: dict, credit_stats: dict) -> dict:
+    """Fetch per-user stats in parallel (quest progress + GPU total + activity counts)."""
     user_id = user["user_id"]
-    quest_progress, gpu_total = await asyncio.gather(
+    quest_progress, gpu_total, activity = await asyncio.gather(
         _compute_quest_progress(user_id),
         _compute_gpu_total(user_id),
+        _compute_activity_counts(user_id),
     )
+
+    # Credit stats from auth DB (pre-fetched in batch)
+    user_credit = credit_stats.get(user_id, {"credits_spent": 0, "credits_purchased": 0, "purchase_credit_amounts": []})
+    money_spent_cents = _compute_money_spent_cents(user_credit["purchase_credit_amounts"])
+
     return {
         **user,
         "quest_progress": quest_progress,
         "gpu_seconds_total": gpu_total,
+        "credits_spent": user_credit["credits_spent"],
+        "credits_purchased": user_credit["credits_purchased"],
+        "money_spent_cents": money_spent_cents,
+        **activity,
     }
 
 
@@ -255,11 +332,12 @@ async def admin_me():
 
 @router.get("/users")
 async def list_users():
-    """List all users with credits, quest progress, and GPU usage. Admin only."""
+    """List all users with credits, quest progress, GPU usage, and activity stats. Admin only."""
     _require_admin()
 
     users = get_all_users_for_admin()
-    results = await asyncio.gather(*[_get_user_stats(u) for u in users])
+    credit_stats = get_credit_stats_for_admin()
+    results = await asyncio.gather(*[_get_user_stats(u, credit_stats) for u in users])
     return list(results)
 
 
