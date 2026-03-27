@@ -126,10 +126,8 @@ export default function CropLayer({
           const isSelected = selectedKeyframeIndex === index;
           const isPermanent = keyframe.origin === 'permanent';
           // Boundary keyframes (at effective start/end) are never deletable
+          // Note: user keyframes at trim boundaries are valid — not a bug
           const isBoundaryKeyframe = isStartKeyframe || isEffectiveEndKeyframe;
-          if (isBoundaryKeyframe && !isPermanent) {
-            console.warn(`[CropLayer] Boundary keyframe at frame ${keyframe.frame} has origin '${keyframe.origin}' instead of 'permanent' — hiding delete but origin should be fixed upstream`);
-          }
 
           // Highlight keyframe if no other keyframe is selected AND:
           // 1. At current time, OR
