@@ -264,7 +264,7 @@ async def local_framing(
     Same interface as call_modal_framing_ai - takes R2 keys, returns same format.
     Downloads from R2, processes with local Real-ESRGAN/FFmpeg, uploads result to R2.
     """
-    from app.storage import download_from_r2, upload_to_r2
+    from app.storage import download_from_r2, download_from_r2_global, upload_to_r2
 
     logger.info(f"[LocalProcessor] Framing job {job_id} starting")
     logger.info(f"[LocalProcessor] User: {user_id}, Input: {input_key} -> Output: {output_key}")
@@ -293,11 +293,11 @@ async def local_framing(
 
             # Download from R2 — game videos are global (no user prefix)
             if input_key.startswith("games/"):
-                download_result = await asyncio.to_thread(download_from_r2, None, input_key, Path(input_path))
+                download_result = await asyncio.to_thread(download_from_r2_global, input_key, Path(input_path))
             else:
                 download_result = await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path))
             if not download_result:
-                return {"status": "error", "error": "Failed to download from R2"}
+                return {"status": "error", "error": f"Failed to download {input_key} from R2"}
 
             download_time = time.time() - start_time
             logger.info(f"[LocalProcessor] Downloaded in {download_time:.1f}s")
@@ -414,7 +414,7 @@ async def local_framing_mock(
     Same interface as local_framing but skips AI upscaling entirely.
     Uses fast FFmpeg crop+resize to produce a valid working video in seconds.
     """
-    from app.storage import download_from_r2, upload_to_r2
+    from app.storage import download_from_r2, download_from_r2_global, upload_to_r2
     import ffmpeg as ffmpeg_lib
 
     logger.info(f"[LocalProcessor] Mock framing job {job_id} starting (test mode)")
@@ -435,11 +435,11 @@ async def local_framing_mock(
 
             # Download from R2 — game videos are global (no user prefix)
             if input_key.startswith("games/"):
-                download_result = await asyncio.to_thread(download_from_r2, None, input_key, Path(input_path))
+                download_result = await asyncio.to_thread(download_from_r2_global, input_key, Path(input_path))
             else:
                 download_result = await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path))
             if not download_result:
-                return {"status": "error", "error": "Failed to download from R2"}
+                return {"status": "error", "error": f"Failed to download {input_key} from R2"}
 
             if progress_callback:
                 try:
