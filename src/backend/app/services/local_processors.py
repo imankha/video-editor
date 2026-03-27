@@ -354,16 +354,53 @@ async def local_framing(
                     except Exception as e:
                         logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
+            # T740: Transform times from clip-relative (0-based) to absolute in source video.
+            # The upscaler sees the full game video file and uses trim_start/trim_end to determine
+            # which frames to process. Without offset, it processes from the start of the game.
+            clip_offset = source_start_time
+            clip_duration = (source_end_time - source_start_time) if source_end_time else None
+
+            # Offset keyframe times to absolute
+            adjusted_keyframes = [
+                {**kf, 'time': kf['time'] + clip_offset}
+                for kf in keyframes
+            ]
+
+            # Offset segment_data trim/segment times to absolute
+            adjusted_segment_data = None
+            if segment_data:
+                adjusted_segment_data = {**segment_data}
+                # Offset trim range
+                trim_start = segment_data.get('trim_start', 0)
+                trim_end = segment_data.get('trim_end', clip_duration or 0)
+                adjusted_segment_data['trim_start'] = trim_start + clip_offset
+                adjusted_segment_data['trim_end'] = trim_end + clip_offset
+                # Offset segment boundaries
+                if 'segments' in segment_data:
+                    adjusted_segment_data['segments'] = [
+                        {**seg, 'start': seg['start'] + clip_offset, 'end': seg['end'] + clip_offset}
+                        for seg in segment_data['segments']
+                    ]
+            elif clip_offset > 0:
+                # No segment_data but we need trim to extract the right range
+                adjusted_segment_data = {
+                    'trim_start': clip_offset,
+                    'trim_end': clip_offset + (clip_duration or 0),
+                }
+
+            logger.info(f"[LocalProcessor] Clip offset: {clip_offset}s, adjusted trim: "
+                       f"{adjusted_segment_data.get('trim_start', 0):.2f}s - {adjusted_segment_data.get('trim_end', 0):.2f}s")
+
             # Process with Real-ESRGAN
             result = await asyncio.to_thread(
                 upscaler.process_video_with_upscale,
                 input_path=input_path,
                 output_path=output_path,
-                keyframes=keyframes,
+                keyframes=adjusted_keyframes,
                 target_fps=fps,
                 export_mode=export_mode,
                 progress_callback=sync_progress_callback,
-                segment_data=segment_data,
+                segment_data=adjusted_segment_data,
                 include_audio=include_audio,
             )
 
