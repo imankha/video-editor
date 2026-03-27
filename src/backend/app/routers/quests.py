@@ -128,17 +128,11 @@ def _check_all_steps(user_id: str, conn) -> dict:
            LIMIT 1"""
     ).fetchone() is not None
 
-    # All clips in a custom project have been extracted (raw_clip.filename != '')
+    # T740: Extraction merged into framing — auto-complete when custom project exists
     steps["extract_custom_clips"] = cursor.execute(
         """SELECT 1 FROM projects p
            WHERE p.is_auto_created = 0
            AND EXISTS (SELECT 1 FROM working_clips WHERE project_id = p.id)
-           AND NOT EXISTS (
-               SELECT 1 FROM working_clips wc
-               JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-               WHERE wc.project_id = p.id
-               AND (rc.filename IS NULL OR rc.filename = '')
-           )
            LIMIT 1"""
     ).fetchone() is not None
 

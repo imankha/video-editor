@@ -35,13 +35,8 @@ export const QUESTS = [
     steps: [
       {
         id: 'open_framing',
-        title: 'Open the Framing Editor',
-        description: 'Go Home, then go to Projects, then select a project and enter Framing mode to crop and upscale your clips',
-      },
-      {
-        id: 'extract_clip',
-        title: 'Open Project in Framing',
-        description: 'Your clip is ready to frame!',
+        title: 'Open a Project',
+        description: 'Go Home, then go to Projects, then select a project and enter Framing mode',
       },
       {
         id: 'export_framing',
@@ -86,13 +81,8 @@ export const QUESTS = [
         description: 'Go Home, then Projects, then New Project. Select clips for your highlight reel and click Create.',
       },
       {
-        id: 'extract_custom_clips',
-        title: 'Open Custom Project in Framing',
-        description: 'Your clips are ready to frame!',
-      },
-      {
         id: 'frame_custom_project',
-        title: 'Frame Project',
+        title: 'Open and Frame Project',
         description: 'Open your new custom project and frame each clip individually',
       },
       {
