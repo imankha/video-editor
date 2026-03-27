@@ -72,7 +72,7 @@ export function FramingScreen({
   const [selectedLayer, setSelectedLayer] = useState('playhead');
   const [videoFile, setVideoFile] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // T740: outdatedClipsDialog removed — auto-refresh applied silently
+  // T740: outdated clips dialog and state removed — framing always uses latest boundaries
   // Mobile sidebar toggle
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const clipHasUserEditsRef = useRef(false);
@@ -81,7 +81,7 @@ export function FramingScreen({
   const previousClipIdRef = useRef(null);
   const isRestoringClipStateRef = useRef(false);
   const fullscreenContainerRef = useRef(null);
-  const outdatedClipsCheckedRef = useRef(false);
+  // T740: outdatedClipsCheckedRef removed — no outdated check in framing
 
   const exportButtonRef = externalExportButtonRef || localExportButtonRef;
 
@@ -133,48 +133,11 @@ export function FramingScreen({
     fetchGames();
   }, [fetchGames]);
 
-  // T740: Auto-apply latest boundaries when clips are re-annotated.
-  // Rescales crop keyframes to fit the new duration instead of resetting them.
-  useEffect(() => {
-    if (!projectId || outdatedClipsCheckedRef.current) return;
-    if (!project?.working_video_id) return;
-
-    outdatedClipsCheckedRef.current = true;
-
-    const autoRefreshOutdatedClips = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/projects/${projectId}/outdated-clips`);
-        if (!response.ok) return;
-
-        const data = await response.json();
-        if (!data.has_outdated_clips || !data.outdated_clips?.length) return;
-
-        console.log('[FramingScreen] Auto-refreshing outdated clips:', data.outdated_clips.length);
-
-        const workingClipIds = data.outdated_clips.map(c => c.working_clip_id);
-        const refreshResponse = await fetch(`${API_BASE}/api/projects/${projectId}/refresh-outdated-clips`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ working_clip_ids: workingClipIds })
-        });
-
-        if (refreshResponse.ok) {
-          console.log('[FramingScreen] Auto-refresh complete, reloading clips');
-          await refreshProject();
-          initialLoadDoneRef.current = false;
-          await fetchProjectClips();
-        }
-      } catch (err) {
-        console.error('[FramingScreen] Error auto-refreshing outdated clips:', err);
-      }
-    };
-
-    autoRefreshOutdatedClips();
-  }, [projectId, project?.working_video_id, refreshProject, fetchProjectClips]);
-
-  useEffect(() => {
-    outdatedClipsCheckedRef.current = false;
-  }, [projectId]);
+  // T740: No outdated clips check needed in framing mode.
+  // Framing reads start_time/end_time fresh from raw_clips every load.
+  // Crop keyframes are 0-based (relative to clip start) and work with any boundaries.
+  // The only thing that becomes "outdated" is an exported working video — that check
+  // belongs in overlay mode, not framing.
 
   // Segments hook
   const {
