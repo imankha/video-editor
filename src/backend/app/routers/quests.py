@@ -39,7 +39,6 @@ QUEST_DEFINITIONS = [
         "reward": 50,
         "step_ids": [
             "open_framing",
-            "extract_clip",
             "export_framing",
             "export_overlay",
             "view_gallery_video",
@@ -54,7 +53,6 @@ QUEST_DEFINITIONS = [
             "annotate_brilliant_2",
             "annotate_4_star",
             "create_mixed_project",
-            "extract_custom_clips",
             "frame_custom_project",
             "start_custom_framing",
             "complete_custom_framing",
