@@ -196,12 +196,28 @@ export function OverlayModeView({
   hasFramingEdits,
   hasMultipleClips,
   framingVideoUrl,
+  // T740: Outdated framing warning
+  framingOutdated = false,
 }) {
   // Show "export required" message if no overlay video but framing has edits
   const showExportRequired = !effectiveOverlayVideoUrl && framingVideoUrl && (hasFramingEdits || hasMultipleClips);
 
   return (
     <>
+      {/* T740: Outdated framing banner */}
+      {framingOutdated && !isFullscreen && (
+        <div className="mb-3 flex items-center justify-between gap-3 bg-amber-900/40 border border-amber-500/30 rounded-lg px-4 py-2.5">
+          <p className="text-amber-200 text-sm">
+            Clip boundaries changed since this video was framed. Overlay edits will apply to the old framing.
+          </p>
+          <button
+            onClick={onSwitchToFraming}
+            className="flex-shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-sm font-medium transition-colors"
+          >
+            Re-frame now
+          </button>
+        </div>
+      )}
       {/* Video Metadata - use overlay metadata, hidden in fullscreen */}
       {!isFullscreen && (effectiveOverlayMetadata ? (
         <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-4 border border-white/20">

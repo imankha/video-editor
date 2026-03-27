@@ -99,6 +99,23 @@ export function OverlayScreen({
     setOverlayLoadedProjectId,
   } = overlayState;
 
+  // T740: Check if framing is outdated (boundaries changed since last export)
+  const [framingOutdated, setFramingOutdated] = useState(false);
+  useEffect(() => {
+    if (!projectId || !workingVideo?.url) return;
+    const checkOutdated = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/projects/${projectId}/outdated-clips`);
+        if (!response.ok) return;
+        const data = await response.json();
+        setFramingOutdated(data.has_outdated_clips);
+      } catch {
+        // Silently ignore — non-critical check
+      }
+    };
+    checkOutdated();
+  }, [projectId, workingVideo?.url]);
+
   // Local state
   const [selectedLayer, setSelectedLayer] = useState('playhead');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -937,6 +954,8 @@ export function OverlayScreen({
       hasFramingEdits={hasFramingEdits}
       hasMultipleClips={hasMultipleClips}
       framingVideoUrl={framingVideoUrl}
+      // T740: Outdated framing warning
+      framingOutdated={framingOutdated}
     />
   );
 }
