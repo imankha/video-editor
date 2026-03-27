@@ -994,41 +994,33 @@ export function ExportButtonContainer({
   // Determine button text based on mode
   const isFramingMode = editorMode === EDITOR_MODES.FRAMING;
 
-  // Check if any clips are still being extracted
-  const clipsNotExtracted = clips?.filter(c => !isExtractedSel(c)) || [];
-  const hasUnextractedClips = clipsNotExtracted.length > 0;
-  const extractingCount = clipsNotExtracted.filter(c => isExtractingSel(c)).length;
-  const pendingCount = clipsNotExtracted.length - extractingCount;
+  // T740: Extraction check removed — framing reads game video directly
 
   // Check if any clips are missing framing data
   const isMultiClipMode = clips && clips.length > 0;
-  const extractedClips = clips?.filter(c => isExtractedSel(c)) || [];
-  const clipsNotFramed = extractedClips.filter(c => {
+  const clipsNotFramed = (clips || []).filter(c => {
     // Use saved crop_data from DB, not runtime cropKeyframes (which includes defaults)
     const savedKfs = clipCropKeyframes(c);
     return !savedKfs || savedKfs.length === 0;
   });
 
-
   const hasUnframedClips = isMultiClipMode
     ? clipsNotFramed.length > 0
     : (!cropKeyframes || cropKeyframes.length === 0);
   const unframedCount = isMultiClipMode ? clipsNotFramed.length : (hasUnframedClips ? 1 : 0);
-  const totalExtractedClips = isMultiClipMode ? extractedClips.length : 1;
+  const totalClips = isMultiClipMode ? (clips?.length || 1) : 1;
 
   // Button disabled state
   const isButtonDisabled = disabled ||
     isCurrentlyExporting ||
     (!videoFile && !projectId) ||
-    (isFramingMode && (hasUnextractedClips || hasUnframedClips));
+    (isFramingMode && hasUnframedClips);
 
   // Button title/tooltip
-  const framedCount = totalExtractedClips - unframedCount;
-  const buttonTitle = isFramingMode && hasUnextractedClips
-    ? 'Wait for all clips to be extracted before framing'
-    : isFramingMode && hasUnframedClips
-      ? `${framedCount}/${totalExtractedClips} clips framed — ${unframedCount} still need${unframedCount === 1 ? 's' : ''} framing`
-      : undefined;
+  const framedCount = totalClips - unframedCount;
+  const buttonTitle = isFramingMode && hasUnframedClips
+    ? `${framedCount}/${totalClips} clips framed — ${unframedCount} still need${unframedCount === 1 ? 's' : ''} framing`
+    : undefined;
 
   return {
     // State
@@ -1042,12 +1034,9 @@ export function ExportButtonContainer({
     isDarkOverlay,
 
     // Clip status
-    hasUnextractedClips,
-    extractingCount,
-    pendingCount,
     hasUnframedClips,
     unframedCount,
-    totalExtractedClips,
+    totalExtractedClips: totalClips,
     isMultiClipMode,
 
     // Button state

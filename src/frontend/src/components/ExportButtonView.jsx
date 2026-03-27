@@ -177,21 +177,10 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         </div>
       </div>
 
-      {/* Extraction status message - Framing mode only */}
-      {isFramingMode && hasUnextractedClips && (
-        <div className="text-orange-400 text-sm bg-orange-900/20 border border-orange-800 rounded p-2 flex items-center gap-2">
-          <Loader size={14} className="animate-spin" />
-          <span>
-            {extractingCount > 0
-              ? `Extracting ${extractingCount} clip${extractingCount > 1 ? 's' : ''}...`
-              : `${pendingCount} clip${pendingCount > 1 ? 's' : ''} waiting for extraction`
-            }
-          </span>
-        </div>
-      )}
+      {/* T740: Extraction status message removed — extraction merged into framing export */}
 
       {/* Unframed clips warning - Framing mode only */}
-      {isFramingMode && !hasUnextractedClips && hasUnframedClips && (
+      {isFramingMode && hasUnframedClips && (
         <div className="text-amber-400 text-sm bg-amber-900/20 border border-amber-700 rounded p-2 flex items-center gap-2">
           <AlertCircle size={14} />
           <span>
