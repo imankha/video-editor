@@ -112,14 +112,35 @@ function App() {
       // Restore navigation state after auth-triggered reload (cross-device recovery)
       const authReturnMode = sessionStorage.getItem('authReturnMode');
       const authReturnProjectId = sessionStorage.getItem('authReturnProjectId');
+      const authReturnGameHash = sessionStorage.getItem('authReturnGameHash');
+      const authReturnGameName = sessionStorage.getItem('authReturnGameName');
       sessionStorage.removeItem('authReturnMode');
       sessionStorage.removeItem('authReturnProjectId');
+      sessionStorage.removeItem('authReturnGameHash');
+      sessionStorage.removeItem('authReturnGameName');
 
       if (authReturnMode) {
-        if (authReturnProjectId) {
+        if (authReturnMode === 'annotate' && (authReturnGameHash || authReturnGameName)) {
+          // T415: Restore annotation mode — wait for games to load, then select + navigate
+          const waitForGames = setInterval(() => {
+            const games = useGamesDataStore.getState().games;
+            if (games.length === 0) return;
+            const game = authReturnGameHash
+              ? games.find(g => g.blake3_hash === authReturnGameHash)
+              : games.find(g => g.name === authReturnGameName);
+            if (game) {
+              clearInterval(waitForGames);
+              useGamesDataStore.getState().selectGame(game);
+              useEditorStore.getState().setEditorMode('annotate');
+            }
+          }, 100);
+          setTimeout(() => clearInterval(waitForGames), 5000);
+        } else if (authReturnProjectId) {
           useProjectsStore.getState().selectProject(authReturnProjectId);
+          useEditorStore.getState().setEditorMode(authReturnMode);
+        } else {
+          useEditorStore.getState().setEditorMode(authReturnMode);
         }
-        useEditorStore.getState().setEditorMode(authReturnMode);
       }
 
       // Payment return: do NOT restore mode — user stays on Projects screen.

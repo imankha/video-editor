@@ -34,8 +34,6 @@ from app.database import USER_DATA_BASE
 from app.session_init import user_session_init
 from app.storage import (
     read_selected_profile_from_r2,
-    read_profiles_json,
-    save_profiles_json,
     upload_to_r2,
     R2ReadError,
     R2_ENABLED,
@@ -178,10 +176,89 @@ async def delete_user():
         raise HTTPException(status_code=500, detail=f"Failed to delete user data: {e}")
 
 
-# --- T410: Guest profile migration ---
+# --- T415: Smart guest merge ---
+
+def _merge_guest_into_profile(guest_db_path: Path, target_db_path: Path) -> int:
+    """Merge guest's games and achievements into target profile database.
+
+    Guest data is limited to games + achievements (auth gates block everything else).
+    No user-scoped R2 files to copy — game videos are global.
+
+    Returns the number of games merged (inserted, not skipped duplicates).
+    """
+    guest_conn = sqlite3.connect(str(guest_db_path), timeout=5)
+    guest_conn.row_factory = sqlite3.Row
+    target_conn = sqlite3.connect(str(target_db_path), timeout=5)
+    target_conn.row_factory = sqlite3.Row
+
+    merged_count = 0
+    try:
+        gc = guest_conn.cursor()
+        tc = target_conn.cursor()
+
+        # 1. Merge games — dedup by blake3_hash
+        guest_games = gc.execute("SELECT * FROM games").fetchall()
+        game_id_map = {}  # guest game ID → target game ID
+
+        for game in guest_games:
+            existing = tc.execute(
+                "SELECT id FROM games WHERE blake3_hash = ?", (game['blake3_hash'],)
+            ).fetchone()
+
+            if existing:
+                game_id_map[game['id']] = existing['id']
+            else:
+                tc.execute(
+                    """INSERT INTO games (name, video_filename, blake3_hash, clip_count,
+                       brilliant_count, great_count, good_count, last_accessed_at,
+                       created_at, upload_status, duration, video_count, total_size)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (game['name'], game['video_filename'], game['blake3_hash'],
+                     game['clip_count'], game['brilliant_count'], game['great_count'],
+                     game['good_count'], game['last_accessed_at'], game['created_at'],
+                     game['upload_status'], game['duration'], game['video_count'],
+                     game['total_size'])
+                )
+                game_id_map[game['id']] = tc.lastrowid
+                merged_count += 1
+
+        # 2. Merge game_videos — only for newly inserted games
+        guest_videos = gc.execute("SELECT * FROM game_videos").fetchall()
+        for gv in guest_videos:
+            new_game_id = game_id_map.get(gv['game_id'])
+            if new_game_id is None:
+                continue
+            existing_gv = tc.execute(
+                "SELECT id FROM game_videos WHERE game_id = ? AND sequence = ?",
+                (new_game_id, gv['sequence'])
+            ).fetchone()
+            if not existing_gv:
+                tc.execute(
+                    """INSERT INTO game_videos (game_id, blake3_hash, sequence, duration,
+                       original_filename, video_size, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (new_game_id, gv['blake3_hash'], gv['sequence'], gv['duration'],
+                     gv['original_filename'], gv['video_size'], gv['created_at'])
+                )
+
+        # 3. Merge achievements — INSERT OR IGNORE keeps target's if both have same key
+        guest_achievements = gc.execute("SELECT * FROM achievements").fetchall()
+        for ach in guest_achievements:
+            tc.execute(
+                "INSERT OR IGNORE INTO achievements (key, achieved_at) VALUES (?, ?)",
+                (ach['key'], ach['achieved_at'])
+            )
+
+        target_conn.commit()
+    finally:
+        guest_conn.close()
+        target_conn.close()
+
+    return merged_count
+
 
 def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
-    """Copy guest's active profile to recovered account if guest has games.
+    """Merge guest's games/achievements into recovered account's default profile.
 
     Called during cross-device recovery (Google login with existing email).
     Best-effort: logs errors but never blocks login.
@@ -219,38 +296,28 @@ def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
             logger.info(f"[Auth] Migration skip: guest {guest_user_id} has no games")
             return
 
-        # 3. Copy guest profile DB to recovered account
-        new_profile_id = uuid4().hex[:8]
-        dest_db_path = USER_DATA_BASE / recovered_user_id / "profiles" / new_profile_id / "database.sqlite"
-        dest_db_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(str(guest_db_path), str(dest_db_path))
+        # 3. Resolve target: recovered account's default profile
+        target_profile_id = read_selected_profile_from_r2(recovered_user_id)
+        target_db_path = USER_DATA_BASE / recovered_user_id / "profiles" / target_profile_id / "database.sqlite"
 
-        # Upload copied DB to R2
+        if not target_db_path.exists():
+            # Brand new account that never loaded — initialize it
+            user_session_init(recovered_user_id)
+
+        # 4. Merge guest data into target profile
+        merged_count = _merge_guest_into_profile(guest_db_path, target_db_path)
+
+        # 5. Upload modified target DB to R2
         original_profile_id = get_current_profile_id()
         try:
-            set_current_profile_id(new_profile_id)
-            upload_to_r2(recovered_user_id, "database.sqlite", dest_db_path)
+            set_current_profile_id(target_profile_id)
+            upload_to_r2(recovered_user_id, "database.sqlite", target_db_path)
         finally:
             set_current_profile_id(original_profile_id)
 
-        # 4. Add new profile to recovered account's profiles.json
-        profiles_data = read_profiles_json(recovered_user_id)
-        if not profiles_data:
-            logger.warning(f"[Auth] Migration: could not read profiles.json for {recovered_user_id}")
-            return
-
-        existing_count = len(profiles_data.get("profiles", {}))
-        profile_name = f"Guest {existing_count}"
-
-        profiles_data["profiles"][new_profile_id] = {
-            "name": profile_name,
-            "color": "#4A90D9",
-        }
-        save_profiles_json(recovered_user_id, profiles_data)
-
         logger.info(
-            f"[Auth] Migrated guest {guest_user_id} profile {guest_profile_id} "
-            f"({game_count} games) → {recovered_user_id} profile {new_profile_id}"
+            f"[Auth] Merged guest {guest_user_id} ({game_count} games, {merged_count} new) "
+            f"→ {recovered_user_id} profile {target_profile_id}"
         )
 
     except Exception as e:

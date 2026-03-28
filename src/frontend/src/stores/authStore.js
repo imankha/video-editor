@@ -3,6 +3,7 @@ import { API_BASE } from '../config';
 import { getUserId, setUserId, resetSession } from '../utils/sessionInit';
 import { useCreditStore } from './creditStore';
 import { useEditorStore } from './editorStore';
+import { useGamesDataStore } from './gamesDataStore';
 import { useProjectsStore } from './projectsStore';
 import { track } from '../utils/analytics';
 
@@ -66,6 +67,14 @@ export const useAuthStore = create((set, get) => ({
       const projectId = useProjectsStore.getState().selectedProjectId;
       if (projectId) {
         sessionStorage.setItem('authReturnProjectId', projectId.toString());
+      }
+      // T415: Save game context for annotation mode return
+      const selectedGame = useGamesDataStore.getState().selectedGame;
+      if (selectedGame) {
+        // blake3_hash is stable across merge (game ID may differ in target DB)
+        // Falls back to name for multi-video games where blake3_hash is null
+        sessionStorage.setItem('authReturnGameHash', selectedGame.blake3_hash || '');
+        sessionStorage.setItem('authReturnGameName', selectedGame.name || '');
       }
       // Reload to initialize with the recovered user's data.
       // Set flag so initSession can detect if the cookie didn't survive the reload.
