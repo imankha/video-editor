@@ -182,7 +182,7 @@ Deploy to production domains with proper scaling.
 | T730 | [Missing End Detection Point](tasks/T730-missing-end-detection-point.md) | DONE | 5 | 4 | Short clips missing last player tracking point at end of overlay region (fence-post error in local detection) |
 | T740 | [Merge Extraction into Framing](tasks/T740-merge-extraction-into-framing.md) | TESTING | 8 | 7 | Eliminate separate extraction step; framing takes source video + time range, extracts + processes in single pass |
 | T750 | [R2 Retry Resilience](tasks/T750-r2-retry-resilience.md) | DONE | 8 | 5 | Add retry with exponential backoff to all R2 operations; transient network failures currently cause immediate 500s |
-| T755 | [Add Clip Panel Z-Order](tasks/T755-add-clip-panel-z-order.md) | TODO | 6 | 4 | Video GPU layer paints over Add Clip overlay; move overlay out of video container to avoid compositing conflict |
+| T755 | [Add Clip Panel Z-Order](tasks/T755-add-clip-panel-z-order.md) | TESTING | 6 | 4 | Video GPU layer paints over Add Clip overlay; move overlay out of video container to avoid compositing conflict |
 | T760 | [Background Local Processing](tasks/T760-background-local-processing.md) | TODO | 7 | 4 | Local exports block the web server; return 202 immediately and run GPU work in background task |
 | T770 | [Navigate Home After Overlay Export](tasks/T770-overlay-complete-navigate-home.md) | TODO | 5 | 2 | After overlay export completes, auto-navigate user back to home/projects screen |
 
