@@ -351,10 +351,17 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
 
     # Verify token with Google (10s timeout — fail fast if Google API is unreachable)
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"https://oauth2.googleapis.com/tokeninfo?id_token={body.token}"
-            )
+        from app.utils.retry import retry_async_call, TIER_1
+
+        async def _verify_google_token():
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                return await client.get(
+                    f"https://oauth2.googleapis.com/tokeninfo?id_token={body.token}"
+                )
+
+        resp = await retry_async_call(
+            _verify_google_token, operation="google_oauth", **TIER_1,
+        )
     except httpx.TimeoutException:
         raise HTTPException(status_code=503, detail="Google token verification timed out")
     except httpx.RequestError as e:

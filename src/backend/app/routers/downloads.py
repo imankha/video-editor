@@ -601,15 +601,32 @@ async def download_file(download_id: int):
             download_filename = generate_download_filename(row['project_name'])
 
             async def stream_from_r2():
-                async with httpx.AsyncClient() as client:
-                    async with client.stream("GET", presigned_url) as response:
-                        if response.status_code != 200:
-                            raise HTTPException(
-                                status_code=response.status_code,
-                                detail=f"R2 returned {response.status_code}"
-                            )
-                        async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):  # 1MB chunks
-                            yield chunk
+                from app.utils.retry import is_transient_error, TIER_2
+                import asyncio as _asyncio
+                import random as _random
+
+                last_exc = None
+                for attempt in range(TIER_2["max_attempts"]):
+                    try:
+                        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
+                            async with client.stream("GET", presigned_url) as response:
+                                if response.status_code != 200:
+                                    raise HTTPException(
+                                        status_code=response.status_code,
+                                        detail=f"R2 returned {response.status_code}"
+                                    )
+                                async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                                    yield chunk
+                        return
+                    except HTTPException:
+                        raise
+                    except Exception as e:
+                        last_exc = e
+                        if not is_transient_error(e) or attempt >= TIER_2["max_attempts"] - 1:
+                            raise
+                        delay = TIER_2["initial_delay"] * (2.0 ** attempt) * (0.5 + _random.random())
+                        logger.warning(f"[stream_proxy] Download attempt {attempt + 1} failed: {e}, retrying in {delay:.1f}s")
+                        await _asyncio.sleep(delay)
 
             return StreamingResponse(
                 stream_from_r2(),
