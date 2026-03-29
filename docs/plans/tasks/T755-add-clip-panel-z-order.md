@@ -1,6 +1,6 @@
 # T755: Add Clip Panel Z-Order Fix
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-03-28
