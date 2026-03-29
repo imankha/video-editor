@@ -361,24 +361,6 @@ export function AnnotateModeView({
                       />
                     ) : null;
                   })(),
-                  // AnnotateFullscreenOverlay
-                  showAnnotateOverlay && (() => {
-                    return (
-                      <AnnotateFullscreenOverlay
-                        key="annotate-fullscreen"
-                        isVisible={showAnnotateOverlay}
-                        currentTime={currentTime}
-                        videoDuration={annotateVideoMetadata?.duration || 0}
-                        existingClip={existingClip}
-                        onCreateClip={onFullscreenCreateClip}
-                        onUpdateClip={onFullscreenUpdateClip}
-                        onResume={onOverlayResume}
-                        onClose={onOverlayClose}
-                        onSeek={seek}
-                        videoRef={videoRef}
-                      />
-                    );
-                  })(),
                 ].filter(Boolean)}
                 zoom={zoom}
                 panOffset={panOffset}
@@ -388,6 +370,23 @@ export function AnnotateModeView({
                 clipRating={showAnnotateOverlay ? null : (getAnnotateRegionAtTime(currentTime)?.rating ?? null)}
               />
             </div>
+
+            {/* AnnotateFullscreenOverlay - rendered outside VideoPlayer to avoid
+                <video> GPU compositing painting over the panel (see T755) */}
+            {showAnnotateOverlay && (
+              <AnnotateFullscreenOverlay
+                isVisible={showAnnotateOverlay}
+                currentTime={currentTime}
+                videoDuration={annotateVideoMetadata?.duration || 0}
+                existingClip={existingClip}
+                onCreateClip={onFullscreenCreateClip}
+                onUpdateClip={onFullscreenUpdateClip}
+                onResume={onOverlayResume}
+                onClose={onOverlayClose}
+                onSeek={seek}
+                videoRef={videoRef}
+              />
+            )}
 
             {/* Controls - in flow for both modes, right below video */}
             <div className={annotateFullscreen ? 'w-full shrink-0' : ''}>
