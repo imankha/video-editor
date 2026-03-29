@@ -276,7 +276,7 @@ def derive_project_name(project_id: int, cursor) -> Optional[str]:
 
     # Try to derive from raw_clip
     cursor.execute("""
-        SELECT rc.name, rc.rating, rc.tags
+        SELECT rc.name, rc.rating, rc.tags, rc.notes
         FROM raw_clips rc
         WHERE rc.auto_project_id = ?
         LIMIT 1

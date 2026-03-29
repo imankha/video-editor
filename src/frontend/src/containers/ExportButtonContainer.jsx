@@ -959,8 +959,15 @@ export function ExportButtonContainer({
             if (data.traceback) {
               console.error('[ExportButtonContainer] Traceback:', Array.isArray(data.traceback) ? data.traceback.join('\n') : data.traceback);
             }
-            const extracted = data.message || data.detail || data.error;
-            errorMessage = (typeof extracted === 'string') ? extracted : `Server error (${status})`;
+            // Detect transient processing failures (R2 download, GPU timeout, etc.)
+            const detail = typeof data.detail === 'object' ? data.detail : data;
+            if (detail.error === 'processing_failed') {
+              errorMessage = 'Export failed due to a temporary issue. Your credit has been refunded. Please try again.';
+              useCreditStore.getState().fetchCredits();
+            } else {
+              const extracted = data.message || data.detail || data.error;
+              errorMessage = (typeof extracted === 'string') ? extracted : `Server error (${status})`;
+            }
           } else if (typeof err.response.data === 'string') {
             errorMessage = err.response.data || `Server error (${status})`;
           } else {

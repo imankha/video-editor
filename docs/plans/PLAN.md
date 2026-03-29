@@ -181,6 +181,7 @@ Deploy to production domains with proper scaling.
 | T580 | [Can't Reframe — Shows Exported Video](tasks/T580-reframing-shows-exported-video.md) | DONE | 7 | 4 | Fix: reset shared videoStore on mode switch + useLayoutEffect guard in FramingScreen |
 | T730 | [Missing End Detection Point](tasks/T730-missing-end-detection-point.md) | DONE | 5 | 4 | Short clips missing last player tracking point at end of overlay region (fence-post error in local detection) |
 | T740 | [Merge Extraction into Framing](tasks/T740-merge-extraction-into-framing.md) | TESTING | 8 | 7 | Eliminate separate extraction step; framing takes source video + time range, extracts + processes in single pass |
+| T750 | [R2 Retry Resilience](tasks/T750-r2-retry-resilience.md) | TODO | 8 | 5 | Add retry with exponential backoff to all R2 operations; transient network failures currently cause immediate 500s |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
