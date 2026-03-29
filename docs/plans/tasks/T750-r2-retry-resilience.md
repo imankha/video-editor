@@ -1,6 +1,6 @@
 # T750: R2 Retry Resilience
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-03-28
