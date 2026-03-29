@@ -51,7 +51,8 @@ def get_r2_client():
             aws_secret_access_key=R2_SECRET_ACCESS_KEY,
             config=Config(
                 signature_version="s3v4",
-                s3={"addressing_style": "path"}
+                s3={"addressing_style": "path"},
+                max_pool_connections=25,  # 10 for upload threads + 15 headroom
             ),
             region_name="auto"
         )
@@ -102,6 +103,42 @@ def get_r2_sync_client():
         return None
 
 
+@lru_cache(maxsize=1)
+def get_r2_transfer_client():
+    """Get boto3 S3 client optimized for large file transfers.
+
+    Uses a larger connection pool and longer read timeout for operations
+    like download_from_r2_global and multipart uploads that transfer
+    large video files (1GB+).
+    """
+    if not R2_ENABLED:
+        return None
+
+    try:
+        import boto3
+        from botocore.config import Config
+
+        client = boto3.client(
+            "s3",
+            endpoint_url=R2_ENDPOINT,
+            aws_access_key_id=R2_ACCESS_KEY_ID,
+            aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+            config=Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "path"},
+                max_pool_connections=20,
+                read_timeout=120,
+            ),
+            region_name="auto"
+        )
+        return client
+    except ImportError:
+        return None
+    except Exception as e:
+        logger.error(f"Failed to initialize R2 transfer client: {e}")
+        return None
+
+
 def r2_key(user_id: str, path: str) -> str:
     """Generate R2 object key for user profile data.
 
@@ -141,6 +178,8 @@ def download_from_r2(user_id: str, relative_path: str, local_path: Path, progres
     Returns:
         True if download succeeded, False otherwise
     """
+    from .utils.retry import retry_r2_call, TIER_1
+
     client = get_r2_client()
     if not client:
         return False
@@ -152,9 +191,15 @@ def download_from_r2(user_id: str, relative_path: str, local_path: Path, progres
 
         # Use callback if provided for progress tracking
         if progress_callback:
-            client.download_file(R2_BUCKET, key, str(local_path), Callback=progress_callback)
+            retry_r2_call(
+                client.download_file, R2_BUCKET, key, str(local_path),
+                Callback=progress_callback, operation=f"download {key}", **TIER_1,
+            )
         else:
-            client.download_file(R2_BUCKET, key, str(local_path))
+            retry_r2_call(
+                client.download_file, R2_BUCKET, key, str(local_path),
+                operation=f"download {key}", **TIER_1,
+            )
         logger.debug(f"Downloaded from R2: {key} -> {local_path}")
         return True
     except client.exceptions.NoSuchKey:
@@ -182,7 +227,11 @@ def get_r2_file_size(user_id: str, relative_path: str) -> Optional[int]:
 
     key = r2_key(user_id, relative_path)
     try:
-        response = client.head_object(Bucket=R2_BUCKET, Key=key)
+        from .utils.retry import retry_r2_call, TIER_2
+        response = retry_r2_call(
+            client.head_object, Bucket=R2_BUCKET, Key=key,
+            operation=f"head {key}", **TIER_2,
+        )
         return response.get('ContentLength')
     except Exception as e:
         logger.debug(f"Could not get file size from R2: {key} - {e}")
@@ -334,7 +383,11 @@ def upload_to_r2(user_id: str, relative_path: str, local_path: Path) -> bool:
 
     key = r2_key(user_id, relative_path)
     try:
-        client.upload_file(str(local_path), R2_BUCKET, key)
+        from .utils.retry import retry_r2_call, TIER_1
+        retry_r2_call(
+            client.upload_file, str(local_path), R2_BUCKET, key,
+            operation=f"upload {key}", **TIER_1,
+        )
         logger.debug(f"Uploaded to R2: {local_path} -> {key}")
         return True
     except Exception as e:
@@ -362,7 +415,12 @@ def upload_bytes_to_r2(user_id: str, relative_path: str, data: bytes) -> bool:
 
     key = r2_key(user_id, relative_path)
     try:
-        client.upload_fileobj(BytesIO(data), R2_BUCKET, key)
+        from .utils.retry import retry_r2_call, TIER_1
+
+        def _upload():
+            client.upload_fileobj(BytesIO(data), R2_BUCKET, key)
+
+        retry_r2_call(_upload, operation=f"upload_bytes {key}", **TIER_1)
         logger.debug(f"Uploaded bytes to R2: {key} ({len(data)} bytes)")
         return True
     except Exception as e:
@@ -387,7 +445,11 @@ def delete_from_r2(user_id: str, relative_path: str) -> bool:
 
     key = r2_key(user_id, relative_path)
     try:
-        client.delete_object(Bucket=R2_BUCKET, Key=key)
+        from .utils.retry import retry_r2_call, TIER_3
+        retry_r2_call(
+            client.delete_object, Bucket=R2_BUCKET, Key=key,
+            operation=f"delete {key}", **TIER_3,
+        )
         logger.debug(f"Deleted from R2: {key}")
         return True
     except Exception as e:
@@ -418,12 +480,15 @@ async def copy_file_in_r2(user_id: str, source_path: str, dest_path: str) -> boo
     dest_key = r2_key(user_id, dest_path)
 
     try:
-        # Use asyncio.to_thread for async compatibility
+        from .utils.retry import retry_r2_call, TIER_3
+
         def do_copy():
-            client.copy_object(
+            retry_r2_call(
+                client.copy_object,
                 Bucket=R2_BUCKET,
                 CopySource={'Bucket': R2_BUCKET, 'Key': source_key},
-                Key=dest_key
+                Key=dest_key,
+                operation=f"copy {source_key}", **TIER_3,
             )
 
         await asyncio.to_thread(do_copy)
@@ -442,9 +507,13 @@ def file_exists_in_r2(user_id: str, relative_path: str) -> bool:
 
     key = r2_key(user_id, relative_path)
     try:
-        client.head_object(Bucket=R2_BUCKET, Key=key)
+        from .utils.retry import retry_r2_call, TIER_2
+        retry_r2_call(
+            client.head_object, Bucket=R2_BUCKET, Key=key,
+            operation=f"exists {key}", **TIER_2,
+        )
         return True
-    except:
+    except Exception:
         return False
 
 
@@ -470,7 +539,11 @@ def get_db_version_from_r2(user_id: str, client=None) -> Optional[int]:
 
     key = r2_key(user_id, "database.sqlite")
     try:
-        response = client.head_object(Bucket=R2_BUCKET, Key=key)
+        from .utils.retry import retry_r2_call, TIER_2
+        response = retry_r2_call(
+            client.head_object, Bucket=R2_BUCKET, Key=key,
+            operation=f"db_version {user_id}", **TIER_2,
+        )
         metadata = response.get("Metadata", {})
         version_str = metadata.get("db-version")
         if version_str:
@@ -577,14 +650,12 @@ def sync_database_to_r2_with_version(
 
     key = r2_key(user_id, "database.sqlite")
     try:
-        # Upload with version metadata
-        client.upload_file(
-            str(local_db_path),
-            R2_BUCKET,
-            key,
-            ExtraArgs={
-                "Metadata": {"db-version": str(new_version)}
-            }
+        from .utils.retry import retry_r2_call, TIER_1
+        retry_r2_call(
+            client.upload_file,
+            str(local_db_path), R2_BUCKET, key,
+            ExtraArgs={"Metadata": {"db-version": str(new_version)}},
+            operation=f"db_sync_upload {user_id}", **TIER_1,
         )
         logger.debug(f"Uploaded DB to R2: {user_id} version {new_version}")
         return True, new_version
@@ -733,10 +804,11 @@ def generate_presigned_url(
         # Note: R2 doesn't support ResponseContentType parameter in presigned URLs.
         # The browser will use the Content-Type from the object metadata instead.
 
-        url = client.generate_presigned_url(
-            "get_object",
-            Params=params,
-            ExpiresIn=expires_in
+        from .utils.retry import retry_r2_call, TIER_3
+        url = retry_r2_call(
+            client.generate_presigned_url,
+            "get_object", Params=params, ExpiresIn=expires_in,
+            operation=f"presign_get {key}", **TIER_3,
         )
         logger.debug(f"Generated presigned URL for: {key}")
         return url
@@ -780,10 +852,11 @@ def generate_presigned_upload_url(
         if content_type:
             params["ContentType"] = content_type
 
-        url = client.generate_presigned_url(
-            "put_object",
-            Params=params,
-            ExpiresIn=expires_in
+        from .utils.retry import retry_r2_call, TIER_3
+        url = retry_r2_call(
+            client.generate_presigned_url,
+            "put_object", Params=params, ExpiresIn=expires_in,
+            operation=f"presign_put {key}", **TIER_3,
         )
         logger.debug(f"Generated presigned upload URL for: {key}")
         return url
@@ -823,7 +896,11 @@ def list_r2_files(user_id: str, prefix: str = "") -> list:
 
     full_prefix = r2_key(user_id, prefix)
     try:
-        response = client.list_objects_v2(Bucket=R2_BUCKET, Prefix=full_prefix)
+        from .utils.retry import retry_r2_call, TIER_3
+        response = retry_r2_call(
+            client.list_objects_v2, Bucket=R2_BUCKET, Prefix=full_prefix,
+            operation=f"list {full_prefix}", **TIER_3,
+        )
         return [obj["Key"] for obj in response.get("Contents", [])]
     except Exception as e:
         logger.error(f"Failed to list R2 files: {e}")
@@ -869,7 +946,11 @@ def r2_head_object_global(key: str) -> Optional[dict]:
         return None
 
     try:
-        response = client.head_object(Bucket=R2_BUCKET, Key=key)
+        from .utils.retry import retry_r2_call, TIER_2
+        response = retry_r2_call(
+            client.head_object, Bucket=R2_BUCKET, Key=key,
+            operation=f"head_global {key}", **TIER_2,
+        )
         return {
             'ContentLength': response.get('ContentLength'),
             'Metadata': response.get('Metadata', {}),
@@ -895,7 +976,11 @@ def r2_delete_object_global(key: str) -> bool:
         return False
 
     try:
-        client.delete_object(Bucket=R2_BUCKET, Key=key)
+        from .utils.retry import retry_r2_call, TIER_3
+        retry_r2_call(
+            client.delete_object, Bucket=R2_BUCKET, Key=key,
+            operation=f"delete_global {key}", **TIER_3,
+        )
         logger.info(f"Deleted global object from R2: {key}")
         return True
     except Exception as e:
@@ -1006,11 +1091,13 @@ def save_profiles_json(user_id: str, data: dict) -> bool:
 
     key = r2_user_key(user_id, "profiles.json")
     try:
-        client.put_object(
-            Bucket=R2_BUCKET,
-            Key=key,
+        from .utils.retry import retry_r2_call, TIER_3
+        retry_r2_call(
+            client.put_object,
+            Bucket=R2_BUCKET, Key=key,
             Body=json.dumps(data).encode('utf-8'),
             ContentType='application/json',
+            operation=f"save_profiles {user_id}", **TIER_3,
         )
         logger.info(f"Saved profiles.json for user {user_id}")
         return True
@@ -1044,8 +1131,12 @@ def delete_profile_r2_data(user_id: str, profile_id: str) -> bool:
 
     prefix = r2_user_key(user_id, f"profiles/{profile_id}/")
     try:
+        from .utils.retry import retry_r2_call, TIER_3
         # List all objects with the prefix
-        response = client.list_objects_v2(Bucket=R2_BUCKET, Prefix=prefix)
+        response = retry_r2_call(
+            client.list_objects_v2, Bucket=R2_BUCKET, Prefix=prefix,
+            operation=f"list_profile {profile_id}", **TIER_3,
+        )
         objects = response.get("Contents", [])
 
         if not objects:
@@ -1054,9 +1145,10 @@ def delete_profile_r2_data(user_id: str, profile_id: str) -> bool:
 
         # Batch delete (S3/R2 supports up to 1000 per request)
         delete_keys = [{"Key": obj["Key"]} for obj in objects]
-        client.delete_objects(
-            Bucket=R2_BUCKET,
-            Delete={"Objects": delete_keys}
+        retry_r2_call(
+            client.delete_objects,
+            Bucket=R2_BUCKET, Delete={"Objects": delete_keys},
+            operation=f"delete_profile {profile_id}", **TIER_3,
         )
         logger.info(f"Deleted {len(delete_keys)} R2 objects for profile {profile_id} of user {user_id}")
         return True
@@ -1097,11 +1189,13 @@ def upload_selected_profile_json(user_id: str, profile_id: str) -> bool:
     key = r2_user_key(user_id, "selected-profile.json")
     data = {"profileId": profile_id}
     try:
-        client.put_object(
-            Bucket=R2_BUCKET,
-            Key=key,
+        from .utils.retry import retry_r2_call, TIER_3
+        retry_r2_call(
+            client.put_object,
+            Bucket=R2_BUCKET, Key=key,
             Body=json.dumps(data).encode('utf-8'),
             ContentType='application/json',
+            operation=f"save_selected_profile {user_id}", **TIER_3,
         )
         logger.info(f"Set selected profile to {profile_id} for user {user_id}")
         return True
@@ -1130,10 +1224,11 @@ def r2_create_multipart_upload(key: str, content_type: str = "video/mp4") -> Opt
         return None
 
     try:
-        response = client.create_multipart_upload(
-            Bucket=R2_BUCKET,
-            Key=key,
-            ContentType=content_type
+        from .utils.retry import retry_r2_call, TIER_3
+        response = retry_r2_call(
+            client.create_multipart_upload,
+            Bucket=R2_BUCKET, Key=key, ContentType=content_type,
+            operation=f"create_multipart {key}", **TIER_3,
         )
         upload_id = response.get('UploadId')
         logger.info(f"Created multipart upload: {key}, upload_id: {upload_id}")
@@ -1166,14 +1261,15 @@ def r2_complete_multipart_upload(
         return False
 
     try:
+        from .utils.retry import retry_r2_call, TIER_3
         # Sort parts by part number
         sorted_parts = sorted(parts, key=lambda p: p['PartNumber'])
 
-        response = client.complete_multipart_upload(
-            Bucket=R2_BUCKET,
-            Key=key,
-            UploadId=upload_id,
-            MultipartUpload={'Parts': sorted_parts}
+        retry_r2_call(
+            client.complete_multipart_upload,
+            Bucket=R2_BUCKET, Key=key, UploadId=upload_id,
+            MultipartUpload={'Parts': sorted_parts},
+            operation=f"complete_multipart {key}", **TIER_3,
         )
         logger.info(f"Completed multipart upload: {key}")
 
@@ -1203,10 +1299,11 @@ def r2_abort_multipart_upload(key: str, upload_id: str) -> bool:
         return False
 
     try:
-        client.abort_multipart_upload(
-            Bucket=R2_BUCKET,
-            Key=key,
-            UploadId=upload_id
+        from .utils.retry import retry_r2_call, TIER_3
+        retry_r2_call(
+            client.abort_multipart_upload,
+            Bucket=R2_BUCKET, Key=key, UploadId=upload_id,
+            operation=f"abort_multipart {key}", **TIER_3,
         )
         logger.info(f"Aborted multipart upload: {key}, upload_id: {upload_id}")
         return True
@@ -1234,12 +1331,12 @@ def r2_is_multipart_upload_valid(key: str, upload_id: str) -> bool:
         return False
 
     try:
+        from .utils.retry import retry_r2_call, TIER_3
         # list_parts will fail if the upload doesn't exist
-        client.list_parts(
-            Bucket=R2_BUCKET,
-            Key=key,
-            UploadId=upload_id,
-            MaxParts=1  # We just need to check if it exists
+        retry_r2_call(
+            client.list_parts,
+            Bucket=R2_BUCKET, Key=key, UploadId=upload_id, MaxParts=1,
+            operation=f"list_parts {key}", **TIER_3,
         )
         return True
     except client.exceptions.NoSuchUpload:
@@ -1274,15 +1371,13 @@ def generate_presigned_part_url(
         return None
 
     try:
-        url = client.generate_presigned_url(
+        from .utils.retry import retry_r2_call, TIER_3
+        url = retry_r2_call(
+            client.generate_presigned_url,
             'upload_part',
-            Params={
-                'Bucket': R2_BUCKET,
-                'Key': key,
-                'UploadId': upload_id,
-                'PartNumber': part_number
-            },
-            ExpiresIn=expires_in
+            Params={'Bucket': R2_BUCKET, 'Key': key, 'UploadId': upload_id, 'PartNumber': part_number},
+            ExpiresIn=expires_in,
+            operation=f"presign_part {key}#{part_number}", **TIER_3,
         )
         return url
     except Exception as e:
@@ -1375,13 +1470,14 @@ def r2_set_object_metadata_global(key: str, metadata: dict) -> bool:
         return False
 
     try:
+        from .utils.retry import retry_r2_call, TIER_3
         # Copy object to itself with new metadata
-        client.copy_object(
+        retry_r2_call(
+            client.copy_object,
             Bucket=R2_BUCKET,
             CopySource={'Bucket': R2_BUCKET, 'Key': key},
-            Key=key,
-            Metadata=metadata,
-            MetadataDirective='REPLACE'
+            Key=key, Metadata=metadata, MetadataDirective='REPLACE',
+            operation=f"set_metadata {key}", **TIER_3,
         )
         logger.debug(f"Set metadata on global object: {key}")
         return True
@@ -1475,10 +1571,13 @@ def generate_presigned_url_global(
         return None
 
     try:
-        url = client.generate_presigned_url(
+        from .utils.retry import retry_r2_call, TIER_3
+        url = retry_r2_call(
+            client.generate_presigned_url,
             "get_object",
             Params={"Bucket": R2_BUCKET, "Key": key},
-            ExpiresIn=expires_in
+            ExpiresIn=expires_in,
+            operation=f"presign_global {key}", **TIER_3,
         )
         logger.debug(f"Generated presigned URL for global object: {key}")
         return url
@@ -1489,11 +1588,16 @@ def generate_presigned_url_global(
 
 def get_r2_file_size_global(key: str) -> Optional[int]:
     """Get the size of a global R2 object (no user prefix)."""
+    from .utils.retry import retry_r2_call, TIER_2
+
     client = get_r2_client()
     if not client:
         return None
     try:
-        response = client.head_object(Bucket=R2_BUCKET, Key=key)
+        response = retry_r2_call(
+            client.head_object, Bucket=R2_BUCKET, Key=key,
+            operation=f"head_global {key}", **TIER_2,
+        )
         return response.get('ContentLength')
     except Exception as e:
         logger.debug(f"Could not get global file size from R2: {key} - {e}")
@@ -1512,7 +1616,9 @@ def download_from_r2_global(key: str, local_path: Path, progress_callback=None) 
     Returns:
         True if download succeeded, False otherwise
     """
-    client = get_r2_client()
+    from .utils.retry import retry_r2_call, TIER_1
+
+    client = get_r2_transfer_client() or get_r2_client()
     if not client:
         return False
 
@@ -1520,9 +1626,15 @@ def download_from_r2_global(key: str, local_path: Path, progress_callback=None) 
         # Ensure parent directory exists
         local_path.parent.mkdir(parents=True, exist_ok=True)
         if progress_callback:
-            client.download_file(R2_BUCKET, key, str(local_path), Callback=progress_callback)
+            retry_r2_call(
+                client.download_file, R2_BUCKET, key, str(local_path),
+                Callback=progress_callback, operation=f"download_global {key}", **TIER_1,
+            )
         else:
-            client.download_file(R2_BUCKET, key, str(local_path))
+            retry_r2_call(
+                client.download_file, R2_BUCKET, key, str(local_path),
+                operation=f"download_global {key}", **TIER_1,
+            )
         logger.debug(f"Downloaded global object from R2: {key} -> {local_path}")
         return True
     except client.exceptions.NoSuchKey:

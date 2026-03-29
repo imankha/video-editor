@@ -164,8 +164,12 @@ def sync_auth_db_from_r2() -> bool:
 
     key = _get_auth_db_r2_key()
     try:
+        from ..utils.retry import retry_r2_call, TIER_1
         AUTH_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        client.download_file(R2_BUCKET, key, str(AUTH_DB_PATH))
+        retry_r2_call(
+            client.download_file, R2_BUCKET, key, str(AUTH_DB_PATH),
+            operation="auth_db_restore", **TIER_1,
+        )
         logger.info(f"[AuthDB] Restored from R2: {key}")
         return True
     except client.exceptions.ClientError as e:
@@ -200,7 +204,11 @@ def sync_auth_db_to_r2() -> bool:
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         conn.close()
 
-        client.upload_file(str(AUTH_DB_PATH), R2_BUCKET, key)
+        from ..utils.retry import retry_r2_call, TIER_1
+        retry_r2_call(
+            client.upload_file, str(AUTH_DB_PATH), R2_BUCKET, key,
+            operation="auth_db_backup", **TIER_1,
+        )
         logger.info(f"[AuthDB] Backed up to R2: {key}")
         return True
     except Exception as e:
