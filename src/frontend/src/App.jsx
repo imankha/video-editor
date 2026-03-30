@@ -143,12 +143,10 @@ function App() {
         }
       }
 
-      // Payment return: do NOT restore mode — user stays on Projects screen.
-      // Verify payment and show toast after session is ready (needs auth cookie).
+      // Payment return: restore editor state and auto-export if redirected from Stripe.
       const paymentParams = new URLSearchParams(window.location.search);
       const payment = paymentParams.get('payment');
       const paymentSessionId = paymentParams.get('session_id');
-      console.log(`[App] Payment return check: payment=${payment}, session_id=${paymentSessionId}, url=${window.location.search}`);
       if (payment) {
         // Remove query params without reload
         const cleanUrl = new URL(window.location.href);
@@ -156,8 +154,22 @@ function App() {
         cleanUrl.searchParams.delete('session_id');
         window.history.replaceState({}, '', cleanUrl.pathname + cleanUrl.hash);
 
+        // Restore editor state saved before Stripe redirect
+        const returnMode = sessionStorage.getItem('paymentReturnMode');
+        const returnProjectId = sessionStorage.getItem('paymentReturnProjectId');
+        const autoExport = sessionStorage.getItem('paymentAutoExport');
+        sessionStorage.removeItem('paymentReturnMode');
+        sessionStorage.removeItem('paymentReturnProjectId');
+        sessionStorage.removeItem('paymentAutoExport');
+
+        if (returnProjectId) {
+          useProjectsStore.getState().selectProject(returnProjectId);
+        }
+        if (returnMode) {
+          useEditorStore.getState().setEditorMode(returnMode);
+        }
+
         if (payment === 'success' && paymentSessionId) {
-          console.log('[App] Verifying Stripe session with backend...');
           fetch(`${API_BASE}/api/payments/verify`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -166,14 +178,15 @@ function App() {
           })
             .then((res) => res.json())
             .then((data) => {
-              console.log('[App] Verify response:', data);
               useCreditStore.getState().fetchCredits();
               if (data.status === 'credits_granted' || data.status === 'already_processed') {
                 const credits = data.credits || 0;
-                console.log(`[App] Showing toast: ${credits} credits`);
-                toast.success(`${credits} credits added to your balance!`, { duration: 0 });
+                toast.success(`${credits} credits added to your balance!`);
+                // Auto-trigger export if user was mid-export when redirected
+                if (autoExport) {
+                  setTimeout(() => exportButtonRef.current?.triggerExport(), 500);
+                }
               } else {
-                console.log('[App] Payment still processing, status:', data.status);
                 toast.info('Payment is still processing. Your credits will appear shortly.');
               }
             })

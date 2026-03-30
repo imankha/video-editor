@@ -35,6 +35,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 # ---------------------------------------------------------------------------
 
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
 # Frontend URL for redirect after checkout
@@ -44,6 +45,17 @@ FRONTEND_URL = _cors.split(",")[0].strip() if _cors else "http://localhost:5173"
 
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
+
+# ---------------------------------------------------------------------------
+# Public config endpoint (no auth required — publishable key is public)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/config")
+async def get_payment_config():
+    """Return Stripe publishable key for frontend Payment Element initialization."""
+    return {"publishable_key": STRIPE_PUBLISHABLE_KEY}
+
 
 # ---------------------------------------------------------------------------
 # Credit Packs

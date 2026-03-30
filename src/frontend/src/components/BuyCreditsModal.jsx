@@ -4,6 +4,7 @@ import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElement
 import { X, Coins, Star, Gem, Loader2, ArrowLeft } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
+import { useEditorStore, useProjectsStore } from '../stores';
 
 /**
  * BuyCreditsModal - Two-step inline payment flow (T526)
@@ -17,9 +18,27 @@ import { API_BASE } from '../config';
  *   insufficientCredits: { required, available, videoSeconds } | null
  */
 
-// Lazy-init Stripe outside component to avoid re-creating on every render
-const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
-const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
+// Module-level cache: fetch publishable key from backend once, then reuse
+let stripePromiseCache = null;
+
+async function getStripePromise() {
+  if (stripePromiseCache) return stripePromiseCache;
+
+  // Try VITE env var first (allows override), then fetch from backend
+  const envKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+  if (envKey) {
+    stripePromiseCache = loadStripe(envKey);
+    return stripePromiseCache;
+  }
+
+  const res = await fetch(`${API_BASE}/api/payments/config`, { credentials: 'include' });
+  if (!res.ok) return null;
+  const { publishable_key } = await res.json();
+  if (!publishable_key) return null;
+
+  stripePromiseCache = loadStripe(publishable_key);
+  return stripePromiseCache;
+}
 
 const PACKS = [
   {
@@ -230,6 +249,7 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess }) {
 export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits }) {
   const [selectedPack, setSelectedPack] = useState(null);
   const [clientSecret, setClientSecret] = useState(null);
+  const [stripePromise, setStripePromise] = useState(null);
   const [loadingPack, setLoadingPack] = useState(null);
   const [error, setError] = useState(null);
 
@@ -237,28 +257,34 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
     const pack = PACKS.find(p => p.key === packKey);
     if (!pack) return;
 
-    // If Stripe isn't configured, fall back to redirect checkout
-    if (!stripePromise) {
-      return handleFallbackCheckout(packKey);
-    }
-
     setLoadingPack(packKey);
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/api/payments/create-intent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ pack: packKey }),
-      });
+      // Fetch Stripe publishable key (cached after first call) + create PaymentIntent in parallel
+      const [resolvedStripe, intentRes] = await Promise.all([
+        getStripePromise(),
+        fetch(`${API_BASE}/api/payments/create-intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ pack: packKey }),
+        }),
+      ]);
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || `Failed to create payment (${res.status})`);
+      // If Stripe isn't configured, fall back to redirect checkout
+      if (!resolvedStripe) {
+        setLoadingPack(null);
+        return handleFallbackCheckout(packKey);
       }
 
-      const { client_secret } = await res.json();
+      if (!intentRes.ok) {
+        const data = await intentRes.json().catch(() => ({}));
+        throw new Error(data.detail || `Failed to create payment (${intentRes.status})`);
+      }
+
+      const { client_secret } = await intentRes.json();
+      setStripePromise(resolvedStripe);
       setClientSecret(client_secret);
       setSelectedPack(pack);
     } catch (err) {
@@ -287,6 +313,14 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
       }
 
       const { checkout_url } = await res.json();
+
+      // Save navigation state so App.jsx can restore context after Stripe redirect
+      const editorMode = useEditorStore.getState().editorMode;
+      const projectId = useProjectsStore.getState().selectedProjectId;
+      sessionStorage.setItem('paymentReturnMode', editorMode);
+      if (projectId) sessionStorage.setItem('paymentReturnProjectId', String(projectId));
+      sessionStorage.setItem('paymentAutoExport', 'true');
+
       window.location.href = checkout_url;
     } catch (err) {
       setError(err.message);
