@@ -214,12 +214,18 @@ function App() {
 
 
   // Export completion callback - used by Screen components to refresh data
-  const handleExportComplete = useCallback(() => {
-    fetchProjects();
+  const handleExportComplete = useCallback(async () => {
+    await fetchProjects({ force: true });
     // Downloads count is auto-refreshed by DownloadsPanel via galleryStore
     // T540: Refresh quest progress after any export completes
     useQuestStore.getState().fetchProgress();
-  }, [fetchProjects]);
+    // T770: Navigate home after overlay export completes
+    if (editorMode === EDITOR_MODES.OVERLAY) {
+      clearSelection();
+      useVideoStore.getState().reset();
+      setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
+    }
+  }, [fetchProjects, editorMode, clearSelection, setEditorMode]);
 
   // Handler for loading saved games from ProjectManager
   // Sets pendingGameId in sessionStorage and navigates to annotate mode

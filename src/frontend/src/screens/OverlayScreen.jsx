@@ -853,11 +853,7 @@ export function OverlayScreen({
     if (onExportComplete) {
       onExportComplete();
     }
-    // Brief delay so user sees "Export complete!" before navigating home
-    setTimeout(() => {
-      navigate('project-manager');
-    }, 1500);
-  }, [refreshProject, setOverlayChangedSinceExport, onExportComplete, navigate]);
+  }, [refreshProject, setOverlayChangedSinceExport, onExportComplete]);
 
   // =========================================
   // RENDER
