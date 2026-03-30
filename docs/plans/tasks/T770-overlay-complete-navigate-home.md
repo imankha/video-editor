@@ -1,6 +1,6 @@
 # T770: Navigate to Projects Screen After Overlay Export
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-03-28

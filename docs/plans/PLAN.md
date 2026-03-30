@@ -184,7 +184,8 @@ Deploy to production domains with proper scaling.
 | T750 | [R2 Retry Resilience](tasks/T750-r2-retry-resilience.md) | DONE | 8 | 5 | Add retry with exponential backoff to all R2 operations; transient network failures currently cause immediate 500s |
 | T755 | [Add Clip Panel Z-Order](tasks/T755-add-clip-panel-z-order.md) | DONE | 6 | 4 | Video GPU layer paints over Add Clip overlay; move overlay out of video container to avoid compositing conflict |
 | T760 | [Background Local Processing](tasks/T760-background-local-processing.md) | DONE | 7 | 4 | Local exports block the web server; return 202 immediately and run GPU work in background task |
-| T770 | [Navigate Home After Overlay Export](tasks/T770-overlay-complete-navigate-home.md) | TESTING | 5 | 2 | After overlay export completes, auto-navigate user back to home/projects screen |
+| T770 | [Navigate Home After Overlay Export](tasks/T770-overlay-complete-navigate-home.md) | DONE | 5 | 2 | After overlay export completes, auto-navigate user back to home/projects screen |
+| T775 | [navigationStore Unused for Routing](tasks/T775-navigationStore-unused.md) | TODO | 4 | 3 | navigationStore.navigate() doesn't control screen rendering — editorMode is the real source of truth; dead code |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
