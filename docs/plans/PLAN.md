@@ -180,7 +180,7 @@ Deploy to production domains with proper scaling.
 | T570 | [Framing Clip Icon State](tasks/T570-framing-clip-icon-state.md) | DONE | 4 | 2 | "!" icon didn't clear after framing; optimistically update crop_data in store on keyframe add |
 | T580 | [Can't Reframe — Shows Exported Video](tasks/T580-reframing-shows-exported-video.md) | DONE | 7 | 4 | Fix: reset shared videoStore on mode switch + useLayoutEffect guard in FramingScreen |
 | T730 | [Missing End Detection Point](tasks/T730-missing-end-detection-point.md) | DONE | 5 | 4 | Short clips missing last player tracking point at end of overlay region (fence-post error in local detection) |
-| T740 | [Merge Extraction into Framing](tasks/T740-merge-extraction-into-framing.md) | TESTING | 8 | 7 | Eliminate separate extraction step; framing takes source video + time range, extracts + processes in single pass |
+| T740 | [Merge Extraction into Framing](tasks/T740-merge-extraction-into-framing.md) | DONE | 8 | 7 | Eliminate separate extraction step; framing takes source video + time range, extracts + processes in single pass |
 | T750 | [R2 Retry Resilience](tasks/T750-r2-retry-resilience.md) | DONE | 8 | 5 | Add retry with exponential backoff to all R2 operations; transient network failures currently cause immediate 500s |
 | T755 | [Add Clip Panel Z-Order](tasks/T755-add-clip-panel-z-order.md) | DONE | 6 | 4 | Video GPU layer paints over Add Clip overlay; move overlay out of video container to avoid compositing conflict |
 | T760 | [Background Local Processing](tasks/T760-background-local-processing.md) | DONE | 7 | 4 | Local exports block the web server; return 202 immediately and run GPU work in background task |
