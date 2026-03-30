@@ -238,6 +238,7 @@ export function ExportButtonContainer({
   const uploadCompleteRef = useRef(false);
   const handleExportRef = useRef(null);
   const exportTimingRef = useRef(null);
+  const backgroundExportRef = useRef(false); // T760: tracks if export was dispatched as 202 background
 
   // Get progress from the global export store for this project
   const currentExportFromStore = Object.values(activeExports)
@@ -309,7 +310,7 @@ export function ExportButtonContainer({
       onProgress: (progress, message) => {
         setProgressMessage(message || '');
       },
-      onComplete: (data) => {
+      onComplete: async (data) => {
         // If we were in disconnected state, the try/catch already exited.
         // Complete the export from here.
         setDisconnected(false);
@@ -317,6 +318,36 @@ export function ExportButtonContainer({
         setProgressMessage('Export complete!');
         setIsExporting(false);
         handleExportEnd();
+
+        // T760: If overlay was dispatched as background (202), trigger download here
+        if (backgroundExportRef.current && editorMode === EDITOR_MODES.OVERLAY && projectId) {
+          backgroundExportRef.current = false;
+          try {
+            setProgressMessage('Preparing download...');
+            const finalVideoUrlResponse = await axios.get(
+              `${API_BASE}/api/export/projects/${projectId}/final-video`
+            );
+            const presignedUrl = finalVideoUrlResponse.data.url;
+            const downloadResponse = await fetch(presignedUrl);
+            if (downloadResponse.ok) {
+              const blob = await downloadResponse.blob();
+              const safeName = projectName
+                ? projectName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'video'
+                : 'video';
+              const downloadFilename = `${safeName}_final.mp4`;
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = downloadFilename;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+            }
+          } catch (downloadErr) {
+            console.error('[ExportButtonContainer] Background overlay download failed:', downloadErr);
+          }
+        }
 
         if (onProceedToOverlay && editorMode === EDITOR_MODES.FRAMING) {
           onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
@@ -343,7 +374,7 @@ export function ExportButtonContainer({
     });
 
     return { connected };
-  }, [editorMode, projectId, clips, onProceedToOverlay, onExportComplete]);
+  }, [editorMode, projectId, projectName, clips, onProceedToOverlay, onExportComplete]);
 
   /**
    * Wait for export job to complete by polling status
@@ -629,6 +660,14 @@ export function ExportButtonContainer({
           });
           renderRequestAccepted = true;
 
+          // T760: 202 = background processing, completion comes via WebSocket
+          if (renderResponse.status === 202) {
+            console.log('[ExportButtonContainer] Render accepted (202), waiting for WebSocket completion');
+            backgroundExportRef.current = true;
+            setProgressMessage('Processing...');
+            return;
+          }
+
           console.log('[ExportButtonContainer] Backend render complete:', renderResponse.data);
 
           handleExportEnd();
@@ -665,6 +704,14 @@ export function ExportButtonContainer({
             effect_type: highlightEffectType
           });
           renderRequestAccepted = true;
+
+          // T760: 202 = background processing, completion comes via WebSocket
+          if (renderResponse.status === 202) {
+            console.log('[ExportButtonContainer] Overlay render accepted (202), waiting for WebSocket completion');
+            backgroundExportRef.current = true;
+            setProgressMessage('Processing...');
+            return;
+          }
 
           console.log('[ExportButtonContainer] Overlay render complete:', renderResponse.data);
 

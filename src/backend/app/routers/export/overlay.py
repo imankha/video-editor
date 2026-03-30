@@ -1576,6 +1576,134 @@ class OverlayRenderRequest(BaseModel):
     effect_type: str = "dark_overlay"
 
 
+async def _run_local_overlay_export(
+    export_id: str,
+    project_id: int,
+    project_name: str,
+    user_id: str,
+    working_filename: str,
+    highlight_regions: list,
+    effect_type: str,
+    video_duration: float,
+):
+    """
+    T760: Run overlay export in background when Modal is disabled.
+
+    Same processing logic as the Modal path in render_overlay(),
+    but runs as asyncio.create_task so the HTTP response returns immediately.
+    All progress is reported via WebSocket.
+    """
+    try:
+        from app.services.export_helpers import send_progress, create_progress_callback, store_modal_call_id as store_call_id
+
+        logger.info(f"[Overlay Background] Starting local export for project {project_id}")
+
+        output_filename = f"final_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+
+        progress_callback = create_progress_callback(
+            export_id, 'overlay',
+            project_id=project_id, project_name=project_name
+        )
+
+        def modal_call_id_callback(modal_call_id: str):
+            store_call_id(export_id, modal_call_id)
+
+        result = await call_modal_overlay_auto(
+            job_id=export_id,
+            user_id=user_id,
+            input_key=f"working_videos/{working_filename}",
+            output_key=f"final_videos/{output_filename}",
+            highlight_regions=highlight_regions,
+            effect_type=effect_type,
+            video_duration=video_duration,
+            progress_callback=progress_callback,
+            call_id_callback=modal_call_id_callback,
+        )
+
+        if result.get("status") != "success":
+            error = result.get("error", "Unknown error")
+            raise RuntimeError(f"Overlay processing failed: {error}")
+
+        await send_progress(
+            export_id, 95, 100, 'finalizing', 'Saving to library...',
+            'overlay', project_id=project_id, project_name=project_name
+        )
+
+        parallel_used = result.get("parallel", False)
+        logger.info(f"[Overlay Background] Processing complete (parallel={parallel_used})")
+
+        # Save to database
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                FROM final_videos WHERE project_id = ?
+            """, (project_id,))
+            next_version = cursor.fetchone()['next_version']
+
+            cursor.execute("SELECT id FROM raw_clips WHERE auto_project_id = ?", (project_id,))
+            is_auto_project = cursor.fetchone() is not None
+            source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
+
+            cursor.execute("""
+                INSERT INTO final_videos (project_id, filename, version, source_type)
+                VALUES (?, ?, ?, ?)
+            """, (project_id, output_filename, next_version, source_type))
+            final_video_id = cursor.lastrowid
+
+            cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
+
+            cursor.execute("""
+                UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?,
+                    completed_at = CURRENT_TIMESTAMP, gpu_seconds = ?, modal_function = ?
+                WHERE id = ?
+            """, (final_video_id, output_filename, result.get("gpu_seconds"), result.get("modal_function"), export_id))
+
+            conn.commit()
+
+        # Send complete progress via WebSocket
+        complete_data = {
+            "progress": 100,
+            "message": "Export complete!",
+            "status": ExportStatus.COMPLETE,
+            "projectId": project_id,
+            "projectName": project_name,
+            "type": "overlay",
+            "finalVideoId": final_video_id,
+            "finalFilename": output_filename
+        }
+        export_progress[export_id] = complete_data
+        await manager.send_progress(export_id, complete_data)
+
+        logger.info(f"[Overlay Background] Complete: final_video_id={final_video_id}")
+
+    except Exception as e:
+        logger.error(f"[Overlay Background] Failed: {e}", exc_info=True)
+
+        # Update export_jobs to error
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (str(e)[:500], export_id))
+                conn.commit()
+        except Exception:
+            pass
+
+        from app.websocket import make_progress_data
+        error_data = make_progress_data(
+            current=0, total=100, phase='error',
+            message=f"Export failed: {e}",
+            export_type='overlay',
+            project_id=project_id, project_name=project_name,
+        )
+        export_progress[export_id] = error_data
+        await manager.send_progress(export_id, error_data)
+
+
 @router.post("/render-overlay")
 async def render_overlay(request: OverlayRenderRequest):
     """
@@ -1784,10 +1912,29 @@ async def render_overlay(request: OverlayRenderRequest):
             logger.error(f"[Overlay Render] Copy failed: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to copy video: {e}")
 
+    # T760: When Modal is disabled, run processing in background to avoid blocking the server
+    if not modal_enabled():
+        asyncio.create_task(
+            _run_local_overlay_export(
+                export_id=export_id,
+                project_id=project_id,
+                project_name=project_name,
+                user_id=user_id,
+                working_filename=working_filename,
+                highlight_regions=highlight_regions,
+                effect_type=effect_type,
+                video_duration=video_duration,
+            )
+        )
+        return JSONResponse(
+            status_code=202,
+            content={"status": "accepted", "export_id": export_id}
+        )
+
     # Update progress
     progress_data = {
         "progress": 5,
-        "message": "Sending to cloud GPU..." if modal_enabled() else "Processing locally...",
+        "message": "Sending to cloud GPU...",
         "status": "processing",
         "projectId": project_id,
         "projectName": project_name,

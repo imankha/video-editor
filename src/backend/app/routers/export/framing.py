@@ -411,6 +411,225 @@ class RenderRequest(BaseModel):
     include_audio: bool = True
 
 
+async def _run_local_framing_export(
+    export_id: str,
+    project_id: int,
+    project_name: str,
+    captured_user_id: str,
+    captured_profile_id: str,
+    user_id: str,
+    input_key: str,
+    output_key: str,
+    keyframes_dict: list,
+    target_fps: int,
+    segment_data: dict,
+    segment_data_raw: dict,
+    include_audio: bool,
+    export_mode: str,
+    working_filename: str,
+    temp_dir: str,
+    output_path: str,
+    clip: dict,
+    credits_deducted: int,
+    video_seconds: float,
+):
+    """
+    T760: Run framing export in background when Modal is disabled.
+
+    This is the same processing logic as the Modal/test path in render_project(),
+    but runs as an asyncio.create_task so the HTTP response returns immediately.
+    All progress is reported via WebSocket. Errors refund credits and update export_jobs.
+    """
+    try:
+        from app.services.export_helpers import send_progress, create_progress_callback
+        from app.services.modal_client import call_modal_framing_ai
+
+        logger.info(f"[Render Background] Starting local export for project {project_id}")
+
+        # Calculate effective output duration for progress estimation
+        effective_duration = 10.0
+        if segment_data_raw:
+            effective_duration = get_output_duration(segment_data_raw)
+            logger.info(f"[Render Background] Calculated output duration: {effective_duration:.2f}s")
+
+        await send_progress(
+            export_id, 10, 100, 'init', 'Starting export...',
+            'framing', project_id=project_id, project_name=project_name
+        )
+
+        progress_callback = create_progress_callback(
+            export_id, 'framing',
+            project_id=project_id, project_name=project_name
+        )
+
+        # Restore user context for the background task
+        set_current_user_id(captured_user_id)
+        set_current_profile_id(captured_profile_id)
+
+        result = await call_modal_framing_ai(
+            job_id=export_id,
+            user_id=user_id,
+            input_key=input_key,
+            output_key=output_key,
+            keyframes=keyframes_dict,
+            output_width=810,
+            output_height=1440,
+            fps=target_fps,
+            segment_data=segment_data,
+            video_duration=effective_duration,
+            progress_callback=progress_callback,
+            include_audio=include_audio,
+            export_mode=export_mode,
+            test_mode=False,
+            source_start_time=clip['raw_start_time'] if clip['game_id'] else 0.0,
+            source_end_time=clip['raw_end_time'] if clip['game_id'] else clip['raw_duration'],
+        )
+
+        if result.get("status") != "success":
+            raise RuntimeError(result.get("error", "AI processing failed"))
+
+        logger.info(f"[Render Background] Export complete: {result}")
+
+        await send_progress(
+            export_id, 92, 100, 'finalizing', 'Finalizing...',
+            'framing', project_id=project_id, project_name=project_name
+        )
+
+        if not download_from_r2(user_id, output_key, Path(output_path)):
+            logger.warning("[Render Background] Could not download output to measure duration")
+            video_duration = 0.0
+        else:
+            video_duration = get_video_duration(output_path)
+            logger.info(f"[Render Background] Video duration: {video_duration:.2f}s")
+
+        # Restore user context again after long-running processing
+        set_current_user_id(captured_user_id)
+        set_current_profile_id(captured_profile_id)
+
+        # Run player detection for overlay keyframes
+        source_clips = [{
+            'clip_index': 0,
+            'start_time': 0.0,
+            'end_time': video_duration,
+            'duration': video_duration,
+            'name': clip['clip_name'] or 'Clip 1',
+        }]
+
+        async def detection_progress_callback(progress: float, message: str, phase: str = "detecting_players"):
+            progress_data = {
+                "progress": progress,
+                "message": message,
+                "status": "processing",
+                "phase": phase,
+                "projectId": project_id,
+                "projectName": project_name,
+                "type": "framing"
+            }
+            export_progress[export_id] = progress_data
+            await manager.send_progress(export_id, progress_data)
+
+        logger.info(f"[Render Background] Starting player detection: user_id={user_id}, output_key={output_key}")
+        highlight_regions = await run_player_detection_for_highlights(
+            user_id=user_id,
+            output_key=output_key,
+            source_clips=source_clips,
+            progress_callback=detection_progress_callback,
+        )
+
+        highlights_json = json.dumps(highlight_regions)
+
+        # Save to database
+        working_video_id = None
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                FROM working_videos WHERE project_id = ?
+            """, (project_id,))
+            next_version = cursor.fetchone()['next_version']
+
+            cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
+
+            cursor.execute("""
+                INSERT INTO working_videos (project_id, filename, version, duration, highlights_data)
+                VALUES (?, ?, ?, ?, ?)
+            """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None, highlights_json))
+            working_video_id = cursor.lastrowid
+
+            cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
+
+            cursor.execute("""
+                UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?,
+                    completed_at = CURRENT_TIMESTAMP, gpu_seconds = ?, modal_function = ?
+                WHERE id = ?
+            """, (working_video_id, working_filename, result.get("gpu_seconds"), result.get("modal_function"), export_id))
+
+            cursor.execute(f"""
+                UPDATE working_clips SET exported_at = datetime('now')
+                WHERE project_id = ? AND id IN ({latest_working_clips_subquery()})
+            """, (project_id, project_id))
+
+            conn.commit()
+            logger.info(f"[Render Background] Created working video {working_video_id} for project {project_id}")
+
+        # Send complete progress via WebSocket
+        complete_data = {
+            "progress": 100,
+            "message": "Export complete!",
+            "status": ExportStatus.COMPLETE,
+            "projectId": project_id,
+            "projectName": project_name,
+            "type": "framing",
+            "workingVideoId": working_video_id,
+            "workingFilename": working_filename
+        }
+        export_progress[export_id] = complete_data
+        await manager.send_progress(export_id, complete_data)
+
+    except Exception as e:
+        logger.error(f"[Render Background] Failed: {str(e)}", exc_info=True)
+
+        # Refund credits on failure
+        if credits_deducted > 0:
+            from ...services.auth_db import refund_credits
+            refund_credits(captured_user_id, credits_deducted, export_id, video_seconds)
+            logger.info(f"[Render Background] Refunded {credits_deducted} credits to {captured_user_id}")
+
+        # Update export_jobs to error
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (str(e)[:500], export_id))
+                conn.commit()
+        except Exception:
+            pass
+
+        # Send error via WebSocket
+        from app.websocket import make_progress_data
+        error_data = make_progress_data(
+            current=0, total=100, phase='error',
+            message=f"Export failed: {str(e)}",
+            export_type='framing',
+            project_id=project_id, project_name=project_name,
+        )
+        export_progress[export_id] = error_data
+        await manager.send_progress(export_id, error_data)
+
+    finally:
+        import shutil
+        import time as time_mod
+        time_mod.sleep(0.5)
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception as cleanup_error:
+            logger.warning(f"[Render Background] Cleanup failed: {cleanup_error}")
+
+
 @router.post("/render")
 async def render_project(request: RenderRequest, http_request: Request):
     """
@@ -704,6 +923,37 @@ async def render_project(request: RenderRequest, http_request: Request):
 
     # Check for E2E test mode - routes to fast FFmpeg crop+resize in call_modal_framing_ai
     is_test_mode = http_request.headers.get('X-Test-Mode', '').lower() == 'true'
+
+    # T760: When Modal is disabled, run processing in background to avoid blocking the server
+    if not modal_enabled() and not is_test_mode:
+        asyncio.create_task(
+            _run_local_framing_export(
+                export_id=export_id,
+                project_id=project_id,
+                project_name=project_name,
+                captured_user_id=captured_user_id,
+                captured_profile_id=captured_profile_id,
+                user_id=user_id,
+                input_key=input_key,
+                output_key=output_key,
+                keyframes_dict=keyframes_dict,
+                target_fps=request.target_fps,
+                segment_data=segment_data,
+                segment_data_raw=segment_data_raw,
+                include_audio=request.include_audio,
+                export_mode=request.export_mode,
+                working_filename=working_filename,
+                temp_dir=temp_dir,
+                output_path=output_path,
+                clip=clip,
+                credits_deducted=credits_deducted,
+                video_seconds=video_seconds,
+            )
+        )
+        return JSONResponse(
+            status_code=202,
+            content={"status": "accepted", "export_id": export_id}
+        )
 
     try:
         from app.services.export_helpers import send_progress, create_progress_callback
