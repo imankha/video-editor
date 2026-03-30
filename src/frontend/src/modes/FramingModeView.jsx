@@ -82,6 +82,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         showBuyCredits={container.showBuyCredits}
         onOpenBuyCredits={container.onOpenBuyCredits}
         onCloseBuyCredits={container.onCloseBuyCredits}
+        onPaymentSuccess={container.onPaymentSuccess}
         handleExportRef={container.handleExportRef}
       />
     </div>

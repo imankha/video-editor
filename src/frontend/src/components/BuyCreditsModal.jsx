@@ -88,7 +88,7 @@ const STRIPE_APPEARANCE = {
 // Step 2: Payment Form (rendered inside <Elements> provider)
 // ---------------------------------------------------------------------------
 
-function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess }) {
+function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {} }) {
   const stripe = useStripe();
   const elements = useElements();
   const [paying, setPaying] = useState(false);
