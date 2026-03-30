@@ -20,6 +20,8 @@
     "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.0.0",
+    "@stripe/stripe-js": "^9.0.0",
     "axios": "^1.6.0",
     "hash-wasm": "^4.12.0",
     "lucide-react": "^0.294.0",

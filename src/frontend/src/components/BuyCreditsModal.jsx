@@ -1,22 +1,25 @@
-import { useState } from 'react';
-import { X, Coins, Star, Gem, Loader2 } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { X, Coins, Star, Gem, Loader2, ArrowLeft } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
-import { useEditorStore, useProjectsStore } from '../stores';
 
 /**
- * BuyCreditsModal - Credit pack selection for Stripe purchase (T525)
+ * BuyCreditsModal - Two-step inline payment flow (T526)
  *
- * Shows three credit packs. Clicking one creates a Stripe Checkout Session
- * and redirects to Stripe's hosted payment page.
- *
- * When triggered from an export with insufficient credits, shows the
- * credit shortage info at the top (merged from InsufficientCreditsModal).
+ * Step 1: Pack selection (same as T525)
+ * Step 2: Stripe Payment Element renders inline — user pays without leaving the page
  *
  * Props:
- *   onClose: () => void - close handler
- *   insufficientCredits: { required, available, videoSeconds } | null - if set, shows shortage info
+ *   onClose: () => void
+ *   onPaymentSuccess: (credits: number) => void — called after successful payment
+ *   insufficientCredits: { required, available, videoSeconds } | null
  */
+
+// Lazy-init Stripe outside component to avoid re-creating on every render
+const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
 
 const PACKS = [
   {
@@ -51,13 +54,222 @@ const PACKS = [
   },
 ];
 
-export function BuyCreditsModal({ onClose, insufficientCredits }) {
+const STRIPE_APPEARANCE = {
+  theme: 'night',
+  variables: {
+    colorPrimary: '#9333ea',
+    colorBackground: '#1f2937',
+    colorText: '#ffffff',
+    fontFamily: 'Inter, system-ui, sans-serif',
+    borderRadius: '8px',
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Step 2: Payment Form (rendered inside <Elements> provider)
+// ---------------------------------------------------------------------------
+
+function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState(null);
+  const [paymentReady, setPaymentReady] = useState(false);
+
+  const handleSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setPaying(true);
+    setError(null);
+
+    const { error: submitError } = await elements.submit();
+    if (submitError) {
+      setError(submitError.message);
+      setPaying(false);
+      return;
+    }
+
+    const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      redirect: 'if_required',
+    });
+
+    if (confirmError) {
+      setError(confirmError.message);
+      setPaying(false);
+      return;
+    }
+
+    // Payment succeeded — verify with backend and grant credits
+    try {
+      const res = await fetch(`${API_BASE}/api/payments/confirm-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ payment_intent_id: paymentIntent.id }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `Verification failed (${res.status})`);
+      }
+
+      const data = await res.json();
+      onPaymentSuccess(data.credits || selectedPack.credits);
+    } catch (err) {
+      // Payment went through but verification failed — credits will arrive via webhook
+      console.warn('[BuyCreditsModal] confirm-intent failed, webhook will handle:', err.message);
+      onPaymentSuccess(selectedPack.credits);
+    }
+  }, [stripe, elements, selectedPack, onPaymentSuccess]);
+
+  const handleExpressCheckout = useCallback(async ({ expressPaymentType }) => {
+    if (!stripe || !elements) return;
+
+    setPaying(true);
+    setError(null);
+
+    const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      redirect: 'if_required',
+    });
+
+    if (confirmError) {
+      setError(confirmError.message);
+      setPaying(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/payments/confirm-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ payment_intent_id: paymentIntent.id }),
+      });
+      if (!res.ok) throw new Error('Verification failed');
+      const data = await res.json();
+      onPaymentSuccess(data.credits || selectedPack.credits);
+    } catch (err) {
+      console.warn('[BuyCreditsModal] Express checkout confirm failed, webhook will handle:', err.message);
+      onPaymentSuccess(selectedPack.credits);
+    }
+  }, [stripe, elements, selectedPack, onPaymentSuccess]);
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* Header with back button */}
+      <div className="flex items-center gap-2 mb-4">
+        <button
+          type="button"
+          onClick={onBack}
+          disabled={paying}
+          className="text-gray-400 hover:text-white transition-colors p-1"
+        >
+          <ArrowLeft size={18} />
+        </button>
+        <div>
+          <h3 className="text-lg font-semibold text-white">
+            {selectedPack.name} — {selectedPack.credits.toLocaleString()} credits
+          </h3>
+          <p className="text-gray-400 text-sm">{selectedPack.price}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={paying}
+          className="ml-auto text-gray-400 hover:text-white transition-colors"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      {/* Express Checkout (Apple Pay / Google Pay) */}
+      <ExpressCheckoutElement
+        onConfirm={handleExpressCheckout}
+        options={{ buttonType: { applePay: 'buy', googlePay: 'buy' } }}
+      />
+
+      {/* Card form */}
+      <div className="mt-4">
+        <PaymentElement onReady={() => setPaymentReady(true)} />
+      </div>
+
+      {error && (
+        <p className="mt-3 text-red-400 text-sm">{error}</p>
+      )}
+
+      <button
+        type="submit"
+        disabled={!stripe || !paymentReady || paying}
+        className={[
+          'mt-4 w-full py-3 rounded-lg font-medium text-white transition-all',
+          !stripe || !paymentReady || paying
+            ? 'bg-purple-800/50 cursor-not-allowed'
+            : 'bg-purple-600 hover:bg-purple-500 cursor-pointer',
+        ].join(' ')}
+      >
+        {paying ? (
+          <span className="flex items-center justify-center gap-2">
+            <Loader2 size={16} className="animate-spin" />
+            Processing...
+          </span>
+        ) : (
+          `Pay ${selectedPack.price}`
+        )}
+      </button>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Modal
+// ---------------------------------------------------------------------------
+
+export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits }) {
+  const [selectedPack, setSelectedPack] = useState(null);
+  const [clientSecret, setClientSecret] = useState(null);
   const [loadingPack, setLoadingPack] = useState(null);
   const [error, setError] = useState(null);
 
-  console.log('[BuyCreditsModal] Rendered');
-
   async function handleSelectPack(packKey) {
+    const pack = PACKS.find(p => p.key === packKey);
+    if (!pack) return;
+
+    // If Stripe isn't configured, fall back to redirect checkout
+    if (!stripePromise) {
+      return handleFallbackCheckout(packKey);
+    }
+
+    setLoadingPack(packKey);
+    setError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/payments/create-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ pack: packKey }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `Failed to create payment (${res.status})`);
+      }
+
+      const { client_secret } = await res.json();
+      setClientSecret(client_secret);
+      setSelectedPack(pack);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingPack(null);
+    }
+  }
+
+  // Fallback: redirect to Stripe Checkout (when VITE_STRIPE_PUBLIC_KEY not set)
+  async function handleFallbackCheckout(packKey) {
     setLoadingPack(packKey);
     setError(null);
 
@@ -75,13 +287,6 @@ export function BuyCreditsModal({ onClose, insufficientCredits }) {
       }
 
       const { checkout_url } = await res.json();
-
-      // Save navigation state so we return to the same screen after Stripe checkout
-      const editorMode = useEditorStore.getState().editorMode;
-      const projectId = useProjectsStore.getState().selectedProjectId;
-      sessionStorage.setItem('paymentReturnMode', editorMode);
-      if (projectId) sessionStorage.setItem('paymentReturnProjectId', String(projectId));
-
       window.location.href = checkout_url;
     } catch (err) {
       setError(err.message);
@@ -89,6 +294,37 @@ export function BuyCreditsModal({ onClose, insufficientCredits }) {
     }
   }
 
+  function handleBack() {
+    setSelectedPack(null);
+    setClientSecret(null);
+    setError(null);
+  }
+
+  // Step 2: Payment Element form
+  if (selectedPack && clientSecret && stripePromise) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10">
+          <Elements
+            stripe={stripePromise}
+            options={{ clientSecret, appearance: STRIPE_APPEARANCE }}
+          >
+            <PaymentForm
+              selectedPack={selectedPack}
+              onBack={handleBack}
+              onClose={onClose}
+              onPaymentSuccess={onPaymentSuccess}
+            />
+          </Elements>
+          <p className="mt-4 text-gray-500 text-xs text-center">
+            Secure payment by Stripe.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Step 1: Pack selection
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10">

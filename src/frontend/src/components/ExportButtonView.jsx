@@ -59,10 +59,11 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // T530: Credit system
   showInsufficientCredits,
   onCloseInsufficientCredits,
-  // T525: Stripe purchase
+  // T525/T526: Stripe purchase
   showBuyCredits,
   onOpenBuyCredits,
   onCloseBuyCredits,
+  onPaymentSuccess,
 
   // Refs for external triggering
   handleExportRef,
@@ -249,6 +250,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       {showBuyCredits && (
         <BuyCreditsModal
           onClose={() => { onCloseBuyCredits(); onCloseInsufficientCredits(); }}
+          onPaymentSuccess={onPaymentSuccess}
           insufficientCredits={showInsufficientCredits}
         />
       )}
