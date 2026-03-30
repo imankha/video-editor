@@ -1109,10 +1109,18 @@ export function ExportButtonContainer({
     showInsufficientCredits,
     onCloseInsufficientCredits: () => setShowInsufficientCredits(null),
     creditBalance,
-    // T525: Stripe purchase
+    // T525/T526: Stripe purchase
     showBuyCredits,
     onOpenBuyCredits: () => { console.log('[ExportButtonContainer] Opening BuyCreditsModal'); setShowBuyCredits(true); },
     onCloseBuyCredits: () => setShowBuyCredits(false),
+    onPaymentSuccess: (credits) => {
+      setShowBuyCredits(false);
+      setShowInsufficientCredits(null);
+      useCreditStore.getState().fetchCredits();
+      toast.success(`${credits} credits added to your balance!`);
+      // Auto-retry export after credits are granted
+      setTimeout(() => handleExportRef.current?.(), 300);
+    },
 
     // Refs (for external triggering)
     handleExportRef,

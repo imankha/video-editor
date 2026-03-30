@@ -1,9 +1,12 @@
 """
-Payments Router - Stripe Checkout + webhook endpoints (T525).
+Payments Router - Stripe Checkout + Payment Element endpoints (T525, T526).
 
 Provides:
-- POST /payments/checkout — Create Stripe Checkout Session for credit purchase
-- POST /payments/webhook — Stripe webhook to fulfill credit grants
+- POST /payments/checkout — Create Stripe Checkout Session (legacy redirect flow)
+- POST /payments/create-intent — Create PaymentIntent for inline Payment Element (T526)
+- POST /payments/confirm-intent — Verify PaymentIntent and grant credits (T526)
+- POST /payments/webhook — Stripe webhook to fulfill credit grants (fallback)
+- POST /payments/verify — Verify Checkout Session after redirect (legacy)
 
 Credit packs are defined as constants (not in DB). Prices match T520 analysis.
 """
@@ -32,6 +35,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 # ---------------------------------------------------------------------------
 
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
 # Frontend URL for redirect after checkout
@@ -41,6 +45,17 @@ FRONTEND_URL = _cors.split(",")[0].strip() if _cors else "http://localhost:5173"
 
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
+
+# ---------------------------------------------------------------------------
+# Public config endpoint (no auth required — publishable key is public)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/config")
+async def get_payment_config():
+    """Return Stripe publishable key for frontend Payment Element initialization."""
+    return {"publishable_key": STRIPE_PUBLISHABLE_KEY}
+
 
 # ---------------------------------------------------------------------------
 # Credit Packs
@@ -108,6 +123,111 @@ async def create_checkout(request: CheckoutRequest):
 
 
 # ---------------------------------------------------------------------------
+# Payment Intent endpoints (T526 — inline Payment Element)
+# ---------------------------------------------------------------------------
+
+
+class CreateIntentRequest(BaseModel):
+    pack: str
+
+
+@router.post("/create-intent")
+async def create_payment_intent(request: CreateIntentRequest):
+    """Create a Stripe PaymentIntent for inline Payment Element checkout."""
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Payments not configured")
+
+    pack = CREDIT_PACKS.get(request.pack)
+    if not pack:
+        raise HTTPException(status_code=400, detail=f"Invalid pack: {request.pack}")
+
+    user_id = get_current_user_id()
+
+    # Get or create Stripe customer
+    customer_id = get_stripe_customer_id(user_id)
+    if not customer_id:
+        customer = stripe.Customer.create(metadata={"user_id": user_id})
+        customer_id = customer.id
+        set_stripe_customer_id(user_id, customer_id)
+
+    intent = stripe.PaymentIntent.create(
+        amount=pack["price_cents"],
+        currency="usd",
+        customer=customer_id,
+        metadata={
+            "user_id": user_id,
+            "pack": request.pack,
+            "credits": str(pack["credits"]),
+        },
+        automatic_payment_methods={"enabled": True},
+    )
+
+    logger.info(f"[Payments] PaymentIntent created for {user_id}, pack={request.pack}, pi={intent.id}")
+    return {"client_secret": intent.client_secret}
+
+
+class ConfirmIntentRequest(BaseModel):
+    payment_intent_id: str
+
+
+@router.post("/confirm-intent")
+async def confirm_payment_intent(request: ConfirmIntentRequest):
+    """
+    Verify a PaymentIntent succeeded and grant credits.
+
+    Called by the frontend after stripe.confirmPayment() resolves successfully.
+    Same idempotency pattern as /verify — won't double-grant.
+    """
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Payments not configured")
+
+    user_id = get_current_user_id()
+    pi_id = request.payment_intent_id
+
+    # Idempotency: already processed?
+    if has_processed_payment(pi_id):
+        from ..services.auth_db import get_credit_balance, get_credit_transactions
+        balance = get_credit_balance(user_id)
+        txns = get_credit_transactions(user_id, limit=50)
+        granted = 0
+        for tx in txns:
+            if tx.get("reference_id") == pi_id and tx.get("source") == "stripe_purchase":
+                granted = tx.get("amount", 0)
+                break
+        return {"status": "already_processed", "balance": balance["balance"], "credits": granted}
+
+    # Retrieve PaymentIntent from Stripe
+    try:
+        intent = stripe.PaymentIntent.retrieve(pi_id)
+    except stripe.StripeError as e:
+        logger.error(f"[Payments] Failed to retrieve PaymentIntent {pi_id}: {e}")
+        raise HTTPException(status_code=400, detail="Invalid payment intent")
+
+    if intent.status != "succeeded":
+        return {"status": "not_succeeded", "intent_status": intent.status}
+
+    # Verify this intent belongs to the current user
+    metadata = intent.metadata or {}
+    intent_user_id = metadata.get("user_id")
+    if intent_user_id != user_id:
+        logger.warning(f"[Payments] PaymentIntent {pi_id} user mismatch: {intent_user_id} != {user_id}")
+        raise HTTPException(status_code=403, detail="Payment does not belong to this user")
+
+    credits = int(metadata.get("credits", 0))
+    pack = metadata.get("pack", "unknown")
+
+    if credits <= 0:
+        raise HTTPException(status_code=400, detail="Invalid credits in payment metadata")
+
+    new_balance = grant_credits(user_id, credits, "stripe_purchase", pi_id)
+    logger.info(
+        f"[Payments] Confirmed + granted {credits} credits to {user_id} "
+        f"(pack={pack}, pi={pi_id}), balance={new_balance}"
+    )
+    return {"status": "credits_granted", "credits": credits, "balance": new_balance}
+
+
+# ---------------------------------------------------------------------------
 # Webhook endpoint
 # ---------------------------------------------------------------------------
 
@@ -137,7 +257,7 @@ async def stripe_webhook(request: Request):
         logger.warning("[Payments] Webhook payload invalid")
         raise HTTPException(status_code=400, detail="Invalid payload")
 
-    # Handle checkout completion
+    # Handle checkout completion (legacy redirect flow)
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         metadata = session.get("metadata", {})
@@ -159,6 +279,30 @@ async def stripe_webhook(request: Request):
         logger.info(
             f"[Payments] Granted {credits} credits to {user_id} "
             f"(pack={pack}, session={session_id}), balance={new_balance}"
+        )
+        return {"status": "credits_granted", "credits": credits, "balance": new_balance}
+
+    # Handle PaymentIntent success (T526 — inline Payment Element fallback)
+    if event["type"] == "payment_intent.succeeded":
+        intent = event["data"]["object"]
+        metadata = intent.get("metadata", {})
+        user_id = metadata.get("user_id")
+        credits = int(metadata.get("credits", 0))
+        pack = metadata.get("pack", "unknown")
+        pi_id = intent["id"]
+
+        if not user_id or credits <= 0:
+            logger.error(f"[Payments] Webhook PI missing metadata: user_id={user_id}, credits={credits}")
+            return {"status": "error", "message": "Missing metadata"}
+
+        if has_processed_payment(pi_id):
+            logger.info(f"[Payments] Duplicate webhook for PI {pi_id}, skipping")
+            return {"status": "already_processed"}
+
+        new_balance = grant_credits(user_id, credits, "stripe_purchase", pi_id)
+        logger.info(
+            f"[Payments] Webhook granted {credits} credits to {user_id} "
+            f"(pack={pack}, pi={pi_id}), balance={new_balance}"
         )
         return {"status": "credits_granted", "credits": credits, "balance": new_balance}
 
