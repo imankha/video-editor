@@ -282,8 +282,10 @@ async def list_projects():
                     (wv.highlights_data IS NOT NULL AND wv.highlights_data != '[]' AND wv.highlights_data != '') OR
                     (wv.text_overlays IS NOT NULL AND wv.text_overlays != '[]' AND wv.text_overlays != '')
                 ) THEN 1 ELSE 0 END as has_overlay_edits,
-                -- Final video info (check if referenced final video exists)
-                CASE WHEN fv.id IS NOT NULL THEN 1 ELSE 0 END as has_final_video,
+                -- Final video info (check if ANY final video exists for this project)
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM final_videos WHERE project_id = p.id
+                ) THEN 1 ELSE 0 END as has_final_video,
                 -- Check if project was auto-created for a 5-star clip
                 CASE WHEN EXISTS (
                     SELECT 1 FROM raw_clips rc WHERE rc.auto_project_id = p.id
@@ -314,7 +316,6 @@ async def list_projects():
                 GROUP BY project_id
             ) clip_stats ON p.id = clip_stats.project_id
             LEFT JOIN working_videos wv ON p.working_video_id = wv.id
-            LEFT JOIN final_videos fv ON p.final_video_id = fv.id
             ORDER BY p.created_at DESC
         """)
 
