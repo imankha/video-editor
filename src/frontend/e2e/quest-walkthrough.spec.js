@@ -99,6 +99,36 @@ async function setupTestUser(page) {
   });
 }
 
+/**
+ * Authenticate E2E test user via backend test-login endpoint.
+ * Only works in dev/staging (returns 404 in production).
+ * Creates a real session cookie so the frontend auth gate is satisfied.
+ */
+async function authenticateTestUser(page) {
+  // Navigate to app first so the cookie domain matches
+  await page.goto('/');
+  // Call test-login via page context so the cookie is set on the browser
+  const result = await page.evaluate(async (headers) => {
+    const res = await fetch('/api/auth/test-login', {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+    });
+    if (!res.ok) return { error: `test-login failed: ${res.status}` };
+    return await res.json();
+  }, { 'Content-Type': 'application/json', 'X-User-ID': TEST_USER_ID, 'X-Test-Mode': 'true' });
+
+  if (result.error) {
+    console.warn(`[Auth] ${result.error} — auth gate may block interactions`);
+  } else {
+    console.log(`[Auth] Test user authenticated: ${result.email} (${result.user_id})`);
+  }
+
+  // Reload so the app picks up the session cookie
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+}
+
 async function screenshot(page, name) {
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
   const filepath = path.join(SCREENSHOTS_DIR, `${name}.png`);
@@ -198,6 +228,10 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
 
   test('Complete all quests', async ({ page, request }) => {
     await setupTestUser(page);
+
+    // Authenticate test user via backend (bypasses Google OAuth)
+    await authenticateTestUser(page);
+
     const bugs = [];
 
     // ===========================================================================

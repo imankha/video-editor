@@ -531,3 +531,45 @@ async def logout(request: Request):
     response = JSONResponse(content={"logged_out": True})
     response.delete_cookie("rb_session", samesite=_SAMESITE, secure=_SECURE_COOKIES)
     return response
+
+
+@router.post("/test-login")
+async def test_login(request: Request):
+    """
+    E2E/QA test login — bypasses Google OAuth by creating an authenticated session.
+    Only available in development and staging environments (never production).
+    Requires X-Test-Mode header to be set.
+    """
+    env = os.getenv("ENV", "development")
+    if env == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+
+    test_mode = request.headers.get("x-test-mode")
+    if not test_mode:
+        raise HTTPException(status_code=403, detail="X-Test-Mode header required")
+
+    user_id = get_current_user_id()
+    email = "e2e@test.local"
+
+    # Ensure user exists in auth DB
+    from app.services.auth_db import get_user_by_email, create_user
+    existing = get_user_by_email(email)
+    if not existing:
+        create_user(user_id, email=email, verified_at=datetime.utcnow().isoformat())
+
+    session_id = create_session(user_id)
+
+    response = JSONResponse(content={
+        "email": email,
+        "user_id": user_id,
+    })
+    response.set_cookie(
+        key="rb_session",
+        value=session_id,
+        max_age=30 * 24 * 60 * 60,
+        httponly=True,
+        samesite=_SAMESITE,
+        secure=_SECURE_COOKIES,
+    )
+    logger.info(f"[Auth] Test login for {user_id} ({email})")
+    return response
