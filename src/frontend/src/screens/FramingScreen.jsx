@@ -19,7 +19,7 @@ import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUt
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
-import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useNavigationStore, useVideoStore } from '../stores';
+import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 
 /**
@@ -374,6 +374,7 @@ export function FramingScreen({
 
   // Track the last loaded URL to detect when clip changes
   const lastLoadedUrlRef = useRef(null);
+  const stateRestoredForUrlRef = useRef(null); // Guard against infinite restore loops
 
   /**
    * Get the video URL and clip range for a clip.
@@ -419,22 +420,17 @@ export function FramingScreen({
     const { url: clipUrl, clipRange } = getClipVideoConfig(firstClip);
     if (!clipUrl) return;
 
-    if (lastLoadedUrlRef.current === clipUrl) return;
+    // Restore framing state (crop keyframes, segments) from clip data if not already done.
+    // The useLayoutEffect above may have already loaded the video (for overlay→framing
+    // transitions), but state restoration still needs to happen. Guard with ref to
+    // prevent infinite loops (restore updates state → re-render → effect re-fires).
+    if (stateRestoredForUrlRef.current !== clipUrl) {
+      stateRestoredForUrlRef.current = clipUrl;
 
-    console.log('[FramingScreen] Initializing video for first clip:', firstClip.id);
-    lastLoadedUrlRef.current = clipUrl;
-    initialLoadDoneRef.current = true;
+      const firstClipWithMeta = getClipWithMeta(firstClip);
+      const parsedSegments = clipSegments(firstClip, firstClipWithMeta?.duration || 0);
+      const parsedCropKfs = clipCropKeyframes(firstClip);
 
-    if (firstClip.id) {
-      previousClipIdRef.current = firstClip.id;
-    }
-
-    const firstClipWithMeta = getClipWithMeta(firstClip);
-    const parsedSegments = clipSegments(firstClip, firstClipWithMeta?.duration || 0);
-    const parsedCropKfs = clipCropKeyframes(firstClip);
-
-    const loadFirstClipVideo = async () => {
-      // Restore framing state BEFORE loading video
       if (parsedSegments) {
         restoreSegmentState(parsedSegments, firstClipWithMeta?.duration || 0);
       }
@@ -446,6 +442,19 @@ export function FramingScreen({
         }
       }
 
+      if (firstClip.id) {
+        previousClipIdRef.current = firstClip.id;
+      }
+    }
+
+    // Skip video loading if already loaded (e.g., by useLayoutEffect on mount)
+    if (lastLoadedUrlRef.current === clipUrl) return;
+
+    console.log('[FramingScreen] Initializing video for first clip:', firstClip.id);
+    lastLoadedUrlRef.current = clipUrl;
+    initialLoadDoneRef.current = true;
+
+    const loadFirstClipVideo = async () => {
       if (!clipUrl.startsWith('blob:')) {
         loadVideoFromStreamingUrl(clipUrl, firstClipWithMeta?.metadata || null, clipRange);
       } else {
@@ -762,7 +771,7 @@ export function FramingScreen({
 
   // Handle proceed to overlay
   const handleProceedToOverlayInternal = useCallback(async (renderedVideoBlob, clipMetadata, exportedProjectId) => {
-    const currentlyViewingProjectId = useNavigationStore.getState().projectId;
+    const currentlyViewingProjectId = useProjectsStore.getState().selectedProjectId;
 
     console.log('[FramingScreen] Starting overlay transition...', {
       exportedProjectId,

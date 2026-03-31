@@ -28,8 +28,8 @@ from ...websocket import export_progress, manager
 from ...interpolation import generate_crop_filter
 from ...database import get_db_connection, get_working_videos_path
 from ...queries import latest_working_clips_subquery
-from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2, download_from_r2_with_progress
-from ...services.ffmpeg_service import get_video_duration
+from ...storage import generate_presigned_url, generate_presigned_url_global, upload_to_r2, upload_bytes_to_r2, download_from_r2, download_from_r2_with_progress
+from ...services.ffmpeg_service import get_video_duration, get_video_info
 from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
 from ...highlight_transform import get_output_duration
 from .multi_clip import (
@@ -325,10 +325,11 @@ async def export_framing(
             UPDATE projects SET working_video_id = ? WHERE id = ?
         """, (working_video_id, project_id))
 
-        # Set exported_at timestamp for all working clips (latest versions only)
+        # Set exported_at and snapshot current boundaries_version for all working clips (latest versions only)
         cursor.execute(f"""
             UPDATE working_clips
-            SET exported_at = datetime('now')
+            SET exported_at = datetime('now'),
+                raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
             WHERE project_id = ?
             AND id IN ({latest_working_clips_subquery()})
         """, (project_id, project_id))
@@ -346,7 +347,8 @@ async def export_framing(
             if total_clips > 0:
                 cursor.execute("""
                     UPDATE working_clips
-                    SET exported_at = datetime('now')
+                    SET exported_at = datetime('now'),
+                        raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
                     WHERE project_id = ?
                     AND exported_at IS NULL
                 """, (project_id,))
@@ -566,7 +568,9 @@ async def _run_local_framing_export(
             """, (working_video_id, working_filename, result.get("gpu_seconds"), result.get("modal_function"), export_id))
 
             cursor.execute(f"""
-                UPDATE working_clips SET exported_at = datetime('now')
+                UPDATE working_clips
+                SET exported_at = datetime('now'),
+                    raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
                 WHERE project_id = ? AND id IN ({latest_working_clips_subquery()})
             """, (project_id, project_id))
 
@@ -862,12 +866,26 @@ async def render_project(request: RenderRequest, http_request: Request):
 
     # Convert frame-based keyframes to time-based for FFmpeg
     # Internal storage uses frame numbers for precision, FFmpeg needs time in seconds
-    FRAMERATE = 30  # TODO: get from video metadata
+    # Probe source video for actual framerate (ffprobe reads only the header, not the whole file)
+    framerate = 30.0
+    try:
+        user_id = get_current_user_id()
+        if clip['game_id']:
+            source_url = generate_presigned_url_global(f"games/{clip['game_blake3_hash']}.mp4")
+        else:
+            source_url = generate_presigned_url(user_id, f"raw_clips/{clip['raw_filename']}")
+        if source_url:
+            source_info = get_video_info(source_url)
+            framerate = source_info.get('fps', 30.0)
+            logger.info(f"[Render] Source video framerate: {framerate}")
+    except Exception as e:
+        logger.warning(f"[Render] Failed to probe source video framerate, using default 30: {e}")
+
     if crop_keyframes and 'frame' in crop_keyframes[0] and 'time' not in crop_keyframes[0]:
-        logger.info(f"[Render] Converting frame-based keyframes to time-based (framerate={FRAMERATE})")
+        logger.info(f"[Render] Converting frame-based keyframes to time-based (framerate={framerate})")
         crop_keyframes = [
             {
-                'time': kf['frame'] / FRAMERATE,
+                'time': kf['frame'] / framerate,
                 'x': kf['x'],
                 'y': kf['y'],
                 'width': kf['width'],
@@ -1115,9 +1133,11 @@ async def render_project(request: RenderRequest, http_request: Request):
                 WHERE id = ?
             """, (working_video_id, working_filename, result.get("gpu_seconds"), result.get("modal_function"), export_id))
 
-            # Set exported_at for working clips
+            # Set exported_at and snapshot current boundaries_version for working clips
             cursor.execute(f"""
-                UPDATE working_clips SET exported_at = datetime('now')
+                UPDATE working_clips
+                SET exported_at = datetime('now'),
+                    raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
                 WHERE project_id = ? AND id IN ({latest_working_clips_subquery()})
             """, (project_id, project_id))
 

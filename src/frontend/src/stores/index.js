@@ -11,7 +11,6 @@
 export { useEditorStore, EDITOR_MODES, SCREENS, getScreenByType } from './editorStore';
 export { useExportStore } from './exportStore';
 export { useVideoStore } from './videoStore';
-export { useNavigationStore, useCurrentMode, useProjectId, useNavigate } from './navigationStore';
 export { useProjectDataStore, useProjectClips, useSelectedClipId, useWorkingVideo, useProjectAspectRatio, useGlobalTransition } from './projectDataStore';
 export { useFramingStore, useFramingVideoFile, useFramingIncludeAudio, useFramingChangedSinceExport } from './framingStore';
 export { useOverlayStore, useOverlayEffectType, useOverlayIsLoading } from './overlayStore';
