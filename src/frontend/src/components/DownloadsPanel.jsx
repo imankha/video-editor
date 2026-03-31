@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid } from 'lucide-react';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
@@ -62,6 +62,7 @@ export function DownloadsPanel({
 
   // State for video preview modal
   const [playingVideo, setPlayingVideo] = useState(null);
+  const watchTimerRef = useRef(null);
 
   // State for before/after export
   const [exportingBeforeAfter, setExportingBeforeAfter] = useState(null);
@@ -100,6 +101,18 @@ export function DownloadsPanel({
         useQuestStore.getState().recordAchievement('viewed_custom_project_video');
       }
     });
+    // T780: Record "watched 1s" achievement after 1 second of playback (autoPlay = true)
+    clearTimeout(watchTimerRef.current);
+    watchTimerRef.current = setTimeout(() => {
+      import('../stores/questStore').then(({ useQuestStore }) => {
+        useQuestStore.getState().recordAchievement('watched_gallery_video_1s');
+      });
+    }, 1000);
+  };
+
+  const closeVideo = () => {
+    clearTimeout(watchTimerRef.current);
+    closeVideo();
   };
 
   const handleOpenProject = async (e, download) => {
@@ -470,7 +483,7 @@ export function DownloadsPanel({
           {/* Modal Backdrop */}
           <div
             className="fixed inset-0 bg-black/80 z-[60]"
-            onClick={() => setPlayingVideo(null)}
+            onClick={() => closeVideo()}
           />
 
           {/* Modal Content */}
@@ -516,7 +529,7 @@ export function DownloadsPanel({
                   size="sm"
                   icon={X}
                   iconOnly
-                  onClick={() => setPlayingVideo(null)}
+                  onClick={() => closeVideo()}
                 />
               </div>
             </div>
@@ -526,7 +539,7 @@ export function DownloadsPanel({
               <MediaPlayer
                 src={getStreamingUrl(playingVideo.id, playingVideo)}
                 autoPlay
-                onClose={() => setPlayingVideo(null)}
+                onClose={() => closeVideo()}
               />
             </div>
           </div>

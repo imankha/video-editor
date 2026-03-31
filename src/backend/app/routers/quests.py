@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/quests", tags=["quests"])
 
 # Known achievement keys — only these can be recorded
-KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "viewed_custom_project_video", "played_annotations"}
+KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "viewed_custom_project_video", "played_annotations", "watched_gallery_video_1s"}
 
 # Quest definitions — single source of truth for quest structure and rewards
 QUEST_DEFINITIONS = [
@@ -144,9 +144,9 @@ def _check_all_steps(user_id: str, conn) -> dict:
     ).fetchone()
     steps["wait_for_export_2"] = row["cnt"] >= 2
 
-    # Watch the new highlight in Gallery (auto-completes if viewed_gallery_video already recorded)
+    # Watch a gallery video for at least 1 second (T780 — distinct from viewed_gallery_video)
     steps["watch_second_highlight"] = cursor.execute(
-        "SELECT 1 FROM achievements WHERE key = 'viewed_gallery_video'"
+        "SELECT 1 FROM achievements WHERE key = 'watched_gallery_video_1s'"
     ).fetchone() is not None
 
     # --- Quest 4: Highlight Reel (second game + custom project) ---
