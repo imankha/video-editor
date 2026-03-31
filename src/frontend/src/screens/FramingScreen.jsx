@@ -419,33 +419,36 @@ export function FramingScreen({
     const { url: clipUrl, clipRange } = getClipVideoConfig(firstClip);
     if (!clipUrl) return;
 
+    // Always restore framing state (crop keyframes, segments) from clip data.
+    // The useLayoutEffect above may have already loaded the video (for overlay→framing
+    // transitions), but state restoration still needs to happen.
+    const firstClipWithMeta = getClipWithMeta(firstClip);
+    const parsedSegments = clipSegments(firstClip, firstClipWithMeta?.duration || 0);
+    const parsedCropKfs = clipCropKeyframes(firstClip);
+
+    if (parsedSegments) {
+      restoreSegmentState(parsedSegments, firstClipWithMeta?.duration || 0);
+    }
+
+    if (parsedCropKfs && parsedCropKfs.length > 0) {
+      const endFrame = Math.round((firstClipWithMeta?.duration || 0) * (firstClipWithMeta?.framerate || 30));
+      if (endFrame > 0) {
+        restoreCropState(parsedCropKfs, endFrame);
+      }
+    }
+
+    if (firstClip.id) {
+      previousClipIdRef.current = firstClip.id;
+    }
+
+    // Skip video loading if already loaded (e.g., by useLayoutEffect on mount)
     if (lastLoadedUrlRef.current === clipUrl) return;
 
     console.log('[FramingScreen] Initializing video for first clip:', firstClip.id);
     lastLoadedUrlRef.current = clipUrl;
     initialLoadDoneRef.current = true;
 
-    if (firstClip.id) {
-      previousClipIdRef.current = firstClip.id;
-    }
-
-    const firstClipWithMeta = getClipWithMeta(firstClip);
-    const parsedSegments = clipSegments(firstClip, firstClipWithMeta?.duration || 0);
-    const parsedCropKfs = clipCropKeyframes(firstClip);
-
     const loadFirstClipVideo = async () => {
-      // Restore framing state BEFORE loading video
-      if (parsedSegments) {
-        restoreSegmentState(parsedSegments, firstClipWithMeta?.duration || 0);
-      }
-
-      if (parsedCropKfs && parsedCropKfs.length > 0) {
-        const endFrame = Math.round((firstClipWithMeta?.duration || 0) * (firstClipWithMeta?.framerate || 30));
-        if (endFrame > 0) {
-          restoreCropState(parsedCropKfs, endFrame);
-        }
-      }
-
       if (!clipUrl.startsWith('blob:')) {
         loadVideoFromStreamingUrl(clipUrl, firstClipWithMeta?.metadata || null, clipRange);
       } else {
