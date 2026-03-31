@@ -186,7 +186,7 @@ Deploy to production domains with proper scaling.
 | T760 | [Background Local Processing](tasks/T760-background-local-processing.md) | DONE | 7 | 4 | Local exports block the web server; return 202 immediately and run GPU work in background task |
 | T770 | [Navigate Home After Overlay Export](tasks/T770-overlay-complete-navigate-home.md) | DONE | 5 | 2 | After overlay export completes, auto-navigate user back to home/projects screen |
 | T775 | [navigationStore Unused for Routing](tasks/T775-navigationStore-unused.md) | DONE | 4 | 3 | navigationStore.navigate() doesn't control screen rendering — editorMode is the real source of truth; dead code |
-| T780 | [Quest Redesign + Credit Pack Pricing](tasks/T780-quest-redesign-credit-packs.md) | TODO | 8 | 5 | Redesign quests 3 & 4 (habit-building → multi-game reel), update rewards (15/25/40/45), set credit packs ($3.99/40, $6.99/85, $12.99/180) |
+| T780 | [Quest Redesign + Credit Pack Pricing](tasks/T780-quest-redesign-credit-packs.md) | TESTING | 8 | 5 | Redesign quests 3 & 4 (habit-building → multi-game reel), update rewards (15/25/40/45), set credit packs ($3.99/40, $6.99/85, $12.99/180) |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)

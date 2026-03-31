@@ -9,7 +9,7 @@ export const QUESTS = [
   {
     id: 'quest_1',
     title: 'Get Started',
-    reward: 25,
+    reward: 15,
     steps: [
       {
         id: 'upload_game',
@@ -31,7 +31,7 @@ export const QUESTS = [
   {
     id: 'quest_2',
     title: 'Export Highlights',
-    reward: 50,
+    reward: 25,
     steps: [
       {
         id: 'open_framing',
@@ -62,53 +62,65 @@ export const QUESTS = [
   },
   {
     id: 'quest_3',
+    title: 'Find More Highlights',
+    reward: 40,
+    steps: [
+      {
+        id: 'annotate_5_more',
+        title: 'Clip 5 More Plays',
+        description: 'Go back to your game and clip 5 more plays — any rating.',
+      },
+      {
+        id: 'annotate_second_5_star',
+        title: 'Find Another 5 Star Moment',
+        description: 'Every game has more than one highlight — find it!',
+      },
+      {
+        id: 'export_second_highlight',
+        title: 'Export Another Highlight',
+        description: 'Pick any 5-star project, frame it, and click "Frame Video".',
+      },
+      {
+        id: 'wait_for_export_2',
+        title: 'Wait For Export',
+        description: 'Wait for the framing export to finish.',
+      },
+    ],
+  },
+  {
+    id: 'quest_4',
     title: 'Highlight Reel',
-    reward: 100,
+    reward: 45,
     steps: [
       {
         id: 'upload_game_2',
         title: 'Add a Second Game',
-        description: 'Go Home, select Games, and click Add Game to add another game',
+        description: 'Add another game — more highlights, bigger reel!',
       },
       {
-        id: 'annotate_brilliant_2',
-        title: 'Annotate 2 5-Star Plays',
-        description: 'Find and annotate at least 2 five-star moments across the game',
+        id: 'annotate_game_2',
+        title: 'Annotate a Good or Great Play',
+        description: 'Find a 4 or 5 star moment in your new game.',
       },
       {
-        id: 'annotate_4_star',
-        title: 'Annotate a 4 Star Play',
-        description: 'Mark a solid play worth remembering',
+        id: 'create_reel',
+        title: 'Create a Highlight Reel',
+        description: 'Go to Projects → New Project. Pick clips from both games to build your reel.',
       },
       {
-        id: 'create_mixed_project',
-        title: 'Create Highlights Project',
-        description: 'Go Home, then Projects, then New Project. Select clips for your highlight reel and click Create.',
+        id: 'export_reel',
+        title: 'Frame Your Reel',
+        description: 'Frame your multi-clip highlight reel and click "Frame Video".',
       },
       {
-        id: 'frame_custom_project',
-        title: 'Open and Frame Project',
-        description: 'Open your new custom project and frame each clip individually',
+        id: 'wait_for_reel',
+        title: 'Wait For Export',
+        description: 'Wait for the export to finish.',
       },
       {
-        id: 'start_custom_framing',
-        title: 'Start Frame Export',
-        description: 'Click the Frame Video button to begin the framing export',
-      },
-      {
-        id: 'complete_custom_framing',
-        title: 'Complete Frame Export',
-        description: 'Wait for the framing export to finish',
-      },
-      {
-        id: 'overlay_custom_project',
-        title: 'Add Overlay',
-        description: 'In Overlay mode, add spotlight overlays to your highlights. Scroll to see each clip\'s highlight region. Move regions with the levers, then click the green boxes and click your player to set spotlights.',
-      },
-      {
-        id: 'watch_custom_video',
-        title: 'Watch Your Video',
-        description: 'Open the Gallery and play back your finished custom project video',
+        id: 'watch_reel',
+        title: 'Watch Your Reel',
+        description: 'Open the Gallery and watch your finished highlight reel!',
       },
     ],
   },

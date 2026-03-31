@@ -62,9 +62,9 @@ async def get_payment_config():
 # ---------------------------------------------------------------------------
 
 CREDIT_PACKS = {
-    "starter": {"credits": 120, "price_cents": 499, "name": "Starter — 120 Credits"},
-    "popular": {"credits": 400, "price_cents": 1299, "name": "Popular — 400 Credits"},
-    "pro": {"credits": 1000, "price_cents": 2499, "name": "Pro — 1,000 Credits"},
+    "starter": {"credits": 40, "price_cents": 399, "name": "Starter — 40 Credits"},
+    "popular": {"credits": 85, "price_cents": 699, "name": "Popular — 85 Credits"},
+    "best_value": {"credits": 180, "price_cents": 1299, "name": "Best Value — 180 Credits"},
 }
 
 # ---------------------------------------------------------------------------

@@ -26,7 +26,7 @@ QUEST_DEFINITIONS = [
     {
         "id": "quest_1",
         "title": "Get Started",
-        "reward": 25,
+        "reward": 15,
         "step_ids": [
             "upload_game",
             "annotate_brilliant",
@@ -36,7 +36,7 @@ QUEST_DEFINITIONS = [
     {
         "id": "quest_2",
         "title": "Export Highlights",
-        "reward": 50,
+        "reward": 25,
         "step_ids": [
             "open_framing",
             "export_framing",
@@ -47,18 +47,26 @@ QUEST_DEFINITIONS = [
     },
     {
         "id": "quest_3",
-        "title": "Multiple Games",
-        "reward": 100,
+        "title": "Find More Highlights",
+        "reward": 40,
+        "step_ids": [
+            "annotate_5_more",
+            "annotate_second_5_star",
+            "export_second_highlight",
+            "wait_for_export_2",
+        ],
+    },
+    {
+        "id": "quest_4",
+        "title": "Highlight Reel",
+        "reward": 45,
         "step_ids": [
             "upload_game_2",
-            "annotate_brilliant_2",
-            "annotate_4_star",
-            "create_mixed_project",
-            "frame_custom_project",
-            "start_custom_framing",
-            "complete_custom_framing",
-            "overlay_custom_project",
-            "watch_custom_video",
+            "annotate_game_2",
+            "create_reel",
+            "export_reel",
+            "wait_for_reel",
+            "watch_reel",
         ],
     },
 ]
@@ -90,9 +98,6 @@ def _check_all_steps(user_id: str, conn) -> dict:
         "SELECT 1 FROM achievements WHERE key = 'opened_framing_editor'"
     ).fetchone() is not None
 
-    # T740: Extraction merged into framing — auto-complete when framing editor is opened
-    steps["extract_clip"] = steps.get("open_framing", False)
-
     # export_framing: user clicked "Frame Video" (export job exists, any status)
     steps["export_framing"] = cursor.execute(
         "SELECT 1 FROM export_jobs WHERE type = 'framing' LIMIT 1"
@@ -111,86 +116,79 @@ def _check_all_steps(user_id: str, conn) -> dict:
         "SELECT 1 FROM achievements WHERE key = 'viewed_gallery_video'"
     ).fetchone() is not None
 
-    # --- Quest 3: Multiple Games ---
-    # Quest 3 annotation steps check the SECOND+ game only (not the first game).
-    # This ensures users are working with the new game, not reusing Quest 1 progress.
+    # --- Quest 3: Find More Highlights (first game only) ---
 
-    # Count-based: need ≥2 games
+    # 6+ total raw_clips on first game
+    row = cursor.execute(
+        "SELECT count(*) as cnt FROM raw_clips WHERE game_id = (SELECT MIN(id) FROM games)"
+    ).fetchone()
+    steps["annotate_5_more"] = row["cnt"] >= 6
+
+    # 2+ clips rated 5 on first game
+    row = cursor.execute(
+        """SELECT count(*) as cnt FROM raw_clips
+           WHERE rating = 5 AND game_id = (SELECT MIN(id) FROM games)"""
+    ).fetchone()
+    steps["annotate_second_5_star"] = row["cnt"] >= 2
+
+    # 2+ framing export jobs exist (any status)
+    row = cursor.execute(
+        "SELECT count(*) as cnt FROM export_jobs WHERE type = 'framing'"
+    ).fetchone()
+    steps["export_second_highlight"] = row["cnt"] >= 2
+
+    # 2+ completed framing export jobs
+    row = cursor.execute(
+        "SELECT count(*) as cnt FROM export_jobs WHERE type = 'framing' AND status = 'complete'"
+    ).fetchone()
+    steps["wait_for_export_2"] = row["cnt"] >= 2
+
+    # --- Quest 4: Highlight Reel (second game + custom project) ---
+
+    # 2+ games
     row = cursor.execute("SELECT count(*) as cnt FROM games").fetchone()
     steps["upload_game_2"] = row["cnt"] >= 2
 
-    # Need ≥2 clips rated 5 on the second+ game (exclude first game)
-    row = cursor.execute(
-        """SELECT count(*) as cnt FROM raw_clips
-           WHERE rating = 5 AND game_id != (SELECT MIN(id) FROM games)"""
-    ).fetchone()
-    steps["annotate_brilliant_2"] = row["cnt"] >= 2
-
-    # Need ≥1 clip rated 4 on the second+ game
-    steps["annotate_4_star"] = cursor.execute(
+    # 1+ clip rated ≥4 on second+ game (exclude first game)
+    steps["annotate_game_2"] = cursor.execute(
         """SELECT 1 FROM raw_clips
-           WHERE rating = 4 AND game_id != (SELECT MIN(id) FROM games)
+           WHERE rating >= 4 AND game_id != (SELECT MIN(id) FROM games)
            LIMIT 1"""
     ).fetchone() is not None
 
-    # T740: Extraction merged into framing — auto-complete when custom project exists
-    steps["extract_custom_clips"] = cursor.execute(
+    # 1+ non-auto project with working_clips from 2+ distinct game_ids
+    steps["create_reel"] = cursor.execute(
         """SELECT 1 FROM projects p
            WHERE p.is_auto_created = 0
-           AND EXISTS (SELECT 1 FROM working_clips WHERE project_id = p.id)
-           LIMIT 1"""
-    ).fetchone() is not None
-
-    # All clips in a custom project have crop_data (framed individually)
-    steps["frame_custom_project"] = cursor.execute(
-        """SELECT 1 FROM projects p
-           WHERE p.is_auto_created = 0
-           AND EXISTS (SELECT 1 FROM working_clips WHERE project_id = p.id)
-           AND NOT EXISTS (
-               SELECT 1 FROM working_clips wc
+           AND (
+               SELECT COUNT(DISTINCT rc.game_id)
+               FROM working_clips wc
+               JOIN raw_clips rc ON wc.raw_clip_id = rc.id
                WHERE wc.project_id = p.id
-               AND (wc.crop_data IS NULL OR wc.crop_data = '')
-           )
+           ) >= 2
            LIMIT 1"""
     ).fetchone() is not None
 
-    # Framing export started for a custom project (any status)
-    steps["start_custom_framing"] = cursor.execute(
+    # 1+ framing export started on non-auto project
+    steps["export_reel"] = cursor.execute(
         """SELECT 1 FROM export_jobs ej
            JOIN projects p ON ej.project_id = p.id
            WHERE ej.type = 'framing' AND p.is_auto_created = 0
            LIMIT 1"""
     ).fetchone() is not None
 
-    # Framing export completed for a custom project
-    steps["complete_custom_framing"] = cursor.execute(
+    # 1+ completed framing export on non-auto project
+    steps["wait_for_reel"] = cursor.execute(
         """SELECT 1 FROM export_jobs ej
            JOIN projects p ON ej.project_id = p.id
-           WHERE ej.status = 'complete' AND ej.type = 'framing'
+           WHERE ej.type = 'framing' AND ej.status = 'complete'
            AND p.is_auto_created = 0
            LIMIT 1"""
     ).fetchone() is not None
 
-    # Overlay export completed for a custom project
-    steps["overlay_custom_project"] = cursor.execute(
-        """SELECT 1 FROM export_jobs ej
-           JOIN projects p ON ej.project_id = p.id
-           WHERE ej.status = 'complete' AND ej.type = 'overlay'
-           AND p.is_auto_created = 0
-           LIMIT 1"""
-    ).fetchone() is not None
-
-    # Watched a custom project video from gallery (separate from Quest 2's general gallery view)
-    steps["watch_custom_video"] = cursor.execute(
+    # Watched a custom project video from gallery
+    steps["watch_reel"] = cursor.execute(
         "SELECT 1 FROM achievements WHERE key = 'viewed_custom_project_video'"
-    ).fetchone() is not None
-
-    # Any custom (non-auto) project with clips
-    steps["create_mixed_project"] = cursor.execute(
-        """SELECT 1 FROM projects p
-           WHERE p.is_auto_created = 0
-           AND EXISTS (SELECT 1 FROM working_clips WHERE project_id = p.id)
-           LIMIT 1"""
     ).fetchone() is not None
 
     return steps
