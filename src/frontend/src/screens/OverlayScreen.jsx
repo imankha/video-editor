@@ -124,6 +124,7 @@ export function OverlayScreen({
   const fullscreenContainerRef = useRef(null);
   const videoLoadedFromUrlRef = useRef(null); // Track which URL we've loaded to prevent infinite loops
   const workingVideoFetchUrlRef = useRef(null); // Track which presigned URL we've started fetching
+  const workingVideoRecoveryAttemptedRef = useRef(false); // Guard against infinite refresh loops
 
   // =========================================
   // DETERMINE EFFECTIVE VIDEO SOURCE
@@ -307,6 +308,7 @@ export function OverlayScreen({
     // Use ref to prevent duplicate fetches (allows loading even if isLoadingWorkingVideo was pre-set)
     if (!workingVideo && project?.working_video_url && workingVideoFetchUrlRef.current !== project.working_video_url) {
       workingVideoFetchUrlRef.current = project.working_video_url;
+      workingVideoRecoveryAttemptedRef.current = false; // Reset recovery guard
       setIsLoadingWorkingVideo(true);
 
       (async () => {
@@ -326,6 +328,19 @@ export function OverlayScreen({
           setIsLoadingWorkingVideo(false);
         }
       })();
+    } else if (!workingVideo && !project?.working_video_url && isLoadingWorkingVideo) {
+      // Stuck state: isLoadingWorkingVideo was set externally (by FramingScreen) but
+      // project data doesn't include working_video_url. This happens when React renders
+      // OverlayScreen before the refreshed project data has propagated.
+      // Recovery: refresh project once to get the URL. If still missing, clear the flag.
+      if (!workingVideoRecoveryAttemptedRef.current) {
+        workingVideoRecoveryAttemptedRef.current = true;
+        console.log('[OverlayScreen] isLoadingWorkingVideo=true but no URL — refreshing project to get presigned URL');
+        refreshProject();
+      } else {
+        console.warn('[OverlayScreen] Working video URL still missing after refresh — clearing loading state');
+        setIsLoadingWorkingVideo(false);
+      }
     } else if (!workingVideo && !project?.working_video_url && !isLoadingWorkingVideo) {
       // No working video URL available at all — log why
       console.warn('[OverlayScreen] No working video URL in project data', {
@@ -334,7 +349,7 @@ export function OverlayScreen({
         hasProject: !!project,
       });
     }
-  }, [workingVideo, project?.working_video_url, project?.working_video_id, projectId, isLoadingWorkingVideo, setIsLoadingWorkingVideo, setWorkingVideo]);
+  }, [workingVideo, project?.working_video_url, project?.working_video_id, projectId, isLoadingWorkingVideo, setIsLoadingWorkingVideo, setWorkingVideo, refreshProject]);
 
   // Load video into useVideo hook when effectiveOverlayVideoUrl is available
   // Uses a ref to track the source URL to prevent infinite loops (blob URLs are always unique)
