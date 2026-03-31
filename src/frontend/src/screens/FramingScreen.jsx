@@ -374,6 +374,7 @@ export function FramingScreen({
 
   // Track the last loaded URL to detect when clip changes
   const lastLoadedUrlRef = useRef(null);
+  const stateRestoredForUrlRef = useRef(null); // Guard against infinite restore loops
 
   /**
    * Get the video URL and clip range for a clip.
@@ -419,26 +420,31 @@ export function FramingScreen({
     const { url: clipUrl, clipRange } = getClipVideoConfig(firstClip);
     if (!clipUrl) return;
 
-    // Always restore framing state (crop keyframes, segments) from clip data.
+    // Restore framing state (crop keyframes, segments) from clip data if not already done.
     // The useLayoutEffect above may have already loaded the video (for overlay→framing
-    // transitions), but state restoration still needs to happen.
-    const firstClipWithMeta = getClipWithMeta(firstClip);
-    const parsedSegments = clipSegments(firstClip, firstClipWithMeta?.duration || 0);
-    const parsedCropKfs = clipCropKeyframes(firstClip);
+    // transitions), but state restoration still needs to happen. Guard with ref to
+    // prevent infinite loops (restore updates state → re-render → effect re-fires).
+    if (stateRestoredForUrlRef.current !== clipUrl) {
+      stateRestoredForUrlRef.current = clipUrl;
 
-    if (parsedSegments) {
-      restoreSegmentState(parsedSegments, firstClipWithMeta?.duration || 0);
-    }
+      const firstClipWithMeta = getClipWithMeta(firstClip);
+      const parsedSegments = clipSegments(firstClip, firstClipWithMeta?.duration || 0);
+      const parsedCropKfs = clipCropKeyframes(firstClip);
 
-    if (parsedCropKfs && parsedCropKfs.length > 0) {
-      const endFrame = Math.round((firstClipWithMeta?.duration || 0) * (firstClipWithMeta?.framerate || 30));
-      if (endFrame > 0) {
-        restoreCropState(parsedCropKfs, endFrame);
+      if (parsedSegments) {
+        restoreSegmentState(parsedSegments, firstClipWithMeta?.duration || 0);
       }
-    }
 
-    if (firstClip.id) {
-      previousClipIdRef.current = firstClip.id;
+      if (parsedCropKfs && parsedCropKfs.length > 0) {
+        const endFrame = Math.round((firstClipWithMeta?.duration || 0) * (firstClipWithMeta?.framerate || 30));
+        if (endFrame > 0) {
+          restoreCropState(parsedCropKfs, endFrame);
+        }
+      }
+
+      if (firstClip.id) {
+        previousClipIdRef.current = firstClip.id;
+      }
     }
 
     // Skip video loading if already loaded (e.g., by useLayoutEffect on mount)
