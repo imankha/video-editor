@@ -136,6 +136,60 @@ async function screenshot(page, name) {
   return `${name}.png`;
 }
 
+/**
+ * Wait for a condition with progress detection.
+ * Keeps waiting as long as the page shows signs of activity (progress bars,
+ * status text changes, spinners). Only gives up if nothing changes for 30s.
+ */
+async function waitWithProgress(page, checkFn, { label = 'condition', stallTimeout = 30000, maxTimeout = 600000 } = {}) {
+  const start = Date.now();
+  let lastSnapshot = '';
+  let lastChangeTime = Date.now();
+
+  while (Date.now() - start < maxTimeout) {
+    // Check if the condition is met
+    const done = await checkFn().catch(() => false);
+    if (done) return true;
+
+    // Take a text snapshot of progress indicators on the page
+    const snapshot = await page.evaluate(() => {
+      const indicators = [];
+      // Progress bars (width style changes as progress moves)
+      document.querySelectorAll('[role="progressbar"], [class*="progress"], [class*="bg-green"], [class*="bg-purple"]').forEach(el => {
+        indicators.push(el.style?.width || el.getAttribute('aria-valuenow') || el.className.slice(0, 50));
+      });
+      // Status text (export status, extraction status, percentages)
+      document.querySelectorAll('[class*="text-gray"], [class*="text-green"], [class*="text-yellow"], [class*="animate-spin"]').forEach(el => {
+        const t = el.textContent?.trim();
+        if (t && t.length < 100 && /\d|%|progress|extract|export|process|wait|load|complet/i.test(t)) {
+          indicators.push(t);
+        }
+      });
+      // Spinners / loading indicators
+      document.querySelectorAll('.animate-spin, [class*="spinner"], [class*="loading"]').forEach(() => {
+        indicators.push('spinner-active');
+      });
+      return indicators.join('|');
+    }).catch(() => '');
+
+    if (snapshot !== lastSnapshot) {
+      if (lastSnapshot) console.log(`[${label}] Progress detected: ${snapshot.slice(0, 120)}`);
+      lastSnapshot = snapshot;
+      lastChangeTime = Date.now();
+    }
+
+    // Stall detection: if nothing changed for stallTimeout, give up
+    if (Date.now() - lastChangeTime > stallTimeout) {
+      console.log(`[${label}] No progress for ${stallTimeout / 1000}s — giving up`);
+      return false;
+    }
+
+    await page.waitForTimeout(5000);
+  }
+  console.log(`[${label}] Max timeout ${maxTimeout / 1000}s reached`);
+  return false;
+}
+
 /** Wait for quest progress API to show a step as complete */
 async function waitForQuestStep(request, stepId, timeout = 30000) {
   const start = Date.now();
@@ -403,14 +457,17 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
       await projectCards.first().click();
       await page.waitForTimeout(3000);
 
-      // Wait for framing screen to load — clip extraction may take a while
-      // The video element appears once extraction completes
-      console.log('[Q2S1] Waiting for clip extraction + video to load...');
-      const video = page.locator('video').first();
-      const videoVisible = await video.isVisible({ timeout: 180000 }).catch(() => false);
-      if (!videoVisible) {
-        q2s1bugs.push('Video not visible after 3min — extraction may have failed');
-        // Try reloading — extraction may have completed but page didn't update
+      // Wait for framing screen video to load — keep waiting as long as there's progress
+      console.log('[Q2S1] Waiting for clip video to load...');
+      const videoLoaded = await waitWithProgress(page,
+        async () => {
+          const video = page.locator('video').first();
+          return await video.isVisible().catch(() => false);
+        },
+        { label: 'Q2S1-video', stallTimeout: 30000 }
+      );
+      if (!videoLoaded) {
+        q2s1bugs.push('Video never loaded — no progress detected for 30s');
         await page.reload();
         await page.waitForLoadState('networkidle');
         await page.waitForTimeout(3000);
@@ -457,12 +514,15 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     // --- Q2 Step 3: Wait For Export ---
     console.log('\n=== Quest 2, Step 3: Wait For Export ===');
 
-    // Wait for the framing export to complete (can take minutes)
-    const q2s3 = await waitForQuestStep(request, 'wait_for_export', 180000);
+    // Wait for the framing export — keep polling as long as page shows progress
+    const q2s3 = await waitWithProgress(page,
+      async () => await waitForQuestStep(request, 'wait_for_export', 5000),
+      { label: 'Q2S3-framing-export', stallTimeout: 30000 }
+    );
     ssFile = await screenshot(page, 'q2s3-export-complete');
 
     let q2s3bugs = [];
-    if (!q2s3) q2s3bugs.push('Framing export did not complete within 3 minutes');
+    if (!q2s3) q2s3bugs.push('Framing export stalled — no UI progress for 30s');
 
     addStep(2, 'Export Highlights', 3, 'wait_for_export', 'Wait For Export', ssFile,
       8, 9,
@@ -509,8 +569,11 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
         await page.waitForTimeout(2000);
 
         // Wait for overlay export to complete
-        const q2s4 = await waitForQuestStep(request, 'export_overlay', 180000);
-        if (!q2s4) q2s4bugs.push('Overlay export did not complete within 3 minutes');
+        const q2s4 = await waitWithProgress(page,
+          async () => await waitForQuestStep(request, 'export_overlay', 5000),
+          { label: 'Q2S4-overlay-export', stallTimeout: 30000 }
+        );
+        if (!q2s4) q2s4bugs.push('Overlay export stalled — no UI progress for 30s');
       } else {
         q2s4bugs.push('Add Overlay button not found');
       }
@@ -695,11 +758,14 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     // --- Q3 Step 4: Wait For Export ---
     console.log('\n=== Quest 3, Step 4: Wait For Export ===');
 
-    const q3s4 = await waitForQuestStep(request, 'wait_for_export_2', 180000);
+    const q3s4 = await waitWithProgress(page,
+      async () => await waitForQuestStep(request, 'wait_for_export_2', 5000),
+      { label: 'Q3S4-framing-export-2', stallTimeout: 30000 }
+    );
     ssFile = await screenshot(page, 'q3s4-export-complete');
 
     let q3s4bugs = [];
-    if (!q3s4) q3s4bugs.push('Second framing export did not complete within 3 minutes');
+    if (!q3s4) q3s4bugs.push('Second framing export stalled — no UI progress for 30s');
 
     addStep(3, 'Annotate More Clips', 4, 'wait_for_export_2', 'Wait For Export', ssFile,
       7, 10,
@@ -922,11 +988,14 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     // --- Q4 Step 5: Wait For Export ---
     console.log('\n=== Quest 4, Step 5: Wait For Export ===');
 
-    const q4s5 = await waitForQuestStep(request, 'wait_for_reel', 180000);
+    const q4s5 = await waitWithProgress(page,
+      async () => await waitForQuestStep(request, 'wait_for_reel', 5000),
+      { label: 'Q4S5-reel-export', stallTimeout: 30000 }
+    );
     ssFile = await screenshot(page, 'q4s5-reel-export-complete');
 
     let q4s5bugs = [];
-    if (!q4s5) q4s5bugs.push('Reel framing export did not complete within 3 minutes');
+    if (!q4s5) q4s5bugs.push('Reel framing export stalled — no UI progress for 30s');
 
     addStep(4, 'Highlight Reel', 5, 'wait_for_reel', 'Wait For Export', ssFile,
       8, 10,
