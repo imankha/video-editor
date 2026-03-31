@@ -2,4 +2,4 @@
 # This ensures a fresh new-user experience for NUF testing.
 # One email per line. Lines starting with # are comments.
 
-imankh@gmail.com
+hello@reelballers.com
