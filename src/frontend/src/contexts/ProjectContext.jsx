@@ -1,11 +1,11 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { API_BASE } from '../config';
-import { useNavigationStore } from '../stores/navigationStore';
+import { useProjectsStore } from '../stores/projectsStore';
 
 const ProjectContext = createContext(null);
 
 export function ProjectProvider({ children }) {
-  const projectId = useNavigationStore(state => state.projectId);
+  const projectId = useProjectsStore(state => state.selectedProjectId);
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

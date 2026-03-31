@@ -12,7 +12,7 @@ import { frameToTime } from '../utils/videoUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { API_BASE } from '../config';
 import { useProject } from '../contexts/ProjectContext';
-import { useNavigationStore } from '../stores/navigationStore';
+import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useOverlayStore } from '../stores/overlayStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useFramingStore } from '../stores/framingStore';
@@ -46,7 +46,7 @@ export function OverlayScreen({
   exportButtonRef: externalExportButtonRef,
 }) {
   // Navigation
-  const navigate = useNavigationStore(state => state.navigate);
+  const setEditorMode = useEditorStore(state => state.setEditorMode);
 
   // Project context
   const { projectId, project, refresh: refreshProject } = useProject();
@@ -839,12 +839,12 @@ export function OverlayScreen({
 
   const handleSwitchToFraming = useCallback(() => {
     // NOTE: Safety blob save removed - gesture-based actions sync immediately to backend.
-    navigate('framing');
-  }, [navigate]);
+    setEditorMode(EDITOR_MODES.FRAMING);
+  }, [setEditorMode]);
 
   const handleBackToProjects = useCallback(() => {
-    navigate('project-manager');
-  }, [navigate]);
+    setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
+  }, [setEditorMode]);
 
   const handleExportComplete = useCallback(() => {
     refreshProject();

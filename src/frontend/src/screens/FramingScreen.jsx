@@ -19,7 +19,7 @@ import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUt
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
-import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useNavigationStore, useVideoStore } from '../stores';
+import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 
 /**
@@ -762,7 +762,7 @@ export function FramingScreen({
 
   // Handle proceed to overlay
   const handleProceedToOverlayInternal = useCallback(async (renderedVideoBlob, clipMetadata, exportedProjectId) => {
-    const currentlyViewingProjectId = useNavigationStore.getState().projectId;
+    const currentlyViewingProjectId = useProjectsStore.getState().selectedProjectId;
 
     console.log('[FramingScreen] Starting overlay transition...', {
       exportedProjectId,

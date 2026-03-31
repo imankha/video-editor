@@ -3,7 +3,6 @@ import { ProjectManager } from '../components/ProjectManager';
 import { DownloadsPanel } from '../components/DownloadsPanel';
 import { useGameUpload } from '../hooks/useGameUpload';
 import { useProjectLoader } from '../hooks/useProjectLoader';
-import { useNavigationStore } from '../stores/navigationStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useExportStore } from '../stores/exportStore';
 import { useGalleryStore } from '../stores/galleryStore';
@@ -60,7 +59,6 @@ export function ProjectsScreen({
   onLoadGame: onLoadGameProp, // Callback to set pendingGameId in App.jsx
   // onProjectSelected removed — selectProject updates Zustand store directly
 }) {
-  const navigate = useNavigationStore(state => state.navigate);
   const setEditorMode = useEditorStore(state => state.setEditorMode);
 
   // Project management — Zustand store (reactive to profile switches)

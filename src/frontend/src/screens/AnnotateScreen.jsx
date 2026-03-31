@@ -37,7 +37,6 @@ import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from 
  */
 export function AnnotateScreen({ onClearSelection }) {
   // Editor mode (for navigation between screens)
-  // NOTE: Using editorStore (not navigationStore) because App.jsx renders based on editorStore
   const setEditorMode = useEditorStore(state => state.setEditorMode);
 
   // Games — Zustand store (reactive to profile switches)

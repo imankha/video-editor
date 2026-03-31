@@ -209,7 +209,6 @@ async function _resetDataStores() {
   stores.useFramingStore.getState().reset();
   stores.useOverlayStore.getState().reset();
   stores.useVideoStore.getState().reset();
-  stores.useNavigationStore.getState().reset();
   stores.useExportStore.getState().reset();
   stores.useUploadStore.getState().reset();
   stores.useGalleryStore.getState().reset();

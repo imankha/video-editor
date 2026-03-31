@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import { API_BASE } from '../config';
-import { useNavigationStore } from '../stores/navigationStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useFramingStore } from '../stores/framingStore';
 import { useOverlayStore } from '../stores/overlayStore';
@@ -70,7 +69,6 @@ function buildClipMetadata(clipsData) {
  * Backend clip IDs used directly.
  */
 export function useProjectLoader() {
-  const { setProjectId, navigate } = useNavigationStore();
   const {
     setProjectClips,
     setWorkingVideo,
@@ -111,9 +109,6 @@ export function useProjectLoader() {
       setLoading(true, 'loading');
 
       onProgress({ stage: 'loading', message: 'Loading project...' });
-
-      // Update navigation state
-      setProjectId(projectId);
 
       // Determine target mode
       const targetMode = mode || (project.working_video_id ? 'overlay' : 'framing');
@@ -241,9 +236,6 @@ export function useProjectLoader() {
       setLoading(false, 'complete');
       onProgress({ stage: 'complete', message: 'Project loaded' });
 
-      // Navigate to target mode
-      navigate(targetMode);
-
       return {
         project,
         clips: clipsData,
@@ -258,7 +250,7 @@ export function useProjectLoader() {
       setLoading(false);
       throw err;
     }
-  }, [setProjectId, navigate, resetProjectData, resetFramingStore, resetOverlayStore, resetVideoStore, setProjectClips, setWorkingVideo, setAspectRatio, setClipMetadata, setLoading, setClipMetadataCache, updateClipMetadata]);
+  }, [resetProjectData, resetFramingStore, resetOverlayStore, resetVideoStore, setProjectClips, setWorkingVideo, setAspectRatio, setClipMetadata, setLoading, setClipMetadataCache, updateClipMetadata]);
 
   return { loadProject };
 }
