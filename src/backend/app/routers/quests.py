@@ -119,11 +119,11 @@ def _check_all_steps(user_id: str, conn) -> dict:
 
     # --- Quest 3: Annotate More Clips (first game only) ---
 
-    # 6+ total raw_clips on first game
+    # 3+ total raw_clips on first game (at least 1 more beyond the 2 five-star clips)
     row = cursor.execute(
         "SELECT count(*) as cnt FROM raw_clips WHERE game_id = (SELECT MIN(id) FROM games)"
     ).fetchone()
-    steps["annotate_5_more"] = row["cnt"] >= 6
+    steps["annotate_5_more"] = row["cnt"] >= 3
 
     # 2+ clips rated 5 on first game
     row = cursor.execute(

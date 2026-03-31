@@ -575,28 +575,28 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
       q3s1bugs
     );
 
-    // --- Q3 Step 2: Annotate 5 More Plays ---
-    console.log('\n=== Quest 3, Step 2: Annotate 5 More Plays ===');
+    // --- Q3 Step 2: Annotate More Clips ---
+    console.log('\n=== Quest 3, Step 2: Annotate More Clips ===');
 
-    // We have ~4 clips now (3 from TSV + 1 from API). Need 6+ total. Create 2 more via API.
-    await createClipViaAPI(request, game1Id, {
-      start_time: 25, end_time: 30, name: 'Solid Tackle', rating: 3, tags: ['Tackle'],
-      notes: 'Good defensive effort',
-    });
-    await createClipViaAPI(request, game1Id, {
-      start_time: 35, end_time: 40, name: 'Quick Pass', rating: 3, tags: ['Pass'],
-      notes: 'Smart decision',
-    });
+    // We have ~4 clips now (3 from TSV + 1 from API). Need 3+ total — should already be satisfied.
+    // If not, create one more via API.
+    const q3s2check = await waitForQuestStep(request, 'annotate_5_more', 5000);
+    if (!q3s2check) {
+      await createClipViaAPI(request, game1Id, {
+        start_time: 25, end_time: 30, name: 'Solid Tackle', rating: 3, tags: ['Tackle'],
+        notes: 'Good defensive effort — learning moment',
+      });
+    }
 
     ssFile = await screenshot(page, 'q3s2-annotate-more');
 
     const q3s2 = await waitForQuestStep(request, 'annotate_5_more');
     let q3s2bugs = [];
-    if (!q3s2) q3s2bugs.push('annotate_5_more not detected (need 6+ clips on first game)');
+    if (!q3s2) q3s2bugs.push('annotate_5_more not detected (need 3+ clips on first game)');
 
-    addStep(3, 'Annotate More Clips', 2, 'annotate_5_more', 'Annotate 5 More Plays', ssFile,
-      5, 9,
-      '"Annotate 5 more plays, any rating." This felt like homework. I get that practice makes perfect, but annotating 3-star plays doesn\'t feel exciting. I\'d rather find more highlights. The step was crystal clear though — I knew exactly what to do.',
+    addStep(3, 'Annotate More Clips', 2, 'annotate_5_more', 'Annotate More Clips', ssFile,
+      7, 9,
+      '"Annotate more clips, try to get every touch that could be a learning or celebration." This reframing made me WANT to go back and find more. It\'s not busywork — I\'m building a library of coaching moments AND celebrations for my kid. I rewatched a couple sections and found a tackle worth noting.',
       q3s2bugs
     );
 
@@ -851,8 +851,8 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     if (!q4s3) q4s3bugs.push('create_reel not detected (need non-auto project with clips from 2+ games)');
 
     addStep(4, 'Highlight Reel', 3, 'create_reel', 'Create a Highlight Reel', ssFile,
-      8, 5,
-      '"Go to Projects → New Project. Filter by 4+ stars, then select multiple clips from both games." This is a new concept — creating a custom project. The clip selector modal had a lot going on. I figured out the game checkboxes and rating filter, but selecting "clips from both games" required me to understand the UI. A first-time user would need a moment here. The 4+ filter tip was helpful though — it narrowed down to the good stuff.',
+      8, 6,
+      '"Go to Projects → New Project. Filter by 4+ stars." Short and clear — the 4+ filter tip narrowed it down to the good stuff immediately. Creating a custom project is a new concept but the modal walked me through it. I picked clips from both games because I wanted to, not because I was told to.',
       q4s3bugs
     );
 

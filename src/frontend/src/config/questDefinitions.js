@@ -72,8 +72,8 @@ export const QUESTS = [
       },
       {
         id: 'annotate_5_more',
-        title: 'Annotate 5 More Plays',
-        description: 'Annotate 5 more plays, any rating.',
+        title: 'Annotate More Clips',
+        description: 'Annotate more clips, try to get every touch that could be a learning or celebration.',
       },
       {
         id: 'export_second_highlight',
@@ -110,7 +110,7 @@ export const QUESTS = [
       {
         id: 'create_reel',
         title: 'Create a Highlight Reel',
-        description: 'Go to Projects → New Project. Filter by 4+ stars, then select multiple clips from both games.',
+        description: 'Go to Projects → New Project. Filter by 4+ stars.',
       },
       {
         id: 'export_reel',
