@@ -1,6 +1,6 @@
 # T775: Delete navigationStore — Duplicate State and Dead Routing Code
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-03-29
