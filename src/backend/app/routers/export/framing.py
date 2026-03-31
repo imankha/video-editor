@@ -325,10 +325,11 @@ async def export_framing(
             UPDATE projects SET working_video_id = ? WHERE id = ?
         """, (working_video_id, project_id))
 
-        # Set exported_at timestamp for all working clips (latest versions only)
+        # Set exported_at and snapshot current boundaries_version for all working clips (latest versions only)
         cursor.execute(f"""
             UPDATE working_clips
-            SET exported_at = datetime('now')
+            SET exported_at = datetime('now'),
+                raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
             WHERE project_id = ?
             AND id IN ({latest_working_clips_subquery()})
         """, (project_id, project_id))
@@ -346,7 +347,8 @@ async def export_framing(
             if total_clips > 0:
                 cursor.execute("""
                     UPDATE working_clips
-                    SET exported_at = datetime('now')
+                    SET exported_at = datetime('now'),
+                        raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
                     WHERE project_id = ?
                     AND exported_at IS NULL
                 """, (project_id,))
@@ -566,7 +568,9 @@ async def _run_local_framing_export(
             """, (working_video_id, working_filename, result.get("gpu_seconds"), result.get("modal_function"), export_id))
 
             cursor.execute(f"""
-                UPDATE working_clips SET exported_at = datetime('now')
+                UPDATE working_clips
+                SET exported_at = datetime('now'),
+                    raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
                 WHERE project_id = ? AND id IN ({latest_working_clips_subquery()})
             """, (project_id, project_id))
 
@@ -1115,9 +1119,11 @@ async def render_project(request: RenderRequest, http_request: Request):
                 WHERE id = ?
             """, (working_video_id, working_filename, result.get("gpu_seconds"), result.get("modal_function"), export_id))
 
-            # Set exported_at for working clips
+            # Set exported_at and snapshot current boundaries_version for working clips
             cursor.execute(f"""
-                UPDATE working_clips SET exported_at = datetime('now')
+                UPDATE working_clips
+                SET exported_at = datetime('now'),
+                    raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
                 WHERE project_id = ? AND id IN ({latest_working_clips_subquery()})
             """, (project_id, project_id))
 
