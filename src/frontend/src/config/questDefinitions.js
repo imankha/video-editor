@@ -62,28 +62,33 @@ export const QUESTS = [
   },
   {
     id: 'quest_3',
-    title: 'Find More Highlights',
+    title: 'Annotate More Clips',
     reward: 40,
     steps: [
-      {
-        id: 'annotate_5_more',
-        title: 'Clip 5 More Plays',
-        description: 'Go back to your game and clip 5 more plays — any rating.',
-      },
       {
         id: 'annotate_second_5_star',
         title: 'Find Another 5 Star Moment',
         description: 'Every game has more than one highlight — find it!',
       },
       {
+        id: 'annotate_5_more',
+        title: 'Annotate 5 More Plays',
+        description: 'Annotate 5 more plays, any rating.',
+      },
+      {
         id: 'export_second_highlight',
         title: 'Export Another Highlight',
-        description: 'Pick any 5-star project, frame it, and click "Frame Video".',
+        description: 'Pick a project, and click "Frame Video" to frame it.',
       },
       {
         id: 'wait_for_export_2',
         title: 'Wait For Export',
         description: 'Wait for the framing export to finish.',
+      },
+      {
+        id: 'watch_second_highlight',
+        title: 'Watch Your Highlight',
+        description: 'Open the Gallery and watch your new highlight!',
       },
     ],
   },
@@ -105,7 +110,7 @@ export const QUESTS = [
       {
         id: 'create_reel',
         title: 'Create a Highlight Reel',
-        description: 'Go to Projects → New Project. Pick clips from both games to build your reel.',
+        description: 'Go to Projects → New Project. Filter by 4+ stars, then select multiple clips from both games.',
       },
       {
         id: 'export_reel',

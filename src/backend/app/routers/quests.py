@@ -47,13 +47,14 @@ QUEST_DEFINITIONS = [
     },
     {
         "id": "quest_3",
-        "title": "Find More Highlights",
+        "title": "Annotate More Clips",
         "reward": 40,
         "step_ids": [
-            "annotate_5_more",
             "annotate_second_5_star",
+            "annotate_5_more",
             "export_second_highlight",
             "wait_for_export_2",
+            "watch_second_highlight",
         ],
     },
     {
@@ -116,7 +117,7 @@ def _check_all_steps(user_id: str, conn) -> dict:
         "SELECT 1 FROM achievements WHERE key = 'viewed_gallery_video'"
     ).fetchone() is not None
 
-    # --- Quest 3: Find More Highlights (first game only) ---
+    # --- Quest 3: Annotate More Clips (first game only) ---
 
     # 6+ total raw_clips on first game
     row = cursor.execute(
@@ -142,6 +143,11 @@ def _check_all_steps(user_id: str, conn) -> dict:
         "SELECT count(*) as cnt FROM export_jobs WHERE type = 'framing' AND status = 'complete'"
     ).fetchone()
     steps["wait_for_export_2"] = row["cnt"] >= 2
+
+    # Watch the new highlight in Gallery (auto-completes if viewed_gallery_video already recorded)
+    steps["watch_second_highlight"] = cursor.execute(
+        "SELECT 1 FROM achievements WHERE key = 'viewed_gallery_video'"
+    ).fetchone() is not None
 
     # --- Quest 4: Highlight Reel (second game + custom project) ---
 
