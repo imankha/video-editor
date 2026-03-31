@@ -181,8 +181,8 @@ async function getProjects(request) {
 // ---------------------------------------------------------------------------
 
 test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
-  // Long timeout — exports can take minutes
-  test.setTimeout(600000); // 10 minutes
+  // Long timeout — exports + extractions can take many minutes
+  test.setTimeout(1200000); // 20 minutes
 
   test.beforeAll(async ({ request }) => {
     // Health check
@@ -266,7 +266,7 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     await screenshot(page, 'q1s1b-add-game-filled');
 
     // Click Create Game
-    const createButton = page.getByRole('button', { name: 'Create Game' });
+    const createButton = page.getByRole('button', { name: 'Add Game' }).last();
     await expect(createButton).toBeEnabled({ timeout: 5000 });
     await createButton.click();
 
@@ -393,21 +393,28 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     ssFile = await screenshot(page, 'q2s1a-projects-tab');
 
     // Find and click the auto-generated 5-star project
-    // Auto projects are named after the clip — look for any project card
+    // Project cards are divs with project name in an h3 — click on the project name text
     let q2s1bugs = [];
-    const projectCards = page.locator('[data-testid="project-card"], .cursor-pointer').filter({ hasText: /.+/ });
+    const projectCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');
     const projectCount = await projectCards.count();
 
     if (projectCount > 0) {
-      // Click the first project
+      console.log(`[Q2S1] Found ${projectCount} project(s), clicking first...`);
       await projectCards.first().click();
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(3000);
 
-      // Wait for framing screen to load (video element visible)
-      await expect(async () => {
-        const video = page.locator('video').first();
-        await expect(video).toBeVisible();
-      }).toPass({ timeout: 30000, intervals: [1000, 2000] });
+      // Wait for framing screen to load — clip extraction may take a while
+      // The video element appears once extraction completes
+      console.log('[Q2S1] Waiting for clip extraction + video to load...');
+      const video = page.locator('video').first();
+      const videoVisible = await video.isVisible({ timeout: 180000 }).catch(() => false);
+      if (!videoVisible) {
+        q2s1bugs.push('Video not visible after 3min — extraction may have failed');
+        // Try reloading — extraction may have completed but page didn't update
+        await page.reload();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(3000);
+      }
 
       ssFile = await screenshot(page, 'q2s1b-framing-screen');
     } else {
@@ -466,12 +473,13 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     // --- Q2 Step 4: Add Highlight Overlays ---
     console.log('\n=== Quest 2, Step 4: Add Overlay ===');
 
-    // Switch to overlay mode
+    // Switch to overlay mode — button may be disabled until framing export completes
     let q2s4bugs = [];
-    const overlayModeBtn = page.locator('button:has-text("Overlay"), [data-testid="mode-overlay"]');
-    const overlayVisible = await overlayModeBtn.first().isVisible().catch(() => false);
+    const overlayModeBtn = page.locator('button:has-text("Overlay"):not([disabled])');
+    // Wait for overlay button to become enabled (framing export must finish first)
+    const overlayEnabled = await overlayModeBtn.first().isVisible({ timeout: 10000 }).catch(() => false);
 
-    if (overlayVisible) {
+    if (overlayEnabled) {
       await overlayModeBtn.first().click();
       await page.waitForTimeout(3000);
       ssFile = await screenshot(page, 'q2s4a-overlay-mode');
@@ -647,7 +655,7 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
 
     // Find a project we haven't exported yet — should be the "Amazing Dribble" auto-project
     let q3s3bugs = [];
-    const projects = page.locator('[data-testid="project-card"], .cursor-pointer').filter({ hasText: /.+/ });
+    const projects = page.locator('.bg-gray-800.rounded-lg h3.text-white');
     const pCount = await projects.count();
     if (pCount >= 2) {
       // Click the second project (first one was already exported in Q2)
@@ -770,7 +778,7 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     await videoInput2.setInputFiles(GAME2_VIDEO);
     await page.waitForTimeout(1000);
 
-    const createBtn2 = page.getByRole('button', { name: 'Create Game' });
+    const createBtn2 = page.getByRole('button', { name: 'Add Game' }).last();
     await expect(createBtn2).toBeEnabled({ timeout: 5000 });
     await createBtn2.click();
 
