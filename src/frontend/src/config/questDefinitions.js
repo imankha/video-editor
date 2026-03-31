@@ -18,7 +18,7 @@ export const QUESTS = [
       },
       {
         id: 'annotate_brilliant',
-        title: 'Annotate at Least 1 5 Star Play',
+        title: 'Annotate a 5 Star Play',
         description: 'When you spot a great play, click Add Clip and rate it 5 stars.',
       },
       {
@@ -36,12 +36,17 @@ export const QUESTS = [
       {
         id: 'open_framing',
         title: 'Open a Project',
-        description: 'Go Home, then go to Projects, then select a project and enter Framing mode',
+        description: 'Go Home, then go to Projects, then select a project',
       },
       {
         id: 'export_framing',
         title: 'Frame Video',
-        description: 'Crop, trim, and slow down segments to frame your clip. When you export, we AI upscale your video to crisp 1080p.',
+        description: 'Crop, trim, and slow down segments to frame your clip. Then click "Frame Video".',
+      },
+      {
+        id: 'wait_for_export',
+        title: 'Wait For Export',
+        description: 'Wait for the framing export to finish. We AI upscale your video to crisp 1080p.',
       },
       {
         id: 'export_overlay',

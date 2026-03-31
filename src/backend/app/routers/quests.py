@@ -40,6 +40,7 @@ QUEST_DEFINITIONS = [
         "step_ids": [
             "open_framing",
             "export_framing",
+            "wait_for_export",
             "export_overlay",
             "view_gallery_video",
         ],
@@ -92,7 +93,13 @@ def _check_all_steps(user_id: str, conn) -> dict:
     # T740: Extraction merged into framing — auto-complete when framing editor is opened
     steps["extract_clip"] = steps.get("open_framing", False)
 
+    # export_framing: user clicked "Frame Video" (export job exists, any status)
     steps["export_framing"] = cursor.execute(
+        "SELECT 1 FROM export_jobs WHERE type = 'framing' LIMIT 1"
+    ).fetchone() is not None
+
+    # wait_for_export: framing export completed successfully
+    steps["wait_for_export"] = cursor.execute(
         "SELECT 1 FROM export_jobs WHERE type = 'framing' AND status = 'complete' LIMIT 1"
     ).fetchone() is not None
 
