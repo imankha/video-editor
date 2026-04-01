@@ -8,7 +8,7 @@
  * so users can visually match what they see in the quest panel to the app UI.
  */
 
-import { Home, Image, Play } from 'lucide-react';
+import { Home, Image, Play, Plus, Star, Crop } from 'lucide-react';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
 function QIcon({ icon: IconComponent, className = 'text-gray-300' }) {
@@ -20,6 +20,11 @@ function QIcon({ icon: IconComponent, className = 'text-gray-300' }) {
 /** Green square marker — matches the overlay timeline keyframe markers */
 function GreenSquare() {
   return <span className="inline-block align-text-bottom mx-0.5 w-2.5 h-2.5 bg-green-500 rounded-sm" />;
+}
+
+/** Filled star — matches the yellow rating stars in the clip editor */
+function FilledStar() {
+  return <Star size={12} className="inline-block align-text-bottom mx-px" fill="#fbbf24" color="#fbbf24" />;
 }
 
 export const QUESTS = [
@@ -36,7 +41,7 @@ export const QUESTS = [
       {
         id: 'annotate_brilliant',
         title: 'Annotate a 5 Star Play',
-        description: 'When you spot a great play, click Add Clip and rate it 5 stars.',
+        description: <>When you spot a great play, click <QIcon icon={Plus} className="text-green-400" /> Add Clip and rate it <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /></>,
       },
       {
         id: 'playback_annotations',
@@ -58,7 +63,7 @@ export const QUESTS = [
       {
         id: 'export_framing',
         title: 'Frame Video',
-        description: 'Drag and resize the crop box around your player at different keyframes so your player stays in view.',
+        description: <>Drag and resize the <QIcon icon={Crop} className="text-yellow-300" /> crop box around your player at different keyframes so your player stays in view.</>,
       },
       {
         id: 'wait_for_export',
@@ -122,7 +127,7 @@ export const QUESTS = [
       {
         id: 'annotate_game_2',
         title: 'Annotate a Good or Great Play',
-        description: 'Find a 4 or 5 star moment in your new game.',
+        description: <>Find a <FilledStar /><FilledStar /><FilledStar /><FilledStar /> or <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> moment in your new game.</>,
       },
       {
         id: 'create_reel',
