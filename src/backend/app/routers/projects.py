@@ -648,7 +648,6 @@ async def create_project_from_clips(request: ProjectFromClipsCreate, background_
     - min_rating: Minimum rating (1-5)
     - tags: List of tags that clips must have (empty = all tags)
 
-    Also triggers extraction for any clips that haven't been extracted yet.
     """
     # Validate aspect ratio
     if request.aspect_ratio not in ['16:9', '9:16', '4:3', '1:1']:
@@ -720,38 +719,7 @@ async def create_project_from_clips(request: ProjectFromClipsCreate, background_
             f"(total duration: {total_duration:.1f}s)"
         )
 
-    # Trigger extraction for clips that need it (outside DB connection)
-    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor
-    from app.profile_context import get_current_profile_id
-    user_id = get_current_user_id()
-    profile_id = get_current_profile_id()
-
-    clips_to_extract = []
-    for clip in clips:
-        # Only extract clips that don't have a filename yet
-        video_filename = clip['video_filename'] if 'video_filename' in clip.keys() else None
-        if not clip['filename'] and clip['game_id'] and video_filename:
-            clips_to_extract.append({
-                'clip_id': clip['id'],
-                'start_time': clip['start_time'],
-                'end_time': clip['end_time'],
-                'game_id': clip['game_id'],
-                'video_filename': video_filename,
-            })
-
-    if clips_to_extract:
-        for clip_info in clips_to_extract:
-            enqueue_clip_extraction(
-                clip_id=clip_info['clip_id'],
-                project_id=project_id,
-                game_id=clip_info['game_id'],
-                video_filename=clip_info['video_filename'],
-                start_time=clip_info['start_time'],
-                end_time=clip_info['end_time'],
-                user_id=user_id,
-            )
-        background_tasks.add_task(run_queue_processor, user_id, profile_id)
-        logger.info(f"Enqueued {len(clips_to_extract)} clips for extraction for project {project_id}")
+    # T790: Extraction removed — framing export handles clip extraction inline (T740)
 
     return ProjectResponse(
         id=project_id,

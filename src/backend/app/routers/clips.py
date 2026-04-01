@@ -610,27 +610,8 @@ async def get_raw_clip_file(clip_id: int):
         raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
 
 
-async def _trigger_extraction_for_auto_project(
-    clip_id: int, project_id: int, game_id: int, video_filename: str,
-    start_time: float, end_time: float, background_tasks: BackgroundTasks
-):
-    """Trigger extraction when an auto-project is created for a 5-star clip."""
-    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor
 
-    user_id = get_current_user_id()
-    from app.profile_context import get_current_profile_id
-    profile_id = get_current_profile_id()
-    enqueue_clip_extraction(
-        clip_id=clip_id,
-        project_id=project_id,
-        game_id=game_id,
-        video_filename=video_filename,
-        start_time=start_time,
-        end_time=end_time,
-        user_id=user_id,
-    )
-    background_tasks.add_task(run_queue_processor, user_id, profile_id)
-    logger.info(f"[AutoProject] Enqueued extraction for clip {clip_id} in auto-project {project_id}")
+# T790: _trigger_extraction_for_auto_project removed — framing export handles extraction (T740)
 
 
 def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> int:
@@ -1242,8 +1223,6 @@ async def add_clip_to_project(
             detail="Cannot provide both raw_clip_id and file"
         )
 
-    clip_needs_extraction = None  # Will hold clip info if extraction needed
-
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -1278,17 +1257,6 @@ async def add_clip_to_project(
 
             raw_filename = raw_clip['filename']
             end_time = raw_clip['end_time']
-
-            # Check if clip needs extraction (has game but no filename)
-            if not raw_filename and raw_clip['game_id'] and raw_clip['video_filename']:
-                clip_needs_extraction = {
-                    'clip_id': raw_clip['id'],
-                    'start_time': raw_clip['start_time'],
-                    'end_time': raw_clip['end_time'],
-                    'game_id': raw_clip['game_id'],
-                    'video_filename': raw_clip['video_filename'],
-                    'project_id': project_id,
-                }
 
             # Get next version for clips with THIS specific end_time
             cursor.execute("""
@@ -1325,9 +1293,7 @@ async def add_clip_to_project(
 
         logger.info(f"Added clip {clip_id} to project {project_id}")
 
-    # Trigger extraction if needed (outside DB connection)
-    if clip_needs_extraction:
-        await trigger_clip_extraction(clip_needs_extraction, background_tasks)
+    # T790: Extraction removed — framing export handles clip extraction inline (T740)
 
     return WorkingClipResponse(
         id=clip_id,
@@ -1340,34 +1306,8 @@ async def add_clip_to_project(
     )
 
 
-async def trigger_clip_extraction(clip_info: dict, background_tasks):
-    """
-    Trigger extraction for a single clip that's been added to a project.
 
-    Flow:
-    1. Enqueue task to modal_tasks table (DB write)
-    2. Trigger queue processor in background (calls Modal)
-    """
-    from app.services.modal_queue import enqueue_clip_extraction, run_queue_processor
-    from app.profile_context import get_current_profile_id
-
-    user_id = get_current_user_id()
-    profile_id = get_current_profile_id()
-
-    # Phase 1: Enqueue to DB
-    enqueue_clip_extraction(
-        clip_id=clip_info['clip_id'],
-        project_id=clip_info['project_id'],
-        game_id=clip_info['game_id'],
-        video_filename=clip_info['video_filename'],
-        start_time=clip_info['start_time'],
-        end_time=clip_info['end_time'],
-        user_id=user_id,
-    )
-
-    # Phase 2: Process queue in background
-    background_tasks.add_task(run_queue_processor, user_id, profile_id)
-    logger.info(f"[Extraction] Enqueued clip {clip_info['clip_id']} for project {clip_info['project_id']}")
+# T790: trigger_clip_extraction removed — framing export handles extraction (T740)
 
 
 def _ensure_unique_name(cursor, name: str, game_id) -> str:
