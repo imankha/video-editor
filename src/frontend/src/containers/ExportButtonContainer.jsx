@@ -987,13 +987,20 @@ export function ExportButtonContainer({
 
   // T740: Extraction check removed — framing reads game video directly
 
-  // Check if any clips haven't been worked on (no crop, segments, or timing edits)
+  // Check if any clips haven't been worked on (no crop or meaningful segment edits)
   const isMultiClipMode = clips && clips.length > 0;
   const clipsNotFramed = (clips || []).filter(c => {
     const hasCrop = clipCropKeyframes(c)?.length > 0;
-    const hasSegments = !!c.segments_data;
-    const hasTiming = !!c.timing_data;
-    return !hasCrop && !hasSegments && !hasTiming;
+    if (hasCrop) return false;
+    // Check for real segment edits (speed, trim, splits) — not just default state
+    if (!c.segments_data) return true;
+    try {
+      const s = JSON.parse(c.segments_data);
+      const hasSpeed = Object.keys(s.segmentSpeeds || {}).length > 0;
+      const hasTrim = !!s.trimRange;
+      const hasSplits = (s.userSplits?.length || 0) > 0;
+      return !hasSpeed && !hasTrim && !hasSplits;
+    } catch { return true; }
   });
 
   const hasUnframedClips = isMultiClipMode

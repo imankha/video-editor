@@ -8,6 +8,18 @@ import { createGameLookup } from '../utils/gameNameLookup';
 import { clipCropKeyframes } from '../utils/clipSelectors';
 import { getClipDisplayName } from '../utils/clipDisplayName';
 
+/** Check if clip has real user segment edits (speed changes, trims, or splits) */
+function hasUserSegmentEdits(clip) {
+  if (!clip.segments_data) return false;
+  try {
+    const s = JSON.parse(clip.segments_data);
+    const hasSpeed = Object.keys(s.segmentSpeeds || {}).length > 0;
+    const hasTrim = !!s.trimRange;
+    const hasSplits = (s.userSplits?.length || 0) > 0;
+    return hasSpeed || hasTrim || hasSplits;
+  } catch { return false; }
+}
+
 /**
  * ClipSelectorSidebar - Sidebar for managing multiple video clips
  *
@@ -196,11 +208,9 @@ export function ClipSelectorSidebar({
           const ratingInfo = hasRating ? getRatingDisplay(clip.rating) : null;
           const isSelected = selectedClipId === clip.id;
           const canSelect = true;
-          // A clip is "worked on" if it has any framing edits (crop, segments, or timing)
+          // A clip is "worked on" if it has any saved framing edits
           const hasCrop = clipCropKeyframes(clip)?.length > 0;
-          const hasSegments = !!clip.segments_data;
-          const hasTiming = !!clip.timing_data;
-          const isFramed = hasCrop || hasSegments || hasTiming;
+          const isFramed = hasCrop || hasUserSegmentEdits(clip);
           const meta = clipMetadataCache[clip.id];
 
           return (
