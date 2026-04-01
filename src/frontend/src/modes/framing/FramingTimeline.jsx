@@ -75,6 +75,7 @@ export function FramingTimeline({
           selectedLayer === 'playhead' ? 'bg-blue-900/50' : 'bg-gray-900 hover:bg-gray-800'
         }`}
         onClick={() => onLayerSelect && onLayerSelect('playhead')}
+        title="Video track — click anywhere to scrub through the clip. Use Space to play/pause."
       >
         <Film size={18} className={selectedLayer === 'playhead' ? 'text-blue-300' : 'text-blue-400'} />
       </div>
@@ -85,13 +86,17 @@ export function FramingTimeline({
           selectedLayer === 'crop' ? 'bg-yellow-900/30' : 'bg-gray-900 hover:bg-gray-800'
         } ${segments.length === 0 ? 'rounded-bl-lg' : ''}`}
         onClick={() => onLayerSelect && onLayerSelect('crop')}
+        title="Crop layer — click to add crop keyframes. Drag the crop box on the video to frame your player at different moments."
       >
         <Crop size={18} className={selectedLayer === 'crop' ? 'text-yellow-300' : 'text-yellow-400'} />
       </div>
 
       {/* Segment Layer Label (only if segments exist) */}
       {segments.length > 0 && (
-        <div className="mt-1 h-20 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 rounded-bl-lg">
+        <div
+          className="mt-1 h-20 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 rounded-bl-lg"
+          title="Speed & trim — click segments to change playback speed. Drag edges to trim the clip."
+        >
           <Split size={18} className="text-purple-400" />
         </div>
       )}

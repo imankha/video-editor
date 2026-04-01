@@ -454,6 +454,7 @@ export default function CropOverlay({
         }}
         onMouseDown={handleCropPointerDown}
         onTouchStart={handleCropPointerDown}
+        title="Drag to move the crop box. Drag corners or edges to resize. This sets the visible area of your highlight."
       >
         {/* Grid lines */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none">

@@ -23,8 +23,8 @@ export const QUESTS = [
       },
       {
         id: 'playback_annotations',
-        title: 'Playback Annotations',
-        description: 'Review the annotations you made with your athlete',
+        title: 'Watch Your Clips Back',
+        description: 'Scroll down in the sidebar and click the green Play button to watch your clips back-to-back.',
       },
     ],
   },
@@ -36,12 +36,12 @@ export const QUESTS = [
       {
         id: 'open_framing',
         title: 'Open a Project',
-        description: 'Go Home, then go to Projects, then select a project',
+        description: 'Go to Projects and select your 5-star highlight.',
       },
       {
         id: 'export_framing',
         title: 'Frame Video',
-        description: 'Crop, trim, and slow down segments to frame your clip. Then click "Frame Video".',
+        description: 'Drag the crop box around your player, then click "Frame Video".',
       },
       {
         id: 'wait_for_export',
@@ -50,13 +50,13 @@ export const QUESTS = [
       },
       {
         id: 'export_overlay',
-        title: 'Add Highlight Overlays',
-        description: 'Click on each of the green keyframes, then put the spotlight around your player by either clicking the box or moving the spotlight. Once all keyframes have a spotlight, click Add Overlay',
+        title: 'Spotlight Your Player',
+        description: 'Click the green dots on the timeline, then click on your player in the video. When done, click "Add Overlay".',
       },
       {
         id: 'view_gallery_video',
         title: 'Watch Your Highlight',
-        description: 'Open the Gallery and play back your completed highlight reel',
+        description: 'Click Gallery in the top bar to find your finished video.',
       },
     ],
   },
@@ -88,7 +88,7 @@ export const QUESTS = [
       {
         id: 'watch_second_highlight',
         title: 'Watch Your Highlight',
-        description: 'Open the Gallery and watch your new highlight!',
+        description: 'Click Gallery in the top bar to find your finished video.',
       },
     ],
   },
@@ -100,7 +100,7 @@ export const QUESTS = [
       {
         id: 'upload_game_2',
         title: 'Add a Second Game',
-        description: 'Add another game — more highlights, bigger reel!',
+        description: 'Add another game to build a multi-game reel! No new footage? You can re-add the same game from a different angle or half.',
       },
       {
         id: 'annotate_game_2',
@@ -110,7 +110,7 @@ export const QUESTS = [
       {
         id: 'create_reel',
         title: 'Create a Highlight Reel',
-        description: 'Go to Projects → New Project. Filter by 4+ stars.',
+        description: 'Go to Projects → New Project. Pick your best clips from both games.',
       },
       {
         id: 'export_reel',
@@ -125,7 +125,7 @@ export const QUESTS = [
       {
         id: 'watch_reel',
         title: 'Watch Your Reel',
-        description: 'Open the Gallery and watch your finished highlight reel!',
+        description: 'Your highlight reel is ready! Click Gallery to watch and share it.',
       },
     ],
   },

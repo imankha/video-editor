@@ -44,7 +44,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
     setProjectName('');
     setIsNameManuallySet(false);
     setSelectedGameIds([]);
-    setMinRating(0);
+    setMinRating(4); // Default to 4+ stars — show the best clips first
     setSelectedTags([]);
     setExcludedClipIds(new Set());
 
