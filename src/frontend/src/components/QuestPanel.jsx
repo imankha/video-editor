@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { useQuestStore } from '../stores/questStore';
 import { useEditorStore } from '../stores/editorStore';
-import { QUESTS } from '../config/questDefinitions';
+import { QUESTS } from '../config/questDefinitions.jsx';
 import { toast } from './shared/Toast';
 
 import exportWebSocketManager from '../services/ExportWebSocketManager';

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { QUESTS } from '../../config/questDefinitions';
+import { QUESTS } from '../../config/questDefinitions.jsx';
 
 /**
  * Flat list of every step in order, with quest metadata attached.

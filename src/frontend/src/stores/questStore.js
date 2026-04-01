@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
-import { QUESTS, TOTAL_STEPS } from '../config/questDefinitions';
+import { QUESTS, TOTAL_STEPS } from '../config/questDefinitions.jsx';
 import { useCreditStore } from './creditStore';
 import { track } from '../utils/analytics';
 
