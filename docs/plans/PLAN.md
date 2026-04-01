@@ -187,7 +187,7 @@ Deploy to production domains with proper scaling.
 | T770 | [Navigate Home After Overlay Export](tasks/T770-overlay-complete-navigate-home.md) | DONE | 5 | 2 | After overlay export completes, auto-navigate user back to home/projects screen |
 | T775 | [navigationStore Unused for Routing](tasks/T775-navigationStore-unused.md) | DONE | 4 | 3 | navigationStore.navigate() doesn't control screen rendering — editorMode is the real source of truth; dead code |
 | T780 | [Quest Redesign + Credit Pack Pricing](tasks/T780-quest-redesign-credit-packs.md) | TESTING | 8 | 5 | Redesign quests 3 & 4 (habit-building → multi-game reel), update rewards (15/25/40/45), set credit packs ($3.99/40, $6.99/85, $12.99/180) |
-| T790 | [Custom Project Triggers Extraction](tasks/T790-custom-project-extraction-bug.md) | TODO | 7 | 5 | Custom project creation triggers old extraction pipeline (removed in T740). Downloads full game video per clip — 35 clips = 35 downloads of a 3GB file. |
+| T790 | [Custom Project Triggers Extraction](tasks/T790-custom-project-extraction-bug.md) | TESTING | 7 | 5 | Custom project creation triggers old extraction pipeline (removed in T740). Downloads full game video per clip — 35 clips = 35 downloads of a 3GB file. |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)

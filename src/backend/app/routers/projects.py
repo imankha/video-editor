@@ -554,15 +554,12 @@ async def create_project(project: ProjectCreate):
 def _build_clips_filter_query(game_ids: List[int], min_rating: int, tags: List[str]):
     """Build SQL query and params for filtering raw clips."""
     # min_rating = 0 means "All clips" (include everything regardless of rating)
-    # Include video_filename for extraction triggering
     if min_rating <= 0:
         query = """
             SELECT rc.id, rc.filename, rc.rating, rc.tags, rc.name, rc.notes,
                    rc.start_time, rc.end_time, rc.game_id,
-                   COALESCE(rc.boundaries_version, 1) as boundaries_version,
-                   g.video_filename
+                   COALESCE(rc.boundaries_version, 1) as boundaries_version
             FROM raw_clips rc
-            LEFT JOIN games g ON rc.game_id = g.id
             WHERE 1=1
         """
         params = []
@@ -570,10 +567,8 @@ def _build_clips_filter_query(game_ids: List[int], min_rating: int, tags: List[s
         query = """
             SELECT rc.id, rc.filename, rc.rating, rc.tags, rc.name, rc.notes,
                    rc.start_time, rc.end_time, rc.game_id,
-                   COALESCE(rc.boundaries_version, 1) as boundaries_version,
-                   g.video_filename
+                   COALESCE(rc.boundaries_version, 1) as boundaries_version
             FROM raw_clips rc
-            LEFT JOIN games g ON rc.game_id = g.id
             WHERE COALESCE(rc.rating, 0) >= ?
         """
         params = [min_rating]
@@ -638,7 +633,7 @@ async def preview_clips(request: ClipsPreviewRequest):
 
 
 @router.post("/from-clips", response_model=ProjectResponse)
-async def create_project_from_clips(request: ProjectFromClipsCreate, background_tasks: BackgroundTasks):
+async def create_project_from_clips(request: ProjectFromClipsCreate):
     """
     Create a project pre-populated with filtered clips from the library.
 
@@ -660,17 +655,14 @@ async def create_project_from_clips(request: ProjectFromClipsCreate, background_
         cursor = conn.cursor()
 
         # Get clips - either by specific IDs or by filters
-        # Include game video_filename for extraction
         if request.clip_ids is not None and len(request.clip_ids) > 0:
             # Use specific clip IDs (preserves order)
             placeholders = ','.join(['?' for _ in request.clip_ids])
             cursor.execute(f"""
                 SELECT rc.id, rc.filename, rc.rating, rc.tags, rc.name, rc.notes,
                        rc.start_time, rc.end_time, rc.game_id,
-                       COALESCE(rc.boundaries_version, 1) as boundaries_version,
-                       g.video_filename
+                       COALESCE(rc.boundaries_version, 1) as boundaries_version
                 FROM raw_clips rc
-                LEFT JOIN games g ON rc.game_id = g.id
                 WHERE rc.id IN ({placeholders})
             """, request.clip_ids)
             rows = cursor.fetchall()
@@ -718,8 +710,6 @@ async def create_project_from_clips(request: ProjectFromClipsCreate, background_
             f"Created project {project_id} with {len(clips)} clips "
             f"(total duration: {total_duration:.1f}s)"
         )
-
-    # T790: Extraction removed — framing export handles clip extraction inline (T740)
 
     return ProjectResponse(
         id=project_id,

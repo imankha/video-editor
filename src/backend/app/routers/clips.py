@@ -611,9 +611,6 @@ async def get_raw_clip_file(clip_id: int):
 
 
 
-# T790: _trigger_extraction_for_auto_project removed — framing export handles extraction (T740)
-
-
 def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> int:
     """Create a 9:16 project for a 5-star clip and return the project ID."""
     # Fetch tags and rating from the raw clip to generate a name if needed
@@ -691,10 +688,8 @@ def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
     return True
 
 
-# Note: Old extraction functions (extract_pending_clips_for_game, extract_all_pending_clips)
-# have been removed. Extraction now happens via modal_queue.py:
-# 1. enqueue_clip_extraction() - adds task to modal_tasks table (DB only)
-# 2. process_modal_queue() - processes pending tasks (called after enqueue and on startup)
+# Note: Standalone extraction was removed in T740/T790. Extraction now happens
+# inline during framing export. modal_queue.py handles startup recovery only.
 
 
 def _refresh_game_aggregates(cursor, game_id: int) -> None:
@@ -1244,11 +1239,10 @@ async def add_clip_to_project(
         next_version = 1
 
         if raw_clip_id is not None:
-            # Adding from library - check if extraction needed
+            # Adding from library
             cursor.execute("""
-                SELECT rc.id, rc.filename, rc.end_time, rc.start_time, rc.game_id, g.video_filename
+                SELECT rc.id, rc.filename, rc.end_time
                 FROM raw_clips rc
-                LEFT JOIN games g ON rc.game_id = g.id
                 WHERE rc.id = ?
             """, (raw_clip_id,))
             raw_clip = cursor.fetchone()
@@ -1293,8 +1287,6 @@ async def add_clip_to_project(
 
         logger.info(f"Added clip {clip_id} to project {project_id}")
 
-    # T790: Extraction removed — framing export handles clip extraction inline (T740)
-
     return WorkingClipResponse(
         id=clip_id,
         project_id=project_id,
@@ -1305,9 +1297,6 @@ async def add_clip_to_project(
         sort_order=next_order
     )
 
-
-
-# T790: trigger_clip_extraction removed — framing export handles extraction (T740)
 
 
 def _ensure_unique_name(cursor, name: str, game_id) -> str:
