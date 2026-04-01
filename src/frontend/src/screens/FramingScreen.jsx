@@ -51,6 +51,7 @@ export function FramingScreen({
   const uploadClipWithMetadataAction = useProjectDataStore(state => state.uploadClipWithMetadata);
   const saveFramingEdits = useProjectDataStore(state => state.saveFramingEdits);
   const updateClipMetadata = useProjectDataStore(state => state.updateClipMetadata);
+  const removeClipFromServer = useProjectDataStore(state => state.removeClip);
 
   // Framing persistent state
   const {
@@ -879,10 +880,12 @@ export function FramingScreen({
     }
   }, [selectedClipId, selectClip]);
 
-  // Handle clip deletion from sidebar
+  // Handle clip deletion from sidebar — persists to backend
   const handleDeleteClip = useCallback((clipId) => {
-    deleteClip(clipId);
-  }, [deleteClip]);
+    if (projectId) {
+      removeClipFromServer(projectId, clipId);
+    }
+  }, [projectId, removeClipFromServer]);
 
   // Handle adding clip from sidebar
   const handleAddClipFromSidebar = useCallback((file) => {
