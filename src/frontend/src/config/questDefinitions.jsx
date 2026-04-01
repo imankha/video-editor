@@ -91,7 +91,7 @@ export const QUESTS = [
       {
         id: 'export_overlay',
         title: 'Spotlight Your Player',
-        description: <>Click the <GreenSquare /> green squares on the timeline, then click on your player in the video if you can. If not, move the ellipse around your player and size it manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
+        description: <>Click each <GreenSquare /> green square on the timeline, then click on your player in the video if you can. If not, move the ellipse around your player and size it manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
       },
       {
         id: 'view_gallery_video',
@@ -128,7 +128,7 @@ export const QUESTS = [
       {
         id: 'overlay_second_highlight',
         title: 'Spotlight Your Player',
-        description: <>Click the <GreenSquare /> green squares on the timeline, then click on your player in the video if you can. If not, move the ellipse around your player and size it manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
+        description: <>Click each <GreenSquare /> green square on the timeline, then click on your player in the video if you can. If not, move the ellipse around your player and size it manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
       },
       {
         id: 'watch_second_highlight',
@@ -170,7 +170,7 @@ export const QUESTS = [
       {
         id: 'overlay_reel',
         title: 'Spotlight Your Player',
-        description: <>Click the <GreenSquare /> green squares on the timeline, then click on your player in the video if you can. If not, move the ellipse around your player and size it manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
+        description: <>Click each <GreenSquare /> green square on the timeline, then click on your player in the video if you can. If not, move the ellipse around your player and size it manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
       },
       {
         id: 'watch_reel',
