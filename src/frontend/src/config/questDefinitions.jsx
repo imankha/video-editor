@@ -122,6 +122,11 @@ export const QUESTS = [
         description: 'Wait for the framing export to finish.',
       },
       {
+        id: 'overlay_second_highlight',
+        title: 'Spotlight Your Player',
+        description: <>Click the <GreenSquare /> green squares on the timeline, then click on your player in the video if you can. If not, move the ellipse around your player and size it manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
+      },
+      {
         id: 'watch_second_highlight',
         title: 'Watch Your Highlight',
         description: <>Click <QIcon icon={Image} className="text-white" /> Gallery in the top bar to find your finished video.</>,

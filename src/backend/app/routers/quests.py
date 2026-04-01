@@ -54,6 +54,7 @@ QUEST_DEFINITIONS = [
             "annotate_5_more",
             "export_second_highlight",
             "wait_for_export_2",
+            "overlay_second_highlight",
             "watch_second_highlight",
         ],
     },
@@ -144,12 +145,16 @@ def _check_all_steps(user_id: str, conn) -> dict:
     ).fetchone()
     steps["wait_for_export_2"] = row["cnt"] >= 2
 
-    # Watch second highlight — requires 2+ completed overlay exports
-    # (proves user went through full pipeline twice: framing → overlay → gallery)
+    # Overlay on second highlight — 2+ completed overlay exports
     row = cursor.execute(
         "SELECT count(*) as cnt FROM export_jobs WHERE type = 'overlay' AND status = 'complete'"
     ).fetchone()
-    steps["watch_second_highlight"] = row["cnt"] >= 2
+    steps["overlay_second_highlight"] = row["cnt"] >= 2
+
+    # Watch second highlight — 2+ overlay exports completed AND gallery video watched
+    steps["watch_second_highlight"] = row["cnt"] >= 2 and cursor.execute(
+        "SELECT 1 FROM achievements WHERE key = 'watched_gallery_video_1s'"
+    ).fetchone() is not None
 
     # --- Quest 4: Highlight Reel (second game + custom project) ---
 
