@@ -226,6 +226,10 @@ export const useProjectDataStore = create((set, get) => ({
       const clip = await response.json();
 
       await get().fetchClips(projectId);
+      // Refresh quest progress — adding clips to a project may complete create_reel step
+      import('./questStore').then(({ useQuestStore }) =>
+        useQuestStore.getState().fetchProgress()
+      );
       return clip;
     } catch (err) {
       console.error('[projectDataStore] addClipFromLibrary error:', err);
@@ -275,6 +279,10 @@ export const useProjectDataStore = create((set, get) => ({
       if (!response.ok) throw new Error('Failed to remove clip');
 
       await get().fetchClips(projectId);
+      // Refresh quest progress — removing clips may un-complete create_reel step
+      import('./questStore').then(({ useQuestStore }) =>
+        useQuestStore.getState().fetchProgress()
+      );
       return true;
     } catch (err) {
       console.error('[projectDataStore] removeClip error:', err);
