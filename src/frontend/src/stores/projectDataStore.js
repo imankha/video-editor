@@ -264,6 +264,9 @@ export const useProjectDataStore = create((set, get) => ({
   removeClip: async (projectId, clipId) => {
     if (!projectId) return false;
 
+    // Optimistically remove from local state (updates selectedClipId too)
+    get().deleteClip(clipId);
+
     try {
       const response = await fetch(
         `${API_BASE_URL}/clips/projects/${projectId}/clips/${clipId}`,
@@ -275,6 +278,8 @@ export const useProjectDataStore = create((set, get) => ({
       return true;
     } catch (err) {
       console.error('[projectDataStore] removeClip error:', err);
+      // Re-fetch to restore state on failure
+      await get().fetchClips(projectId);
       return false;
     }
   },
