@@ -169,19 +169,24 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
       const keyframesKey = JSON.stringify(savedKeyframes.map(k => ({ frame: k.frame, x: k.x, y: k.y })));
 
       if (keyframesKey !== lastSavedKeyframesRef.current) {
-        lastSavedKeyframesRef.current = keyframesKey;
-
         // Normalize and restore
         const frameKeyframes = normalizeToFrameKeyframes(savedKeyframes, framerate);
 
         if (validateFrameKeyframes(frameKeyframes)) {
-          // Use video duration for endFrame — max keyframe frame fails when
-          // only 1 keyframe exists at frame 0 (ensurePermanentKeyframes needs
-          // a nonzero endFrame to create the end boundary keyframe).
+          // Compute endFrame from video duration — max keyframe frame fails
+          // when only 1 keyframe exists at frame 0.
           const effectiveDuration = trimRange?.end ?? videoMetadata?.duration;
+          const maxKfFrame = Math.max(...frameKeyframes.map(k => k.frame));
           const endFrame = effectiveDuration
             ? timeToFrame(effectiveDuration, framerate)
-            : Math.max(...frameKeyframes.map(k => k.frame));
+            : maxKfFrame;
+
+          // If endFrame is 0 (no metadata yet, single keyframe at frame 0),
+          // defer restore — videoMetadata dep will re-trigger when it loads.
+          // Don't set lastSavedKeyframesRef so we retry when metadata arrives.
+          if (endFrame <= 0 && frameKeyframes.length < 2) return;
+
+          lastSavedKeyframesRef.current = keyframesKey;
           restoreKeyframes(frameKeyframes, endFrame);
         }
       }
