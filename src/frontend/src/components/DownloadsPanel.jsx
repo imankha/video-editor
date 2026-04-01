@@ -112,7 +112,7 @@ export function DownloadsPanel({
 
   const closeVideo = () => {
     clearTimeout(watchTimerRef.current);
-    closeVideo();
+    setPlayingVideo(null);
   };
 
   const handleOpenProject = async (e, download) => {

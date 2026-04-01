@@ -3,7 +3,24 @@
  *
  * Single source of truth for quest structure. Adding/removing/reordering steps
  * means editing this config only. Backend has matching step_ids for progress derivation.
+ *
+ * Descriptions use JSX with inline icons — small versions of the actual UI icons
+ * so users can visually match what they see in the quest panel to the app UI.
  */
+
+import { Home, Image, Play } from 'lucide-react';
+
+/** Inline icon — small version of the actual UI icon, styled to sit inline with text */
+function QIcon({ icon: IconComponent, className = 'text-gray-300' }) {
+  return (
+    <IconComponent size={12} className={`inline-block align-text-bottom mx-0.5 ${className}`} />
+  );
+}
+
+/** Green square marker — matches the overlay timeline keyframe markers */
+function GreenSquare() {
+  return <span className="inline-block align-text-bottom mx-0.5 w-2.5 h-2.5 bg-green-500 rounded-sm" />;
+}
 
 export const QUESTS = [
   {
@@ -24,7 +41,7 @@ export const QUESTS = [
       {
         id: 'playback_annotations',
         title: 'Watch Your Clips Back',
-        description: 'Scroll down in the sidebar and click the green Play button to watch your clips back-to-back.',
+        description: <>Scroll down in the sidebar and click the green <QIcon icon={Play} className="text-green-400" /> Play button to watch your clips back-to-back.</>,
       },
     ],
   },
@@ -36,7 +53,7 @@ export const QUESTS = [
       {
         id: 'open_framing',
         title: 'Open a Project',
-        description: 'Go to Projects and select your 5-star highlight.',
+        description: <>Click <QIcon icon={Home} className="text-white" /> Home → Projects and select a project.</>,
       },
       {
         id: 'export_framing',
@@ -51,12 +68,12 @@ export const QUESTS = [
       {
         id: 'export_overlay',
         title: 'Spotlight Your Player',
-        description: 'Click the green squares on the timeline, then click on your player in the video if you can. If not, move the ellipse around your player and size it manually. When done, click "Add Overlay".',
+        description: <>Click the <GreenSquare /> green squares on the timeline, then click on your player in the video if you can. If not, move the ellipse around your player and size it manually. When done, click "Add Overlay".</>,
       },
       {
         id: 'view_gallery_video',
         title: 'Watch Your Highlight',
-        description: 'Click Gallery in the top bar to find your finished video.',
+        description: <>Click <QIcon icon={Image} className="text-white" /> Gallery in the top bar to find your finished video.</>,
       },
     ],
   },
@@ -88,7 +105,7 @@ export const QUESTS = [
       {
         id: 'watch_second_highlight',
         title: 'Watch Your Highlight',
-        description: 'Click Gallery in the top bar to find your finished video.',
+        description: <>Click <QIcon icon={Image} className="text-white" /> Gallery in the top bar to find your finished video.</>,
       },
     ],
   },
@@ -110,7 +127,7 @@ export const QUESTS = [
       {
         id: 'create_reel',
         title: 'Create a Highlight Reel',
-        description: 'Go to Projects → New Project. Pick your best clips from both games.',
+        description: <>Click <QIcon icon={Home} className="text-white" /> Home → Projects → New Project. Pick your best clips from both games.</>,
       },
       {
         id: 'export_reel',
@@ -125,7 +142,7 @@ export const QUESTS = [
       {
         id: 'watch_reel',
         title: 'Watch Your Reel',
-        description: 'Your highlight reel is ready! Click Gallery to watch and download it.',
+        description: <>Your highlight reel is ready! Click <QIcon icon={Image} className="text-white" /> Gallery to watch and download it.</>,
       },
     ],
   },
