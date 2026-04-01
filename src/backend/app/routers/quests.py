@@ -68,6 +68,7 @@ QUEST_DEFINITIONS = [
             "create_reel",
             "export_reel",
             "wait_for_reel",
+            "overlay_reel",
             "watch_reel",
         ],
     },
@@ -195,6 +196,15 @@ def _check_all_steps(user_id: str, conn) -> dict:
         """SELECT 1 FROM export_jobs ej
            JOIN projects p ON ej.project_id = p.id
            WHERE ej.type = 'framing' AND ej.status = 'complete'
+           AND p.is_auto_created = 0
+           LIMIT 1"""
+    ).fetchone() is not None
+
+    # Overlay export completed on non-auto project
+    steps["overlay_reel"] = cursor.execute(
+        """SELECT 1 FROM export_jobs ej
+           JOIN projects p ON ej.project_id = p.id
+           WHERE ej.type = 'overlay' AND ej.status = 'complete'
            AND p.is_auto_created = 0
            LIMIT 1"""
     ).fetchone() is not None

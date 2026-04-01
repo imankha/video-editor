@@ -168,6 +168,11 @@ export const QUESTS = [
         description: 'Wait for the export to finish.',
       },
       {
+        id: 'overlay_reel',
+        title: 'Spotlight Your Player',
+        description: <>Click the <GreenSquare /> green squares on the timeline, then click on your player in the video if you can. If not, move the ellipse around your player and size it manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
+      },
+      {
         id: 'watch_reel',
         title: 'Watch Your Reel',
         description: <>Your highlight reel is ready! Click <QIcon icon={Image} className="text-white" /> Gallery to watch and download it.</>,
