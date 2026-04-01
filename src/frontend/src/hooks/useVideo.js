@@ -179,6 +179,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     setError(null);
     retryAttemptRef.current = 0; // Reset retry counter on new video load
 
+    const newClipOffset = clipRange?.clipOffset || 0;
+    const sameUrl = url === videoUrl;
+
     // Clean up previous blob URL (only if it's a blob URL we created)
     if (videoUrl && videoUrl.startsWith('blob:')) {
       console.log('[useVideo] Revoking previous blob URL:', videoUrl);
@@ -195,9 +198,16 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       url: url,
       metadata: preloadedMetadata,
       duration: effectiveDuration,
-      clipOffset: clipRange?.clipOffset || 0,
+      clipOffset: newClipOffset,
       clipDuration: clipRange?.clipDuration || null,
     });
+
+    // Same video URL but different clip offset (switching clips on same game video):
+    // browser won't fire loadedmetadata, so seek explicitly
+    if (sameUrl && videoRef.current) {
+      videoRef.current.currentTime = newClipOffset;
+      setCurrentTime(0);
+    }
 
     console.log('[useVideo] Set streaming URL directly (instant)');
   };
