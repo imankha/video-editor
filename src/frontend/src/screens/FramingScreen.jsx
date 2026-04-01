@@ -390,6 +390,12 @@ export function FramingScreen({
     return { url, clipRange: null };
   }, [projectId]);
 
+  // Re-fetch clips on mount — picks up any changes made in annotate mode
+  // (e.g., updated start_time/end_time, new clips, deleted clips)
+  useEffect(() => {
+    if (projectId) fetchClips(projectId);
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only refresh
+
   // T580: On mount, immediately load the first clip's video before first paint.
   // When switching from overlay → framing, the shared videoStore may still hold
   // the working video (cropped/exported). Loading the correct clip URL here
