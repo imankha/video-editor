@@ -129,6 +129,19 @@ async function authenticateTestUser(page) {
   await page.waitForLoadState('networkidle');
 }
 
+/** Dismiss the auth modal if it appears (click the X button) */
+async function dismissAuthModal(page) {
+  const authModal = page.locator('text=Create your first video');
+  if (await authModal.isVisible({ timeout: 1000 }).catch(() => false)) {
+    const closeBtn = page.locator('.fixed.inset-0 button:has(svg.lucide-x), [class*="fixed"] button:has(svg)').first();
+    if (await closeBtn.isVisible().catch(() => false)) {
+      await closeBtn.click();
+      await page.waitForTimeout(300);
+      console.log('[Auth] Dismissed auth modal');
+    }
+  }
+}
+
 async function screenshot(page, name) {
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
   const filepath = path.join(SCREENSHOTS_DIR, `${name}.png`);
@@ -319,6 +332,16 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
 
     // Authenticate test user via backend (bypasses Google OAuth)
     await authenticateTestUser(page);
+
+    // Intercept /api/auth/me to always return authenticated for the test user
+    // This prevents the auth gate modal from appearing after reloads
+    await page.route('**/api/auth/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ user_id: TEST_USER_ID, email: 'e2e@test.local' }),
+      });
+    });
 
     const bugs = [];
 
