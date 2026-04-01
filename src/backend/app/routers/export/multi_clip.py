@@ -1312,8 +1312,17 @@ async def export_multi_clip(
                     raise HTTPException(status_code=400, detail=f"Cannot resolve clip {i}: no matching DB clip")
 
                 # Use DB-authoritative crop/segments data
+                # DB stores frame-based keyframes; pipeline expects time-based
                 if db_clip['crop_data']:
-                    clip_data['cropKeyframes'] = json.loads(db_clip['crop_data'])
+                    raw_kfs = json.loads(db_clip['crop_data'])
+                    framerate = 30  # Default; matches single-clip export fallback
+                    if raw_kfs and 'frame' in raw_kfs[0] and 'time' not in raw_kfs[0]:
+                        clip_data['cropKeyframes'] = [
+                            {'time': kf['frame'] / framerate, 'x': kf['x'], 'y': kf['y'], 'width': kf['width'], 'height': kf['height']}
+                            for kf in raw_kfs
+                        ]
+                    else:
+                        clip_data['cropKeyframes'] = raw_kfs
                 if db_clip['segments_data']:
                     clip_data['segments'] = json.loads(db_clip['segments_data'])
                 if db_clip['raw_duration']:
