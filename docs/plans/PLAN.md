@@ -190,6 +190,7 @@ Deploy to production domains with proper scaling.
 | T790 | [Custom Project Triggers Extraction](tasks/T790-custom-project-extraction-bug.md) | TESTING | 7 | 5 | Custom project creation triggers old extraction pipeline (removed in T740). Downloads full game video per clip — 35 clips = 35 downloads of a 3GB file. |
 | T800 | [Remove Legacy Extraction Infrastructure](tasks/T800-remove-extraction-infrastructure.md) | TODO | 5 | 5 | Dead extraction code across ~15 files: response models, retry endpoint, WebSocket manager, modal_queue functions, tests, stale comments. T790 removed triggers; this removes everything else. |
 | T810 | [Multi-Clip Export Fails for Game Video Clips](tasks/T810-multi-clip-export-game-video.md) | TESTING | 9 | 6 | Multi-clip export downloads each clip's file from frontend, but game-video clips have no standalone files (T740). Backend needs to resolve clips from DB like single-clip export does. |
+| T820 | [Guest Migration Data Loss](tasks/T820-guest-migration-data-loss.md) | TODO | 10 | 6 | Guest→email migration silently fails when R2 is down, orphaning all guest data. User sees blank account with no warning. No retry, no recovery path. |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
