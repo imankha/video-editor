@@ -131,52 +131,45 @@ export function useProjectLoader() {
 
       console.log('[useProjectLoader] Fetched clips:', clipsData.length);
 
-      // Load video metadata in parallel for all clips
-      // Game clips use game_video_url, uploaded/extracted clips use file_url
+      // Load video metadata — deduplicate by URL so each game video is probed once
       const metadataCache = {};
-      await Promise.all(
-        clipsData.map(async (clip) => {
-          // Determine which URL to probe for metadata
-          let metadataUrl = null;
-          let clipDurationOverride = null;
+      const urlMetadataMap = new Map(); // url -> Promise<metadata>
 
-          if (clip.game_video_url && clip.start_time != null && clip.end_time != null) {
-            // Game clip: probe game video for resolution/framerate, but override duration with clip range
-            metadataUrl = clip.game_video_url;
-            clipDurationOverride = clip.end_time - clip.start_time;
-          } else if (clip.filename) {
-            // Extracted/uploaded clip: probe the clip file directly
-            metadataUrl = getClipFileUrlSelector(clip, projectId);
-          } else {
-            console.log('[useProjectLoader] Clip has no video source:', clip.id);
-            return;
-          }
+      // Build per-clip config and deduplicate URL probes
+      const clipConfigs = clipsData.map(clip => {
+        if (clip.game_video_url && clip.start_time != null && clip.end_time != null) {
+          return { clip, url: clip.game_video_url, durationOverride: clip.end_time - clip.start_time };
+        } else if (clip.filename) {
+          return { clip, url: getClipFileUrlSelector(clip, projectId), durationOverride: null };
+        }
+        return { clip, url: null, durationOverride: null };
+      });
 
-          try {
-            const metadata = await extractVideoMetadataFromUrl(metadataUrl);
-            const duration = clipDurationOverride ?? metadata?.duration ?? 0;
-            metadataCache[clip.id] = {
-              duration,
-              width: metadata?.width || 0,
-              height: metadata?.height || 0,
-              framerate: metadata?.framerate || 30,
-              metadata: { ...metadata, duration },
-            };
-          } catch (err) {
-            console.warn(`[useProjectLoader] Failed to load metadata for clip ${clip.id}:`, err);
-            // For game clips, we can still provide duration from start/end times
-            if (clipDurationOverride != null) {
-              metadataCache[clip.id] = {
-                duration: clipDurationOverride,
-                width: 0,
-                height: 0,
-                framerate: 30,
-                metadata: { duration: clipDurationOverride, framerate: 30 },
-              };
-            }
-          }
-        })
-      );
+      // Probe each unique URL once
+      for (const { url } of clipConfigs) {
+        if (url && !urlMetadataMap.has(url)) {
+          urlMetadataMap.set(url, extractVideoMetadataFromUrl(url).catch(err => {
+            console.warn(`[useProjectLoader] Failed to load metadata from ${url?.substring(0, 60)}:`, err);
+            return null;
+          }));
+        }
+      }
+
+      // Wait for all unique probes, then build cache
+      await Promise.all(urlMetadataMap.values());
+
+      for (const { clip, url, durationOverride } of clipConfigs) {
+        if (!url) continue;
+        const metadata = await urlMetadataMap.get(url);
+        const duration = durationOverride ?? metadata?.duration ?? 0;
+        metadataCache[clip.id] = {
+          duration,
+          width: metadata?.width || 0,
+          height: metadata?.height || 0,
+          framerate: metadata?.framerate || 30,
+          metadata: { ...metadata, duration },
+        };
+      }
 
       // Store raw clips and metadata cache in projectDataStore
       setClipMetadataCache(metadataCache);
