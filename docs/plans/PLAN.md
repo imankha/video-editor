@@ -194,6 +194,7 @@ Deploy to production domains with proper scaling.
 | T830 | [Clip Preview Timeline Shows Full Video](tasks/T830-clip-preview-timeline-full-video.md) | TODO | 6 | 4 | New Project modal clip preview shows full game video timeline instead of clip range |
 | T840 | [Annotate Drag/Play Conflict](tasks/T840-annotate-drag-play-conflict.md) | TODO | 7 | 3 | Dragging start/end time handles while video is playing causes playback to fight with drag preview |
 | T850 | [Annotate Duplicate Scrub UI](tasks/T850-annotate-duplicate-scrub-ui.md) | TODO | 5 | 4 | Two scrub/timeline UI instances visible during clip playback in annotate mode |
+| T860 | [Keyframe Invariant Render Loop](tasks/T860-keyframe-invariant-render-loop.md) | TODO | 9 | 5 | Keyframe invariant check in render body causes 500+ re-renders, making framing unresponsive |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
