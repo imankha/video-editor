@@ -1181,8 +1181,7 @@ function GameCard({ game, onLoad, onDelete }) {
  * - Yellow/Amber: Exporting (actively rendering)
  * - Blue (◐): Editing (has edits, not exported)
  * - Light Blue: Ready (for overlay - working video exists)
- * - Orange: Extracting (GPU extraction in progress)
- * - Gray (○): Not started / pending extraction
+ * - Gray (○): Not started
  *
  * Click handlers:
  * - onClipClick(clipIndex) - Called when a clip segment is clicked
@@ -1196,18 +1195,11 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
     clip_count,
     clips_exported,
     clips_in_progress,
-    clips_extracted = clip_count, // Default to all extracted for backwards compat
-    clips_extracting = 0,
-    clips_pending_extraction = 0,
     clips = [], // Clip details from backend
     has_working_video,
     has_overlay_edits,
     has_final_video
   } = project;
-
-  // Calculate how many clips are in each extraction state
-  const clipsNotExtracted = clip_count - clips_extracted;
-  const isAnyExtracting = clips_extracting > 0 || clips_pending_extraction > 0;
 
   // Once framing is complete (has_working_video), show a single "Framing" segment
   // instead of per-clip segments. Framing exports ALL clips into ONE working video,
@@ -1224,26 +1216,15 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
     // Currently exporting - show single "Framing" segment as exporting
     clipSegments.push({ status: 'exporting', label: 'Framing', tags: [] });
   } else {
-    // Framing not done - show per-clip progress for extraction/editing status
+    // Framing not done - show per-clip editing status
     for (let i = 0; i < clip_count; i++) {
       const clipInfo = clips[i];
       const clipName = getClipDisplayName(clipInfo, `Clip ${i + 1}`);
       const clipTags = clipInfo?.tags || [];
-      const clipIsExtracted = clipInfo?.is_extracted !== false;
-      const clipIsExtracting = clipInfo?.is_extracting || false;
 
-      if (!clipIsExtracted) {
-        // Clip still needs extraction
-        if (clipIsExtracting) {
-          clipSegments.push({ status: 'extracting', label: clipName, tags: clipTags });
-        } else {
-          clipSegments.push({ status: 'pending_extraction', label: clipName, tags: clipTags });
-        }
-      } else if (clips_in_progress > 0 && i < clips_in_progress) {
-        // Clip has edits in progress
+      if (clips_in_progress > 0 && i < clips_in_progress) {
         clipSegments.push({ status: 'in_progress', label: clipName, tags: clipTags });
       } else {
-        // Clip ready but not framed yet
         clipSegments.push({ status: 'pending', label: clipName, tags: clipTags });
       }
     }
@@ -1282,8 +1263,6 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
     exporting: 'bg-amber-500',
     in_progress: 'bg-blue-500',
     ready: 'bg-blue-300',
-    extracting: 'bg-orange-500 animate-pulse',
-    pending_extraction: 'bg-gray-600 border border-orange-500',
     pending: 'bg-gray-600'
   };
 
@@ -1295,12 +1274,7 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
       {/* Labels row */}
       <div className="flex justify-between text-xs text-gray-500 mb-1">
         <span className="flex items-center gap-2">
-          {isAnyExtracting ? (
-            <span className="text-orange-400 flex items-center gap-1">
-              <RefreshCw size={10} className="animate-spin" />
-              Extracting ({clips_extracted}/{clip_count})
-            </span>
-          ) : isExporting === 'framing' ? (
+          {isExporting === 'framing' ? (
             <span className="text-amber-400 flex items-center gap-1">
               <RefreshCw size={10} className="animate-spin" />
               Framing...
@@ -1349,10 +1323,8 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
                 segment.status === 'exporting' ? 'Exporting...' :
                 segment.status === 'in_progress' ? 'Editing' :
                 segment.status === 'ready' ? 'Ready' :
-                segment.status === 'extracting' ? 'Extracting...' :
-                segment.status === 'pending_extraction' ? 'Waiting for extraction' :
                 'Not Started'
-              }${segment.status !== 'extracting' && segment.status !== 'pending_extraction' ? ' (click to open)' : ''}`}
+              } (click to open)`}
             />
           );
         })}
@@ -1419,14 +1391,6 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
     ? exportingProject.stage
     : storeExport?.type || null;
 
-  // Extraction status
-  const clipsExtracted = project.clips_extracted ?? project.clip_count;
-  const clipsExtracting = project.clips_extracting ?? 0;
-  const clipsPendingExtraction = project.clips_pending_extraction ?? 0;
-  const isAnyExtracting = clipsExtracting > 0 || clipsPendingExtraction > 0;
-  const hasExtractedClips = clipsExtracted > 0;
-  // Always allow opening projects - users should be able to see/edit clips while extraction runs
-  // Backend tracks extraction state via modal_tasks and won't double-trigger
   const canOpen = true;
 
   const handleDelete = (e) => {
@@ -1470,7 +1434,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
           ? 'hover:bg-gray-750 cursor-pointer border-gray-700 hover:border-purple-500'
           : 'cursor-not-allowed border-gray-700 opacity-75'
       }`}
-      title={!canOpen ? 'Extraction in progress...' : undefined}
+      title={undefined}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
@@ -1530,13 +1494,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
               <>
                 <span>•</span>
                 <span>
-                  {isAnyExtracting ? (
-                    <span className="text-orange-400 flex items-center gap-1">
-                      <RefreshCw size={12} className="animate-spin" />
-                      Extracting ({clipsExtracted}/{project.clip_count})
-                    </span>
-                  ) :
-                  isExporting === 'overlay' ? (
+                  {isExporting === 'overlay' ? (
                     <span className="text-amber-400">Exporting...</span>
                   ) :
                   isExporting === 'framing' ? (

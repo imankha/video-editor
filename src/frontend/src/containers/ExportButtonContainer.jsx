@@ -8,7 +8,7 @@ import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
-import { isExtracted as isExtractedSel, isExtracting as isExtractingSel, clipCropKeyframes } from '../utils/clipSelectors';
+import { clipCropKeyframes } from '../utils/clipSelectors';
 
 // Export configuration - centralized for easy A/B testing
 export const EXPORT_CONFIG = {

@@ -27,10 +27,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   isFramingMode,
   isDarkOverlay,
 
-  // Clip extraction status
-  hasUnextractedClips,
-  extractingCount,
-  pendingCount,
+  // Clip status
   hasUnframedClips,
   unframedCount,
   totalExtractedClips,

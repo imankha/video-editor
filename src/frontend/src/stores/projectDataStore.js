@@ -7,18 +7,17 @@ const API_BASE_URL = `${API_BASE}/api`;
  * Project Data Store - Single source of truth for project and clip state
  *
  * T250: Stores RAW backend WorkingClipResponse data. No transformation.
- * Derived values (isExtracted, isFailed, etc.) are computed via clipSelectors.js.
+ * Derived values (e.g. isExtracted) are computed via clipSelectors.js.
  * Backend working_clips.id is the canonical clip ID.
  *
  * Clip format (raw backend WorkingClipResponse):
  * - id: backend working_clips.id (integer)
  * - project_id, raw_clip_id, uploaded_filename
- * - filename: extracted clip filename (null if not extracted)
+ * - filename: standalone clip filename (null if clip uses game video range queries)
  * - file_url: presigned R2 URL (null in local dev)
  * - name, notes, exported_at, sort_order
  * - crop_data, timing_data, segments_data: JSON strings
  * - game_id, start_time, end_time, tags, rating
- * - extraction_status: 'pending' | 'running' | 'completed' | 'failed' | null
  *
  * Video metadata is cached separately in clipMetadataCache keyed by clip ID.
  *

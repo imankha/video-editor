@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { vi, describe, it, expect } from 'vitest';
 import { ClipSelectorSidebar } from './ClipSelectorSidebar';
 
@@ -14,7 +14,6 @@ const defaultProps = {
   onTransitionChange: vi.fn(),
   onAddFromLibrary: vi.fn(),
   onUploadWithMetadata: vi.fn(),
-  onRetryExtraction: vi.fn(),
   existingRawClipIds: [],
   games: [],
   clipMetadataCache: {},
@@ -29,7 +28,6 @@ function makeClip(overrides = {}) {
     id: 1,
     filename: 'test.mp4',
     file_url: null,
-    extraction_status: null,
     crop_data: null,
     segments_data: null,
     timing_data: null,
@@ -43,64 +41,19 @@ function makeClip(overrides = {}) {
   };
 }
 
-describe('ClipSelectorSidebar extraction states', () => {
-  it('renders "Extracting..." for a clip with extraction_status=running', () => {
-    const clip = makeClip({
-      filename: null,
-      extraction_status: 'running',
-    });
+describe('ClipSelectorSidebar', () => {
+  it('renders clip without filename as selectable (uses game video range queries)', () => {
+    const clip = makeClip({ filename: null });
     render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
-    expect(screen.getByText('Extracting...')).toBeTruthy();
+    const clipItem = screen.getByTestId('clip-item');
+    expect(clipItem.className).not.toContain('opacity-60');
+    expect(clipItem.className).not.toContain('cursor-default');
   });
 
-  it('renders "Waiting for extraction" for a clip with no extraction_status and no filename', () => {
-    const clip = makeClip({
-      filename: null,
-      extraction_status: null,
-    });
+  it('renders clip with filename as selectable', () => {
+    const clip = makeClip({ filename: 'test.mp4' });
     render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
-    expect(screen.getByText('Waiting for extraction')).toBeTruthy();
-  });
-
-  it('renders "Retrying..." for a clip with extraction_status=retrying', () => {
-    const clip = makeClip({
-      filename: null,
-      extraction_status: 'retrying',
-    });
-    render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
-    expect(screen.getByText('Retrying...')).toBeTruthy();
-  });
-
-  it('renders "Failed" with retry button for a failed clip', () => {
-    const clip = makeClip({
-      filename: null,
-      extraction_status: 'failed',
-    });
-    render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
-    expect(screen.getByText('Failed')).toBeTruthy();
-    expect(screen.getByText('Retry')).toBeTruthy();
-  });
-
-  it('calls onRetryExtraction with clip.id when retry button is clicked', () => {
-    const onRetry = vi.fn();
-    const clip = makeClip({
-      id: 99,
-      filename: null,
-      extraction_status: 'failed',
-    });
-    render(
-      <ClipSelectorSidebar {...defaultProps} clips={[clip]} onRetryExtraction={onRetry} />
-    );
-    fireEvent.click(screen.getByText('Retry'));
-    expect(onRetry).toHaveBeenCalledWith(99);
-  });
-
-  it('does not show retry button for retrying (auto-retry in progress) clips', () => {
-    const clip = makeClip({
-      filename: null,
-      extraction_status: 'retrying',
-    });
-    render(<ClipSelectorSidebar {...defaultProps} clips={[clip]} />);
-    expect(screen.queryByText('Retry')).toBeNull();
+    const clipItem = screen.getByTestId('clip-item');
+    expect(clipItem.className).not.toContain('opacity-60');
   });
 });

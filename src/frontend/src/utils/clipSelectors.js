@@ -8,16 +8,16 @@
  * @see T250: Clip Store Unification
  */
 
-// ========== Extraction Status Selectors ==========
+// ========== Clip File Status Selectors ==========
+// T790: Standalone extraction removed — clips use game video range queries.
+// isExtracted checks if clip has its own file (not all clips need one).
 
 export const isExtracted = (clip) => !!clip.filename;
 
-export const isExtracting = (clip) =>
-  clip.extraction_status === 'running' || clip.extraction_status === 'pending';
-
-export const isFailed = (clip) => clip.extraction_status === 'failed';
-
-export const isRetrying = (clip) => clip.extraction_status === 'retrying';
+// Legacy selectors — always false now. Kept for any remaining call sites.
+export const isExtracting = () => false;
+export const isFailed = () => false;
+export const isRetrying = () => false;
 
 // ========== Display Selectors ==========
 

@@ -47,7 +47,6 @@ export function FramingScreen({
   const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
   const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
   const fetchClips = useProjectDataStore(state => state.fetchClips);
-  const retryExtractionAction = useProjectDataStore(state => state.retryExtraction);
   const addClipFromLibraryAction = useProjectDataStore(state => state.addClipFromLibrary);
   const uploadClipWithMetadataAction = useProjectDataStore(state => state.uploadClipWithMetadata);
   const saveFramingEdits = useProjectDataStore(state => state.saveFramingEdits);
@@ -111,12 +110,6 @@ export function FramingScreen({
     if (projectId) return fetchClips(projectId);
     return Promise.resolve([]);
   }, [projectId, fetchClips]);
-
-  // Helper: retry extraction for a clip
-  const retryExtraction = useCallback((clipId) => {
-    if (projectId) return retryExtractionAction(projectId, clipId);
-    return Promise.resolve(false);
-  }, [projectId, retryExtractionAction]);
 
   // Helper: get clip file URL
   const getClipFileUrl = useCallback((clipId) => {
@@ -940,7 +933,6 @@ export function FramingScreen({
     onTransitionChange: setGlobalTransition,
     onUploadWithMetadata: handleUploadWithMetadata,
     onAddFromLibrary: handleAddFromLibrary,
-    onRetryExtraction: retryExtraction,
     existingRawClipIds: clips.map(c => c.raw_clip_id).filter(Boolean),
     games,
     clipMetadataCache,
