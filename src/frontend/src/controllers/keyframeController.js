@@ -266,7 +266,8 @@ export function keyframeReducer(state, action) {
       });
 
       // Enforce permanent keyframe invariant at boundaries
-      const resolvedEndFrame = endFrame || sortedKeyframes[sortedKeyframes.length - 1].frame;
+      // Use nullish coalescing — endFrame=0 is a valid value (|| treats 0 as falsy)
+      const resolvedEndFrame = (endFrame != null && endFrame > 0) ? endFrame : sortedKeyframes[sortedKeyframes.length - 1].frame;
       const guardedKeyframes = ensurePermanentKeyframes(sortedKeyframes, resolvedEndFrame);
 
       // Determine if end keyframe was explicitly set (not same as start)

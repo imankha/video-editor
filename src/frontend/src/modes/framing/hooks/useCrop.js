@@ -175,14 +175,18 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
         const frameKeyframes = normalizeToFrameKeyframes(savedKeyframes, framerate);
 
         if (validateFrameKeyframes(frameKeyframes)) {
-          const endFrame = frameKeyframes.length > 0
-            ? Math.max(...frameKeyframes.map(k => k.frame))
-            : 0;
+          // Use video duration for endFrame — max keyframe frame fails when
+          // only 1 keyframe exists at frame 0 (ensurePermanentKeyframes needs
+          // a nonzero endFrame to create the end boundary keyframe).
+          const effectiveDuration = trimRange?.end ?? videoMetadata?.duration;
+          const endFrame = effectiveDuration
+            ? timeToFrame(effectiveDuration, framerate)
+            : Math.max(...frameKeyframes.map(k => k.frame));
           restoreKeyframes(frameKeyframes, endFrame);
         }
       }
     }
-  }, [savedKeyframes, framerate, restoreKeyframes]);
+  }, [savedKeyframes, framerate, restoreKeyframes, videoMetadata, trimRange]);
 
   /**
    * Auto-initialize keyframes when metadata loads
