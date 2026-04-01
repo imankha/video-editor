@@ -435,8 +435,21 @@ export function FramingContainer({
         framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newTrimEnd ?? duration)
           .catch(err => console.error('[FramingContainer] Failed to sync setTrimRange:', err));
       }
+
+      // Optimistically update store so sidebar framing indicator reflects trim
+      if (selectedClipId) {
+        updateClipData(selectedClipId, {
+          segments_data: JSON.stringify({
+            boundaries: segmentBoundaries,
+            segmentSpeeds: segmentSpeeds,
+            trimRange: !isCurrentlyTrimmed
+              ? { start: newTrimStart ?? 0, end: newTrimEnd ?? duration }
+              : trimRange,
+          })
+        });
+      }
     }
-  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, toggleTrimSegment, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, trimRange]);
+  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, toggleTrimSegment, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, trimRange, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Coordinated de-trim handler for start
@@ -685,6 +698,17 @@ export function FramingContainer({
     }
   }, [removeSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
 
+  // Helper: sync current segment state to clip store so sidebar indicator updates
+  const syncSegmentsToStore = useCallback(() => {
+    if (!selectedClipId) return;
+    const segmentState = {
+      boundaries: segmentBoundaries,
+      segmentSpeeds: segmentSpeeds,
+      trimRange: trimRange,
+    };
+    updateClipData(selectedClipId, { segments_data: JSON.stringify(segmentState) });
+  }, [selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
+
   /**
    * Handle segment speed change
    */
@@ -700,7 +724,20 @@ export function FramingContainer({
       framingActions.setSegmentSpeed(selectedProjectId, clipId, segmentIndex, speed)
         .catch(err => console.error('[FramingContainer] Failed to sync setSegmentSpeed:', err));
     }
-  }, [setSegmentSpeed, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
+
+    // Optimistically update store so sidebar framing indicator reflects the change
+    // Note: segmentSpeeds won't have the new value yet (React batching), so build it manually
+    if (selectedClipId) {
+      const updatedSpeeds = { ...segmentSpeeds, [segmentIndex]: speed };
+      updateClipData(selectedClipId, {
+        segments_data: JSON.stringify({
+          boundaries: segmentBoundaries,
+          segmentSpeeds: updatedSpeeds,
+          trimRange: trimRange,
+        })
+      });
+    }
+  }, [setSegmentSpeed, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
 
   /**
    * Get filtered keyframes for export (handles trim range)
