@@ -420,14 +420,14 @@ export function FramingScreen({
     const { url: clipUrl, clipRange } = getClipVideoConfig(firstClip);
     if (!clipUrl) return;
 
+    const firstClipWithMeta = getClipWithMeta(firstClip);
+
     // Restore framing state (crop keyframes, segments) from clip data if not already done.
     // The useLayoutEffect above may have already loaded the video (for overlay→framing
     // transitions), but state restoration still needs to happen. Guard with ref to
     // prevent infinite loops (restore updates state → re-render → effect re-fires).
     if (stateRestoredForUrlRef.current !== clipUrl) {
       stateRestoredForUrlRef.current = clipUrl;
-
-      const firstClipWithMeta = getClipWithMeta(firstClip);
       const parsedSegments = clipSegments(firstClip, firstClipWithMeta?.duration || 0);
       const parsedCropKfs = clipCropKeyframes(firstClip);
 

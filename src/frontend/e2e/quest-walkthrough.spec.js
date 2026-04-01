@@ -283,6 +283,14 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
   test('Complete all quests', async ({ page, request }) => {
     await setupTestUser(page);
 
+    // Capture browser console for debugging
+    page.on('console', msg => {
+      if (msg.type() === 'error' || msg.text().includes('[') || msg.text().includes('Error')) {
+        console.log(`[BROWSER ${msg.type()}] ${msg.text()}`);
+      }
+    });
+    page.on('pageerror', err => console.log(`[PAGE ERROR] ${err.message}`));
+
     // Authenticate test user via backend (bypasses Google OAuth)
     await authenticateTestUser(page);
 
@@ -453,9 +461,16 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     const projectCount = await projectCards.count();
 
     if (projectCount > 0) {
-      console.log(`[Q2S1] Found ${projectCount} project(s), clicking first...`);
+      const projectName = await projectCards.first().textContent();
+      console.log(`[Q2S1] Found ${projectCount} project(s), clicking "${projectName}"...`);
       await projectCards.first().click();
       await page.waitForTimeout(3000);
+
+      // Log what screen we're on after clicking
+      const url = page.url();
+      const hasVideo = await page.locator('video').count();
+      const bodyText = await page.locator('h2, h3').allTextContents().catch(() => []);
+      console.log(`[Q2S1] After click: url=${url}, videos=${hasVideo}, headings=${bodyText.slice(0, 5).join(', ')}`);
 
       // Wait for framing screen video to load — keep waiting as long as there's progress
       console.log('[Q2S1] Waiting for clip video to load...');
