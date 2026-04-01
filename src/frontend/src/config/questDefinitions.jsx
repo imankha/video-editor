@@ -145,7 +145,7 @@ export const QUESTS = [
       {
         id: 'upload_game_2',
         title: 'Add a Second Game',
-        description: 'Add another game — more highlights, bigger reel!',
+        description: 'Add another game — more highlights, better reel!',
       },
       {
         id: 'annotate_game_2',
