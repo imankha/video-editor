@@ -144,10 +144,12 @@ def _check_all_steps(user_id: str, conn) -> dict:
     ).fetchone()
     steps["wait_for_export_2"] = row["cnt"] >= 2
 
-    # Watch a gallery video for at least 1 second (T780 — distinct from viewed_gallery_video)
-    steps["watch_second_highlight"] = cursor.execute(
-        "SELECT 1 FROM achievements WHERE key = 'watched_gallery_video_1s'"
-    ).fetchone() is not None
+    # Watch second highlight — requires 2+ completed overlay exports
+    # (proves user went through full pipeline twice: framing → overlay → gallery)
+    row = cursor.execute(
+        "SELECT count(*) as cnt FROM export_jobs WHERE type = 'overlay' AND status = 'complete'"
+    ).fetchone()
+    steps["watch_second_highlight"] = row["cnt"] >= 2
 
     # --- Quest 4: Highlight Reel (second game + custom project) ---
 
