@@ -41,7 +41,7 @@ export const QUESTS = [
       {
         id: 'export_framing',
         title: 'Frame Video',
-        description: 'Drag the crop box around your player, then click "Frame Video".',
+        description: 'Drag and resize the crop box around your player at different keyframes so your player stays in view.',
       },
       {
         id: 'wait_for_export',
@@ -51,7 +51,7 @@ export const QUESTS = [
       {
         id: 'export_overlay',
         title: 'Spotlight Your Player',
-        description: 'Click the green dots on the timeline, then click on your player in the video. When done, click "Add Overlay".',
+        description: 'Click the green squares on the timeline, then click on your player in the video if you can. If not, move the ellipse around your player and size it manually. When done, click "Add Overlay".',
       },
       {
         id: 'view_gallery_video',
@@ -100,7 +100,7 @@ export const QUESTS = [
       {
         id: 'upload_game_2',
         title: 'Add a Second Game',
-        description: 'Add another game to build a multi-game reel! No new footage? You can re-add the same game from a different angle or half.',
+        description: 'Add another game — more highlights, bigger reel!',
       },
       {
         id: 'annotate_game_2',
@@ -125,7 +125,7 @@ export const QUESTS = [
       {
         id: 'watch_reel',
         title: 'Watch Your Reel',
-        description: 'Your highlight reel is ready! Click Gallery to watch and share it.',
+        description: 'Your highlight reel is ready! Click Gallery to watch and download it.',
       },
     ],
   },
