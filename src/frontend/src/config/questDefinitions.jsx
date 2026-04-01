@@ -100,7 +100,7 @@ export const QUESTS = [
       {
         id: 'export_second_highlight',
         title: 'Export Another Highlight',
-        description: 'Pick a project, and click "Frame Video" to frame it.',
+        description: 'Pick a project, crop it along the timeline and then click "Frame Video" to frame it.',
       },
       {
         id: 'wait_for_export_2',
