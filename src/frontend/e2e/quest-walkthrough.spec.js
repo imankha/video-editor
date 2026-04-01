@@ -208,6 +208,32 @@ async function waitForQuestStep(request, stepId, timeout = 30000) {
   return false;
 }
 
+/** Frame all clips in a project via API (set crop data so export button enables) */
+async function frameAllClipsInProject(request, projectId) {
+  const clipsRes = await request.get(`${API_BASE}/clips/projects/${projectId}/clips`, { headers: TEST_HEADERS });
+  if (!clipsRes.ok()) return 0;
+  const clips = await clipsRes.json();
+  let framed = 0;
+  for (const clip of clips) {
+    const res = await framClipViaAPI(request, projectId, clip.id);
+    if (res.ok()) framed++;
+  }
+  return framed;
+}
+
+/** Set crop data on a clip via API so it counts as "framed" */
+async function framClipViaAPI(request, projectId, clipId) {
+  // Add a crop keyframe at frame 0 (default centered crop)
+  const res = await request.post(`${API_BASE}/clips/projects/${projectId}/clips/${clipId}/actions`, {
+    headers: TEST_HEADERS,
+    data: {
+      action: 'add_crop_keyframe',
+      data: { frame: 0, x: 0.25, y: 0.1, width: 0.5, height: 0.8, origin: 'user' },
+    },
+  });
+  return res;
+}
+
 /** Create a raw clip via API (for bulk data setup) */
 async function createClipViaAPI(request, gameId, { start_time, end_time, name, rating, tags = [], notes = '' }) {
   const res = await request.post(`${API_BASE}/clips/raw/save`, {
@@ -506,17 +532,27 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     // --- Q2 Step 2: Frame Video ---
     console.log('\n=== Quest 2, Step 2: Frame Video (Export) ===');
 
+    // Ensure clips are framed (have crop data) via API so the export button enables
+    const projectsList = await getProjects(request);
+    if (projectsList.length > 0) {
+      const framed = await frameAllClipsInProject(request, projectsList[0].id);
+      console.log(`[Q2S2] Framed ${framed} clip(s) via API`);
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(2000);
+    }
+
     // Look for the Frame Video / export button
     let q2s2bugs = [];
-    const frameVideoBtn = page.locator('button:has-text("Frame Video")');
-    const frameVisible = await frameVideoBtn.first().isVisible().catch(() => false);
+    const frameVideoBtn = page.locator('button:has-text("Frame Video"):not([disabled])');
+    const frameVisible = await frameVideoBtn.first().isVisible({ timeout: 10000 }).catch(() => false);
 
     if (frameVisible) {
       await frameVideoBtn.first().click();
       await page.waitForTimeout(2000);
       ssFile = await screenshot(page, 'q2s2-frame-video-clicked');
     } else {
-      q2s2bugs.push('Frame Video button not found');
+      q2s2bugs.push('Frame Video button still disabled after framing clips');
       ssFile = await screenshot(page, 'q2s2-no-frame-button');
     }
 
@@ -735,26 +771,36 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     let q3s3bugs = [];
     const projects = page.locator('.bg-gray-800.rounded-lg h3.text-white');
     const pCount = await projects.count();
+    // Frame clips in all projects via API
+    const allProjects = await getProjects(request);
+    for (const proj of allProjects) {
+      const framed = await frameAllClipsInProject(request, proj.id);
+      if (framed > 0) console.log(`[Q3S3] Framed ${framed} clip(s) in project ${proj.id}`);
+    }
+
     if (pCount >= 2) {
-      // Click the second project (first one was already exported in Q2)
       await projects.nth(1).click();
       await page.waitForTimeout(3000);
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(2000);
 
-      // Click Frame Video
-      const fvBtn = page.locator('button:has-text("Frame Video")');
-      if (await fvBtn.first().isVisible().catch(() => false)) {
+      const fvBtn = page.locator('button:has-text("Frame Video"):not([disabled])');
+      if (await fvBtn.first().isVisible({ timeout: 10000 }).catch(() => false)) {
         await fvBtn.first().click();
         await page.waitForTimeout(2000);
       } else {
-        q3s3bugs.push('Frame Video button not visible on second project');
+        q3s3bugs.push('Frame Video button still disabled on second project');
       }
     } else if (pCount === 1) {
       q3s3bugs.push('Only 1 project found — second 5-star auto-project may not have been created');
-      // Try exporting the existing project again (it's already been exported, but the count check is ≥2)
       await projects.first().click();
       await page.waitForTimeout(3000);
-      const fvBtn = page.locator('button:has-text("Frame Video")');
-      if (await fvBtn.first().isVisible().catch(() => false)) {
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(2000);
+      const fvBtn = page.locator('button:has-text("Frame Video"):not([disabled])');
+      if (await fvBtn.first().isVisible({ timeout: 10000 }).catch(() => false)) {
         await fvBtn.first().click();
         await page.waitForTimeout(2000);
       }
@@ -983,13 +1029,23 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     console.log('\n=== Quest 4, Step 4: Frame the Reel ===');
 
     let q4s4bugs = [];
-    // We should be in the framing screen for the new project
-    const fvBtn2 = page.locator('button:has-text("Frame Video")');
+    // Frame all clips in the custom project via API
+    const latestProjects = await getProjects(request);
+    const customProject = latestProjects.find(p => !p.is_auto_created);
+    if (customProject) {
+      const framed = await frameAllClipsInProject(request, customProject.id);
+      console.log(`[Q4S4] Framed ${framed} clip(s) in custom project ${customProject.id}`);
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(2000);
+    }
+
+    const fvBtn2 = page.locator('button:has-text("Frame Video"):not([disabled])');
     if (await fvBtn2.first().isVisible({ timeout: 10000 }).catch(() => false)) {
       await fvBtn2.first().click();
       await page.waitForTimeout(2000);
     } else {
-      q4s4bugs.push('Frame Video button not found for custom project');
+      q4s4bugs.push('Frame Video button not found or still disabled for custom project');
     }
 
     ssFile = await screenshot(page, 'q4s4-frame-reel');
