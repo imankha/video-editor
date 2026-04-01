@@ -46,9 +46,11 @@ export const useQuestStore = create((set, get) => ({
         // Progressive disclosure: show first unclaimed quest
         const q1 = data.quests.find(q => q.id === 'quest_1');
         const q2 = data.quests.find(q => q.id === 'quest_2');
+        const q3 = data.quests.find(q => q.id === 'quest_3');
         let activeQuestId = 'quest_1';
         if (q1?.reward_claimed) activeQuestId = 'quest_2';
         if (q1?.reward_claimed && q2?.reward_claimed) activeQuestId = 'quest_3';
+        if (q1?.reward_claimed && q2?.reward_claimed && q3?.reward_claimed) activeQuestId = 'quest_4';
 
         set({
           quests: data.quests,
