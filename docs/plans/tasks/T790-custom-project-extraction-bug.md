@@ -48,14 +48,32 @@ Remove ALL remaining extraction code paths. T740 replaced extraction with:
 
 The old extraction pipeline (ModalQueue clip extraction tasks) should have been fully removed in T740 but wasn't — it still fires when working_clips are added to custom projects.
 
-### Root Cause
-When working_clips are inserted into a project, the backend queues extraction tasks via ModalQueue. This code path was NOT removed by T740 — it was only bypassed for auto-created single-clip projects (which use the game video URL directly). Custom projects with multiple clips from different games still hit the old extraction pipeline.
+### Root Cause (Confirmed)
+
+T740 removed extraction triggering from `list_project_clips()` (when user OPENS a project) but missed TWO other code paths that still trigger extraction:
+
+| Code Path | File | Lines | What It Does |
+|-----------|------|-------|-------------|
+| **Multi-clip project creation (BUG)** | `projects.py` | 723-753 | `create_project_from_clips()` loops through clips, calls `enqueue_clip_extraction()` for each unextracted clip, then `run_queue_processor()` in background |
+| **Single-clip manual add** | `clips.py` | 1328-1330 | `add_clip_to_project()` calls `trigger_clip_extraction()` for single clips added to existing projects |
+| **Dead code** | `clips.py` | 613-633 | `_trigger_extraction_for_auto_project()` defined but never called |
+
+The multi-clip path in `projects.py:723-753` is the primary bug. It builds a `clips_to_extract` list (clips with no filename, has game_id, has video_filename) and enqueues each one. The ModalQueue then downloads the full game video from R2 for EACH clip separately.
+
+T740's comment at `clips.py:1147` says:
+```python
+# T740: Extraction no longer triggered here — framing export handles it directly
+```
+
+But the same removal was never applied to `projects.py:create_project_from_clips()`.
 
 ### Fix
-1. Remove extraction task creation from working_clip insertion
-2. Remove/disable the ModalQueue clip extraction processor
-3. Verify framing screen uses range queries for all clip types (auto + custom)
-4. Clean up ExtractionWSManager references if no longer needed
+1. **Remove lines 723-753 in projects.py** — delete the extraction loop from `create_project_from_clips()`
+2. **Remove lines 1328-1330 in clips.py** — delete `trigger_clip_extraction()` call from `add_clip_to_project()`
+3. **Remove `_trigger_extraction_for_auto_project()` dead code** in clips.py (lines 613-633)
+4. **Consider removing `enqueue_clip_extraction()` and `_process_clip_extraction()`** from modal_queue.py if no other callers exist
+5. **Verify** framing screen uses range queries for all clip types (auto + custom)
+6. **Keep ExtractionWSManager** for now — it may be used for framing export progress
 
 ## Context
 
