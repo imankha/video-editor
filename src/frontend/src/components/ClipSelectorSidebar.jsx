@@ -4,8 +4,9 @@ import { ClipLibraryModal } from './ClipLibraryModal';
 import { UploadClipModal } from './UploadClipModal';
 import { Button } from './shared/Button';
 import { getRatingDisplay, formatDuration } from './shared/clipConstants';
-import { createGameLookup, formatClipDisplayName } from '../utils/gameNameLookup';
-import { isExtracted as isExtractedSel, clipDisplayName, clipCropKeyframes } from '../utils/clipSelectors';
+import { createGameLookup } from '../utils/gameNameLookup';
+import { isExtracted as isExtractedSel, clipCropKeyframes } from '../utils/clipSelectors';
+import { getClipDisplayName } from '../utils/clipDisplayName';
 
 /**
  * ClipSelectorSidebar - Sidebar for managing multiple video clips
@@ -256,38 +257,33 @@ export function ClipSelectorSidebar({
 
                 {/* Clip info */}
                 <div className="flex-1 min-w-0">
-                  {/* Clip number and name on same line */}
+                  {/* Clip name (primary) */}
                   {(() => {
-                    const clipName = clip.name || clipDisplayName(clip);
-                    const displayName = formatClipDisplayName(clipName, clip.game_id, gameLookup);
+                    const clipName = getClipDisplayName(clip, `Clip ${index + 1}`);
+                    const gameName = clip.game_id && gameLookup?.has(clip.game_id)
+                      ? gameLookup.get(clip.game_id) : null;
                     return (
-                      <div
-                        className="text-sm text-white truncate"
-                        title={displayName}
-                      >
-                        <span className="text-gray-500 mr-1">{index + 1}.</span>
-                        {displayName}
-                      </div>
+                      <>
+                        <div
+                          className="text-sm text-white truncate"
+                          title={clipName}
+                        >
+                          <span className="text-gray-500 mr-1">{index + 1}.</span>
+                          {clipName}
+                        </div>
+                        {/* Game name + duration (secondary) */}
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500 truncate">
+                          {gameName && (
+                            <>
+                              <span className="truncate">{gameName}</span>
+                              <span>•</span>
+                            </>
+                          )}
+                          <span>{formatDuration(meta?.duration || 0)}</span>
+                        </div>
+                      </>
                     );
                   })()}
-                  {/* Duration and source info */}
-                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                    <span>{formatDuration(meta?.duration || 0)}</span>
-                    {/* Show notes indicator if clip has notes */}
-                    {clip.notes && (
-                      <span
-                        className="inline-flex items-center text-purple-400"
-                        title={clip.notes}
-                      >
-                        <MessageSquare size={10} className="mr-0.5" />
-                        <span className="truncate max-w-[60px]">
-                          {clip.notes.length > 15
-                            ? clip.notes.slice(0, 15) + '...'
-                            : clip.notes}
-                        </span>
-                      </span>
-                    )}
-                  </div>
                 </div>
 
                 {/* Framing status indicator */}

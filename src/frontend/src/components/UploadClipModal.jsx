@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Upload, Film, Loader } from 'lucide-react';
 import { Button, StarRating, TagSelector } from './shared';
-import { generateClipName } from '../modes/annotate/constants/soccerTags';
+import { generateClipName } from '../utils/clipDisplayName';
 import { ensureUniqueName, getExistingNamesForGame } from '../utils/uniqueName';
 
 /**

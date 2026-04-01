@@ -1,4 +1,46 @@
-import { generateClipName } from '../modes/annotate/constants/soccerTags';
+import { RATING_ADJECTIVES } from '../components/shared/clipConstants';
+
+/**
+ * Generate a clip name from rating, tags, and notes.
+ * Single source of truth for clip name derivation (frontend).
+ * Backend equivalent: queries.py derive_clip_name()
+ *
+ * Priority: notes > rating+tags > empty string
+ *
+ * @param {number} rating - Clip rating (1-5)
+ * @param {string[]} selectedTags - Tags assigned to the clip
+ * @param {string} notes - Clip notes text
+ * @returns {string} Generated clip name
+ */
+export function generateClipName(rating, selectedTags, notes = '') {
+  const MAX_TITLE_LENGTH = 40;
+
+  // Notes take priority over tags
+  if (notes && notes.trim()) {
+    const trimmed = notes.trim();
+    if (trimmed.length <= MAX_TITLE_LENGTH) return trimmed;
+
+    // Truncate at word boundary
+    const words = trimmed.split(/\s+/);
+    let result = words[0];
+    for (let i = 1; i < words.length; i++) {
+      const next = result + ' ' + words[i];
+      if (next.length > MAX_TITLE_LENGTH) break;
+      result = next;
+    }
+    return result;
+  }
+
+  // Fallback: rating + tags
+  if (!selectedTags || selectedTags.length === 0) return '';
+
+  const adjective = RATING_ADJECTIVES[rating] || 'Interesting';
+  const tagPart = selectedTags.length === 1
+    ? selectedTags[0]
+    : selectedTags.slice(0, -1).join(', ') + ' and ' + selectedTags[selectedTags.length - 1];
+
+  return `${adjective} ${tagPart}`;
+}
 
 /**
  * Get display name for a clip.

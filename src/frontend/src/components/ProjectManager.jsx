@@ -9,7 +9,7 @@ import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
-import { generateClipName } from '../modes/annotate/constants/soccerTags';
+import { generateClipName } from '../utils/clipDisplayName';
 import { RATING_NOTATION, RATING_BADGE_COLORS } from './shared/clipConstants';
 import { getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
 import { ProfileDropdown } from './ProfileDropdown';
