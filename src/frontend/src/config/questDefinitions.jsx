@@ -8,7 +8,7 @@
  * so users can visually match what they see in the quest panel to the app UI.
  */
 
-import { Home, Image, Play, Plus, Star, Crop, Film } from 'lucide-react';
+import { Home, Image, Play, Plus, Star, Crop, Film, Crosshair } from 'lucide-react';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
 function QIcon({ icon: IconComponent, className = 'text-gray-300' }) {
@@ -17,9 +17,13 @@ function QIcon({ icon: IconComponent, className = 'text-gray-300' }) {
   );
 }
 
-/** Green square marker — matches the overlay timeline keyframe markers */
+/** Detection marker — matches the green squares on the overlay timeline (bg-green-600, rounded, Crosshair icon) */
 function GreenSquare() {
-  return <span className="inline-block align-text-bottom mx-0.5 w-2.5 h-2.5 bg-green-500 rounded-sm" />;
+  return (
+    <span className="inline-flex items-center justify-center align-text-bottom mx-0.5 w-4 h-4 bg-green-600 rounded border border-green-400">
+      <Crosshair size={10} className="text-white" />
+    </span>
+  );
 }
 
 /** Filled star — matches the yellow rating stars in the clip editor */
