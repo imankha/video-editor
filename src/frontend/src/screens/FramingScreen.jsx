@@ -515,7 +515,7 @@ export function FramingScreen({
           resetCrop();
         }
 
-        // 3. Load new clip's video
+        // 3. Load new clip's video (or just seek if same video URL)
         const { url: newClipUrl, clipRange: newClipRange } = getClipVideoConfig(newClip);
         if (newClipUrl) {
           if (!newClipUrl.startsWith('blob:')) {

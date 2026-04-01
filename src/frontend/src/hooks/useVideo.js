@@ -172,44 +172,46 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * @param {Object} clipRange - Optional {clipOffset, clipDuration} for playing a subset of the video
    */
   const loadVideoFromStreamingUrl = (url, preloadedMetadata = null, clipRange = null) => {
+    const newClipOffset = clipRange?.clipOffset || 0;
+    const newClipDuration = clipRange?.clipDuration || null;
+    const effectiveDuration = newClipDuration || preloadedMetadata?.duration || 0;
+
+    // Same video URL — just update clip range and seek, no reload needed
+    if (url === videoUrl && videoRef.current) {
+      console.log(`[useVideo] Same URL, seeking to clip offset=${newClipOffset}s`);
+      setVideoLoaded({
+        file: null,
+        url: url,
+        metadata: preloadedMetadata || metadata,
+        duration: effectiveDuration,
+        clipOffset: newClipOffset,
+        clipDuration: newClipDuration,
+      });
+      videoRef.current.currentTime = newClipOffset;
+      setCurrentTime(0);
+      return;
+    }
+
     console.log('[useVideo] loadVideoFromStreamingUrl (RANGE REQUESTS) called with:', url?.substring(0, 60));
     if (clipRange) {
-      console.log(`[useVideo] Clip range: offset=${clipRange.clipOffset}s, duration=${clipRange.clipDuration}s`);
+      console.log(`[useVideo] Clip range: offset=${newClipOffset}s, duration=${newClipDuration}s`);
     }
     setError(null);
     retryAttemptRef.current = 0; // Reset retry counter on new video load
 
-    const newClipOffset = clipRange?.clipOffset || 0;
-    const sameUrl = url === videoUrl;
-
     // Clean up previous blob URL (only if it's a blob URL we created)
     if (videoUrl && videoUrl.startsWith('blob:')) {
-      console.log('[useVideo] Revoking previous blob URL:', videoUrl);
       revokeVideoURL(videoUrl);
     }
 
-    // Use clip duration if provided, otherwise use metadata duration
-    const effectiveDuration = clipRange?.clipDuration || preloadedMetadata?.duration || 0;
-
-    // Use URL directly - no blob download!
-    // The browser will stream the video using HTTP Range requests
     setVideoLoaded({
-      file: null, // No file for streaming URLs
+      file: null,
       url: url,
       metadata: preloadedMetadata,
       duration: effectiveDuration,
       clipOffset: newClipOffset,
-      clipDuration: clipRange?.clipDuration || null,
+      clipDuration: newClipDuration,
     });
-
-    // Same video URL but different clip offset (switching clips on same game video):
-    // browser won't fire loadedmetadata, so seek explicitly
-    if (sameUrl && videoRef.current) {
-      videoRef.current.currentTime = newClipOffset;
-      setCurrentTime(0);
-    }
-
-    console.log('[useVideo] Set streaming URL directly (instant)');
   };
 
   /**
