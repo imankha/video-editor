@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useMemo } from 'react';
+import { useReducer, useCallback, useMemo, useEffect, useRef } from 'react';
 import { timeToFrame, frameToTime } from '../utils/videoUtils';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import {
@@ -30,13 +30,24 @@ export default function useKeyframeController({
 }) {
   const [state, dispatch] = useReducer(keyframeReducer, null, createInitialState);
 
-  // Validate invariants in development
-  if (process.env.NODE_ENV === 'development') {
-    const violations = validateInvariants(state);
-    if (violations.length > 0) {
-      console.error('Keyframe invariant violations:', violations);
+  // Validate invariants in development — only when state actually changes.
+  // Previously this ran in the render body (every render), which flooded the
+  // console when any other store update caused re-renders (T860).
+  const lastViolationsRef = useRef(null);
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      const violations = validateInvariants(state);
+      if (violations.length > 0) {
+        const key = JSON.stringify(violations);
+        if (key !== lastViolationsRef.current) {
+          lastViolationsRef.current = key;
+          console.error('Keyframe invariant violations:', violations);
+        }
+      } else {
+        lastViolationsRef.current = null;
+      }
     }
-  }
+  }, [state]);
 
   // ============================================================================
   // INITIALIZATION

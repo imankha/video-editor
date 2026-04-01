@@ -109,16 +109,17 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * @param {string} filename - Optional filename for the created file
    * @returns {Promise<File|null>} - The loaded file or null on error
    */
-  const loadVideoFromUrl = async (url, filename = 'video.mp4') => {
+  const loadVideoFromUrl = useCallback(async (url, filename = 'video.mp4') => {
     console.log('[useVideo] loadVideoFromUrl (FULL DOWNLOAD) called with:', url);
     setError(null);
     setIsLoading(true);
 
     try {
       // Clean up previous blob URL (only if it's a blob URL we created)
-      if (videoUrl && videoUrl.startsWith('blob:')) {
-        console.log('[useVideo] Revoking previous blob URL:', videoUrl);
-        revokeVideoURL(videoUrl);
+      const currentUrl = useVideoStore.getState().videoUrl;
+      if (currentUrl && currentUrl.startsWith('blob:')) {
+        console.log('[useVideo] Revoking previous blob URL:', currentUrl);
+        revokeVideoURL(currentUrl);
       }
 
       // Fetch the video from URL
@@ -156,14 +157,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       setIsLoading(false);
       return null;
     }
-  };
+  }, [setError, setIsLoading, setVideoLoaded]); // eslint-disable-line react-hooks/exhaustive-deps -- reads videoUrl via getState() to keep callback stable
 
-  /**
-   * Load a video from a streaming URL (no blob download)
-   * Use this for presigned R2 URLs where streaming is preferred.
-   * @param {string} url - Streaming URL (e.g., presigned R2 URL)
-   * @param {Object} preloadedMetadata - Optional pre-extracted metadata
-   */
   /**
    * Load a video from a streaming URL (no blob download)
    * Use this for presigned R2 URLs where streaming is preferred.
@@ -171,18 +166,20 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * @param {Object} preloadedMetadata - Optional pre-extracted metadata
    * @param {Object} clipRange - Optional {clipOffset, clipDuration} for playing a subset of the video
    */
-  const loadVideoFromStreamingUrl = (url, preloadedMetadata = null, clipRange = null) => {
+  const loadVideoFromStreamingUrl = useCallback((url, preloadedMetadata = null, clipRange = null) => {
     const newClipOffset = clipRange?.clipOffset || 0;
     const newClipDuration = clipRange?.clipDuration || null;
     const effectiveDuration = newClipDuration || preloadedMetadata?.duration || 0;
 
     // Same video URL — just update clip range and seek, no reload needed
-    if (url === videoUrl && videoRef.current) {
+    const currentUrl = useVideoStore.getState().videoUrl;
+    if (url === currentUrl && videoRef.current) {
       console.log(`[useVideo] Same URL, seeking to clip offset=${newClipOffset}s`);
+      const currentMeta = useVideoStore.getState().metadata;
       setVideoLoaded({
         file: null,
         url: url,
-        metadata: preloadedMetadata || metadata,
+        metadata: preloadedMetadata || currentMeta,
         duration: effectiveDuration,
         clipOffset: newClipOffset,
         clipDuration: newClipDuration,
@@ -200,8 +197,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     retryAttemptRef.current = 0; // Reset retry counter on new video load
 
     // Clean up previous blob URL (only if it's a blob URL we created)
-    if (videoUrl && videoUrl.startsWith('blob:')) {
-      revokeVideoURL(videoUrl);
+    const prevUrl = useVideoStore.getState().videoUrl;
+    if (prevUrl && prevUrl.startsWith('blob:')) {
+      revokeVideoURL(prevUrl);
     }
 
     setVideoLoaded({
@@ -212,7 +210,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       clipOffset: newClipOffset,
       clipDuration: newClipDuration,
     });
-  };
+  }, [setError, setCurrentTime, setVideoLoaded]); // eslint-disable-line react-hooks/exhaustive-deps -- reads videoUrl/metadata via getState() to keep callback stable
 
   /**
    * Play video - handles promise to prevent race conditions

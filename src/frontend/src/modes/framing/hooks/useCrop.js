@@ -238,7 +238,7 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
         initializeKeyframes(defaultCrop, totalFrames);
       }
     }
-  }, [videoMetadata, aspectRatio, needsInitialization, initializeKeyframes, calculateDefaultCrop, framerate, trimRange]);
+  }, [videoMetadata, aspectRatio, initializeKeyframes, calculateDefaultCrop, framerate, trimRange]); // eslint-disable-line react-hooks/exhaustive-deps -- needsInitialization removed: it depends on full keyframe state, causing this effect to re-fire on every keyframe change. The effect uses keyframesRef instead.
 
   /**
    * Update aspect ratio and recalculate all keyframes
