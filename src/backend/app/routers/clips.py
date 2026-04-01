@@ -1047,21 +1047,9 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
         """, (project_id, project_id))
         clips = cursor.fetchall()
 
-        # Collect raw_clip_ids that need extraction status lookup
-        raw_clip_ids_needing_status = [
-            clip['raw_clip_id'] for clip in clips
-            if clip['raw_clip_id'] and not clip['raw_filename'] and not clip['uploaded_filename']
-        ]
-
-        # Look up extraction status for clips that need it
-        # T249: Use get_extraction_status for proper retrying/failed mapping
+        # T790: Standalone extraction removed — framing export handles it inline.
+        # extraction_status is always None now.
         extraction_statuses = {}
-        if raw_clip_ids_needing_status:
-            from app.services.modal_queue import get_extraction_status
-            for rc_id in raw_clip_ids_needing_status:
-                status = get_extraction_status(rc_id)
-                if status:
-                    extraction_statuses[rc_id] = status
 
         # Pre-fetch notes corpus for TF-IDF title generation
         corpus = _get_notes_corpus(cursor)

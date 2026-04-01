@@ -367,85 +367,55 @@ async def list_projects():
 
         # Fetch extraction status for all projects
         # Counts clips that are: extracted (have filename), extracting (running task), pending (pending task)
-        # Uses UNION to count clips for both:
-        #   1. Auto-created projects (via auto_project_id)
-        #   2. Manual projects (via working_clips.project_id)
-        # A clip can appear in multiple projects, so we use UNION ALL then aggregate
+        # T790: Standalone extraction removed (T740 merged it into framing export).
+        # Count clips with filenames (extracted = has standalone file).
+        # extracting/pending are always 0 — no new extraction tasks are created.
         cursor.execute("""
-            SELECT project_id,
-                SUM(is_extracted) as extracted,
-                SUM(is_extracting) as extracting,
-                SUM(is_pending) as pending
+            SELECT project_id, SUM(is_extracted) as extracted
             FROM (
-                -- Auto-created projects: clips linked via auto_project_id
-                SELECT
-                    rc.auto_project_id as project_id,
-                    CASE WHEN rc.filename IS NOT NULL AND rc.filename != '' THEN 1 ELSE 0 END as is_extracted,
-                    CASE WHEN mt.status = 'running' THEN 1 ELSE 0 END as is_extracting,
-                    CASE WHEN mt.status = 'pending' THEN 1 ELSE 0 END as is_pending
+                SELECT rc.auto_project_id as project_id,
+                    CASE WHEN rc.filename IS NOT NULL AND rc.filename != '' THEN 1 ELSE 0 END as is_extracted
                 FROM raw_clips rc
-                LEFT JOIN modal_tasks mt ON mt.raw_clip_id = rc.id AND mt.task_type = 'clip_extraction' AND mt.status IN ('pending', 'running')
                 WHERE rc.auto_project_id IS NOT NULL
 
                 UNION ALL
 
-                -- Manual projects: clips linked via working_clips
-                SELECT
-                    wc.project_id as project_id,
-                    CASE WHEN rc.filename IS NOT NULL AND rc.filename != '' THEN 1 ELSE 0 END as is_extracted,
-                    CASE WHEN mt.status = 'running' THEN 1 ELSE 0 END as is_extracting,
-                    CASE WHEN mt.status = 'pending' THEN 1 ELSE 0 END as is_pending
+                SELECT wc.project_id as project_id,
+                    CASE WHEN rc.filename IS NOT NULL AND rc.filename != '' THEN 1 ELSE 0 END as is_extracted
                 FROM working_clips wc
                 JOIN raw_clips rc ON rc.id = wc.raw_clip_id
-                LEFT JOIN modal_tasks mt ON mt.raw_clip_id = rc.id AND mt.task_type = 'clip_extraction' AND mt.status IN ('pending', 'running')
             ) combined
             GROUP BY project_id
         """)
         extraction_rows = cursor.fetchall()
 
-        # Build a map of project_id -> extraction status
         project_extraction = {}
         for ext_row in extraction_rows:
             project_extraction[ext_row['project_id']] = {
                 'extracted': ext_row['extracted'] or 0,
-                'extracting': ext_row['extracting'] or 0,
-                'pending': ext_row['pending'] or 0
+                'extracting': 0,
+                'pending': 0
             }
 
-        # Fetch clip details for each project (names, tags, extraction status)
-        # Uses UNION to get clips for both auto-created and manual projects
+        # Fetch clip details for each project (names, tags, extracted status)
         cursor.execute("""
-            SELECT project_id, clip_id, name, tags, rating, is_extracted, is_extracting, sort_order
+            SELECT project_id, clip_id, name, tags, rating, is_extracted, 0 as is_extracting, sort_order
             FROM (
-                -- Auto-created projects: clips linked via auto_project_id
-                SELECT
-                    rc.auto_project_id as project_id,
-                    rc.id as clip_id,
-                    rc.name,
-                    rc.tags,
-                    rc.rating,
+                SELECT rc.auto_project_id as project_id, rc.id as clip_id,
+                    rc.name, rc.tags, rc.rating,
                     CASE WHEN rc.filename IS NOT NULL AND rc.filename != '' THEN 1 ELSE 0 END as is_extracted,
-                    CASE WHEN mt.status = 'running' THEN 1 ELSE 0 END as is_extracting,
                     0 as sort_order
                 FROM raw_clips rc
-                LEFT JOIN modal_tasks mt ON mt.raw_clip_id = rc.id AND mt.task_type = 'clip_extraction' AND mt.status IN ('pending', 'running')
                 WHERE rc.auto_project_id IS NOT NULL
 
                 UNION ALL
 
-                -- Manual projects: clips linked via working_clips
-                SELECT
-                    wc.project_id as project_id,
-                    rc.id as clip_id,
-                    rc.name,
-                    rc.tags,
-                    rc.rating,
+                SELECT wc.project_id as project_id, rc.id as clip_id,
+                    rc.name, rc.tags, rc.rating,
                     CASE WHEN rc.filename IS NOT NULL AND rc.filename != '' THEN 1 ELSE 0 END as is_extracted,
-                    CASE WHEN mt.status = 'running' THEN 1 ELSE 0 END as is_extracting,
                     wc.sort_order
                 FROM working_clips wc
                 JOIN raw_clips rc ON rc.id = wc.raw_clip_id
-                LEFT JOIN modal_tasks mt ON mt.raw_clip_id = rc.id AND mt.task_type = 'clip_extraction' AND mt.status IN ('pending', 'running')
             ) combined
             ORDER BY project_id, sort_order, clip_id
         """)
