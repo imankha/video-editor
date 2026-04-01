@@ -1,11 +1,11 @@
 import { useState, useRef, useMemo } from 'react';
-import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, Check, AlertCircle } from 'lucide-react';
+import { GripVertical, X, Plus, Film, MessageSquare, Upload, Library, Check, Crop } from 'lucide-react';
 import { ClipLibraryModal } from './ClipLibraryModal';
 import { UploadClipModal } from './UploadClipModal';
 import { Button } from './shared/Button';
 import { getRatingDisplay, formatDuration } from './shared/clipConstants';
 import { createGameLookup } from '../utils/gameNameLookup';
-import { isExtracted as isExtractedSel, clipCropKeyframes } from '../utils/clipSelectors';
+import { clipCropKeyframes } from '../utils/clipSelectors';
 import { getClipDisplayName } from '../utils/clipDisplayName';
 
 /**
@@ -195,8 +195,6 @@ export function ClipSelectorSidebar({
           const hasRating = clip.rating != null;
           const ratingInfo = hasRating ? getRatingDisplay(clip.rating) : null;
           const isSelected = selectedClipId === clip.id;
-          // All clips are selectable — extraction is handled inline during framing export
-          const extracted = isExtractedSel(clip);
           const canSelect = true;
           // A clip is "framed" if it has crop keyframes (parsed from raw JSON)
           const parsedCropKfs = clipCropKeyframes(clip);
@@ -287,18 +285,16 @@ export function ClipSelectorSidebar({
                 </div>
 
                 {/* Framing status indicator */}
-                {extracted && (
-                  <div
-                    className={`ml-2 flex-shrink-0 ${isFramed ? 'text-green-400' : 'text-amber-400'}`}
-                    title={isFramed ? 'Framed' : 'Not framed - add crop keyframes'}
-                  >
-                    {isFramed ? (
-                      <Check size={16} className="stroke-[3]" />
-                    ) : (
-                      <AlertCircle size={16} />
-                    )}
-                  </div>
-                )}
+                <div
+                  className={`ml-2 flex-shrink-0 ${isFramed ? 'text-green-400' : 'text-gray-600'}`}
+                  title={isFramed ? 'Framed' : 'Needs framing — add crop keyframes'}
+                >
+                  {isFramed ? (
+                    <Check size={16} className="stroke-[3]" />
+                  ) : (
+                    <Crop size={14} />
+                  )}
+                </div>
 
                 {/* Delete button */}
                 <Button
