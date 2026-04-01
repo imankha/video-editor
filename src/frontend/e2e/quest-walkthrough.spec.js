@@ -534,16 +534,23 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
 
     // Ensure clips are framed (have crop data) via API so the export button enables
     const projectsList = await getProjects(request);
+    let q2s2bugs = [];
     if (projectsList.length > 0) {
       const framed = await frameAllClipsInProject(request, projectsList[0].id);
       console.log(`[Q2S2] Framed ${framed} clip(s) via API`);
+      // Reload navigates back to projects — re-enter the project
       await page.reload();
       await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(1000);
+      // Re-click the project to enter framing
+      const reProjectCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');
+      if (await reProjectCards.first().isVisible().catch(() => false)) {
+        await reProjectCards.first().click();
+        await page.waitForTimeout(3000);
+      }
     }
 
     // Look for the Frame Video / export button
-    let q2s2bugs = [];
     const frameVideoBtn = page.locator('button:has-text("Frame Video"):not([disabled])');
     const frameVisible = await frameVideoBtn.first().isVisible({ timeout: 10000 }).catch(() => false);
 
@@ -778,12 +785,17 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
       if (framed > 0) console.log(`[Q3S3] Framed ${framed} clip(s) in project ${proj.id}`);
     }
 
-    if (pCount >= 2) {
-      await projects.nth(1).click();
+    // After framing via API, reload and re-enter the project
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+    // Re-read project cards after reload
+    const projectsAfterFrame = page.locator('.bg-gray-800.rounded-lg h3.text-white');
+    const pCountAfter = await projectsAfterFrame.count();
+
+    if (pCountAfter >= 2) {
+      await projectsAfterFrame.nth(1).click();
       await page.waitForTimeout(3000);
-      await page.reload();
-      await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(2000);
 
       const fvBtn = page.locator('button:has-text("Frame Video"):not([disabled])');
       if (await fvBtn.first().isVisible({ timeout: 10000 }).catch(() => false)) {
@@ -792,13 +804,10 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
       } else {
         q3s3bugs.push('Frame Video button still disabled on second project');
       }
-    } else if (pCount === 1) {
+    } else if (pCountAfter >= 1) {
       q3s3bugs.push('Only 1 project found — second 5-star auto-project may not have been created');
-      await projects.first().click();
+      await projectsAfterFrame.first().click();
       await page.waitForTimeout(3000);
-      await page.reload();
-      await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(2000);
       const fvBtn = page.locator('button:has-text("Frame Video"):not([disabled])');
       if (await fvBtn.first().isVisible({ timeout: 10000 }).catch(() => false)) {
         await fvBtn.first().click();
@@ -1035,9 +1044,18 @@ test.describe('Quest Walkthrough — Soccer Parent Simulation', () => {
     if (customProject) {
       const framed = await frameAllClipsInProject(request, customProject.id);
       console.log(`[Q4S4] Framed ${framed} clip(s) in custom project ${customProject.id}`);
-      await page.reload();
+      // Reload navigates to projects — go to Projects tab and re-enter custom project
+      await page.goto('/');
       await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(2000);
+      await page.locator('button:has-text("Projects")').click();
+      await page.waitForTimeout(1000);
+      // Click the custom project (non-auto, likely the last one)
+      const reelCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');
+      const reelCount = await reelCards.count();
+      if (reelCount > 0) {
+        await reelCards.last().click(); // Custom project is usually the most recent
+        await page.waitForTimeout(3000);
+      }
     }
 
     const fvBtn2 = page.locator('button:has-text("Frame Video"):not([disabled])');
