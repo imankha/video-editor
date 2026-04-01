@@ -196,9 +196,11 @@ export function ClipSelectorSidebar({
           const ratingInfo = hasRating ? getRatingDisplay(clip.rating) : null;
           const isSelected = selectedClipId === clip.id;
           const canSelect = true;
-          // A clip is "framed" if it has crop keyframes (parsed from raw JSON)
-          const parsedCropKfs = clipCropKeyframes(clip);
-          const isFramed = parsedCropKfs && parsedCropKfs.length > 0;
+          // A clip is "worked on" if it has any framing edits (crop, segments, or timing)
+          const hasCrop = clipCropKeyframes(clip)?.length > 0;
+          const hasSegments = !!clip.segments_data;
+          const hasTiming = !!clip.timing_data;
+          const isFramed = hasCrop || hasSegments || hasTiming;
           const meta = clipMetadataCache[clip.id];
 
           return (

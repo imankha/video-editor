@@ -987,12 +987,13 @@ export function ExportButtonContainer({
 
   // T740: Extraction check removed — framing reads game video directly
 
-  // Check if any clips are missing framing data
+  // Check if any clips haven't been worked on (no crop, segments, or timing edits)
   const isMultiClipMode = clips && clips.length > 0;
   const clipsNotFramed = (clips || []).filter(c => {
-    // Use saved crop_data from DB, not runtime cropKeyframes (which includes defaults)
-    const savedKfs = clipCropKeyframes(c);
-    return !savedKfs || savedKfs.length === 0;
+    const hasCrop = clipCropKeyframes(c)?.length > 0;
+    const hasSegments = !!c.segments_data;
+    const hasTiming = !!c.timing_data;
+    return !hasCrop && !hasSegments && !hasTiming;
   });
 
   const hasUnframedClips = isMultiClipMode
