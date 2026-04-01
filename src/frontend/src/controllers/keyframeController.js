@@ -167,12 +167,14 @@ function ensurePermanentKeyframes(keyframes, endFrame) {
   }
 
   // Ensure endFrame exists — absorb nearby keyframe if within MIN_KEYFRAME_SPACING
+  // Skip frame 0 when looking for nearby candidates — absorbing the start permanent
+  // keyframe into endFrame would collapse both boundaries into a single keyframe.
   if (endFrame !== null && endFrame !== undefined) {
     const endIndex = result.findIndex(kf => kf.frame === endFrame);
     if (endIndex >= 0) {
       result[endIndex] = { ...result[endIndex], origin: 'permanent' };
     } else {
-      const nearbyEndIndex = result.findIndex(kf => kf.frame > endFrame - MIN_KEYFRAME_SPACING && kf.frame < endFrame);
+      const nearbyEndIndex = result.findIndex(kf => kf.frame > endFrame - MIN_KEYFRAME_SPACING && kf.frame < endFrame && kf.frame !== 0);
       if (nearbyEndIndex >= 0) {
         // Absorb: move nearby keyframe to endFrame
         result[nearbyEndIndex] = { ...result[nearbyEndIndex], frame: endFrame, origin: 'permanent' };
