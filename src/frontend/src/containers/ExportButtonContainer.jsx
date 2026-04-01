@@ -521,80 +521,12 @@ export function ExportButtonContainer({
         if (isMultiClip) {
           endpoint = `${API_BASE}/api/export/multi-clip`;
 
-          for (let index = 0; index < clips.length; index++) {
-            const clip = clips[index];
-            if (clip.file) {
-              formData.append(`video_${index}`, clip.file);
-            } else if (clip.id && projectId) {
-              const streamUrl = `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/file?stream=true`;
-              console.log(`[ExportButtonContainer] Fetching clip ${index} via backend proxy:`, streamUrl);
-              setProgressMessage(`Downloading clip ${index + 1}/${clips.length}...`);
-
-              try {
-                const response = await fetch(streamUrl);
-                if (!response.ok) {
-                  let responseBody = '';
-                  try {
-                    responseBody = await response.text();
-                  } catch {
-                    responseBody = '(could not read response body)';
-                  }
-
-                  const statusText = response.status === 403 ? 'Access denied' :
-                                    response.status === 404 ? 'Clip not found' :
-                                    response.status === 502 ? 'Storage gateway error' :
-                                    response.status === 503 ? 'Storage unavailable' :
-                                    `HTTP ${response.status} ${response.statusText}`;
-
-                  console.error(`[ExportButtonContainer] Clip fetch failed:`, {
-                    clipIndex: index,
-                    clipId: clip.id,
-                    status: response.status,
-                    statusText: response.statusText,
-                    responseBody: responseBody.substring(0, 500)
-                  });
-
-                  throw new Error(`CLIP_FETCH_ERROR: Failed to download clip ${index + 1}: ${statusText}`);
-                }
-                const blob = await response.blob();
-                console.log(`[ExportButtonContainer] Successfully downloaded clip ${index}: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
-                const file = new File([blob], clip.fileName || `clip_${index}.mp4`, { type: 'video/mp4' });
-                formData.append(`video_${index}`, file);
-              } catch (fetchErr) {
-                if (fetchErr.message.startsWith('CLIP_FETCH_ERROR:')) {
-                  throw fetchErr;
-                }
-
-                console.error(`[ExportButtonContainer] Clip ${index} fetch error:`, {
-                  errorName: fetchErr.name,
-                  errorMessage: fetchErr.message,
-                  clipId: clip.workingClipId,
-                  stack: fetchErr.stack
-                });
-
-                throw new Error(`CLIP_FETCH_ERROR: Failed to download clip ${index + 1}: ${fetchErr.message || 'Network error'}. Server may be unavailable.`);
-              }
-            } else if (clip.fileUrl) {
-              console.warn(`[ExportButtonContainer] Clip ${index} has no backend id, falling back to direct URL fetch`);
-              const urlForLog = clip.fileUrl.includes('?') ? clip.fileUrl.split('?')[0] + '?...' : clip.fileUrl;
-              console.log(`[ExportButtonContainer] Fetching clip ${index} from URL:`, urlForLog);
-              setProgressMessage(`Downloading clip ${index + 1}/${clips.length}...`);
-
-              const response = await fetch(clip.fileUrl);
-              if (!response.ok) {
-                throw new Error(`CLIP_FETCH_ERROR: Failed to download clip ${index + 1}: HTTP ${response.status}`);
-              }
-              const blob = await response.blob();
-              const file = new File([blob], clip.fileName || `clip_${index}.mp4`, { type: 'video/mp4' });
-              formData.append(`video_${index}`, file);
-            } else {
-              throw new Error(`CLIP_FETCH_ERROR: Clip ${index + 1} has no file or storage URL - please reload the project`);
-            }
-          }
-
+          // T810: Don't download/upload clip files — backend resolves video sources from DB
+          // This supports game-video clips that have no standalone files
           const multiClipData = {
             clips: clips.map((clip, index) => ({
               clipIndex: index,
+              workingClipId: clip.id,
               fileName: clip.fileName,
               duration: clip.duration,
               sourceWidth: clip.sourceWidth,

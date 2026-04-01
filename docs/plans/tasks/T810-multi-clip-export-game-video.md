@@ -1,6 +1,6 @@
 # T810: Multi-Clip Export Fails for Game Video Clips
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 9
 **Complexity:** 6
 **Created:** 2026-04-01

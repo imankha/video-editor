@@ -37,7 +37,8 @@ from ...services.clip_pipeline import process_clip_with_pipeline
 from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR, ExportStatus
 from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
-from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2
+from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2, download_from_r2_global
+from ...queries import latest_working_clips_subquery
 from ...user_context import get_current_user_id, set_current_user_id
 from ...profile_context import get_current_profile_id, set_current_profile_id
 from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
@@ -57,6 +58,16 @@ except (ImportError, OSError, AttributeError) as e:
 
 # Default duration for auto-generated highlight regions (seconds)
 DEFAULT_HIGHLIGHT_REGION_DURATION = 2.0
+
+
+class BytesFile:
+    """Async file-like wrapper for bytes, compatible with UploadFile interface."""
+    def __init__(self, content: bytes):
+        self._content = content
+    async def read(self):
+        return self._content
+    async def seek(self, offset):
+        pass
 
 # YOLO model singleton for local detection
 _yolo_model = None
@@ -1256,6 +1267,120 @@ async def export_multi_clip(
                 },
             )
         credits_deducted = credits_required
+
+    # DB-resolved mode: when project_id is provided and no video files uploaded,
+    # resolve clip sources from the database (supports game-video clips without standalone files)
+    if project_id and len(video_files) == 0 and len(clips_data) > 0:
+        logger.info(f"[Multi-Clip Export] No video files uploaded, resolving {len(clips_data)} clips from DB")
+
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"""
+                SELECT
+                    wc.id, wc.raw_clip_id, wc.uploaded_filename,
+                    wc.crop_data, wc.segments_data, wc.sort_order,
+                    rc.filename as raw_filename, rc.name as clip_name,
+                    rc.game_id, rc.start_time as raw_start_time,
+                    rc.end_time as raw_end_time,
+                    (rc.end_time - rc.start_time) as raw_duration,
+                    g.blake3_hash as game_blake3_hash
+                FROM working_clips wc
+                LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+                LEFT JOIN games g ON rc.game_id = g.id
+                WHERE wc.project_id = ?
+                AND wc.id IN ({latest_working_clips_subquery()})
+                ORDER BY wc.sort_order
+            """, (project_id, project_id))
+            db_clips = cursor.fetchall()
+
+        if not db_clips:
+            raise HTTPException(status_code=400, detail="No clips found in project")
+
+        # Build lookup by working_clip_id
+        db_clips_by_id = {clip['id']: clip for clip in db_clips}
+
+        resolve_temp_dir = tempfile.mkdtemp()
+        try:
+            for i, clip_data in enumerate(clips_data):
+                wc_id = clip_data.get('workingClipId')
+                if wc_id and wc_id in db_clips_by_id:
+                    db_clip = db_clips_by_id[wc_id]
+                elif i < len(db_clips):
+                    # Fallback: match by sort order
+                    db_clip = db_clips[i]
+                else:
+                    raise HTTPException(status_code=400, detail=f"Cannot resolve clip {i}: no matching DB clip")
+
+                # Use DB-authoritative crop/segments data
+                if db_clip['crop_data']:
+                    clip_data['cropKeyframes'] = json.loads(db_clip['crop_data'])
+                if db_clip['segments_data']:
+                    clip_data['segments'] = json.loads(db_clip['segments_data'])
+                if db_clip['raw_duration']:
+                    clip_data['duration'] = db_clip['raw_duration']
+
+                # Resolve video source
+                if db_clip['game_id'] and db_clip['game_blake3_hash']:
+                    # Game clip: download game video from R2, extract clip range
+                    game_key = f"games/{db_clip['game_blake3_hash']}.mp4"
+                    game_video_path = Path(resolve_temp_dir) / f"game_{db_clip['game_blake3_hash']}.mp4"
+
+                    # Reuse downloaded game video if multiple clips share the same game
+                    if not game_video_path.exists():
+                        logger.info(f"[Multi-Clip Export] Downloading game video: {game_key}")
+                        if not download_from_r2_global(game_key, game_video_path):
+                            raise HTTPException(status_code=500, detail=f"Failed to download game video for clip {i}")
+
+                    # Extract clip range with FFmpeg (stream copy, no re-encode)
+                    clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
+                    start_time = db_clip['raw_start_time']
+                    end_time = db_clip['raw_end_time']
+                    logger.info(f"[Multi-Clip Export] Extracting clip {i} range: {start_time}s - {end_time}s")
+
+                    try:
+                        (
+                            ffmpeg
+                            .input(str(game_video_path), ss=start_time, to=end_time)
+                            .output(str(clip_path), c='copy')
+                            .overwrite_output()
+                            .run(quiet=True)
+                        )
+                    except ffmpeg.Error as e:
+                        raise HTTPException(status_code=500, detail=f"Failed to extract clip {i} range: {e}")
+
+                    with open(clip_path, 'rb') as f:
+                        video_files[i] = BytesFile(f.read())
+
+                elif db_clip['uploaded_filename']:
+                    # Uploaded clip: download from user's R2 storage
+                    r2_key = f"raw_clips/{db_clip['uploaded_filename']}"
+                    clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
+                    logger.info(f"[Multi-Clip Export] Downloading uploaded clip: {r2_key}")
+                    if not download_from_r2(captured_user_id, r2_key, clip_path):
+                        raise HTTPException(status_code=500, detail=f"Failed to download uploaded clip {i}")
+                    with open(clip_path, 'rb') as f:
+                        video_files[i] = BytesFile(f.read())
+
+                elif db_clip['raw_filename']:
+                    # Extracted clip: download from user's R2 storage
+                    r2_key = f"raw_clips/{db_clip['raw_filename']}"
+                    clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
+                    logger.info(f"[Multi-Clip Export] Downloading raw clip: {r2_key}")
+                    if not download_from_r2(captured_user_id, r2_key, clip_path):
+                        raise HTTPException(status_code=500, detail=f"Failed to download raw clip {i}")
+                    with open(clip_path, 'rb') as f:
+                        video_files[i] = BytesFile(f.read())
+
+                else:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Clip {i} has no video source (no game_id, uploaded_filename, or raw_filename)"
+                    )
+
+            logger.info(f"[Multi-Clip Export] Resolved {len(video_files)} clips from DB")
+        finally:
+            # Clean up temp files (video content is now in memory via BytesFile)
+            shutil.rmtree(resolve_temp_dir, ignore_errors=True)
 
     # Validate video files match clip data
     if len(video_files) != len(clips_data):
