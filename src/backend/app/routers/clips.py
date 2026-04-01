@@ -1214,6 +1214,15 @@ async def add_clip_to_project(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Project not found")
 
+        # Prevent duplicate raw_clip_id in the same project
+        if raw_clip_id is not None:
+            cursor.execute(
+                "SELECT id FROM working_clips WHERE project_id = ? AND raw_clip_id = ?",
+                (project_id, raw_clip_id)
+            )
+            if cursor.fetchone():
+                raise HTTPException(status_code=409, detail="Clip already in project")
+
         # Get next sort order
         cursor.execute("""
             SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order
