@@ -820,32 +820,17 @@ async def delete_project(project_id: int):
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Unlink FK references on project before deleting related records
-        cursor.execute("""
-            UPDATE projects SET working_video_id = NULL, final_video_id = NULL WHERE id = ?
-        """, (project_id,))
-
-        # Delete working clips (all versions for this project)
-        cursor.execute("""
-            DELETE FROM working_clips WHERE project_id = ?
-        """, (project_id,))
-
-        # Delete working videos (all versions for this project)
-        cursor.execute("""
-            DELETE FROM working_videos WHERE project_id = ?
-        """, (project_id,))
-
-        # Delete final videos (all versions for this project)
-        cursor.execute("""
-            DELETE FROM final_videos WHERE project_id = ?
-        """, (project_id,))
-
         # Clear auto_project_id from any raw_clips pointing to this project
+        # (raw_clips.auto_project_id has ON DELETE SET NULL, but we clear explicitly
+        # because the FK is on projects, and we want this visible in the code)
         cursor.execute("""
             UPDATE raw_clips SET auto_project_id = NULL WHERE auto_project_id = ?
         """, (project_id,))
 
-        # Delete project
+        # Delete project — cascades to working_clips, working_videos, export_jobs
+        # projects.working_video_id and final_video_id use ON DELETE SET NULL
+        # so deleting working_videos/final_videos first would auto-null them,
+        # but since we're deleting the project itself, order doesn't matter.
         cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         conn.commit()
 
