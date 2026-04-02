@@ -13,6 +13,7 @@ Credit packs are defined as constants (not in DB). Prices match T520 analysis.
 
 import logging
 import os
+import sqlite3
 
 import stripe
 from fastapi import APIRouter, HTTPException, Request
@@ -219,7 +220,15 @@ async def confirm_payment_intent(request: ConfirmIntentRequest):
     if credits <= 0:
         raise HTTPException(status_code=400, detail="Invalid credits in payment metadata")
 
-    new_balance = grant_credits(user_id, credits, "stripe_purchase", pi_id)
+    try:
+        new_balance = grant_credits(user_id, credits, "stripe_purchase", pi_id)
+    except sqlite3.IntegrityError:
+        # Already processed — idempotent success (race between confirm + webhook)
+        logger.info(f"[Payments] Payment {pi_id} already processed (idempotent)")
+        from ..services.user_db import get_credit_balance
+        balance = get_credit_balance(user_id)
+        return {"status": "already_processed", "balance": balance["balance"], "credits": credits}
+
     logger.info(
         f"[Payments] Confirmed + granted {credits} credits to {user_id} "
         f"(pack={pack}, pi={pi_id}), balance={new_balance}"
@@ -270,12 +279,18 @@ async def stripe_webhook(request: Request):
             logger.error(f"[Payments] Webhook missing metadata: user_id={user_id}, credits={credits}")
             return {"status": "error", "message": "Missing metadata"}
 
-        # Idempotency: don't double-grant
+        # Fast-path: skip work if already processed
         if has_processed_payment(user_id, session_id):
             logger.info(f"[Payments] Duplicate webhook for session {session_id}, skipping")
             return {"status": "already_processed"}
 
-        new_balance = grant_credits(user_id, credits, "stripe_purchase", session_id)
+        # UNIQUE index on (user_id, source, reference_id) prevents double-grant atomically
+        try:
+            new_balance = grant_credits(user_id, credits, "stripe_purchase", session_id)
+        except sqlite3.IntegrityError:
+            logger.info(f"[Payments] Payment {session_id} already processed (idempotent)")
+            return {"status": "already_processed"}
+
         logger.info(
             f"[Payments] Granted {credits} credits to {user_id} "
             f"(pack={pack}, session={session_id}), balance={new_balance}"
@@ -295,11 +310,18 @@ async def stripe_webhook(request: Request):
             logger.error(f"[Payments] Webhook PI missing metadata: user_id={user_id}, credits={credits}")
             return {"status": "error", "message": "Missing metadata"}
 
+        # Fast-path: skip work if already processed
         if has_processed_payment(user_id, pi_id):
             logger.info(f"[Payments] Duplicate webhook for PI {pi_id}, skipping")
             return {"status": "already_processed"}
 
-        new_balance = grant_credits(user_id, credits, "stripe_purchase", pi_id)
+        # UNIQUE index on (user_id, source, reference_id) prevents double-grant atomically
+        try:
+            new_balance = grant_credits(user_id, credits, "stripe_purchase", pi_id)
+        except sqlite3.IntegrityError:
+            logger.info(f"[Payments] Payment {pi_id} already processed (idempotent)")
+            return {"status": "already_processed"}
+
         logger.info(
             f"[Payments] Webhook granted {credits} credits to {user_id} "
             f"(pack={pack}, pi={pi_id}), balance={new_balance}"
@@ -373,7 +395,15 @@ async def verify_session(request: Request):
     if credits <= 0:
         raise HTTPException(status_code=400, detail="Invalid credits in session metadata")
 
-    new_balance = grant_credits(user_id, credits, "stripe_purchase", session_id)
+    try:
+        new_balance = grant_credits(user_id, credits, "stripe_purchase", session_id)
+    except sqlite3.IntegrityError:
+        # Already processed — idempotent success (race between verify + webhook)
+        logger.info(f"[Payments] Payment {session_id} already processed (idempotent)")
+        from ..services.user_db import get_credit_balance
+        balance = get_credit_balance(user_id)
+        return {"status": "already_processed", "balance": balance["balance"], "credits": credits}
+
     logger.info(
         f"[Payments] Verified + granted {credits} credits to {user_id} "
         f"(pack={pack}, session={session_id}), balance={new_balance}"
