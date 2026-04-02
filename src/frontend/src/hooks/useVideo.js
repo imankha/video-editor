@@ -176,10 +176,14 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     if (url === currentUrl && videoRef.current) {
       console.log(`[useVideo] Same URL, seeking to clip offset=${newClipOffset}s`);
       const currentMeta = useVideoStore.getState().metadata;
+      const baseMeta = preloadedMetadata || currentMeta;
+      // Override metadata.duration with clip-effective duration so consumers
+      // (e.g., useCrop endFrame computation) see the clip length, not the full video.
+      const meta = baseMeta && effectiveDuration ? { ...baseMeta, duration: effectiveDuration } : baseMeta;
       setVideoLoaded({
         file: null,
         url: url,
-        metadata: preloadedMetadata || currentMeta,
+        metadata: meta,
         duration: effectiveDuration,
         clipOffset: newClipOffset,
         clipDuration: newClipDuration,
@@ -202,10 +206,15 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       revokeVideoURL(prevUrl);
     }
 
+    // Override metadata.duration with clip-effective duration so consumers
+    // see the clip length, not the full video length (game clips are subsets).
+    const meta = preloadedMetadata && effectiveDuration
+      ? { ...preloadedMetadata, duration: effectiveDuration }
+      : preloadedMetadata;
     setVideoLoaded({
       file: null,
       url: url,
-      metadata: preloadedMetadata,
+      metadata: meta,
       duration: effectiveDuration,
       clipOffset: newClipOffset,
       clipDuration: newClipDuration,

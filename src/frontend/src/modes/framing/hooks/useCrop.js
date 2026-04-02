@@ -184,8 +184,13 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
           // If endFrame is 0 (no metadata yet, single keyframe at frame 0),
           // defer restore — videoMetadata dep will re-trigger when it loads.
           // Don't set lastSavedKeyframesRef so we retry when metadata arrives.
-          if (endFrame <= 0 && frameKeyframes.length < 2) return;
+          if (endFrame <= 0 && frameKeyframes.length < 2) {
+            console.log('[useCrop] Deferring restore — endFrame=0, waiting for metadata');
+            return;
+          }
 
+          console.log('[useCrop] Restoring saved keyframes:', frameKeyframes.length, 'kfs, endFrame:', endFrame,
+            '(duration:', videoMetadata?.duration, 'trimEnd:', trimRange?.end, ')');
           lastSavedKeyframesRef.current = keyframesKey;
           restoreKeyframes(frameKeyframes, endFrame);
         }
