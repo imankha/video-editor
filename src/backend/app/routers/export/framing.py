@@ -670,30 +670,19 @@ async def render_project(request: RenderRequest, http_request: Request):
         "status": "processing"
     }
 
-    # Regress status: clear both working_video_id and final_video_id
-    # This makes project show "Not Started" during re-framing, then "In Overlay" when complete
-    # Do this FIRST in its own transaction so it always happens
+    # T890: Regress status + create export_jobs in single atomic transaction
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("UPDATE projects SET working_video_id = NULL, final_video_id = NULL WHERE id = ?", (project_id,))
-            conn.commit()
-        logger.info(f"[Render] Cleared working_video_id and final_video_id for project {project_id} (status regression)")
-    except Exception as e:
-        logger.warning(f"[Render] Failed to clear video IDs: {e}")
-
-    # Create export_jobs record for tracking and recovery (separate transaction)
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO export_jobs (id, project_id, type, status, input_data)
                 VALUES (?, ?, 'framing', 'processing', '{}')
             """, (export_id, project_id))
             conn.commit()
-        logger.info(f"[Render] Created export_jobs record: {export_id}")
+        logger.info(f"[Render] Regressed project {project_id} and created export_jobs record: {export_id}")
     except Exception as e:
-        logger.warning(f"[Render] Failed to create export_jobs record: {e}")
+        logger.warning(f"[Render] Failed to regress status / create export_jobs: {e}")
 
     # Step 1: Validate project and get working_clips
     with get_db_connection() as conn:
@@ -713,15 +702,7 @@ async def render_project(request: RenderRequest, http_request: Request):
         from app.services.export_helpers import derive_project_name
         project_name = derive_project_name(project_id, cursor) or project['name']
 
-        # Create export_jobs record
-        try:
-            cursor.execute("""
-                INSERT INTO export_jobs (id, project_id, type, status, input_data)
-                VALUES (?, ?, 'framing', 'processing', '{}')
-            """, (export_id, project_id))
-            conn.commit()
-        except Exception as e:
-            logger.warning(f"[Render] Failed to create export_jobs record: {e}")
+        # NOTE: export_jobs record already created in the atomic transaction above
 
         # Get working_clips with their rendering data + game video info
         cursor.execute(f"""
@@ -779,7 +760,7 @@ async def render_project(request: RenderRequest, http_request: Request):
 
     # T530: Credit check — deduct before GPU dispatch, refund on failure
     import math
-    from ...services.user_db import deduct_credits
+    from ...services.user_db import reserve_credits, confirm_reservation, release_reservation
 
     source_duration = clip['raw_duration'] or 0
     segments_raw = None
@@ -792,9 +773,10 @@ async def render_project(request: RenderRequest, http_request: Request):
     credits_required = math.ceil(video_seconds) if video_seconds > 0 else 0
     credits_deducted = 0
 
+    # T890: Reserve credits (atomic in user.sqlite), confirm after export_jobs created
     if credits_required > 0:
-        credit_result = deduct_credits(
-            captured_user_id, credits_required, "framing_usage", export_id, video_seconds
+        credit_result = reserve_credits(
+            captured_user_id, credits_required, export_id, video_seconds
         )
         if not credit_result["success"]:
             raise HTTPException(
@@ -806,6 +788,13 @@ async def render_project(request: RenderRequest, http_request: Request):
                     "video_seconds": video_seconds,
                 },
             )
+        # Reservation created — export_jobs already created above in atomic transaction
+        # Confirm the reservation (moves from reserved to deducted in credit_transactions)
+        try:
+            confirm_reservation(captured_user_id, export_id)
+        except Exception:
+            release_reservation(captured_user_id, export_id)
+            raise
         credits_deducted = credits_required
 
     # Step 2: Validate clip has required data
