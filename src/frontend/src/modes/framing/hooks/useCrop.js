@@ -130,6 +130,7 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
     initializeKeyframes,
     keyframes,
     isEndKeyframeExplicit,
+    machineState,
     updateAllKeyframes,
     restoreKeyframes,
     addOrUpdateKeyframe,
@@ -173,24 +174,18 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
         const frameKeyframes = normalizeToFrameKeyframes(savedKeyframes, framerate);
 
         if (validateFrameKeyframes(frameKeyframes)) {
-          // Compute endFrame from video duration — max keyframe frame fails
-          // when only 1 keyframe exists at frame 0.
+          // Require video duration for endFrame — using max keyframe frame
+          // produces wrong results (e.g., endFrame=1 for a 5s clip with a
+          // single keyframe at frame 1). Defer until metadata arrives.
           const effectiveDuration = trimRange?.end ?? videoMetadata?.duration;
-          const maxKfFrame = Math.max(...frameKeyframes.map(k => k.frame));
-          const endFrame = effectiveDuration
-            ? timeToFrame(effectiveDuration, framerate)
-            : maxKfFrame;
-
-          // If endFrame is 0 (no metadata yet, single keyframe at frame 0),
-          // defer restore — videoMetadata dep will re-trigger when it loads.
-          // Don't set lastSavedKeyframesRef so we retry when metadata arrives.
-          if (endFrame <= 0 && frameKeyframes.length < 2) {
-            console.log('[useCrop] Deferring restore — endFrame=0, waiting for metadata');
+          if (!effectiveDuration) {
+            console.log('[useCrop] Deferring restore — no duration yet, waiting for metadata');
             return;
           }
+          const endFrame = timeToFrame(effectiveDuration, framerate);
 
           console.log('[useCrop] Restoring saved keyframes:', frameKeyframes.length, 'kfs, endFrame:', endFrame,
-            '(duration:', videoMetadata?.duration, 'trimEnd:', trimRange?.end, ')');
+            '(duration:', effectiveDuration, 'trimEnd:', trimRange?.end, ')');
           lastSavedKeyframesRef.current = keyframesKey;
           restoreKeyframes(frameKeyframes, endFrame);
         }
@@ -213,20 +208,22 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
       const totalFrames = timeToFrame(effectiveDuration, framerate);
 
       // Check if we need to initialize:
-      // - Only if NO keyframes exist (empty state)
+      // - Only if state is UNINITIALIZED (no keyframes, or after resetCrop)
       // - Skip if trimRange is set (trim operations handle their own keyframes)
       // - Skip if savedKeyframes were provided (use those instead)
-      const currentKeyframes = keyframesRef.current;
+      // NOTE: Uses machineState (in deps) instead of keyframesRef to properly
+      // detect post-reset state. The clip-switch effect calls resetCrop() AFTER
+      // this effect runs, so keyframesRef would still have stale previous-clip data.
+      const isUninitialized = machineState === 'uninitialized';
       const hasSavedKeyframes = savedKeyframes && savedKeyframes.length > 0;
-      const hasExistingKeyframes = currentKeyframes.length > 0;
 
-      // Only auto-initialize if we have no keyframes at all and no saved ones to restore
-      let shouldInitialize = !trimRange && !hasSavedKeyframes && !hasExistingKeyframes;
+      let shouldInitialize = !trimRange && !hasSavedKeyframes && isUninitialized;
 
       // Additional check: if keyframes exist but have wrong orientation (portrait vs landscape),
       // force re-initialization. This handles aspect ratio changes.
       // BUT only if there are no savedKeyframes (respect saved data)
-      if (!shouldInitialize && !trimRange && !hasSavedKeyframes && hasExistingKeyframes) {
+      const currentKeyframes = keyframesRef.current;
+      if (!shouldInitialize && !trimRange && !hasSavedKeyframes && !isUninitialized && currentKeyframes.length > 0) {
         const firstKeyframe = currentKeyframes[0];
         if (firstKeyframe?.width && firstKeyframe?.height) {
           const keyframeRatio = firstKeyframe.width / firstKeyframe.height;
@@ -242,6 +239,10 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
         }
       }
 
+      console.log('[useCrop] autoInit: shouldInitialize:', shouldInitialize,
+        'hasSaved:', hasSavedKeyframes, 'machineState:', machineState,
+        'totalFrames:', totalFrames, 'metaDuration:', videoMetadata.duration);
+
       if (shouldInitialize) {
         const defaultCrop = calculateDefaultCrop(
           videoMetadata.width,
@@ -249,10 +250,11 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
           aspectRatio
         );
 
+        console.log('[useCrop] autoInit: initializing with endFrame:', totalFrames);
         initializeKeyframes(defaultCrop, totalFrames);
       }
     }
-  }, [videoMetadata, aspectRatio, initializeKeyframes, calculateDefaultCrop, framerate, trimRange]); // eslint-disable-line react-hooks/exhaustive-deps -- needsInitialization removed: it depends on full keyframe state, causing this effect to re-fire on every keyframe change. The effect uses keyframesRef instead.
+  }, [videoMetadata, aspectRatio, initializeKeyframes, calculateDefaultCrop, framerate, trimRange, machineState]); // eslint-disable-line react-hooks/exhaustive-deps -- machineState replaces needsInitialization (only changes on init/reset/restore, not every keyframe edit)
 
   /**
    * Update aspect ratio and recalculate all keyframes

@@ -437,9 +437,16 @@ export function FramingScreen({
 
       if (parsedCropKfs && parsedCropKfs.length > 0) {
         const endFrame = Math.round((firstClipWithMeta?.duration || 0) * (firstClipWithMeta?.framerate || 30));
+        console.log('[FramingScreen] initEffect crop restore: kfs:', parsedCropKfs.length,
+          'endFrame:', endFrame, 'clipDuration:', firstClipWithMeta?.duration,
+          'framerate:', firstClipWithMeta?.framerate);
         if (endFrame > 0) {
           restoreCropState(parsedCropKfs, endFrame);
+        } else {
+          console.log('[FramingScreen] initEffect: skipping crop restore (endFrame=0, no metadata yet)');
         }
+      } else {
+        console.log('[FramingScreen] initEffect: no crop keyframes to restore');
       }
 
       if (firstClip.id) {

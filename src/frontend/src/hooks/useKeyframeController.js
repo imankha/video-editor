@@ -34,8 +34,18 @@ export default function useKeyframeController({
   // Previously this ran in the render body (every render), which flooded the
   // console when any other store update caused re-renders (T860).
   const lastViolationsRef = useRef(null);
+  const lastStateLogRef = useRef(null);
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
+      // Log state transitions for debugging
+      const stateKey = `${state.machineState}:${state.keyframes.length}:${state.endFrame}`;
+      if (stateKey !== lastStateLogRef.current) {
+        lastStateLogRef.current = stateKey;
+        console.log('[keyframeController] State:', state.machineState,
+          'kfs:', state.keyframes.length, 'endFrame:', state.endFrame,
+          'frames:', state.keyframes.map(k => `${k.frame}(${k.origin})`).join(', '));
+      }
+
       const violations = validateInvariants(state);
       if (violations.length > 0) {
         const key = JSON.stringify(violations);
