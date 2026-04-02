@@ -190,16 +190,25 @@ Deploy to production domains with proper scaling.
 | T790 | [Custom Project Triggers Extraction](tasks/T790-custom-project-extraction-bug.md) | DONE | 7 | 5 | Custom project creation triggers old extraction pipeline (removed in T740). Downloads full game video per clip — 35 clips = 35 downloads of a 3GB file. |
 | T800 | [Remove Legacy Extraction Infrastructure](tasks/T800-remove-extraction-infrastructure.md) | TODO | 5 | 5 | Dead extraction code across ~15 files: response models, retry endpoint, WebSocket manager, modal_queue functions, tests, stale comments. T790 removed triggers; this removes everything else. |
 | T810 | [Multi-Clip Export Fails for Game Video Clips](tasks/T810-multi-clip-export-game-video.md) | DONE | 9 | 6 | Multi-clip export downloads each clip's file from frontend, but game-video clips have no standalone files (T740). Backend needs to resolve clips from DB like single-clip export does. |
-| T820 | [Guest Migration Data Loss](tasks/T820-guest-migration-data-loss.md) | TODO | 10 | 6 | Guest→email migration silently fails when R2 is down, orphaning all guest data. User sees blank account with no warning. No retry, no recovery path. |
 | T830 | [Clip Preview Timeline Shows Full Video](tasks/T830-clip-preview-timeline-full-video.md) | TODO | 6 | 4 | New Project modal clip preview shows full game video timeline instead of clip range |
 | T840 | [Annotate Drag/Play Conflict](tasks/T840-annotate-drag-play-conflict.md) | DONE | 7 | 3 | Dragging start/end time handles while video is playing causes playback to fight with drag preview |
 | T850 | [Annotate Duplicate Scrub UI](tasks/T850-annotate-duplicate-scrub-ui.md) | TODO | 5 | 4 | Two scrub/timeline UI instances visible during clip playback in annotate mode |
 | T860 | [Keyframe Invariant Render Loop](tasks/T860-keyframe-invariant-render-loop.md) | DONE | 9 | 5 | Keyframe invariant check in render body causes 500+ re-renders, making framing unresponsive |
 | T870 | [Export Progress Stuck During Download](tasks/T870-export-progress-stuck-during-download.md) | TODO | 5 | 3 | Export shows 0% for ~48s while backend downloads game video from R2 |
-| T880 | [Quest Reward Double-Grant](tasks/T880-quest-reward-double-grant.md) | TODO | 8 | 2 | Race condition: spam-clicking "Claim Reward" grants credits twice. Check-then-act not atomic. |
-| T890 | [Export Transaction Atomicity](tasks/T890-export-transaction-atomicity.md) | TODO | 7 | 4 | Export job creation splits across multiple transactions; crash between them leaves inconsistent state. Credit deduction not synced to R2. |
-| T900 | [FK Cascade Gaps](tasks/T900-fk-cascade-gaps.md) | TODO | 5 | 3 | 5 foreign keys missing ON DELETE CASCADE/SET NULL; manual DELETE loops are fragile and incomplete. |
-| T910 | [R2 Restore Retry](tasks/T910-r2-restore-retry.md) | TODO | 8 | 3 | Cold start + R2 unreachable = empty DB, version locked to 0, never retries. Data in R2 but inaccessible. |
+
+### Data Integrity & Persistence Hardening
+[tasks/data-integrity/EPIC.md](tasks/data-integrity/EPIC.md)
+
+Restructure persistence to eliminate silent data loss, credit race conditions, and non-atomic transactions. Must complete before production launch.
+
+| # | ID | Task | Status | Impact | Cmplx | Depends On | Notes |
+|---|-----|------|--------|--------|-------|------------|-------|
+| 1 | T920 | [User-Level DB](tasks/data-integrity/T920-user-level-db.md) | TODO | 9 | 6 | — | Move credits/stripe/transactions from shared auth.sqlite to per-user user.sqlite |
+| 2 | T880 | [Quest Reward Double-Grant](tasks/T880-quest-reward-double-grant.md) | TODO | 8 | 2 | T920 | UNIQUE index in user.sqlite prevents race condition |
+| 3 | T890 | [Export Transaction Atomicity](tasks/T890-export-transaction-atomicity.md) | TODO | 7 | 4 | T920 | Credit reservation pattern + combine split transactions |
+| 4 | T820 | [Guest Migration Data Loss](tasks/T820-guest-migration-data-loss.md) | TODO | 10 | 6 | T920 | Block login on failure, pending_migrations, credit transfer |
+| 5 | T910 | [R2 Restore Retry](tasks/T910-r2-restore-retry.md) | TODO | 8 | 3 | T920 | Distinguish 404 from transient error, retry with cooldown |
+| 6 | T900 | [FK Cascade Gaps](tasks/data-integrity/T900-fk-cascade-gaps.md) | TODO | 5 | 3 | — | 5 missing CASCADE/SET NULL constraints in profile DB |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)

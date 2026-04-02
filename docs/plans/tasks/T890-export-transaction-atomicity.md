@@ -4,88 +4,85 @@
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-04-02
+**Depends On:** T920
 
 ## Problem
 
-Export job creation splits operations across multiple separate transactions. If the server crashes or a write fails between transactions, the system is left in an inconsistent state that requires manual intervention.
+Export job creation splits operations across multiple transactions and multiple databases. If the server crashes between transactions, the system is left in an inconsistent state.
 
-### Split Transaction #1: Framing Status Regression + Job Creation
+### Split #1: Status regression + job creation (same DB, separate commits)
 
-In `framing.py:673-693`, project video IDs are cleared in one transaction (line 680), then the export_jobs record is created in a second (line 693). If the second fails:
+In `framing.py:673-693`, project video IDs are cleared in one commit (line 680), then export_jobs is inserted in a second (line 693). If the second fails, the project is regressed with no job to track.
 
-- Project shows "Not Started" (video IDs cleared)
-- No export_jobs record exists to track or recover
-- User's previous export result is gone with no new job to replace it
+### Split #2: Credit deduction + job creation (different DBs)
 
-### Split Transaction #2: Credit Deduction + Job Creation
+Credits live in user.sqlite (after T920), export_jobs live in profile database.sqlite. These can never share a SQLite transaction.
 
-Credit deduction happens in `auth.sqlite` (exports.py:541), but job creation happens in the per-user DB (exports.py:572-578). These are **separate SQLite files** — impossible to make atomic with SQLite alone.
+If the server crashes after deduction but before job creation: credits charged, no job, no refund path.
 
-If the server crashes after deduction but before job creation:
-- Credits charged, no job record, no refund path (no job_id to refund against)
+### Split #3: Job completion + video creation (same DB, separate commits)
 
-### Split Transaction #3: Job Completion + Video Creation
+`export_worker.py` marks jobs complete in a separate transaction from creating working_video/final_video records.
 
-`export_worker.py` marks jobs complete (line 157) in a separate transaction from creating the working_video/final_video record (line 282-297). If video creation fails after job is marked complete:
-- Job shows "complete" but project has no video
-- Orphaned state
+## SQLite Atomicity
 
-## SQLite Atomicity Mechanisms
-
-SQLite provides:
-- **Single-connection transactions**: All statements between BEGIN and COMMIT are atomic
-- **WAL mode**: Allows concurrent readers during a write transaction
-- **SAVEPOINT**: Nested transaction support within a connection
-- **No cross-database transactions**: Two separate .sqlite files cannot share a transaction
-
-**Limitation**: Credit operations (auth.sqlite) and user data operations (per-user database.sqlite) can never be in the same transaction.
+- **Same-file transactions**: All statements between BEGIN and COMMIT are atomic. This fixes splits #1 and #3.
+- **Cross-file**: Two `.sqlite` files cannot share a transaction. Split #2 requires a different pattern.
 
 ## Solution
 
-### Fix 1: Combine status regression + job creation (same DB)
+### Fix 1: Combine same-DB splits (trivial)
 
-Move the project status regression into the same transaction as export_jobs INSERT:
-
+Status regression + job creation → single commit:
 ```python
-# framing.py — ONE transaction
 with get_db_connection() as conn:
     conn.execute("UPDATE projects SET working_video_id=NULL, final_video_id=NULL WHERE id=?", (pid,))
-    conn.execute("INSERT INTO export_jobs (id, project_id, type, status) VALUES (?, ?, ?, 'processing')", ...)
+    conn.execute("INSERT INTO export_jobs (...) VALUES (...)")
     conn.commit()
 ```
 
-Same fix for multi_clip.py:1190-1206.
-
-### Fix 2: Credit deduction with job reference
-
-Since auth.sqlite and user DB can't share a transaction, use a **compensating transaction** pattern:
-
-1. Create job record FIRST (status='pending_payment')
-2. Deduct credits with job_id as reference
-3. Update job status to 'processing'
-4. If step 2 fails → delete job record
-5. If step 3 fails → refund credits using job_id
-
-Add a startup recovery check: find jobs in 'pending_payment' status older than 60s → refund credits if deducted, delete job.
-
-### Fix 3: Combine job completion + video creation
-
-Already mostly done in the codebase (multi_clip.py:1593-1610 is atomic). Apply the same pattern to export_worker.py framing/overlay paths:
-
+Job completion + video creation → single commit:
 ```python
-# export_worker.py — ONE transaction
 with get_db_connection() as conn:
-    conn.execute("INSERT INTO working_videos ...", ...)
+    conn.execute("INSERT INTO working_videos (...) VALUES (...)")
     conn.execute("UPDATE projects SET working_video_id=? ...", ...)
-    conn.execute("UPDATE export_jobs SET status='complete' ...", ...)
+    conn.execute("UPDATE export_jobs SET status='complete' ...")
     conn.commit()
 ```
 
-### Fix 4: Also sync auth.sqlite after deduct_credits()
+Also remove the duplicate export_jobs INSERT in framing.py (lines 693 vs 722).
 
-Currently `deduct_credits()` does NOT call `sync_auth_db_to_r2()` — only grant/refund/set do. If the server crashes after deduction, cold start restores the pre-deduction balance from R2 — user gets free export.
+### Fix 2: Credit reservation pattern (cross-DB)
 
-Add `sync_auth_db_to_r2()` call after `deduct_credits()`.
+T920 adds a `credit_reservations` table in user.sqlite. The pattern:
+
+```
+Step 1: reserve_credits(user_id, amount, job_id)
+        → user.sqlite: INSERT credit_reservations, UPDATE credits -= amount
+        → ATOMIC (single transaction)
+
+Step 2: create_export_job(job_id, project_id, ...)
+        → database.sqlite: INSERT export_jobs + UPDATE projects
+        → ATOMIC (single transaction)
+
+Step 3: confirm_reservation(job_id)
+        → user.sqlite: DELETE reservation, INSERT credit_transaction
+        → ATOMIC (single transaction)
+
+On failure at step 2:
+    release_reservation(job_id)
+        → user.sqlite: DELETE reservation, UPDATE credits += amount
+
+Startup recovery:
+    SELECT * FROM credit_reservations WHERE created_at < datetime('now', '-60 seconds')
+    → For each: check if matching export_job exists in profile DB
+    → If yes: confirm (job was created, reservation should be finalized)
+    → If no: release (job never created, return credits)
+```
+
+### Fix 3: Sync user.sqlite to R2 after deduction
+
+Currently `deduct_credits()` does NOT sync to R2. If the server crashes, cold start restores pre-deduction balance — user gets a free export. After T920, user.sqlite must sync to R2 after credit operations, same as database.sqlite does via middleware.
 
 ## Relevant Files
 
@@ -93,12 +90,13 @@ Add `sync_auth_db_to_r2()` call after `deduct_credits()`.
 - `src/backend/app/routers/export/multi_clip.py` — Lines 1190-1210: split transactions
 - `src/backend/app/services/export_worker.py` — Lines 137-297: job lifecycle
 - `src/backend/app/routers/exports.py` — Lines 541-578: credit deduction + job creation
-- `src/backend/app/services/auth_db.py` — Lines 489-520: `deduct_credits()` (missing R2 sync)
+- `src/backend/app/services/user_db.py` (after T920) — reserve/confirm/release credit functions
 
 ## Acceptance Criteria
 
 - [ ] Status regression + job creation in single transaction (framing + multi-clip)
 - [ ] Job completion + video creation + project update in single transaction
-- [ ] Credit deduction has compensating transaction pattern with startup recovery
-- [ ] `deduct_credits()` syncs auth.sqlite to R2
-- [ ] No duplicate export_jobs INSERT (framing.py:693 vs 722)
+- [ ] Credit reservation pattern implemented (reserve → create job → confirm)
+- [ ] Startup recovery for orphaned reservations
+- [ ] Duplicate export_jobs INSERT removed (framing.py)
+- [ ] user.sqlite synced to R2 after all credit operations
