@@ -203,7 +203,7 @@ Restructure persistence to eliminate silent data loss, credit race conditions, a
 
 | # | ID | Task | Status | Impact | Cmplx | Depends On | Notes |
 |---|-----|------|--------|--------|-------|------------|-------|
-| 1 | T920 | [User-Level DB](tasks/data-integrity/T920-user-level-db.md) | TODO | 9 | 6 | — | Move credits/stripe/transactions from shared auth.sqlite to per-user user.sqlite |
+| 1 | T920 | [User-Level DB](tasks/data-integrity/T920-user-level-db.md) | TESTING | 9 | 6 | — | Move credits/stripe/transactions from shared auth.sqlite to per-user user.sqlite |
 | 2 | T880 | [Quest Reward Double-Grant](tasks/T880-quest-reward-double-grant.md) | TODO | 8 | 2 | T920 | UNIQUE index in user.sqlite prevents race condition |
 | 3 | T890 | [Export Transaction Atomicity](tasks/T890-export-transaction-atomicity.md) | TODO | 7 | 4 | T920 | Credit reservation pattern + combine split transactions |
 | 4 | T820 | [Guest Migration Data Loss](tasks/T820-guest-migration-data-loss.md) | TODO | 10 | 6 | T920 | Block login on failure, pending_migrations, credit transfer |
