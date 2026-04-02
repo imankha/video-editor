@@ -178,14 +178,9 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
           // produces wrong results (e.g., endFrame=1 for a 5s clip with a
           // single keyframe at frame 1). Defer until metadata arrives.
           const effectiveDuration = trimRange?.end ?? videoMetadata?.duration;
-          if (!effectiveDuration) {
-            console.log('[useCrop] Deferring restore — no duration yet, waiting for metadata');
-            return;
-          }
+          if (!effectiveDuration) return;
           const endFrame = timeToFrame(effectiveDuration, framerate);
 
-          console.log('[useCrop] Restoring saved keyframes:', frameKeyframes.length, 'kfs, endFrame:', endFrame,
-            '(duration:', effectiveDuration, 'trimEnd:', trimRange?.end, ')');
           lastSavedKeyframesRef.current = keyframesKey;
           restoreKeyframes(frameKeyframes, endFrame);
         }
@@ -239,10 +234,6 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
         }
       }
 
-      console.log('[useCrop] autoInit: shouldInitialize:', shouldInitialize,
-        'hasSaved:', hasSavedKeyframes, 'machineState:', machineState,
-        'totalFrames:', totalFrames, 'metaDuration:', videoMetadata.duration);
-
       if (shouldInitialize) {
         const defaultCrop = calculateDefaultCrop(
           videoMetadata.width,
@@ -250,7 +241,6 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
           aspectRatio
         );
 
-        console.log('[useCrop] autoInit: initializing with endFrame:', totalFrames);
         initializeKeyframes(defaultCrop, totalFrames);
       }
     }
@@ -368,7 +358,6 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
       return;
     }
 
-    console.log('[useCrop] Restoring frame-based keyframes:', frameKeyframes.length, 'endFrame:', endFrame);
     restoreKeyframes(frameKeyframes, endFrame);
   }, [restoreKeyframes, framerate]);
 
