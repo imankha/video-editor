@@ -68,6 +68,37 @@ _request_context: ContextVar[Optional[dict]] = ContextVar('request_context', def
 _request_user_id: ContextVar[Optional[str]] = ContextVar('request_user_id', default=None)
 
 
+# ---------------------------------------------------------------------------
+# Sync-pending marker file (T930)
+#
+# Written BEFORE attempting R2 sync, cleared AFTER success.  If the server
+# crashes between DB write and successful R2 upload, the marker survives on
+# disk so the next request can retry the sync.
+# ---------------------------------------------------------------------------
+
+def _sync_pending_path(user_id: str) -> Path:
+    """Path to the sync-pending marker file for a user."""
+    return USER_DATA_BASE / user_id / ".sync_pending"
+
+
+def mark_sync_pending(user_id: str) -> None:
+    """Write marker file indicating this user has unsynced DB writes."""
+    path = _sync_pending_path(user_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(time.time()))
+
+
+def clear_sync_pending(user_id: str) -> None:
+    """Remove marker file after successful R2 sync."""
+    path = _sync_pending_path(user_id)
+    path.unlink(missing_ok=True)
+
+
+def has_sync_pending(user_id: str) -> bool:
+    """Check if this user has unsynced DB writes from a previous request."""
+    return _sync_pending_path(user_id).exists()
+
+
 class TrackedCursor:
     """
     SQLite cursor wrapper that tracks if write operations occurred.
@@ -1351,6 +1382,49 @@ def sync_db_to_cloud_if_writes() -> bool:
     if get_request_has_writes():
         return sync_db_to_cloud()
     return True
+
+
+# ---------------------------------------------------------------------------
+# Explicit sync functions for background workers (T940)
+# ---------------------------------------------------------------------------
+# Background tasks (e.g., export worker) run outside request middleware,
+# so their DB writes are never synced by the middleware's end-of-request hook.
+# These functions take user_id/profile_id as explicit args instead of reading
+# from _request_context, enabling sync from any execution context.
+
+
+def sync_db_to_r2_explicit(user_id: str, profile_id: str) -> bool:
+    """Explicitly sync profile database to R2. For use outside request middleware (e.g., background workers)."""
+    if not R2_ENABLED:
+        return True
+
+    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "database.sqlite"
+    if not db_path.exists():
+        return True
+
+    local_version = get_local_db_version(user_id, profile_id)
+    success, new_version = sync_database_to_r2_with_version(user_id, db_path, local_version)
+    if success and new_version is not None:
+        set_local_db_version(user_id, profile_id, new_version)
+    return success
+
+
+def sync_user_db_to_r2_explicit(user_id: str) -> bool:
+    """Explicitly sync user.sqlite to R2. For use outside request middleware (e.g., background workers)."""
+    if not R2_ENABLED:
+        return True
+
+    db_path = USER_DATA_BASE / user_id / "user.sqlite"
+    if not db_path.exists():
+        return True
+
+    from .storage import sync_user_db_to_r2_with_version
+
+    local_version = get_local_user_db_version(user_id)
+    success, new_version = sync_user_db_to_r2_with_version(user_id, db_path, local_version)
+    if success and new_version is not None:
+        set_local_user_db_version(user_id, new_version)
+    return success
 
 
 # ---------------------------------------------------------------------------
