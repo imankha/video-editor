@@ -54,6 +54,13 @@ from app.services.auth_db import (
     update_last_seen,
     sync_auth_db_to_r2,
 )
+from app.services.user_db import (
+    get_user_db_connection,
+    ensure_user_database,
+    get_credit_balance,
+    grant_credits,
+    get_credit_transactions,
+)
 
 # Test accounts that auto-reset on every login (fresh new-user experience).
 # Read from nuf-reset-emails.txt at module load time.
@@ -258,70 +265,141 @@ def _merge_guest_into_profile(guest_db_path: Path, target_db_path: Path) -> int:
 
 
 def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
-    """Merge guest's games/achievements into recovered account's default profile.
+    """Merge guest's games/achievements/credits into recovered account's default profile.
 
     Called during cross-device recovery (Google login with existing email).
-    Best-effort: logs errors but never blocks login.
+    T820: Records migration intent BEFORE attempting transfer. Raises on failure
+    so the caller can block login instead of silently switching to an empty account.
     """
-    try:
-        # Skip if same user (re-login from same device)
-        if guest_user_id == recovered_user_id:
-            return
+    # Skip if same user (re-login from same device)
+    if guest_user_id == recovered_user_id:
+        return
 
-        # 1. Resolve guest's active profile
-        try:
-            guest_profile_id = read_selected_profile_from_r2(guest_user_id)
-        except R2ReadError:
-            logger.warning(f"[Auth] Migration skip: R2 error reading guest profile for {guest_user_id}")
-            return
-        if not guest_profile_id:
-            logger.info(f"[Auth] Migration skip: no profile found for guest {guest_user_id}")
-            return
-
-        # 2. Check if guest has games
-        guest_db_path = USER_DATA_BASE / guest_user_id / "profiles" / guest_profile_id / "database.sqlite"
-        if not guest_db_path.exists():
-            logger.info(f"[Auth] Migration skip: no local DB for guest {guest_user_id}")
-            return
-
-        conn = sqlite3.connect(str(guest_db_path), timeout=5)
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM games")
-            game_count = cursor.fetchone()[0]
-        finally:
-            conn.close()
-
-        if game_count == 0:
-            logger.info(f"[Auth] Migration skip: guest {guest_user_id} has no games")
-            return
-
-        # 3. Resolve target: recovered account's default profile
-        target_profile_id = read_selected_profile_from_r2(recovered_user_id)
-        target_db_path = USER_DATA_BASE / recovered_user_id / "profiles" / target_profile_id / "database.sqlite"
-
-        if not target_db_path.exists():
-            # Brand new account that never loaded — initialize it
-            user_session_init(recovered_user_id)
-
-        # 4. Merge guest data into target profile
-        merged_count = _merge_guest_into_profile(guest_db_path, target_db_path)
-
-        # 5. Upload modified target DB to R2
-        original_profile_id = get_current_profile_id()
-        try:
-            set_current_profile_id(target_profile_id)
-            upload_to_r2(recovered_user_id, "database.sqlite", target_db_path)
-        finally:
-            set_current_profile_id(original_profile_id)
-
-        logger.info(
-            f"[Auth] Merged guest {guest_user_id} ({game_count} games, {merged_count} new) "
-            f"→ {recovered_user_id} profile {target_profile_id}"
+    # 1. Record migration intent in target's user.sqlite BEFORE attempting anything
+    ensure_user_database(recovered_user_id)
+    with get_user_db_connection(recovered_user_id) as conn:
+        conn.execute(
+            "INSERT INTO pending_migrations (guest_user_id, status) VALUES (?, 'pending')",
+            (guest_user_id,)
         )
+        conn.commit()
 
-    except Exception as e:
-        logger.error(f"[Auth] Migration failed (login continues): {e}")
+    # 2. Resolve guest's active profile
+    try:
+        guest_profile_id = read_selected_profile_from_r2(guest_user_id)
+    except R2ReadError as e:
+        logger.error(f"[Auth] R2 read failed during migration: {e}")
+        raise
+    if not guest_profile_id:
+        logger.info(f"[Auth] Migration skip: no profile found for guest {guest_user_id}")
+        # No data to migrate — mark complete
+        with get_user_db_connection(recovered_user_id) as conn:
+            conn.execute(
+                """UPDATE pending_migrations SET status='completed', completed_at=datetime('now')
+                   WHERE guest_user_id=? AND status='pending'""",
+                (guest_user_id,)
+            )
+            conn.commit()
+        return
+
+    # 3. Check if guest has games
+    guest_db_path = USER_DATA_BASE / guest_user_id / "profiles" / guest_profile_id / "database.sqlite"
+    if not guest_db_path.exists():
+        logger.info(f"[Auth] Migration skip: no local DB for guest {guest_user_id}")
+        with get_user_db_connection(recovered_user_id) as conn:
+            conn.execute(
+                """UPDATE pending_migrations SET status='completed', completed_at=datetime('now')
+                   WHERE guest_user_id=? AND status='pending'""",
+                (guest_user_id,)
+            )
+            conn.commit()
+        return
+
+    conn_check = sqlite3.connect(str(guest_db_path), timeout=5)
+    try:
+        cursor = conn_check.cursor()
+        cursor.execute("SELECT COUNT(*) FROM games")
+        game_count = cursor.fetchone()[0]
+    finally:
+        conn_check.close()
+
+    # 4. Transfer credits from guest to target (even if no games)
+    try:
+        guest_balance = get_credit_balance(guest_user_id)
+        if guest_balance["balance"] > 0:
+            grant_credits(recovered_user_id, guest_balance["balance"], "migration_transfer", guest_user_id)
+
+        # Copy credit history with migration reference
+        guest_transactions = get_credit_transactions(guest_user_id, limit=1000)
+        if guest_transactions:
+            with get_user_db_connection(recovered_user_id) as conn:
+                for tx in guest_transactions:
+                    conn.execute(
+                        """INSERT OR IGNORE INTO credit_transactions
+                           (user_id, amount, source, reference_id, video_seconds, created_at)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (recovered_user_id, tx["amount"], f"migrated_{tx['source']}",
+                         tx.get("reference_id"), tx.get("video_seconds"), tx["created_at"])
+                    )
+                conn.commit()
+    except sqlite3.Error as e:
+        logger.error(f"[Auth] Database error during credit transfer: {e}")
+        raise
+
+    if game_count == 0:
+        logger.info(f"[Auth] Migration skip: guest {guest_user_id} has no games (credits transferred)")
+        with get_user_db_connection(recovered_user_id) as conn:
+            conn.execute(
+                """UPDATE pending_migrations SET status='completed', completed_at=datetime('now')
+                   WHERE guest_user_id=? AND status='pending'""",
+                (guest_user_id,)
+            )
+            conn.commit()
+        return
+
+    # 5. Resolve target: recovered account's default profile
+    try:
+        target_profile_id = read_selected_profile_from_r2(recovered_user_id)
+    except R2ReadError as e:
+        logger.error(f"[Auth] R2 read failed for target profile: {e}")
+        raise
+    target_db_path = USER_DATA_BASE / recovered_user_id / "profiles" / target_profile_id / "database.sqlite"
+
+    if not target_db_path.exists():
+        # Brand new account that never loaded — initialize it
+        user_session_init(recovered_user_id)
+
+    # 6. Merge guest data into target profile
+    try:
+        merged_count = _merge_guest_into_profile(guest_db_path, target_db_path)
+    except sqlite3.Error as e:
+        logger.error(f"[Auth] Database error during profile merge: {e}")
+        raise
+
+    # 7. Upload modified target DB to R2
+    original_profile_id = get_current_profile_id()
+    try:
+        set_current_profile_id(target_profile_id)
+        upload_to_r2(recovered_user_id, "database.sqlite", target_db_path)
+    except OSError as e:
+        logger.error(f"[Auth] File system error during migration upload: {e}")
+        raise
+    finally:
+        set_current_profile_id(original_profile_id)
+
+    # 8. Mark migration complete
+    with get_user_db_connection(recovered_user_id) as conn:
+        conn.execute(
+            """UPDATE pending_migrations SET status='completed', completed_at=datetime('now')
+               WHERE guest_user_id=? AND status='pending'""",
+            (guest_user_id,)
+        )
+        conn.commit()
+
+    logger.info(
+        f"[Auth] Merged guest {guest_user_id} ({game_count} games, {merged_count} new) "
+        f"→ {recovered_user_id} profile {target_profile_id}"
+    )
 
 
 # --- T405: Google OAuth + Session management (shared auth DB) ---
@@ -397,8 +475,26 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
         user_id = existing['user_id']
         logger.info(f"[Auth] Google login — existing user found: {user_id} ({email})")
         update_last_seen(user_id)
-        # T410: Migrate guest progress before switching user
-        _migrate_guest_profile(current_user_id, user_id)
+        # T820: Migrate guest progress — block login on failure
+        try:
+            _migrate_guest_profile(current_user_id, user_id)
+        except Exception as e:
+            logger.error(f"[Auth] Migration failed for guest {current_user_id} → {user_id}: {e}")
+            # Record failure in pending_migrations
+            try:
+                with get_user_db_connection(user_id) as conn:
+                    conn.execute(
+                        """UPDATE pending_migrations SET status='failed', error=?, attempts=attempts+1
+                           WHERE guest_user_id=? AND status='pending'""",
+                        (str(e), current_user_id)
+                    )
+                    conn.commit()
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=503,
+                detail="We're having trouble transferring your data. Please try again in a moment."
+            )
     else:
         # First-time Google auth
         # Check if current user already exists in auth DB (guest who's now signing in)
@@ -455,10 +551,24 @@ async def auth_me(request: Request):
     # T610: Track activity for account cleanup
     update_last_seen(session["user_id"])
 
+    user_id = session["user_id"]
+
+    # T820: Check for pending/failed migrations
+    migration_pending = False
+    try:
+        with get_user_db_connection(user_id) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM pending_migrations WHERE status IN ('pending', 'failed') LIMIT 1"
+            ).fetchone()
+            migration_pending = row is not None
+    except Exception:
+        pass
+
     return {
         "email": session.get("email"),
-        "user_id": session["user_id"],
+        "user_id": user_id,
         "is_authenticated": True,
+        "migration_pending": migration_pending,
     }
 
 
@@ -517,6 +627,59 @@ async def init_guest(request: Request):
         secure=_SECURE_COOKIES,
     )
     return response
+
+
+@router.post("/retry-migration")
+async def retry_migration(request: Request):
+    """Retry a failed guest migration.
+
+    T820: If a previous migration failed (R2 down, DB error), the guest_user_id
+    is stored in pending_migrations. This endpoint retries the migration.
+    """
+    session_id = request.cookies.get("rb_session")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="No session")
+
+    session = validate_session(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    user_id = session["user_id"]
+
+    with get_user_db_connection(user_id) as conn:
+        row = conn.execute(
+            "SELECT id, guest_user_id FROM pending_migrations WHERE status='failed' ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+
+    if not row:
+        return {"status": "no_pending_migration"}
+
+    guest_user_id = row["guest_user_id"]
+
+    # Reset status to pending for retry
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "UPDATE pending_migrations SET status='pending', error=NULL WHERE id=?",
+            (row["id"],)
+        )
+        conn.commit()
+
+    try:
+        _migrate_guest_profile(guest_user_id, user_id)
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"[Auth] Migration retry failed for guest {guest_user_id} → {user_id}: {e}")
+        try:
+            with get_user_db_connection(user_id) as conn:
+                conn.execute(
+                    """UPDATE pending_migrations SET status='failed', error=?, attempts=attempts+1
+                       WHERE guest_user_id=? AND status='pending'""",
+                    (str(e), guest_user_id)
+                )
+                conn.commit()
+        except Exception:
+            pass
+        return {"status": "failed", "error": str(e)}
 
 
 @router.post("/logout")
