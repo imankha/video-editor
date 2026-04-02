@@ -1,6 +1,6 @@
 # T910: R2 Restore Failure — Empty DB With No Retry
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-04-02

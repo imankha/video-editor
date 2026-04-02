@@ -26,6 +26,7 @@ from .user_context import get_current_user_id
 from .profile_context import get_current_profile_id
 from .storage import (
     R2_ENABLED,
+    R2VersionResult,
     sync_database_from_r2,
     sync_database_to_r2,
     sync_database_from_r2_if_newer,
@@ -44,6 +45,10 @@ _initialized_users: set = set()
 # Track database versions per (user_id, profile_id) (for R2 sync)
 _user_db_versions: dict = {}  # (user_id, profile_id) -> version number
 _db_version_lock = threading.Lock()
+
+# R2 restore cooldown — avoids hammering R2 on transient failures
+_r2_restore_cooldowns: dict[str, float] = {}  # cache_key -> last failure timestamp
+RESTORE_COOLDOWN_SECONDS = 30
 
 # Database size thresholds (archive system targets <400KB)
 DB_SIZE_WARNING_THRESHOLD = 400 * 1024  # 400KB - archive target exceeded
@@ -441,44 +446,53 @@ def ensure_database():
 
         # Only download from R2 if we've never synced for this user+profile (first access)
         if local_version is None:
-            local_exists = db_path.exists()
-            local_size = db_path.stat().st_size if local_exists else 0
-            logger.info(
-                f"[Restore] First access for user={user_id} profile={profile_id}, "
-                f"local_db={'exists' if local_exists else 'missing'} ({local_size} bytes), checking R2..."
-            )
-            import time as _time
-            restore_start = _time.perf_counter()
-            was_synced, new_version = sync_database_from_r2_if_newer(user_id, db_path, local_version)
-            restore_elapsed = _time.perf_counter() - restore_start
-            if was_synced:
-                new_size = db_path.stat().st_size if db_path.exists() else 0
-                logger.info(
-                    f"[Restore] Downloaded database from R2 for user={user_id} profile={profile_id}: "
-                    f"version={new_version}, size={new_size} bytes, took {restore_elapsed:.2f}s"
-                )
-                set_local_db_version(user_id, profile_id, new_version)
-                # Force re-initialization since we got a new DB
-                already_initialized = False
-            elif new_version is not None:
-                # R2 has a version but we didn't need to download (local exists)
-                logger.info(
-                    f"[Restore] Local database up-to-date for user={user_id} profile={profile_id}: "
-                    f"version={new_version}, took {restore_elapsed:.2f}s"
-                )
-                set_local_db_version(user_id, profile_id, new_version)
+            # Check cooldown — don't hammer R2 on repeated transient failures
+            cache_key = f"{user_id}:{profile_id}"
+            last_fail = _r2_restore_cooldowns.get(cache_key)
+            if last_fail and (time.time() - last_fail) < RESTORE_COOLDOWN_SECONDS:
+                logger.debug(f"[Restore] Skipping R2 check for {cache_key} — cooldown active")
             else:
-                # R2 has no DB for this user+profile (fresh or R2 HEAD failed).
-                # Set version to 0 so we don't retry the R2 HEAD on every request.
-                # Without this, every get_db_connection() call for fresh users
-                # makes a slow R2 HEAD request (~3s), and if a sync eventually
-                # succeeds (uploading stale data), a later request with
-                # local_version=None would download and overwrite local changes.
+                local_exists = db_path.exists()
+                local_size = db_path.stat().st_size if local_exists else 0
                 logger.info(
-                    f"[Restore] No R2 database found for user={user_id} profile={profile_id}, "
-                    f"starting fresh (took {restore_elapsed:.2f}s)"
+                    f"[Restore] First access for user={user_id} profile={profile_id}, "
+                    f"local_db={'exists' if local_exists else 'missing'} ({local_size} bytes), checking R2..."
                 )
-                set_local_db_version(user_id, profile_id, 0)
+                import time as _time
+                restore_start = _time.perf_counter()
+                was_synced, new_version, was_error = sync_database_from_r2_if_newer(user_id, db_path, local_version)
+                restore_elapsed = _time.perf_counter() - restore_start
+                if was_synced:
+                    new_size = db_path.stat().st_size if db_path.exists() else 0
+                    logger.info(
+                        f"[Restore] Downloaded database from R2 for user={user_id} profile={profile_id}: "
+                        f"version={new_version}, size={new_size} bytes, took {restore_elapsed:.2f}s"
+                    )
+                    set_local_db_version(user_id, profile_id, new_version)
+                    # Force re-initialization since we got a new DB
+                    already_initialized = False
+                elif was_error:
+                    # Transient R2 failure — do NOT lock version to 0
+                    # Will retry on next request after cooldown
+                    _r2_restore_cooldowns[cache_key] = time.time()
+                    logger.warning(
+                        f"[Restore] R2 unreachable for {user_id}:{profile_id}, "
+                        f"will retry after {RESTORE_COOLDOWN_SECONDS}s (took {restore_elapsed:.2f}s)"
+                    )
+                elif new_version is not None:
+                    # R2 has a version but we didn't need to download (local exists)
+                    logger.info(
+                        f"[Restore] Local database up-to-date for user={user_id} profile={profile_id}: "
+                        f"version={new_version}, took {restore_elapsed:.2f}s"
+                    )
+                    set_local_db_version(user_id, profile_id, new_version)
+                else:
+                    # R2 returned NOT_FOUND — genuinely new user, lock to 0
+                    logger.info(
+                        f"[Restore] No R2 database found for user={user_id} profile={profile_id}, "
+                        f"starting fresh (took {restore_elapsed:.2f}s)"
+                    )
+                    set_local_db_version(user_id, profile_id, 0)
 
     # If already initialized, skip table creation
     if already_initialized:
