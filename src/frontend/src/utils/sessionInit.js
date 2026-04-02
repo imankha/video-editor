@@ -145,6 +145,10 @@ export async function initSession() {
         // Only authenticated if they have an email (Google sign-in).
         // A guest session has a user_id but no email — still not authenticated.
         useAuthStore.getState().setSessionState(!!meData.email, meData.email || null);
+        // T820: Track migration status from /me response
+        if (meData.migration_pending) {
+          useAuthStore.getState().setMigrationPending(true);
+        }
       } else if (authExpected) {
         console.error(`[Auth] Session cookie not received after sign-in for ${authExpected}. ` +
           'Cross-origin cookie blocked? Check SameSite/Secure settings and CORS config.');

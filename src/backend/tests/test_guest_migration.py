@@ -301,13 +301,14 @@ class TestMigrateGuestProfile:
         _migrate_guest_profile(env["guest_user_id"], env["guest_user_id"])
 
     @patch("app.routers.auth.read_selected_profile_from_r2")
-    def test_r2_error_skips(self, mock_read_selected, migration_env):
-        """R2ReadError during profile lookup → skip, don't crash."""
+    def test_r2_error_raises(self, mock_read_selected, migration_env):
+        """T820: R2ReadError during profile lookup → raises (caller blocks login)."""
         from app.storage import R2ReadError
         env = migration_env
         mock_read_selected.side_effect = R2ReadError("connection timeout")
         with patch("app.routers.auth.USER_DATA_BASE", env["tmp_path"]):
-            _migrate_guest_profile(env["guest_user_id"], env["recovered_user_id"])
+            with pytest.raises(R2ReadError):
+                _migrate_guest_profile(env["guest_user_id"], env["recovered_user_id"])
 
     @patch("app.routers.auth.read_selected_profile_from_r2")
     def test_no_local_db_skips(self, mock_read_selected, migration_env):

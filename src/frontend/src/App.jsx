@@ -205,6 +205,8 @@ function App() {
   const isAdmin = useAuthStore(state => state.isAdmin);
   const isCheckingSession = useAuthStore(state => state.isCheckingSession);
   const requireAuth = useAuthStore(state => state.requireAuth);
+  const migrationPending = useAuthStore(state => state.migrationPending);
+  const retryMigration = useAuthStore(state => state.retryMigration);
 
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
@@ -429,6 +431,8 @@ function App() {
         <ToastContainer />
         {/* Guest activity banner — only shown after guest does meaningful work */}
         {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
+        {/* T820: Migration retry banner — shown when guest migration failed */}
+        {migrationPending && <MigrationRetryBanner onRetry={retryMigration} />}
         {/* Quest overlay — auto-shows for new users (T540) */}
         <QuestPanel />
         {/* Admin button — fixed top-right, visible only to admins */}
@@ -445,6 +449,8 @@ function App() {
       <ConnectionStatus />
       {/* Guest activity banner — only shown after guest does meaningful work */}
       {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
+      {/* T820: Migration retry banner — shown when guest migration failed */}
+      {migrationPending && <MigrationRetryBanner onRetry={retryMigration} />}
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
       {editorMode === EDITOR_MODES.ANNOTATE && <AnnotateScreen onClearSelection={clearSelection} />}
 
@@ -591,6 +597,20 @@ function AdminButton({ onClick }) {
       <ShieldCheck size={15} />
       <span className="hidden sm:inline font-medium">Admin</span>
     </button>
+  );
+}
+
+function MigrationRetryBanner({ onRetry }) {
+  return (
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-800 border border-amber-500/30 shadow-xl text-sm">
+      <span className="text-amber-400">Some of your data from a previous session couldn't be transferred.</span>
+      <button
+        onClick={onRetry}
+        className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 transition-colors text-white font-medium whitespace-nowrap"
+      >
+        Try again
+      </button>
+    </div>
   );
 }
 
