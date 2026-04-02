@@ -199,6 +199,7 @@ Deploy to production domains with proper scaling.
 | T880 | [Quest Reward Double-Grant](tasks/T880-quest-reward-double-grant.md) | TODO | 8 | 2 | Race condition: spam-clicking "Claim Reward" grants credits twice. Check-then-act not atomic. |
 | T890 | [Export Transaction Atomicity](tasks/T890-export-transaction-atomicity.md) | TODO | 7 | 4 | Export job creation splits across multiple transactions; crash between them leaves inconsistent state. Credit deduction not synced to R2. |
 | T900 | [FK Cascade Gaps](tasks/T900-fk-cascade-gaps.md) | TODO | 5 | 3 | 5 foreign keys missing ON DELETE CASCADE/SET NULL; manual DELETE loops are fragile and incomplete. |
+| T910 | [R2 Restore Retry](tasks/T910-r2-restore-retry.md) | TODO | 8 | 3 | Cold start + R2 unreachable = empty DB, version locked to 0, never retries. Data in R2 but inaccessible. |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
