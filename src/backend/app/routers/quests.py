@@ -7,12 +7,13 @@ Reward claiming is idempotent — credits are only granted once per quest.
 """
 
 import logging
+import sqlite3
 
 from fastapi import APIRouter, HTTPException
 
 from ..user_context import get_current_user_id
 from ..database import get_db_connection
-from ..services.user_db import grant_credits, get_credit_transactions
+from ..services.user_db import grant_credits, get_credit_balance, get_credit_transactions
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +219,11 @@ def _check_all_steps(user_id: str, conn) -> dict:
 
 
 def _has_claimed_reward(user_id: str, quest_id: str) -> bool:
-    """Check if quest reward was already claimed via credit_transactions."""
+    """Check if quest reward was already claimed via credit_transactions.
+
+    Used as a fast-path read for progress display. The real idempotency guard
+    is the UNIQUE index on credit_transactions(user_id, source, reference_id).
+    """
     txns = get_credit_transactions(user_id, limit=100)
     return any(
         t["source"] == "quest_reward" and t["reference_id"] == quest_id
@@ -263,12 +268,6 @@ async def claim_reward(quest_id: str):
     if not qdef:
         raise HTTPException(status_code=404, detail="Quest not found")
 
-    # Idempotent: already claimed → return current balance
-    if _has_claimed_reward(user_id, quest_id):
-        from ..services.user_db import get_credit_balance
-        balance = get_credit_balance(user_id)
-        return {"credits_granted": 0, "new_balance": balance["balance"], "already_claimed": True}
-
     # Verify all steps complete
     with get_db_connection() as conn:
         all_steps = _check_all_steps(user_id, conn)
@@ -277,8 +276,14 @@ async def claim_reward(quest_id: str):
         if not all_steps.get(sid, False):
             raise HTTPException(status_code=400, detail=f"Quest not complete: step '{sid}' is incomplete")
 
-    # Grant reward
-    new_balance = grant_credits(user_id, qdef["reward"], "quest_reward", quest_id)
+    # Grant reward — UNIQUE index on (user_id, source, reference_id) prevents double-grant
+    try:
+        new_balance = grant_credits(user_id, qdef["reward"], "quest_reward", quest_id)
+    except sqlite3.IntegrityError:
+        # UNIQUE constraint violation — already claimed (race condition or retry)
+        balance = get_credit_balance(user_id)
+        return {"credits_granted": 0, "new_balance": balance["balance"], "already_claimed": True}
+
     logger.info(f"[Quests] Granted {qdef['reward']} credits for {quest_id} to {user_id}, balance={new_balance}")
 
     return {"credits_granted": qdef["reward"], "new_balance": new_balance, "already_claimed": False}
