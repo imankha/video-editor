@@ -105,7 +105,7 @@ async function enterAnnotateModeWithClips(page) {
   await page.waitForTimeout(1000);
 
   // Click Create Game button
-  const createButton = page.getByRole('button', { name: 'Create Game' });
+  const createButton = page.locator('form button:has-text("Add Game")');
   await expect(createButton).toBeEnabled({ timeout: 5000 });
   await createButton.click();
 

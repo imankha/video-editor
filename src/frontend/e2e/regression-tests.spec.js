@@ -502,7 +502,7 @@ async function ensureAnnotateModeWithClips(page) {
   await page.waitForTimeout(1000);
 
   // Click Create Game button (triggers upload + game creation)
-  const createButton = page.getByRole('button', { name: 'Create Game' });
+  const createButton = page.locator('form button:has-text("Add Game")');
   await expect(createButton).toBeEnabled({ timeout: 5000 });
   await createButton.click();
 
@@ -1087,7 +1087,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForTimeout(1000);
 
     // Click Create Game
-    const createButton = page.getByRole('button', { name: 'Create Game' });
+    const createButton = page.locator('form button:has-text("Add Game")');
     await expect(createButton).toBeEnabled({ timeout: 5000 });
     await createButton.click();
 
@@ -1118,7 +1118,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForTimeout(1000);
 
     // Click Create Game
-    const createButton = page.getByRole('button', { name: 'Create Game' });
+    const createButton = page.locator('form button:has-text("Add Game")');
     await expect(createButton).toBeEnabled({ timeout: 5000 });
     await createButton.click();
 
@@ -1163,7 +1163,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForTimeout(1000);
 
     // Click Create Game
-    const createButton = page.getByRole('button', { name: 'Create Game' });
+    const createButton = page.locator('form button:has-text("Add Game")');
     await expect(createButton).toBeEnabled({ timeout: 5000 });
     await createButton.click();
 
@@ -1439,7 +1439,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(1000);
 
     // Click Create Game
-    const createButton = page.getByRole('button', { name: 'Create Game' });
+    const createButton = page.locator('form button:has-text("Add Game")');
     await expect(createButton).toBeEnabled({ timeout: 5000 });
     await createButton.click();
 
@@ -2183,7 +2183,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(1000);
 
     // Create game
-    const createGameButton = page.getByRole('button', { name: 'Create Game' });
+    const createGameButton = page.locator('form button:has-text("Add Game")');
     await expect(createGameButton).toBeEnabled({ timeout: 5000 });
     await createGameButton.click();
 

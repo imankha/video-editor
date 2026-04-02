@@ -133,7 +133,7 @@ test.describe('Game Loading Debug', () => {
       await page.waitForTimeout(1000);
 
       // Click Create Game
-      const createButton = page.getByRole('button', { name: 'Create Game' });
+      const createButton = page.locator('form button:has-text("Add Game")');
       await expect(createButton).toBeEnabled({ timeout: 5000 });
       await createButton.click();
 
