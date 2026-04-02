@@ -1,6 +1,6 @@
 # T880: Quest Reward Double-Grant Race Condition
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-04-02
