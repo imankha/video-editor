@@ -16,12 +16,20 @@ Configuration:
 
 import os
 import logging
+from enum import Enum
 from pathlib import Path
-from typing import Optional, BinaryIO, Tuple
+from typing import Optional, BinaryIO, Tuple, Union
 from functools import lru_cache
 import threading
 
 logger = logging.getLogger(__name__)
+
+
+class R2VersionResult(Enum):
+    """Distinguishes 'not found' (genuinely new user) from 'error' (transient failure)."""
+    NOT_FOUND = "not_found"
+    ERROR = "error"
+
 
 # Environment prefix for R2 paths (dev | staging | prod)
 APP_ENV = os.getenv("APP_ENV", "dev")
@@ -521,12 +529,15 @@ def file_exists_in_r2(user_id: str, relative_path: str) -> bool:
 _request_context = threading.local()
 
 
-def get_db_version_from_r2(user_id: str, client=None) -> Optional[int]:
+def get_db_version_from_r2(user_id: str, client=None) -> Union[int, R2VersionResult]:
     """
     Get the version number of the database in R2.
 
     Version is stored as custom metadata 'x-amz-meta-db-version'.
-    Returns None if R2 is disabled, file doesn't exist, or no version set.
+    Returns:
+        int: version number (0 for legacy uploads without metadata)
+        R2VersionResult.NOT_FOUND: file doesn't exist (genuinely new user)
+        R2VersionResult.ERROR: R2 disabled, unreachable, or other transient failure
 
     Args:
         user_id: User namespace
@@ -535,7 +546,7 @@ def get_db_version_from_r2(user_id: str, client=None) -> Optional[int]:
     if client is None:
         client = get_r2_client()
     if not client:
-        return None
+        return R2VersionResult.ERROR  # No client = can't check
 
     key = r2_key(user_id, "database.sqlite")
     try:
@@ -552,19 +563,19 @@ def get_db_version_from_r2(user_id: str, client=None) -> Optional[int]:
         return 0
     except client.exceptions.ClientError as e:
         if e.response['Error']['Code'] == '404':
-            return None  # File doesn't exist
+            return R2VersionResult.NOT_FOUND
         logger.error(f"Failed to get DB version from R2: {e}")
-        return None
+        return R2VersionResult.ERROR
     except Exception as e:
         logger.error(f"Failed to get DB version from R2: {e}")
-        return None
+        return R2VersionResult.ERROR
 
 
 def sync_database_from_r2_if_newer(
     user_id: str,
     local_db_path: Path,
     local_version: Optional[int]
-) -> Tuple[bool, Optional[int]]:
+) -> Tuple[bool, Optional[int], bool]:
     """
     Download the user's database from R2 only if R2 version is newer.
 
@@ -574,32 +585,38 @@ def sync_database_from_r2_if_newer(
         local_version: Current local version (None if no local DB)
 
     Returns:
-        Tuple of (was_downloaded, new_version)
-        - (True, version) if downloaded newer version
-        - (False, local_version) if local is current or newer
-        - (False, None) if R2 disabled or error
+        Tuple of (was_downloaded, new_version, was_error)
+        - (True, version, False) if downloaded newer version
+        - (False, local_version, False) if local is current or newer
+        - (False, None, False) if NOT_FOUND (genuinely new user)
+        - (False, None, True) if ERROR (transient failure, should retry)
     """
     if not R2_ENABLED:
-        return False, local_version
+        return False, local_version, False
 
-    r2_version = get_db_version_from_r2(user_id)
+    r2_result = get_db_version_from_r2(user_id)
 
-    # If no DB in R2, nothing to sync
-    if r2_version is None:
+    if r2_result == R2VersionResult.NOT_FOUND:
         logger.debug(f"No database in R2 for user: {user_id}")
-        return False, local_version
+        return False, None, False
+
+    if r2_result == R2VersionResult.ERROR:
+        logger.debug(f"R2 error checking database version for user: {user_id}")
+        return False, None, True
+
+    r2_version = r2_result  # It's an int
 
     # If local version is same or newer, no need to download
     if local_version is not None and local_version >= r2_version:
         logger.debug(f"Local DB version {local_version} >= R2 version {r2_version}, skipping download")
-        return False, local_version
+        return False, local_version, False
 
     # Download the newer version
     if download_from_r2(user_id, "database.sqlite", local_db_path):
         logger.info(f"Downloaded DB from R2: version {r2_version} (was {local_version})")
-        return True, r2_version
+        return True, r2_version, False
 
-    return False, local_version
+    return False, local_version, True  # Download failed
 
 
 def sync_database_to_r2_with_version(
@@ -635,10 +652,16 @@ def sync_database_to_r2_with_version(
         return False, None
 
     # Check for conflicts (another request may have written)
-    r2_version = get_db_version_from_r2(user_id, client=client)
+    r2_result = get_db_version_from_r2(user_id, client=client)
+
+    # Extract int version, treating NOT_FOUND/ERROR as 0
+    if isinstance(r2_result, R2VersionResult):
+        r2_version = 0
+    else:
+        r2_version = r2_result
 
     # If R2 has a newer version than what we loaded, we have a conflict
-    if r2_version is not None and current_version is not None and r2_version > current_version:
+    if r2_version > 0 and current_version is not None and r2_version > current_version:
         logger.warning(
             f"DB sync conflict for {user_id}: loaded version {current_version}, "
             f"R2 has version {r2_version}. Using last-write-wins."
@@ -646,7 +669,7 @@ def sync_database_to_r2_with_version(
         # For MVP: last-write-wins, but log the conflict
 
     # Calculate new version
-    new_version = (max(r2_version or 0, current_version or 0)) + 1
+    new_version = (max(r2_version, current_version or 0)) + 1
 
     key = r2_key(user_id, "database.sqlite")
     try:
@@ -713,12 +736,18 @@ def _user_db_r2_key(user_id: str) -> str:
     return f"{APP_ENV}/users/{user_id}/user.sqlite"
 
 
-def get_user_db_version_from_r2(user_id: str, client=None) -> Optional[int]:
-    """Get version number of user.sqlite in R2. Same pattern as get_db_version_from_r2."""
+def get_user_db_version_from_r2(user_id: str, client=None) -> Union[int, R2VersionResult]:
+    """Get version number of user.sqlite in R2. Same pattern as get_db_version_from_r2.
+
+    Returns:
+        int: version number (0 for legacy uploads without metadata)
+        R2VersionResult.NOT_FOUND: file doesn't exist (genuinely new user)
+        R2VersionResult.ERROR: R2 disabled, unreachable, or other transient failure
+    """
     if client is None:
         client = get_r2_client()
     if not client:
-        return None
+        return R2VersionResult.ERROR
 
     key = _user_db_r2_key(user_id)
     try:
@@ -734,35 +763,48 @@ def get_user_db_version_from_r2(user_id: str, client=None) -> Optional[int]:
         return 0
     except client.exceptions.ClientError as e:
         if e.response['Error']['Code'] == '404':
-            return None
+            return R2VersionResult.NOT_FOUND
         logger.error(f"Failed to get user.sqlite version from R2: {e}")
-        return None
+        return R2VersionResult.ERROR
     except Exception as e:
         logger.error(f"Failed to get user.sqlite version from R2: {e}")
-        return None
+        return R2VersionResult.ERROR
 
 
 def sync_user_db_from_r2_if_newer(
     user_id: str,
     local_db_path: Path,
     local_version: Optional[int]
-) -> Tuple[bool, Optional[int]]:
-    """Download user.sqlite from R2 only if R2 version is newer."""
+) -> Tuple[bool, Optional[int], bool]:
+    """Download user.sqlite from R2 only if R2 version is newer.
+
+    Returns:
+        Tuple of (was_downloaded, new_version, was_error)
+        - (True, version, False) if downloaded newer version
+        - (False, local_version, False) if local is current or newer
+        - (False, None, False) if NOT_FOUND (genuinely new user)
+        - (False, None, True) if ERROR (transient failure, should retry)
+    """
     if not R2_ENABLED:
-        return False, local_version
+        return False, local_version, False
 
-    r2_version = get_user_db_version_from_r2(user_id)
+    r2_result = get_user_db_version_from_r2(user_id)
 
-    if r2_version is None:
-        return False, local_version
+    if r2_result == R2VersionResult.NOT_FOUND:
+        return False, None, False
+
+    if r2_result == R2VersionResult.ERROR:
+        return False, None, True
+
+    r2_version = r2_result  # It's an int
 
     if local_version is not None and local_version >= r2_version:
-        return False, local_version
+        return False, local_version, False
 
     # Download directly (not profile-scoped)
     client = get_r2_client()
     if not client:
-        return False, local_version
+        return False, None, True
 
     key = _user_db_r2_key(user_id)
     try:
@@ -773,10 +815,10 @@ def sync_user_db_from_r2_if_newer(
             operation=f"user_db_download {user_id}", **TIER_1,
         )
         logger.info(f"Downloaded user.sqlite from R2: {user_id} version {r2_version}")
-        return True, r2_version
+        return True, r2_version, False
     except Exception as e:
         logger.error(f"Failed to download user.sqlite from R2: {e}")
-        return False, local_version
+        return False, local_version, True  # Download failed
 
 
 def sync_user_db_to_r2_with_version(
@@ -795,15 +837,21 @@ def sync_user_db_to_r2_with_version(
     if not client:
         return False, None
 
-    r2_version = get_user_db_version_from_r2(user_id, client=client)
+    r2_result = get_user_db_version_from_r2(user_id, client=client)
 
-    if r2_version is not None and current_version is not None and r2_version > current_version:
+    # Extract int version, treating NOT_FOUND/ERROR as 0
+    if isinstance(r2_result, R2VersionResult):
+        r2_version = 0
+    else:
+        r2_version = r2_result
+
+    if r2_version > 0 and current_version is not None and r2_version > current_version:
         logger.warning(
             f"user.sqlite sync conflict for {user_id}: loaded version {current_version}, "
             f"R2 has version {r2_version}. Using last-write-wins."
         )
 
-    new_version = (max(r2_version or 0, current_version or 0)) + 1
+    new_version = (max(r2_version, current_version or 0)) + 1
 
     key = _user_db_r2_key(user_id)
     try:

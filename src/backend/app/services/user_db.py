@@ -19,12 +19,17 @@ Sync strategy:
 import logging
 import sqlite3
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# R2 restore cooldown — avoids hammering R2 on transient failures
+_r2_user_restore_cooldowns: dict[str, float] = {}  # user_id -> last failure timestamp
+USER_RESTORE_COOLDOWN_SECONDS = 30
 
 USER_DATA_BASE = Path(__file__).parent.parent.parent.parent / "user_data"
 
@@ -83,13 +88,60 @@ def _get_user_db_path(user_id: str) -> Path:
 
 
 def ensure_user_database(user_id: str) -> None:
-    """Create user.sqlite with schema if it doesn't exist."""
+    """Create user.sqlite with schema if it doesn't exist.
+
+    On first access, attempts R2 restore with NOT_FOUND vs ERROR distinction:
+    - NOT_FOUND: genuinely new user, lock version to 0
+    - ERROR: transient failure, retry after cooldown
+    """
     with _init_lock:
         if user_id in _initialized_user_dbs:
             return
 
     db_path = _get_user_db_path(user_id)
     db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # R2 restore on first access (before schema creation so restored DB is used)
+    from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
+    from ..database import get_local_user_db_version, set_local_user_db_version
+
+    if R2_ENABLED:
+        local_version = get_local_user_db_version(user_id)
+        if local_version is None:
+            # Check cooldown
+            last_fail = _r2_user_restore_cooldowns.get(user_id)
+            if last_fail and (time.time() - last_fail) < USER_RESTORE_COOLDOWN_SECONDS:
+                logger.debug(f"[Restore] Skipping user.sqlite R2 check for {user_id} — cooldown active")
+            else:
+                logger.info(f"[Restore] First access for user.sqlite user={user_id}, checking R2...")
+                restore_start = time.perf_counter()
+                was_synced, new_version, was_error = sync_user_db_from_r2_if_newer(user_id, db_path, local_version)
+                restore_elapsed = time.perf_counter() - restore_start
+                if was_synced:
+                    logger.info(
+                        f"[Restore] Downloaded user.sqlite from R2 for user={user_id}: "
+                        f"version={new_version}, took {restore_elapsed:.2f}s"
+                    )
+                    set_local_user_db_version(user_id, new_version)
+                elif was_error:
+                    _r2_user_restore_cooldowns[user_id] = time.time()
+                    logger.warning(
+                        f"[Restore] R2 unreachable for user.sqlite user={user_id}, "
+                        f"will retry after {USER_RESTORE_COOLDOWN_SECONDS}s (took {restore_elapsed:.2f}s)"
+                    )
+                elif new_version is not None:
+                    logger.info(
+                        f"[Restore] user.sqlite up-to-date for user={user_id}: "
+                        f"version={new_version}, took {restore_elapsed:.2f}s"
+                    )
+                    set_local_user_db_version(user_id, new_version)
+                else:
+                    # NOT_FOUND — genuinely new user
+                    logger.info(
+                        f"[Restore] No user.sqlite in R2 for user={user_id}, "
+                        f"starting fresh (took {restore_elapsed:.2f}s)"
+                    )
+                    set_local_user_db_version(user_id, 0)
 
     conn = sqlite3.connect(str(db_path), timeout=30)
     conn.execute("PRAGMA journal_mode=WAL")
