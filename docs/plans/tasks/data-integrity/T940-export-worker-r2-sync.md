@@ -1,6 +1,6 @@
 # T940: Export Worker R2 Sync
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-04-02

@@ -210,7 +210,7 @@ Restructure persistence to eliminate silent data loss, credit race conditions, a
 | 5 | T910 | [R2 Restore Retry](tasks/T910-r2-restore-retry.md) | TESTING | 8 | 3 | T920 | Distinguish 404 from transient error, retry with cooldown |
 | 6 | T900 | [FK Cascade Gaps](tasks/data-integrity/T900-fk-cascade-gaps.md) | TESTING | 5 | 3 | — | 5 missing CASCADE/SET NULL constraints in profile DB |
 | 7 | T930 | [Resilient R2 Sync](tasks/data-integrity/T930-resilient-r2-sync.md) | TODO | 9 | 4 | T920 | Persist sync failure state, retry on next request, sync-before-response for credits |
-| 8 | T940 | [Export Worker R2 Sync](tasks/data-integrity/T940-export-worker-r2-sync.md) | TODO | 8 | 2 | T920 | Background export writes never synced to R2 |
+| 8 | T940 | [Export Worker R2 Sync](tasks/data-integrity/T940-export-worker-r2-sync.md) | TESTING | 8 | 2 | T920 | Background export writes never synced to R2 |
 | 9 | T950 | [Version Conflict Detection](tasks/data-integrity/T950-version-conflict-detection.md) | TODO | 7 | 3 | T920 | Stop last-write-wins, fail on conflict, re-download |
 
 ### Mobile Responsive (TODO)
