@@ -524,8 +524,8 @@ def ensure_database():
                 final_video_id INTEGER,
                 is_auto_created INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (working_video_id) REFERENCES working_videos(id),
-                FOREIGN KEY (final_video_id) REFERENCES final_videos(id)
+                FOREIGN KEY (working_video_id) REFERENCES working_videos(id) ON DELETE SET NULL,
+                FOREIGN KEY (final_video_id) REFERENCES final_videos(id) ON DELETE SET NULL
             )
         """)
 
@@ -543,8 +543,8 @@ def ensure_database():
                 timing_data TEXT,
                 segments_data TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (project_id) REFERENCES projects(id),
-                FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id)
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id) ON DELETE CASCADE
             )
         """)
 
@@ -558,7 +558,7 @@ def ensure_database():
                 highlights_data TEXT,
                 text_overlays TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (project_id) REFERENCES projects(id)
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             )
         """)
 
@@ -1049,6 +1049,126 @@ def ensure_database():
             INSERT OR IGNORE INTO user_settings (id, settings_json)
             VALUES (1, '{}')
         """)
+
+        # T900: Add missing FK CASCADE/SET NULL constraints
+        # SQLite doesn't support ALTER TABLE to modify FKs, so we recreate tables.
+        # foreign_keys must be OFF during table replacement to avoid issues.
+        conn.execute("PRAGMA foreign_keys=OFF")
+
+        # --- working_clips: add CASCADE on project_id and raw_clip_id ---
+        row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='working_clips'"
+        ).fetchone()
+        if row and 'ON DELETE CASCADE' not in row[0]:
+            logger.info("[Migration T900] Adding FK cascades to working_clips")
+            cursor.execute("""
+                CREATE TABLE _working_clips_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id INTEGER NOT NULL,
+                    raw_clip_id INTEGER,
+                    uploaded_filename TEXT,
+                    exported_at TEXT DEFAULT NULL,
+                    sort_order INTEGER DEFAULT 0,
+                    version INTEGER NOT NULL DEFAULT 1,
+                    crop_data TEXT,
+                    timing_data TEXT,
+                    segments_data TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    raw_clip_version INTEGER,
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                    FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id) ON DELETE CASCADE
+                )
+            """)
+            old_cols = [c['name'] for c in cursor.execute("PRAGMA table_info(working_clips)").fetchall()]
+            new_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(_working_clips_new)").fetchall()}
+            common = [c for c in old_cols if c in new_cols]
+            cols_str = ', '.join(common)
+            cursor.execute(f"INSERT INTO _working_clips_new ({cols_str}) SELECT {cols_str} FROM working_clips")
+            cursor.execute("DROP TABLE working_clips")
+            cursor.execute("ALTER TABLE _working_clips_new RENAME TO working_clips")
+            # Recreate indexes
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_working_clips_project_version
+                ON working_clips(project_id, version DESC)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_working_clips_project_raw_clip_version
+                ON working_clips(project_id, raw_clip_id, version DESC)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_working_clips_project_upload_version
+                ON working_clips(project_id, uploaded_filename, version DESC)
+            """)
+            logger.info("[Migration T900] working_clips FK cascades added")
+
+        # --- working_videos: add CASCADE on project_id ---
+        row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='working_videos'"
+        ).fetchone()
+        if row and 'ON DELETE CASCADE' not in row[0]:
+            logger.info("[Migration T900] Adding FK cascade to working_videos")
+            cursor.execute("""
+                CREATE TABLE _working_videos_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id INTEGER NOT NULL,
+                    filename TEXT NOT NULL,
+                    version INTEGER NOT NULL DEFAULT 1,
+                    highlights_data TEXT,
+                    text_overlays TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    duration REAL,
+                    effect_type TEXT DEFAULT 'original',
+                    overlay_version INTEGER DEFAULT 0,
+                    highlight_color TEXT DEFAULT NULL,
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+                )
+            """)
+            old_cols = [c['name'] for c in cursor.execute("PRAGMA table_info(working_videos)").fetchall()]
+            new_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(_working_videos_new)").fetchall()}
+            common = [c for c in old_cols if c in new_cols]
+            cols_str = ', '.join(common)
+            cursor.execute(f"INSERT INTO _working_videos_new ({cols_str}) SELECT {cols_str} FROM working_videos")
+            cursor.execute("DROP TABLE working_videos")
+            cursor.execute("ALTER TABLE _working_videos_new RENAME TO working_videos")
+            # Recreate index
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_working_videos_project_version
+                ON working_videos(project_id, version DESC)
+            """)
+            logger.info("[Migration T900] working_videos FK cascade added")
+
+        # --- projects: add SET NULL on working_video_id and final_video_id ---
+        row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='projects'"
+        ).fetchone()
+        if row and 'ON DELETE SET NULL' not in row[0]:
+            logger.info("[Migration T900] Adding FK SET NULL to projects")
+            cursor.execute("""
+                CREATE TABLE _projects_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    aspect_ratio TEXT NOT NULL,
+                    working_video_id INTEGER,
+                    final_video_id INTEGER,
+                    is_auto_created INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_opened_at TIMESTAMP,
+                    current_mode TEXT DEFAULT 'framing',
+                    restored_at TIMESTAMP DEFAULT NULL,
+                    FOREIGN KEY (working_video_id) REFERENCES working_videos(id) ON DELETE SET NULL,
+                    FOREIGN KEY (final_video_id) REFERENCES final_videos(id) ON DELETE SET NULL
+                )
+            """)
+            old_cols = [c['name'] for c in cursor.execute("PRAGMA table_info(projects)").fetchall()]
+            new_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(_projects_new)").fetchall()}
+            common = [c for c in old_cols if c in new_cols]
+            cols_str = ', '.join(common)
+            cursor.execute(f"INSERT INTO _projects_new ({cols_str}) SELECT {cols_str} FROM projects")
+            cursor.execute("DROP TABLE projects")
+            cursor.execute("ALTER TABLE _projects_new RENAME TO projects")
+            logger.info("[Migration T900] projects FK SET NULL added")
+
+        conn.execute("PRAGMA foreign_keys=ON")
 
         conn.commit()
         _initialized_users.add(user_id)
