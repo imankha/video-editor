@@ -145,9 +145,10 @@ class TrackedConnection:
     during the request, and we sync once at the end, not after every write.
     """
 
-    def __init__(self, conn: sqlite3.Connection):
+    def __init__(self, conn: sqlite3.Connection, db_type: str = 'profile'):
         self._conn = conn
         self._has_writes = False
+        self._db_type = db_type
 
     def _mark_write(self):
         """Mark that a write operation occurred."""
@@ -158,6 +159,8 @@ class TrackedConnection:
         ctx = _request_context.get()
         if ctx is not None:
             ctx['has_writes'] = True
+            if self._db_type == 'user':
+                ctx['has_user_db_writes'] = True
 
     @property
     def has_writes(self) -> bool:
@@ -521,8 +524,8 @@ def ensure_database():
                 final_video_id INTEGER,
                 is_auto_created INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (working_video_id) REFERENCES working_videos(id),
-                FOREIGN KEY (final_video_id) REFERENCES final_videos(id)
+                FOREIGN KEY (working_video_id) REFERENCES working_videos(id) ON DELETE SET NULL,
+                FOREIGN KEY (final_video_id) REFERENCES final_videos(id) ON DELETE SET NULL
             )
         """)
 
@@ -540,8 +543,8 @@ def ensure_database():
                 timing_data TEXT,
                 segments_data TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (project_id) REFERENCES projects(id),
-                FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id)
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id) ON DELETE CASCADE
             )
         """)
 
@@ -555,7 +558,7 @@ def ensure_database():
                 highlights_data TEXT,
                 text_overlays TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (project_id) REFERENCES projects(id)
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             )
         """)
 
@@ -1047,6 +1050,126 @@ def ensure_database():
             VALUES (1, '{}')
         """)
 
+        # T900: Add missing FK CASCADE/SET NULL constraints
+        # SQLite doesn't support ALTER TABLE to modify FKs, so we recreate tables.
+        # foreign_keys must be OFF during table replacement to avoid issues.
+        conn.execute("PRAGMA foreign_keys=OFF")
+
+        # --- working_clips: add CASCADE on project_id and raw_clip_id ---
+        row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='working_clips'"
+        ).fetchone()
+        if row and 'ON DELETE CASCADE' not in row[0]:
+            logger.info("[Migration T900] Adding FK cascades to working_clips")
+            cursor.execute("""
+                CREATE TABLE _working_clips_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id INTEGER NOT NULL,
+                    raw_clip_id INTEGER,
+                    uploaded_filename TEXT,
+                    exported_at TEXT DEFAULT NULL,
+                    sort_order INTEGER DEFAULT 0,
+                    version INTEGER NOT NULL DEFAULT 1,
+                    crop_data TEXT,
+                    timing_data TEXT,
+                    segments_data TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    raw_clip_version INTEGER,
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                    FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id) ON DELETE CASCADE
+                )
+            """)
+            old_cols = [c['name'] for c in cursor.execute("PRAGMA table_info(working_clips)").fetchall()]
+            new_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(_working_clips_new)").fetchall()}
+            common = [c for c in old_cols if c in new_cols]
+            cols_str = ', '.join(common)
+            cursor.execute(f"INSERT INTO _working_clips_new ({cols_str}) SELECT {cols_str} FROM working_clips")
+            cursor.execute("DROP TABLE working_clips")
+            cursor.execute("ALTER TABLE _working_clips_new RENAME TO working_clips")
+            # Recreate indexes
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_working_clips_project_version
+                ON working_clips(project_id, version DESC)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_working_clips_project_raw_clip_version
+                ON working_clips(project_id, raw_clip_id, version DESC)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_working_clips_project_upload_version
+                ON working_clips(project_id, uploaded_filename, version DESC)
+            """)
+            logger.info("[Migration T900] working_clips FK cascades added")
+
+        # --- working_videos: add CASCADE on project_id ---
+        row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='working_videos'"
+        ).fetchone()
+        if row and 'ON DELETE CASCADE' not in row[0]:
+            logger.info("[Migration T900] Adding FK cascade to working_videos")
+            cursor.execute("""
+                CREATE TABLE _working_videos_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id INTEGER NOT NULL,
+                    filename TEXT NOT NULL,
+                    version INTEGER NOT NULL DEFAULT 1,
+                    highlights_data TEXT,
+                    text_overlays TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    duration REAL,
+                    effect_type TEXT DEFAULT 'original',
+                    overlay_version INTEGER DEFAULT 0,
+                    highlight_color TEXT DEFAULT NULL,
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+                )
+            """)
+            old_cols = [c['name'] for c in cursor.execute("PRAGMA table_info(working_videos)").fetchall()]
+            new_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(_working_videos_new)").fetchall()}
+            common = [c for c in old_cols if c in new_cols]
+            cols_str = ', '.join(common)
+            cursor.execute(f"INSERT INTO _working_videos_new ({cols_str}) SELECT {cols_str} FROM working_videos")
+            cursor.execute("DROP TABLE working_videos")
+            cursor.execute("ALTER TABLE _working_videos_new RENAME TO working_videos")
+            # Recreate index
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_working_videos_project_version
+                ON working_videos(project_id, version DESC)
+            """)
+            logger.info("[Migration T900] working_videos FK cascade added")
+
+        # --- projects: add SET NULL on working_video_id and final_video_id ---
+        row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='projects'"
+        ).fetchone()
+        if row and 'ON DELETE SET NULL' not in row[0]:
+            logger.info("[Migration T900] Adding FK SET NULL to projects")
+            cursor.execute("""
+                CREATE TABLE _projects_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    aspect_ratio TEXT NOT NULL,
+                    working_video_id INTEGER,
+                    final_video_id INTEGER,
+                    is_auto_created INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_opened_at TIMESTAMP,
+                    current_mode TEXT DEFAULT 'framing',
+                    restored_at TIMESTAMP DEFAULT NULL,
+                    FOREIGN KEY (working_video_id) REFERENCES working_videos(id) ON DELETE SET NULL,
+                    FOREIGN KEY (final_video_id) REFERENCES final_videos(id) ON DELETE SET NULL
+                )
+            """)
+            old_cols = [c['name'] for c in cursor.execute("PRAGMA table_info(projects)").fetchall()]
+            new_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(_projects_new)").fetchall()}
+            common = [c for c in old_cols if c in new_cols]
+            cols_str = ', '.join(common)
+            cursor.execute(f"INSERT INTO _projects_new ({cols_str}) SELECT {cols_str} FROM projects")
+            cursor.execute("DROP TABLE projects")
+            cursor.execute("ALTER TABLE _projects_new RENAME TO projects")
+            logger.info("[Migration T900] projects FK SET NULL added")
+
+        conn.execute("PRAGMA foreign_keys=ON")
+
         conn.commit()
         _initialized_users.add(user_id)
         logger.debug(f"Database verified/initialized for user: {user_id}")
@@ -1213,4 +1336,70 @@ def sync_db_to_cloud_if_writes() -> bool:
 
     if get_request_has_writes():
         return sync_db_to_cloud()
+    return True
+
+
+# ---------------------------------------------------------------------------
+# User.sqlite version tracking and sync (T920)
+# ---------------------------------------------------------------------------
+
+_user_sqlite_versions: dict = {}  # user_id -> version number
+_user_sqlite_version_lock = threading.Lock()
+
+
+def get_local_user_db_version(user_id: str) -> Optional[int]:
+    """Get locally cached version for a user's user.sqlite."""
+    with _user_sqlite_version_lock:
+        return _user_sqlite_versions.get(user_id)
+
+
+def set_local_user_db_version(user_id: str, version: Optional[int]) -> None:
+    """Set locally cached version for a user's user.sqlite."""
+    with _user_sqlite_version_lock:
+        if version is None:
+            _user_sqlite_versions.pop(user_id, None)
+        else:
+            _user_sqlite_versions[user_id] = version
+
+
+def get_request_has_user_db_writes() -> bool:
+    """Check if any user.sqlite writes occurred during this request."""
+    ctx = _request_context.get()
+    if ctx is None:
+        return False
+    return ctx.get('has_user_db_writes', False)
+
+
+def sync_user_db_to_cloud_if_writes() -> bool:
+    """Sync user.sqlite to R2 if writes occurred during this request.
+
+    Called by middleware after syncing the profile DB.
+    Returns True if sync succeeded (or no writes/R2 disabled), False on failure.
+    """
+    if not R2_ENABLED:
+        return True
+
+    if not get_request_has_user_db_writes():
+        return True
+
+    user_id = _request_user_id.get()
+    if not user_id:
+        return True
+
+    db_path = USER_DATA_BASE / user_id / "user.sqlite"
+    if not db_path.exists():
+        return True
+
+    from .storage import sync_user_db_to_r2_with_version
+
+    local_version = get_local_user_db_version(user_id)
+    success, new_version = sync_user_db_to_r2_with_version(user_id, db_path, local_version)
+    if success and new_version is not None:
+        set_local_user_db_version(user_id, new_version)
+        logger.debug(f"user.sqlite synced to R2 for user: {user_id}, version: {new_version}")
+        return True
+    elif not success:
+        logger.warning(f"Failed to sync user.sqlite to R2 for user: {user_id}")
+        return False
+
     return True

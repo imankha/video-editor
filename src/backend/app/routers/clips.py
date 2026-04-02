@@ -673,10 +673,7 @@ def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
         logger.info(f"Keeping modified auto-project {project_id}")
         return False
 
-    # Delete the working clip first (foreign key constraint)
-    cursor.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
-
-    # Delete the project
+    # Delete the project — cascades to working_clips, working_videos, export_jobs
     cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
 
     # Clear the auto_project_id from the raw clip
@@ -962,10 +959,7 @@ async def delete_raw_clip(clip_id: int):
         if clip['auto_project_id']:
             _delete_auto_project(cursor, clip['auto_project_id'], clip_id)
 
-        # Delete working clips that reference this raw clip
-        cursor.execute("DELETE FROM working_clips WHERE raw_clip_id = ?", (clip_id,))
-
-        # Delete the raw clip record
+        # Delete the raw clip record — cascades to working_clips (via raw_clip_id CASCADE)
         cursor.execute("DELETE FROM raw_clips WHERE id = ?", (clip_id,))
 
         # Update game aggregates after deletion

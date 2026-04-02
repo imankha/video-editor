@@ -677,43 +677,25 @@ async def delete_game(game_id: int):
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Game not found")
 
-        # Find all raw_clips for this game (they'll be cascade-deleted, but their
-        # children in working_clips won't cascade)
-        cursor.execute("SELECT id FROM raw_clips WHERE game_id = ?", (game_id,))
-        raw_clip_ids = [row['id'] for row in cursor.fetchall()]
-
         # Find all projects that were auto-created from this game's clips
+        # These must be deleted explicitly — they're not FK-linked to games
         cursor.execute(
             "SELECT DISTINCT auto_project_id FROM raw_clips WHERE game_id = ? AND auto_project_id IS NOT NULL",
             (game_id,)
         )
         project_ids = [row['auto_project_id'] for row in cursor.fetchall()]
 
-        # Delete child tables that don't cascade (order matters for FK constraints)
         if project_ids:
             placeholders = ','.join('?' * len(project_ids))
-            # Unlink self-referencing FKs on projects
-            cursor.execute(
-                f"UPDATE projects SET working_video_id = NULL, final_video_id = NULL WHERE id IN ({placeholders})",
-                project_ids
-            )
-            cursor.execute(f"DELETE FROM final_videos WHERE project_id IN ({placeholders})", project_ids)
-            cursor.execute(f"DELETE FROM working_videos WHERE project_id IN ({placeholders})", project_ids)
-            cursor.execute(f"DELETE FROM working_clips WHERE project_id IN ({placeholders})", project_ids)
-            cursor.execute(f"DELETE FROM ratings WHERE project_id IN ({placeholders})", project_ids)
-            cursor.execute(f"DELETE FROM export_jobs WHERE project_id IN ({placeholders})", project_ids)
+            # Delete auto-projects — cascades to working_clips, working_videos, export_jobs
             cursor.execute(f"DELETE FROM projects WHERE id IN ({placeholders})", project_ids)
 
-        # Also delete working_clips referencing raw_clips directly (non-auto projects)
-        if raw_clip_ids:
-            placeholders = ','.join('?' * len(raw_clip_ids))
-            cursor.execute(f"DELETE FROM working_clips WHERE raw_clip_id IN ({placeholders})", raw_clip_ids)
-
-        # Now safe to delete the game — raw_clips, modal_tasks, game_videos cascade
+        # Delete the game — cascades to raw_clips (CASCADE), which cascades to
+        # working_clips (via raw_clip_id CASCADE). modal_tasks, game_videos also cascade.
         cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
         conn.commit()
 
-        logger.info(f"Deleted game {game_id} ({len(raw_clip_ids)} clips, {len(project_ids)} projects)")
+        logger.info(f"Deleted game {game_id} ({len(project_ids)} auto-projects cascaded)")
         return {'success': True}
 
 
