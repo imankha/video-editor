@@ -106,7 +106,6 @@ export function ClipScrubRegion({
   // All drag state in refs to avoid stale closures when switching handles
   const draggingRef = useRef(null);
   const dragOffsetRef = useRef(0);
-  const wasPlayingRef = useRef(false);
 
   // Stable refs for callbacks so window listeners never go stale
   const onStartTimeChangeRef = useRef(onStartTimeChange);
@@ -126,7 +125,6 @@ export function ClipScrubRegion({
     e.stopPropagation();
     // Pause video when user starts dragging (prevents playback fighting with drag preview)
     const video = videoRef?.current;
-    wasPlayingRef.current = video ? !video.paused : false;
     if (video && !video.paused) {
       video.pause();
     }
@@ -183,22 +181,8 @@ export function ClipScrubRegion({
       onDragEndRef.current?.(startTimeRef.current, endTimeRef.current);
       draggingRef.current = null;
       setDragging(null);
-      // Resume playback if video was playing before the drag started
-      if (wasPlayingRef.current) {
-        wasPlayingRef.current = false;
-        const video = videoRef?.current;
-        if (video) {
-          // Wait for any pending seek to finish before resuming
-          const resume = () => video.play();
-          if (video.seeking) {
-            video.addEventListener('seeked', resume, { once: true });
-          } else {
-            video.play();
-          }
-        }
-      }
     }
-  }, [videoRef]);
+  }, []);
 
   // Attach move/up to window once, stable listeners (no churn)
   useEffect(() => {
