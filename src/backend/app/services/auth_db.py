@@ -81,7 +81,6 @@ def init_auth_db():
                 email TEXT UNIQUE,
                 google_id TEXT UNIQUE,
                 verified_at TEXT,
-                stripe_customer_id TEXT,
                 created_at TEXT DEFAULT (datetime('now')),
                 last_seen_at TEXT
             );
@@ -107,15 +106,11 @@ def init_auth_db():
             CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes(email);
         """)
 
-        # T530: Credit system — add columns to users table (idempotent)
-        for col, col_def in [
-            ("credits", "INTEGER DEFAULT 0"),
-            ("credit_summary", "INTEGER DEFAULT 0"),
-        ]:
-            try:
-                db.execute(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
-            except sqlite3.OperationalError:
-                pass  # Column already exists
+        # T920: credit_summary for admin panel aggregation (idempotent)
+        try:
+            db.execute("ALTER TABLE users ADD COLUMN credit_summary INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
         # T550: Admin users — table-driven admin list
         db.executescript("""
@@ -129,21 +124,7 @@ def init_auth_db():
         )
         db.commit()
 
-        # T530: Credit transactions ledger
-        db.executescript("""
-            CREATE TABLE IF NOT EXISTS credit_transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL REFERENCES users(user_id),
-                amount INTEGER NOT NULL,
-                source TEXT NOT NULL,
-                reference_id TEXT,
-                video_seconds REAL,
-                created_at TEXT DEFAULT (datetime('now'))
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_credit_tx_user
-                ON credit_transactions(user_id);
-        """)
+        # Legacy credit_transactions removed — now in per-user user.sqlite (T920)
 
     logger.info("[AuthDB] Tables initialized")
 

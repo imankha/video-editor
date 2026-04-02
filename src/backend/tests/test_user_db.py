@@ -69,7 +69,7 @@ class TestSchemaCreation:
         conn.close()
 
         expected = {"credits", "credit_transactions", "credit_reservations",
-                    "user_meta", "pending_migrations"}
+                    "stripe_customers", "pending_migrations"}
         assert expected.issubset(tables), f"Missing tables: {expected - tables}"
 
     def test_ensure_user_database_idempotent(self, isolated_user_db):
@@ -396,77 +396,21 @@ class TestCreditSummarySync:
 # 10. Migration from auth.sqlite
 # -----------------------------------------------------------------------
 
-class TestMigrationFromAuthDb:
-    def test_migrates_credits_and_transactions(self, isolated_user_db):
-        """If auth.sqlite has credits for a user, ensure_user_database migrates them."""
-        from app.services.auth_db import get_auth_db
-        from app.services import user_db
-
-        # Seed auth.sqlite with credit data
-        with get_auth_db() as db:
-            db.execute(
-                "UPDATE users SET credits = 42 WHERE user_id = 'user-a'",
-            )
-            db.execute(
-                """INSERT INTO credit_transactions (user_id, amount, source, reference_id)
-                   VALUES ('user-a', 42, 'admin_grant', 'seed-ref')"""
-            )
-            db.commit()
-
-        # Remove user.sqlite + clear cache to force re-init with migration
-        user_db._initialized_user_dbs.discard("user-a")
-        db_path = user_db._get_user_db_path("user-a")
-        if db_path.exists():
-            import os
-            os.remove(str(db_path))
-
-        from app.services.user_db import get_credit_balance, get_credit_transactions
+class TestInitCreditsRow:
+    def test_new_user_gets_zero_balance(self, isolated_user_db):
+        """New user should get a credits row with balance=0."""
+        from app.services.user_db import get_credit_balance
         balance = get_credit_balance("user-a")
-        assert balance["balance"] == 42
+        assert balance["balance"] == 0
 
-        txns = get_credit_transactions("user-a")
-        assert len(txns) == 1
-        assert txns[0]["source"] == "admin_grant"
-        assert txns[0]["amount"] == 42
-
-    def test_migrates_stripe_customer_id(self, isolated_user_db):
-        """stripe_customer_id in auth.sqlite should migrate to user_meta."""
-        from app.services.auth_db import get_auth_db
-        from app.services import user_db
-
-        with get_auth_db() as db:
-            db.execute(
-                "UPDATE users SET stripe_customer_id = 'cus_migrated' WHERE user_id = 'user-a'",
-            )
-            db.commit()
-
-        # Force re-init
-        user_db._initialized_user_dbs.discard("user-a")
-        db_path = user_db._get_user_db_path("user-a")
-        if db_path.exists():
-            import os
-            os.remove(str(db_path))
-
-        from app.services.user_db import get_stripe_customer_id
-        assert get_stripe_customer_id("user-a") == "cus_migrated"
-
-    def test_no_migration_if_user_db_already_has_data(self, isolated_user_db):
-        """If user.sqlite already has a credits row, migration is skipped."""
+    def test_init_is_idempotent(self, isolated_user_db):
+        """Calling ensure_user_database twice doesn't reset balance."""
         from app.services.user_db import grant_credits, get_credit_balance
-        from app.services.auth_db import get_auth_db
         from app.services import user_db
 
-        # Grant in user.sqlite first
-        grant_credits("user-a", 10, "admin_grant")
-
-        # Seed auth.sqlite with different data
-        with get_auth_db() as db:
-            db.execute("UPDATE users SET credits = 999 WHERE user_id = 'user-a'")
-            db.commit()
-
-        # Clear cache but keep user.sqlite
+        grant_credits("user-a", 50, "admin_grant")
         user_db._initialized_user_dbs.discard("user-a")
+        user_db.ensure_user_database("user-a")
 
-        # Re-access should NOT overwrite
         balance = get_credit_balance("user-a")
-        assert balance["balance"] == 10  # Not 999
+        assert balance["balance"] == 50

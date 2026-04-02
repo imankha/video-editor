@@ -7,7 +7,7 @@ It stores:
   - credits: current credit balance
   - credit_transactions: full ledger of credit changes
   - credit_reservations: held credits for in-progress exports (T890)
-  - user_meta: key-value pairs (stripe_customer_id, etc.)
+  - stripe_customers: Stripe billing customer IDs
   - pending_migrations: guest→authenticated migration tracking (T820)
 
 Sync strategy:
@@ -66,9 +66,9 @@ _USER_DB_SCHEMA = """
         created_at TEXT DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS user_meta (
-        key TEXT PRIMARY KEY,
-        value TEXT
+    CREATE TABLE IF NOT EXISTS stripe_customers (
+        user_id TEXT PRIMARY KEY,
+        customer_id TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS pending_migrations (
@@ -151,8 +151,8 @@ def ensure_user_database(user_id: str) -> None:
     conn.executescript(_USER_DB_SCHEMA)
     conn.close()
 
-    # Migrate data from auth.sqlite if this is first init
-    _migrate_from_auth_db(user_id)
+    # Initialize credits row for new users
+    _init_credits_row(user_id)
 
     with _init_lock:
         _initialized_user_dbs.add(user_id)
@@ -348,20 +348,21 @@ def has_processed_payment(user_id: str, reference_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def get_stripe_customer_id(user_id: str) -> Optional[str]:
-    """Get stripe_customer_id for a user from user_meta."""
+    """Get Stripe customer ID for a user."""
     with get_user_db_connection(user_id) as conn:
         row = conn.execute(
-            "SELECT value FROM user_meta WHERE key = 'stripe_customer_id'",
+            "SELECT customer_id FROM stripe_customers WHERE user_id = ?",
+            (user_id,),
         ).fetchone()
-        return row["value"] if row else None
+        return row["customer_id"] if row else None
 
 
 def set_stripe_customer_id(user_id: str, stripe_customer_id: str):
-    """Save stripe_customer_id to user_meta table."""
+    """Save Stripe customer ID for a user."""
     with get_user_db_connection(user_id) as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO user_meta (key, value) VALUES ('stripe_customer_id', ?)",
-            (stripe_customer_id,),
+            "INSERT OR REPLACE INTO stripe_customers (user_id, customer_id) VALUES (?, ?)",
+            (user_id, stripe_customer_id),
         )
         conn.commit()
     logger.info(f"[UserDB] Set stripe_customer_id for {user_id}")
@@ -536,11 +537,10 @@ def _update_credit_summary(user_id: str, balance: int) -> None:
 # Data migration from auth.sqlite
 # ---------------------------------------------------------------------------
 
-def _migrate_from_auth_db(user_id: str) -> bool:
-    """Migrate credits, transactions, stripe_customer_id from auth.sqlite to user.sqlite.
+def _init_credits_row(user_id: str) -> bool:
+    """Initialize credits row for a new user if it doesn't exist.
 
-    Called on first access if user.sqlite credits table is empty but auth.sqlite has data.
-    Idempotent — checks if already migrated.
+    Idempotent — skips if credits row already exists.
     """
     db_path = _get_user_db_path(user_id)
     if not db_path.exists():
@@ -550,90 +550,15 @@ def _migrate_from_auth_db(user_id: str) -> bool:
     conn.row_factory = sqlite3.Row
 
     try:
-        # Check if already migrated (credits row exists)
         row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()
         if row is not None:
-            conn.close()
-            return False  # Already has data
+            return False  # Already initialized
 
-        # Read from auth.sqlite
-        try:
-            from .auth_db import get_auth_db
-            with get_auth_db() as auth_conn:
-                user_row = auth_conn.execute(
-                    "SELECT credits, stripe_customer_id FROM users WHERE user_id = ?",
-                    (user_id,)
-                ).fetchone()
-                if not user_row:
-                    # User doesn't exist in auth.sqlite — just initialize
-                    conn.execute(
-                        "INSERT INTO credits (user_id, balance) VALUES (?, 0)",
-                        (user_id,)
-                    )
-                    conn.commit()
-                    conn.close()
-                    return True
-
-                credit_balance = user_row["credits"] or 0
-                stripe_customer_id = user_row["stripe_customer_id"]
-
-                # Read transactions
-                tx_rows = auth_conn.execute(
-                    """SELECT user_id, amount, source, reference_id, video_seconds, created_at
-                       FROM credit_transactions WHERE user_id = ?""",
-                    (user_id,)
-                ).fetchall()
-                # Convert to dicts while auth_conn is still open
-                tx_data = [
-                    {
-                        "user_id": tx["user_id"],
-                        "amount": tx["amount"],
-                        "source": tx["source"],
-                        "reference_id": tx["reference_id"],
-                        "video_seconds": tx["video_seconds"],
-                        "created_at": tx["created_at"],
-                    }
-                    for tx in tx_rows
-                ]
-        except Exception as e:
-            logger.warning(f"[UserDB] Could not read from auth.sqlite for migration of {user_id}: {e}")
-            # Initialize with zero balance
-            conn.execute(
-                "INSERT INTO credits (user_id, balance) VALUES (?, 0)",
-                (user_id,)
-            )
-            conn.commit()
-            conn.close()
-            return True
-
-        # Write to user.sqlite
         conn.execute(
-            "INSERT INTO credits (user_id, balance) VALUES (?, ?)",
-            (user_id, credit_balance)
+            "INSERT INTO credits (user_id, balance) VALUES (?, 0)",
+            (user_id,)
         )
-
-        for tx in tx_data:
-            conn.execute(
-                """INSERT OR IGNORE INTO credit_transactions
-                   (user_id, amount, source, reference_id, video_seconds, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (tx["user_id"], tx["amount"], tx["source"], tx["reference_id"],
-                 tx["video_seconds"], tx["created_at"])
-            )
-
-        if stripe_customer_id:
-            conn.execute(
-                "INSERT OR REPLACE INTO user_meta (key, value) VALUES ('stripe_customer_id', ?)",
-                (stripe_customer_id,)
-            )
-
         conn.commit()
-        logger.info(
-            f"[UserDB] Migrated data from auth.sqlite for {user_id}: "
-            f"balance={credit_balance}, transactions={len(tx_data)}, "
-            f"stripe={'yes' if stripe_customer_id else 'no'}"
-        )
-
     finally:
         conn.close()
 

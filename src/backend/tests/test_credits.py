@@ -170,37 +170,11 @@ class TestHasProcessedPayment:
         assert has_processed_payment("test-user-1", "pi_test123") is True
 
 
-class TestMigrationFromAuthDb:
-    """Test data migration from auth.sqlite to user.sqlite."""
+class TestNewUserInit:
+    """Test that new users get initialized with zero credits."""
 
-    def test_migrates_credits_and_transactions(self, isolated_user_db):
-        """Credits and transactions in auth.sqlite should migrate to user.sqlite."""
-        from app.services.auth_db import get_auth_db
-
-        # Seed auth.sqlite with credits data (simulating pre-migration state)
-        with get_auth_db() as db:
-            db.execute("UPDATE users SET credits = 42 WHERE user_id = 'test-user-1'")
-            db.execute(
-                """INSERT INTO credit_transactions (user_id, amount, source, reference_id)
-                   VALUES ('test-user-1', 42, 'admin_grant', 'seed-ref')"""
-            )
-            db.commit()
-
-        # Force re-initialization to trigger migration
-        from app.services import user_db
-        user_db._initialized_user_dbs.discard("test-user-1")
-        # Remove existing user.sqlite to force fresh migration
-        user_db_path = user_db._get_user_db_path("test-user-1")
-        if user_db_path.exists():
-            import os
-            os.remove(str(user_db_path))
-
-        # Now access should trigger migration
-        from app.services.user_db import get_credit_balance, get_credit_transactions
+    def test_new_user_starts_with_zero(self, isolated_user_db):
+        """A brand new user should have balance=0."""
+        from app.services.user_db import get_credit_balance
         balance = get_credit_balance("test-user-1")
-        assert balance["balance"] == 42
-
-        txns = get_credit_transactions("test-user-1")
-        assert len(txns) == 1
-        assert txns[0]["source"] == "admin_grant"
-        assert txns[0]["amount"] == 42
+        assert balance["balance"] == 0
