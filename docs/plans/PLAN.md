@@ -208,7 +208,7 @@ Restructure persistence to eliminate silent data loss, credit race conditions, a
 | 3 | T890 | [Export Transaction Atomicity](tasks/T890-export-transaction-atomicity.md) | TODO | 7 | 4 | T920 | Credit reservation pattern + combine split transactions |
 | 4 | T820 | [Guest Migration Data Loss](tasks/T820-guest-migration-data-loss.md) | TODO | 10 | 6 | T920 | Block login on failure, pending_migrations, credit transfer |
 | 5 | T910 | [R2 Restore Retry](tasks/T910-r2-restore-retry.md) | TODO | 8 | 3 | T920 | Distinguish 404 from transient error, retry with cooldown |
-| 6 | T900 | [FK Cascade Gaps](tasks/data-integrity/T900-fk-cascade-gaps.md) | TODO | 5 | 3 | — | 5 missing CASCADE/SET NULL constraints in profile DB |
+| 6 | T900 | [FK Cascade Gaps](tasks/data-integrity/T900-fk-cascade-gaps.md) | TESTING | 5 | 3 | — | 5 missing CASCADE/SET NULL constraints in profile DB |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
