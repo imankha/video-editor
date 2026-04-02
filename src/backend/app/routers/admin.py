@@ -22,9 +22,11 @@ from ..user_context import get_current_user_id
 from ..services.auth_db import (
     is_admin,
     get_all_users_for_admin,
+    get_user_by_id,
+)
+from ..services.user_db import (
     get_credit_stats_for_admin,
     grant_credits,
-    get_user_by_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -435,6 +437,6 @@ async def admin_set_credits(user_id: str, request: SetCreditsRequest):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    from ..services.auth_db import set_credits
+    from ..services.user_db import set_credits
     new_balance = set_credits(user_id, request.amount)
     return {"balance": new_balance}

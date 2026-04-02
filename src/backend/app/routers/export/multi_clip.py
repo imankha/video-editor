@@ -1240,7 +1240,7 @@ async def export_multi_clip(
     captured_profile_id = get_current_profile_id()
 
     # T530: Credit check — calculate total duration from clips_data
-    from ...services.auth_db import deduct_credits
+    from ...services.user_db import deduct_credits
     from ...highlight_transform import get_output_duration
 
     total_video_seconds = 0
@@ -1949,7 +1949,7 @@ async def export_multi_clip(
     except HTTPException:
         # T530: Refund credits on failure
         if credits_deducted > 0:
-            from ...services.auth_db import refund_credits
+            from ...services.user_db import refund_credits
             refund_credits(captured_user_id, credits_deducted, export_id, total_video_seconds)
             logger.info(f"[Multi-Clip Export] Refunded {credits_deducted} credits to {captured_user_id}")
         import time
@@ -1966,7 +1966,7 @@ async def export_multi_clip(
     except Exception as e:
         # T530: Refund credits on failure
         if credits_deducted > 0:
-            from ...services.auth_db import refund_credits
+            from ...services.user_db import refund_credits
             refund_credits(captured_user_id, credits_deducted, export_id, total_video_seconds)
             logger.info(f"[Multi-Clip Export] Refunded {credits_deducted} credits to {captured_user_id}")
         import traceback

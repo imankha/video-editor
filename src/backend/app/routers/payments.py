@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ..user_context import get_current_user_id
-from ..services.auth_db import (
+from ..services.user_db import (
     get_stripe_customer_id,
     set_stripe_customer_id,
     has_processed_payment,
@@ -185,8 +185,8 @@ async def confirm_payment_intent(request: ConfirmIntentRequest):
     pi_id = request.payment_intent_id
 
     # Idempotency: already processed?
-    if has_processed_payment(pi_id):
-        from ..services.auth_db import get_credit_balance, get_credit_transactions
+    if has_processed_payment(user_id, pi_id):
+        from ..services.user_db import get_credit_balance, get_credit_transactions
         balance = get_credit_balance(user_id)
         txns = get_credit_transactions(user_id, limit=50)
         granted = 0
@@ -271,7 +271,7 @@ async def stripe_webhook(request: Request):
             return {"status": "error", "message": "Missing metadata"}
 
         # Idempotency: don't double-grant
-        if has_processed_payment(session_id):
+        if has_processed_payment(user_id, session_id):
             logger.info(f"[Payments] Duplicate webhook for session {session_id}, skipping")
             return {"status": "already_processed"}
 
@@ -295,7 +295,7 @@ async def stripe_webhook(request: Request):
             logger.error(f"[Payments] Webhook PI missing metadata: user_id={user_id}, credits={credits}")
             return {"status": "error", "message": "Missing metadata"}
 
-        if has_processed_payment(pi_id):
+        if has_processed_payment(user_id, pi_id):
             logger.info(f"[Payments] Duplicate webhook for PI {pi_id}, skipping")
             return {"status": "already_processed"}
 
@@ -338,8 +338,8 @@ async def verify_session(request: Request):
     user_id = get_current_user_id()
 
     # Already processed (by webhook or previous verify call)
-    if has_processed_payment(session_id):
-        from ..services.auth_db import get_credit_balance, get_credit_transactions
+    if has_processed_payment(user_id, session_id):
+        from ..services.user_db import get_credit_balance, get_credit_transactions
         balance = get_credit_balance(user_id)
         # Look up how many credits were granted for this session
         txns = get_credit_transactions(user_id, limit=50)

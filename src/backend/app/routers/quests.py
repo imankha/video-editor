@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException
 
 from ..user_context import get_current_user_id
 from ..database import get_db_connection
-from ..services.auth_db import grant_credits, get_credit_transactions
+from ..services.user_db import grant_credits, get_credit_transactions
 
 logger = logging.getLogger(__name__)
 
@@ -265,7 +265,7 @@ async def claim_reward(quest_id: str):
 
     # Idempotent: already claimed → return current balance
     if _has_claimed_reward(user_id, quest_id):
-        from ..services.auth_db import get_credit_balance
+        from ..services.user_db import get_credit_balance
         balance = get_credit_balance(user_id)
         return {"credits_granted": 0, "new_balance": balance["balance"], "already_claimed": True}
 

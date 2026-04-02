@@ -34,7 +34,9 @@ from ..database import (
     init_request_context,
     clear_request_context,
     sync_db_to_cloud_if_writes,
+    sync_user_db_to_cloud_if_writes,
     get_request_has_writes,
+    get_request_has_user_db_writes,
 )
 from ..profile_context import set_current_profile_id
 from ..session_init import user_session_init
@@ -155,10 +157,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
             # After request, sync if writes occurred
             had_writes = get_request_has_writes()
-            if had_writes:
+            had_user_db_writes = get_request_has_user_db_writes()
+            if had_writes or had_user_db_writes:
                 sync_start = time.perf_counter()
                 try:
                     sync_success = sync_db_to_cloud_if_writes()
+                    user_sync_success = sync_user_db_to_cloud_if_writes()
+                    sync_success = sync_success and user_sync_success
                 except Exception as sync_error:
                     logger.error(f"Sync to R2 raised exception: {sync_error}")
                     sync_success = False
@@ -181,10 +186,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             # On exception, still try to sync (changes may have been committed)
             try:
                 had_writes = get_request_has_writes()
-                if had_writes:
+                had_user_db_writes = get_request_has_user_db_writes()
+                if had_writes or had_user_db_writes:
                     sync_start = time.perf_counter()
                     try:
                         sync_success = sync_db_to_cloud_if_writes()
+                        user_sync_success = sync_user_db_to_cloud_if_writes()
+                        sync_success = sync_success and user_sync_success
                     except Exception as sync_error:
                         logger.error(f"Sync to R2 raised exception after request error: {sync_error}")
                         sync_success = False

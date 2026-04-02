@@ -596,7 +596,7 @@ async def _run_local_framing_export(
 
         # Refund credits on failure
         if credits_deducted > 0:
-            from ...services.auth_db import refund_credits
+            from ...services.user_db import refund_credits
             refund_credits(captured_user_id, credits_deducted, export_id, video_seconds)
             logger.info(f"[Render Background] Refunded {credits_deducted} credits to {captured_user_id}")
 
@@ -779,7 +779,7 @@ async def render_project(request: RenderRequest, http_request: Request):
 
     # T530: Credit check — deduct before GPU dispatch, refund on failure
     import math
-    from ...services.auth_db import deduct_credits
+    from ...services.user_db import deduct_credits
 
     source_duration = clip['raw_duration'] or 0
     segments_raw = None
@@ -1173,7 +1173,7 @@ async def render_project(request: RenderRequest, http_request: Request):
 
         # T530: Refund credits on failure
         if credits_deducted > 0:
-            from ...services.auth_db import refund_credits
+            from ...services.user_db import refund_credits
             refund_credits(captured_user_id, credits_deducted, export_id, video_seconds)
             logger.info(f"[Render] Refunded {credits_deducted} credits to {captured_user_id}")
 
@@ -1207,7 +1207,7 @@ async def render_project(request: RenderRequest, http_request: Request):
 
         # T530: Refund credits on failure
         if credits_deducted > 0:
-            from ...services.auth_db import refund_credits
+            from ...services.user_db import refund_credits
             refund_credits(captured_user_id, credits_deducted, export_id, video_seconds)
             logger.info(f"[Render] Refunded {credits_deducted} credits to {captured_user_id}")
 

@@ -26,8 +26,15 @@ from app.database import (
     init_request_context,
     get_request_has_writes,
     clear_request_context,
-    _request_has_writes,
+    _request_context,
 )
+
+
+def _mark_context_has_writes():
+    """Mark that writes occurred in the current request context."""
+    ctx = _request_context.get()
+    if ctx is not None:
+        ctx['has_writes'] = True
 
 
 class TestRequestWriteTrackingIsolation:
@@ -40,16 +47,16 @@ class TestRequestWriteTrackingIsolation:
         clear_request_context()
 
     def test_mark_write_sets_true(self):
-        """Setting _request_has_writes should be readable."""
+        """Marking writes in the context dict should be readable."""
         init_request_context()
-        _request_has_writes.set(True)
+        _mark_context_has_writes()
         assert get_request_has_writes() is True
         clear_request_context()
 
     def test_clear_resets(self):
         """clear_request_context should reset writes to False."""
         init_request_context()
-        _request_has_writes.set(True)
+        _mark_context_has_writes()
         clear_request_context()
         assert get_request_has_writes() is False
 
@@ -66,7 +73,7 @@ class TestRequestWriteTrackingIsolation:
             """Simulates the export request that writes to DB."""
             init_request_context()
             # Export writes to DB
-            _request_has_writes.set(True)
+            _mark_context_has_writes()
             # Yield control (simulates await during export processing)
             await asyncio.sleep(0.01)
             # After yielding, check that our write flag is still True
@@ -120,20 +127,22 @@ class TestLocalVersionInitialization:
         )
 
         test_user = "test_version_init_user"
+        test_profile = "test_profile"
+        cache_key = (test_user, test_profile)
 
         # Clear any cached version
         with _db_version_lock:
-            _user_db_versions.pop(test_user, None)
+            _user_db_versions.pop(cache_key, None)
 
         # Simulate what ensure_database does for fresh user when R2 returns None
-        local_version = get_local_db_version(test_user)
+        local_version = get_local_db_version(test_user, test_profile)
         if local_version is None:
             # This is the fix: set version 0 instead of leaving as None
-            set_local_db_version(test_user, 0)
+            set_local_db_version(test_user, test_profile, 0)
 
         # Verify version is now 0, not None
-        assert get_local_db_version(test_user) == 0
+        assert get_local_db_version(test_user, test_profile) == 0
 
         # Clean up
         with _db_version_lock:
-            _user_db_versions.pop(test_user, None)
+            _user_db_versions.pop(cache_key, None)

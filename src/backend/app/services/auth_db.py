@@ -110,6 +110,7 @@ def init_auth_db():
         # T530: Credit system — add columns to users table (idempotent)
         for col, col_def in [
             ("credits", "INTEGER DEFAULT 0"),
+            ("credit_summary", "INTEGER DEFAULT 0"),
         ]:
             try:
                 db.execute(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
@@ -260,8 +261,8 @@ def create_user(
     """
     with get_auth_db() as db:
         db.execute(
-            """INSERT INTO users (user_id, email, google_id, verified_at, credits)
-               VALUES (?, ?, ?, ?, 0)""",
+            """INSERT INTO users (user_id, email, google_id, verified_at)
+               VALUES (?, ?, ?, ?)""",
             (user_id, email, google_id, verified_at),
         )
         db.commit()
@@ -269,7 +270,7 @@ def create_user(
     # Sync to R2 immediately — new user registration is critical
     sync_auth_db_to_r2()
 
-    logger.info(f"[AuthDB] Created user: {user_id} email={email} credits=0")
+    logger.info(f"[AuthDB] Created user: {user_id} email={email}")
     return {"user_id": user_id, "email": email, "google_id": google_id}
 
 
@@ -442,164 +443,12 @@ def create_guest_user() -> str:
     user_id = generate_user_id()
     with get_auth_db() as db:
         db.execute(
-            "INSERT INTO users (user_id, credits) VALUES (?, 0)",
+            "INSERT INTO users (user_id) VALUES (?)",
             (user_id,),
         )
         db.commit()
-    logger.info(f"[AuthDB] Created guest user: {user_id} credits=0")
+    logger.info(f"[AuthDB] Created guest user: {user_id}")
     return user_id
-
-
-# ---------------------------------------------------------------------------
-# Credit operations (T530)
-# ---------------------------------------------------------------------------
-
-def get_credit_balance(user_id: str) -> dict:
-    """Get credit balance for a user."""
-    with get_auth_db() as db:
-        row = db.execute(
-            "SELECT credits FROM users WHERE user_id = ?",
-            (user_id,)
-        ).fetchone()
-        if not row:
-            return {"balance": 0}
-        return {"balance": row["credits"]}
-
-
-def grant_credits(user_id: str, amount: int, source: str, reference_id: Optional[str] = None) -> int:
-    """Grant credits to a user. Returns new balance. Syncs to R2."""
-    with get_auth_db() as db:
-        db.execute(
-            "UPDATE users SET credits = credits + ? WHERE user_id = ?",
-            (amount, user_id),
-        )
-        db.execute(
-            """INSERT INTO credit_transactions (user_id, amount, source, reference_id)
-               VALUES (?, ?, ?, ?)""",
-            (user_id, amount, source, reference_id),
-        )
-        db.commit()
-        row = db.execute("SELECT credits FROM users WHERE user_id = ?", (user_id,)).fetchone()
-        new_balance = row["credits"]
-    sync_auth_db_to_r2()
-    logger.info(f"[AuthDB] Granted {amount} credits to {user_id} (source={source}), balance={new_balance}")
-    return new_balance
-
-
-def deduct_credits(
-    user_id: str,
-    amount: int,
-    source: str,
-    reference_id: Optional[str] = None,
-    video_seconds: Optional[float] = None,
-) -> dict:
-    """
-    Deduct credits atomically. Returns {success, balance, required}.
-    Reads + writes in a single connection for atomicity.
-    """
-    with get_auth_db() as db:
-        row = db.execute("SELECT credits FROM users WHERE user_id = ?", (user_id,)).fetchone()
-        if not row:
-            return {"success": False, "balance": 0, "required": amount}
-        current = row["credits"]
-        if current < amount:
-            return {"success": False, "balance": current, "required": amount}
-        db.execute(
-            "UPDATE users SET credits = credits - ? WHERE user_id = ?",
-            (amount, user_id),
-        )
-        db.execute(
-            """INSERT INTO credit_transactions (user_id, amount, source, reference_id, video_seconds)
-               VALUES (?, ?, ?, ?, ?)""",
-            (user_id, -amount, source, reference_id, video_seconds),
-        )
-        db.commit()
-        new_balance = current - amount
-    logger.info(f"[AuthDB] Deducted {amount} credits from {user_id} (source={source}), balance={new_balance}")
-    return {"success": True, "balance": new_balance, "required": amount}
-
-
-
-def refund_credits(
-    user_id: str,
-    amount: int,
-    reference_id: str,
-    video_seconds: Optional[float] = None,
-) -> int:
-    """Refund credits for a failed export. Returns new balance."""
-    with get_auth_db() as db:
-        db.execute(
-            "UPDATE users SET credits = credits + ? WHERE user_id = ?",
-            (amount, user_id),
-        )
-        db.execute(
-            """INSERT INTO credit_transactions (user_id, amount, source, reference_id, video_seconds)
-               VALUES (?, ?, 'framing_refund', ?, ?)""",
-            (user_id, amount, reference_id, video_seconds),
-        )
-        db.commit()
-        row = db.execute("SELECT credits FROM users WHERE user_id = ?", (user_id,)).fetchone()
-        new_balance = row["credits"]
-    sync_auth_db_to_r2()
-    logger.info(f"[AuthDB] Refunded {amount} credits to {user_id} (job={reference_id}), balance={new_balance}")
-    return new_balance
-
-
-def set_credits(user_id: str, amount: int) -> int:
-    """Set a user's credit balance to an exact value. Records a transaction. Syncs to R2."""
-    with get_auth_db() as db:
-        row = db.execute("SELECT credits FROM users WHERE user_id = ?", (user_id,)).fetchone()
-        old_balance = row["credits"] if row else 0
-        delta = amount - old_balance
-        db.execute(
-            "UPDATE users SET credits = ? WHERE user_id = ?",
-            (amount, user_id),
-        )
-        db.execute(
-            """INSERT INTO credit_transactions (user_id, amount, source, reference_id)
-               VALUES (?, ?, 'admin_set', ?)""",
-            (user_id, delta, f"set_to_{amount}"),
-        )
-        db.commit()
-    sync_auth_db_to_r2()
-    logger.info(f"[AuthDB] Set credits for {user_id} to {amount} (was {old_balance})")
-    return amount
-
-
-# ---------------------------------------------------------------------------
-# Stripe customer management (T525)
-# ---------------------------------------------------------------------------
-
-
-def get_stripe_customer_id(user_id: str) -> Optional[str]:
-    """Get stripe_customer_id for a user. Returns None if not set."""
-    with get_auth_db() as db:
-        row = db.execute(
-            "SELECT stripe_customer_id FROM users WHERE user_id = ?", (user_id,)
-        ).fetchone()
-        return row["stripe_customer_id"] if row else None
-
-
-def set_stripe_customer_id(user_id: str, stripe_customer_id: str):
-    """Save stripe_customer_id to users table. Syncs to R2."""
-    with get_auth_db() as db:
-        db.execute(
-            "UPDATE users SET stripe_customer_id = ? WHERE user_id = ?",
-            (stripe_customer_id, user_id),
-        )
-        db.commit()
-    sync_auth_db_to_r2()
-    logger.info(f"[AuthDB] Set stripe_customer_id for {user_id}")
-
-
-def has_processed_payment(reference_id: str) -> bool:
-    """Check if a payment has already been processed (idempotency guard)."""
-    with get_auth_db() as db:
-        row = db.execute(
-            "SELECT 1 FROM credit_transactions WHERE reference_id = ? AND source = 'stripe_purchase'",
-            (reference_id,),
-        ).fetchone()
-        return row is not None
 
 
 # ---------------------------------------------------------------------------
@@ -623,76 +472,8 @@ def get_all_users_for_admin() -> list:
     """Return all users for the admin panel. Returns base user data only (no per-profile stats)."""
     with get_auth_db() as db:
         rows = db.execute(
-            """SELECT user_id, email, credits, created_at, last_seen_at
+            """SELECT user_id, email, credit_summary as credits, created_at, last_seen_at
                FROM users
                ORDER BY created_at DESC"""
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-
-def get_credit_stats_for_admin() -> dict:
-    """Return per-user credit stats from credit_transactions for the admin panel.
-
-    Returns dict keyed by user_id with:
-      credits_spent: total credits consumed (abs of negative non-refund amounts)
-      credits_purchased: total credits from stripe purchases
-      purchase_credit_amounts: list of individual stripe purchase credit amounts (for $ mapping)
-    """
-    with get_auth_db() as db:
-        # Credits spent: sum of negative amounts excluding refunds
-        spent_rows = db.execute(
-            """SELECT user_id, SUM(ABS(amount)) as total_spent
-               FROM credit_transactions
-               WHERE amount < 0 AND source != 'admin_set'
-               GROUP BY user_id"""
-        ).fetchall()
-
-        # Credits purchased via Stripe
-        purchased_rows = db.execute(
-            """SELECT user_id, SUM(amount) as total_purchased
-               FROM credit_transactions
-               WHERE source = 'stripe_purchase' AND amount > 0
-               GROUP BY user_id"""
-        ).fetchall()
-
-        # Individual purchase amounts (for dollar mapping)
-        purchase_detail_rows = db.execute(
-            """SELECT user_id, amount
-               FROM credit_transactions
-               WHERE source = 'stripe_purchase' AND amount > 0"""
-        ).fetchall()
-
-        stats: dict = {}
-        for row in spent_rows:
-            uid = row["user_id"]
-            if uid not in stats:
-                stats[uid] = {"credits_spent": 0, "credits_purchased": 0, "purchase_credit_amounts": []}
-            stats[uid]["credits_spent"] = row["total_spent"]
-
-        for row in purchased_rows:
-            uid = row["user_id"]
-            if uid not in stats:
-                stats[uid] = {"credits_spent": 0, "credits_purchased": 0, "purchase_credit_amounts": []}
-            stats[uid]["credits_purchased"] = row["total_purchased"]
-
-        for row in purchase_detail_rows:
-            uid = row["user_id"]
-            if uid not in stats:
-                stats[uid] = {"credits_spent": 0, "credits_purchased": 0, "purchase_credit_amounts": []}
-            stats[uid]["purchase_credit_amounts"].append(row["amount"])
-
-        return stats
-
-
-def get_credit_transactions(user_id: str, limit: int = 50) -> list:
-    """Get recent credit transactions for a user."""
-    with get_auth_db() as db:
-        rows = db.execute(
-            """SELECT id, amount, source, reference_id, video_seconds, created_at
-               FROM credit_transactions
-               WHERE user_id = ?
-               ORDER BY created_at DESC
-               LIMIT ?""",
-            (user_id, limit),
         ).fetchall()
         return [dict(r) for r in rows]

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from ..user_context import get_current_user_id
-from ..services.auth_db import (
+from ..services.user_db import (
     get_credit_balance,
     grant_credits,
     get_credit_transactions,

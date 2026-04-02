@@ -169,7 +169,7 @@ async def process_export_job(job_id: str):
             credits_deducted = config.get("credits_deducted", 0)
             refund_user_id = config.get("credit_user_id")
             if credits_deducted > 0 and refund_user_id:
-                from .auth_db import refund_credits
+                from .user_db import refund_credits
                 refund_credits(
                     refund_user_id, credits_deducted, job_id,
                     config.get("video_seconds"),

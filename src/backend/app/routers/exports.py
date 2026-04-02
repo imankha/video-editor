@@ -529,7 +529,7 @@ async def start_framing_export(
         raise HTTPException(status_code=500, detail=f"Failed to stage video: {e}")
 
     # T530: Credit check — deduct before GPU dispatch, refund on failure
-    from ..services.auth_db import deduct_credits
+    from ..services.user_db import deduct_credits
     from ..services.ffmpeg_service import get_video_duration
 
     user_id = get_current_user_id()

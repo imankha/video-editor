@@ -704,6 +704,123 @@ def sync_database_to_r2(user_id: str, local_db_path: Path) -> bool:
     return upload_to_r2(user_id, "database.sqlite", local_db_path)
 
 
+# ---------------------------------------------------------------------------
+# User.sqlite R2 sync (T920)
+# ---------------------------------------------------------------------------
+
+def _user_db_r2_key(user_id: str) -> str:
+    """R2 object key for a user's user.sqlite."""
+    return f"{APP_ENV}/users/{user_id}/user.sqlite"
+
+
+def get_user_db_version_from_r2(user_id: str, client=None) -> Optional[int]:
+    """Get version number of user.sqlite in R2. Same pattern as get_db_version_from_r2."""
+    if client is None:
+        client = get_r2_client()
+    if not client:
+        return None
+
+    key = _user_db_r2_key(user_id)
+    try:
+        from .utils.retry import retry_r2_call, TIER_2
+        response = retry_r2_call(
+            client.head_object, Bucket=R2_BUCKET, Key=key,
+            operation=f"user_db_version {user_id}", **TIER_2,
+        )
+        metadata = response.get("Metadata", {})
+        version_str = metadata.get("db-version")
+        if version_str:
+            return int(version_str)
+        return 0
+    except client.exceptions.ClientError as e:
+        if e.response['Error']['Code'] == '404':
+            return None
+        logger.error(f"Failed to get user.sqlite version from R2: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Failed to get user.sqlite version from R2: {e}")
+        return None
+
+
+def sync_user_db_from_r2_if_newer(
+    user_id: str,
+    local_db_path: Path,
+    local_version: Optional[int]
+) -> Tuple[bool, Optional[int]]:
+    """Download user.sqlite from R2 only if R2 version is newer."""
+    if not R2_ENABLED:
+        return False, local_version
+
+    r2_version = get_user_db_version_from_r2(user_id)
+
+    if r2_version is None:
+        return False, local_version
+
+    if local_version is not None and local_version >= r2_version:
+        return False, local_version
+
+    # Download directly (not profile-scoped)
+    client = get_r2_client()
+    if not client:
+        return False, local_version
+
+    key = _user_db_r2_key(user_id)
+    try:
+        from .utils.retry import retry_r2_call, TIER_1
+        local_db_path.parent.mkdir(parents=True, exist_ok=True)
+        retry_r2_call(
+            client.download_file, R2_BUCKET, key, str(local_db_path),
+            operation=f"user_db_download {user_id}", **TIER_1,
+        )
+        logger.info(f"Downloaded user.sqlite from R2: {user_id} version {r2_version}")
+        return True, r2_version
+    except Exception as e:
+        logger.error(f"Failed to download user.sqlite from R2: {e}")
+        return False, local_version
+
+
+def sync_user_db_to_r2_with_version(
+    user_id: str,
+    local_db_path: Path,
+    current_version: Optional[int]
+) -> Tuple[bool, Optional[int]]:
+    """Upload user.sqlite to R2 with version metadata. Same pattern as profile DB."""
+    if not R2_ENABLED:
+        return False, None
+
+    if not local_db_path.exists():
+        return False, None
+
+    client = get_r2_sync_client()
+    if not client:
+        return False, None
+
+    r2_version = get_user_db_version_from_r2(user_id, client=client)
+
+    if r2_version is not None and current_version is not None and r2_version > current_version:
+        logger.warning(
+            f"user.sqlite sync conflict for {user_id}: loaded version {current_version}, "
+            f"R2 has version {r2_version}. Using last-write-wins."
+        )
+
+    new_version = (max(r2_version or 0, current_version or 0)) + 1
+
+    key = _user_db_r2_key(user_id)
+    try:
+        from .utils.retry import retry_r2_call, TIER_1
+        retry_r2_call(
+            client.upload_file,
+            str(local_db_path), R2_BUCKET, key,
+            ExtraArgs={"Metadata": {"db-version": str(new_version)}},
+            operation=f"user_db_sync_upload {user_id}", **TIER_1,
+        )
+        logger.debug(f"Uploaded user.sqlite to R2: {user_id} version {new_version}")
+        return True, new_version
+    except Exception as e:
+        logger.error(f"Failed to upload user.sqlite to R2: {e}")
+        return False, None
+
+
 def ensure_file_from_r2(user_id: str, relative_path: str, local_path: Path) -> bool:
     """
     Ensure a file exists locally, downloading from R2 if needed.

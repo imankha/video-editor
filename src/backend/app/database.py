@@ -145,9 +145,10 @@ class TrackedConnection:
     during the request, and we sync once at the end, not after every write.
     """
 
-    def __init__(self, conn: sqlite3.Connection):
+    def __init__(self, conn: sqlite3.Connection, db_type: str = 'profile'):
         self._conn = conn
         self._has_writes = False
+        self._db_type = db_type
 
     def _mark_write(self):
         """Mark that a write operation occurred."""
@@ -158,6 +159,8 @@ class TrackedConnection:
         ctx = _request_context.get()
         if ctx is not None:
             ctx['has_writes'] = True
+            if self._db_type == 'user':
+                ctx['has_user_db_writes'] = True
 
     @property
     def has_writes(self) -> bool:
@@ -1213,4 +1216,70 @@ def sync_db_to_cloud_if_writes() -> bool:
 
     if get_request_has_writes():
         return sync_db_to_cloud()
+    return True
+
+
+# ---------------------------------------------------------------------------
+# User.sqlite version tracking and sync (T920)
+# ---------------------------------------------------------------------------
+
+_user_sqlite_versions: dict = {}  # user_id -> version number
+_user_sqlite_version_lock = threading.Lock()
+
+
+def get_local_user_db_version(user_id: str) -> Optional[int]:
+    """Get locally cached version for a user's user.sqlite."""
+    with _user_sqlite_version_lock:
+        return _user_sqlite_versions.get(user_id)
+
+
+def set_local_user_db_version(user_id: str, version: Optional[int]) -> None:
+    """Set locally cached version for a user's user.sqlite."""
+    with _user_sqlite_version_lock:
+        if version is None:
+            _user_sqlite_versions.pop(user_id, None)
+        else:
+            _user_sqlite_versions[user_id] = version
+
+
+def get_request_has_user_db_writes() -> bool:
+    """Check if any user.sqlite writes occurred during this request."""
+    ctx = _request_context.get()
+    if ctx is None:
+        return False
+    return ctx.get('has_user_db_writes', False)
+
+
+def sync_user_db_to_cloud_if_writes() -> bool:
+    """Sync user.sqlite to R2 if writes occurred during this request.
+
+    Called by middleware after syncing the profile DB.
+    Returns True if sync succeeded (or no writes/R2 disabled), False on failure.
+    """
+    if not R2_ENABLED:
+        return True
+
+    if not get_request_has_user_db_writes():
+        return True
+
+    user_id = _request_user_id.get()
+    if not user_id:
+        return True
+
+    db_path = USER_DATA_BASE / user_id / "user.sqlite"
+    if not db_path.exists():
+        return True
+
+    from .storage import sync_user_db_to_r2_with_version
+
+    local_version = get_local_user_db_version(user_id)
+    success, new_version = sync_user_db_to_r2_with_version(user_id, db_path, local_version)
+    if success and new_version is not None:
+        set_local_user_db_version(user_id, new_version)
+        logger.debug(f"user.sqlite synced to R2 for user: {user_id}, version: {new_version}")
+        return True
+    elif not success:
+        logger.warning(f"Failed to sync user.sqlite to R2 for user: {user_id}")
+        return False
+
     return True

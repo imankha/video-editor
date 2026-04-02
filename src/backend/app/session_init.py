@@ -101,7 +101,11 @@ def user_session_init(user_id: str) -> dict:
     from .database import ensure_database
     ensure_database()
 
-    # 4. Cleanup tasks (moved from ensure_database lines 922-938)
+    # 4. Ensure user-level database exists (credits, billing, recovery)
+    from .services.user_db import ensure_user_database
+    ensure_user_database(user_id)
+
+    # 5. Cleanup tasks (moved from ensure_database lines 922-938)
     try:
         from .services.project_archive import cleanup_stale_restored_projects
         archived_count = cleanup_stale_restored_projects(user_id)
@@ -116,7 +120,7 @@ def user_session_init(user_id: str) -> dict:
     except Exception as e:
         logger.error(f"T243: Failed to cleanup database bloat: {e}")
 
-    # 5. Cache the result
+    # 6. Cache the result
     result = {
         "profile_id": profile_id,
         "is_new_user": is_new_user,
