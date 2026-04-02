@@ -185,9 +185,17 @@ export function ClipScrubRegion({
       setDragging(null);
       // Resume playback if video was playing before the drag started
       if (wasPlayingRef.current) {
-        const video = videoRef?.current;
-        if (video) video.play();
         wasPlayingRef.current = false;
+        const video = videoRef?.current;
+        if (video) {
+          // Wait for any pending seek to finish before resuming
+          const resume = () => video.play();
+          if (video.seeking) {
+            video.addEventListener('seeked', resume, { once: true });
+          } else {
+            video.play();
+          }
+        }
       }
     }
   }, [videoRef]);
