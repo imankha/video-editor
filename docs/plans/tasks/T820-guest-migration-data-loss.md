@@ -1,6 +1,6 @@
 # T820: Guest-to-Email Migration Silently Fails, Orphaning User Data
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 10
 **Complexity:** 6
 **Created:** 2026-04-01
