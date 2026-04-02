@@ -528,8 +528,8 @@ async def start_framing_export(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to stage video: {e}")
 
-    # T530: Credit check — deduct before GPU dispatch, refund on failure
-    from ..services.user_db import deduct_credits
+    # T890: Credit reservation — reserve before job creation, confirm after
+    from ..services.user_db import reserve_credits, confirm_reservation, release_reservation
     from ..services.ffmpeg_service import get_video_duration
 
     user_id = get_current_user_id()
@@ -537,9 +537,10 @@ async def start_framing_export(
     credits_required = math.ceil(video_seconds)
     credits_deducted = 0
 
+    # Step 1: Reserve credits (atomic in user.sqlite)
     if credits_required > 0:
-        result = deduct_credits(
-            user_id, credits_required, "framing_usage", job_id, video_seconds
+        result = reserve_credits(
+            user_id, credits_required, job_id, video_seconds
         )
         if not result["success"]:
             staged_video_path.unlink(missing_ok=True)
@@ -567,15 +568,25 @@ async def start_framing_export(
         "credit_user_id": user_id,
     }
 
-    # Create job in database
+    # Step 2: Create job in database (atomic in profile database.sqlite)
     input_data = json.dumps(config)
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO export_jobs (id, project_id, type, status, input_data)
-            VALUES (?, ?, 'framing', 'pending', ?)
-        """, (job_id, project_id, input_data))
-        conn.commit()
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO export_jobs (id, project_id, type, status, input_data)
+                VALUES (?, ?, 'framing', 'pending', ?)
+            """, (job_id, project_id, input_data))
+            conn.commit()
+
+        # Step 3: Confirm reservation (atomic in user.sqlite)
+        if credits_deducted > 0:
+            confirm_reservation(user_id, job_id)
+    except Exception:
+        # Job creation failed — release the reservation
+        if credits_deducted > 0:
+            release_reservation(user_id, job_id)
+        raise
 
     logger.info(f"[Exports] Created framing job {job_id} for project {project_id}")
 

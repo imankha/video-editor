@@ -1183,30 +1183,20 @@ async def export_multi_clip(
 
     logger.info(f"[Multi-Clip Export] Starting export {export_id}")
 
-    # Regress status and create export_jobs record
+    # T890: Regress status + create export_jobs in single atomic transaction
     if project_id:
-        # Clear both video IDs FIRST in its own transaction so it always happens
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("UPDATE projects SET working_video_id = NULL, final_video_id = NULL WHERE id = ?", (project_id,))
-                conn.commit()
-            logger.info(f"[Multi-Clip Export] Cleared working_video_id and final_video_id for project {project_id} (status regression)")
-        except Exception as e:
-            logger.warning(f"[Multi-Clip Export] Failed to clear video IDs: {e}")
-
-        # Create export_jobs record (separate transaction)
-        try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO export_jobs (id, project_id, type, status, input_data)
                     VALUES (?, ?, 'framing', 'processing', '{}')
                 """, (export_id, project_id))
                 conn.commit()
-            logger.info(f"[Multi-Clip Export] Created export_jobs record: {export_id}")
+            logger.info(f"[Multi-Clip Export] Regressed project {project_id} and created export_jobs record: {export_id}")
         except Exception as e:
-            logger.warning(f"[Multi-Clip Export] Failed to create export_jobs record: {e}")
+            logger.warning(f"[Multi-Clip Export] Failed to regress status / create export_jobs: {e}")
 
     # Parse form data to get video files
     form = await request.form()
@@ -1239,8 +1229,8 @@ async def export_multi_clip(
     captured_user_id = get_current_user_id()
     captured_profile_id = get_current_profile_id()
 
-    # T530: Credit check — calculate total duration from clips_data
-    from ...services.user_db import deduct_credits
+    # T890: Credit reservation — calculate total duration from clips_data
+    from ...services.user_db import reserve_credits, confirm_reservation, release_reservation
     from ...highlight_transform import get_output_duration
 
     total_video_seconds = 0
@@ -1252,9 +1242,10 @@ async def export_multi_clip(
     credits_required = math.ceil(total_video_seconds) if total_video_seconds > 0 else 0
     credits_deducted = 0
 
+    # T890: Reserve credits (atomic in user.sqlite), confirm after export_jobs created
     if credits_required > 0:
-        credit_result = deduct_credits(
-            captured_user_id, credits_required, "framing_usage", export_id, total_video_seconds
+        credit_result = reserve_credits(
+            captured_user_id, credits_required, export_id, total_video_seconds
         )
         if not credit_result["success"]:
             raise HTTPException(
@@ -1266,6 +1257,13 @@ async def export_multi_clip(
                     "video_seconds": total_video_seconds,
                 },
             )
+        # Reservation created — export_jobs already created above in atomic transaction
+        # Confirm the reservation (moves from reserved to deducted in credit_transactions)
+        try:
+            confirm_reservation(captured_user_id, export_id)
+        except Exception:
+            release_reservation(captured_user_id, export_id)
+            raise
         credits_deducted = credits_required
 
     # DB-resolved mode: when project_id is provided and no video files uploaded,
