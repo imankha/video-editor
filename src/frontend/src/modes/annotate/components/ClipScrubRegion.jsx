@@ -123,6 +123,11 @@ export function ClipScrubRegion({
   const handlePointerDown = useCallback((handle, e) => {
     e.preventDefault();
     e.stopPropagation();
+    // Pause video when user starts dragging (prevents playback fighting with drag preview)
+    const video = videoRef?.current;
+    if (video && !video.paused) {
+      video.pause();
+    }
     // Stop any running preview when user starts dragging
     if (isPreviewing) {
       stopPreview();
