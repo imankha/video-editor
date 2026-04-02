@@ -1,6 +1,6 @@
 # T890: Export Transaction Atomicity
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-04-02
