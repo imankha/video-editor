@@ -4,7 +4,7 @@
 **Impact:** 10
 **Complexity:** 6
 **Created:** 2026-04-01
-**Updated:** 2026-04-01
+**Updated:** 2026-04-02
 
 ## Problem
 
@@ -39,14 +39,27 @@ except R2ReadError:
 ```
 The migration is "best-effort" by design (line 264: "logs errors but never blocks login"). But losing all user data silently is worse than blocking login.
 
-### 2. No retry or deferred migration
+### 2. Broad except Exception swallows all errors (auth.py:323-324)
+```python
+except Exception as e:
+    logger.error(f"[Auth] Migration failed (login continues): {e}")
+```
+DB corruption, FK constraints, R2 upload failures — all silently ignored. Login proceeds, data orphaned.
+
+### 3. No retry or deferred migration
 Once the migration is skipped, there's no record that it needs to happen later. The guest user_id is never stored on the email account for future retry.
 
-### 3. Local guest data cleaned up independently
-The local `user_data/{guest_id}/` directory is cleaned up by session expiry/lifecycle, regardless of whether migration succeeded. Once the local copy is gone and the guest session expires, the data is only in R2 — but no code path accesses it.
+### 4. Guest credits orphaned during cross-device recovery
+Credits live in `auth.sqlite` keyed by `user_id`. When guest migrates to an existing account (cross-device recovery), `_migrate_guest_profile()` merges games/achievements but **never transfers credits**. Guest's credits are permanently orphaned under the old user_id.
 
-### 4. No user-facing warning
-The user sees a successful login with no indication that their data wasn't migrated. They discover the loss only when they look for their projects.
+### 5. R2 upload failure after successful local merge
+If `_merge_guest_into_profile()` succeeds locally but `upload_to_r2()` fails (line 310-316), the merged DB exists only on this server. On next cold start or different device, R2 has the old version — merge is lost.
+
+### 6. Target profile creation can mask R2 failure
+If the target account's DB doesn't exist locally (line 303-305), `user_session_init()` creates a fresh empty profile. If R2 was unreachable (which is why migration failed), this creates a new empty profile instead of loading the recovered account's actual data.
+
+### 7. Local guest data cleaned up independently
+The local `user_data/{guest_id}/` directory is cleaned up by session expiry/lifecycle, regardless of whether migration succeeded. Once the local copy is gone and the guest session expires, the data is only in R2 — but no code path accesses it.
 
 ## Solution
 
@@ -54,39 +67,44 @@ The user sees a successful login with no indication that their data wasn't migra
 If guest has games/data AND migration fails, return an error to the frontend instead of silently continuing. Show user a message: "We're having trouble transferring your data. Please try again in a moment."
 
 ### Option B: Deferred migration with retry
-- Store `pending_migration: {guest_id, target_id}` in auth DB
+- Add `pending_migrations` table to auth.sqlite: `{guest_user_id, target_user_id, attempted_at, status, error}`
 - On next login or app load, retry the migration
 - Show banner: "Some of your data is still being transferred"
 
-### Option C: Keep guest session alive as fallback
-- Don't expire the guest session until migration is confirmed successful
-- If migration fails, keep returning guest data (not email account data)
-
 ### Additional Safeguards
+- **Transfer guest credits** during cross-device recovery (check auth.sqlite for guest_user_id balance, grant to target)
+- **Replace broad `except Exception`** with specific error handling per step
 - **Never clean up local guest data** until migration is confirmed
 - **Log migration success/failure** with enough detail to manually recover
 - **Add migration status to /api/auth/me** response so frontend can warn
+- **Sync auth.sqlite to R2** after merge upload (credits + migration record)
 
 ## Context
 
 ### Relevant Files
-- `src/backend/app/routers/auth.py` — Lines 260-324: `_migrate_guest_profile()`, Lines 390-401: Google login flow
-- `src/backend/app/services/auth_db.py` — Guest user creation, session management
+- `src/backend/app/routers/auth.py` — Lines 260-324: `_migrate_guest_profile()`, Lines 181-257: `_merge_guest_into_profile()`, Lines 390-401: Google login flow
+- `src/backend/app/services/auth_db.py` — Guest user creation, session management, credit operations
 - `src/backend/app/session_init.py` — Profile initialization, R2 sync
+- `src/backend/app/storage.py` — Lines 1000-1043: `read_selected_profile_from_r2()`, R2 sync operations
 
 ### Related Tasks
-- None — this is a standalone data integrity issue
+- T880: Quest Reward Double-Grant Race Condition
+- T890: Export Transaction Atomicity
+- T900: FK Cascade Gaps
 
 ### Technical Notes
 - Guest data in R2 is keyed by `{env}/users/{guest_user_id}/` — recoverable if user_id is known
-- The `_merge_guest_into_profile()` function (called by migration) merges games and clips at the DB level
+- The `_merge_guest_into_profile()` function merges games and achievements (not clips/projects — auth-gated)
 - R2 connectivity issues are transient — retrying after a few seconds usually succeeds
 - The migration function has a broad `except Exception` catch-all (line 323) that also silently swallows errors
+- Credits are in `auth.sqlite` (shared), not per-user DB — require separate transfer logic
 
 ## Acceptance Criteria
 
 - [ ] Guest-to-email migration failure does NOT silently lose data
 - [ ] User is warned if migration fails (either blocked from login or shown banner)
+- [ ] Guest credits are transferred during cross-device recovery
 - [ ] Guest data is not cleaned up locally until migration is confirmed
-- [ ] Failed migrations are recorded for retry
+- [ ] Failed migrations are recorded for retry (pending_migrations table or equivalent)
 - [ ] Manual recovery is possible given the guest user_id
+- [ ] Broad `except Exception` replaced with specific error handling

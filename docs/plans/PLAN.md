@@ -196,6 +196,9 @@ Deploy to production domains with proper scaling.
 | T850 | [Annotate Duplicate Scrub UI](tasks/T850-annotate-duplicate-scrub-ui.md) | TODO | 5 | 4 | Two scrub/timeline UI instances visible during clip playback in annotate mode |
 | T860 | [Keyframe Invariant Render Loop](tasks/T860-keyframe-invariant-render-loop.md) | DONE | 9 | 5 | Keyframe invariant check in render body causes 500+ re-renders, making framing unresponsive |
 | T870 | [Export Progress Stuck During Download](tasks/T870-export-progress-stuck-during-download.md) | TODO | 5 | 3 | Export shows 0% for ~48s while backend downloads game video from R2 |
+| T880 | [Quest Reward Double-Grant](tasks/T880-quest-reward-double-grant.md) | TODO | 8 | 2 | Race condition: spam-clicking "Claim Reward" grants credits twice. Check-then-act not atomic. |
+| T890 | [Export Transaction Atomicity](tasks/T890-export-transaction-atomicity.md) | TODO | 7 | 4 | Export job creation splits across multiple transactions; crash between them leaves inconsistent state. Credit deduction not synced to R2. |
+| T900 | [FK Cascade Gaps](tasks/T900-fk-cascade-gaps.md) | TODO | 5 | 3 | 5 foreign keys missing ON DELETE CASCADE/SET NULL; manual DELETE loops are fragile and incomplete. |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
