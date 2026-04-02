@@ -1,6 +1,6 @@
 # T415: Smart Guest Merge on Login
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-03-27

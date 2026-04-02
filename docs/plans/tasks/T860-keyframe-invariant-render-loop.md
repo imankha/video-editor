@@ -1,6 +1,6 @@
 # T860: Keyframe Invariant Violations Cause Infinite Render Loop
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-04-01

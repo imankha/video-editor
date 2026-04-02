@@ -104,7 +104,7 @@ Gate GPU operations behind email verification. Google OAuth primary, Email OTP s
 | T401 | [Email OTP Auth](tasks/user-auth/T401-email-otp.md) | TODO | 9 | 4 | Real Resend integration (per-user SQLite) |
 | T405 | [Central Auth + Cross-Device](tasks/user-auth/T405-central-auth-db.md) | DONE | 7 | 5 | Shared auth.sqlite+R2, server-issued UUIDs, session cookies, remove ?user= param |
 | T410 | [Guest Progress Migration](tasks/user-auth/T410-guest-progress-migration.md) | DONE | 6 | 5 | On login, migrate guest profile (if has games) as "second" profile on recovered account |
-| T415 | [Smart Guest Merge](tasks/user-auth/T415-smart-guest-merge.md) | TESTING | 7 | 3 | Merge guest games into default profile (never branch); fix auth return context |
+| T415 | [Smart Guest Merge](tasks/user-auth/T415-smart-guest-merge.md) | DONE | 7 | 3 | Merge guest games into default profile (never branch); fix auth return context |
 | T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 7 | 3 | Single-session enforcement, expiry |
 | T430 | [Account Settings](tasks/user-auth/T430-account-settings.md) | TODO | 4 | 2 | Email display, linking, logout |
 
@@ -186,15 +186,15 @@ Deploy to production domains with proper scaling.
 | T760 | [Background Local Processing](tasks/T760-background-local-processing.md) | DONE | 7 | 4 | Local exports block the web server; return 202 immediately and run GPU work in background task |
 | T770 | [Navigate Home After Overlay Export](tasks/T770-overlay-complete-navigate-home.md) | DONE | 5 | 2 | After overlay export completes, auto-navigate user back to home/projects screen |
 | T775 | [navigationStore Unused for Routing](tasks/T775-navigationStore-unused.md) | DONE | 4 | 3 | navigationStore.navigate() doesn't control screen rendering — editorMode is the real source of truth; dead code |
-| T780 | [Quest Redesign + Credit Pack Pricing](tasks/T780-quest-redesign-credit-packs.md) | TESTING | 8 | 5 | Redesign quests 3 & 4 (habit-building → multi-game reel), update rewards (15/25/40/45), set credit packs ($3.99/40, $6.99/85, $12.99/180) |
-| T790 | [Custom Project Triggers Extraction](tasks/T790-custom-project-extraction-bug.md) | TESTING | 7 | 5 | Custom project creation triggers old extraction pipeline (removed in T740). Downloads full game video per clip — 35 clips = 35 downloads of a 3GB file. |
+| T780 | [Quest Redesign + Credit Pack Pricing](tasks/T780-quest-redesign-credit-packs.md) | DONE | 8 | 5 | Redesign quests 3 & 4 (habit-building → multi-game reel), update rewards (15/25/40/45), set credit packs ($3.99/40, $6.99/85, $12.99/180) |
+| T790 | [Custom Project Triggers Extraction](tasks/T790-custom-project-extraction-bug.md) | DONE | 7 | 5 | Custom project creation triggers old extraction pipeline (removed in T740). Downloads full game video per clip — 35 clips = 35 downloads of a 3GB file. |
 | T800 | [Remove Legacy Extraction Infrastructure](tasks/T800-remove-extraction-infrastructure.md) | TODO | 5 | 5 | Dead extraction code across ~15 files: response models, retry endpoint, WebSocket manager, modal_queue functions, tests, stale comments. T790 removed triggers; this removes everything else. |
-| T810 | [Multi-Clip Export Fails for Game Video Clips](tasks/T810-multi-clip-export-game-video.md) | TESTING | 9 | 6 | Multi-clip export downloads each clip's file from frontend, but game-video clips have no standalone files (T740). Backend needs to resolve clips from DB like single-clip export does. |
+| T810 | [Multi-Clip Export Fails for Game Video Clips](tasks/T810-multi-clip-export-game-video.md) | DONE | 9 | 6 | Multi-clip export downloads each clip's file from frontend, but game-video clips have no standalone files (T740). Backend needs to resolve clips from DB like single-clip export does. |
 | T820 | [Guest Migration Data Loss](tasks/T820-guest-migration-data-loss.md) | TODO | 10 | 6 | Guest→email migration silently fails when R2 is down, orphaning all guest data. User sees blank account with no warning. No retry, no recovery path. |
 | T830 | [Clip Preview Timeline Shows Full Video](tasks/T830-clip-preview-timeline-full-video.md) | TODO | 6 | 4 | New Project modal clip preview shows full game video timeline instead of clip range |
 | T840 | [Annotate Drag/Play Conflict](tasks/T840-annotate-drag-play-conflict.md) | TODO | 7 | 3 | Dragging start/end time handles while video is playing causes playback to fight with drag preview |
 | T850 | [Annotate Duplicate Scrub UI](tasks/T850-annotate-duplicate-scrub-ui.md) | TODO | 5 | 4 | Two scrub/timeline UI instances visible during clip playback in annotate mode |
-| T860 | [Keyframe Invariant Render Loop](tasks/T860-keyframe-invariant-render-loop.md) | TESTING | 9 | 5 | Keyframe invariant check in render body causes 500+ re-renders, making framing unresponsive |
+| T860 | [Keyframe Invariant Render Loop](tasks/T860-keyframe-invariant-render-loop.md) | DONE | 9 | 5 | Keyframe invariant check in render body causes 500+ re-renders, making framing unresponsive |
 | T870 | [Export Progress Stuck During Download](tasks/T870-export-progress-stuck-during-download.md) | TODO | 5 | 3 | Export shows 0% for ~48s while backend downloads game video from R2 |
 
 ### Mobile Responsive (TODO)
