@@ -1,6 +1,6 @@
 # T850: Annotate Mode — Duplicate Scrub UI During Clip Playback
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-04-01

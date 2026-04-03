@@ -371,6 +371,7 @@ export function AnnotateScreen({ onClearSelection }) {
           clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
           selectedRegionId={playback?.isPlaybackMode ? playback.activeClipId : annotateSelectedRegionId}
           activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
+          isPlaybackMode={!!playback?.isPlaybackMode}
           onSelectRegion={playback?.isPlaybackMode ? playback.seekToClip : handleSelectAnnotateRegion}
           onUpdateRegion={updateClipRegion}
           onDeleteRegion={deleteClipRegion}
