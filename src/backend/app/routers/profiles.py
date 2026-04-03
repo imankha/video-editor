@@ -1,9 +1,9 @@
 """
 Profile CRUD and switching endpoints.
 
-Manages profiles.json and selected-profile.json in R2 for multi-athlete
-support. Each profile gets its own database, clips, projects, and exports.
+Each profile gets its own database, clips, projects, and exports.
 Games are shared across profiles (global via T80).
+Profile metadata is stored in user.sqlite (source of truth).
 
 Endpoints:
     GET    /api/profiles          - List all profiles
@@ -24,11 +24,8 @@ from app.user_context import get_current_user_id
 from app.profile_context import set_current_profile_id
 from app.session_init import invalidate_user_cache
 from app.storage import (
-    save_profiles_json,
-    upload_selected_profile_json,
     delete_profile_r2_data,
     delete_local_profile_data,
-    R2_ENABLED,
 )
 from app.services.user_db import (
     get_profiles,
@@ -43,22 +40,6 @@ from app.services.user_db import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
-
-
-def _sync_profiles_to_r2(user_id: str) -> None:
-    """Best-effort sync of profiles from user.sqlite to R2 (backup)."""
-    if not R2_ENABLED:
-        return
-    profiles = get_profiles(user_id)
-    default_id = next((p["id"] for p in profiles if p["is_default"]), None)
-    data = {
-        "default": default_id or (profiles[0]["id"] if profiles else None),
-        "profiles": {
-            p["id"]: {"name": p["name"], "color": p["color"]}
-            for p in profiles
-        },
-    }
-    save_profiles_json(user_id, data)
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +90,7 @@ async def list_profiles():
 async def create_profile(request: CreateProfileRequest):
     """Create a new profile.
 
-    Writes to user.sqlite (source of truth) and R2 (backup).
+    Writes to user.sqlite (source of truth, synced to R2 automatically).
     """
     user_id = get_current_user_id()
     profiles = get_profiles(user_id)
@@ -122,13 +103,8 @@ async def create_profile(request: CreateProfileRequest):
     new_id = uuid4().hex[:8]
     name = request.name.strip()
 
-    # Write to user.sqlite
     db_create_profile(user_id, new_id, name, request.color)
     set_selected_profile_id(user_id, new_id)
-
-    # R2 backup: sync full profiles state
-    _sync_profiles_to_r2(user_id)
-    upload_selected_profile_json(user_id, new_id)
 
     # Initialize DB for new profile
     set_current_profile_id(new_id)
@@ -146,7 +122,7 @@ async def create_profile(request: CreateProfileRequest):
 async def switch_profile(request: SwitchProfileRequest):
     """Switch the active profile.
 
-    Updates user.sqlite (source of truth) and R2 (backup).
+    Updates user.sqlite (source of truth, synced to R2 automatically).
     """
     user_id = get_current_user_id()
     profiles = get_profiles(user_id)
@@ -155,9 +131,7 @@ async def switch_profile(request: SwitchProfileRequest):
     if request.profileId not in profile_ids:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    # Write to user.sqlite + R2 backup
     set_selected_profile_id(user_id, request.profileId)
-    upload_selected_profile_json(user_id, request.profileId)
     invalidate_user_cache(user_id)
 
     # Ensure the new profile's DB exists locally
@@ -197,7 +171,6 @@ async def update_profile(profile_id: str, request: UpdateProfileRequest):
         color = request.color
 
     db_update_profile(user_id, profile_id, name=name, color=color)
-    _sync_profiles_to_r2(user_id)
 
     logger.info(f"Updated profile {profile_id} for user {user_id}")
 
@@ -226,7 +199,6 @@ async def delete_profile(profile_id: str):
     if profile_id == current:
         other_id = next(p["id"] for p in profiles if p["id"] != profile_id)
         set_selected_profile_id(user_id, other_id)
-        upload_selected_profile_json(user_id, other_id)
         invalidate_user_cache(user_id)
 
     # Check if deleting the default profile — reassign default
@@ -235,9 +207,7 @@ async def delete_profile(profile_id: str):
         new_default = next(p["id"] for p in profiles if p["id"] != profile_id)
         set_default_profile(user_id, new_default)
 
-    # Delete from user.sqlite + R2 backup
     db_delete_profile(user_id, profile_id)
-    _sync_profiles_to_r2(user_id)
 
     # Delete R2 profile data and local data
     delete_profile_r2_data(user_id, profile_id)

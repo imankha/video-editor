@@ -1110,7 +1110,6 @@ def r2_global_key(path: str) -> str:
 def r2_user_key(user_id: str, path: str) -> str:
     """
     Generate R2 object key for user-level files (outside profiles).
-    Used for profiles.json, selected-profile.json.
     Format: {env}/users/{user_id}/{path}
     """
     path = path.replace("\\", "/")
@@ -1175,135 +1174,8 @@ def r2_delete_object_global(key: str) -> bool:
 
 
 # ==============================================================================
-# Profile Management Functions (user-level, outside profiles/)
+# Profile Data Cleanup Functions
 # ==============================================================================
-
-class R2ReadError(Exception):
-    """Raised when R2 read fails due to a transient error (not 'key missing')."""
-    pass
-
-
-def read_selected_profile_from_r2(user_id: str) -> Optional[str]:
-    """Read selected-profile.json from R2 for a user.
-
-    Returns the profile_id string, or None if the key doesn't exist in R2.
-    Raises R2ReadError on transient failures so callers don't mistake errors
-    for "new user".
-    """
-    client = get_r2_sync_client()
-    if not client:
-        return None
-
-    import json
-    import tempfile
-
-    key = r2_user_key(user_id, "selected-profile.json")
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.json') as tmp:
-            tmp_path = tmp.name
-        client.download_file(R2_BUCKET, key, tmp_path)
-        with open(tmp_path, 'r') as f:
-            data = json.load(f)
-        os.unlink(tmp_path)
-        profile_id = data.get("profileId")
-        if profile_id:
-            logger.info(f"Loaded profile {profile_id} for user {user_id} from R2")
-        return profile_id
-    except client.exceptions.NoSuchKey:
-        logger.debug(f"No selected-profile.json for user {user_id}")
-        return None
-    except Exception as e:
-        # download_file uses HeadObject which returns ClientError with 404
-        # instead of NoSuchKey — treat any 404 as "not found"
-        from botocore.exceptions import ClientError
-        if isinstance(e, ClientError) and e.response.get('Error', {}).get('Code') in ('404', 'NoSuchKey'):
-            logger.debug(f"No selected-profile.json for user {user_id} (404)")
-            return None
-        logger.error(f"R2 error reading selected-profile.json for user {user_id}: {e}")
-        raise R2ReadError(str(e)) from e
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except (OSError, UnboundLocalError):
-            pass
-
-
-def read_profiles_json(user_id: str) -> Optional[dict]:
-    """Read profiles.json from R2 for a user.
-
-    Returns the parsed dict, or None if not found or R2 disabled.
-    """
-    client = get_r2_sync_client()
-    if not client:
-        return None
-
-    import json
-    import tempfile
-
-    key = r2_user_key(user_id, "profiles.json")
-    tmp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.json') as tmp:
-            tmp_path = tmp.name
-        client.download_file(R2_BUCKET, key, tmp_path)
-        with open(tmp_path, 'r') as f:
-            data = json.load(f)
-        os.unlink(tmp_path)
-        return data
-    except client.exceptions.NoSuchKey:
-        logger.debug(f"No profiles.json for user {user_id}")
-        return None
-    except Exception as e:
-        logger.warning(f"Failed to read profiles.json for user {user_id}: {e}")
-        return None
-    finally:
-        try:
-            if tmp_path:
-                os.unlink(tmp_path)
-        except (OSError, UnboundLocalError):
-            pass
-
-
-def save_profiles_json(user_id: str, data: dict) -> bool:
-    """Write profiles.json to R2 for a user.
-
-    Replaces the full document with the provided dict.
-    """
-    client = get_r2_client()
-    if not client:
-        return False
-
-    import json
-
-    key = r2_user_key(user_id, "profiles.json")
-    try:
-        from .utils.retry import retry_r2_call, TIER_3
-        retry_r2_call(
-            client.put_object,
-            Bucket=R2_BUCKET, Key=key,
-            Body=json.dumps(data).encode('utf-8'),
-            ContentType='application/json',
-            operation=f"save_profiles {user_id}", **TIER_3,
-        )
-        logger.info(f"Saved profiles.json for user {user_id}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to save profiles.json for user {user_id}: {e}")
-        return False
-
-
-def upload_profiles_json(user_id: str, profile_id: str) -> bool:
-    """Upload profiles.json to R2 for a user.
-
-    Creates the initial profile manifest with one default profile.
-    """
-    data = {
-        "default": profile_id,
-        "profiles": {
-            profile_id: {"name": None}
-        }
-    }
-    return save_profiles_json(user_id, data)
 
 
 def delete_profile_r2_data(user_id: str, profile_id: str) -> bool:
@@ -1361,32 +1233,6 @@ def delete_local_profile_data(user_id: str, profile_id: str) -> bool:
         return True
     except Exception as e:
         logger.error(f"Failed to delete local data for profile {profile_id}: {e}")
-        return False
-
-
-def upload_selected_profile_json(user_id: str, profile_id: str) -> bool:
-    """Upload selected-profile.json to R2 for a user."""
-    client = get_r2_client()
-    if not client:
-        return False
-
-    import json
-
-    key = r2_user_key(user_id, "selected-profile.json")
-    data = {"profileId": profile_id}
-    try:
-        from .utils.retry import retry_r2_call, TIER_3
-        retry_r2_call(
-            client.put_object,
-            Bucket=R2_BUCKET, Key=key,
-            Body=json.dumps(data).encode('utf-8'),
-            ContentType='application/json',
-            operation=f"save_selected_profile {user_id}", **TIER_3,
-        )
-        logger.info(f"Set selected profile to {profile_id} for user {user_id}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to upload selected-profile.json for user {user_id}: {e}")
         return False
 
 

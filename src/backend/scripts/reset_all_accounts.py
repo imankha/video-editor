@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
 Reset ALL user accounts across local and R2 environments.
-Leaves games data and user "a" local folder intact.
+Leaves games data intact.
 
 Deletes:
   1. All rows from users, sessions, credit_transactions in auth.sqlite
-  2. All local user_data/{uuid}/ folders (preserves user "a" and auth.sqlite)
+  2. All local user_data/ folders (preserves auth.sqlite)
   3. All R2 objects under {env}/users/ for dev, staging, prod
   4. Syncs cleaned auth.sqlite to R2
 
 Does NOT delete:
-  - user_data/a/ (developer test account)
   - {env}/games/ (shared game videos)
   - auth.sqlite file itself (just empties the tables)
 

@@ -216,7 +216,7 @@ class TestMigrateGuestProfile:
     """T415: Full _migrate_guest_profile integration tests."""
 
     @patch("app.routers.auth.upload_to_r2", return_value=True)
-    @patch("app.routers.auth.read_selected_profile_from_r2")
+    @patch("app.routers.auth.get_selected_profile_id")
     @patch("app.routers.auth.get_current_profile_id", return_value="current-ctx")
     @patch("app.routers.auth.set_current_profile_id")
     def test_guest_with_games_merges_into_default(
@@ -246,7 +246,7 @@ class TestMigrateGuestProfile:
         mock_set_profile.assert_any_call("current-ctx")
 
     @patch("app.routers.auth.upload_to_r2", return_value=True)
-    @patch("app.routers.auth.read_selected_profile_from_r2")
+    @patch("app.routers.auth.get_selected_profile_id")
     @patch("app.routers.auth.get_current_profile_id", return_value="current-ctx")
     @patch("app.routers.auth.set_current_profile_id")
     def test_no_extra_profile_created(
@@ -270,7 +270,7 @@ class TestMigrateGuestProfile:
         assert profile_dirs[0].name == env["target_profile_id"]
 
     @patch("app.routers.auth.upload_to_r2", return_value=True)
-    @patch("app.routers.auth.read_selected_profile_from_r2")
+    @patch("app.routers.auth.get_selected_profile_id")
     @patch("app.routers.auth.get_current_profile_id", return_value="current-ctx")
     @patch("app.routers.auth.set_current_profile_id")
     def test_guest_without_games_skips(
@@ -287,7 +287,7 @@ class TestMigrateGuestProfile:
 
         mock_upload.assert_not_called()
 
-    @patch("app.routers.auth.read_selected_profile_from_r2", return_value=None)
+    @patch("app.routers.auth.get_selected_profile_id", return_value=None)
     def test_no_guest_profile_skips(self, mock_read_selected, migration_env):
         """Guest with no profile in R2 → skip."""
         env = migration_env
@@ -300,17 +300,16 @@ class TestMigrateGuestProfile:
         env = migration_env
         _migrate_guest_profile(env["guest_user_id"], env["guest_user_id"])
 
-    @patch("app.routers.auth.read_selected_profile_from_r2")
-    def test_r2_error_raises(self, mock_read_selected, migration_env):
-        """T820: R2ReadError during profile lookup → raises (caller blocks login)."""
-        from app.storage import R2ReadError
+    @patch("app.routers.auth.get_selected_profile_id")
+    def test_db_error_raises(self, mock_read_selected, migration_env):
+        """DB error during profile lookup → raises (caller blocks login)."""
         env = migration_env
-        mock_read_selected.side_effect = R2ReadError("connection timeout")
+        mock_read_selected.side_effect = Exception("database locked")
         with patch("app.routers.auth.USER_DATA_BASE", env["tmp_path"]):
-            with pytest.raises(R2ReadError):
+            with pytest.raises(Exception):
                 _migrate_guest_profile(env["guest_user_id"], env["recovered_user_id"])
 
-    @patch("app.routers.auth.read_selected_profile_from_r2")
+    @patch("app.routers.auth.get_selected_profile_id")
     def test_no_local_db_skips(self, mock_read_selected, migration_env):
         """Guest profile exists in R2 but no local DB → skip."""
         env = migration_env
@@ -319,7 +318,7 @@ class TestMigrateGuestProfile:
             _migrate_guest_profile(env["guest_user_id"], env["recovered_user_id"])
 
     @patch("app.routers.auth.upload_to_r2", return_value=True)
-    @patch("app.routers.auth.read_selected_profile_from_r2")
+    @patch("app.routers.auth.get_selected_profile_id")
     @patch("app.routers.auth.get_current_profile_id", return_value="current-ctx")
     @patch("app.routers.auth.set_current_profile_id")
     def test_dedup_preserves_target_game(

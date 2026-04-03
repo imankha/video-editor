@@ -17,6 +17,7 @@ Run with: pytest tests/test_r2_restructure.py -v
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+from uuid import uuid4
 import json
 
 import pytest
@@ -135,14 +136,14 @@ class TestR2UserKeyFormat:
     def test_r2_user_key_format(self):
         """r2_user_key should produce user-level path without profile."""
         from app.storage import r2_user_key
-        assert r2_user_key("myuser", "profiles.json") == "dev/users/myuser/profiles.json"
+        assert r2_user_key("myuser", "user.sqlite") == "dev/users/myuser/user.sqlite"
 
     @patch("app.storage.APP_ENV", "staging")
     def test_r2_user_key_staging(self):
         """r2_user_key should respect APP_ENV."""
         from app.storage import r2_user_key
-        result = r2_user_key("myuser", "selected-profile.json")
-        assert result == "staging/users/myuser/selected-profile.json"
+        result = r2_user_key("myuser", "user.sqlite")
+        assert result == "staging/users/myuser/user.sqlite"
 
 
 # ---------------------------------------------------------------------------
@@ -208,60 +209,58 @@ class TestUserSessionInit:
         reset_profile_id()
         reset_user_id()
 
-    @patch("app.session_init.R2_ENABLED", False)
-    def test_creates_profile_for_new_user_no_r2(self):
-        """With R2 disabled, should create a profile ID and return it."""
-        from app.session_init import user_session_init
+    def test_creates_profile_for_new_user(self):
+        """Should create a profile ID and return it for new users."""
+        from app.session_init import user_session_init, _init_cache
         from app.user_context import set_current_user_id
         from app.profile_context import get_current_profile_id
 
-        set_current_user_id("test_new_user")
-        result = user_session_init("test_new_user")
+        uid = f"test_new_{uuid4().hex[:8]}"
+        set_current_user_id(uid)
+        _init_cache.pop(uid, None)
+        result = user_session_init(uid)
 
         assert "profile_id" in result
-        assert len(result["profile_id"]) == 8  # uuid4().hex[:8]
+        assert len(result["profile_id"]) == 8
         assert result["is_new_user"] is True
-        # Profile context should be set
         assert get_current_profile_id() == result["profile_id"]
 
-    @patch("app.session_init.R2_ENABLED", True)
-    @patch("app.session_init.read_selected_profile_from_r2")
-    def test_loads_existing_profile_from_r2(self, mock_read):
-        """With R2 enabled, should load existing profile."""
-        mock_read.return_value = "existpro"
-
-        from app.session_init import user_session_init
+    def test_loads_existing_profile_from_user_sqlite(self):
+        """Should load existing profile from user.sqlite."""
+        from app.session_init import user_session_init, _init_cache
         from app.user_context import set_current_user_id
         from app.profile_context import get_current_profile_id
+        from app.services.user_db import (
+            ensure_user_database, create_profile, set_selected_profile_id,
+        )
 
-        set_current_user_id("test_existing_user")
-        result = user_session_init("test_existing_user")
+        uid = f"test_existing_{uuid4().hex[:8]}"
+        pid = uuid4().hex[:8]
+        set_current_user_id(uid)
+        _init_cache.pop(uid, None)
+        ensure_user_database(uid)
+        create_profile(uid, pid, "Test", "#000000")
+        set_selected_profile_id(uid, pid)
 
-        assert result["profile_id"] == "existpro"
+        result = user_session_init(uid)
+
+        assert result["profile_id"] == pid
         assert result["is_new_user"] is False
-        assert get_current_profile_id() == "existpro"
-        mock_read.assert_called_once_with("test_existing_user")
+        assert get_current_profile_id() == pid
 
-    @patch("app.session_init.R2_ENABLED", True)
-    @patch("app.session_init.read_selected_profile_from_r2")
-    @patch("app.session_init.upload_profiles_json")
-    @patch("app.session_init.upload_selected_profile_json")
-    def test_creates_profile_when_r2_returns_none(
-        self, mock_upload_selected, mock_upload_profiles, mock_read
-    ):
-        """When R2 has no profile, should create one and upload."""
-        mock_read.return_value = None
-
-        from app.session_init import user_session_init
+    def test_creates_profile_for_brand_new_user(self):
+        """When no profile exists, should create one."""
+        from app.session_init import user_session_init, _init_cache
         from app.user_context import set_current_user_id
 
-        set_current_user_id("test_brand_new")
-        result = user_session_init("test_brand_new")
+        uid = f"test_brand_new_{uuid4().hex[:8]}"
+        set_current_user_id(uid)
+        _init_cache.pop(uid, None)
+
+        result = user_session_init(uid)
 
         assert result["is_new_user"] is True
         assert len(result["profile_id"]) == 8
-        mock_upload_profiles.assert_called_once()
-        mock_upload_selected.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

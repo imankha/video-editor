@@ -663,36 +663,63 @@ def set_selected_profile_id(user_id: str, profile_id: str) -> None:
         conn.commit()
 
 
-def get_preferences(user_id: str = None) -> Optional[str]:
-    """Return the preferences JSON string from user_settings, or None."""
+PREF_PREFIX = "pref."
+
+
+def get_all_preferences(user_id: str = None) -> dict[str, str]:
+    """Return all preference key-value pairs from user_settings.
+
+    Keys are stored as 'pref.statusFilter' etc; returned without the prefix.
+    """
     with get_user_db_connection(user_id) as conn:
-        row = conn.execute(
-            "SELECT value FROM user_settings WHERE key = 'preferences'"
-        ).fetchone()
-        return row["value"] if row else None
+        rows = conn.execute(
+            "SELECT key, value FROM user_settings WHERE key LIKE 'pref.%'"
+        ).fetchall()
+        return {row["key"][len(PREF_PREFIX):]: row["value"] for row in rows}
 
 
-def set_preferences(user_id: str = None, preferences_json: str = "{}") -> None:
-    """Set the preferences JSON in user_settings."""
+def set_preference(user_id: str = None, key: str = "", value: str = "") -> None:
+    """Set a single preference in user_settings."""
     with get_user_db_connection(user_id) as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO user_settings (key, value) VALUES ('preferences', ?)",
-            (preferences_json,),
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
+            (f"{PREF_PREFIX}{key}", value),
         )
+        conn.commit()
+
+
+def set_preferences_bulk(user_id: str = None, prefs: dict[str, str] = None) -> None:
+    """Set multiple preferences in a single transaction."""
+    if not prefs:
+        return
+    with get_user_db_connection(user_id) as conn:
+        for key, value in prefs.items():
+            conn.execute(
+                "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
+                (f"{PREF_PREFIX}{key}", value),
+            )
+        conn.commit()
+
+
+def clear_all_preferences(user_id: str = None) -> None:
+    """Delete all preference rows from user_settings."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute("DELETE FROM user_settings WHERE key LIKE 'pref.%'")
         conn.commit()
 
 
 def backfill_preferences_from_profile(user_id: str) -> bool:
     """One-time migration: copy settings from active profile DB to user.sqlite.
 
-    Idempotent — skips if user.sqlite already has a 'preferences' key.
+    Idempotent — skips if user.sqlite already has any pref.* keys.
     Returns True if backfill occurred, False if skipped.
     """
-    # Skip if user.sqlite already has preferences
-    if get_preferences(user_id) is not None:
+    existing = get_all_preferences(user_id)
+    if existing:
         return False
 
     # Try to read from the active profile's database.sqlite
+    import json
     from ..database import get_db_connection
     try:
         with get_db_connection() as conn:
@@ -700,9 +727,16 @@ def backfill_preferences_from_profile(user_id: str) -> bool:
                 "SELECT settings_json FROM user_settings WHERE id = 1"
             ).fetchone()
             if row and row["settings_json"]:
-                set_preferences(user_id, row["settings_json"])
-                logger.info(f"[UserDB] Backfilled preferences for user {user_id} from profile DB")
-                return True
+                blob = json.loads(row["settings_json"])
+                # Flatten nested JSON: {projectFilters: {statusFilter: "x"}} -> {statusFilter: "x"}
+                flat = {}
+                for section_value in blob.values():
+                    if isinstance(section_value, dict):
+                        flat.update({k: str(v) for k, v in section_value.items()})
+                if flat:
+                    set_preferences_bulk(user_id, flat)
+                    logger.info(f"[UserDB] Backfilled {len(flat)} preferences for user {user_id} from profile DB")
+                    return True
     except Exception as e:
         logger.warning(f"[UserDB] Could not backfill preferences for user {user_id}: {e}")
 
@@ -746,49 +780,3 @@ def set_default_profile(user_id: str, profile_id: str) -> None:
         conn.commit()
 
 
-def migrate_profiles_from_r2(user_id: str) -> Optional[str]:
-    """One-time migration: read profiles.json from R2 into user.sqlite.
-
-    Returns the selected profile_id, or None if no R2 data found.
-    Idempotent — skips if profiles table already has rows.
-    """
-    # Check if already migrated
-    existing = get_profiles(user_id)
-    if existing:
-        return get_selected_profile_id(user_id)
-
-    # Read R2 data
-    from ..storage import read_profiles_json, read_selected_profile_from_r2, R2_ENABLED
-    if not R2_ENABLED:
-        return None
-
-    data = read_profiles_json(user_id)
-    if not data or not data.get("profiles"):
-        return None
-
-    default_id = data.get("default")
-    selected_id = None
-    try:
-        selected_id = read_selected_profile_from_r2(user_id)
-    except Exception:
-        pass  # Non-fatal — we'll use default if selected can't be read
-
-    # Write profiles into user.sqlite
-    with get_user_db_connection(user_id) as conn:
-        for pid, meta in data["profiles"].items():
-            name = meta.get("name") or ""
-            color = meta.get("color") or "#6366f1"
-            is_default = 1 if pid == default_id else 0
-            conn.execute(
-                "INSERT OR IGNORE INTO profiles (id, name, color, is_default) VALUES (?, ?, ?, ?)",
-                (pid, name, color, is_default),
-            )
-        if selected_id:
-            conn.execute(
-                "INSERT OR REPLACE INTO user_settings (key, value) VALUES ('selected_profile', ?)",
-                (selected_id,),
-            )
-        conn.commit()
-
-    logger.info(f"[UserDB] Migrated {len(data['profiles'])} profiles from R2 for user {user_id}")
-    return selected_id or default_id

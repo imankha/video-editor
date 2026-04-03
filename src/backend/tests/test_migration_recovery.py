@@ -139,7 +139,7 @@ def patched_user_db(recovery_env):
 class TestMigrationIntentRecorded:
 
     @patch("app.routers.auth.upload_to_r2", return_value=True)
-    @patch("app.routers.auth.read_selected_profile_from_r2")
+    @patch("app.routers.auth.get_selected_profile_id")
     @patch("app.routers.auth.get_current_profile_id", return_value="ctx")
     @patch("app.routers.auth.set_current_profile_id")
     def test_pending_migration_row_exists(
@@ -169,7 +169,7 @@ class TestMigrationIntentRecorded:
 class TestSuccessfulMigrationComplete:
 
     @patch("app.routers.auth.upload_to_r2", return_value=True)
-    @patch("app.routers.auth.read_selected_profile_from_r2")
+    @patch("app.routers.auth.get_selected_profile_id")
     @patch("app.routers.auth.get_current_profile_id", return_value="ctx")
     @patch("app.routers.auth.set_current_profile_id")
     def test_status_completed_after_success(
@@ -197,17 +197,16 @@ class TestSuccessfulMigrationComplete:
 
 class TestFailedMigrationRecordsError:
 
-    @patch("app.routers.auth.read_selected_profile_from_r2")
-    def test_r2_failure_raises_and_leaves_pending(
+    @patch("app.routers.auth.get_selected_profile_id")
+    def test_db_failure_raises_and_leaves_pending(
         self, mock_read_selected, patched_user_db,
     ):
-        """R2 read failure raises R2ReadError; pending_migrations row stays as 'pending'."""
-        from app.storage import R2ReadError
+        """DB failure raises exception; pending_migrations row stays as 'pending'."""
         env = patched_user_db
-        mock_read_selected.side_effect = R2ReadError("connection timeout")
+        mock_read_selected.side_effect = Exception("database locked")
 
         with patch("app.routers.auth.USER_DATA_BASE", env["tmp_path"]):
-            with pytest.raises(R2ReadError):
+            with pytest.raises(Exception):
                 _migrate_guest_profile(env["guest_user_id"], env["recovered_user_id"])
 
         # pending_migrations was inserted before the R2 call
@@ -225,7 +224,7 @@ class TestFailedMigrationRecordsError:
 class TestCreditTransfer:
 
     @patch("app.routers.auth.upload_to_r2", return_value=True)
-    @patch("app.routers.auth.read_selected_profile_from_r2")
+    @patch("app.routers.auth.get_selected_profile_id")
     @patch("app.routers.auth.get_current_profile_id", return_value="ctx")
     @patch("app.routers.auth.set_current_profile_id")
     def test_credits_transferred_to_target(
@@ -257,7 +256,7 @@ class TestCreditTransfer:
         assert migration_txns[0]["amount"] == 50
         assert migration_txns[0]["reference_id"] == env["guest_user_id"]
 
-    @patch("app.routers.auth.read_selected_profile_from_r2")
+    @patch("app.routers.auth.get_selected_profile_id")
     @patch("app.routers.auth.get_current_profile_id", return_value="ctx")
     @patch("app.routers.auth.set_current_profile_id")
     def test_zero_credits_no_transfer(
@@ -287,7 +286,7 @@ class TestCreditTransfer:
 class TestCreditHistoryCopied:
 
     @patch("app.routers.auth.upload_to_r2", return_value=True)
-    @patch("app.routers.auth.read_selected_profile_from_r2")
+    @patch("app.routers.auth.get_selected_profile_id")
     @patch("app.routers.auth.get_current_profile_id", return_value="ctx")
     @patch("app.routers.auth.set_current_profile_id")
     def test_guest_transactions_copied_to_target(
@@ -534,19 +533,18 @@ class TestMeEndpointMigrationPending:
 
 class TestExceptionPropagation:
 
-    @patch("app.routers.auth.read_selected_profile_from_r2")
-    def test_r2_read_error_propagates(self, mock_read_selected, patched_user_db):
-        """R2ReadError is NOT swallowed — it propagates to caller."""
-        from app.storage import R2ReadError
+    @patch("app.routers.auth.get_selected_profile_id")
+    def test_db_read_error_propagates(self, mock_read_selected, patched_user_db):
+        """DB errors are NOT swallowed — they propagate to caller."""
         env = patched_user_db
-        mock_read_selected.side_effect = R2ReadError("bucket unreachable")
+        mock_read_selected.side_effect = Exception("database unreachable")
 
         with patch("app.routers.auth.USER_DATA_BASE", env["tmp_path"]):
-            with pytest.raises(R2ReadError, match="bucket unreachable"):
+            with pytest.raises(Exception, match="database unreachable"):
                 _migrate_guest_profile(env["guest_user_id"], env["recovered_user_id"])
 
     @patch("app.routers.auth.upload_to_r2", return_value=True)
-    @patch("app.routers.auth.read_selected_profile_from_r2")
+    @patch("app.routers.auth.get_selected_profile_id")
     @patch("app.routers.auth.get_current_profile_id", return_value="ctx")
     @patch("app.routers.auth.set_current_profile_id")
     def test_sqlite_error_propagates(
@@ -564,7 +562,7 @@ class TestExceptionPropagation:
             with pytest.raises(sqlite3.OperationalError, match="disk I/O error"):
                 _migrate_guest_profile(env["guest_user_id"], env["recovered_user_id"])
 
-    @patch("app.routers.auth.read_selected_profile_from_r2")
+    @patch("app.routers.auth.get_selected_profile_id")
     @patch("app.routers.auth.get_current_profile_id", return_value="ctx")
     @patch("app.routers.auth.set_current_profile_id")
     def test_os_error_on_upload_propagates(

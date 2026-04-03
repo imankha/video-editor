@@ -9,20 +9,14 @@ Called by:
   - UserContextMiddleware (auto-resolve when X-Profile-ID header is missing)
   - startup_event (initialize default user)
 
-Idempotent per user — the expensive R2 lookup runs once, then results are
-cached in _init_cache. Subsequent calls just set the profile context and return.
+Idempotent per user — user.sqlite is source of truth. Results are cached
+in _init_cache. Subsequent calls just set the profile context and return.
 """
 
 import logging
 from uuid import uuid4
 
 from .profile_context import set_current_profile_id
-from .storage import (
-    R2_ENABLED,
-    R2ReadError,
-    upload_profiles_json,
-    upload_selected_profile_json,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +27,7 @@ _init_cache: dict[str, dict] = {}
 
 
 def invalidate_user_cache(user_id: str) -> None:
-    """Remove user from _init_cache so next request re-reads from R2.
+    """Remove user from _init_cache so next request re-reads user.sqlite.
 
     Called after profile switch or delete to ensure the middleware
     picks up the new selected profile on the next request.
@@ -46,7 +40,7 @@ def user_session_init(user_id: str) -> dict:
     Initialize a user session. Idempotent — safe to call on every request.
 
     First call per user:
-    1. Load or create profile (R2 lookup / create)
+    1. Load or create profile from user.sqlite
     2. Ensure database exists (dirs, tables, R2 download)
     3. Run cleanup tasks (stale projects, DB bloat)
     4. Cache the result
@@ -71,39 +65,25 @@ def user_session_init(user_id: str) -> dict:
     from .services.user_db import ensure_user_database
     ensure_user_database(user_id)
 
-    # 2. Load or create profile (user.sqlite is source of truth, R2 is backup)
+    # 2. Load or create profile (user.sqlite is source of truth)
     from .services.user_db import (
-        get_selected_profile_id, get_profiles,
-        create_profile, set_selected_profile_id, migrate_profiles_from_r2,
+        get_selected_profile_id,
+        create_profile, set_selected_profile_id,
     )
 
     profile_id = None
     is_new_user = False
 
-    # Try user.sqlite first
     profile_id = get_selected_profile_id(user_id)
     if profile_id:
         logger.info(f"Loaded profile {profile_id} for user {user_id} from user.sqlite")
-    else:
-        # Try R2 migration (existing user whose profiles are still in R2)
-        if R2_ENABLED:
-            try:
-                profile_id = migrate_profiles_from_r2(user_id)
-                if profile_id:
-                    logger.info(f"Migrated profile {profile_id} for user {user_id} from R2")
-            except R2ReadError:
-                logger.error(f"R2 read failed for user {user_id} — refusing to create new profile")
-                raise
 
     if not profile_id:
-        # Genuinely new user — create default profile in user.sqlite + R2 backup
+        # New user — create default profile in user.sqlite
         profile_id = uuid4().hex[:8]
         is_new_user = True
         create_profile(user_id, profile_id, name="", color="#6366f1", is_default=True)
         set_selected_profile_id(user_id, profile_id)
-        if R2_ENABLED:
-            upload_profiles_json(user_id, profile_id)
-            upload_selected_profile_json(user_id, profile_id)
         logger.info(f"Created new profile {profile_id} for user {user_id}")
 
     # 2. Set profile context

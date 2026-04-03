@@ -33,9 +33,7 @@ from app.profile_context import get_current_profile_id, set_current_profile_id
 from app.database import USER_DATA_BASE
 from app.session_init import user_session_init
 from app.storage import (
-    read_selected_profile_from_r2,
     upload_to_r2,
-    R2ReadError,
     R2_ENABLED,
     get_r2_client,
     R2_BUCKET,
@@ -57,6 +55,7 @@ from app.services.auth_db import (
 from app.services.user_db import (
     get_user_db_connection,
     ensure_user_database,
+    get_selected_profile_id,
     get_credit_balance,
     grant_credits,
     get_credit_transactions,
@@ -291,11 +290,8 @@ def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
         conn.commit()
 
     # 2. Resolve guest's active profile
-    try:
-        guest_profile_id = read_selected_profile_from_r2(guest_user_id)
-    except R2ReadError as e:
-        logger.error(f"[Auth] R2 read failed during migration: {e}")
-        raise
+    ensure_user_database(guest_user_id)
+    guest_profile_id = get_selected_profile_id(guest_user_id)
     if not guest_profile_id:
         logger.info(f"[Auth] Migration skip: no profile found for guest {guest_user_id}")
         # No data to migrate — mark complete
@@ -364,11 +360,7 @@ def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
         return
 
     # 5. Resolve target: recovered account's default profile
-    try:
-        target_profile_id = read_selected_profile_from_r2(recovered_user_id)
-    except R2ReadError as e:
-        logger.error(f"[Auth] R2 read failed for target profile: {e}")
-        raise
+    target_profile_id = get_selected_profile_id(recovered_user_id)
     target_db_path = USER_DATA_BASE / recovered_user_id / "profiles" / target_profile_id / "database.sqlite"
 
     if not target_db_path.exists():

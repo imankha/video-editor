@@ -12,14 +12,14 @@ Migrates a user's database (runs pending migrations), syncs it to R2, and delete
 
 ## Common Usage
 
-- `/cleanup-users` - Keep user "a", delete all others (default)
-- `/cleanup-users keep:b` - Keep user "b" instead
+- `/cleanup-users` - Delete all users (default)
+- `/cleanup-users keep:<user-id>` - Keep a specific user, delete all others
 - `/cleanup-users delete:e2e_*` - Only delete users matching pattern, keep everything else
-- `/cleanup-users keep:a delete:e2e_*` - Keep "a", only delete e2e test users
+- `/cleanup-users keep:<user-id> delete:e2e_*` - Keep one user, only delete e2e test users
 
 ## Arguments
 
-- `keep:<user-id>` - User ID to keep and sync (default: "a")
+- `keep:<user-id>` - User ID to keep and sync (no default — omit to delete all)
 - `delete:<pattern>` - Only delete users matching this glob pattern (default: all non-kept users)
 
 Arguments provided: `$ARGUMENTS`
@@ -27,7 +27,7 @@ Arguments provided: `$ARGUMENTS`
 ## Task
 
 Parse the arguments to determine:
-1. **keep_user**: Which user to migrate and sync (default "a")
+1. **keep_user**: Which user to migrate and sync (no default — if omitted, delete all)
 2. **delete_pattern**: Optional glob pattern to filter deletions (e.g., "e2e_*" only deletes e2e test accounts)
 
 Then run a Python script in the backend directory that:

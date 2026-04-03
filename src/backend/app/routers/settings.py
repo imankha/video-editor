@@ -1,19 +1,17 @@
 """
 Settings Router - User preferences that persist across sessions
 
-Settings are stored as JSON in the user.sqlite key-value table (key='preferences').
-This makes settings global per-user, not per-profile.
-
-Settings are synced to R2 like all other user data.
+Settings are stored as individual key-value rows in user.sqlite (pref.* keys).
+Each setting is independent — a bad write to one cannot corrupt others.
+Global per-user, not per-profile.
 """
 
-import json
 import logging
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.services.user_db import get_preferences, set_preferences
+from app.services.user_db import get_all_preferences, set_preferences_bulk, clear_all_preferences
 from app.constants import DEFAULT_HIGHLIGHT_EFFECT
 
 logger = logging.getLogger(__name__)
@@ -21,25 +19,53 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 
-# Default settings values
-DEFAULT_SETTINGS = {
-    # Project filters (ProjectManager)
-    "projectFilters": {
-        "statusFilter": "uncompleted",
-        "aspectFilter": "all",
-        "creationFilter": "all",
-    },
-    # Framing preferences
-    "framing": {
-        "includeAudio": True,
-        "defaultAspectRatio": "9:16",
-        "defaultTransition": "cut",
-    },
-    # Overlay preferences
-    "overlay": {
-        "highlightEffectType": DEFAULT_HIGHLIGHT_EFFECT.value,
-    },
+# Flat defaults — keys match DB rows exactly
+DEFAULTS = {
+    "statusFilter": "uncompleted",
+    "aspectFilter": "all",
+    "creationFilter": "all",
+    "includeAudio": "true",
+    "defaultAspectRatio": "9:16",
+    "defaultTransition": "cut",
+    "highlightEffectType": DEFAULT_HIGHLIGHT_EFFECT.value,
 }
+
+# Map from nested frontend shape to flat keys
+_SECTION_KEYS = {
+    "projectFilters": ["statusFilter", "aspectFilter", "creationFilter"],
+    "framing": ["includeAudio", "defaultAspectRatio", "defaultTransition"],
+    "overlay": ["highlightEffectType"],
+}
+
+
+def _to_nested(flat: dict) -> dict:
+    """Convert flat key-value dict to nested frontend shape."""
+    result = {}
+    for section, keys in _SECTION_KEYS.items():
+        result[section] = {}
+        for key in keys:
+            value = flat.get(key, DEFAULTS.get(key))
+            # Convert string booleans back to booleans for frontend
+            if value == "true":
+                value = True
+            elif value == "false":
+                value = False
+            result[section][key] = value
+    return result
+
+
+def _flatten_updates(updates: dict) -> dict:
+    """Flatten nested update dict to flat key-value pairs (strings only)."""
+    flat = {}
+    for section_value in updates.values():
+        if isinstance(section_value, dict):
+            for k, v in section_value.items():
+                # Convert booleans to strings for storage
+                if isinstance(v, bool):
+                    flat[k] = "true" if v else "false"
+                else:
+                    flat[k] = str(v)
+    return flat
 
 
 class SettingsUpdate(BaseModel):
@@ -49,17 +75,6 @@ class SettingsUpdate(BaseModel):
     overlay: Optional[Dict[str, Any]] = None
 
 
-def deep_merge(base: dict, updates: dict) -> dict:
-    """Recursively merge updates into base dict"""
-    result = base.copy()
-    for key, value in updates.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = deep_merge(result[key], value)
-        else:
-            result[key] = value
-    return result
-
-
 @router.get("")
 async def get_settings():
     """
@@ -67,20 +82,9 @@ async def get_settings():
 
     Returns settings with defaults filled in for any missing values.
     """
-    raw = get_preferences(user_id=None)
-
-    if raw:
-        try:
-            stored = json.loads(raw)
-        except json.JSONDecodeError:
-            stored = {}
-    else:
-        stored = {}
-
-    # Merge stored settings with defaults (stored takes precedence)
-    merged = deep_merge(DEFAULT_SETTINGS, stored)
-
-    return merged
+    stored = get_all_preferences()
+    merged = {**DEFAULTS, **stored}
+    return _to_nested(merged)
 
 
 @router.put("")
@@ -89,35 +93,24 @@ async def update_settings(updates: SettingsUpdate):
     Update user settings (partial update).
 
     Only fields included in the request are updated.
-    Nested objects are merged, not replaced.
+    Each setting is written as its own row — independent of others.
     """
-    raw = get_preferences(user_id=None)
-
-    if raw:
-        try:
-            current = json.loads(raw)
-        except json.JSONDecodeError:
-            current = {}
-    else:
-        current = {}
-
-    # Merge updates (only non-None fields)
     updates_dict = updates.model_dump(exclude_none=True)
-    merged = deep_merge(current, updates_dict)
+    flat = _flatten_updates(updates_dict)
 
-    # Save to user.sqlite
-    set_preferences(user_id=None, preferences_json=json.dumps(merged))
+    if flat:
+        set_preferences_bulk(prefs=flat)
+        logger.info(f"Settings updated: {list(flat.keys())}")
 
-    logger.info(f"Settings updated: {list(updates_dict.keys())}")
-
-    # Return merged with defaults
-    return deep_merge(DEFAULT_SETTINGS, merged)
+    # Return full settings with defaults
+    stored = get_all_preferences()
+    merged = {**DEFAULTS, **stored}
+    return _to_nested(merged)
 
 
 @router.delete("")
 async def reset_settings():
     """Reset all settings to defaults"""
-    set_preferences(user_id=None, preferences_json="{}")
-
+    clear_all_preferences()
     logger.info("Settings reset to defaults")
-    return DEFAULT_SETTINGS
+    return _to_nested(DEFAULTS)
