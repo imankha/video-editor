@@ -83,7 +83,9 @@ export const useProfileStore = create((set, get) => ({
       }));
 
       // Reset all data stores — they hold data from the old profile
-      _resetDataStores();
+      // Must await before navigating, otherwise ProjectsScreen mounts
+      // with stale data and its useEffect fetchGames() races with the reset
+      await _resetDataStores();
 
       // Navigate to project manager
       const { useEditorStore, EDITOR_MODES } = await import('./index');
