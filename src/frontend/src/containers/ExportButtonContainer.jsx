@@ -319,34 +319,9 @@ export function ExportButtonContainer({
         setIsExporting(false);
         handleExportEnd();
 
-        // T760: If overlay was dispatched as background (202), trigger download here
-        if (backgroundExportRef.current && editorMode === EDITOR_MODES.OVERLAY && projectId) {
+        // T760: Background overlay complete — download available in Gallery
+        if (backgroundExportRef.current) {
           backgroundExportRef.current = false;
-          try {
-            setProgressMessage('Preparing download...');
-            const finalVideoUrlResponse = await axios.get(
-              `${API_BASE}/api/export/projects/${projectId}/final-video`
-            );
-            const presignedUrl = finalVideoUrlResponse.data.url;
-            const downloadResponse = await fetch(presignedUrl);
-            if (downloadResponse.ok) {
-              const blob = await downloadResponse.blob();
-              const safeName = projectName
-                ? projectName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'video'
-                : 'video';
-              const downloadFilename = `${safeName}_final.mp4`;
-              const url = window.URL.createObjectURL(blob);
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = downloadFilename;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              window.URL.revokeObjectURL(url);
-            }
-          } catch (downloadErr) {
-            console.error('[ExportButtonContainer] Background overlay download failed:', downloadErr);
-          }
         }
 
         if (onProceedToOverlay && editorMode === EDITOR_MODES.FRAMING) {
@@ -652,35 +627,6 @@ export function ExportButtonContainer({
 
           console.log('[ExportButtonContainer] Overlay render complete:', renderResponse.data);
 
-          setProgressMessage('Preparing download...');
-
-          // Get presigned URL from backend (JSON, not redirect — avoids CORS issues)
-          const finalVideoUrlResponse = await axios.get(
-            `${API_BASE}/api/export/projects/${projectId}/final-video`
-          );
-          const presignedUrl = finalVideoUrlResponse.data.url;
-
-          // Download the video directly from R2 using fetch (supports CORS)
-          const downloadResponse = await fetch(presignedUrl);
-          if (!downloadResponse.ok) {
-            throw new Error(`Failed to download video: ${downloadResponse.status}`);
-          }
-          const blob = await downloadResponse.blob();
-
-          const safeName = projectName
-            ? projectName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'video'
-            : 'video';
-          const downloadFilename = `${safeName}_final.mp4`;
-
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = downloadFilename;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-
           if (onExportComplete) {
             onExportComplete();
           }
@@ -698,7 +644,7 @@ export function ExportButtonContainer({
           }
 
           const toastId = toast.success('Video exported!', {
-            message: projectName ? `"${projectName}" has been downloaded and saved to your gallery.` : 'Your video has been downloaded.',
+            message: projectName ? `"${projectName}" is ready in your Gallery.` : 'Your video is ready in the Gallery.',
             duration: 0
           });
           setExportCompleteToastId(toastId);
@@ -790,22 +736,9 @@ export function ExportButtonContainer({
       } else {
         // Overlay mode - backend returns blob for download
         const blob = new Blob([response.data], { type: 'video/mp4' });
-        const safeName = projectName
-          ? projectName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'video'
-          : 'video';
-        const downloadFilename = `${safeName}_final.mp4`;
-
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = downloadFilename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
 
         setLocalProgress(95);
-        setProgressMessage('Saving to downloads...');
+        setProgressMessage('Saving to gallery...');
 
         if (projectId) {
           try {
@@ -841,7 +774,7 @@ export function ExportButtonContainer({
         }
 
         const toastId = toast.success('Video exported!', {
-          message: projectName ? `"${projectName}" has been downloaded and saved to your gallery.` : 'Your video has been downloaded.',
+          message: projectName ? `"${projectName}" is ready in your Gallery.` : 'Your video is ready in the Gallery.',
           duration: 0
         });
         setExportCompleteToastId(toastId);

@@ -239,7 +239,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       {/* Success message */}
       {displayProgress === 100 && !isCurrentlyExporting && (
         <div className="text-green-400 text-sm bg-green-900/20 border border-green-800 rounded p-2">
-          Export complete! Video downloaded.
+          Export complete! View in Gallery.
         </div>
       )}
 
