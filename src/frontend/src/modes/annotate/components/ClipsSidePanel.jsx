@@ -15,7 +15,6 @@ export function ClipsSidePanel({
   clipRegions,
   selectedRegionId,
   activePlaybackClipId = null,
-  isPlaybackMode = false,
   onSelectRegion,
   onUpdateRegion,
   onDeleteRegion,
@@ -241,7 +240,7 @@ export function ClipsSidePanel({
           </div>
 
           {/* Details Editor (desktop only - on mobile it takes over the full panel) */}
-          {!isMobile && !isPlaybackMode && selectedRegion && (
+          {!isMobile && selectedRegion && (
             <ClipDetailsEditor
               region={selectedRegion}
               onUpdate={(updates) => onUpdateRegion(selectedRegion.id, updates)}

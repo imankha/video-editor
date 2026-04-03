@@ -90,9 +90,7 @@ export function PlaybackControls({
 }) {
   const progress = totalVirtualDuration > 0 ? (virtualTime / totalVirtualDuration) * 100 : 0;
   const progressBarRef = useRef(null);
-  const clipScrubRef = useRef(null);
   const isDraggingRef = useRef(false);
-  const isClipScrubDraggingRef = useRef(false);
 
   // Volume state
   const [volume, setVolume] = useState(1);
@@ -145,54 +143,11 @@ export function PlaybackControls({
     window.addEventListener('mouseup', handleMouseUp);
   }, [clientXToVirtualTime, onSeek, onStartScrub, onEndScrub]);
 
-  // --- Clip scrub bar drag ---
-
-  const clientXToActualTime = useCallback((clientX) => {
-    const rect = clipScrubRef.current?.getBoundingClientRect();
-    if (!rect || !currentSegment) return 0;
-    const fraction = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    return currentSegment.startTime + fraction * currentSegment.duration;
-  }, [currentSegment]);
-
-  const handleClipScrubMouseDown = useCallback((e) => {
-    e.preventDefault();
-    isClipScrubDraggingRef.current = true;
-    onStartScrub?.();
-    onSeekWithinSegment?.(clientXToActualTime(e.clientX));
-
-    const handleMouseMove = (e2) => {
-      if (!isClipScrubDraggingRef.current) return;
-      onSeekWithinSegment?.(clientXToActualTime(e2.clientX));
-    };
-    const handleMouseUp = () => {
-      isClipScrubDraggingRef.current = false;
-      onEndScrub?.();
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-  }, [clientXToActualTime, onSeekWithinSegment, onStartScrub, onEndScrub]);
-
-  // Clip scrub progress (within current segment)
-  const clipProgress = currentSegment
-    ? ((virtualTime - currentSegment.virtualStart) / currentSegment.duration) * 100
-    : 0;
-  const clampedClipProgress = Math.max(0, Math.min(100, clipProgress));
-
   const formatVirtualTime = (seconds) => {
     if (isNaN(seconds) || seconds < 0) return '0:00';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const formatClipTime = (seconds) => {
-    if (isNaN(seconds) || seconds < 0) return '0:00.0';
-    const m = Math.floor(seconds / 60);
-    const s = (seconds % 60).toFixed(1);
-    return `${m}:${s.padStart(4, '0')}`;
   };
 
   return (
@@ -231,33 +186,6 @@ export function PlaybackControls({
         />
       </div>
 
-      {/* Clip scrub bar — frame-level control within the active clip */}
-      {currentSegment && (
-        <div className="flex items-center gap-2 px-1">
-          <span className="text-xs text-gray-400 w-16 truncate flex-shrink-0" title={activeClipName || `Clip`}>
-            {activeClipName || 'Clip'}
-          </span>
-          <div
-            ref={clipScrubRef}
-            className="relative flex-1 h-4 bg-gray-700/60 rounded cursor-pointer"
-            onMouseDown={handleClipScrubMouseDown}
-          >
-            {/* Clip fill */}
-            <div
-              className="absolute top-0 left-0 h-full bg-green-600/50 rounded-l pointer-events-none"
-              style={{ width: `${clampedClipProgress}%` }}
-            />
-            {/* Clip playhead */}
-            <div
-              className="absolute top-0 w-0.5 h-full bg-white shadow pointer-events-none z-10"
-              style={{ left: `${clampedClipProgress}%` }}
-            />
-          </div>
-          <span className="text-xs text-gray-500 font-mono flex-shrink-0">
-            {formatClipTime(currentSegment.duration)}
-          </span>
-        </div>
-      )}
 
       {/* Controls row — matches AnnotateControls layout */}
       <div className={`controls-container flex flex-wrap items-center justify-between gap-y-1 py-2 px-2 sm:px-4 ${
