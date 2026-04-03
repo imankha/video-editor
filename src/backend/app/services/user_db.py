@@ -718,7 +718,7 @@ def backfill_preferences_from_profile(user_id: str) -> bool:
     if existing:
         return False
 
-    # Try to read from the active profile's database.sqlite
+    # Try to read from the active profile's profile.sqlite
     import json
     from ..database import get_db_connection
     try:

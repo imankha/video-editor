@@ -548,7 +548,7 @@ def get_db_version_from_r2(user_id: str, client=None) -> Union[int, R2VersionRes
     if not client:
         return R2VersionResult.ERROR  # No client = can't check
 
-    key = r2_key(user_id, "database.sqlite")
+    key = r2_key(user_id, "profile.sqlite")
     try:
         from .utils.retry import retry_r2_call, TIER_2
         response = retry_r2_call(
@@ -612,7 +612,7 @@ def sync_database_from_r2_if_newer(
         return False, local_version, False
 
     # Download the newer version
-    if download_from_r2(user_id, "database.sqlite", local_db_path):
+    if download_from_r2(user_id, "profile.sqlite", local_db_path):
         logger.info(f"Downloaded DB from R2: version {r2_version} (was {local_version})")
         return True, r2_version, False
 
@@ -669,7 +669,7 @@ def sync_database_to_r2_with_version(
         )
         # Re-download the newer version so next request uses fresh data
         try:
-            if download_from_r2(user_id, "database.sqlite", local_db_path):
+            if download_from_r2(user_id, "profile.sqlite", local_db_path):
                 logger.info(f"[SYNC] Re-downloaded v{r2_version} from R2 after conflict")
         except Exception as e:
             logger.warning(f"[SYNC] Failed to re-download after conflict: {e}")
@@ -678,7 +678,7 @@ def sync_database_to_r2_with_version(
     # Calculate new version
     new_version = (max(r2_version, current_version or 0)) + 1
 
-    key = r2_key(user_id, "database.sqlite")
+    key = r2_key(user_id, "profile.sqlite")
     try:
         from .utils.retry import retry_r2_call, TIER_1
         retry_r2_call(
@@ -710,7 +710,7 @@ def sync_database_from_r2(user_id: str, local_db_path: Path) -> bool:
     if not R2_ENABLED:
         return False
 
-    return download_from_r2(user_id, "database.sqlite", local_db_path)
+    return download_from_r2(user_id, "profile.sqlite", local_db_path)
 
 
 def sync_database_to_r2(user_id: str, local_db_path: Path) -> bool:
@@ -731,7 +731,7 @@ def sync_database_to_r2(user_id: str, local_db_path: Path) -> bool:
     if not local_db_path.exists():
         return False
 
-    return upload_to_r2(user_id, "database.sqlite", local_db_path)
+    return upload_to_r2(user_id, "profile.sqlite", local_db_path)
 
 
 # ---------------------------------------------------------------------------

@@ -42,7 +42,7 @@ class TestSyncDbToR2Explicit:
 
         mock_sync.return_value = (True, 6)
         fake_base = Path("/fake/user_data")
-        db_path = fake_base / "u1" / "profiles" / "p1" / "database.sqlite"
+        db_path = fake_base / "u1" / "profiles" / "p1" / "profile.sqlite"
 
         with patch("app.database.get_user_data_path_explicit", return_value=db_path.parent), \
              _patch_path_exists(db_path):
@@ -61,7 +61,7 @@ class TestSyncDbToR2Explicit:
 
         mock_sync.return_value = (True, 4)
         fake_base = Path("/fake/user_data")
-        db_path = fake_base / "u1" / "profiles" / "p1" / "database.sqlite"
+        db_path = fake_base / "u1" / "profiles" / "p1" / "profile.sqlite"
 
         with patch("app.database.get_user_data_path_explicit", return_value=db_path.parent), \
              _patch_path_exists(db_path), \
@@ -81,7 +81,7 @@ class TestSyncDbToR2Explicit:
 
         mock_sync.return_value = (False, None)
         fake_base = Path("/fake/user_data")
-        db_path = fake_base / "u1" / "profiles" / "p1" / "database.sqlite"
+        db_path = fake_base / "u1" / "profiles" / "p1" / "profile.sqlite"
 
         with patch("app.database.get_user_data_path_explicit", return_value=db_path.parent), \
              _patch_path_exists(db_path), \

@@ -65,7 +65,7 @@ def _get_profile_db_paths(user_id: str) -> list[Path]:
     profiles_dir = USER_DATA_BASE / user_id / "profiles"
     if not profiles_dir.exists():
         return []
-    return list(profiles_dir.glob("*/database.sqlite"))
+    return list(profiles_dir.glob("*/profile.sqlite"))
 
 
 def _check_steps_on_conn(conn) -> dict[str, bool]:

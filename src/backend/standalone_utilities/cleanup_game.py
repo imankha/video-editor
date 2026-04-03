@@ -31,7 +31,7 @@ def main():
     # Setup paths
     script_dir = Path(__file__).parent
     project_root = script_dir.parent.parent
-    db_path = project_root / 'user_data' / 'a' / 'database.sqlite'
+    db_path = project_root / 'user_data' / 'a' / 'profile.sqlite'
 
     if not db_path.exists():
         print(f"Error: Database not found at {db_path}")

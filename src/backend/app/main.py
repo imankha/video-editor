@@ -207,7 +207,7 @@ def _graceful_shutdown(signum, frame):
             from app.storage import sync_database_to_r2_with_version
             from app.database import get_local_db_version, set_local_db_version
 
-            for db_file in USER_DATA_BASE.glob("*/profiles/*/database.sqlite"):
+            for db_file in USER_DATA_BASE.glob("*/profiles/*/profile.sqlite"):
                 parts = db_file.relative_to(USER_DATA_BASE).parts
                 user_id = parts[0]
                 profile_id = parts[2]

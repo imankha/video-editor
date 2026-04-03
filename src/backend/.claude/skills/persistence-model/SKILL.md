@@ -74,11 +74,11 @@ Frontend                    Backend                     R2 Storage
 ## Database Location
 
 ```
-user_data/{user_id}/database.sqlite   # Local
-reel-ballers-users/{user_id}/database.sqlite   # R2
+user_data/{user_id}/profile.sqlite   # Local
+reel-ballers-users/{user_id}/profile.sqlite   # R2
 ```
 
-Dev default: `C:\Users\imank\projects\video-editor\user_data\a\database.sqlite`
+Dev default: `C:\Users\imank\projects\video-editor\user_data\a\profile.sqlite`
 
 ---
 

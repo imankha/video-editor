@@ -4,7 +4,7 @@
 import sqlite3
 from pathlib import Path
 
-db_path = Path(r"C:\Users\imank\projects\video-editor\user_data\a\database.sqlite")
+db_path = Path(r"C:\Users\imank\projects\video-editor\user_data\a\profile.sqlite")
 print(f"Database: {db_path}")
 conn = sqlite3.connect(str(db_path))
 conn.row_factory = sqlite3.Row

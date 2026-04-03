@@ -1,7 +1,7 @@
 """
 Database configuration and initialization for Video Editor.
 
-Uses SQLite with the database file stored in user_data/<user_id>/database.sqlite.
+Uses SQLite with the database file stored in user_data/<user_id>/profile.sqlite.
 Tables are created automatically on first access or when missing.
 
 The database and directories are auto-created on demand, so deleting
@@ -269,7 +269,7 @@ def get_local_db_version(user_id: str, profile_id: str) -> Optional[int]:
             return cached
 
     # Not in cache - try to read from database file
-    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "database.sqlite"
+    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
     if not db_path.exists():
         return None
 
@@ -312,7 +312,7 @@ def set_local_db_version(user_id: str, profile_id: str, version: Optional[int]) 
 
     # Also persist to database file
     if version is not None:
-        db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "database.sqlite"
+        db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
         if db_path.exists():
             try:
                 conn = sqlite3.connect(str(db_path), timeout=5)
@@ -369,7 +369,7 @@ def get_user_data_path() -> Path:
 
 def get_database_path() -> Path:
     """Get the database file path for the current user."""
-    return get_user_data_path() / "database.sqlite"
+    return get_user_data_path() / "profile.sqlite"
 
 
 # Dynamic path getters for video storage subdirectories
@@ -419,10 +419,10 @@ def ensure_directories():
     Ensure all required directories exist for the current user.
     Called automatically before database access.
 
-    When R2 is enabled, only create the user_data base directory (for database.sqlite).
+    When R2 is enabled, only create the user_data base directory (for profile.sqlite).
     Video files are stored in R2, not locally.
     """
-    # Always create base user data directory (needed for database.sqlite)
+    # Always create base user data directory (needed for profile.sqlite)
     get_user_data_path().mkdir(parents=True, exist_ok=True)
 
     # When R2 is enabled, don't create local video directories - all files go to R2
@@ -463,6 +463,12 @@ def ensure_database():
 
     # Ensure directories exist
     ensure_directories()
+
+    # T990: Migrate database.sqlite → profile.sqlite (one-time local rename)
+    old_db_path = db_path.parent / "database.sqlite"
+    if not db_path.exists() and old_db_path.exists():
+        old_db_path.rename(db_path)
+        logger.info(f"[T990] Renamed database.sqlite → profile.sqlite for user={user_id}")
 
     # If R2 is enabled, download from R2 only on first access (no local DB yet)
     # We do NOT check R2 version on every request - that HEAD request is slow (20s+ when cold)
@@ -1394,7 +1400,7 @@ def sync_db_to_r2_explicit(user_id: str, profile_id: str) -> bool:
     if not R2_ENABLED:
         return True
 
-    db_path = get_user_data_path_explicit(user_id, profile_id) / "database.sqlite"
+    db_path = get_user_data_path_explicit(user_id, profile_id) / "profile.sqlite"
     if not db_path.exists():
         return True
 

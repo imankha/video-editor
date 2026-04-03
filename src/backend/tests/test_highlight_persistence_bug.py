@@ -259,7 +259,7 @@ class TestAPICodePath:
         import sqlite3
         from pathlib import Path
 
-        db_path = Path("C:/Users/imank/projects/video-editor/user_data/a/database.sqlite")
+        db_path = Path("C:/Users/imank/projects/video-editor/user_data/a/profile.sqlite")
 
         if not db_path.exists():
             pytest.skip("User A database not found")

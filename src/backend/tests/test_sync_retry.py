@@ -116,11 +116,11 @@ class TestRetryPendingSync:
         # Create fake DB files
         profile_dir = base / user_id / "profiles" / "abcd1234"
         profile_dir.mkdir(parents=True)
-        (profile_dir / "database.sqlite").write_text("fake")
+        (profile_dir / "profile.sqlite").write_text("fake")
         (base / user_id / "user.sqlite").write_text("fake")
 
         # Patch database functions that are imported locally inside retry_pending_sync
-        with patch("app.database.get_database_path", return_value=profile_dir / "database.sqlite"), \
+        with patch("app.database.get_database_path", return_value=profile_dir / "profile.sqlite"), \
              patch("app.database.get_local_db_version", return_value=1), \
              patch("app.database.set_local_db_version") as mock_set_ver, \
              patch("app.database.get_local_user_db_version", return_value=1), \
@@ -141,9 +141,9 @@ class TestRetryPendingSync:
 
         profile_dir = base / user_id / "profiles" / "abcd1234"
         profile_dir.mkdir(parents=True)
-        (profile_dir / "database.sqlite").write_text("fake")
+        (profile_dir / "profile.sqlite").write_text("fake")
 
-        with patch("app.database.get_database_path", return_value=profile_dir / "database.sqlite"), \
+        with patch("app.database.get_database_path", return_value=profile_dir / "profile.sqlite"), \
              patch("app.database.get_local_db_version", return_value=1), \
              patch("app.database.set_local_db_version"), \
              patch("app.database.get_local_user_db_version", return_value=None), \

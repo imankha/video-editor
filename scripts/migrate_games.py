@@ -83,7 +83,7 @@ def compute_blake3_hash(file_path: Path, chunk_size: int = 8 * 1024 * 1024) -> s
 def get_user_database(user_id: str) -> Path:
     """Get path to user's database file."""
     user_data_base = project_root / "user_data" / user_id
-    return user_data_base / "database.sqlite"
+    return user_data_base / "profile.sqlite"
 
 
 def download_user_database(user_id: str, local_path: Path) -> bool:
@@ -92,7 +92,7 @@ def download_user_database(user_id: str, local_path: Path) -> bool:
     if not client:
         return False
 
-    key = r2_key(user_id, "database.sqlite")
+    key = r2_key(user_id, "profile.sqlite")
     try:
         local_path.parent.mkdir(parents=True, exist_ok=True)
         client.download_file(R2_BUCKET, key, str(local_path))
@@ -228,7 +228,7 @@ def migrate_user_games(user_id: str, dry_run: bool = False, keep_originals: bool
         temp_path = Path(temp_dir)
 
         # Download user's database
-        db_path = temp_path / "database.sqlite"
+        db_path = temp_path / "profile.sqlite"
         print(f"Downloading database for user {user_id}...")
 
         if not download_user_database(user_id, db_path):
@@ -384,7 +384,7 @@ def migrate_user_games(user_id: str, dry_run: bool = False, keep_originals: bool
                     client.upload_file(
                         str(db_path),
                         R2_BUCKET,
-                        r2_key(user_id, "database.sqlite")
+                        r2_key(user_id, "profile.sqlite")
                     )
                     print(f"  Database uploaded successfully")
                 except Exception as e:

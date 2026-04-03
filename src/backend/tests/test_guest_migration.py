@@ -105,8 +105,8 @@ def migration_env(tmp_path):
     guest_profile_id = uuid4().hex[:8]
     target_profile_id = uuid4().hex[:8]
 
-    guest_db_path = tmp_path / guest_user_id / "profiles" / guest_profile_id / "database.sqlite"
-    target_db_path = tmp_path / recovered_user_id / "profiles" / target_profile_id / "database.sqlite"
+    guest_db_path = tmp_path / guest_user_id / "profiles" / guest_profile_id / "profile.sqlite"
+    target_db_path = tmp_path / recovered_user_id / "profiles" / target_profile_id / "profile.sqlite"
 
     _create_db(guest_db_path)
     _create_db(target_db_path)

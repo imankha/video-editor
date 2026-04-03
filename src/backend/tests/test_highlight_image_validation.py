@@ -50,7 +50,7 @@ def find_available_test_data() -> Optional[Dict]:
             if not user_dir.is_dir():
                 continue
 
-            db_path = user_dir / "database.sqlite"
+            db_path = user_dir / "profile.sqlite"
             if not db_path.exists():
                 continue
 

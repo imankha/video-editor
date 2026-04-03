@@ -80,7 +80,7 @@ def export_game_to_tsv(cursor, game_id, game_name, output_path):
     return len(clips)
 
 def main():
-    db_path = Path(__file__).parent.parent.parent / 'user_data' / 'a' / 'database.sqlite'
+    db_path = Path(__file__).parent.parent.parent / 'user_data' / 'a' / 'profile.sqlite'
     annotations_dir = Path(__file__).parent.parent.parent / 'formal annotations'
 
     if not db_path.exists():

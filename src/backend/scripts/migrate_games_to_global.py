@@ -204,7 +204,7 @@ def main():
 
     # Find all users with databases
     for user_dir in USER_DATA_BASE.iterdir():
-        if user_dir.is_dir() and (user_dir / "database.sqlite").exists():
+        if user_dir.is_dir() and (user_dir / "profile.sqlite").exists():
             migrate_user_games(user_dir.name, dry_run=dry_run)
 
 

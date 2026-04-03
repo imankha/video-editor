@@ -2,7 +2,7 @@
 T85a: Migrate user data from flat layout to profiles layout.
 
 Before: user_data/{user_id}/database.sqlite, raw_clips/, working_videos/, ...
-After:  user_data/{user_id}/profiles/{profile_id}/database.sqlite, raw_clips/, ...
+After:  user_data/{user_id}/profiles/{profile_id}/profile.sqlite, raw_clips/, ...
 
 Handles both local filesystem AND R2 object migration.
 
@@ -30,7 +30,7 @@ if _env_file.exists():
 
 # Directories/files that belong inside a profile
 PROFILE_ITEMS = {
-    "database.sqlite",
+    "profile.sqlite",
     "database.db",
     "video_editor.db",
     "raw_clips",
@@ -69,7 +69,7 @@ def migrate_user(user_id: str, profile_id: str, execute: bool = False):
 
     # If profile dir already has a database (e.g., from user_session_init),
     # remove it — the real data at top level takes precedence
-    stale_db = profile_dir / "database.sqlite"
+    stale_db = profile_dir / "profile.sqlite"
     if stale_db.exists():
         if execute:
             print(f"  [REPLACE] Removing empty database created by init: {stale_db}")

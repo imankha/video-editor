@@ -568,7 +568,7 @@ async def start_framing_export(
         "credit_user_id": user_id,
     }
 
-    # Step 2: Create job in database (atomic in profile database.sqlite)
+    # Step 2: Create job in database (atomic in profile.sqlite)
     input_data = json.dumps(config)
     try:
         with get_db_connection() as conn:

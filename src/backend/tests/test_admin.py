@@ -171,7 +171,7 @@ class TestGpuAggregation:
         # Create a fake profile DB with export_jobs containing gpu_seconds
         profile_dir = tmp_path / "regular-user" / "profiles" / "profile-1"
         profile_dir.mkdir(parents=True)
-        db_path = profile_dir / "database.sqlite"
+        db_path = profile_dir / "profile.sqlite"
         conn = sqlite3.connect(str(db_path))
         conn.execute("""
             CREATE TABLE export_jobs (

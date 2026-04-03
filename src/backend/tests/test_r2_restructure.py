@@ -89,8 +89,8 @@ class TestR2KeyFormat:
     def test_r2_key_prod_format(self):
         """r2_key should respect APP_ENV."""
         from app.storage import r2_key
-        result = r2_key("myuser", "database.sqlite")
-        assert result == "prod/users/myuser/profiles/testprof/database.sqlite"
+        result = r2_key("myuser", "profile.sqlite")
+        assert result == "prod/users/myuser/profiles/testprof/profile.sqlite"
 
     @patch("app.storage.APP_ENV", "dev")
     def test_r2_key_normalizes_backslashes(self):
@@ -183,7 +183,7 @@ class TestUserDataPath:
         assert parts[-4] == "testuser"
         assert parts[-3] == "profiles"
         assert parts[-2] == "prof123"
-        assert parts[-1] == "database.sqlite"
+        assert parts[-1] == "profile.sqlite"
 
     def test_raw_clips_path_under_profile(self):
         """get_raw_clips_path() should be under the profile directory."""

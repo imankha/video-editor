@@ -63,7 +63,7 @@ async def upload_video(file: UploadFile, user_id: str):
 ### R2 Key Structure
 ```
 {user_id}/
-  database.sqlite          # User database
+  profile.sqlite           # Profile database
   videos/
     {filename}             # Uploaded videos
   exports/

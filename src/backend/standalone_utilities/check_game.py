@@ -21,7 +21,7 @@ def main():
         print(f"Error: game_id must be an integer, got '{sys.argv[1]}'")
         sys.exit(1)
 
-    db_path = Path(__file__).parent.parent.parent / 'user_data' / 'a' / 'database.sqlite'
+    db_path = Path(__file__).parent.parent.parent / 'user_data' / 'a' / 'profile.sqlite'
     if not db_path.exists():
         print(f"Error: Database not found at {db_path}")
         sys.exit(1)

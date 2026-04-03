@@ -134,7 +134,7 @@ def main():
     if not profiles_dir.exists():
         print(f"WARNING: No profiles directory at {profiles_dir}")
     else:
-        for db_path in profiles_dir.glob("*/database.sqlite"):
+        for db_path in profiles_dir.glob("*/profile.sqlite"):
             profile_id = db_path.parent.name
             print(f"\n--- Clearing profile: {profile_id} ---")
 
@@ -149,7 +149,7 @@ def main():
             print(f"  Cleared: {', '.join(TABLES_TO_CLEAR)}")
 
             # Upload cleared DB to R2
-            r2_key = f"{app_env}/users/{user_id}/profiles/{profile_id}/database.sqlite"
+            r2_key = f"{app_env}/users/{user_id}/profiles/{profile_id}/profile.sqlite"
             checkpoint_and_upload(db_path, r2_client, bucket, r2_key)
 
     # Delete user record entirely from auth.sqlite

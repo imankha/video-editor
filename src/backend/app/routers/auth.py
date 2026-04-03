@@ -305,7 +305,7 @@ def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
         return
 
     # 3. Check if guest has games
-    guest_db_path = USER_DATA_BASE / guest_user_id / "profiles" / guest_profile_id / "database.sqlite"
+    guest_db_path = USER_DATA_BASE / guest_user_id / "profiles" / guest_profile_id / "profile.sqlite"
     if not guest_db_path.exists():
         logger.info(f"[Auth] Migration skip: no local DB for guest {guest_user_id}")
         with get_user_db_connection(recovered_user_id) as conn:
@@ -361,7 +361,7 @@ def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
 
     # 5. Resolve target: recovered account's default profile
     target_profile_id = get_selected_profile_id(recovered_user_id)
-    target_db_path = USER_DATA_BASE / recovered_user_id / "profiles" / target_profile_id / "database.sqlite"
+    target_db_path = USER_DATA_BASE / recovered_user_id / "profiles" / target_profile_id / "profile.sqlite"
 
     if not target_db_path.exists():
         # Brand new account that never loaded — initialize it
@@ -378,7 +378,7 @@ def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
     original_profile_id = get_current_profile_id()
     try:
         set_current_profile_id(target_profile_id)
-        upload_to_r2(recovered_user_id, "database.sqlite", target_db_path)
+        upload_to_r2(recovered_user_id, "profile.sqlite", target_db_path)
     except OSError as e:
         logger.error(f"[Auth] File system error during migration upload: {e}")
         raise
