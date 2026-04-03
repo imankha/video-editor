@@ -192,7 +192,7 @@ Deploy to production domains with proper scaling.
 | T810 | [Multi-Clip Export Fails for Game Video Clips](tasks/T810-multi-clip-export-game-video.md) | DONE | 9 | 6 | Multi-clip export downloads each clip's file from frontend, but game-video clips have no standalone files (T740). Backend needs to resolve clips from DB like single-clip export does. |
 | T830 | [Clip Preview Timeline Shows Full Video](tasks/T830-clip-preview-timeline-full-video.md) | DONE | 6 | 4 | New Project modal clip preview shows full game video timeline instead of clip range |
 | T840 | [Annotate Drag/Play Conflict](tasks/T840-annotate-drag-play-conflict.md) | DONE | 7 | 3 | Dragging start/end time handles while video is playing causes playback to fight with drag preview |
-| T850 | [Annotate Duplicate Scrub UI](tasks/T850-annotate-duplicate-scrub-ui.md) | TESTING | 5 | 4 | Two scrub/timeline UI instances visible during clip playback in annotate mode |
+| T850 | [Annotate Duplicate Scrub UI](tasks/T850-annotate-duplicate-scrub-ui.md) | DONE | 5 | 4 | Two scrub/timeline UI instances visible during clip playback in annotate mode |
 | T860 | [Keyframe Invariant Render Loop](tasks/T860-keyframe-invariant-render-loop.md) | DONE | 9 | 5 | Keyframe invariant check in render body causes 500+ re-renders, making framing unresponsive |
 | T870 | [Export Progress Stuck During Download](tasks/T870-export-progress-stuck-during-download.md) | TESTING | 5 | 3 | Export shows 0% for ~48s while backend downloads game video from R2 |
 

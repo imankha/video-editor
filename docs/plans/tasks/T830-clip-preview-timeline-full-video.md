@@ -1,6 +1,6 @@
 # T830: Clip Preview Timeline Shows Full Video Duration
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-04-01
