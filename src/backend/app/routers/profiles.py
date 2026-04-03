@@ -24,17 +24,41 @@ from app.user_context import get_current_user_id
 from app.profile_context import set_current_profile_id
 from app.session_init import invalidate_user_cache
 from app.storage import (
-    read_profiles_json,
-    read_selected_profile_from_r2,
     save_profiles_json,
     upload_selected_profile_json,
     delete_profile_r2_data,
     delete_local_profile_data,
+    R2_ENABLED,
+)
+from app.services.user_db import (
+    get_profiles,
+    get_selected_profile_id,
+    set_selected_profile_id,
+    create_profile as db_create_profile,
+    update_profile as db_update_profile,
+    delete_profile as db_delete_profile,
+    set_default_profile,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
+
+
+def _sync_profiles_to_r2(user_id: str) -> None:
+    """Best-effort sync of profiles from user.sqlite to R2 (backup)."""
+    if not R2_ENABLED:
+        return
+    profiles = get_profiles(user_id)
+    default_id = next((p["id"] for p in profiles if p["is_default"]), None)
+    data = {
+        "default": default_id or (profiles[0]["id"] if profiles else None),
+        "profiles": {
+            p["id"]: {"name": p["name"], "color": p["color"]}
+            for p in profiles
+        },
+    }
+    save_profiles_json(user_id, data)
 
 
 # ---------------------------------------------------------------------------
@@ -63,86 +87,76 @@ class SwitchProfileRequest(BaseModel):
 async def list_profiles():
     """List all profiles for the current user.
 
-    Returns profiles with metadata including which is current and default.
+    Reads from user.sqlite (source of truth since T960).
     """
     user_id = get_current_user_id()
-    data = read_profiles_json(user_id)
+    profiles = get_profiles(user_id)
+    selected = get_selected_profile_id(user_id)
 
-    if not data:
-        return {"profiles": []}
-
-    selected = read_selected_profile_from_r2(user_id)
-
-    profiles = []
-    for profile_id, meta in data.get("profiles", {}).items():
-        profiles.append({
-            "id": profile_id,
-            "name": meta.get("name"),
-            "color": meta.get("color"),
-            "isDefault": profile_id == data.get("default"),
-            "isCurrent": profile_id == selected,
-        })
-
-    return {"profiles": profiles}
+    return {"profiles": [
+        {
+            "id": p["id"],
+            "name": p["name"],
+            "color": p["color"],
+            "isDefault": bool(p["is_default"]),
+            "isCurrent": p["id"] == selected,
+        }
+        for p in profiles
+    ]}
 
 
 @router.post("")
 async def create_profile(request: CreateProfileRequest):
     """Create a new profile.
 
-    Generates a new GUID, adds to profiles.json, initializes a fresh
-    database, and auto-switches to the new profile.
+    Writes to user.sqlite (source of truth) and R2 (backup).
     """
     user_id = get_current_user_id()
-    data = read_profiles_json(user_id)
-
-    if not data:
-        raise HTTPException(status_code=500, detail="Could not read profiles.json")
+    profiles = get_profiles(user_id)
 
     # Check for duplicate name (case-insensitive)
-    existing_names = [
-        meta.get("name", "").lower()
-        for meta in data["profiles"].values()
-        if meta.get("name")
-    ]
+    existing_names = [p["name"].lower() for p in profiles if p["name"]]
     if request.name.strip().lower() in existing_names:
         raise HTTPException(status_code=409, detail="A profile with this name already exists")
 
     new_id = uuid4().hex[:8]
-    data["profiles"][new_id] = {
-        "name": request.name.strip(),
-        "color": request.color,
-    }
+    name = request.name.strip()
 
-    save_profiles_json(user_id, data)
+    # Write to user.sqlite
+    db_create_profile(user_id, new_id, name, request.color)
+    set_selected_profile_id(user_id, new_id)
+
+    # R2 backup: sync full profiles state
+    _sync_profiles_to_r2(user_id)
+    upload_selected_profile_json(user_id, new_id)
 
     # Initialize DB for new profile
     set_current_profile_id(new_id)
     from app.database import ensure_database
     ensure_database()
 
-    # Auto-switch to new profile
-    upload_selected_profile_json(user_id, new_id)
     invalidate_user_cache(user_id)
 
-    logger.info(f"Created profile {new_id} ({request.name}) for user {user_id}")
+    logger.info(f"Created profile {new_id} ({name}) for user {user_id}")
 
-    return {"id": new_id, "name": request.name, "color": request.color}
+    return {"id": new_id, "name": name, "color": request.color}
 
 
 @router.put("/current")
 async def switch_profile(request: SwitchProfileRequest):
     """Switch the active profile.
 
-    Updates selected-profile.json in R2 and invalidates the session
-    init cache so the next request uses the new profile.
+    Updates user.sqlite (source of truth) and R2 (backup).
     """
     user_id = get_current_user_id()
-    data = read_profiles_json(user_id)
+    profiles = get_profiles(user_id)
+    profile_ids = {p["id"] for p in profiles}
 
-    if not data or request.profileId not in data.get("profiles", {}):
+    if request.profileId not in profile_ids:
         raise HTTPException(status_code=404, detail="Profile not found")
 
+    # Write to user.sqlite + R2 backup
+    set_selected_profile_id(user_id, request.profileId)
     upload_selected_profile_json(user_id, request.profileId)
     invalidate_user_cache(user_id)
 
@@ -160,30 +174,34 @@ async def switch_profile(request: SwitchProfileRequest):
 async def update_profile(profile_id: str, request: UpdateProfileRequest):
     """Update a profile's name and/or color."""
     user_id = get_current_user_id()
-    data = read_profiles_json(user_id)
+    profiles = get_profiles(user_id)
+    profile = next((p for p in profiles if p["id"] == profile_id), None)
 
-    if not data or profile_id not in data.get("profiles", {}):
+    if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    profile = data["profiles"][profile_id]
+    name = profile["name"]
+    color = profile["color"]
+
     if request.name is not None:
         # Check for duplicate name (case-insensitive), excluding this profile
         existing_names = [
-            meta.get("name", "").lower()
-            for pid, meta in data["profiles"].items()
-            if pid != profile_id and meta.get("name")
+            p["name"].lower() for p in profiles
+            if p["id"] != profile_id and p["name"]
         ]
         if request.name.strip().lower() in existing_names:
             raise HTTPException(status_code=409, detail="A profile with this name already exists")
-        profile["name"] = request.name.strip()
-    if request.color is not None:
-        profile["color"] = request.color
+        name = request.name.strip()
 
-    save_profiles_json(user_id, data)
+    if request.color is not None:
+        color = request.color
+
+    db_update_profile(user_id, profile_id, name=name, color=color)
+    _sync_profiles_to_r2(user_id)
 
     logger.info(f"Updated profile {profile_id} for user {user_id}")
 
-    return {"id": profile_id, "name": profile["name"], "color": profile.get("color")}
+    return {"id": profile_id, "name": name, "color": color}
 
 
 @router.delete("/{profile_id}")
@@ -194,29 +212,34 @@ async def delete_profile(profile_id: str):
     profile, auto-switches to another one first.
     """
     user_id = get_current_user_id()
-    data = read_profiles_json(user_id)
+    profiles = get_profiles(user_id)
+    profile_ids = {p["id"] for p in profiles}
 
-    if not data or profile_id not in data.get("profiles", {}):
+    if profile_id not in profile_ids:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    if len(data["profiles"]) <= 1:
+    if len(profiles) <= 1:
         raise HTTPException(status_code=400, detail="Cannot delete last profile")
 
     # If deleting the current profile, switch to another first
-    current = read_selected_profile_from_r2(user_id)
+    current = get_selected_profile_id(user_id)
     if profile_id == current:
-        other_id = next(pid for pid in data["profiles"] if pid != profile_id)
+        other_id = next(p["id"] for p in profiles if p["id"] != profile_id)
+        set_selected_profile_id(user_id, other_id)
         upload_selected_profile_json(user_id, other_id)
         invalidate_user_cache(user_id)
 
-    # Remove from profiles.json
-    del data["profiles"][profile_id]
-    if data.get("default") == profile_id:
-        data["default"] = next(iter(data["profiles"]))
+    # Check if deleting the default profile — reassign default
+    deleted_profile = next(p for p in profiles if p["id"] == profile_id)
+    if deleted_profile["is_default"]:
+        new_default = next(p["id"] for p in profiles if p["id"] != profile_id)
+        set_default_profile(user_id, new_default)
 
-    save_profiles_json(user_id, data)
+    # Delete from user.sqlite + R2 backup
+    db_delete_profile(user_id, profile_id)
+    _sync_profiles_to_r2(user_id)
 
-    # Delete R2 data and local data
+    # Delete R2 profile data and local data
     delete_profile_r2_data(user_id, profile_id)
     delete_local_profile_data(user_id, profile_id)
 

@@ -20,7 +20,6 @@ from .profile_context import set_current_profile_id
 from .storage import (
     R2_ENABLED,
     R2ReadError,
-    read_selected_profile_from_r2,
     upload_profiles_json,
     upload_selected_profile_json,
 )
@@ -68,30 +67,44 @@ def user_session_init(user_id: str) -> dict:
 
     # --- Slow path: first init for this user ---
 
-    # 1. Load or create profile
+    # 1. Ensure user-level database exists (needed before profile lookup)
+    from .services.user_db import ensure_user_database
+    ensure_user_database(user_id)
+
+    # 2. Load or create profile (user.sqlite is source of truth, R2 is backup)
+    from .services.user_db import (
+        get_selected_profile_id, get_profiles,
+        create_profile, set_selected_profile_id, migrate_profiles_from_r2,
+    )
+
     profile_id = None
     is_new_user = False
 
-    if R2_ENABLED:
-        try:
-            profile_id = read_selected_profile_from_r2(user_id)
-        except R2ReadError:
-            # R2 failed but the user may have existing data — do NOT create
-            # a new profile (that would overwrite their real profile selection).
-            # Let the request fail visibly rather than silently reset the user.
-            logger.error(f"R2 read failed for user {user_id} — refusing to create new profile")
-            raise
+    # Try user.sqlite first
+    profile_id = get_selected_profile_id(user_id)
+    if profile_id:
+        logger.info(f"Loaded profile {profile_id} for user {user_id} from user.sqlite")
+    else:
+        # Try R2 migration (existing user whose profiles are still in R2)
+        if R2_ENABLED:
+            try:
+                profile_id = migrate_profiles_from_r2(user_id)
+                if profile_id:
+                    logger.info(f"Migrated profile {profile_id} for user {user_id} from R2")
+            except R2ReadError:
+                logger.error(f"R2 read failed for user {user_id} — refusing to create new profile")
+                raise
 
     if not profile_id:
-        # Genuinely new user (NoSuchKey) or R2 disabled — create default profile
+        # Genuinely new user — create default profile in user.sqlite + R2 backup
         profile_id = uuid4().hex[:8]
         is_new_user = True
+        create_profile(user_id, profile_id, name="", color="#6366f1", is_default=True)
+        set_selected_profile_id(user_id, profile_id)
         if R2_ENABLED:
             upload_profiles_json(user_id, profile_id)
             upload_selected_profile_json(user_id, profile_id)
         logger.info(f"Created new profile {profile_id} for user {user_id}")
-    else:
-        logger.info(f"Loaded existing profile {profile_id} for user {user_id}")
 
     # 2. Set profile context
     set_current_profile_id(profile_id)
@@ -100,10 +113,6 @@ def user_session_init(user_id: str) -> dict:
     # Import here to avoid circular imports (database.py imports from storage.py)
     from .database import ensure_database
     ensure_database()
-
-    # 4. Ensure user-level database exists (credits, billing, recovery)
-    from .services.user_db import ensure_user_database
-    ensure_user_database(user_id)
 
     # 5. T890: Recover orphaned credit reservations
     try:

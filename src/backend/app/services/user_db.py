@@ -85,6 +85,19 @@ _USER_DB_SCHEMA = """
         quest_id TEXT PRIMARY KEY,
         completed_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS profiles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL,
+        is_default INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
 """
 
 
@@ -616,3 +629,120 @@ def backfill_completed_quests(user_id: str) -> int:
             conn.commit()
             logger.info(f"[UserDB] Backfilled {count} completed quests for user {user_id}")
     return count
+
+
+# ---------------------------------------------------------------------------
+# Profile management (T960: profiles in user.sqlite)
+# ---------------------------------------------------------------------------
+
+def get_profiles(user_id: str) -> list[dict]:
+    """Return all profiles for a user, ordered by creation time."""
+    with get_user_db_connection(user_id) as conn:
+        rows = conn.execute(
+            "SELECT id, name, color, is_default, created_at FROM profiles ORDER BY created_at"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_selected_profile_id(user_id: str) -> Optional[str]:
+    """Return the selected profile ID from user_settings, or None."""
+    with get_user_db_connection(user_id) as conn:
+        row = conn.execute(
+            "SELECT value FROM user_settings WHERE key = 'selected_profile'"
+        ).fetchone()
+        return row["value"] if row else None
+
+
+def set_selected_profile_id(user_id: str, profile_id: str) -> None:
+    """Set the selected profile in user_settings."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES ('selected_profile', ?)",
+            (profile_id,),
+        )
+        conn.commit()
+
+
+def create_profile(user_id: str, profile_id: str, name: str, color: str, is_default: bool = False) -> None:
+    """Insert a new profile row."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "INSERT INTO profiles (id, name, color, is_default) VALUES (?, ?, ?, ?)",
+            (profile_id, name, color, 1 if is_default else 0),
+        )
+        conn.commit()
+    logger.info(f"[UserDB] Created profile {profile_id} ({name}) for user {user_id}")
+
+
+def update_profile(user_id: str, profile_id: str, name: Optional[str] = None, color: Optional[str] = None) -> None:
+    """Update a profile's name and/or color."""
+    with get_user_db_connection(user_id) as conn:
+        if name is not None:
+            conn.execute("UPDATE profiles SET name = ? WHERE id = ?", (name, profile_id))
+        if color is not None:
+            conn.execute("UPDATE profiles SET color = ? WHERE id = ?", (color, profile_id))
+        conn.commit()
+
+
+def delete_profile(user_id: str, profile_id: str) -> None:
+    """Delete a profile row. Also clears is_default if it was the default."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute("DELETE FROM profiles WHERE id = ?", (profile_id,))
+        conn.commit()
+    logger.info(f"[UserDB] Deleted profile {profile_id} for user {user_id}")
+
+
+def set_default_profile(user_id: str, profile_id: str) -> None:
+    """Set a profile as the default (clears is_default on all others)."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute("UPDATE profiles SET is_default = 0")
+        conn.execute("UPDATE profiles SET is_default = 1 WHERE id = ?", (profile_id,))
+        conn.commit()
+
+
+def migrate_profiles_from_r2(user_id: str) -> Optional[str]:
+    """One-time migration: read profiles.json from R2 into user.sqlite.
+
+    Returns the selected profile_id, or None if no R2 data found.
+    Idempotent — skips if profiles table already has rows.
+    """
+    # Check if already migrated
+    existing = get_profiles(user_id)
+    if existing:
+        return get_selected_profile_id(user_id)
+
+    # Read R2 data
+    from ..storage import read_profiles_json, read_selected_profile_from_r2, R2_ENABLED
+    if not R2_ENABLED:
+        return None
+
+    data = read_profiles_json(user_id)
+    if not data or not data.get("profiles"):
+        return None
+
+    default_id = data.get("default")
+    selected_id = None
+    try:
+        selected_id = read_selected_profile_from_r2(user_id)
+    except Exception:
+        pass  # Non-fatal — we'll use default if selected can't be read
+
+    # Write profiles into user.sqlite
+    with get_user_db_connection(user_id) as conn:
+        for pid, meta in data["profiles"].items():
+            name = meta.get("name") or ""
+            color = meta.get("color") or "#6366f1"
+            is_default = 1 if pid == default_id else 0
+            conn.execute(
+                "INSERT OR IGNORE INTO profiles (id, name, color, is_default) VALUES (?, ?, ?, ?)",
+                (pid, name, color, is_default),
+            )
+        if selected_id:
+            conn.execute(
+                "INSERT OR REPLACE INTO user_settings (key, value) VALUES ('selected_profile', ?)",
+                (selected_id,),
+            )
+        conn.commit()
+
+    logger.info(f"[UserDB] Migrated {len(data['profiles'])} profiles from R2 for user {user_id}")
+    return selected_id or default_id
