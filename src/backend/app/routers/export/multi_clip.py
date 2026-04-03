@@ -1298,6 +1298,7 @@ async def export_multi_clip(
         db_clips_by_id = {clip['id']: clip for clip in db_clips}
 
         resolve_temp_dir = tempfile.mkdtemp()
+        resolve_total = len(clips_data)
         try:
             for i, clip_data in enumerate(clips_data):
                 wc_id = clip_data.get('workingClipId')
@@ -1334,11 +1335,36 @@ async def export_multi_clip(
 
                     # Reuse downloaded game video if multiple clips share the same game
                     if not game_video_path.exists():
+                        # Send download progress (5-10% range)
+                        dl_progress = 5 + int(((i + 0.0) / resolve_total) * 5)
+                        progress_data = {
+                            "progress": dl_progress,
+                            "message": f"Downloading source video ({i + 1}/{resolve_total})...",
+                            "status": "processing",
+                            "projectId": project_id,
+                            "projectName": project_name,
+                            "type": "multi_clip"
+                        }
+                        export_progress[export_id] = progress_data
+                        await manager.send_progress(export_id, progress_data)
+
                         logger.info(f"[Multi-Clip Export] Downloading game video: {game_key}")
                         if not download_from_r2_global(game_key, game_video_path):
                             raise HTTPException(status_code=500, detail=f"Failed to download game video for clip {i}")
 
                     # Extract clip range with FFmpeg (stream copy, no re-encode)
+                    extract_progress = 5 + int(((i + 0.5) / resolve_total) * 5)
+                    progress_data = {
+                        "progress": extract_progress,
+                        "message": f"Extracting clip {i + 1}/{resolve_total}...",
+                        "status": "processing",
+                        "projectId": project_id,
+                        "projectName": project_name,
+                        "type": "multi_clip"
+                    }
+                    export_progress[export_id] = progress_data
+                    await manager.send_progress(export_id, progress_data)
+
                     clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
                     start_time = db_clip['raw_start_time']
                     end_time = db_clip['raw_end_time']
@@ -1360,6 +1386,18 @@ async def export_multi_clip(
 
                 elif db_clip['uploaded_filename']:
                     # Uploaded clip: download from user's R2 storage
+                    dl_progress = 5 + int((i / resolve_total) * 5)
+                    progress_data = {
+                        "progress": dl_progress,
+                        "message": f"Downloading clip {i + 1}/{resolve_total}...",
+                        "status": "processing",
+                        "projectId": project_id,
+                        "projectName": project_name,
+                        "type": "multi_clip"
+                    }
+                    export_progress[export_id] = progress_data
+                    await manager.send_progress(export_id, progress_data)
+
                     r2_key = f"raw_clips/{db_clip['uploaded_filename']}"
                     clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
                     logger.info(f"[Multi-Clip Export] Downloading uploaded clip: {r2_key}")
@@ -1370,6 +1408,18 @@ async def export_multi_clip(
 
                 elif db_clip['raw_filename']:
                     # Extracted clip: download from user's R2 storage
+                    dl_progress = 5 + int((i / resolve_total) * 5)
+                    progress_data = {
+                        "progress": dl_progress,
+                        "message": f"Downloading clip {i + 1}/{resolve_total}...",
+                        "status": "processing",
+                        "projectId": project_id,
+                        "projectName": project_name,
+                        "type": "multi_clip"
+                    }
+                    export_progress[export_id] = progress_data
+                    await manager.send_progress(export_id, progress_data)
+
                     r2_key = f"raw_clips/{db_clip['raw_filename']}"
                     clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
                     logger.info(f"[Multi-Clip Export] Downloading raw clip: {r2_key}")
