@@ -114,7 +114,14 @@ def user_session_init(user_id: str) -> dict:
     except Exception as e:
         logger.error(f"Failed to recover orphaned reservations: {e}")
 
-    # 6. Cleanup tasks (moved from ensure_database lines 922-938)
+    # 6. T970: Backfill completed_quests from credit_transactions
+    try:
+        from .services.user_db import backfill_completed_quests
+        backfill_completed_quests(user_id)
+    except Exception as e:
+        logger.error(f"T970: Failed to backfill completed quests: {e}")
+
+    # 7. Cleanup tasks (moved from ensure_database lines 922-938)
     try:
         from .services.project_archive import cleanup_stale_restored_projects
         archived_count = cleanup_stale_restored_projects(user_id)
@@ -129,7 +136,7 @@ def user_session_init(user_id: str) -> dict:
     except Exception as e:
         logger.error(f"T243: Failed to cleanup database bloat: {e}")
 
-    # 7. Cache the result
+    # 8. Cache the result
     result = {
         "profile_id": profile_id,
         "is_new_user": is_new_user,

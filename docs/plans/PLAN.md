@@ -213,6 +213,16 @@ Restructure persistence to eliminate silent data loss, credit race conditions, a
 | 8 | T940 | [Export Worker R2 Sync](tasks/data-integrity/T940-export-worker-r2-sync.md) | TESTING | 8 | 2 | T920 | Background export writes now synced to R2 |
 | 9 | T950 | [Version Conflict Detection](tasks/data-integrity/T950-version-conflict-detection.md) | TESTING | 7 | 3 | T920 | Fail on conflict, re-download newer version |
 
+### User-Level Data Consolidation
+[tasks/user-data-consolidation/EPIC.md](tasks/user-data-consolidation/EPIC.md)
+
+Move profile metadata and quest achievements from per-profile storage into user.sqlite. Prevents cross-profile quest exploit (double credits) and centralizes user identity data.
+
+| # | ID | Task | Status | Impact | Cmplx | Depends On | Notes |
+|---|-----|------|--------|--------|-------|------------|-------|
+| 1 | T960 | [Profiles to User DB](tasks/user-data-consolidation/T960-profiles-to-user-db.md) | TODO | 6 | 5 | T920 | Move profile CRUD from R2 JSON to user.sqlite profiles table |
+| 2 | T970 | [User-Scoped Quest Achievements](tasks/user-data-consolidation/T970-user-scoped-quest-achievements.md) | TESTING | 8 | 4 | T920 | Move achievements from per-profile DB to user.sqlite; prevents double quest completion |
+
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
 

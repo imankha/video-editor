@@ -80,6 +80,11 @@ _USER_DB_SCHEMA = """
         created_at TEXT DEFAULT (datetime('now')),
         completed_at TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS completed_quests (
+        quest_id TEXT PRIMARY KEY,
+        completed_at TEXT DEFAULT (datetime('now'))
+    );
 """
 
 
@@ -563,3 +568,51 @@ def _init_credits_row(user_id: str) -> bool:
         conn.close()
 
     return True
+
+
+# ---------------------------------------------------------------------------
+# Completed quests (T970: user-scoped quest achievements)
+# ---------------------------------------------------------------------------
+
+def mark_quest_completed(user_id: str, quest_id: str) -> None:
+    """Record a quest as completed in user.sqlite. Idempotent (INSERT OR IGNORE)."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO completed_quests (quest_id) VALUES (?)",
+            (quest_id,),
+        )
+        conn.commit()
+    logger.info(f"[UserDB] Quest {quest_id} marked completed for user {user_id}")
+
+
+def get_completed_quest_ids(user_id: str) -> set[str]:
+    """Return set of quest_ids the user has completed."""
+    with get_user_db_connection(user_id) as conn:
+        rows = conn.execute("SELECT quest_id FROM completed_quests").fetchall()
+        return {row["quest_id"] for row in rows}
+
+
+def backfill_completed_quests(user_id: str) -> int:
+    """Backfill completed_quests from credit_transactions quest_reward rows.
+
+    Idempotent — INSERT OR IGNORE. Called once during session init.
+    Returns count of newly backfilled quests.
+    """
+    with get_user_db_connection(user_id) as conn:
+        rows = conn.execute(
+            """SELECT reference_id FROM credit_transactions
+               WHERE user_id = ? AND source = 'quest_reward' AND reference_id IS NOT NULL""",
+            (user_id,),
+        ).fetchall()
+        count = 0
+        for row in rows:
+            result = conn.execute(
+                "INSERT OR IGNORE INTO completed_quests (quest_id) VALUES (?)",
+                (row["reference_id"],),
+            )
+            if result.rowcount > 0:
+                count += 1
+        if count > 0:
+            conn.commit()
+            logger.info(f"[UserDB] Backfilled {count} completed quests for user {user_id}")
+    return count

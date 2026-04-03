@@ -145,17 +145,22 @@ class TestQuestClaimEndpoint:
 
         with patch("app.routers.quests.get_current_user_id", return_value=user_id), \
              patch("app.routers.quests.get_db_connection") as mock_conn, \
-             patch("app.routers.quests._check_all_steps", return_value=all_steps_complete):
+             patch("app.routers.quests._check_all_steps", return_value=all_steps_complete), \
+             patch("app.routers.quests.mark_quest_completed"):
 
-            # First claim should succeed
-            result1 = asyncio.get_event_loop().run_until_complete(claim_reward(quest_id))
-            assert result1["already_claimed"] is False
-            assert result1["credits_granted"] == 15
+            loop = asyncio.new_event_loop()
+            try:
+                # First claim should succeed
+                result1 = loop.run_until_complete(claim_reward(quest_id))
+                assert result1["already_claimed"] is False
+                assert result1["credits_granted"] == 15
 
-            # Second claim should return already_claimed (not raise 500)
-            result2 = asyncio.get_event_loop().run_until_complete(claim_reward(quest_id))
-            assert result2["already_claimed"] is True
-            assert result2["credits_granted"] == 0
+                # Second claim should return already_claimed (not raise 500)
+                result2 = loop.run_until_complete(claim_reward(quest_id))
+                assert result2["already_claimed"] is True
+                assert result2["credits_granted"] == 0
+            finally:
+                loop.close()
 
 
 # ---------------------------------------------------------------------------

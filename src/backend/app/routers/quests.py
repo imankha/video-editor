@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException
 
 from ..user_context import get_current_user_id
 from ..database import get_db_connection
-from ..services.user_db import grant_credits, get_credit_balance, get_credit_transactions
+from ..services.user_db import grant_credits, get_credit_balance, get_credit_transactions, mark_quest_completed, get_completed_quest_ids
 
 logger = logging.getLogger(__name__)
 
@@ -233,24 +233,41 @@ def _has_claimed_reward(user_id: str, quest_id: str) -> bool:
 
 @router.get("/progress")
 async def get_progress():
-    """Get quest progress for the current user."""
+    """Get quest progress for the current user.
+
+    Completed quests are read from user.sqlite (user-scoped, T970).
+    Step progress for uncompleted quests is derived from the active profile.
+    """
     user_id = get_current_user_id()
+    completed_quest_ids = get_completed_quest_ids(user_id)
 
     with get_db_connection() as conn:
         all_steps = _check_all_steps(user_id, conn)
 
     quests = []
     for qdef in QUEST_DEFINITIONS:
-        quest_steps = {sid: all_steps.get(sid, False) for sid in qdef["step_ids"]}
-        completed = all(quest_steps.values())
-        reward_claimed = _has_claimed_reward(user_id, qdef["id"])
+        quest_id = qdef["id"]
 
-        quests.append({
-            "id": qdef["id"],
-            "steps": quest_steps,
-            "completed": completed,
-            "reward_claimed": reward_claimed,
-        })
+        if quest_id in completed_quest_ids:
+            # Quest already completed (user-scoped) — all steps true, reward claimed
+            quest_steps = {sid: True for sid in qdef["step_ids"]}
+            quests.append({
+                "id": quest_id,
+                "steps": quest_steps,
+                "completed": True,
+                "reward_claimed": True,
+            })
+        else:
+            quest_steps = {sid: all_steps.get(sid, False) for sid in qdef["step_ids"]}
+            completed = all(quest_steps.values())
+            reward_claimed = _has_claimed_reward(user_id, quest_id)
+
+            quests.append({
+                "id": quest_id,
+                "steps": quest_steps,
+                "completed": completed,
+                "reward_claimed": reward_claimed,
+            })
 
     return {"quests": quests}
 
@@ -281,8 +298,13 @@ async def claim_reward(quest_id: str):
         new_balance = grant_credits(user_id, qdef["reward"], "quest_reward", quest_id)
     except sqlite3.IntegrityError:
         # UNIQUE constraint violation — already claimed (race condition or retry)
+        # Still mark completed in user.sqlite in case backfill missed it
+        mark_quest_completed(user_id, quest_id)
         balance = get_credit_balance(user_id)
         return {"credits_granted": 0, "new_balance": balance["balance"], "already_claimed": True}
+
+    # T970: Mark quest as completed in user.sqlite (user-scoped, survives profile switch)
+    mark_quest_completed(user_id, quest_id)
 
     logger.info(f"[Quests] Granted {qdef['reward']} credits for {quest_id} to {user_id}, balance={new_balance}")
 
