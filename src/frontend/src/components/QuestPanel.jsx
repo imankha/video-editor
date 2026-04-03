@@ -104,9 +104,11 @@ export function QuestPanel() {
       const questStepCount = questDef.steps.length;
       if (currentCompleted === questStepCount && !questProgress?.reward_claimed) {
         // All steps done — fanfare + celebration animation
+        // Auto-expand so user sees "Claim" CTA (override auto-collapse in annotate mode)
         playSound('fanfare');
         setCelebrating(true);
         setExpanded(true);
+        setUserOverride(true);
       } else {
         // Individual step completed
         playSound('check');
