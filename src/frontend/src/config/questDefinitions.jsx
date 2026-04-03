@@ -64,7 +64,7 @@ export const QUESTS = [
       {
         id: 'playback_annotations',
         title: 'Watch Your Clips Back',
-        description: <>Scroll down in the sidebar and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your clips back-to-back.</>,
+        description: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
       },
     ],
   },
