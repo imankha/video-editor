@@ -54,6 +54,33 @@ RESTORE_COOLDOWN_SECONDS = 30
 DB_SIZE_WARNING_THRESHOLD = 400 * 1024  # 400KB - archive target exceeded
 DB_SIZE_CRITICAL_THRESHOLD = 768 * 1024  # 768KB - sync performance degrades
 
+
+# ---------------------------------------------------------------------------
+# T930: Persistent sync failure state
+# ---------------------------------------------------------------------------
+
+def _sync_pending_path(user_id: str) -> Path:
+    """Path to marker file indicating unsynced writes."""
+    return USER_DATA_BASE / user_id / ".sync_pending"
+
+
+def mark_sync_pending(user_id: str) -> None:
+    """Write marker file indicating this user has unsynced writes."""
+    path = _sync_pending_path(user_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(time.time()))
+
+
+def clear_sync_pending(user_id: str) -> None:
+    """Remove marker file after successful sync."""
+    path = _sync_pending_path(user_id)
+    path.unlink(missing_ok=True)
+
+
+def has_sync_pending(user_id: str) -> bool:
+    """Check if this user has unsynced writes from a previous request."""
+    return _sync_pending_path(user_id).exists()
+
 # Query timing threshold for slow query warnings (in seconds)
 SLOW_QUERY_THRESHOLD = 0.1  # 100ms - warn if query takes this long
 

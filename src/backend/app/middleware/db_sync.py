@@ -37,6 +37,9 @@ from ..database import (
     sync_user_db_to_cloud_if_writes,
     get_request_has_writes,
     get_request_has_user_db_writes,
+    mark_sync_pending,
+    clear_sync_pending,
+    has_sync_pending,
 )
 from ..profile_context import set_current_profile_id
 from ..session_init import user_session_init
@@ -144,6 +147,21 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         if not should_sync:
             return await call_next(request)
 
+        # --- T930: Retry pending sync from previous failed request ---
+        if has_sync_pending(user_id):
+            logger.info(f"[SYNC] Retrying pending sync for user {user_id}")
+            try:
+                retry_ok = sync_db_to_cloud_if_writes()
+                user_retry_ok = sync_user_db_to_cloud_if_writes()
+                if (retry_ok == "ok" or retry_ok is True) and user_retry_ok:
+                    clear_sync_pending(user_id)
+                    set_sync_failed(user_id, False)
+                    logger.info(f"[SYNC] Retry succeeded for user {user_id}")
+                else:
+                    logger.warning(f"[SYNC] Retry still failing for user {user_id}")
+            except Exception as e:
+                logger.warning(f"[SYNC] Retry failed for user {user_id}: {e}")
+
         # --- Request with sync tracking ---
         request_start = time.perf_counter()
         sync_duration = 0.0
@@ -159,6 +177,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             had_writes = get_request_has_writes()
             had_user_db_writes = get_request_has_user_db_writes()
             if had_writes or had_user_db_writes:
+                # T930: Mark pending BEFORE sync attempt — survives crash
+                mark_sync_pending(user_id)
+
                 sync_start = time.perf_counter()
                 sync_status = "ok"
                 try:
@@ -173,13 +194,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     sync_status = "failed"
                 sync_duration = time.perf_counter() - sync_start
 
-                set_sync_failed(user_id, sync_status != "ok")
-
                 if sync_status == "ok":
+                    clear_sync_pending(user_id)  # T930: Only clear on success
+                    set_sync_failed(user_id, False)
                     logger.info(f"[SYNC] {request.method} {request.url.path} → R2 sync OK ({sync_duration:.2f}s)")
                 elif sync_status == "conflict":
+                    set_sync_failed(user_id, True)
                     logger.warning(f"[SYNC] {request.method} {request.url.path} → version conflict ({sync_duration:.2f}s)")
                 else:
+                    set_sync_failed(user_id, True)
                     logger.warning(f"[SYNC] {request.method} {request.url.path} → R2 sync FAILED ({sync_duration:.2f}s)")
 
             # T950: Distinguish conflict from failure in header
