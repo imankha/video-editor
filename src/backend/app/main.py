@@ -282,12 +282,8 @@ async def startup_event():
     init_auth_db()
     logger.info("[Startup] Central auth DB initialized")
 
-    # Initialize the default user session (profile + database).
-    # This ensures startup tasks that need DB access have a profile context.
-    from app.user_context import set_current_user_id as _set_user
-    _set_user(DEFAULT_USER_ID)
-    user_session_init(DEFAULT_USER_ID)
-    logger.info(f"Default user '{DEFAULT_USER_ID}' session initialized")
+    # Default user 'a' init removed — all users now go through auth.
+    # Profile context is set per-request by the middleware.
 
     # Recover any orphaned export jobs from previous server run
     try:
