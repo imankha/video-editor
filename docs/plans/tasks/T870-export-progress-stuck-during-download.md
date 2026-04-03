@@ -1,6 +1,6 @@
 # T870: Export Progress Stuck at 0% During Game Video Download
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-04-01

@@ -194,7 +194,7 @@ Deploy to production domains with proper scaling.
 | T840 | [Annotate Drag/Play Conflict](tasks/T840-annotate-drag-play-conflict.md) | DONE | 7 | 3 | Dragging start/end time handles while video is playing causes playback to fight with drag preview |
 | T850 | [Annotate Duplicate Scrub UI](tasks/T850-annotate-duplicate-scrub-ui.md) | TODO | 5 | 4 | Two scrub/timeline UI instances visible during clip playback in annotate mode |
 | T860 | [Keyframe Invariant Render Loop](tasks/T860-keyframe-invariant-render-loop.md) | DONE | 9 | 5 | Keyframe invariant check in render body causes 500+ re-renders, making framing unresponsive |
-| T870 | [Export Progress Stuck During Download](tasks/T870-export-progress-stuck-during-download.md) | TODO | 5 | 3 | Export shows 0% for ~48s while backend downloads game video from R2 |
+| T870 | [Export Progress Stuck During Download](tasks/T870-export-progress-stuck-during-download.md) | TESTING | 5 | 3 | Export shows 0% for ~48s while backend downloads game video from R2 |
 
 ### Data Integrity & Persistence Hardening
 [tasks/data-integrity/EPIC.md](tasks/data-integrity/EPIC.md)
