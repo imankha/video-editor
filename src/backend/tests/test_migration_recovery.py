@@ -128,7 +128,7 @@ def patched_user_db(recovery_env):
     with patch("app.services.user_db.USER_DATA_BASE", env["user_data_base"]), \
          patch("app.services.user_db._initialized_user_dbs", set()), \
          patch("app.services.user_db._update_credit_summary"), \
-         patch("app.services.user_db._migrate_from_auth_db"):
+         patch("app.services.user_db._init_credits_row"):
         yield env
 
 

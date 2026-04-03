@@ -431,7 +431,7 @@ class TestEnsureUserDatabaseRestore:
     @patch("app.database.get_local_user_db_version", return_value=None)
     @patch("app.storage.sync_user_db_from_r2_if_newer")
     @patch("app.database.set_local_user_db_version")
-    @patch("app.services.user_db._migrate_from_auth_db")
+    @patch("app.services.user_db._init_credits_row")
     def test_not_found_locks_version_to_zero(
         self, mock_migrate, mock_set_version, mock_sync, mock_get_version
     ):
@@ -452,7 +452,7 @@ class TestEnsureUserDatabaseRestore:
     @patch("app.database.get_local_user_db_version", return_value=None)
     @patch("app.storage.sync_user_db_from_r2_if_newer")
     @patch("app.database.set_local_user_db_version")
-    @patch("app.services.user_db._migrate_from_auth_db")
+    @patch("app.services.user_db._init_credits_row")
     def test_error_does_not_lock_version(
         self, mock_migrate, mock_set_version, mock_sync, mock_get_version
     ):
@@ -476,7 +476,7 @@ class TestEnsureUserDatabaseRestore:
     @patch("app.database.get_local_user_db_version", return_value=None)
     @patch("app.storage.sync_user_db_from_r2_if_newer")
     @patch("app.database.set_local_user_db_version")
-    @patch("app.services.user_db._migrate_from_auth_db")
+    @patch("app.services.user_db._init_credits_row")
     def test_user_db_cooldown_prevents_retry(
         self, mock_migrate, mock_set_version, mock_sync, mock_get_version
     ):
@@ -502,7 +502,7 @@ class TestEnsureUserDatabaseRestore:
     @patch("app.database.get_local_user_db_version", return_value=None)
     @patch("app.storage.sync_user_db_from_r2_if_newer")
     @patch("app.database.set_local_user_db_version")
-    @patch("app.services.user_db._migrate_from_auth_db")
+    @patch("app.services.user_db._init_credits_row")
     def test_user_db_cooldown_expires(
         self, mock_migrate, mock_set_version, mock_sync, mock_get_version
     ):
