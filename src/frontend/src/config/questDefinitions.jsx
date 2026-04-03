@@ -81,7 +81,7 @@ export const QUESTS = [
       {
         id: 'export_framing',
         title: 'Frame Video',
-        description: <>Drag and resize the <QIcon icon={Crop} className="text-yellow-300" /> crop box around your player at different keyframes so your player stays in view.</>,
+        description: <>Drag and resize the <QIcon icon={Crop} className="text-yellow-300" /> crop box around your player at different keyframes so your player stays in view. When ready, click <MiniButton icon={Film} variant="purple">Frame Video</MiniButton>.</>,
       },
       {
         id: 'wait_for_export',

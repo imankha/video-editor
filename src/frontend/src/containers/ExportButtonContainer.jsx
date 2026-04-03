@@ -592,6 +592,11 @@ export function ExportButtonContainer({
           });
           renderRequestAccepted = true;
 
+          // Refresh quest progress now that export job exists in DB
+          import('../stores/questStore').then(({ useQuestStore }) => {
+            useQuestStore.getState().fetchProgress({ force: true });
+          }).catch(() => {});
+
           // T760: 202 = background processing, completion comes via WebSocket
           if (renderResponse.status === 202) {
             console.log('[ExportButtonContainer] Render accepted (202), waiting for WebSocket completion');
