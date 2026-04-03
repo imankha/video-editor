@@ -40,4 +40,5 @@ R2 JSON files become read-only for migration, then deprecated.
 | # | ID | Task | Status | Impact | Cmplx | Notes |
 |---|-----|------|--------|--------|-------|-------|
 | 1 | T960 | [Profiles to User DB](T960-profiles-to-user-db.md) | TODO | 6 | 5 | Move profile CRUD from R2 JSON to user.sqlite profiles table |
-| 2 | T970 | [User-Scoped Quest Achievements](T970-user-scoped-quest-achievements.md) | TODO | 8 | 4 | Move achievements from per-profile DB to user.sqlite; prevents double quest completion |
+| 2 | T970 | [User-Scoped Quest Achievements](T970-user-scoped-quest-achievements.md) | TESTING | 8 | 4 | Move achievements from per-profile DB to user.sqlite; prevents double quest completion |
+| 3 | T985 | [Settings to User DB](T985-settings-to-user-db.md) | TODO | 6 | 4 | Move user preferences from per-profile DB to user.sqlite; prevents loss on profile delete |

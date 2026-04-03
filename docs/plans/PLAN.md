@@ -222,6 +222,7 @@ Move profile metadata and quest achievements from per-profile storage into user.
 |---|-----|------|--------|--------|-------|------------|-------|
 | 1 | T960 | [Profiles to User DB](tasks/user-data-consolidation/T960-profiles-to-user-db.md) | TESTING | 6 | 5 | T920 | Move profile CRUD from R2 JSON to user.sqlite profiles table |
 | 2 | T970 | [User-Scoped Quest Achievements](tasks/user-data-consolidation/T970-user-scoped-quest-achievements.md) | TESTING | 8 | 4 | T920 | Move achievements from per-profile DB to user.sqlite; prevents double quest completion |
+| 3 | T985 | [Settings to User DB](tasks/user-data-consolidation/T985-settings-to-user-db.md) | TODO | 6 | 4 | T920 | Move user preferences from per-profile DB to user.sqlite; prevents loss on profile delete |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
