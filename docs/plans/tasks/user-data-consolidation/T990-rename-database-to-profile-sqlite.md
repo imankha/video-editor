@@ -1,6 +1,6 @@
 # T990: Rename database.sqlite to profile.sqlite
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 4
 **Complexity:** 5
 **Created:** 2026-04-03
