@@ -274,6 +274,12 @@ User feedback from first NUF session. Two groups: game addition flow and clip cr
 |----|------|--------|--------|-------|-------|
 | T700 | [Quest Panel Smart Positioning](tasks/T700-quest-panel-smart-positioning.md) | DONE | 4 | 3 | CSS-first positioning to avoid sidebar overlap; replace JS elementsFromPoint approach |
 
+#### Playback
+
+| ID | Task | Status | Impact | Cmplx | Notes |
+|----|------|--------|--------|-------|-------|
+| T980 | [Clip-Scoped Scrub Bar in Play Annotations](tasks/T980-clip-scoped-scrub-playback.md) | TODO | 5 | 4 | Per-clip scrub bar below main timeline; reuses existing onSeekWithinSegment prop |
+
 ### Phase 4: Post-Launch Polish
 
 Improvements after real user traffic.
