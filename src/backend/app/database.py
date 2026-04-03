@@ -1291,66 +1291,59 @@ def reset_initialized_flag():
     _initialized_users.discard(user_id)
 
 
-def sync_db_to_cloud() -> bool:
+def sync_db_to_cloud() -> str:
     """
     Sync the current user's database to R2 storage with version tracking.
-    Call this after database modifications to persist changes to the cloud.
 
-    Uses version-based sync with optimistic locking:
-    - Checks current version to detect conflicts
-    - Increments version on successful upload
-    - Logs conflicts but uses last-write-wins for MVP
-
-    Also checks database size and logs migration recommendations.
-
-    Returns True if sync succeeded (or R2 not enabled), False on failure.
+    Returns:
+        "ok" if sync succeeded (or R2 not enabled)
+        "conflict" if version conflict detected (T950: re-downloaded newer version)
+        "failed" if sync failed (network error, etc.)
     """
     if not R2_ENABLED:
-        return True
+        return "ok"
 
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
     db_path = get_database_path()
 
     if not db_path.exists():
-        return True
+        return "ok"
 
-    # Check database size and log warnings if approaching threshold
     check_database_size(db_path)
-
-    # Get current local version for conflict detection
     current_version = get_local_db_version(user_id, profile_id)
 
-    # Sync with version tracking
     success, new_version = sync_database_to_r2_with_version(user_id, db_path, current_version)
 
     if success and new_version is not None:
         set_local_db_version(user_id, profile_id, new_version)
         logger.debug(f"Database synced to R2 for user: {user_id}, profile: {profile_id}, version: {new_version}")
-        return True
+        return "ok"
+    elif not success and new_version is not None:
+        # T950: Conflict detected — storage.py re-downloaded newer version
+        set_local_db_version(user_id, profile_id, new_version)
+        logger.warning(f"Version conflict for user: {user_id}, profile: {profile_id}, updated to v{new_version}")
+        return "conflict"
     elif not success:
         logger.warning(f"Failed to sync database to R2 for user: {user_id}, profile: {profile_id}")
-        return False
+        return "failed"
 
-    return True
+    return "ok"
 
 
-def sync_db_to_cloud_if_writes() -> bool:
+def sync_db_to_cloud_if_writes() -> str:
     """
     Sync database to R2 only if writes occurred during this request.
     Called by middleware at end of request.
 
-    This enables batched syncing - multiple writes in a single request
-    result in only one R2 upload.
-
-    Returns True if sync succeeded (or no writes/R2 disabled), False on failure.
+    Returns: "ok", "conflict", or "failed"
     """
     if not R2_ENABLED:
-        return True
+        return "ok"
 
     if get_request_has_writes():
         return sync_db_to_cloud()
-    return True
+    return "ok"
 
 
 # ---------------------------------------------------------------------------
