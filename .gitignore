@@ -95,3 +95,5 @@ deploy_output.txt
 
 # Google OAuth credentials
 client_secret_*.json
+src/user_data/
+.claude/worktrees/
