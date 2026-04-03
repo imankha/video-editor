@@ -66,10 +66,12 @@ from app.services.user_db import (
 # Read from nuf-reset-emails.txt at module load time.
 def _load_nuf_reset_emails():
     """Load NUF reset emails from config file. One email per line, # for comments."""
-    # Check multiple locations: backend root (Docker), then project root (local dev)
+    # Check multiple locations:
+    # 3 parents: auth.py → routers → app → src/backend/ (also /app/ in Docker)
+    # 5 parents: auth.py → routers → app → backend → src → project root (local dev)
     candidates = [
-        Path(__file__).parent.parent.parent.parent / "nuf-reset-emails.txt",  # src/backend/
-        Path(__file__).parent.parent.parent.parent.parent / "nuf-reset-emails.txt",  # project root
+        Path(__file__).parent.parent.parent / "nuf-reset-emails.txt",
+        Path(__file__).parent.parent.parent.parent.parent / "nuf-reset-emails.txt",
     ]
     for config_path in candidates:
         if config_path.exists():
