@@ -1,0 +1,5 @@
+# Emails listed here get fully reset on every Google login.
+# This ensures a fresh new-user experience for NUF testing.
+# One email per line. Lines starting with # are comments.
+
+hello@reelballers.com
