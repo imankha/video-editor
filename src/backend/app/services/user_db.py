@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 _r2_user_restore_cooldowns: dict[str, float] = {}  # user_id -> last failure timestamp
 USER_RESTORE_COOLDOWN_SECONDS = 30
 
-USER_DATA_BASE = Path(__file__).parent.parent.parent.parent / "user_data"
+USER_DATA_BASE = Path(__file__).parent.parent.parent.parent.parent / "user_data"
 
 # Track initialized user DBs
 _initialized_user_dbs: set = set()

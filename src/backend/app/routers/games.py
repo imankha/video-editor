@@ -453,6 +453,13 @@ async def list_games():
     """List all saved games. Videos stored globally at games/{blake3_hash}.mp4."""
     ensure_directories()
 
+    from app.profile_context import get_current_profile_id
+    from app.user_context import get_current_user_id
+    from app.database import get_database_path
+    _profile = get_current_profile_id()
+    _db_path = get_database_path()
+    logger.info(f"[list_games] user={get_current_user_id()} profile={_profile} db={_db_path}")
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -511,6 +518,7 @@ async def list_games():
                 'viewed_duration': row['viewed_duration'] or 0,
             })
 
+        logger.info(f"[list_games] returning {len(games)} games for profile={_profile}")
         return {'games': games}
 
 
