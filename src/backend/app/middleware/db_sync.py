@@ -160,25 +160,31 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             had_user_db_writes = get_request_has_user_db_writes()
             if had_writes or had_user_db_writes:
                 sync_start = time.perf_counter()
+                sync_status = "ok"
                 try:
-                    sync_success = sync_db_to_cloud_if_writes()
+                    db_status = sync_db_to_cloud_if_writes()  # Returns "ok", "conflict", or "failed"
                     user_sync_success = sync_user_db_to_cloud_if_writes()
-                    sync_success = sync_success and user_sync_success
+                    if db_status == "conflict":
+                        sync_status = "conflict"
+                    elif db_status == "failed" or not user_sync_success:
+                        sync_status = "failed"
                 except Exception as sync_error:
                     logger.error(f"Sync to R2 raised exception: {sync_error}")
-                    sync_success = False
+                    sync_status = "failed"
                 sync_duration = time.perf_counter() - sync_start
 
-                set_sync_failed(user_id, not sync_success)
+                set_sync_failed(user_id, sync_status != "ok")
 
-                if sync_success:
+                if sync_status == "ok":
                     logger.info(f"[SYNC] {request.method} {request.url.path} → R2 sync OK ({sync_duration:.2f}s)")
+                elif sync_status == "conflict":
+                    logger.warning(f"[SYNC] {request.method} {request.url.path} → version conflict ({sync_duration:.2f}s)")
                 else:
                     logger.warning(f"[SYNC] {request.method} {request.url.path} → R2 sync FAILED ({sync_duration:.2f}s)")
 
-            # Add X-Sync-Status header if this user has a pending sync failure
+            # T950: Distinguish conflict from failure in header
             if is_sync_failed(user_id):
-                response.headers["X-Sync-Status"] = "failed"
+                response.headers["X-Sync-Status"] = sync_status if (had_writes or had_user_db_writes) else "failed"
 
             return response
 
@@ -190,15 +196,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 if had_writes or had_user_db_writes:
                     sync_start = time.perf_counter()
                     try:
-                        sync_success = sync_db_to_cloud_if_writes()
+                        db_status = sync_db_to_cloud_if_writes()
                         user_sync_success = sync_user_db_to_cloud_if_writes()
-                        sync_success = sync_success and user_sync_success
+                        overall_ok = (db_status == "ok") and user_sync_success
                     except Exception as sync_error:
                         logger.error(f"Sync to R2 raised exception after request error: {sync_error}")
-                        sync_success = False
+                        overall_ok = False
                     sync_duration = time.perf_counter() - sync_start
 
-                    set_sync_failed(user_id, not sync_success)
+                    set_sync_failed(user_id, not overall_ok)
             except Exception as tracking_error:
                 logger.error(f"Failed to track sync state after error: {tracking_error}")
 
