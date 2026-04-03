@@ -130,7 +130,14 @@ def user_session_init(user_id: str) -> dict:
     except Exception as e:
         logger.error(f"T970: Failed to backfill completed quests: {e}")
 
-    # 7. Cleanup tasks (moved from ensure_database lines 922-938)
+    # 7. T985: Backfill preferences from profile DB to user.sqlite
+    try:
+        from .services.user_db import backfill_preferences_from_profile
+        backfill_preferences_from_profile(user_id)
+    except Exception as e:
+        logger.error(f"T985: Failed to backfill preferences: {e}")
+
+    # 8. Cleanup tasks (moved from ensure_database lines 922-938)
     try:
         from .services.project_archive import cleanup_stale_restored_projects
         archived_count = cleanup_stale_restored_projects(user_id)
@@ -145,7 +152,7 @@ def user_session_init(user_id: str) -> dict:
     except Exception as e:
         logger.error(f"T243: Failed to cleanup database bloat: {e}")
 
-    # 8. Cache the result
+    # 9. Cache the result
     result = {
         "profile_id": profile_id,
         "is_new_user": is_new_user,

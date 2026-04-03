@@ -1,20 +1,19 @@
 """
 Settings Router - User preferences that persist across sessions
 
-Settings are stored as JSON in a single row for flexibility.
-This avoids schema changes when adding new settings.
+Settings are stored as JSON in the user.sqlite key-value table (key='preferences').
+This makes settings global per-user, not per-profile.
 
 Settings are synced to R2 like all other user data.
 """
 
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.database import get_db_connection
+from app.services.user_db import get_preferences, set_preferences
 from app.constants import DEFAULT_HIGHLIGHT_EFFECT
 
 logger = logging.getLogger(__name__)
@@ -68,23 +67,20 @@ async def get_settings():
 
     Returns settings with defaults filled in for any missing values.
     """
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT settings_json FROM user_settings WHERE id = 1")
-        row = cursor.fetchone()
+    raw = get_preferences(user_id=None)
 
-        if row and row['settings_json']:
-            try:
-                stored = json.loads(row['settings_json'])
-            except json.JSONDecodeError:
-                stored = {}
-        else:
+    if raw:
+        try:
+            stored = json.loads(raw)
+        except json.JSONDecodeError:
             stored = {}
+    else:
+        stored = {}
 
-        # Merge stored settings with defaults (stored takes precedence)
-        merged = deep_merge(DEFAULT_SETTINGS, stored)
+    # Merge stored settings with defaults (stored takes precedence)
+    merged = deep_merge(DEFAULT_SETTINGS, stored)
 
-        return merged
+    return merged
 
 
 @router.put("")
@@ -95,51 +91,33 @@ async def update_settings(updates: SettingsUpdate):
     Only fields included in the request are updated.
     Nested objects are merged, not replaced.
     """
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
+    raw = get_preferences(user_id=None)
 
-        # Get current settings
-        cursor.execute("SELECT settings_json FROM user_settings WHERE id = 1")
-        row = cursor.fetchone()
-
-        if row and row['settings_json']:
-            try:
-                current = json.loads(row['settings_json'])
-            except json.JSONDecodeError:
-                current = {}
-        else:
+    if raw:
+        try:
+            current = json.loads(raw)
+        except json.JSONDecodeError:
             current = {}
+    else:
+        current = {}
 
-        # Merge updates (only non-None fields)
-        updates_dict = updates.model_dump(exclude_none=True)
-        merged = deep_merge(current, updates_dict)
+    # Merge updates (only non-None fields)
+    updates_dict = updates.model_dump(exclude_none=True)
+    merged = deep_merge(current, updates_dict)
 
-        # Save
-        cursor.execute("""
-            UPDATE user_settings
-            SET settings_json = ?, updated_at = ?
-            WHERE id = 1
-        """, (json.dumps(merged), datetime.now().isoformat()))
+    # Save to user.sqlite
+    set_preferences(user_id=None, preferences_json=json.dumps(merged))
 
-        conn.commit()
+    logger.info(f"Settings updated: {list(updates_dict.keys())}")
 
-        logger.info(f"Settings updated: {list(updates_dict.keys())}")
-
-        # Return merged with defaults
-        return deep_merge(DEFAULT_SETTINGS, merged)
+    # Return merged with defaults
+    return deep_merge(DEFAULT_SETTINGS, merged)
 
 
 @router.delete("")
 async def reset_settings():
     """Reset all settings to defaults"""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE user_settings
-            SET settings_json = '{}', updated_at = ?
-            WHERE id = 1
-        """, (datetime.now().isoformat(),))
-        conn.commit()
+    set_preferences(user_id=None, preferences_json="{}")
 
-        logger.info("Settings reset to defaults")
-        return DEFAULT_SETTINGS
+    logger.info("Settings reset to defaults")
+    return DEFAULT_SETTINGS

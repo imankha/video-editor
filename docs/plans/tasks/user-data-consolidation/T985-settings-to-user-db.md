@@ -1,6 +1,6 @@
 # T985: Move Settings from Profile DB to User DB
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-04-03

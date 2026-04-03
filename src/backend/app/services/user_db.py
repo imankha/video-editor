@@ -663,6 +663,52 @@ def set_selected_profile_id(user_id: str, profile_id: str) -> None:
         conn.commit()
 
 
+def get_preferences(user_id: str = None) -> Optional[str]:
+    """Return the preferences JSON string from user_settings, or None."""
+    with get_user_db_connection(user_id) as conn:
+        row = conn.execute(
+            "SELECT value FROM user_settings WHERE key = 'preferences'"
+        ).fetchone()
+        return row["value"] if row else None
+
+
+def set_preferences(user_id: str = None, preferences_json: str = "{}") -> None:
+    """Set the preferences JSON in user_settings."""
+    with get_user_db_connection(user_id) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES ('preferences', ?)",
+            (preferences_json,),
+        )
+        conn.commit()
+
+
+def backfill_preferences_from_profile(user_id: str) -> bool:
+    """One-time migration: copy settings from active profile DB to user.sqlite.
+
+    Idempotent — skips if user.sqlite already has a 'preferences' key.
+    Returns True if backfill occurred, False if skipped.
+    """
+    # Skip if user.sqlite already has preferences
+    if get_preferences(user_id) is not None:
+        return False
+
+    # Try to read from the active profile's database.sqlite
+    from ..database import get_db_connection
+    try:
+        with get_db_connection() as conn:
+            row = conn.execute(
+                "SELECT settings_json FROM user_settings WHERE id = 1"
+            ).fetchone()
+            if row and row["settings_json"]:
+                set_preferences(user_id, row["settings_json"])
+                logger.info(f"[UserDB] Backfilled preferences for user {user_id} from profile DB")
+                return True
+    except Exception as e:
+        logger.warning(f"[UserDB] Could not backfill preferences for user {user_id}: {e}")
+
+    return False
+
+
 def create_profile(user_id: str, profile_id: str, name: str, color: str, is_default: bool = False) -> None:
     """Insert a new profile row."""
     with get_user_db_connection(user_id) as conn:
