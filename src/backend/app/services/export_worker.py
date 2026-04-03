@@ -110,6 +110,34 @@ def create_progress_callback(export_id: str, loop: asyncio.AbstractEventLoop, pr
     return progress_callback
 
 
+def _sync_after_export(config: dict) -> None:
+    """Sync databases to R2 after export worker completes.
+
+    Background workers run outside the request middleware, so their DB
+    writes are never synced automatically. This explicit sync ensures
+    export results (working_videos, project updates, job status) and
+    credit refunds survive server restarts.
+    """
+    try:
+        from ..user_context import get_current_user_id
+        from ..profile_context import get_current_profile_id
+        from ..database import sync_db_to_r2_explicit, sync_user_db_to_r2_explicit
+
+        user_id = get_current_user_id()
+        profile_id = get_current_profile_id()
+
+        sync_db_to_r2_explicit(user_id, profile_id)
+
+        # Also sync user.sqlite if credits were involved (refund on failure)
+        credit_user_id = config.get("credit_user_id")
+        if credit_user_id:
+            sync_user_db_to_r2_explicit(credit_user_id)
+
+        logger.info(f"[ExportWorker] R2 sync complete for user={user_id} profile={profile_id}")
+    except Exception as e:
+        logger.error(f"[ExportWorker] R2 sync after export failed: {e}")
+
+
 async def process_export_job(job_id: str):
     """
     Process an export job in the background.
@@ -159,6 +187,9 @@ async def process_export_job(job_id: str):
 
         logger.info(f"[ExportWorker] Job {job_id} completed successfully")
 
+        # T940: Sync to R2 (background worker runs outside request middleware)
+        _sync_after_export(config)
+
     except Exception as e:
         logger.error(f"[ExportWorker] Job {job_id} failed: {e}", exc_info=True)
         update_job_error(job_id, str(e))
@@ -178,6 +209,9 @@ async def process_export_job(job_id: str):
                     f"[ExportWorker] Refunded {credits_deducted} credits to "
                     f"{refund_user_id} for failed job {job_id}"
                 )
+
+        # T940: Sync to R2 after failure too (export_jobs status + refund)
+        _sync_after_export(config)
 
 
 async def process_framing_export(job_id: str, project_id: int, config: dict) -> tuple:
