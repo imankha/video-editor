@@ -105,10 +105,10 @@ def _reset_test_account(user_id: str, email: str) -> None:
                     client.delete_objects(Bucket=R2_BUCKET, Delete={"Objects": keys})
             logger.info(f"[Auth] Deleted R2 data under {prefix}")
 
-    # 3. Delete auth DB records (sessions, credit transactions, user row)
+    # 3. Delete auth DB records (sessions + user row; credits now in user.sqlite, already wiped above)
     from app.services.auth_db import AUTH_DB_PATH
     conn = sqlite3.connect(str(AUTH_DB_PATH))
-    for table, col in [("credit_transactions", "user_id"), ("sessions", "user_id"), ("users", "user_id")]:
+    for table, col in [("sessions", "user_id"), ("users", "user_id")]:
         conn.execute(f"DELETE FROM {table} WHERE {col} = ?", (user_id,))
     conn.commit()
     conn.close()
@@ -460,8 +460,8 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     if not email or token_data.get("email_verified") != "true":
         raise HTTPException(status_code=401, detail="Email not verified by Google")
 
-    # Auto-reset NUF test accounts: wipe all data so login is always fresh (non-prod only)
-    if email.lower() in NUF_RESET_EMAILS and APP_ENV != "production":
+    # Auto-reset NUF test accounts: wipe all data so login is always fresh
+    if email.lower() in NUF_RESET_EMAILS:
         existing_test = get_user_by_email(email)
         if existing_test:
             _reset_test_account(existing_test['user_id'], email)
