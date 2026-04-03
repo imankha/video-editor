@@ -464,12 +464,6 @@ def ensure_database():
     # Ensure directories exist
     ensure_directories()
 
-    # T990: Migrate database.sqlite → profile.sqlite (one-time local rename)
-    old_db_path = db_path.parent / "database.sqlite"
-    if not db_path.exists() and old_db_path.exists():
-        old_db_path.rename(db_path)
-        logger.info(f"[T990] Renamed database.sqlite → profile.sqlite for user={user_id}")
-
     # If R2 is enabled, download from R2 only on first access (no local DB yet)
     # We do NOT check R2 version on every request - that HEAD request is slow (20s+ when cold)
     # Multi-device sync will be handled by user management (T200) with session invalidation
