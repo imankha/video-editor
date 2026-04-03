@@ -21,8 +21,6 @@ from pathlib import Path
 from typing import Optional, Callable
 
 from ..database import get_db_connection, get_working_videos_path
-from ..user_context import get_current_user_id
-from ..profile_context import get_current_profile_id
 from ..websocket import manager, export_progress
 from .ffmpeg_service import get_video_duration
 from ..routers.exports import (
@@ -112,6 +110,34 @@ def create_progress_callback(export_id: str, loop: asyncio.AbstractEventLoop, pr
     return progress_callback
 
 
+def _sync_after_export(config: dict) -> None:
+    """Sync databases to R2 after export worker completes.
+
+    Background workers run outside the request middleware, so their DB
+    writes are never synced automatically. This explicit sync ensures
+    export results (working_videos, project updates, job status) and
+    credit refunds survive server restarts.
+    """
+    try:
+        from ..user_context import get_current_user_id
+        from ..profile_context import get_current_profile_id
+        from ..database import sync_db_to_r2_explicit, sync_user_db_to_r2_explicit
+
+        user_id = get_current_user_id()
+        profile_id = get_current_profile_id()
+
+        sync_db_to_r2_explicit(user_id, profile_id)
+
+        # Also sync user.sqlite if credits were involved (refund on failure)
+        credit_user_id = config.get("credit_user_id")
+        if credit_user_id:
+            sync_user_db_to_r2_explicit(credit_user_id)
+
+        logger.info(f"[ExportWorker] R2 sync complete for user={user_id} profile={profile_id}")
+    except Exception as e:
+        logger.error(f"[ExportWorker] R2 sync after export failed: {e}")
+
+
 async def process_export_job(job_id: str):
     """
     Process an export job in the background.
@@ -161,15 +187,8 @@ async def process_export_job(job_id: str):
 
         logger.info(f"[ExportWorker] Job {job_id} completed successfully")
 
-        # Sync profile DB to R2 (background task runs outside request middleware)
-        try:
-            from ..database import sync_db_to_r2_explicit
-            user_id = get_current_user_id()
-            profile_id = get_current_profile_id()
-            sync_db_to_r2_explicit(user_id, profile_id)
-            logger.info(f"[ExportWorker] Synced profile DB to R2 after export job {job_id}")
-        except Exception as sync_err:
-            logger.error(f"[ExportWorker] Failed to sync to R2 after export job {job_id}: {sync_err}")
+        # T940: Sync to R2 (background worker runs outside request middleware)
+        _sync_after_export(config)
 
     except Exception as e:
         logger.error(f"[ExportWorker] Job {job_id} failed: {e}", exc_info=True)
@@ -191,20 +210,32 @@ async def process_export_job(job_id: str):
                     f"{refund_user_id} for failed job {job_id}"
                 )
 
-        # Sync DBs to R2 after failure (background task runs outside request middleware)
+        # T940: Sync to R2 after failure too (export_jobs status + refund)
+        _sync_after_export(config)
+
+
+def _sync_after_export(user_id: str, profile_id: str, config: dict) -> None:
+    """
+    Sync databases to R2 after export job completes (T940).
+
+    Background workers run outside the request lifecycle, so the middleware
+    sync never fires. This function explicitly syncs:
+    - Profile database (always)
+    - User database (only if credit_user_id in config, meaning credits were involved)
+    """
+    from ..database import sync_db_to_r2_explicit, sync_user_db_to_r2_explicit
+
+    try:
+        sync_db_to_r2_explicit(user_id, profile_id)
+    except Exception as e:
+        logger.error(f"[ExportWorker] Failed to sync profile DB to R2: {e}")
+
+    credit_user_id = config.get("credit_user_id")
+    if credit_user_id:
         try:
-            from ..database import sync_db_to_r2_explicit, sync_user_db_to_r2_explicit
-            user_id = get_current_user_id()
-            profile_id = get_current_profile_id()
-            sync_db_to_r2_explicit(user_id, profile_id)  # export_jobs status update
-            # Also sync user.sqlite if credits were refunded
-            if (job_type == 'framing'
-                    and config.get("credits_deducted", 0) > 0
-                    and config.get("credit_user_id")):
-                sync_user_db_to_r2_explicit(user_id)  # credit refund
-            logger.info(f"[ExportWorker] Synced DBs to R2 after export failure/refund for job {job_id}")
-        except Exception as sync_err:
-            logger.error(f"[ExportWorker] Failed to sync to R2 after export failure: {sync_err}")
+            sync_user_db_to_r2_explicit(user_id)
+        except Exception as e:
+            logger.error(f"[ExportWorker] Failed to sync user DB to R2: {e}")
 
 
 async def process_framing_export(job_id: str, project_id: int, config: dict) -> tuple:
