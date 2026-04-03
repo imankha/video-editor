@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { X, Filter, Clock, Film, Settings, Sliders, Check, Star, List, Play } from 'lucide-react';
+import { X, Filter, Clock, Film, Settings, Sliders, Check, Star, List, Play, Pause } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import { ensureUniqueName } from '../utils/uniqueName';
@@ -34,6 +34,8 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
 
   // Preview state
   const [previewingClip, setPreviewingClip] = useState(null);
+  const [previewCurrentTime, setPreviewCurrentTime] = useState(0);
+  const [previewIsPlaying, setPreviewIsPlaying] = useState(false);
   const previewVideoRef = useRef(null);
 
   // Fetch raw clips on mount and reset form state
@@ -399,19 +401,47 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
   const handlePreviewVideoLoaded = useCallback(() => {
     if (previewVideoRef.current && previewingClip) {
       previewVideoRef.current.currentTime = previewingClip.start_time || 0;
+      setPreviewCurrentTime(0);
       previewVideoRef.current.play();
     }
   }, [previewingClip]);
 
-  // Handle video time update - stop at end time
+  // Handle video time update - stop at end time, track relative position
   const handlePreviewTimeUpdate = useCallback(() => {
     if (previewVideoRef.current && previewingClip) {
+      const startTime = previewingClip.start_time || 0;
       const endTime = previewingClip.end_time || previewVideoRef.current.duration;
       if (previewVideoRef.current.currentTime >= endTime) {
         previewVideoRef.current.pause();
-        previewVideoRef.current.currentTime = previewingClip.start_time || 0;
+        previewVideoRef.current.currentTime = startTime;
+        setPreviewCurrentTime(0);
+        setPreviewIsPlaying(false);
+      } else {
+        setPreviewCurrentTime(previewVideoRef.current.currentTime - startTime);
       }
     }
+  }, [previewingClip]);
+
+  // Toggle preview play/pause
+  const togglePreviewPlay = useCallback(() => {
+    if (!previewVideoRef.current) return;
+    if (previewVideoRef.current.paused) {
+      previewVideoRef.current.play();
+    } else {
+      previewVideoRef.current.pause();
+    }
+  }, []);
+
+  // Handle preview scrub bar click
+  const handlePreviewScrub = useCallback((e) => {
+    if (!previewVideoRef.current || !previewingClip) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const startTime = previewingClip.start_time || 0;
+    const clipDur = (previewingClip.end_time || 0) - startTime;
+    const targetTime = startTime + fraction * clipDur;
+    previewVideoRef.current.currentTime = targetTime;
+    setPreviewCurrentTime(targetTime - startTime);
   }, [previewingClip]);
 
   // Handle create
@@ -819,19 +849,52 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
             </div>
 
             {/* Video Player */}
-            <div className="flex-1 flex items-center justify-center bg-black overflow-hidden">
+            <div className="flex-1 flex items-center justify-center bg-black overflow-hidden relative">
               <video
                 ref={previewVideoRef}
                 src={getGameVideoUrl(previewingClip.game_id)}
-                controls
                 onLoadedMetadata={handlePreviewVideoLoaded}
                 onTimeUpdate={handlePreviewTimeUpdate}
-                className="w-full h-full object-contain"
+                onPlay={() => setPreviewIsPlaying(true)}
+                onPause={() => setPreviewIsPlaying(false)}
+                onClick={togglePreviewPlay}
+                className="w-full h-full object-contain cursor-pointer"
                 style={{ maxHeight: '100%', maxWidth: '100%' }}
               >
                 Your browser does not support the video tag.
               </video>
             </div>
+
+            {/* Custom Controls */}
+            {(() => {
+              const clipDur = Math.max(0, (previewingClip.end_time || 0) - (previewingClip.start_time || 0));
+              const progress = clipDur > 0 ? (previewCurrentTime / clipDur) * 100 : 0;
+              return (
+                <div className="flex items-center gap-3 px-3 py-2 bg-gray-800 border-t border-gray-700">
+                  <button
+                    type="button"
+                    onClick={togglePreviewPlay}
+                    className="text-white hover:text-purple-400 transition-colors"
+                  >
+                    {previewIsPlaying ? <Pause size={18} /> : <Play size={18} />}
+                  </button>
+                  <div
+                    className="flex-1 h-2 bg-gray-600 rounded-full cursor-pointer group"
+                    onClick={handlePreviewScrub}
+                  >
+                    <div
+                      className="h-full bg-purple-500 rounded-full relative transition-[width] duration-75"
+                      style={{ width: `${Math.min(100, progress)}%` }}
+                    >
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </div>
+                  <span className="text-xs text-gray-400 tabular-nums min-w-[70px] text-right">
+                    {formatDuration(previewCurrentTime)} / {formatDuration(clipDur)}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
         </>
       )}
