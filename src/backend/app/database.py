@@ -1354,6 +1354,74 @@ def sync_db_to_cloud_if_writes() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Explicit R2 sync for background workers (T940)
+# ---------------------------------------------------------------------------
+
+def get_user_data_path_explicit(user_id: str, profile_id: str) -> Path:
+    """Get user data path without relying on ContextVars."""
+    return USER_DATA_BASE / user_id / "profiles" / profile_id
+
+
+def sync_db_to_r2_explicit(user_id: str, profile_id: str) -> bool:
+    """
+    Sync the profile database to R2 without relying on ContextVars.
+
+    Designed for background workers (e.g. export_worker) that run outside
+    the request-response lifecycle where ContextVars are no longer valid.
+
+    Returns True on success (or if R2 is disabled), False on failure.
+    """
+    if not R2_ENABLED:
+        return True
+
+    db_path = get_user_data_path_explicit(user_id, profile_id) / "database.sqlite"
+    if not db_path.exists():
+        return True
+
+    check_database_size(db_path)
+    current_version = get_local_db_version(user_id, profile_id)
+
+    success, new_version = sync_database_to_r2_with_version(user_id, db_path, current_version)
+
+    if success and new_version is not None:
+        set_local_db_version(user_id, profile_id, new_version)
+        logger.debug(f"[ExportWorker] Database synced to R2: user={user_id}, profile={profile_id}, v={new_version}")
+        return True
+    else:
+        logger.warning(f"[ExportWorker] Failed to sync database to R2: user={user_id}, profile={profile_id}")
+        return False
+
+
+def sync_user_db_to_r2_explicit(user_id: str) -> bool:
+    """
+    Sync user.sqlite to R2 without relying on ContextVars.
+
+    Designed for background workers that may modify user.sqlite (e.g. credit refunds).
+
+    Returns True on success (or if R2 is disabled), False on failure.
+    """
+    if not R2_ENABLED:
+        return True
+
+    db_path = USER_DATA_BASE / user_id / "user.sqlite"
+    if not db_path.exists():
+        return True
+
+    from .storage import sync_user_db_to_r2_with_version
+
+    local_version = get_local_user_db_version(user_id)
+    success, new_version = sync_user_db_to_r2_with_version(user_id, db_path, local_version)
+
+    if success and new_version is not None:
+        set_local_user_db_version(user_id, new_version)
+        logger.debug(f"[ExportWorker] user.sqlite synced to R2: user={user_id}, v={new_version}")
+        return True
+    else:
+        logger.warning(f"[ExportWorker] Failed to sync user.sqlite to R2: user={user_id}")
+        return False
+
+
+# ---------------------------------------------------------------------------
 # User.sqlite version tracking and sync (T920)
 # ---------------------------------------------------------------------------
 

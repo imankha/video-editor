@@ -214,6 +214,30 @@ async def process_export_job(job_id: str):
         _sync_after_export(config)
 
 
+def _sync_after_export(user_id: str, profile_id: str, config: dict) -> None:
+    """
+    Sync databases to R2 after export job completes (T940).
+
+    Background workers run outside the request lifecycle, so the middleware
+    sync never fires. This function explicitly syncs:
+    - Profile database (always)
+    - User database (only if credit_user_id in config, meaning credits were involved)
+    """
+    from ..database import sync_db_to_r2_explicit, sync_user_db_to_r2_explicit
+
+    try:
+        sync_db_to_r2_explicit(user_id, profile_id)
+    except Exception as e:
+        logger.error(f"[ExportWorker] Failed to sync profile DB to R2: {e}")
+
+    credit_user_id = config.get("credit_user_id")
+    if credit_user_id:
+        try:
+            sync_user_db_to_r2_explicit(user_id)
+        except Exception as e:
+            logger.error(f"[ExportWorker] Failed to sync user DB to R2: {e}")
+
+
 async def process_framing_export(job_id: str, project_id: int, config: dict) -> tuple:
     """
     Process a framing mode export.
