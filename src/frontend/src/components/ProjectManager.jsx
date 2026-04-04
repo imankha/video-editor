@@ -1273,19 +1273,25 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
     <div className="mt-3">
       {/* Labels row */}
       <div className="flex justify-between text-xs text-gray-500 mb-1">
-        <span className="flex items-center gap-2">
-          {isExporting === 'framing' ? (
-            <span className="text-amber-400 flex items-center gap-1">
-              <RefreshCw size={10} className="animate-spin" />
-              Framing...
+        {has_final_video ? (
+          <span className="text-green-400 w-full text-center">Done</span>
+        ) : (
+          <>
+            <span className="flex items-center gap-2">
+              {isExporting === 'framing' ? (
+                <span className="text-amber-400 flex items-center gap-1">
+                  <RefreshCw size={10} className="animate-spin" />
+                  Framing...
+                </span>
+              ) : framingComplete ? (
+                <span className="text-green-400">Framing</span>
+              ) : (
+                <span>Framing</span>
+              )}
             </span>
-          ) : framingComplete ? (
-            <span className="text-green-400">Framing</span>
-          ) : (
-            <span>Framing</span>
-          )}
-        </span>
-        <span>Overlay</span>
+            <span>Overlay</span>
+          </>
+        )}
       </div>
 
       {/* Segments strip */}
