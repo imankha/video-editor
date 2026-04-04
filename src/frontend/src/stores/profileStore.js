@@ -112,9 +112,13 @@ export const useProfileStore = create((set, get) => ({
 
       const newProfile = await response.json();
 
-      // Refetch profiles to get updated list, then switch to the new one
-      await get().fetchProfiles({ force: true });
+      // Switch to the new profile FIRST (updates header, resets stores),
+      // then refetch profiles to get the updated list.
+      // Order matters: fetchProfiles sets currentProfileId from server's
+      // isCurrent flag, which would make switchProfile think we're already
+      // on the new profile and skip the reset.
       await get().switchProfile(newProfile.id);
+      await get().fetchProfiles({ force: true });
 
       return newProfile;
     } catch (error) {
