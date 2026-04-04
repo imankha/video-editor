@@ -114,7 +114,12 @@ def ensure_user_database(user_id: str) -> None:
     """
     with _init_lock:
         if user_id in _initialized_user_dbs:
-            return
+            # Verify the DB file still exists (may have been deleted by reset script)
+            db_path = _get_user_db_path(user_id)
+            if db_path.exists():
+                return
+            # File gone — remove from cache and re-initialize
+            _initialized_user_dbs.discard(user_id)
 
     db_path = _get_user_db_path(user_id)
     db_path.parent.mkdir(parents=True, exist_ok=True)
