@@ -64,8 +64,6 @@ export const SEGMENT_STATUS = {
   EXPORTING: 'exporting',
   IN_PROGRESS: 'in_progress',
   READY: 'ready',
-  EXTRACTING: 'extracting',
-  PENDING_EXTRACTION: 'pending_extraction',
 } as const;
 
 // Usage

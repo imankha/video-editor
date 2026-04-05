@@ -186,8 +186,6 @@ class ClipSummary(BaseModel):
     name: Optional[str] = None
     tags: List[str] = []
     rating: Optional[int] = None
-    is_extracted: bool = True
-    is_extracting: bool = False
 
 
 class ProjectListItem(BaseModel):
@@ -197,9 +195,6 @@ class ProjectListItem(BaseModel):
     clip_count: int
     clips_exported: int  # Clips with exported_at IS NOT NULL (included in working video)
     clips_in_progress: int  # Clips with edits but not yet exported
-    clips_extracted: int  # Clips with video file ready (filename IS NOT NULL)
-    clips_extracting: int  # Clips currently being extracted (modal_tasks running)
-    clips_pending_extraction: int  # Clips waiting to be extracted (modal_tasks pending)
     has_working_video: bool
     has_overlay_edits: bool
     has_final_video: bool
@@ -227,10 +222,6 @@ class WorkingClipResponse(BaseModel):
     rating: Optional[int] = None  # Rating from raw_clips (for auto-generated names)
     exported_at: Optional[str] = None  # ISO timestamp when clip was exported
     sort_order: int
-    # Extraction status
-    is_extracted: bool = True  # True if video file is ready (filename exists)
-    is_extracting: bool = False  # True if extraction is in progress
-    extraction_status: Optional[str] = None  # 'pending', 'running', 'completed', 'failed', or None
 
 
 class ProjectDetailResponse(BaseModel):
@@ -365,45 +356,12 @@ async def list_projects():
                 project_games[project_id]['game_names'].append(display_name)
                 project_games[project_id]['game_dates'].append(game_row['game_date'] or '')
 
-        # Fetch extraction status for all projects
-        # Counts clips that are: extracted (have filename), extracting (running task), pending (pending task)
-        # T790: Standalone extraction removed (T740 merged it into framing export).
-        # Count clips with filenames (extracted = has standalone file).
-        # extracting/pending are always 0 — no new extraction tasks are created.
+        # Fetch clip details for each project (names, tags, rating)
         cursor.execute("""
-            SELECT project_id, SUM(is_extracted) as extracted
-            FROM (
-                SELECT rc.auto_project_id as project_id,
-                    CASE WHEN rc.filename IS NOT NULL AND rc.filename != '' THEN 1 ELSE 0 END as is_extracted
-                FROM raw_clips rc
-                WHERE rc.auto_project_id IS NOT NULL
-
-                UNION ALL
-
-                SELECT wc.project_id as project_id,
-                    CASE WHEN rc.filename IS NOT NULL AND rc.filename != '' THEN 1 ELSE 0 END as is_extracted
-                FROM working_clips wc
-                JOIN raw_clips rc ON rc.id = wc.raw_clip_id
-            ) combined
-            GROUP BY project_id
-        """)
-        extraction_rows = cursor.fetchall()
-
-        project_extraction = {}
-        for ext_row in extraction_rows:
-            project_extraction[ext_row['project_id']] = {
-                'extracted': ext_row['extracted'] or 0,
-                'extracting': 0,
-                'pending': 0
-            }
-
-        # Fetch clip details for each project (names, tags, extracted status)
-        cursor.execute("""
-            SELECT project_id, clip_id, name, tags, rating, is_extracted, 0 as is_extracting, sort_order
+            SELECT project_id, clip_id, name, tags, rating, sort_order
             FROM (
                 SELECT rc.auto_project_id as project_id, rc.id as clip_id,
                     rc.name, rc.tags, rc.rating,
-                    CASE WHEN rc.filename IS NOT NULL AND rc.filename != '' THEN 1 ELSE 0 END as is_extracted,
                     0 as sort_order
                 FROM raw_clips rc
                 WHERE rc.auto_project_id IS NOT NULL
@@ -412,7 +370,6 @@ async def list_projects():
 
                 SELECT wc.project_id as project_id, rc.id as clip_id,
                     rc.name, rc.tags, rc.rating,
-                    CASE WHEN rc.filename IS NOT NULL AND rc.filename != '' THEN 1 ELSE 0 END as is_extracted,
                     wc.sort_order
                 FROM working_clips wc
                 JOIN raw_clips rc ON rc.id = wc.raw_clip_id
@@ -438,9 +395,7 @@ async def list_projects():
                 id=clip_row['clip_id'],
                 name=clip_row['name'],
                 tags=tags,
-                rating=clip_row['rating'],
-                is_extracted=bool(clip_row['is_extracted']),
-                is_extracting=bool(clip_row['is_extracting'])
+                rating=clip_row['rating']
             ))
 
         result = []
@@ -450,11 +405,6 @@ async def list_projects():
                 'game_ids': [],
                 'game_names': [],
                 'game_dates': []
-            })
-            extraction_info = project_extraction.get(project_id, {
-                'extracted': 0,
-                'extracting': 0,
-                'pending': 0
             })
 
             # Generate group key
@@ -470,9 +420,6 @@ async def list_projects():
                 clip_count=row['clip_count'],
                 clips_exported=row['clips_exported'],
                 clips_in_progress=row['clips_in_progress'],
-                clips_extracted=extraction_info['extracted'],
-                clips_extracting=extraction_info['extracting'],
-                clips_pending_extraction=extraction_info['pending'],
                 has_working_video=bool(row['has_working_video']),
                 has_overlay_edits=bool(row['has_overlay_edits']),
                 has_final_video=bool(row['has_final_video']),
@@ -732,7 +679,7 @@ async def get_project(project_id: int):
             except Exception as e:
                 logger.warning(f"Auto-restore failed for project {project_id}: {e}")
 
-        # Get working clips with resolved filenames and extraction status
+        # Get working clips with resolved filenames
         # (latest version of each clip only, grouped by end_time)
         cursor.execute(f"""
             SELECT
@@ -745,13 +692,9 @@ async def get_project(project_id: int):
                 rc.name as raw_name,
                 rc.notes as raw_notes,
                 rc.tags as raw_tags,
-                rc.rating as raw_rating,
-                mt.status as extraction_status
+                rc.rating as raw_rating
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-            LEFT JOIN modal_tasks mt ON mt.raw_clip_id = rc.id
-                AND mt.task_type = 'clip_extraction'
-                AND mt.status IN ('pending', 'running')
             WHERE wc.project_id = ?
             AND wc.id IN ({latest_working_clips_subquery()})
             ORDER BY wc.sort_order
@@ -763,10 +706,6 @@ async def get_project(project_id: int):
             # Resolve filename
             raw_filename = clip['raw_filename'] or ''
             filename = raw_filename or clip['uploaded_filename'] or 'unknown'
-            # Extraction status
-            is_extracted = bool(raw_filename) or bool(clip['uploaded_filename'])
-            extraction_status = clip['extraction_status']
-            is_extracting = extraction_status == 'running'
             # Parse tags JSON
             tags = []
             if clip['raw_tags']:
@@ -785,10 +724,7 @@ async def get_project(project_id: int):
                 tags=tags,
                 rating=clip['raw_rating'],
                 exported_at=clip['exported_at'],
-                sort_order=clip['sort_order'],
-                is_extracted=is_extracted,
-                is_extracting=is_extracting,
-                extraction_status=extraction_status
+                sort_order=clip['sort_order']
             ))
 
         # Generate presigned URL for working video if it exists
@@ -1074,7 +1010,6 @@ class RefreshClipsRequest(BaseModel):
 class RefreshClipsResponse(BaseModel):
     success: bool
     refreshed_count: int
-    extraction_triggered: bool = False
 
 
 @router.post("/{project_id}/refresh-outdated-clips", response_model=RefreshClipsResponse)
@@ -1082,9 +1017,8 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
     """
     Refresh outdated working clips to use latest annotation boundaries.
 
-    T740: Instead of resetting framing data, rescales crop keyframes and segment
-    boundaries to fit the new clip duration. This preserves the user's crop animation
-    within the new time range. No re-extraction needed (framing reads game video directly).
+    Rescales crop keyframes and segment boundaries to fit the new clip duration.
+    This preserves the user's crop animation within the new time range.
 
     Rescaling: if old duration was 30s and new is 20s, a keyframe at frame 450 (15s @ 30fps)
     maps to frame 300 (10s) — all frames multiplied by (newDuration / oldDuration).
@@ -1212,6 +1146,5 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
 
     return RefreshClipsResponse(
         success=True,
-        refreshed_count=refreshed_count,
-        extraction_triggered=False
+        refreshed_count=refreshed_count
     )

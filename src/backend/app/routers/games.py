@@ -862,7 +862,7 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
     Uses natural key (game_id, end_time, video_sequence) to match annotations with raw_clips.
     - Updates existing clips' metadata (name, rating, tags, notes, start_time)
     - Deletes clips that are no longer in the annotations list
-    - New clips are expected to be created via real-time save (with FFmpeg extraction)
+    - New clips are expected to be created via real-time save
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -909,13 +909,12 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
                     existing_clips[clip_key]['id']
                 ))
             else:
-                # Create new raw_clip with empty filename (pending extraction)
-                # This is a fallback if real-time save failed
+                # Create new raw_clip (fallback if real-time save failed)
                 cursor.execute("""
                     INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id, video_sequence)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    '',  # empty filename = pending extraction
+                    '',
                     rating,
                     tags_json,
                     name,
@@ -925,7 +924,7 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
                     game_id,
                     video_sequence,
                 ))
-                logger.info(f"Created pending raw_clip for game {game_id} at end_time {end_time} video_sequence {video_sequence}")
+                logger.info(f"Created raw_clip for game {game_id} at end_time {end_time} video_sequence {video_sequence}")
 
         # Delete raw_clips that are no longer in annotations
         for clip_key, clip_data in existing_clips.items():
@@ -991,7 +990,7 @@ async def finish_annotation(game_id: int, body: FinishAnnotationRequest = Finish
     Called when user leaves annotation mode for a game.
     Persists the high-water mark of video watched (viewed_duration).
 
-    Extraction is NOT triggered here — only happens when clips are added to projects.
+    Persists high-water mark only; no side effects.
     """
     if body.viewed_duration > 0:
         with get_db_connection() as conn:
