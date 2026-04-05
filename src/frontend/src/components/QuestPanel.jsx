@@ -96,6 +96,7 @@ export function QuestPanel() {
     : 0;
 
   useEffect(() => {
+    if (!questDef) return;
     if (prevCompletedRef.current === null) {
       // First load — just record, don't play sound
       prevCompletedRef.current = currentCompleted;
