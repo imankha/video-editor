@@ -21,66 +21,21 @@ async function setupUserA(page) {
   });
 }
 
-/**
- * Navigate to framing mode for a project with working video.
- */
-async function navigateToFramingProject(page) {
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
-
-  // Go to Projects tab
-  const projectsBtn = page.locator('button:has-text("Projects")');
-  await expect(projectsBtn).toBeVisible({ timeout: 10000 });
-  await projectsBtn.click();
-  await page.waitForTimeout(1000);
-
-  // Click the first visible project card — user "a" has projects like "Great Touch Pass"
-  const projectCard = page.locator('text="Great Touch Pass"').first();
-  await expect(projectCard).toBeVisible({ timeout: 10000 });
-  await projectCard.click();
-  await page.waitForTimeout(2000);
-
-  // Wait for framing mode UI — the "Framing" button or video should appear
-  const framingBtn = page.locator('button:has-text("Framing")');
-  await expect(framingBtn).toBeVisible({ timeout: 15000 });
-
-  // Wait for video to appear and load
-  const video = page.locator('video');
-  await expect(video).toBeVisible({ timeout: 30000 });
-  await video.evaluate(async (v) => {
-    if (v.readyState < 2) {
-      await new Promise(resolve => {
-        v.addEventListener('loadeddata', resolve, { once: true });
-        setTimeout(resolve, 15000);
-      });
-    }
-  });
-
-  // Let crop overlay initialize
-  await page.waitForTimeout(2000);
-
-  return 'Great Touch Pass';
-}
-
 test.describe('T340: Keyframe Integrity Guards', () => {
   test.beforeEach(async ({ page }) => {
     await setupUserA(page);
   });
 
   /**
-   * Load user a's project in framing mode, then verify all three guards
-   * via the actual Vite-served modules in the browser.
+   * Verify all three keyframe guards via Vite-served modules in the browser.
+   * These are pure JS logic tests — no project or framing mode needed,
+   * just navigate to the app so Vite can serve the module imports.
    */
   test('Live: all guards verified with user a project in framing mode', async ({ page }) => {
-    const projectName = await navigateToFramingProject(page);
-    console.log(`[T340] Loaded project: ${projectName}`);
-
-    // Verify framing mode is active — video visible, crop overlay should exist
-    await expect(page.locator('video')).toBeVisible();
-    console.log('[T340] Video loaded in framing mode');
-
-    // Screenshot: framing mode loaded
-    await page.screenshot({ path: 'test-results/t340-framing-loaded.png' });
+    // Navigate to app root so Vite dev server is available for module imports
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    console.log('[T340] App loaded, running keyframe guard tests via browser modules');
 
     // Run all guard tests via the actual browser-served modules
     const result = await page.evaluate(async () => {

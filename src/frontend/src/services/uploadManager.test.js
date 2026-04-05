@@ -19,6 +19,14 @@ import {
   listDedupeGames,
 } from './uploadManager';
 
+// Mock stores that uploadGame triggers via dynamic import
+vi.mock('../stores/questStore', () => ({
+  useQuestStore: { getState: () => ({ fetchProgress: vi.fn() }) },
+}));
+vi.mock('../stores/gamesDataStore', () => ({
+  useGamesDataStore: { getState: () => ({ invalidateGames: vi.fn() }) },
+}));
+
 // Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -189,7 +197,16 @@ describe('uploadManager', () => {
 
   describe('uploadGame integration', () => {
     it('should handle dedup (video exists in R2, game already owned)', async () => {
-      // Step 1: prepare-upload returns 'exists' (video already in R2)
+      // Step 1: POST /api/games creates the game row
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status: 'already_owned',
+          game_id: 123,
+          name: 'Test Game',
+        }),
+      });
+      // Step 2: prepare-upload returns 'exists' (video already in R2)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -198,13 +215,11 @@ describe('uploadManager', () => {
           file_size: 1024,
         }),
       });
-      // Step 2: POST /api/games returns 'already_owned'
+      // Step 3: POST /api/games/{id}/videos attaches video
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          status: 'already_owned',
-          game_id: 123,
-          name: 'Test Game',
+          videos: [{ video_url: 'https://example.com/video.mp4' }],
         }),
       });
 
@@ -225,7 +240,16 @@ describe('uploadManager', () => {
     });
 
     it('should handle dedup (video exists in R2, new game created)', async () => {
-      // Step 1: prepare-upload returns 'exists' (video already in R2)
+      // Step 1: POST /api/games creates the game row
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status: 'created',
+          game_id: 456,
+          name: 'New Game',
+        }),
+      });
+      // Step 2: prepare-upload returns 'exists' (video already in R2)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -234,13 +258,11 @@ describe('uploadManager', () => {
           file_size: 1024,
         }),
       });
-      // Step 2: POST /api/games returns 'created'
+      // Step 3: POST /api/games/{id}/videos attaches video
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          status: 'created',
-          game_id: 456,
-          name: 'New Game',
+          videos: [{ video_url: 'https://example.com/video.mp4' }],
         }),
       });
 

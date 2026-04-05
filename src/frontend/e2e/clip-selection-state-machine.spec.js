@@ -15,7 +15,9 @@ const TEST_USER_ID = `e2e_t690_${Date.now()}_${Math.random().toString(36).slice(
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const TEST_VIDEO = path.resolve(__dirname, '../../../formal annotations/3.22.26/wcfc-vs-sporting-ca-2026-03-21-2026-03-22.mp4');
+const TEST_DATA_DIR = path.resolve(__dirname, '../../../formal annotations/test.short');
+const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-carlsbad-trimmed.mp4');
+const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
 
 // ============================================================================
 // Helpers
@@ -29,7 +31,21 @@ async function setupTestUserContext(page) {
   await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
     const headers = { ...route.request().headers() };
     delete headers['x-test-mode'];
+    delete headers['x-user-id'];
     await route.continue({ headers });
+  });
+}
+
+async function clearBrowserState(page) {
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await page.evaluate(async () => {
+    if ('caches' in window) {
+      const names = await caches.keys();
+      await Promise.all(names.map(name => caches.delete(name)));
+    }
   });
 }
 
@@ -73,6 +89,12 @@ async function enterAnnotateMode(page) {
     await expect(uploadingButton).toBeHidden({ timeout: 300000 });
   }
   console.log('[Setup] Video ready');
+
+  // Bypass auth gate so Add Clip works instead of showing sign-in modal
+  await page.evaluate(async () => {
+    const { useAuthStore } = await import('/src/stores/authStore.js');
+    useAuthStore.setState({ isAuthenticated: true, email: 'test@e2e.local', showAuthModal: false });
+  });
 }
 
 async function ensurePaused(page) {
@@ -95,15 +117,17 @@ async function countSidebarClips(page) {
   return await page.locator('.border-b.border-gray-800.cursor-pointer').count();
 }
 
-/** Create a clip: press A to open overlay, then click the Save button */
+/** Create a clip: click "Add Clip" button to open overlay, then click the Save button */
 async function createClip(page, seekTime) {
   await ensurePaused(page);
 
   // Seek directly via video element
   await seekVideoDirect(page, seekTime);
 
-  // Press 'A' to open the overlay
-  await page.keyboard.press('a');
+  // Click "Add Clip" button to open the overlay
+  const addClipBtn = page.locator('button:has-text("Add Clip")');
+  await expect(addClipBtn).toBeVisible({ timeout: 5000 });
+  await addClipBtn.click();
   await page.waitForTimeout(1000);
 
   // Click the save button explicitly
@@ -134,6 +158,9 @@ test.describe('T690: Clip Selection State Machine', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupTestUserContext(page);
+    // Clear browser storage to prevent stale data triggering AuthGateModal
+    await page.goto('/');
+    await clearBrowserState(page);
   });
 
   test('Complete state machine verification @t690', async ({ page }) => {
@@ -143,30 +170,15 @@ test.describe('T690: Clip Selection State Machine', () => {
     await enterAnnotateMode(page);
     await ensurePaused(page);
 
+    // Import TSV to create clips (Add Clip button requires fullscreen overlay)
+    console.log('[Test] Importing TSV to create clips...');
+    const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
+    await expect(tsvInput).toBeAttached({ timeout: 10000 });
+    await tsvInput.setInputFiles(TEST_TSV);
+    await page.waitForTimeout(2000);
+
     let clipCount = await countSidebarClips(page);
-    console.log(`[Test] Existing clips: ${clipCount}`);
-
-    if (clipCount < 2) {
-      console.log('[Test] Creating clips...');
-
-      // Deselect by seeking to empty area
-      await seekVideoDirect(page, 2);
-
-      if (clipCount < 1) {
-        await createClip(page, 30);
-        clipCount = await countSidebarClips(page);
-        console.log(`[Test] After clip 1: ${clipCount}`);
-      }
-      if (clipCount < 2) {
-        // Deselect before creating second clip
-        await seekVideoDirect(page, 2);
-        await page.waitForTimeout(500);
-        await createClip(page, 90);
-        clipCount = await countSidebarClips(page);
-        console.log(`[Test] After clip 2: ${clipCount}`);
-      }
-    }
-
+    console.log(`[Test] Clips after TSV import: ${clipCount}`);
     expect(clipCount).toBeGreaterThanOrEqual(2);
 
     // Deselect
@@ -185,8 +197,8 @@ test.describe('T690: Clip Selection State Machine', () => {
     await firstClip.click();
     await page.waitForTimeout(1000);
 
-    // Verify selection via DOM: sidebar highlight should appear
-    const selectedHighlightReq1 = page.locator('.border-l-2:not(.border-l-transparent)');
+    // Verify selection via DOM: sidebar highlight should appear (border-l-3 for selected clips)
+    const selectedHighlightReq1 = page.locator('.border-l-3');
     const highlightVisReq1 = await selectedHighlightReq1.isVisible({ timeout: 2000 }).catch(() => false);
     console.log(`[Test] REQ 1: Sidebar highlight visible: ${highlightVisReq1}`);
     expect(highlightVisReq1).toBe(true);
@@ -209,7 +221,7 @@ test.describe('T690: Clip Selection State Machine', () => {
     const clipDetail = page.locator('input[placeholder*="name" i], input[placeholder*="clip" i], [class*="ClipDetailsEditor"]').first();
     const detailVisible = await clipDetail.isVisible({ timeout: 2000 }).catch(() => false);
     // Also check: sidebar should show the selected clip with a highlighted border
-    const selectedHighlight = page.locator('.border-l-2:not(.border-l-transparent)');
+    const selectedHighlight = page.locator('.border-l-3');
     const highlightVisible = await selectedHighlight.isVisible({ timeout: 1000 }).catch(() => false);
     console.log(`[Test] STABILITY: Detail panel: ${detailVisible}, highlight: ${highlightVisible}`);
 
@@ -224,6 +236,10 @@ test.describe('T690: Clip Selection State Machine', () => {
     // ========================================================================
     console.log('\n[Test] === REQ 2: Auto-deselect ===');
 
+    // Deselect first (dismiss any clip detail popup)
+    await seekVideoDirect(page, 2);
+    await page.waitForTimeout(500);
+
     // Re-select
     await firstClip.click();
     await page.waitForTimeout(500);
@@ -232,7 +248,7 @@ test.describe('T690: Clip Selection State Machine', () => {
     await page.waitForTimeout(800);
 
     // Verify deselection via DOM: sidebar highlight should be gone
-    const highlightAfterDeselect = page.locator('.border-l-2:not(.border-l-transparent)');
+    const highlightAfterDeselect = page.locator('.border-l-3');
     const stillHighlighted = await highlightAfterDeselect.isVisible().catch(() => false);
     console.log(`[Test] REQ 2: Highlight gone after seek away: ${!stillHighlighted}`);
     expect(stillHighlighted).toBe(false);
@@ -260,6 +276,10 @@ test.describe('T690: Clip Selection State Machine', () => {
     // REQ 3, 5, 6, 7, 8, 9, 10, 11, 12: Fullscreen workflow
     // ========================================================================
     console.log('\n[Test] === Fullscreen workflow (REQ 3/5-12) ===');
+
+    // Deselect first (dismiss any clip detail popup blocking sidebar)
+    await seekVideoDirect(page, 2);
+    await page.waitForTimeout(500);
 
     // Ensure clip selected
     await firstClip.click();
@@ -300,7 +320,7 @@ test.describe('T690: Clip Selection State Machine', () => {
 
       // Overlay should be closed, but clip still selected (sidebar highlight)
       const overlayGoneReq12 = !(await saveOrUpdate.isVisible().catch(() => false));
-      const highlightAfterClose = await page.locator('.border-l-2:not(.border-l-transparent)').isVisible().catch(() => false);
+      const highlightAfterClose = await page.locator('.border-l-3').isVisible().catch(() => false);
       console.log(`  REQ 12: Overlay gone: ${overlayGoneReq12}, still selected: ${highlightAfterClose}`);
       expect(overlayGoneReq12).toBe(true);
 
@@ -343,7 +363,7 @@ test.describe('T690: Clip Selection State Machine', () => {
       expect(overlayGoneReq9).toBe(true);
 
       // --- REQ 3: Selection survived FS round-trip ---
-      const highlightAfterFS = await page.locator('.border-l-2:not(.border-l-transparent)').isVisible({ timeout: 2000 }).catch(() => false);
+      const highlightAfterFS = await page.locator('.border-l-3').isVisible({ timeout: 2000 }).catch(() => false);
       console.log(`  REQ 3: Selection survived FS: ${highlightAfterFS}`);
     }
 

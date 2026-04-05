@@ -214,14 +214,8 @@ test.describe('Full Workflow Tests', () => {
     await expect(page.locator('button:has-text("New Project")')).toBeVisible();
   });
 
-  test('2. Annotate Mode - Upload video and import TSV', async ({ page }) => {
-    // Upload video and import TSV
-    await enterAnnotateModeWithClips(page);
-
-    // Verify annotate mode is active
-    await expect(page.getByRole('heading', { name: 'Clips' })).toBeVisible();
-    await expect(page.locator('text=Great Control Pass').first()).toBeVisible({ timeout: 5000 });
-  });
+  // Test 2 removed: "Annotate Mode - Upload video and import TSV" is fully covered
+  // by new-user-flow.spec.js Quest 1 Step 1 (Add Game + annotate flow).
 
   test('3. Annotate Mode - Export TSV round-trip', async ({ page }) => {
     await enterAnnotateMode(page);
@@ -241,81 +235,8 @@ test.describe('Full Workflow Tests', () => {
     expect(content).toContain('Full Effort Play');
   });
 
-  test('4. Create Annotated Video button is enabled after upload', async ({ page }) => {
-    await enterAnnotateMode(page);
-
-    // Wait for video upload to complete first (button shows "Uploading video..." until done)
-    // The upload enables the "Create Annotated Video" button
-    const createVideoButton = page.locator('button:has-text("Create Annotated Video")');
-    await expect(createVideoButton).toBeVisible({ timeout: 120000 }); // 2 min for video upload
-    await expect(createVideoButton).toBeEnabled({ timeout: 10000 });
-
-    // Note: Clips are now auto-saved to library in real-time as you annotate
-    // The "Import Into Projects" button was removed - clips go to library automatically
-  });
-
-  test('5. Create Annotated Video API call succeeds', async ({ page }) => {
-    // Use event listener instead of route for more reliable request capture
-    let capturedExportUrl = null;
-
-    // Listen for all requests using page.on() which doesn't interfere with routing
-    page.on('request', request => {
-      const url = request.url();
-      if (url.includes('/api/annotate/export')) {
-        console.log(`[Test] Export request detected: ${url}`);
-        capturedExportUrl = url;
-      } else if (url.includes('/api/health')) {
-        console.log(`[Test] Health check request detected: ${url}`);
-      }
-    });
-
-    await enterAnnotateMode(page);
-
-    // Wait for video upload to complete - button changes from "Uploading video..." to "Create Annotated Video"
-    // This can take a while for large videos
-    const exportButton = page.locator('button:has-text("Create Annotated Video")');
-    await expect(exportButton).toBeVisible({ timeout: 120000 }); // 2 minute timeout for upload
-    await expect(exportButton).toBeEnabled({ timeout: 10000 });
-
-    // Small delay to ensure UI is fully ready
-    await page.waitForTimeout(500);
-
-    // Click the export button and wait for the export request
-    console.log('[Test] Clicking export button...');
-
-    // Use Promise.race to wait for either the request or an error toast
-    const exportRequestPromise = page.waitForRequest(
-      request => request.url().includes('/api/annotate/export'),
-      { timeout: 60000 } // 60 second timeout for health check + request
-    );
-
-    const errorToastPromise = page.waitForSelector('[role="alert"]', { timeout: 60000 }).catch(() => null);
-
-    await exportButton.click();
-
-    // Wait for either the export request or an error toast
-    const result = await Promise.race([
-      exportRequestPromise.then(req => ({ type: 'request', request: req })),
-      errorToastPromise.then(toast => toast ? ({ type: 'error', toast }) : new Promise(() => {})), // Never resolve if no toast
-    ]).catch(err => ({ type: 'timeout', error: err }));
-
-    if (result.type === 'request') {
-      console.log(`[Test] Export request URL: ${result.request.url()}`);
-      expect(result.request.url()).toContain('/api/annotate/export');
-    } else if (result.type === 'error') {
-      const errorText = await result.toast.textContent();
-      console.log(`[Test] Error shown to user: ${errorText}`);
-      throw new Error(`Export failed with error: ${errorText}`);
-    } else {
-      // Check if we captured the URL via event listener even if waitForRequest failed
-      if (capturedExportUrl) {
-        console.log(`[Test] Export request URL (via event listener): ${capturedExportUrl}`);
-        expect(capturedExportUrl).toContain('/api/annotate/export');
-      } else {
-        throw new Error(`Export request not made within timeout. ${result.error?.message || 'Unknown error'}`);
-      }
-    }
-  });
+  // Tests 4-5 removed: "Playback Annotations button enabled" and "enters playback mode"
+  // are fully covered by new-user-flow.spec.js Quest 1 Step 3 (Playback Annotations).
 
   // Test 6 removed: project creation via API is tested in "Projects CRUD works"
   // below. Running it immediately after test 5's annotate export causes

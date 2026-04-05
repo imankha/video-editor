@@ -12,7 +12,9 @@ const API_BASE = `http://localhost:${API_PORT}/api`;
 const TEST_USER_ID = `e2e_scrub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const TEST_VIDEO = path.resolve(__dirname, '../../../formal annotations/3.22.26/wcfc-vs-sporting-ca-2026-03-21-2026-03-22.mp4');
+const TEST_DATA_DIR = path.resolve(__dirname, '../../../formal annotations/test.short');
+const TEST_VIDEO = path.join(TEST_DATA_DIR, 'wcfc-carlsbad-trimmed.mp4');
+const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
 
 async function setupTestUserContext(page) {
   await page.setExtraHTTPHeaders({ 'X-User-ID': TEST_USER_ID, 'X-Test-Mode': 'true' });
@@ -20,6 +22,19 @@ async function setupTestUserContext(page) {
     const headers = { ...route.request().headers() };
     delete headers['x-test-mode'];
     await route.continue({ headers });
+  });
+}
+
+async function clearBrowserState(page) {
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await page.evaluate(async () => {
+    if ('caches' in window) {
+      const names = await caches.keys();
+      await Promise.all(names.map(name => caches.delete(name)));
+    }
   });
 }
 
@@ -50,6 +65,12 @@ async function enterAnnotateMode(page) {
   if (await uploadingButton.isVisible().catch(() => false)) {
     await expect(uploadingButton).toBeHidden({ timeout: 300000 });
   }
+
+  // Bypass auth gate so Add Clip works instead of showing sign-in modal
+  await page.evaluate(async () => {
+    const { useAuthStore } = await import('/src/stores/authStore.js');
+    useAuthStore.setState({ isAuthenticated: true, email: 'test@e2e.local', showAuthModal: false });
+  });
 }
 
 async function ensurePaused(page) {
@@ -61,7 +82,9 @@ async function createClip(page, seekTime) {
   await ensurePaused(page);
   await page.locator('video').first().evaluate((v, t) => { v.currentTime = t; }, seekTime);
   await page.waitForTimeout(800);
-  await page.keyboard.press('a');
+  // Click "Add Clip" button to open the overlay (no keyboard shortcut)
+  const addClipBtn = page.locator('button:has-text("Add Clip")');
+  await addClipBtn.click();
   await page.waitForTimeout(1000);
   const saveBtn = page.locator('button:has-text("Save & Continue")').first();
   if (await saveBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -77,6 +100,9 @@ test.describe('Sidebar scrub handle debug', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupTestUserContext(page);
+    // Clear browser storage to prevent stale cached data and dismiss modals
+    await page.goto('/');
+    await clearBrowserState(page);
   });
 
   test('Drag start handle in sidebar and check logs', async ({ page }) => {
@@ -91,19 +117,17 @@ test.describe('Sidebar scrub handle debug', () => {
     await enterAnnotateMode(page);
     await ensurePaused(page);
 
-    // Create a clip if needed
-    const clipItem = page.locator('.border-b.border-gray-800.cursor-pointer').first();
-    if (!(await clipItem.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await page.locator('video').first().evaluate(v => { v.currentTime = 2; });
-      await page.waitForTimeout(500);
-      await createClip(page, 30);
-    }
+    // Import TSV to create clips (Add Clip button requires fullscreen overlay)
+    const tsvInput = page.locator('input[type="file"][accept=".tsv,.txt"]');
+    await expect(tsvInput).toBeAttached({ timeout: 10000 });
+    await tsvInput.setInputFiles(TEST_TSV);
+    await page.waitForTimeout(2000);
 
     // Deselect, then select the clip to show details
     await page.locator('video').first().evaluate(v => { v.currentTime = 2; });
     await page.waitForTimeout(800);
     const clip = page.locator('.border-b.border-gray-800.cursor-pointer').first();
-    await expect(clip).toBeVisible({ timeout: 3000 });
+    await expect(clip).toBeVisible({ timeout: 5000 });
     await clip.click();
     await page.waitForTimeout(1500);
 
