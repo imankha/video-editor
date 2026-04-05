@@ -1,32 +1,53 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
-import { QUESTS, TOTAL_STEPS } from '../config/questDefinitions.jsx';
 import { useCreditStore } from './creditStore';
 import { track } from '../utils/analytics';
 
 // Module-level ref for fetch dedup
 let _fetchProgressPromise = null;
+let _fetchDefinitionsPromise = null;
 // Track achievements already recorded this session to prevent duplicate POSTs
 const _recordedAchievements = new Set();
 
 /**
- * Quest Store — manages quest progress and reward claiming (T540).
+ * Quest Store — manages quest progress and reward claiming (T540, T1000).
  *
- * Backend is authoritative for progress derivation. This store caches the
- * latest progress response. The QuestPanel component manages its own
- * collapsed/expanded/hidden UI state independently.
+ * Quest definitions (structure, titles, rewards) are fetched from the backend
+ * via GET /api/quests/definitions — single source of truth (T1000).
+ * Progress is fetched separately via GET /api/quests/progress.
  */
 export const useQuestStore = create((set, get) => ({
+  // Quest definitions from backend (T1000)
+  definitions: null, // [{id, title, reward, step_ids}]
+
   // Quest progress from backend
   quests: [],
   loaded: false,
 
   // Derived totals (computed on fetch)
   totalCompleted: 0,
-  totalSteps: TOTAL_STEPS,
+  totalSteps: 0,
 
   // Which quest is currently active (progressive disclosure)
   activeQuestId: null,
+
+  fetchDefinitions: async () => {
+    if (_fetchDefinitionsPromise) return _fetchDefinitionsPromise;
+    _fetchDefinitionsPromise = (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/quests/definitions`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const totalSteps = data.reduce((sum, q) => sum + q.step_ids.length, 0);
+        set({ definitions: data, totalSteps });
+      } catch {
+        // Best-effort
+      } finally {
+        _fetchDefinitionsPromise = null;
+      }
+    })();
+    return _fetchDefinitionsPromise;
+  },
 
   fetchProgress: async ({ force = false } = {}) => {
     // Dedup: if a fetch is already in flight, return the existing promise
@@ -101,11 +122,14 @@ export const useQuestStore = create((set, get) => ({
 
   reset: () => {
     _fetchProgressPromise = null;
+    _fetchDefinitionsPromise = null;
     _recordedAchievements.clear();
     set({
+      definitions: null,
       quests: [],
       loaded: false,
       totalCompleted: 0,
+      totalSteps: 0,
       activeQuestId: null,
     });
   },

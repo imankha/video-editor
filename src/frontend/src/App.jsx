@@ -105,6 +105,7 @@ function App() {
       useProfileStore.getState().fetchProfiles();
       useProjectsStore.getState().fetchProjects();
       useGamesDataStore.getState().fetchGames();
+      useQuestStore.getState().fetchDefinitions();
       useQuestStore.getState().fetchProgress();
       useSettingsStore.getState().loadSettings();
       useGalleryStore.getState().fetchCount();

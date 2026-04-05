@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { useQuestStore } from '../stores/questStore';
 import { useEditorStore } from '../stores/editorStore';
-import { QUESTS } from '../config/questDefinitions.jsx';
+import { STEP_TITLES, STEP_DESCRIPTIONS } from '../config/questDefinitions.jsx';
 import { toast } from './shared/Toast';
 
 import exportWebSocketManager from '../services/ExportWebSocketManager';
@@ -17,6 +17,7 @@ import exportWebSocketManager from '../services/ExportWebSocketManager';
  * fetching, and event subscriptions.
  */
 export function QuestPanel() {
+  const definitions = useQuestStore((s) => s.definitions);
   const quests = useQuestStore((s) => s.quests);
   const loaded = useQuestStore((s) => s.loaded);
   const activeQuestId = useQuestStore((s) => s.activeQuestId);
@@ -88,20 +89,21 @@ export function QuestPanel() {
   }, [fetchProgress]);
 
   // Detect step completions and quest completions for audio/animation
-  const questDef = QUESTS.find(q => q.id === activeQuestId) || QUESTS[0];
+  const questDef = definitions?.find(q => q.id === activeQuestId) || definitions?.[0];
   const questProgress = quests.find(q => q.id === activeQuestId);
   const currentCompleted = questProgress
     ? Object.values(questProgress.steps).filter(Boolean).length
     : 0;
 
   useEffect(() => {
+    if (!questDef) return;
     if (prevCompletedRef.current === null) {
       // First load — just record, don't play sound
       prevCompletedRef.current = currentCompleted;
       return;
     }
     if (currentCompleted > prevCompletedRef.current) {
-      const questStepCount = questDef.steps.length;
+      const questStepCount = questDef.step_ids.length;
       if (currentCompleted === questStepCount && !questProgress?.reward_claimed) {
         // All steps done — fanfare + celebration animation
         // Auto-expand so user sees "Claim" CTA (override auto-collapse in annotate mode)
@@ -117,15 +119,15 @@ export function QuestPanel() {
     prevCompletedRef.current = currentCompleted;
   }, [currentCompleted]);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Don't render if hidden, not loaded, or all quests fully done (unless modal is showing)
+  // Don't render if hidden, not loaded, definitions not fetched, or all quests done
   const allQuestsDone = loaded && quests.length > 0 && quests.every(q => q.reward_claimed);
-  if ((hidden || !loaded || allQuestsDone) && !showCompletionModal) return null;
+  if ((hidden || !loaded || !definitions || !questDef || allQuestsDone) && !showCompletionModal) return null;
   const steps = questProgress?.steps || {};
   const completedCount = Object.values(steps).filter(Boolean).length;
-  const totalCount = questDef.steps.length;
+  const totalCount = questDef.step_ids.length;
   const isComplete = completedCount === totalCount;
   const progressPercent = (completedCount / totalCount) * 100;
-  const currentStepId = questDef.steps.find(s => !steps[s.id])?.id;
+  const currentStepId = questDef.step_ids.find(sid => !steps[sid]);
 
   const handleClaimReward = async () => {
     setClaiming(true);
@@ -234,16 +236,16 @@ export function QuestPanel() {
 
             {/* Steps */}
             <div className="px-4 pb-2">
-              {questDef.steps.map((step, index) => {
-                const done = steps[step.id] || false;
-                const isCurrent = step.id === currentStepId;
+              {questDef.step_ids.map((stepId, index) => {
+                const done = steps[stepId] || false;
+                const isCurrent = stepId === currentStepId;
 
                 return (
                   <div
-                    key={step.id}
+                    key={stepId}
                     className={`
                       ${isCurrent ? 'flex' : 'hidden sm:flex'} items-start gap-3.5 py-3
-                      ${index < questDef.steps.length - 1 ? 'sm:border-b border-white/5' : ''}
+                      ${index < questDef.step_ids.length - 1 ? 'sm:border-b border-white/5' : ''}
                       ${isCurrent ? 'quest-step-current' : ''}
                     `}
                   >
@@ -265,11 +267,11 @@ export function QuestPanel() {
                         isCurrent ? 'quest-step-active text-base' :
                         'quest-step-inactive text-base'
                       }`}>
-                        {step.title}
+                        {STEP_TITLES[stepId] || stepId}
                       </p>
                       {isCurrent && (
                         <p className="quest-step-description text-sm mt-1 leading-snug">
-                          {step.description}
+                          {STEP_DESCRIPTIONS[stepId]}
                         </p>
                       )}
                     </div>

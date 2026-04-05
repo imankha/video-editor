@@ -28,21 +28,11 @@ from ..services.user_db import (
     get_credit_stats_for_admin,
     grant_credits,
 )
+from ..quest_config import QUEST_DEFINITIONS
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-# Quest definitions — mirrors quests.py (step IDs per quest)
-_QUEST_STEP_IDS = {
-    "quest_1": ["upload_game", "annotate_brilliant", "create_annotated_video"],
-    "quest_2": ["open_framing", "extract_clip", "export_framing", "export_overlay", "view_gallery_video"],
-    "quest_3": [
-        "upload_game_2", "annotate_brilliant_2", "annotate_4_star", "create_mixed_project",
-        "extract_custom_clips", "frame_custom_project", "start_custom_framing",
-        "complete_custom_framing", "overlay_custom_project", "watch_custom_video",
-    ],
-}
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +61,7 @@ def _get_profile_db_paths(user_id: str) -> list[Path]:
 def _check_steps_on_conn(conn) -> dict[str, bool]:
     """
     Run all quest step checks on an open SQLite connection.
-    Mirrors _check_all_steps() in quests.py.
+    Mirrors _check_all_steps() in quests.py — uses canonical step IDs from quest_config.
     """
     cursor = conn.cursor()
     steps = {}
@@ -83,21 +73,19 @@ def _check_steps_on_conn(conn) -> dict[str, bool]:
         row = cursor.execute(sql, params).fetchone()
         return row[0] if row else 0
 
-    # Quest 1
+    # --- Quest 1: Get Started ---
     steps["upload_game"] = one("SELECT 1 FROM games LIMIT 1")
     steps["annotate_brilliant"] = one("SELECT 1 FROM raw_clips WHERE rating = 5 LIMIT 1")
-    steps["create_annotated_video"] = one(
-        "SELECT 1 FROM export_jobs WHERE type = 'annotate' AND status = 'complete' LIMIT 1"
+    steps["playback_annotations"] = one(
+        "SELECT 1 FROM achievements WHERE key = 'played_annotations'"
     )
 
-    # Quest 2
+    # --- Quest 2: Export Highlights ---
     steps["open_framing"] = one("SELECT 1 FROM achievements WHERE key = 'opened_framing_editor'")
-    steps["extract_clip"] = one(
-        """SELECT 1 FROM working_clips wc
-           JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-           WHERE rc.filename IS NOT NULL AND rc.filename != '' LIMIT 1"""
-    )
     steps["export_framing"] = one(
+        "SELECT 1 FROM export_jobs WHERE type = 'framing' LIMIT 1"
+    )
+    steps["wait_for_export"] = one(
         "SELECT 1 FROM export_jobs WHERE type = 'framing' AND status = 'complete' LIMIT 1"
     )
     steps["export_overlay"] = one(
@@ -105,53 +93,80 @@ def _check_steps_on_conn(conn) -> dict[str, bool]:
     )
     steps["view_gallery_video"] = one("SELECT 1 FROM achievements WHERE key = 'viewed_gallery_video'")
 
-    # Quest 3
+    # --- Quest 3: Annotate More Clips ---
+    row_clips = val(
+        "SELECT count(*) FROM raw_clips WHERE game_id = (SELECT MIN(id) FROM games)"
+    )
+    steps["annotate_5_more"] = row_clips >= 3
+
+    row_5star = val(
+        "SELECT count(*) FROM raw_clips WHERE rating = 5 AND game_id = (SELECT MIN(id) FROM games)"
+    )
+    steps["annotate_second_5_star"] = row_5star >= 2
+
+    row_framing = val("SELECT count(*) FROM export_jobs WHERE type = 'framing'")
+    steps["export_second_highlight"] = row_framing >= 2
+
+    row_framing_complete = val(
+        "SELECT count(*) FROM export_jobs WHERE type = 'framing' AND status = 'complete'"
+    )
+    steps["wait_for_export_2"] = row_framing_complete >= 2
+
+    row_overlay_complete = val(
+        "SELECT count(*) FROM export_jobs WHERE type = 'overlay' AND status = 'complete'"
+    )
+    steps["overlay_second_highlight"] = row_overlay_complete >= 2
+
+    steps["watch_second_highlight"] = row_overlay_complete >= 2 and one(
+        "SELECT 1 FROM achievements WHERE key = 'watched_gallery_video_1s'"
+    )
+
+    # --- Quest 4: Highlight Reel ---
     steps["upload_game_2"] = val("SELECT count(*) FROM games") >= 2
-    steps["annotate_brilliant_2"] = val(
-        "SELECT count(*) FROM raw_clips WHERE rating = 5 AND game_id != (SELECT MIN(id) FROM games)"
-    ) >= 2
-    steps["annotate_4_star"] = one(
-        "SELECT 1 FROM raw_clips WHERE rating = 4 AND game_id != (SELECT MIN(id) FROM games) LIMIT 1"
+
+    steps["annotate_game_2"] = one(
+        """SELECT 1 FROM raw_clips
+           WHERE rating >= 4 AND game_id != (SELECT MIN(id) FROM games)
+           LIMIT 1"""
     )
-    steps["extract_custom_clips"] = one(
-        """SELECT 1 FROM projects p WHERE p.is_auto_created = 0
-           AND EXISTS (SELECT 1 FROM working_clips WHERE project_id = p.id)
-           AND NOT EXISTS (
-               SELECT 1 FROM working_clips wc JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-               WHERE wc.project_id = p.id AND (rc.filename IS NULL OR rc.filename = '')
-           ) LIMIT 1"""
-    )
-    steps["frame_custom_project"] = one(
-        """SELECT 1 FROM projects p WHERE p.is_auto_created = 0
-           AND EXISTS (SELECT 1 FROM working_clips WHERE project_id = p.id)
-           AND NOT EXISTS (
-               SELECT 1 FROM working_clips wc WHERE wc.project_id = p.id
-               AND (wc.crop_data IS NULL OR wc.crop_data = '')
-           ) LIMIT 1"""
-    )
-    steps["start_custom_framing"] = one(
-        """SELECT 1 FROM export_jobs ej JOIN projects p ON ej.project_id = p.id
-           WHERE ej.type = 'framing' AND p.is_auto_created = 0 LIMIT 1"""
-    )
-    steps["complete_custom_framing"] = one(
-        """SELECT 1 FROM export_jobs ej JOIN projects p ON ej.project_id = p.id
-           WHERE ej.status = 'complete' AND ej.type = 'framing' AND p.is_auto_created = 0 LIMIT 1"""
-    )
-    steps["overlay_custom_project"] = one(
-        """SELECT 1 FROM export_jobs ej JOIN projects p ON ej.project_id = p.id
-           WHERE ej.status = 'complete' AND ej.type = 'overlay' AND p.is_auto_created = 0 LIMIT 1"""
-    )
-    steps["watch_custom_video"] = one("SELECT 1 FROM achievements WHERE key = 'viewed_custom_project_video'")
-    steps["create_mixed_project"] = one(
+
+    steps["create_reel"] = one(
         """SELECT 1 FROM projects p
-           WHERE EXISTS (
-               SELECT 1 FROM working_clips wc JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-               WHERE wc.project_id = p.id AND rc.rating = 5
-           )
-           AND EXISTS (
-               SELECT 1 FROM working_clips wc JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-               WHERE wc.project_id = p.id AND rc.rating = 4
-           ) LIMIT 1"""
+           WHERE p.is_auto_created = 0
+           AND (
+               SELECT COUNT(DISTINCT rc.game_id)
+               FROM working_clips wc
+               JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+               WHERE wc.project_id = p.id
+           ) >= 2
+           LIMIT 1"""
+    )
+
+    steps["export_reel"] = one(
+        """SELECT 1 FROM export_jobs ej
+           JOIN projects p ON ej.project_id = p.id
+           WHERE ej.type = 'framing' AND p.is_auto_created = 0
+           LIMIT 1"""
+    )
+
+    steps["wait_for_reel"] = one(
+        """SELECT 1 FROM export_jobs ej
+           JOIN projects p ON ej.project_id = p.id
+           WHERE ej.type = 'framing' AND ej.status = 'complete'
+           AND p.is_auto_created = 0
+           LIMIT 1"""
+    )
+
+    steps["overlay_reel"] = one(
+        """SELECT 1 FROM export_jobs ej
+           JOIN projects p ON ej.project_id = p.id
+           WHERE ej.type = 'overlay' AND ej.status = 'complete'
+           AND p.is_auto_created = 0
+           LIMIT 1"""
+    )
+
+    steps["watch_reel"] = one(
+        "SELECT 1 FROM achievements WHERE key = 'viewed_custom_project_video'"
     )
 
     return steps
@@ -162,8 +177,8 @@ async def _compute_quest_progress(user_id: str) -> dict:
     db_paths = _get_profile_db_paths(user_id)
     if not db_paths:
         return {
-            qid: {"completed": 0, "total": len(sids), "reward_claimed": False}
-            for qid, sids in _QUEST_STEP_IDS.items()
+            qdef["id"]: {"completed": 0, "total": len(qdef["step_ids"]), "reward_claimed": False}
+            for qdef in QUEST_DEFINITIONS
         }
 
     # Merge steps across profiles: a step is done if ANY profile has it
@@ -180,12 +195,13 @@ async def _compute_quest_progress(user_id: str) -> dict:
             logger.warning(f"[Admin] Could not read quest steps from {db_path}: {e}")
 
     # Check reward_claimed per quest (also OR across profiles)
-    reward_claimed: dict[str, bool] = {qid: False for qid in _QUEST_STEP_IDS}
+    quest_ids = [qdef["id"] for qdef in QUEST_DEFINITIONS]
+    reward_claimed: dict[str, bool] = {qid: False for qid in quest_ids}
     for db_path in db_paths:
         try:
             conn = sqlite3.connect(str(db_path), timeout=5)
             cursor = conn.cursor()
-            for qid in _QUEST_STEP_IDS:
+            for qid in quest_ids:
                 if not reward_claimed[qid]:
                     row = cursor.execute(
                         "SELECT 1 FROM credit_transactions WHERE source = ? LIMIT 1", (f"quest_{qid}",)
@@ -196,7 +212,9 @@ async def _compute_quest_progress(user_id: str) -> dict:
             logger.warning(f"[Admin] Could not read reward_claimed from {db_path}: {e}")
 
     result = {}
-    for qid, step_ids in _QUEST_STEP_IDS.items():
+    for qdef in QUEST_DEFINITIONS:
+        qid = qdef["id"]
+        step_ids = qdef["step_ids"]
         completed = sum(1 for sid in step_ids if merged.get(sid, False))
         result[qid] = {
             "completed": completed,

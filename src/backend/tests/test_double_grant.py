@@ -127,7 +127,8 @@ class TestNoneReferenceIdAllowsDuplicates:
 class TestQuestClaimEndpoint:
     def test_claim_reward_returns_already_claimed_on_duplicate(self, isolated_user_db):
         """The claim_reward endpoint catches IntegrityError and returns already_claimed."""
-        from app.routers.quests import claim_reward, QUEST_DEFINITIONS
+        from app.routers.quests import claim_reward
+        from app.quest_config import QUEST_DEFINITIONS
         import asyncio
 
         quest_id = "quest_1"
