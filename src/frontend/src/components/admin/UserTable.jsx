@@ -3,6 +3,7 @@ import { Plus, Cpu, Search, ArrowUpDown, ArrowUp, ArrowDown, DollarSign, Zap, Ga
 import { CreditGrantModal } from './CreditGrantModal';
 import { GpuUsagePanel } from './GpuUsagePanel';
 import { QuestFunnelChart } from './QuestFunnelChart';
+import { useQuestStore } from '../../stores/questStore';
 
 const CLOUDFLARE_DASHBOARD_URL = 'https://dash.cloudflare.com/?to=/:account/web-analytics';
 
@@ -52,7 +53,7 @@ function StatCard({ icon: Icon, label, value, sub, color = 'purple' }) {
   );
 }
 
-const COLUMNS = [
+const BASE_COLUMNS_BEFORE = [
   { key: 'email', label: 'Email', align: 'left' },
   { key: 'credits', label: 'Credits', align: 'right' },
   { key: 'credits_spent', label: 'Spent', align: 'right' },
@@ -62,9 +63,9 @@ const COLUMNS = [
   { key: 'clips_annotated', label: 'Clips', align: 'right' },
   { key: 'projects_framed', label: 'Framed', align: 'right' },
   { key: 'projects_completed', label: 'Done', align: 'right' },
-  { key: 'quest_1', label: 'Q1', align: 'center' },
-  { key: 'quest_2', label: 'Q2', align: 'center' },
-  { key: 'quest_3', label: 'Q3', align: 'center' },
+];
+
+const BASE_COLUMNS_AFTER = [
   { key: 'last_seen_at', label: 'Last seen', align: 'right' },
   { key: 'gpu_seconds_total', label: 'GPU', align: 'right' },
 ];
@@ -110,12 +111,23 @@ function matchesFilter(user, filter) {
  * - allUsers: all users including guests (for quest funnel when unfiltered)
  */
 export function UserTable({ users, allUsers }) {
+  const definitions = useQuestStore((s) => s.definitions);
   const [grantUser, setGrantUser] = useState(null);
   const [gpuUser, setGpuUser] = useState(null);
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState('last_seen_at');
   const [sortDir, setSortDir] = useState('desc');
   const [filter, setFilter] = useState('all');
+
+  // Build columns dynamically from quest definitions
+  const COLUMNS = useMemo(() => {
+    const questCols = (definitions || []).map((q, i) => ({
+      key: q.id,
+      label: `Q${i + 1}`,
+      align: 'center',
+    }));
+    return [...BASE_COLUMNS_BEFORE, ...questCols, ...BASE_COLUMNS_AFTER];
+  }, [definitions]);
 
   const isFiltered = search !== '' || filter !== 'all';
 
@@ -301,15 +313,11 @@ export function UserTable({ users, allUsers }) {
                   {user.projects_completed || '—'}
                 </td>
 
-                <td className="px-3 py-2.5 text-center">
-                  <QuestBadge questId="quest_1" progress={user.quest_progress?.quest_1} />
-                </td>
-                <td className="px-3 py-2.5 text-center">
-                  <QuestBadge questId="quest_2" progress={user.quest_progress?.quest_2} />
-                </td>
-                <td className="px-3 py-2.5 text-center">
-                  <QuestBadge questId="quest_3" progress={user.quest_progress?.quest_3} />
-                </td>
+                {(definitions || []).map(q => (
+                  <td key={q.id} className="px-3 py-2.5 text-center">
+                    <QuestBadge questId={q.id} progress={user.quest_progress?.[q.id]} />
+                  </td>
+                ))}
 
                 <td className="px-3 py-2.5 text-right text-gray-500 text-xs">
                   {user.last_seen_at ? user.last_seen_at.slice(0, 10) : '—'}

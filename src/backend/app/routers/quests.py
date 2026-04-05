@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException
 from ..user_context import get_current_user_id
 from ..database import get_db_connection
 from ..services.user_db import grant_credits, get_credit_balance, get_credit_transactions, mark_quest_completed, get_completed_quest_ids
+from ..quest_config import QUEST_DEFINITIONS, QUEST_BY_ID
 
 logger = logging.getLogger(__name__)
 
@@ -21,59 +22,6 @@ router = APIRouter(prefix="/quests", tags=["quests"])
 
 # Known achievement keys — only these can be recorded
 KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "viewed_custom_project_video", "played_annotations", "watched_gallery_video_1s"}
-
-# Quest definitions — single source of truth for quest structure and rewards
-QUEST_DEFINITIONS = [
-    {
-        "id": "quest_1",
-        "title": "Get Started",
-        "reward": 15,
-        "step_ids": [
-            "upload_game",
-            "annotate_brilliant",
-            "playback_annotations",
-        ],
-    },
-    {
-        "id": "quest_2",
-        "title": "Export Highlights",
-        "reward": 25,
-        "step_ids": [
-            "open_framing",
-            "export_framing",
-            "wait_for_export",
-            "export_overlay",
-            "view_gallery_video",
-        ],
-    },
-    {
-        "id": "quest_3",
-        "title": "Annotate More Clips",
-        "reward": 40,
-        "step_ids": [
-            "annotate_second_5_star",
-            "annotate_5_more",
-            "export_second_highlight",
-            "wait_for_export_2",
-            "overlay_second_highlight",
-            "watch_second_highlight",
-        ],
-    },
-    {
-        "id": "quest_4",
-        "title": "Highlight Reel",
-        "reward": 45,
-        "step_ids": [
-            "upload_game_2",
-            "annotate_game_2",
-            "create_reel",
-            "export_reel",
-            "wait_for_reel",
-            "overlay_reel",
-            "watch_reel",
-        ],
-    },
-]
 
 
 def _check_all_steps(user_id: str, conn) -> dict:
@@ -229,6 +177,20 @@ def _has_claimed_reward(user_id: str, quest_id: str) -> bool:
         t["source"] == "quest_reward" and t["reference_id"] == quest_id
         for t in txns
     )
+
+
+@router.get("/definitions")
+async def get_definitions():
+    """Return quest structure for the frontend. No auth required."""
+    return [
+        {
+            "id": q["id"],
+            "title": q["title"],
+            "reward": q["reward"],
+            "step_ids": q["step_ids"],
+        }
+        for q in QUEST_DEFINITIONS
+    ]
 
 
 @router.get("/progress")
