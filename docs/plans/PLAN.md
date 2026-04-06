@@ -189,13 +189,13 @@ Deploy to production domains with proper scaling.
 | T780 | [Quest Redesign + Credit Pack Pricing](tasks/T780-quest-redesign-credit-packs.md) | DONE | 8 | 5 | Redesign quests 3 & 4 (habit-building → multi-game reel), update rewards (15/25/40/45), set credit packs ($3.99/40, $6.99/85, $12.99/180) |
 | T790 | [Custom Project Triggers Extraction](tasks/T790-custom-project-extraction-bug.md) | DONE | 7 | 5 | Custom project creation triggers old extraction pipeline (removed in T740). Downloads full game video per clip — 35 clips = 35 downloads of a 3GB file. |
 | T800 | [Remove Legacy Extraction Infrastructure](tasks/T800-remove-extraction-infrastructure.md) | DONE | 5 | 5 | Dead extraction code across ~15 files: response models, retry endpoint, WebSocket manager, modal_queue functions, tests, stale comments. T790 removed triggers; this removes everything else. |
-| T1000 | [DRY Quest Definitions](tasks/T1000-dry-quest-definitions.md) | TESTING | 6 | 4 | Quest defs duplicated in 3 files (frontend, quests.py, admin.py); admin copy is stale/wrong. Single source of truth in backend, derive everything else. |
+| T1000 | [DRY Quest Definitions](tasks/T1000-dry-quest-definitions.md) | DONE | 6 | 4 | Quest defs duplicated in 3 files (frontend, quests.py, admin.py); admin copy is stale/wrong. Single source of truth in backend, derive everything else. |
 | T810 | [Multi-Clip Export Fails for Game Video Clips](tasks/T810-multi-clip-export-game-video.md) | DONE | 9 | 6 | Multi-clip export downloads each clip's file from frontend, but game-video clips have no standalone files (T740). Backend needs to resolve clips from DB like single-clip export does. |
 | T830 | [Clip Preview Timeline Shows Full Video](tasks/T830-clip-preview-timeline-full-video.md) | DONE | 6 | 4 | New Project modal clip preview shows full game video timeline instead of clip range |
 | T840 | [Annotate Drag/Play Conflict](tasks/T840-annotate-drag-play-conflict.md) | DONE | 7 | 3 | Dragging start/end time handles while video is playing causes playback to fight with drag preview |
 | T850 | [Annotate Duplicate Scrub UI](tasks/T850-annotate-duplicate-scrub-ui.md) | DONE | 5 | 4 | Two scrub/timeline UI instances visible during clip playback in annotate mode |
 | T860 | [Keyframe Invariant Render Loop](tasks/T860-keyframe-invariant-render-loop.md) | DONE | 9 | 5 | Keyframe invariant check in render body causes 500+ re-renders, making framing unresponsive |
-| T870 | [Export Progress Stuck During Download](tasks/T870-export-progress-stuck-during-download.md) | TESTING | 5 | 3 | Export shows 0% for ~48s while backend downloads game video from R2 |
+| T870 | [Export Progress Stuck During Download](tasks/T870-export-progress-stuck-during-download.md) | DONE | 5 | 3 | Export shows 0% for ~48s while backend downloads game video from R2 |
 
 ### Data Integrity & Persistence Hardening
 [tasks/data-integrity/EPIC.md](tasks/data-integrity/EPIC.md)
@@ -204,15 +204,15 @@ Restructure persistence to eliminate silent data loss, credit race conditions, a
 
 | # | ID | Task | Status | Impact | Cmplx | Depends On | Notes |
 |---|-----|------|--------|--------|-------|------------|-------|
-| 1 | T920 | [User-Level DB](tasks/data-integrity/T920-user-level-db.md) | TESTING | 9 | 6 | — | Move credits/stripe/transactions from shared auth.sqlite to per-user user.sqlite |
-| 2 | T880 | [Quest Reward Double-Grant](tasks/T880-quest-reward-double-grant.md) | TESTING | 8 | 2 | T920 | UNIQUE index in user.sqlite prevents race condition |
-| 3 | T890 | [Export Transaction Atomicity](tasks/T890-export-transaction-atomicity.md) | TESTING | 7 | 4 | T920 | Credit reservation pattern + combine split transactions |
-| 4 | T820 | [Guest Migration Data Loss](tasks/T820-guest-migration-data-loss.md) | TESTING | 10 | 6 | T920 | Block login on failure, pending_migrations, credit transfer |
-| 5 | T910 | [R2 Restore Retry](tasks/T910-r2-restore-retry.md) | TESTING | 8 | 3 | T920 | Distinguish 404 from transient error, retry with cooldown |
-| 6 | T900 | [FK Cascade Gaps](tasks/data-integrity/T900-fk-cascade-gaps.md) | TESTING | 5 | 3 | — | 5 missing CASCADE/SET NULL constraints in profile DB |
-| 7 | T930 | [Resilient R2 Sync](tasks/data-integrity/T930-resilient-r2-sync.md) | TESTING | 9 | 4 | T920 | Persist sync failure state, retry on next request |
-| 8 | T940 | [Export Worker R2 Sync](tasks/data-integrity/T940-export-worker-r2-sync.md) | TESTING | 8 | 2 | T920 | Background export writes now synced to R2 |
-| 9 | T950 | [Version Conflict Detection](tasks/data-integrity/T950-version-conflict-detection.md) | TESTING | 7 | 3 | T920 | Fail on conflict, re-download newer version |
+| 1 | T920 | [User-Level DB](tasks/data-integrity/T920-user-level-db.md) | DONE | 9 | 6 | — | Move credits/stripe/transactions from shared auth.sqlite to per-user user.sqlite |
+| 2 | T880 | [Quest Reward Double-Grant](tasks/T880-quest-reward-double-grant.md) | DONE | 8 | 2 | T920 | UNIQUE index in user.sqlite prevents race condition |
+| 3 | T890 | [Export Transaction Atomicity](tasks/T890-export-transaction-atomicity.md) | DONE | 7 | 4 | T920 | Credit reservation pattern + combine split transactions |
+| 4 | T820 | [Guest Migration Data Loss](tasks/T820-guest-migration-data-loss.md) | DONE | 10 | 6 | T920 | Block login on failure, pending_migrations, credit transfer |
+| 5 | T910 | [R2 Restore Retry](tasks/T910-r2-restore-retry.md) | DONE | 8 | 3 | T920 | Distinguish 404 from transient error, retry with cooldown |
+| 6 | T900 | [FK Cascade Gaps](tasks/data-integrity/T900-fk-cascade-gaps.md) | DONE | 5 | 3 | — | 5 missing CASCADE/SET NULL constraints in profile DB |
+| 7 | T930 | [Resilient R2 Sync](tasks/data-integrity/T930-resilient-r2-sync.md) | DONE | 9 | 4 | T920 | Persist sync failure state, retry on next request |
+| 8 | T940 | [Export Worker R2 Sync](tasks/data-integrity/T940-export-worker-r2-sync.md) | DONE | 8 | 2 | T920 | Background export writes now synced to R2 |
+| 9 | T950 | [Version Conflict Detection](tasks/data-integrity/T950-version-conflict-detection.md) | DONE | 7 | 3 | T920 | Fail on conflict, re-download newer version |
 
 ### User-Level Data Consolidation
 [tasks/user-data-consolidation/EPIC.md](tasks/user-data-consolidation/EPIC.md)
@@ -221,10 +221,10 @@ Move profile metadata and quest achievements from per-profile storage into user.
 
 | # | ID | Task | Status | Impact | Cmplx | Depends On | Notes |
 |---|-----|------|--------|--------|-------|------------|-------|
-| 1 | T960 | [Profiles to User DB](tasks/user-data-consolidation/T960-profiles-to-user-db.md) | TESTING | 6 | 5 | T920 | Move profile CRUD from R2 JSON to user.sqlite profiles table |
-| 2 | T970 | [User-Scoped Quest Achievements](tasks/user-data-consolidation/T970-user-scoped-quest-achievements.md) | TESTING | 8 | 4 | T920 | Move achievements from per-profile DB to user.sqlite; prevents double quest completion |
-| 3 | T985 | [Settings to User DB](tasks/user-data-consolidation/T985-settings-to-user-db.md) | TESTING | 6 | 4 | T920 | Move user preferences from per-profile DB to user.sqlite; prevents loss on profile delete |
-| 4 | T990 | [Rename database.sqlite to profile.sqlite](tasks/user-data-consolidation/T990-rename-database-to-profile-sqlite.md) | TESTING | 4 | 5 | T985 | Rename per-profile DB file for clarity alongside user.sqlite |
+| 1 | T960 | [Profiles to User DB](tasks/user-data-consolidation/T960-profiles-to-user-db.md) | DONE | 6 | 5 | T920 | Move profile CRUD from R2 JSON to user.sqlite profiles table |
+| 2 | T970 | [User-Scoped Quest Achievements](tasks/user-data-consolidation/T970-user-scoped-quest-achievements.md) | DONE | 8 | 4 | T920 | Move achievements from per-profile DB to user.sqlite; prevents double quest completion |
+| 3 | T985 | [Settings to User DB](tasks/user-data-consolidation/T985-settings-to-user-db.md) | DONE | 6 | 4 | T920 | Move user preferences from per-profile DB to user.sqlite; prevents loss on profile delete |
+| 4 | T990 | [Rename database.sqlite to profile.sqlite](tasks/user-data-consolidation/T990-rename-database-to-profile-sqlite.md) | DONE | 4 | 5 | T985 | Rename per-profile DB file for clarity alongside user.sqlite |
 
 ### Mobile Responsive (TODO)
 [tasks/mobile-responsive/EPIC.md](tasks/mobile-responsive/EPIC.md)
