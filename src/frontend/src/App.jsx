@@ -18,6 +18,7 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen, AdminScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AuthGateModal } from './components/AuthGateModal';
+import { AccountSettings } from './components/AccountSettings';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
 import { useQuestStore } from './stores/questStore';
@@ -428,6 +429,8 @@ function App() {
         <SyncStatusIndicator />
         {/* Auth Gate Modal - shows when GPU action requires authentication */}
         <AuthGateModal />
+        {/* T430: Account Settings panel */}
+        <AccountSettings />
         {/* Toast Notifications */}
         <ToastContainer />
         {/* Guest activity banner — only shown after guest does meaningful work */}
@@ -581,6 +584,8 @@ function App() {
 
       {/* Auth Gate Modal - shows when GPU action requires authentication */}
       <AuthGateModal />
+      {/* T430: Account Settings panel */}
+      <AccountSettings />
 
     </div>
     </AppStateProvider>

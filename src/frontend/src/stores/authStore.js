@@ -12,7 +12,9 @@ export const useAuthStore = create((set, get) => ({
   isAuthenticated: false,
   isAdmin: false,
   email: null,
+  pictureUrl: null,  // T430: Google profile picture URL
   showAuthModal: false,
+  showAccountSettings: false,  // T430: Account settings panel
   pendingAction: null,
   isCheckingSession: true,  // true until initial session check completes
   hasGuestActivity: false,  // true once a guest user has done any write operation
@@ -48,7 +50,7 @@ export const useAuthStore = create((set, get) => ({
 
   // Called after successful Google sign-in (or OTP in T401)
   // T405: Also receives user_id for cross-device recovery (may differ from current guest)
-  onAuthSuccess: (email, userId) => {
+  onAuthSuccess: (email, userId, pictureUrl = null) => {
     const { pendingAction } = get();
 
     // T405: If the server returned a different user_id (cross-device recovery),
@@ -59,6 +61,7 @@ export const useAuthStore = create((set, get) => ({
       set({
         isAuthenticated: true,
         email,
+        pictureUrl,
         showAuthModal: false,
         pendingAction: null,
       });
@@ -87,6 +90,7 @@ export const useAuthStore = create((set, get) => ({
     set({
       isAuthenticated: true,
       email,
+      pictureUrl,
       showAuthModal: false,
       pendingAction: null,
     });
@@ -125,10 +129,11 @@ export const useAuthStore = create((set, get) => ({
   },
 
   // Called on app load after session check
-  setSessionState: (isAuthenticated, email = null) => {
+  setSessionState: (isAuthenticated, email = null, pictureUrl = null) => {
     set({
       isAuthenticated,
       email,
+      pictureUrl,
       isCheckingSession: false,
       // Clear guest activity once authenticated — no need for exit warning
       ...(isAuthenticated ? { hasGuestActivity: false } : {}),
@@ -157,13 +162,19 @@ export const useAuthStore = create((set, get) => ({
       isAuthenticated: false,
       isAdmin: false,
       email: null,
+      pictureUrl: null,
       showAuthModal: false,
+      showAccountSettings: false,
       pendingAction: null,
       isCheckingSession: false,
     });
     resetSession();
     window.location.reload();
   },
+
+  // T430: Toggle account settings panel
+  openAccountSettings: () => set({ showAccountSettings: true }),
+  closeAccountSettings: () => set({ showAccountSettings: false }),
 
   // Close modal without authenticating
   closeAuthModal: () => {

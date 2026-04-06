@@ -50,6 +50,7 @@ from app.services.auth_db import (
     link_google_to_user,
     get_user_by_id,
     update_last_seen,
+    update_picture_url,
     sync_auth_db_to_r2,
 )
 from app.services.user_db import (
@@ -520,6 +521,11 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
                         verified_at=datetime.utcnow().isoformat())
             logger.info(f"[Auth] Google login — created new user: {user_id} ({email})")
 
+    # T430: Store Google profile picture URL
+    picture_url = token_data.get("picture")
+    if picture_url:
+        update_picture_url(user_id, picture_url)
+
     # Create session in central auth DB
     session_id = create_session(user_id)
 
@@ -527,6 +533,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     response = JSONResponse(content={
         "email": email,
         "user_id": user_id,
+        "picture_url": picture_url,
     })
     response.set_cookie(
         key="rb_session",
@@ -573,11 +580,16 @@ async def auth_me(request: Request):
     except Exception:
         pass
 
+    # T430: Fetch picture_url from auth DB
+    user_record = get_user_by_id(user_id)
+    picture_url = user_record["picture_url"] if user_record else None
+
     return {
         "email": session.get("email"),
         "user_id": user_id,
         "is_authenticated": True,
         "migration_pending": migration_pending,
+        "picture_url": picture_url,
     }
 
 
