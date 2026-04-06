@@ -7,7 +7,7 @@ const API_BASE_URL = `${API_BASE}/api`;
  * Project Data Store - Single source of truth for project and clip state
  *
  * T250: Stores RAW backend WorkingClipResponse data. No transformation.
- * Derived values (e.g. isExtracted) are computed via clipSelectors.js.
+ * Derived values are computed via clipSelectors.js.
  * Backend working_clips.id is the canonical clip ID.
  *
  * Clip format (raw backend WorkingClipResponse):
@@ -136,25 +136,6 @@ export const useProjectDataStore = create((set, get) => ({
       set({ clipsError: err.message, clipsFetching: false });
       console.error('[projectDataStore] fetchClips error:', err);
       return [];
-    }
-  },
-
-  retryExtraction: async (projectId, clipId) => {
-    if (!projectId) return false;
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/clips/projects/${projectId}/clips/${clipId}/retry-extraction`,
-        { method: 'POST' }
-      );
-      if (!response.ok) throw new Error('Failed to retry extraction');
-
-      // Refresh clips to get updated status
-      await get().fetchClips(projectId);
-      return true;
-    } catch (err) {
-      console.error('[projectDataStore] retryExtraction error:', err);
-      return false;
     }
   },
 

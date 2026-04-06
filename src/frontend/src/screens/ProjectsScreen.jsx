@@ -11,7 +11,6 @@ import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
-import extractionWebSocketManager from '../services/ExtractionWebSocketManager';
 
 // Module-level variable to pass File object and game details to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
@@ -130,24 +129,6 @@ export function ProjectsScreen({
   useEffect(() => {
     fetchPendingUploads();
   }, [fetchPendingUploads]);
-
-  // Listen for extraction events and refresh project list (real-time status updates)
-  useEffect(() => {
-    extractionWebSocketManager.connect();
-
-    const unsubComplete = extractionWebSocketManager.addEventListener('extraction_complete', () => {
-      fetchProjects();
-    });
-
-    const unsubFailed = extractionWebSocketManager.addEventListener('extraction_failed', () => {
-      fetchProjects();
-    });
-
-    return () => {
-      unsubComplete();
-      unsubFailed();
-    };
-  }, [fetchProjects]);
 
   // Handle project selection
   const handleSelectProject = useCallback(async (projectId) => {

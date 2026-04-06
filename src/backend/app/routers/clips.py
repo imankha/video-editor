@@ -157,7 +157,7 @@ class WorkingClipResponse(BaseModel):
     project_id: int
     raw_clip_id: Optional[int]
     uploaded_filename: Optional[str]
-    filename: Optional[str] = None  # May be None if extraction not complete
+    filename: Optional[str] = None
     file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
     name: Optional[str] = None
     notes: Optional[str] = None
@@ -173,8 +173,6 @@ class WorkingClipResponse(BaseModel):
     game_video_url: Optional[str] = None  # Presigned URL for source game video (for framing preview)
     tags: Optional[List[str]] = None
     rating: Optional[int] = None
-    # Extraction status: 'pending', 'processing', 'completed', 'failed', or None if no extraction needed
-    extraction_status: Optional[str] = None
 
 
 class WorkingClipUpdate(BaseModel):
@@ -685,10 +683,6 @@ def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
     return True
 
 
-# Note: Standalone extraction was removed in T740/T790. Extraction now happens
-# inline during framing export. modal_queue.py handles startup recovery only.
-
-
 def _refresh_game_aggregates(cursor, game_id: int) -> None:
     """Recalculate and update game aggregate columns from raw_clips."""
     cursor.execute("""
@@ -720,9 +714,8 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
     """
     Save a raw clip during annotation (real-time save).
 
-    Creates a pending clip record without extracting the video.
-    If the clip is rated 5 stars, automatically creates a 9:16 project for it
-    AND triggers extraction (since creating a project should extract its clips).
+    Creates a pending clip record. If the clip is rated 5 stars,
+    automatically creates a 9:16 project for it.
 
     Idempotent: If a clip with the same game_id + end_time + video_sequence already exists,
     updates that clip instead of creating a duplicate.
@@ -744,7 +737,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
         existing = cursor.fetchone()
 
         if existing:
-            # Update existing clip metadata (don't touch filename - extraction is separate)
+            # Update existing clip metadata
             clip_id = existing['id']
             old_start_time = existing['start_time']
             boundaries_changed = old_start_time != clip_data.start_time
@@ -778,7 +771,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
                     clip_id
                 ))
 
-            # Handle 5-star project sync (extraction triggered when user opens project, not here)
+            # Handle 5-star project sync
             old_rating = existing['rating']
             new_rating = clip_data.rating
             project_created = False
@@ -802,7 +795,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
                 project_id=project_id
             )
 
-        # New clip - create as pending (no extraction yet)
+        # New clip
         cursor.execute("""
             INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id, video_sequence)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -811,7 +804,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
               clip_data.video_sequence))
         raw_clip_id = cursor.lastrowid
 
-        # Handle 5-star project creation (extraction triggered when user opens project, not here)
+        # Handle 5-star project creation
         project_created = False
         project_id = None
         if clip_data.rating == 5:
@@ -820,7 +813,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
 
         _refresh_game_aggregates(cursor, clip_data.game_id)
         conn.commit()
-        logger.info(f"Saved pending clip {raw_clip_id} for game {clip_data.game_id}")
+        logger.info(f"Saved clip {raw_clip_id} for game {clip_data.game_id}")
 
         return RawClipSaveResponse(
             raw_clip_id=raw_clip_id,
@@ -836,14 +829,14 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
     Update a raw clip's metadata.
 
     Handles 5-star sync:
-    - If rating changed TO 5: Create auto-project (extraction when user opens project)
+    - If rating changed TO 5: Create auto-project
     - If rating changed FROM 5: Delete auto-project (if unmodified)
-    - If duration changed: Increment boundaries_version (extraction on user request)
+    - If duration changed: Increment boundaries_version
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get current clip data with game info for potential extraction
+        # Get current clip data
         cursor.execute("""
             SELECT rc.id, rc.filename, rc.rating, rc.name, rc.start_time, rc.end_time,
                    rc.auto_project_id, rc.game_id,
@@ -874,7 +867,7 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
             _delete_auto_project(cursor, auto_project_id, clip_id)
             auto_project_id = None
 
-        # Handle rating change: non-5 -> 5 (extraction triggered when user opens project, not here)
+        # Handle rating change: non-5 -> 5
         project_created = False
         if old_rating != 5 and new_rating == 5 and not auto_project_id:
             clip_name = update.name if update.name is not None else clip['name']
@@ -907,10 +900,7 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
             updates.append("video_sequence = ?")
             params.append(update.video_sequence)
 
-        # If duration changed, increment boundaries_version so we can detect if framing used an older version
-        # NOTE: We do NOT clear filename here - the existing extracted clip is still valid for its original boundaries.
-        # When the user opens a project using this clip, the outdated-clips check will prompt them to update or keep original.
-        # Extraction only happens if the user explicitly chooses to update.
+        # If duration changed, increment boundaries_version so framing can detect outdated clips
         if duration_changed:
             updates.append("boundaries_version = COALESCE(boundaries_version, 0) + 1")
             updates.append("boundaries_updated_at = datetime('now')")
@@ -997,10 +987,7 @@ async def delete_raw_clip(clip_id: int):
 
 @router.get("/projects/{project_id}/clips", response_model=List[WorkingClipResponse])
 async def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
-    """List all working clips for a project.
-
-    Also triggers extraction for any clips that haven't been extracted yet.
-    """
+    """List all working clips for a project."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -1041,10 +1028,6 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
         """, (project_id, project_id))
         clips = cursor.fetchall()
 
-        # T790: Standalone extraction removed — framing export handles it inline.
-        # extraction_status is always None now.
-        extraction_statuses = {}
-
         # Pre-fetch notes corpus for TF-IDF title generation
         corpus = _get_notes_corpus(cursor)
 
@@ -1059,15 +1042,12 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
             if raw_filename:
                 filename = raw_filename
                 file_url = get_working_clip_url(filename, 'raw')
-                extraction_status = None
             elif uploaded_filename:
                 filename = uploaded_filename
                 file_url = get_working_clip_url(filename, 'upload')
-                extraction_status = None
             else:
                 filename = None
                 file_url = None
-                extraction_status = None  # No longer tracking extraction status
 
             # Generate game video presigned URL for framing preview
             game_video_url = None
@@ -1098,73 +1078,10 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 end_time=clip['raw_end_time'],
                 game_video_url=game_video_url,
                 tags=tags,
-                rating=rating,
-                extraction_status=extraction_status
+                rating=rating
             ))
 
-    # T740: Extraction no longer triggered here — framing export handles it directly
-
     return result
-
-
-@router.post("/projects/{project_id}/clips/{clip_id}/retry-extraction")
-async def retry_extraction(project_id: int, clip_id: int, background_tasks: BackgroundTasks):
-    """
-    T249: Manually retry a failed extraction for a specific working clip.
-
-    Resets the failed task to 'pending' with retry_count reset to 0 (manual retries
-    are unlimited — the count only limits automatic retries).
-    """
-    user_id = get_current_user_id()
-    profile_id = None
-    try:
-        from app.profile_context import get_current_profile_id
-        profile_id = get_current_profile_id()
-    except Exception:
-        pass
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        # Get raw_clip_id from working clip
-        cursor.execute(
-            "SELECT raw_clip_id FROM working_clips WHERE id = ? AND project_id = ?",
-            (clip_id, project_id)
-        )
-        wc = cursor.fetchone()
-        if not wc or not wc['raw_clip_id']:
-            raise HTTPException(status_code=404, detail="Working clip not found or has no raw clip")
-
-        raw_clip_id = wc['raw_clip_id']
-
-        # Find the most recent failed task for this clip
-        cursor.execute("""
-            SELECT id FROM modal_tasks
-            WHERE raw_clip_id = ?
-            AND task_type = 'clip_extraction'
-            AND status = 'failed'
-            ORDER BY created_at DESC LIMIT 1
-        """, (raw_clip_id,))
-        task = cursor.fetchone()
-        if not task:
-            raise HTTPException(status_code=404, detail="No failed extraction found for this clip")
-
-        # Reset to pending with retry_count=0 (manual retry)
-        cursor.execute("""
-            UPDATE modal_tasks
-            SET status = 'pending', retry_count = 0,
-                error = NULL, started_at = NULL, completed_at = NULL
-            WHERE id = ?
-        """, (task['id'],))
-        conn.commit()
-
-    logger.info(f"[Clips] Manual retry: task={task['id']}, clip={clip_id}, raw_clip={raw_clip_id}")
-
-    # Trigger queue processing in background
-    from app.services.modal_queue import run_queue_processor
-    background_tasks.add_task(run_queue_processor, user_id, profile_id)
-
-    return {"status": "retrying", "task_id": task['id']}
 
 
 @router.post("/projects/{project_id}/clips", response_model=WorkingClipResponse)
@@ -1180,8 +1097,6 @@ async def add_clip_to_project(
     Either provide:
     - raw_clip_id: to add a clip from the library
     - file: to upload a new clip directly
-
-    If the raw_clip doesn't have a filename (unextracted), triggers extraction.
     """
     from fastapi import BackgroundTasks as BT
     if background_tasks is None:

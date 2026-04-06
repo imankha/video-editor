@@ -427,7 +427,11 @@ export function AnnotateContainer({
 
       setEditorMode('annotate');
     } catch (err) {
-      console.error('[AnnotateContainer] Failed to load game:', err);
+      console.warn('[AnnotateContainer] Failed to load game:', err.message);
+      if (err.message?.includes('not found')) {
+        toast.error('Game not found — it may have been deleted');
+        setEditorMode('projects');
+      }
     }
   }, [getGame, getGameVideoUrl, annotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode, saveClip]);
 

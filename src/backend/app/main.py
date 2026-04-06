@@ -64,7 +64,7 @@ logging.getLogger("s3transfer").setLevel(logging.WARNING)
 # Import routers and websocket handler
 from app.routers import health_router, export_router, detection_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router, profiles_router, credits_router, quests_router, admin_router, payments_router
 from app.routers.exports import router as exports_router
-from app.websocket import websocket_export_progress, websocket_extractions
+from app.websocket import websocket_export_progress
 from app.services.export_worker import recover_orphaned_jobs
 from app.user_context import set_current_user_id, get_current_user_id
 from app.session_init import user_session_init
@@ -131,13 +131,6 @@ app.include_router(payments_router, prefix="/api")
 async def ws_export_progress(websocket: WebSocket, export_id: str):
     """WebSocket endpoint for real-time export progress updates"""
     await websocket_export_progress(websocket, export_id)
-
-
-# WebSocket endpoint for extraction status updates
-@app.websocket("/ws/extractions")
-async def ws_extractions(websocket: WebSocket):
-    """WebSocket endpoint for clip extraction status updates"""
-    await websocket_extractions(websocket)
 
 
 def get_git_version_info():

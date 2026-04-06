@@ -57,6 +57,36 @@ async function setupTestUserContext(page) {
     delete headers['x-user-id'];
     await route.continue({ headers });
   });
+
+  // Intercept /api/auth/me to return authenticated state for the test user.
+  // This makes the frontend's authStore.isAuthenticated=true, which bypasses
+  // the requireAuth gate on export actions (avoids AuthGateModal popup).
+  await page.route('**/api/auth/me', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user_id: TEST_USER_ID,
+        email: 'e2e@test.local',
+      }),
+    });
+  });
+
+  // Intercept /api/credits to return sufficient balance for export tests.
+  // This prevents the "Buy Credits" modal from appearing in the frontend.
+  // Backend credits are granted separately via POST /api/credits/grant.
+  await page.route('**/api/credits', async (route) => {
+    // Only intercept GET requests (balance check), let POST through
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ balance: 10000, loaded: true }),
+      });
+    } else {
+      await route.continue();
+    }
+  });
 }
 
 /**
@@ -285,6 +315,16 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     const overlayEnabled = await overlayButton.isEnabled({ timeout: 500 }).catch(() => false);
     if (exportStarted && overlayEnabled && !isExporting && !hasLoader) {
       console.log('[Full] Export complete - Overlay button enabled');
+      await page.waitForTimeout(1000);
+      return;
+    }
+
+    // Check for "Video exported!" toast — overlay export in test mode completes fast
+    // and navigates to HOME before the button check can detect completion
+    const exportToast = page.locator('text=/Video exported/i').first();
+    const hasExportToast = await exportToast.isVisible({ timeout: 500 }).catch(() => false);
+    if (exportStarted && hasExportToast && !isExporting && !hasLoader) {
+      console.log('[Full] Export complete - "Video exported" toast detected');
       await page.waitForTimeout(1000);
       return;
     }
@@ -566,8 +606,11 @@ async function ensureAnnotateModeWithClips(page) {
  */
 async function navigateToProjectFromHome(page) {
   console.log('[Test] Navigating to home then back to project for fresh load...');
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.goto('/', { timeout: 30000 });
+  await Promise.race([
+    page.waitForLoadState('networkidle'),
+    page.waitForTimeout(10000),
+  ]);
 
   // Click Projects tab to show "Your Projects" section
   const projectsTab = page.locator('button:has-text("Projects")');
@@ -608,219 +651,20 @@ async function navigateToProjectFromHome(page) {
 }
 
 /**
- * Trigger clip extraction and wait for clips to have actual video files.
+ * Navigate to a project in Framing mode and wait for video to load.
  *
- * Clips are saved to the database with empty filenames (pending extraction).
- * Extraction is triggered on-demand when opening a project (GET /api/clips/projects/{id}/clips).
- *
- * This helper:
- * 1. Calls finish-annotation to signal end of annotation session
- * 2. Hits the project clips endpoint to trigger extraction enqueue
- * 3. Waits for clips to have non-empty filenames (extraction complete)
- * 4. Navigates to the project in Framing mode
- */
-async function triggerExtractionAndWait(page, maxWaitTime = 180000) {
-  console.log('[Test] Triggering clip extraction...');
-
-  // Get the most recent game ID
-  const gameId = await page.evaluate(async () => {
-    const res = await fetch('/api/games');
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.games?.[0]?.id || null;
-  });
-
-  if (!gameId) {
-    console.log('[Test] WARNING: No game found, skipping extraction trigger');
-    return;
-  }
-
-  // Call finish-annotation to signal end of annotation session
-  const result = await page.evaluate(async (id) => {
-    const res = await fetch(`/api/games/${id}/finish-annotation`, { method: 'POST' });
-    if (!res.ok) return { error: res.status };
-    return res.json();
-  }, gameId);
-
-  console.log(`[Test] Finish-annotation response: ${JSON.stringify(result)}`);
-
-  // Extraction is triggered on-demand when opening a project (GET /api/clips/projects/{id}/clips).
-  // We need to find the project and hit that endpoint to enqueue extraction tasks.
-  const projectId = await page.evaluate(async () => {
-    const res = await fetch('/api/projects');
-    if (!res.ok) return null;
-    const projects = await res.json();
-    return projects?.[0]?.id || null;
-  });
-
-  if (!projectId) {
-    console.log('[Test] WARNING: No project found, cannot trigger extraction');
-    return;
-  }
-
-  // Hit the project clips endpoint to trigger extraction enqueue
-  const triggerResult = await page.evaluate(async (pid) => {
-    const res = await fetch(`/api/clips/projects/${pid}/clips`);
-    if (!res.ok) return { error: res.status };
-    const data = await res.json();
-    return { clipCount: data.length, clips: data.map(c => ({ id: c.id, filename: c.filename, extraction_status: c.extraction_status })) };
-  }, projectId);
-
-  console.log(`[Test] Triggered extraction via project ${projectId}: ${JSON.stringify(triggerResult)}`);
-
-  // Quick check: are all clips already extracted?
-  const quickCheck = await page.evaluate(async (gid) => {
-    const res = await fetch('/api/clips/raw');
-    const clips = res.ok ? await res.json() : [];
-    const gameClips = clips.filter(c => c.game_id === gid);
-    const extractedCount = gameClips.filter(c => c.filename && c.filename.length > 0).length;
-    return { total: gameClips.length, extracted: extractedCount };
-  }, gameId);
-
-  if (quickCheck.total > 0 && quickCheck.extracted === quickCheck.total) {
-    console.log(`[Test] All ${quickCheck.total} clips already extracted, navigating to project...`);
-    await navigateToProjectFromHome(page);
-    return;
-  }
-
-  console.log(`[Test] Clips not fully extracted (${quickCheck.extracted}/${quickCheck.total}), waiting...`);
-
-  // Check extraction task status via API to diagnose issues
-  const taskStatus = await page.evaluate(async (pid) => {
-    const res = await fetch(`/api/clips/projects/${pid}/clips`);
-    if (!res.ok) return { error: res.status };
-    const clips = await res.json();
-    return clips.map(c => ({ id: c.id, filename: c.filename, extraction_status: c.extraction_status }));
-  }, projectId);
-  console.log(`[Test] Clip extraction statuses: ${JSON.stringify(taskStatus)}`);
-
-  // Wait for clips to be extracted
-  // Use progress-based timeout: only timeout if progress STALLS, not on absolute time
-  console.log(`[Test] Waiting for ${quickCheck.total} clips to be extracted...`);
-
-  const startWait = Date.now();
-  let lastExtractedCount = quickCheck.extracted;
-  let lastProgressTime = Date.now();
-  const STALL_TIMEOUT = 120000; // 2 minutes without progress = stalled
-
-  while (true) {
-    // Fetch clips filtered by this game's ID
-    const gameClips = await page.evaluate(async (gid) => {
-      const res = await fetch('/api/clips/raw');
-      const clips = res.ok ? await res.json() : [];
-      return clips.filter(c => c.game_id === gid);
-    }, gameId);
-
-    // Check how many of THIS game's clips are extracted
-    const extractedClips = gameClips.filter(c => c.filename && c.filename.length > 0);
-
-    // Success: all of this game's clips are extracted
-    if (extractedClips.length >= gameClips.length && gameClips.length > 0) {
-      console.log(`[Test] All ${extractedClips.length} clips extracted after ${Math.round((Date.now() - startWait) / 1000)}s`);
-      await navigateToProjectFromHome(page);
-      return;
-    }
-
-    // Track progress - reset stall timer if progress was made
-    if (extractedClips.length > lastExtractedCount) {
-      lastExtractedCount = extractedClips.length;
-      lastProgressTime = Date.now();
-    }
-
-    // Check for stall - fail if no progress for STALL_TIMEOUT
-    const timeSinceProgress = Date.now() - lastProgressTime;
-    if (timeSinceProgress > STALL_TIMEOUT) {
-      // Diagnostic: check extraction task statuses before giving up
-      const finalStatus = await page.evaluate(async (pid) => {
-        const res = await fetch(`/api/clips/projects/${pid}/clips`);
-        if (!res.ok) return { error: res.status };
-        const clips = await res.json();
-        return clips.map(c => ({ id: c.id, filename: c.filename, extraction_status: c.extraction_status }));
-      }, projectId);
-      const taskDebug = await page.evaluate(async () => {
-        const res = await fetch('/api/debug/tasks');
-        if (!res.ok) return { error: res.status };
-        return res.json();
-      });
-      console.log(`[Test] WARNING: Extraction stalled - no progress for ${STALL_TIMEOUT / 1000}s (stuck at ${extractedClips.length}/${gameClips.length})`);
-      console.log(`[Test] Final clip statuses: ${JSON.stringify(finalStatus)}`);
-      console.log(`[Test] Modal tasks: ${JSON.stringify(taskDebug)}`);
-      return;
-    }
-
-    // Hard timeout only fails if ALSO stalled (gives grace period for slow but progressing extractions)
-    const elapsed = Date.now() - startWait;
-    if (elapsed > maxWaitTime && timeSinceProgress > 60000) {
-      console.log(`[Test] WARNING: Extraction timeout after ${maxWaitTime / 1000}s (last progress ${Math.round(timeSinceProgress / 1000)}s ago)`);
-      return;
-    }
-
-    // Log progress periodically
-    const elapsedSec = Math.round(elapsed / 1000);
-    if (elapsedSec % 10 === 0) {
-      console.log(`[Test] Extraction progress: ${extractedClips.length}/${gameClips.length} clips (${elapsedSec}s elapsed)`);
-    }
-
-    await page.waitForTimeout(2000);
-  }
-}
-
-/**
- * Lightweight alternative to triggerExtractionAndWait for framing smoke tests.
- *
- * Instead of waiting for ALL clips to finish extracting (which takes too long in E2E),
- * this helper:
- * 1. Calls finish-annotation to signal end of annotation session
- * 2. Hits the project clips endpoint to enqueue extraction
- * 3. Navigates to the project in Framing mode
- * 4. Verifies that either a video is loaded OR progress indicators are visible and advancing
- * 5. Waits for the first video to become playable (not ALL clips)
+ * T800: Standalone extraction was removed — clips use game video range queries.
+ * This helper just navigates to the project and waits for the video element.
  *
  * @param {import('@playwright/test').Page} page
  * @param {object} options
  * @param {boolean} options.waitForVideo - If true, wait for a video element to be ready (default: true)
  * @param {number} options.videoTimeout - Max time to wait for video to load (default: 60000)
  */
-async function triggerExtractionAndNavigateToFraming(page, { waitForVideo = true, videoTimeout = 60000 } = {}) {
-  console.log('[Test] Triggering extraction (lightweight) and navigating to framing...');
+async function navigateToFramingAndWaitForVideo(page, { waitForVideo = true, videoTimeout = 60000 } = {}) {
+  console.log('[Test] Navigating to framing mode...');
 
-  // Get the most recent game ID
-  const gameId = await page.evaluate(async () => {
-    const res = await fetch('/api/games');
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.games?.[0]?.id || null;
-  });
-
-  if (!gameId) {
-    console.log('[Test] WARNING: No game found, skipping extraction trigger');
-    return;
-  }
-
-  // Call finish-annotation to signal end of annotation session
-  const result = await page.evaluate(async (id) => {
-    const res = await fetch(`/api/games/${id}/finish-annotation`, { method: 'POST' });
-    if (!res.ok) return { error: res.status };
-    return res.json();
-  }, gameId);
-  console.log(`[Test] Finish-annotation response: ${JSON.stringify(result)}`);
-
-  // Find project and hit clips endpoint to enqueue extraction
-  const projectId = await page.evaluate(async () => {
-    const res = await fetch('/api/projects');
-    if (!res.ok) return null;
-    const projects = await res.json();
-    return projects?.[0]?.id || null;
-  });
-
-  if (projectId) {
-    await page.evaluate(async (pid) => {
-      await fetch(`/api/clips/projects/${pid}/clips`);
-    }, projectId);
-    console.log(`[Test] Triggered extraction via project ${projectId}`);
-  }
-
-  // Navigate to the project in framing mode
+  // Navigate to the project
   await navigateToProjectFromHome(page);
 
   // Wait for Framing mode to load
@@ -829,16 +673,9 @@ async function triggerExtractionAndNavigateToFraming(page, { waitForVideo = true
 
   if (!waitForVideo) return;
 
-  // Wait for video to appear. The framing screen may show the source video
-  // even before extraction completes (T740: extraction merged into framing export).
-  // If a progress indicator is visible, verify it's advancing (not stuck).
+  // Wait for video to appear
   const startWait = Date.now();
-  let lastProgressSnapshot = '';
-  let lastProgressChangeTime = Date.now();
-  const STALL_TIMEOUT = 30000;
-
   while (Date.now() - startWait < videoTimeout) {
-    // Check if a video element is visible and has content
     const videoState = await page.evaluate(() => {
       const v = document.querySelector('video');
       if (!v) return { visible: false };
@@ -853,57 +690,18 @@ async function triggerExtractionAndNavigateToFraming(page, { waitForVideo = true
 
     if (videoState.visible && videoState.hasSrc && videoState.readyState >= 2 && videoState.videoWidth > 0) {
       console.log(`[Test] Video ready in framing mode after ${Math.round((Date.now() - startWait) / 1000)}s`);
-      await page.waitForTimeout(500); // Extra wait for frame render
+      await page.waitForTimeout(500);
       return;
-    }
-
-    // Take a snapshot of progress indicators to verify progress is being made
-    const snapshot = await page.evaluate(() => {
-      const indicators = [];
-      document.querySelectorAll('[role="progressbar"], [class*="progress"], [class*="bg-green"], [class*="bg-purple"]').forEach(el => {
-        indicators.push(el.style?.width || el.getAttribute('aria-valuenow') || el.className.slice(0, 50));
-      });
-      document.querySelectorAll('[class*="text-gray"], [class*="text-green"], [class*="text-yellow"], [class*="animate-spin"]').forEach(el => {
-        const t = el.textContent?.trim();
-        if (t && t.length < 100 && /\d|%|progress|extract|export|process|wait|load|complet/i.test(t)) {
-          indicators.push(t);
-        }
-      });
-      document.querySelectorAll('.animate-spin, [class*="spinner"], [class*="loading"]').forEach(() => {
-        indicators.push('spinner-active');
-      });
-      return indicators.join('|');
-    }).catch(() => '');
-
-    if (snapshot !== lastProgressSnapshot) {
-      if (lastProgressSnapshot) {
-        console.log(`[Test] Framing progress: ${snapshot.slice(0, 120)}`);
-      }
-      lastProgressSnapshot = snapshot;
-      lastProgressChangeTime = Date.now();
-    }
-
-    // If no progress for STALL_TIMEOUT, log warning but don't fail
-    if (Date.now() - lastProgressChangeTime > STALL_TIMEOUT) {
-      console.log(`[Test] WARNING: No progress detected for ${STALL_TIMEOUT / 1000}s in framing mode`);
-      // Still check if video appeared despite no progress indicators
-      const hasVideo = await page.locator('video').isVisible().catch(() => false);
-      if (hasVideo) {
-        console.log('[Test] Video element is visible despite no progress indicators');
-        return;
-      }
-      break;
     }
 
     await page.waitForTimeout(2000);
   }
 
-  // Final check: video may have loaded during the last iteration
   const finalVideoCheck = await page.locator('video').isVisible().catch(() => false);
   if (finalVideoCheck) {
     console.log('[Test] Video visible at end of wait');
   } else {
-    console.log(`[Test] WARNING: No video visible after ${Math.round((Date.now() - startWait) / 1000)}s — test may need video for assertions`);
+    console.log(`[Test] WARNING: No video visible after ${Math.round((Date.now() - startWait) / 1000)}s`);
   }
 }
 
@@ -1040,8 +838,8 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   console.log('[Test] Clips created and auto-saved to library');
 
   // Navigate to project manager and create project from clips
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2000);
   await page.locator('button:has-text("Projects")').click();
   await page.waitForTimeout(500);
 
@@ -1086,12 +884,8 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
   await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
 
-  // Trigger extraction and navigate to project
-  // triggerExtractionAndWait handles: extraction, navigation to Projects, clicking project card
-  await triggerExtractionAndWait(page);
-
-  // Wait for Framing mode to load (triggerExtractionAndWait clicks the project)
-  await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 10000 });
+  // Navigate to the project in Framing mode
+  await navigateToFramingAndWaitForVideo(page);
   await waitForVideoFirstFrame(page);
   console.log('[Test] Project created from clips - now in Framing mode');
 
@@ -1146,7 +940,61 @@ async function ensureFramingMode(page) {
   // Extra wait for React context to propagate
   // This ensures selectedProjectId is set in ExportButton before we click it
   await page.waitForTimeout(2000);
-  console.log('[Test] In framing mode with project loaded');
+
+  // Frame all clips by setting crop_data via API (marks them as "framed")
+  // Without this, the Frame Video button stays disabled ("needs framing")
+  const framedCount = await page.evaluate(async () => {
+    const projectsRes = await fetch('/api/projects');
+    const projects = await projectsRes.json();
+    if (!projects?.length) return 0;
+    const projectId = projects[0].id;
+
+    const clipsRes = await fetch(`/api/clips/projects/${projectId}/clips`);
+    const clips = await clipsRes.json();
+
+    let count = 0;
+    for (const clip of clips) {
+      if (clip.crop_data) { count++; continue; }
+      // Set a default crop keyframe at frame 0 (center crop)
+      const cropData = JSON.stringify([{ frame: 0, x: 0.25, y: 0.25, width: 0.5, height: 0.5, origin: 'user' }]);
+      const res = await fetch(`/api/clips/projects/${projectId}/clips/${clip.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ crop_data: cropData })
+      });
+      if (res.ok) count++;
+    }
+    return count;
+  });
+  console.log(`[Test] Set crop_data on ${framedCount} clips via API`);
+
+  // Grant credits to the test user on the backend so reserve_credits succeeds.
+  // The frontend credit check is intercepted via page.route, but the backend
+  // also checks credits during export and will return 402 without this.
+  const grantResult = await page.evaluate(async () => {
+    const res = await fetch('/api/credits/grant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: 1000, source: 'e2e_test' }),
+    });
+    if (!res.ok) return { error: res.status, text: await res.text() };
+    return res.json();
+  });
+  console.log(`[Test] Granted backend credits: ${JSON.stringify(grantResult)}`);
+
+  // Reload the page to pick up updated clip state
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+
+  // Navigate back to the project in framing mode
+  await navigateToProjectFromHome(page);
+
+  // Wait for Frame Video button to be visible and enabled
+  const frameBtn = page.locator('button:has-text("Frame Video")');
+  await expect(frameBtn).toBeVisible({ timeout: 15000 });
+  await page.waitForTimeout(1000);
+
+  console.log('[Test] In framing mode with project loaded and all clips framed');
 }
 
 /**
@@ -1383,9 +1231,8 @@ test.describe('Smoke Tests @smoke', () => {
     // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
     await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
 
-    // Trigger extraction and navigate to framing — doesn't wait for all clips,
-    // just verifies progress is being made and waits for first video to load
-    await triggerExtractionAndNavigateToFraming(page, { videoTimeout: 60000 });
+    // Navigate to framing and wait for video to load
+    await navigateToFramingAndWaitForVideo(page, { videoTimeout: 60000 });
 
     // Verify video element is visible and has content
     const video = page.locator('video');
@@ -1438,9 +1285,8 @@ test.describe('Smoke Tests @smoke', () => {
     // Wait for modal to close - now stays on Projects page
     await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
 
-    // Navigate to framing — this test just needs the framing screen loaded,
-    // not necessarily a fully extracted video. Check progress is being made.
-    await triggerExtractionAndNavigateToFraming(page, { waitForVideo: true, videoTimeout: 60000 });
+    // Navigate to framing and wait for video
+    await navigateToFramingAndWaitForVideo(page, { waitForVideo: true, videoTimeout: 60000 });
 
     // Wait a bit to ensure any infinite loops would trigger
     await page.waitForTimeout(3000);
@@ -1483,8 +1329,8 @@ test.describe('Smoke Tests @smoke', () => {
     // Wait for modal to close - now stays on Projects page
     await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
 
-    // Navigate to framing and wait for video to be playable
-    await triggerExtractionAndNavigateToFraming(page, { waitForVideo: true, videoTimeout: 60000 });
+    // Navigate to framing and wait for video
+    await navigateToFramingAndWaitForVideo(page, { waitForVideo: true, videoTimeout: 60000 });
 
     const video = page.locator('video');
 
@@ -1628,10 +1474,10 @@ test.describe('Full Coverage Tests @full', () => {
     console.log(`[Full] Created ${projects.length} projects`);
     expect(projects.length).toBeGreaterThan(0);
 
-    // Trigger extraction and navigate to project
-    await triggerExtractionAndWait(page);
+    // Navigate to the project in Framing mode
+    await navigateToFramingAndWaitForVideo(page);
 
-    // Wait for Framing mode to load — check for Framing tab button or Frame Video button
+    // Check for Framing tab button or Frame Video button
     const framingVisible = await Promise.race([
       page.locator('button:has-text("Framing")').waitFor({ state: 'visible', timeout: 30000 }).then(() => true),
       page.locator('button:has-text("Frame Video")').waitFor({ state: 'visible', timeout: 30000 }).then(() => true),
@@ -1648,7 +1494,7 @@ test.describe('Full Coverage Tests @full', () => {
 
   test('Framing: export creates working video @full', async ({ page }) => {
     // Safety timeout only - real timeout is progress-based (30s without progress = fail)
-    test.setTimeout(0); // Disable Playwright timeout, rely on progress-based stall detection
+    test.setTimeout(600000); // 10 minutes — generous cap, real timeout is progress-based stall detection
 
     // Ensure we're in framing mode (creates projects if needed)
     // Uses TEST_VIDEO (1.5 min) for fast test runs
@@ -1725,7 +1571,7 @@ test.describe('Full Coverage Tests @full', () => {
   });
 
   test('Overlay: video loads after framing export @full', async ({ page }) => {
-    test.setTimeout(0); // Disable - progress-based stall detection
+    test.setTimeout(600000); // 10 minutes — generous cap, progress-based stall detection
 
     // Ensure working video exists (runs framing export if needed)
     await ensureWorkingVideoExists(page);
@@ -1751,7 +1597,7 @@ test.describe('Full Coverage Tests @full', () => {
   });
 
   test('Overlay: highlight region initializes @full', async ({ page }) => {
-    test.setTimeout(0); // Disable - progress-based stall detection
+    test.setTimeout(600000); // 10 minutes — generous cap, progress-based stall detection
 
     // Ensure working video exists (runs framing export if needed)
     await ensureWorkingVideoExists(page);
@@ -1938,7 +1784,7 @@ test.describe('Full Coverage Tests @full', () => {
    * Test waits for export to complete, only fails if progress stalls.
    */
   test('Framing: export progress advances properly @full', async ({ page }) => {
-    test.setTimeout(0); // Disable - progress-based stall detection (30s without progress = fail)
+    test.setTimeout(600000); // 10 minutes — generous cap, progress-based stall detection (30s without progress = fail)
 
     // Ensure we're in framing mode
     await ensureFramingMode(page);
@@ -2301,7 +2147,7 @@ test.describe('Full Coverage Tests @full', () => {
    * Uses a fresh user ID to ensure clean state.
    */
   test('Full Pipeline: Annotate → Framing → Overlay → Final Export @full', async ({ page }) => {
-    test.setTimeout(0); // Disable - progress-based stall detection
+    test.setTimeout(600000); // 10 minutes — generous cap, progress-based stall detection
 
     console.log('[Full Pipeline] Starting full pipeline test...');
     console.log(`[Full Pipeline] Test user: ${TEST_USER_ID}`);
@@ -2399,14 +2245,9 @@ test.describe('Full Coverage Tests @full', () => {
     // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
     await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
 
-    // Trigger extraction and navigate to project
-    // triggerExtractionAndWait handles: extraction, navigation to Projects, clicking project card
-    console.log('[Full Pipeline] Triggering clip extraction...');
-    await triggerExtractionAndWait(page);
-
-    // Wait for framing mode to load (triggerExtractionAndWait clicks the project)
-    console.log('[Full Pipeline] Waiting for framing mode to load...');
-    await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 30000 });
+    // Navigate to the project in Framing mode
+    console.log('[Full Pipeline] Navigating to framing mode...');
+    await navigateToFramingAndWaitForVideo(page);
     await waitForVideoFirstFrame(page);
 
     // Verify clips are loaded in sidebar
@@ -2414,6 +2255,46 @@ test.describe('Full Coverage Tests @full', () => {
     await expect(clipItems.first()).toBeVisible({ timeout: 10000 });
     const clipCount = await clipItems.count();
     console.log(`[Full Pipeline] Project created with ${clipCount} clips, framing mode loaded`);
+
+    // Set crop_data on all clips so they're considered "framed" (enables Frame Video button)
+    const pipelineFramedCount = await page.evaluate(async () => {
+      const projectsRes = await fetch('/api/projects');
+      const projects = await projectsRes.json();
+      if (!projects?.length) return 0;
+      const projectId = projects[0].id;
+      const clipsRes = await fetch(`/api/clips/projects/${projectId}/clips`);
+      const clips = await clipsRes.json();
+      let count = 0;
+      for (const clip of clips) {
+        if (clip.crop_data) { count++; continue; }
+        const cropData = JSON.stringify([{ frame: 0, x: 0.25, y: 0.25, width: 0.5, height: 0.5, origin: 'user' }]);
+        const res = await fetch(`/api/clips/projects/${projectId}/clips/${clip.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ crop_data: cropData })
+        });
+        if (res.ok) count++;
+      }
+      return count;
+    });
+    console.log(`[Full Pipeline] Set crop_data on ${pipelineFramedCount} clips`);
+
+    // Reload to pick up crop_data changes
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
+    await navigateToFramingAndWaitForVideo(page);
+
+    // Grant backend credits for the export (frontend check is intercepted via page.route)
+    const creditGrant = await page.evaluate(async () => {
+      const res = await fetch('/api/credits/grant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: 1000, source: 'e2e_test' }),
+      });
+      if (!res.ok) return { error: res.status, text: await res.text() };
+      return res.json();
+    });
+    console.log(`[Full Pipeline] Granted credits: ${JSON.stringify(creditGrant)}`);
 
     // STEP 4: Run framing export
     console.log('[Full Pipeline] Step 4: Running framing export...');
@@ -2483,9 +2364,16 @@ test.describe('Full Coverage Tests @full', () => {
     expect(finalVideos?.length ?? 0, 'Should have at least one final video').toBeGreaterThan(0);
 
     // Optionally navigate to Gallery to verify UI
+    // After overlay export, app navigates to HOME where Gallery panel may already be open.
+    // Dismiss any overlapping panels first by pressing Escape, then try Gallery button.
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+
     const galleryButton = page.locator('button:has-text("Gallery")');
     if (await galleryButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await galleryButton.click();
+      await galleryButton.click({ timeout: 5000 }).catch(() => {
+        console.log('[Full Pipeline] Gallery button click intercepted, skipping UI verification');
+      });
       await page.waitForTimeout(2000);
 
       // Verify video card is visible

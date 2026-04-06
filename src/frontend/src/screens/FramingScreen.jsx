@@ -1,6 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { List, X } from 'lucide-react';
-// T740: ExtractionWebSocketManager removed — extraction merged into framing export
 import { FramingModeView } from '../modes';
 import { FramingContainer } from '../containers';
 import { useCrop, useSegments } from '../modes/framing';
@@ -118,9 +117,6 @@ export function FramingScreen({
     if (clip) return getClipFileUrlSelector(clip, projectId);
     return `${API_BASE}/api/clips/projects/${projectId}/clips/${clipId}/file`;
   }, [clips, projectId]);
-
-  // T740: Extraction state, WebSocket listener, and timeout tracking removed.
-  // Extraction is now merged into framing export — no separate extraction step.
 
   // Fetch games on mount
   useEffect(() => {

@@ -269,7 +269,7 @@ Never transform API responses into a different shape for storage. Transformation
 function transformClipToUIFormat(backendClip) {
   return {
     id: generateClientId(),        // New ID diverges from backend
-    isExtracted: !!backendClip.filename,  // Stored flag goes stale
+    isReady: !!backendClip.filename,  // Stored flag goes stale
     fileNameDisplay: backendClip.filename?.replace(/\.[^/.]+$/, ''),
     // ... 20 more transformed fields
   };
@@ -280,7 +280,7 @@ store.setClips(backendClips.map(transformClipToUIFormat));  // Stale on arrival
 store.setRawClips(backendClips);  // Exact API response
 
 // Selectors compute at read time — always fresh
-export const isExtracted = (clip) => !!clip.filename;
+export const isReady = (clip) => !!clip.filename;
 export const clipDisplayName = (clip) => (clip.filename || 'clip.mp4').replace(/\.[^/.]+$/, '');
 ```
 
@@ -300,17 +300,16 @@ const clip = { id: 42, ...backendData };
 
 ### Rule: Never store derived boolean flags
 
-Flags like `isExtracted`, `isExtracting`, `isFailed` MUST be computed from source data, never stored as properties. Stored flags go stale when the source data changes and the flag update is missed.
+Derived booleans MUST be computed from source data, never stored as properties. Stored flags go stale when the source data changes and the flag update is missed.
 
 ```javascript
 // BAD: Stored flags that must be manually synced
-{ isExtracted: true, isExtracting: false, isFailed: false, extractionStatus: 'completed' }
-// If extractionStatus changes to 'failed' but isFailed isn't updated → bug
+{ isReady: true, hasExported: false }
+// If exported_at gets set but hasExported isn't updated → bug
 
 // GOOD: Compute at read time — impossible to go stale
-export const isExtracted = (clip) => !!clip.filename;
-export const isExtracting = (clip) => clip.extraction_status === 'running' || clip.extraction_status === 'pending';
-export const isFailed = (clip) => clip.extraction_status === 'failed';
+export const isReady = (clip) => !!clip.filename;
+export const hasExported = (clip) => !!clip.exported_at;
 ```
 
 ---

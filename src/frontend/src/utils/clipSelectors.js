@@ -1,23 +1,14 @@
 /**
  * Clip Selectors — Computed derived values from raw backend clip data
  *
- * These pure functions replace stored boolean flags (isExtracted, isExtracting, etc.)
- * that were previously set during transformClipToUIFormat(). By computing at read time,
- * we eliminate stale flags and sync issues.
+ * By computing at read time, we eliminate stale flags and sync issues.
  *
  * @see T250: Clip Store Unification
  */
 
 // ========== Clip File Status Selectors ==========
-// T790: Standalone extraction removed — clips use game video range queries.
-// isExtracted checks if clip has its own file (not all clips need one).
 
 export const isExtracted = (clip) => !!clip.filename;
-
-// Legacy selectors — always false now. Kept for any remaining call sites.
-export const isExtracting = () => false;
-export const isFailed = () => false;
-export const isRetrying = () => false;
 
 // ========== Display Selectors ==========
 
