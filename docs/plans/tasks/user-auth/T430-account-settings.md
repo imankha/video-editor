@@ -1,6 +1,6 @@
 # T430: Account Settings
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-03-12
@@ -12,7 +12,7 @@ Authenticated users need a place to see their account info, link additional logi
 
 ## Solution
 
-Settings page (or panel) accessible from the header/nav. Shows email, linked Google account, credit balance, and logout button.
+Settings page (or panel) accessible from the header/nav. Shows email, linked Google account, credit balance, and logout button. When logged in via Google, show the user's Google profile image as their avatar in the nav bar (replaces generic icon).
 
 ## Context
 
@@ -33,17 +33,29 @@ Settings page (or panel) accessible from the header/nav. Shows email, linked Goo
 - Credit balance + link to purchase (from monetization epic)
 - Logout button (clears session cookie)
 
+**Google profile image:**
+- Google OAuth `tokeninfo` response includes `picture` field (URL to profile photo)
+- Store `picture_url` in auth DB during Google login (T400/T405 already verifies the token)
+- Return `picture_url` in GET /api/auth/me response
+- Display as circular avatar in nav bar when logged in (fall back to initials/icon if no image)
+
 ## Implementation
 
 ### Steps
-1. [ ] Create AccountSettings component
-2. [ ] Add route/link in navigation
-3. [ ] Display user info from GET /api/auth/me
-4. [ ] Add logout functionality (POST /api/auth/logout + clear local state)
-5. [ ] Add "Link Google" button (if not yet linked)
+1. [ ] Store Google `picture` URL in auth DB during login
+2. [ ] Return `picture_url` in GET /api/auth/me response
+3. [ ] Show Google profile image as avatar in nav bar (circular, ~32px)
+4. [ ] Create AccountSettings component
+5. [ ] Add route/link in navigation (click avatar to open settings)
+6. [ ] Display user info from GET /api/auth/me
+7. [ ] Add logout functionality (POST /api/auth/logout + clear local state)
+8. [ ] Add "Link Google" button (if not yet linked)
 
 ## Acceptance Criteria
 
+- [ ] Google profile image shown as avatar in nav bar when logged in via Google
+- [ ] Falls back to initials or generic icon when no image available
+- [ ] Clicking avatar opens settings panel
 - [ ] Settings accessible from nav
 - [ ] Shows email address
 - [ ] Shows Google link status

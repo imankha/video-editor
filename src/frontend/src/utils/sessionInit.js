@@ -144,7 +144,7 @@ export async function initSession() {
         _currentUserId = userId;
         // Only authenticated if they have an email (Google sign-in).
         // A guest session has a user_id but no email — still not authenticated.
-        useAuthStore.getState().setSessionState(!!meData.email, meData.email || null);
+        useAuthStore.getState().setSessionState(!!meData.email, meData.email || null, meData.picture_url || null);
         // T820: Track migration status from /me response
         if (meData.migration_pending) {
           useAuthStore.getState().setMigrationPending(true);

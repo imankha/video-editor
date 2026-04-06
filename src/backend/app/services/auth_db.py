@@ -112,6 +112,12 @@ def init_auth_db():
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # T430: Google profile picture URL
+        try:
+            db.execute("ALTER TABLE users ADD COLUMN picture_url TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         # T550: Admin users — table-driven admin list
         db.executescript("""
             CREATE TABLE IF NOT EXISTS admin_users (
@@ -269,6 +275,16 @@ def link_google_to_user(user_id: str, email: str, google_id: str) -> None:
     logger.info(f"[AuthDB] Linked Google to user {user_id}: {email}")
 
 
+def update_picture_url(user_id: str, picture_url: str) -> None:
+    """Update user's Google profile picture URL."""
+    with get_auth_db() as db:
+        db.execute(
+            "UPDATE users SET picture_url = ? WHERE user_id = ?",
+            (picture_url, user_id),
+        )
+        db.commit()
+
+
 def update_last_seen(user_id: str) -> None:
     """Update user's last_seen_at timestamp."""
     now = datetime.utcnow().isoformat()
@@ -284,7 +300,7 @@ def get_user_by_id(user_id: str) -> Optional[dict]:
     """Look up a user by user_id."""
     with get_auth_db() as db:
         row = db.execute(
-            "SELECT user_id, email, google_id, verified_at, created_at FROM users WHERE user_id = ?",
+            "SELECT user_id, email, google_id, verified_at, created_at, picture_url FROM users WHERE user_id = ?",
             (user_id,)
         ).fetchone()
         if row:

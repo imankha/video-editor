@@ -25,8 +25,10 @@ export function ProfileDropdown() {
 
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const email = useAuthStore(state => state.email);
+  const pictureUrl = useAuthStore(state => state.pictureUrl);
   const logout = useAuthStore(state => state.logout);
   const requireAuth = useAuthStore(state => state.requireAuth);
+  const openAccountSettings = useAuthStore(state => state.openAccountSettings);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -86,7 +88,19 @@ export function ProfileDropdown() {
     </>
   );
 
-  // Authenticated, single profile: user icon → small dropdown
+  // Avatar element shared across single/multi profile views
+  const avatarButton = pictureUrl ? (
+    <img
+      src={pictureUrl}
+      alt=""
+      className="w-8 h-8 rounded-full object-cover"
+      referrerPolicy="no-referrer"
+    />
+  ) : (
+    <User size={16} className="text-gray-300" />
+  );
+
+  // Authenticated, single profile: avatar → small dropdown
   if (!hasMultiple) {
     return (
       <>
@@ -94,10 +108,10 @@ export function ProfileDropdown() {
           <button
             ref={triggerRef}
             onClick={() => setShowDropdown(!showDropdown)}
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            className={`flex items-center justify-center w-8 h-8 rounded-full ${pictureUrl ? '' : 'bg-white/10 hover:bg-white/20'} transition-colors`}
             title={email}
           >
-            <User size={16} className="text-gray-300" />
+            {avatarButton}
           </button>
 
           {showDropdown && (
@@ -110,11 +124,20 @@ export function ProfileDropdown() {
               className="absolute right-0 top-full mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 py-1"
             >
               <button
-                onClick={() => { setShowDropdown(false); setShowManageModal(true); }}
+                onClick={() => { setShowDropdown(false); openAccountSettings(); }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"
               >
                 <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 flex-shrink-0">
                   <Settings size={14} className="text-gray-300" />
+                </div>
+                <span className="text-sm text-gray-300">Account Settings</span>
+              </button>
+              <button
+                onClick={() => { setShowDropdown(false); setShowManageModal(true); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"
+              >
+                <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 flex-shrink-0">
+                  <User size={14} className="text-gray-300" />
                 </div>
                 <span className="text-sm text-gray-300">Manage Profiles</span>
               </button>
@@ -142,12 +165,21 @@ export function ProfileDropdown() {
           title={email}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
         >
-          <div
-            className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
-            style={{ backgroundColor: currentProfile?.color || '#3B82F6' }}
-          >
-            {(currentProfile?.name || 'D')[0].toUpperCase()}
-          </div>
+          {pictureUrl ? (
+            <img
+              src={pictureUrl}
+              alt=""
+              className="w-6 h-6 rounded-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div
+              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
+              style={{ backgroundColor: currentProfile?.color || '#3B82F6' }}
+            >
+              {(currentProfile?.name || 'D')[0].toUpperCase()}
+            </div>
+          )}
           <span className="text-sm text-white font-medium max-w-[100px] truncate">
             {currentProfile?.name || 'Default'}
           </span>
@@ -201,9 +233,19 @@ export function ProfileDropdown() {
               className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"
             >
               <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 flex-shrink-0">
-                <Settings size={14} className="text-gray-300" />
+                <User size={14} className="text-gray-300" />
               </div>
               <span className="text-sm text-gray-300">Manage Profiles</span>
+            </button>
+
+            <button
+              onClick={() => { setShowDropdown(false); openAccountSettings(); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/10 transition-colors"
+            >
+              <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 flex-shrink-0">
+                <Settings size={14} className="text-gray-300" />
+              </div>
+              <span className="text-sm text-gray-300">Account Settings</span>
             </button>
 
             {authSection}
