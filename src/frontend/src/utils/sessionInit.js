@@ -24,6 +24,40 @@ let _initPromise = null;
 let _onGuestWrite = null;
 
 /**
+ * Retry a fetch call with exponential backoff.
+ * Handles both server errors (5xx) and network failures (server unreachable).
+ * Used for cold-start resilience — the server may return 500 or be
+ * temporarily unreachable while waking up on Fly.io.
+ */
+async function fetchWithRetry(url, options, { retries = 3, baseDelay = 1000 } = {}) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok || response.status < 500) return response;
+      // Server error (500+) — retry after delay if we have attempts left
+      if (attempt < retries) {
+        const delay = baseDelay * Math.pow(2, attempt); // 1s, 2s, 4s
+        console.warn(`[sessionInit] ${url} returned ${response.status}, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        console.error(`[sessionInit] ${url} returned ${response.status} after ${retries + 1} attempts`);
+        return response;
+      }
+    } catch (err) {
+      // Network error (server unreachable, DNS failure, etc.)
+      if (attempt < retries) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.warn(`[sessionInit] ${url} network error: ${err.message}, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        console.error(`[sessionInit] ${url} network error after ${retries + 1} attempts: ${err.message}`);
+        throw err;
+      }
+    }
+  }
+}
+
+/**
  * Register a callback that fires after any successful mutating API call
  * while the user is a guest. Used to track guest activity for the exit warning.
  */
@@ -135,7 +169,7 @@ export async function initSession() {
     const authExpected = sessionStorage.getItem('authExpected');
     if (authExpected) sessionStorage.removeItem('authExpected');
     try {
-      const meResponse = await fetch(`${API_BASE}/api/auth/me`, {
+      const meResponse = await fetchWithRetry(`${API_BASE}/api/auth/me`, {
         credentials: 'include',
       });
       if (meResponse.ok) {
@@ -153,13 +187,14 @@ export async function initSession() {
         console.error(`[Auth] Session cookie not received after sign-in for ${authExpected}. ` +
           'Cross-origin cookie blocked? Check SameSite/Secure settings and CORS config.');
       }
-    } catch {
-      // No session — will create guest below
+    } catch (err) {
+      // Network error or server unreachable — log it, then fall through to guest init
+      console.warn('[sessionInit] /me check failed:', err.message || err);
     }
 
     // Step 2: No valid session — create anonymous guest
     if (!userId) {
-      const guestResponse = await fetch(`${API_BASE}/api/auth/init-guest`, {
+      const guestResponse = await fetchWithRetry(`${API_BASE}/api/auth/init-guest`, {
         method: 'POST',
         credentials: 'include',
       });
@@ -181,7 +216,7 @@ export async function initSession() {
     }
 
     // Step 3: Have a user_id (from session) — initialize profile
-    const initResponse = await fetch(`${API_BASE}/api/auth/init`, {
+    const initResponse = await fetchWithRetry(`${API_BASE}/api/auth/init`, {
       method: 'POST',
     });
     if (!initResponse.ok) {

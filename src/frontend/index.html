@@ -6,8 +6,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Reel Ballers</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+      /* Preloader — shown instantly, hidden by App.jsx when ready */
+      #preloader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+        transition: opacity 0.3s ease-out;
+      }
+      #preloader.fade-out { opacity: 0; pointer-events: none; }
+      #preloader svg { animation: preloader-pulse 2s ease-in-out infinite; }
+      @keyframes preloader-pulse {
+        0%, 100% { opacity: 0.7; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.05); }
+      }
+    </style>
   </head>
   <body>
+    <!-- Preloader: fixed overlay, removed by app when session init completes -->
+    <div id="preloader">
+      <svg width="64" height="64" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="24" r="22" stroke="url(#g)" stroke-width="3" fill="none" />
+        <circle cx="24" cy="4" r="2" fill="#a855f7" />
+        <circle cx="24" cy="44" r="2" fill="#a855f7" />
+        <circle cx="4" cy="24" r="2" fill="#a855f7" />
+        <circle cx="44" cy="24" r="2" fill="#a855f7" />
+        <path d="M20 16 L20 32 L34 24 Z" fill="white" opacity="0.95" />
+        <defs>
+          <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#a855f7" />
+            <stop offset="100%" stop-color="#6366f1" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

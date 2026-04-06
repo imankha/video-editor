@@ -101,7 +101,18 @@ function App() {
     // Wire guest-write callback: any successful mutating API call while guest marks activity
     setGuestWriteCallback(() => useAuthStore.getState().markGuestActivity());
 
+    // Dismiss preloader overlay (added outside #root in index.html)
+    const dismissPreloader = () => {
+      const preloader = document.getElementById('preloader');
+      if (preloader) {
+        preloader.classList.add('fade-out');
+        setTimeout(() => preloader.remove(), 300);
+      }
+    };
+
     initSession().then(() => {
+      dismissPreloader();
+
       // T630/T635: Fire all initial data fetches in parallel after auth resolves
       warmAllUserVideos();
       useProfileStore.getState().fetchProfiles();
@@ -200,6 +211,11 @@ function App() {
             });
         }
       }
+    }).catch((err) => {
+      console.error('[App] Session init failed after retries:', err);
+      // Clear isCheckingSession so the app renders instead of staying white
+      useAuthStore.getState().setSessionState(false);
+      dismissPreloader();
     });
   }, []);
 
