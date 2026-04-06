@@ -18,10 +18,12 @@ per-user SQLite. This enables cross-device recovery via email→user_id lookup.
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta
 import httpx
 import logging
 import os
+import re
+import secrets
 import shutil
 from pathlib import Path
 
@@ -48,10 +50,12 @@ from app.services.auth_db import (
     invalidate_user_sessions,
     create_guest_user,
     link_google_to_user,
+    link_email_to_user,
     get_user_by_id,
     update_last_seen,
     update_picture_url,
     sync_auth_db_to_r2,
+    get_auth_db,
 )
 from app.services.user_db import (
     get_user_db_connection,
@@ -701,6 +705,207 @@ async def retry_migration(request: Request):
         except Exception:
             pass
         return {"status": "failed", "error": str(e)}
+
+
+# --- T401: Email OTP Auth ---
+
+_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
+# Rate limits
+_MAX_CODES_PER_HOUR = 3
+_MAX_ATTEMPTS_PER_CODE = 5
+_OTP_EXPIRY_MINUTES = 10
+
+
+class SendOtpRequest(BaseModel):
+    email: str
+
+
+class VerifyOtpRequest(BaseModel):
+    email: str
+    code: str
+
+
+@router.post("/send-otp")
+async def send_otp(body: SendOtpRequest):
+    """
+    Generate a 6-digit OTP code and send it via email (Resend).
+
+    Rate limited to 3 codes per email per hour.
+    """
+    email = body.email.strip().lower()
+    if not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Invalid email address")
+
+    # Rate limit: count codes for this email in last hour
+    one_hour_ago = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+    with get_auth_db() as db:
+        row = db.execute(
+            "SELECT COUNT(*) as cnt FROM otp_codes WHERE email = ? AND created_at > ?",
+            (email, one_hour_ago),
+        ).fetchone()
+        if row["cnt"] >= _MAX_CODES_PER_HOUR:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many codes requested. Please try again later.",
+            )
+
+    # Generate cryptographically secure 6-digit code
+    code = str(secrets.randbelow(900000) + 100000)
+    expires_at = (datetime.utcnow() + timedelta(minutes=_OTP_EXPIRY_MINUTES)).isoformat()
+
+    # Store in otp_codes table
+    with get_auth_db() as db:
+        db.execute(
+            "INSERT INTO otp_codes (email, code, expires_at) VALUES (?, ?, ?)",
+            (email, code, expires_at),
+        )
+        db.commit()
+
+    # Send via Resend
+    from app.services.email import send_otp_email
+
+    try:
+        await send_otp_email(email, code)
+    except ValueError:
+        # RESEND_API_KEY not configured
+        raise HTTPException(status_code=500, detail="Email service not configured")
+    except Exception as e:
+        logger.error(f"[Auth] Failed to send OTP email to {email}: {e}")
+        raise HTTPException(status_code=503, detail="Failed to send email. Please try again.")
+
+    logger.info(f"[Auth] OTP sent to {email}")
+    return {"sent": True}
+
+
+@router.post("/verify-otp")
+async def verify_otp(body: VerifyOtpRequest, request: Request):
+    """
+    Verify a 6-digit OTP code and create an authenticated session.
+
+    Same user lookup/create logic as Google OAuth:
+    - If email exists in auth DB → cross-device recovery (migrate guest data)
+    - If email is new → link email to current guest user
+    """
+    email = body.email.strip().lower()
+    code = body.code.strip()
+    current_user_id = get_current_user_id()
+
+    if not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Invalid email address")
+
+    if not re.match(r'^\d{6}$', code):
+        raise HTTPException(status_code=400, detail="Invalid code format")
+
+    # Find the latest unused code for this email
+    with get_auth_db() as db:
+        row = db.execute(
+            """SELECT id, code, expires_at, attempts
+               FROM otp_codes
+               WHERE email = ? AND used_at IS NULL
+               ORDER BY created_at DESC LIMIT 1""",
+            (email,),
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=400, detail="No pending code. Please request a new one.")
+
+    # Check expiry
+    if datetime.fromisoformat(row["expires_at"]) < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Code expired. Please request a new one.")
+
+    # Check attempt limit
+    if row["attempts"] >= _MAX_ATTEMPTS_PER_CODE:
+        raise HTTPException(status_code=400, detail="Too many attempts. Please request a new code.")
+
+    # Verify the code
+    if row["code"] != code:
+        with get_auth_db() as db:
+            db.execute(
+                "UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?",
+                (row["id"],),
+            )
+            db.commit()
+        remaining = _MAX_ATTEMPTS_PER_CODE - row["attempts"] - 1
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid code. {remaining} attempt{'s' if remaining != 1 else ''} remaining.",
+        )
+
+    # Code is valid — mark as used
+    with get_auth_db() as db:
+        db.execute(
+            "UPDATE otp_codes SET used_at = ? WHERE id = ?",
+            (datetime.utcnow().isoformat(), row["id"]),
+        )
+        db.commit()
+
+    # --- Same user lookup/create logic as google_auth() ---
+
+    # Auto-reset NUF test accounts
+    if email in NUF_RESET_EMAILS:
+        existing_test = get_user_by_email(email)
+        if existing_test:
+            _reset_test_account(existing_test['user_id'], email)
+
+    existing = get_user_by_email(email)
+
+    if existing:
+        # Cross-device recovery: use the EXISTING user_id
+        user_id = existing['user_id']
+        logger.info(f"[Auth] OTP login — existing user found: {user_id} ({email})")
+        update_last_seen(user_id)
+        # Migrate guest progress — block login on failure
+        try:
+            _migrate_guest_profile(current_user_id, user_id)
+        except Exception as e:
+            logger.error(f"[Auth] Migration failed for guest {current_user_id} → {user_id}: {e}")
+            try:
+                with get_user_db_connection(user_id) as conn:
+                    conn.execute(
+                        """UPDATE pending_migrations SET status='failed', error=?, attempts=attempts+1
+                           WHERE guest_user_id=? AND status='pending'""",
+                        (str(e), current_user_id)
+                    )
+                    conn.commit()
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=503,
+                detail="We're having trouble transferring your data. Please try again in a moment."
+            )
+    else:
+        # First-time email auth
+        current_user = get_user_by_id(current_user_id)
+        if current_user and not current_user.get('email'):
+            # Guest user signing in for the first time — link email to their account
+            link_email_to_user(current_user_id, email)
+            user_id = current_user_id
+            logger.info(f"[Auth] OTP login — linked to existing guest: {user_id} ({email})")
+        else:
+            # Brand new user
+            user_id = current_user_id
+            create_user(user_id, email=email, verified_at=datetime.utcnow().isoformat())
+            logger.info(f"[Auth] OTP login — created new user: {user_id} ({email})")
+
+    # Create session in central auth DB
+    session_id = create_session(user_id)
+
+    # Set session cookie on response
+    response = JSONResponse(content={
+        "email": email,
+        "user_id": user_id,
+        "picture_url": None,
+    })
+    response.set_cookie(
+        key="rb_session",
+        value=session_id,
+        max_age=30 * 24 * 60 * 60,  # 30 days
+        httponly=True,
+        samesite=_SAMESITE,
+        secure=_SECURE_COOKIES,
+    )
+    return response
 
 
 @router.post("/logout")

@@ -101,13 +101,14 @@ Gate GPU operations behind email verification. Google OAuth primary, Email OTP s
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
 | T400 | [Auth Gate + Google OAuth](tasks/user-auth/T400-auth-gate-ui.md) | DONE | 9 | 4 | Modal + real Google sign-in (per-user SQLite) |
-| T401 | [Email OTP Auth](tasks/user-auth/T401-email-otp.md) | TODO | 9 | 4 | Real Resend integration (per-user SQLite) |
+| T401 | [Email OTP Auth](tasks/user-auth/T401-email-otp.md) | TESTING | 9 | 4 | Real Resend integration (per-user SQLite) |
 | T405 | [Central Auth + Cross-Device](tasks/user-auth/T405-central-auth-db.md) | DONE | 7 | 5 | Shared auth.sqlite+R2, server-issued UUIDs, session cookies, remove ?user= param |
 | T410 | [Guest Progress Migration](tasks/user-auth/T410-guest-progress-migration.md) | DONE | 6 | 5 | On login, migrate guest profile (if has games) as "second" profile on recovered account |
 | T415 | [Smart Guest Merge](tasks/user-auth/T415-smart-guest-merge.md) | DONE | 7 | 3 | Merge guest games into default profile (never branch); fix auth return context |
 | T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 7 | 3 | Single-session enforcement, expiry |
 | T430 | [Account Settings](tasks/user-auth/T430-account-settings.md) | DONE | 4 | 2 | Email display, linking, logout |
 | T435 | [Google One Tap Auto-Prompt](tasks/user-auth/T435-google-one-tap-auto-prompt.md) | DONE | 7 | 2 | Auto-show Google sign-in prompt for guests on page load |
+| T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | TODO | 6 | 3 | PWA install, manifest, service worker, landing page CTA |
 
 #### Epic: Monetization
 [tasks/monetization/EPIC.md](tasks/monetization/EPIC.md)

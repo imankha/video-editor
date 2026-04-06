@@ -275,6 +275,19 @@ def link_google_to_user(user_id: str, email: str, google_id: str) -> None:
     logger.info(f"[AuthDB] Linked Google to user {user_id}: {email}")
 
 
+def link_email_to_user(user_id: str, email: str) -> None:
+    """Link an email to an existing anonymous user (via OTP verification)."""
+    now = datetime.utcnow().isoformat()
+    with get_auth_db() as db:
+        db.execute(
+            """UPDATE users SET email = ?, verified_at = ? WHERE user_id = ?""",
+            (email, now, user_id),
+        )
+        db.commit()
+    sync_auth_db_to_r2()
+    logger.info(f"[AuthDB] Linked email to user {user_id}: {email}")
+
+
 def update_picture_url(user_id: str, picture_url: str) -> None:
     """Update user's Google profile picture URL."""
     with get_auth_db() as db:
