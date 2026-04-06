@@ -45,6 +45,8 @@ export const useAuthStore = create((set, get) => ({
       action();
       return;
     }
+    // Cancel Google One Tap before opening modal (prevents overlap)
+    window.google?.accounts?.id?.cancel();
     set({ showAuthModal: true, pendingAction: action });
   },
 
