@@ -57,6 +57,36 @@ async function setupTestUserContext(page) {
     delete headers['x-user-id'];
     await route.continue({ headers });
   });
+
+  // Intercept /api/auth/me to return authenticated state for the test user.
+  // This makes the frontend's authStore.isAuthenticated=true, which bypasses
+  // the requireAuth gate on export actions (avoids AuthGateModal popup).
+  await page.route('**/api/auth/me', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user_id: TEST_USER_ID,
+        email: 'e2e@test.local',
+      }),
+    });
+  });
+
+  // Intercept /api/credits to return sufficient balance for export tests.
+  // This prevents the "Buy Credits" modal from appearing in the frontend.
+  // Backend credits are granted separately via POST /api/credits/grant.
+  await page.route('**/api/credits', async (route) => {
+    // Only intercept GET requests (balance check), let POST through
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ balance: 10000, loaded: true }),
+      });
+    } else {
+      await route.continue();
+    }
+  });
 }
 
 /**
@@ -566,8 +596,11 @@ async function ensureAnnotateModeWithClips(page) {
  */
 async function navigateToProjectFromHome(page) {
   console.log('[Test] Navigating to home then back to project for fresh load...');
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.goto('/', { timeout: 30000 });
+  await Promise.race([
+    page.waitForLoadState('networkidle'),
+    page.waitForTimeout(10000),
+  ]);
 
   // Click Projects tab to show "Your Projects" section
   const projectsTab = page.locator('button:has-text("Projects")');
@@ -795,8 +828,8 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   console.log('[Test] Clips created and auto-saved to library');
 
   // Navigate to project manager and create project from clips
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2000);
   await page.locator('button:has-text("Projects")').click();
   await page.waitForTimeout(500);
 
@@ -897,7 +930,61 @@ async function ensureFramingMode(page) {
   // Extra wait for React context to propagate
   // This ensures selectedProjectId is set in ExportButton before we click it
   await page.waitForTimeout(2000);
-  console.log('[Test] In framing mode with project loaded');
+
+  // Frame all clips by setting crop_data via API (marks them as "framed")
+  // Without this, the Frame Video button stays disabled ("needs framing")
+  const framedCount = await page.evaluate(async () => {
+    const projectsRes = await fetch('/api/projects');
+    const projects = await projectsRes.json();
+    if (!projects?.length) return 0;
+    const projectId = projects[0].id;
+
+    const clipsRes = await fetch(`/api/clips/projects/${projectId}/clips`);
+    const clips = await clipsRes.json();
+
+    let count = 0;
+    for (const clip of clips) {
+      if (clip.crop_data) { count++; continue; }
+      // Set a default crop keyframe at frame 0 (center crop)
+      const cropData = JSON.stringify([{ frame: 0, x: 0.25, y: 0.25, width: 0.5, height: 0.5, origin: 'user' }]);
+      const res = await fetch(`/api/clips/projects/${projectId}/clips/${clip.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ crop_data: cropData })
+      });
+      if (res.ok) count++;
+    }
+    return count;
+  });
+  console.log(`[Test] Set crop_data on ${framedCount} clips via API`);
+
+  // Grant credits to the test user on the backend so reserve_credits succeeds.
+  // The frontend credit check is intercepted via page.route, but the backend
+  // also checks credits during export and will return 402 without this.
+  const grantResult = await page.evaluate(async () => {
+    const res = await fetch('/api/credits/grant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: 1000, source: 'e2e_test' }),
+    });
+    if (!res.ok) return { error: res.status, text: await res.text() };
+    return res.json();
+  });
+  console.log(`[Test] Granted backend credits: ${JSON.stringify(grantResult)}`);
+
+  // Reload the page to pick up updated clip state
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+
+  // Navigate back to the project in framing mode
+  await navigateToProjectFromHome(page);
+
+  // Wait for Frame Video button to be visible and enabled
+  const frameBtn = page.locator('button:has-text("Frame Video")');
+  await expect(frameBtn).toBeVisible({ timeout: 15000 });
+  await page.waitForTimeout(1000);
+
+  console.log('[Test] In framing mode with project loaded and all clips framed');
 }
 
 /**
@@ -1397,7 +1484,7 @@ test.describe('Full Coverage Tests @full', () => {
 
   test('Framing: export creates working video @full', async ({ page }) => {
     // Safety timeout only - real timeout is progress-based (30s without progress = fail)
-    test.setTimeout(0); // Disable Playwright timeout, rely on progress-based stall detection
+    test.setTimeout(600000); // 10 minutes — generous cap, real timeout is progress-based stall detection
 
     // Ensure we're in framing mode (creates projects if needed)
     // Uses TEST_VIDEO (1.5 min) for fast test runs
@@ -1474,7 +1561,7 @@ test.describe('Full Coverage Tests @full', () => {
   });
 
   test('Overlay: video loads after framing export @full', async ({ page }) => {
-    test.setTimeout(0); // Disable - progress-based stall detection
+    test.setTimeout(600000); // 10 minutes — generous cap, progress-based stall detection
 
     // Ensure working video exists (runs framing export if needed)
     await ensureWorkingVideoExists(page);
@@ -1500,7 +1587,7 @@ test.describe('Full Coverage Tests @full', () => {
   });
 
   test('Overlay: highlight region initializes @full', async ({ page }) => {
-    test.setTimeout(0); // Disable - progress-based stall detection
+    test.setTimeout(600000); // 10 minutes — generous cap, progress-based stall detection
 
     // Ensure working video exists (runs framing export if needed)
     await ensureWorkingVideoExists(page);
@@ -1687,7 +1774,7 @@ test.describe('Full Coverage Tests @full', () => {
    * Test waits for export to complete, only fails if progress stalls.
    */
   test('Framing: export progress advances properly @full', async ({ page }) => {
-    test.setTimeout(0); // Disable - progress-based stall detection (30s without progress = fail)
+    test.setTimeout(600000); // 10 minutes — generous cap, progress-based stall detection (30s without progress = fail)
 
     // Ensure we're in framing mode
     await ensureFramingMode(page);
@@ -2050,7 +2137,7 @@ test.describe('Full Coverage Tests @full', () => {
    * Uses a fresh user ID to ensure clean state.
    */
   test('Full Pipeline: Annotate → Framing → Overlay → Final Export @full', async ({ page }) => {
-    test.setTimeout(0); // Disable - progress-based stall detection
+    test.setTimeout(600000); // 10 minutes — generous cap, progress-based stall detection
 
     console.log('[Full Pipeline] Starting full pipeline test...');
     console.log(`[Full Pipeline] Test user: ${TEST_USER_ID}`);
@@ -2158,6 +2245,46 @@ test.describe('Full Coverage Tests @full', () => {
     await expect(clipItems.first()).toBeVisible({ timeout: 10000 });
     const clipCount = await clipItems.count();
     console.log(`[Full Pipeline] Project created with ${clipCount} clips, framing mode loaded`);
+
+    // Set crop_data on all clips so they're considered "framed" (enables Frame Video button)
+    const pipelineFramedCount = await page.evaluate(async () => {
+      const projectsRes = await fetch('/api/projects');
+      const projects = await projectsRes.json();
+      if (!projects?.length) return 0;
+      const projectId = projects[0].id;
+      const clipsRes = await fetch(`/api/clips/projects/${projectId}/clips`);
+      const clips = await clipsRes.json();
+      let count = 0;
+      for (const clip of clips) {
+        if (clip.crop_data) { count++; continue; }
+        const cropData = JSON.stringify([{ frame: 0, x: 0.25, y: 0.25, width: 0.5, height: 0.5, origin: 'user' }]);
+        const res = await fetch(`/api/clips/projects/${projectId}/clips/${clip.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ crop_data: cropData })
+        });
+        if (res.ok) count++;
+      }
+      return count;
+    });
+    console.log(`[Full Pipeline] Set crop_data on ${pipelineFramedCount} clips`);
+
+    // Reload to pick up crop_data changes
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
+    await navigateToFramingAndWaitForVideo(page);
+
+    // Grant backend credits for the export (frontend check is intercepted via page.route)
+    const creditGrant = await page.evaluate(async () => {
+      const res = await fetch('/api/credits/grant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: 1000, source: 'e2e_test' }),
+      });
+      if (!res.ok) return { error: res.status, text: await res.text() };
+      return res.json();
+    });
+    console.log(`[Full Pipeline] Granted credits: ${JSON.stringify(creditGrant)}`);
 
     // STEP 4: Run framing export
     console.log('[Full Pipeline] Step 4: Running framing export...');
