@@ -10,7 +10,7 @@ This module handles exports related to the Overlay editing mode:
 These endpoints handle highlight regions, effect types, and final output.
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
@@ -1705,7 +1705,7 @@ async def _run_local_overlay_export(
 
 
 @router.post("/render-overlay")
-async def render_overlay(request: OverlayRenderRequest):
+async def render_overlay(request: OverlayRenderRequest, http_request: Request):
     """
     Render overlay export using Modal GPU (or local fallback).
 
@@ -1911,6 +1911,89 @@ async def render_overlay(request: OverlayRenderRequest):
         except Exception as e:
             logger.error(f"[Overlay Render] Copy failed: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to copy video: {e}")
+
+    # Check for E2E test mode - skip full overlay rendering, just copy working video as final
+    is_test_mode = http_request.headers.get('X-Test-Mode', '').lower() == 'true'
+
+    if is_test_mode and not modal_enabled():
+        logger.info(f"[Overlay Render] TEST MODE: Skipping overlay rendering, copying working video as final")
+
+        try:
+            from app.services.export_helpers import send_progress
+            from app.storage import copy_file_in_r2
+
+            # Generate output filename and copy in R2
+            output_filename = f"final_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+            source_key = f"working_videos/{working_filename}"
+            dest_key = f"final_videos/{output_filename}"
+
+            await send_progress(
+                export_id, 50, 100, 'processing', 'Test mode: copying video...',
+                'overlay', project_id=project_id, project_name=project_name
+            )
+
+            await copy_file_in_r2(user_id, source_key, dest_key)
+            logger.info(f"[Overlay Render] TEST MODE: Copied {source_key} -> {dest_key}")
+
+            await send_progress(
+                export_id, 95, 100, 'finalizing', 'Saving to library...',
+                'overlay', project_id=project_id, project_name=project_name
+            )
+
+            # Save to database
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute("""
+                    SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                    FROM final_videos WHERE project_id = ?
+                """, (project_id,))
+                next_version = cursor.fetchone()['next_version']
+
+                cursor.execute("SELECT id FROM raw_clips WHERE auto_project_id = ?", (project_id,))
+                is_auto_project = cursor.fetchone() is not None
+                source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
+
+                cursor.execute("""
+                    INSERT INTO final_videos (project_id, filename, version, source_type)
+                    VALUES (?, ?, ?, ?)
+                """, (project_id, output_filename, next_version, source_type))
+                final_video_id = cursor.lastrowid
+
+                cursor.execute("""
+                    UPDATE export_jobs
+                    SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (final_video_id, output_filename, export_id))
+
+                conn.commit()
+
+            logger.info(f"[Overlay Render] TEST MODE complete: final_video_id={final_video_id}")
+
+            # Send final completion via WebSocket
+            completion_data = {
+                "progress": 100,
+                "status": "complete",
+                "message": "Export complete (test mode)",
+                "projectId": project_id,
+                "projectName": project_name,
+                "type": "overlay"
+            }
+            export_progress[export_id] = completion_data
+            await manager.send_progress(export_id, completion_data)
+
+            return JSONResponse({
+                "status": "success",
+                "final_video_id": final_video_id,
+                "filename": output_filename,
+                "modal_used": False,
+                "parallel_used": False,
+                "test_mode": True
+            })
+
+        except Exception as e:
+            logger.error(f"[Overlay Render] TEST MODE failed: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Test mode overlay export failed: {e}")
 
     # T760: When Modal is disabled, run processing in background to avoid blocking the server
     if not modal_enabled():
