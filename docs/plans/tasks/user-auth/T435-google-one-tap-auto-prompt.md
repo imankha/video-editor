@@ -1,6 +1,6 @@
 # T435: Google One Tap Auto-Prompt
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-04-06
