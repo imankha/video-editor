@@ -361,10 +361,14 @@ def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
 
     # 5. Resolve target: recovered account's default profile
     target_profile_id = get_selected_profile_id(recovered_user_id)
+    if not target_profile_id:
+        # Brand new or reset account — initialize it to create a default profile
+        user_session_init(recovered_user_id)
+        target_profile_id = get_selected_profile_id(recovered_user_id)
+
     target_db_path = USER_DATA_BASE / recovered_user_id / "profiles" / target_profile_id / "profile.sqlite"
 
     if not target_db_path.exists():
-        # Brand new account that never loaded — initialize it
         user_session_init(recovered_user_id)
 
     # 6. Merge guest data into target profile
@@ -375,7 +379,10 @@ def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
         raise
 
     # 7. Upload modified target DB to R2
-    original_profile_id = get_current_profile_id()
+    #    Profile context may not be set during Google OAuth (no X-Profile-ID header),
+    #    so read the raw context var instead of get_current_profile_id() which raises.
+    from app.profile_context import _current_profile_id
+    original_profile_id = _current_profile_id.get()  # None is OK
     try:
         set_current_profile_id(target_profile_id)
         upload_to_r2(recovered_user_id, "profile.sqlite", target_db_path)
@@ -383,7 +390,11 @@ def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
         logger.error(f"[Auth] File system error during migration upload: {e}")
         raise
     finally:
-        set_current_profile_id(original_profile_id)
+        if original_profile_id is not None:
+            set_current_profile_id(original_profile_id)
+        else:
+            from app.profile_context import reset_profile_id
+            reset_profile_id()
 
     # 8. Mark migration complete
     with get_user_db_connection(recovered_user_id) as conn:
