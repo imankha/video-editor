@@ -107,6 +107,7 @@ Gate GPU operations behind email verification. Google OAuth primary, Email OTP s
 | T415 | [Smart Guest Merge](tasks/user-auth/T415-smart-guest-merge.md) | DONE | 7 | 3 | Merge guest games into default profile (never branch); fix auth return context |
 | T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 7 | 3 | Single-session enforcement, expiry |
 | T430 | [Account Settings](tasks/user-auth/T430-account-settings.md) | DONE | 4 | 2 | Email display, linking, logout |
+| T435 | [Google One Tap Auto-Prompt](tasks/user-auth/T435-google-one-tap-auto-prompt.md) | TODO | 7 | 2 | Auto-show Google sign-in prompt for guests on page load |
 
 #### Epic: Monetization
 [tasks/monetization/EPIC.md](tasks/monetization/EPIC.md)

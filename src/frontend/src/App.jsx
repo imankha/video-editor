@@ -18,6 +18,7 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen, AdminScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AuthGateModal } from './components/AuthGateModal';
+import { GoogleOneTap } from './components/GoogleOneTap';
 import { AccountSettings } from './components/AccountSettings';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
@@ -427,6 +428,8 @@ function App() {
         <UploadProgressIndicator />
         {/* Sync Status Indicator - shows when R2 sync has failed */}
         <SyncStatusIndicator />
+        {/* T435: Google One Tap auto-prompt for guest users */}
+        <GoogleOneTap />
         {/* Auth Gate Modal - shows when GPU action requires authentication */}
         <AuthGateModal />
         {/* T430: Account Settings panel */}
@@ -582,6 +585,8 @@ function App() {
       {/* Toast Notifications */}
       <ToastContainer />
 
+      {/* T435: Google One Tap auto-prompt for guest users */}
+      <GoogleOneTap />
       {/* Auth Gate Modal - shows when GPU action requires authentication */}
       <AuthGateModal />
       {/* T430: Account Settings panel */}

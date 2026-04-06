@@ -28,7 +28,8 @@ Gate GPU-cost operations behind email verification. Users explore freely (upload
 | T401 | [Email OTP Auth](T401-email-otp.md) | TODO | Real Resend integration (per-user SQLite) |
 | T405 | [Central Auth + Cross-Device](T405-central-auth-db.md) | TODO | D1 migration, LoginPage, account recovery |
 | T420 | [Session & Return Visits](T420-session-return-visits.md) | TODO | Single-session enforcement, expiry |
-| T430 | [Account Settings](T430-account-settings.md) | TODO | Email display, linking, logout |
+| T430 | [Account Settings](T430-account-settings.md) | DONE | Email display, linking, logout |
+| T435 | [Google One Tap Auto-Prompt](T435-google-one-tap-auto-prompt.md) | TODO | Auto-show Google sign-in for guests on page load |
 
 ## Completion Criteria
 
