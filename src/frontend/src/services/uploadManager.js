@@ -279,8 +279,8 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   });
   notify(UPLOAD_PHASE.HASHING, 100, 'Hash complete');
 
-  // Phase 2: Prepare (check R2 for dedup)
-  notify(UPLOAD_PHASE.PREPARING, 0, 'Checking for existing file...');
+  // Phase 2: Prepare (check R2 for dedup, create multipart upload, generate URLs)
+  notify(UPLOAD_PHASE.PREPARING, 0, 'Preparing upload...');
   const prepareBody = {
     blake3_hash: hash,
     file_size: file.size,

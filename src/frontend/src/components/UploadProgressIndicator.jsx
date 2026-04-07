@@ -20,7 +20,7 @@ export function UploadProgressIndicator() {
     <div className="fixed bottom-4 right-4 z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-4 w-80">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium text-gray-200 truncate flex-1 mr-2">
-          {activeUpload.fileName}
+          Uploading {activeUpload.fileName}
         </span>
         <span className="text-xs text-gray-400">
           {fileSizeMB} MB

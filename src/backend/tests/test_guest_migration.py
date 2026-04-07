@@ -26,14 +26,21 @@ def _create_db(db_path: Path) -> None:
             blake3_hash TEXT,
             clip_count INTEGER DEFAULT 0,
             brilliant_count INTEGER DEFAULT 0,
-            great_count INTEGER DEFAULT 0,
             good_count INTEGER DEFAULT 0,
-            last_accessed_at TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            upload_status TEXT DEFAULT 'complete',
-            duration REAL,
-            video_count INTEGER DEFAULT 1,
-            total_size INTEGER DEFAULT 0
+            interesting_count INTEGER DEFAULT 0,
+            mistake_count INTEGER DEFAULT 0,
+            blunder_count INTEGER DEFAULT 0,
+            aggregate_score INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            video_duration REAL,
+            video_width INTEGER,
+            video_height INTEGER,
+            video_size INTEGER,
+            opponent_name TEXT,
+            game_date TEXT,
+            game_type TEXT,
+            tournament_name TEXT
         );
         CREATE TABLE game_videos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,9 +48,10 @@ def _create_db(db_path: Path) -> None:
             blake3_hash TEXT NOT NULL,
             sequence INTEGER NOT NULL,
             duration REAL,
-            original_filename TEXT,
+            video_width INTEGER,
+            video_height INTEGER,
             video_size INTEGER,
-            created_at TEXT DEFAULT (datetime('now')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (game_id) REFERENCES games(id)
         );
         CREATE TABLE achievements (
@@ -66,9 +74,9 @@ def _insert_game(db_path: Path, name: str, blake3_hash: str, videos: list[tuple]
     if videos:
         for seq, vhash, duration in videos:
             cursor.execute(
-                "INSERT INTO game_videos (game_id, blake3_hash, sequence, duration, original_filename) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (game_id, vhash, seq, duration, f"{vhash}.mp4")
+                "INSERT INTO game_videos (game_id, blake3_hash, sequence, duration) "
+                "VALUES (?, ?, ?, ?)",
+                (game_id, vhash, seq, duration)
             )
     conn.commit()
     conn.close()

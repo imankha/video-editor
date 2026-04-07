@@ -227,14 +227,19 @@ def _merge_guest_into_profile(guest_db_path: Path, target_db_path: Path) -> int:
             else:
                 tc.execute(
                     """INSERT INTO games (name, video_filename, blake3_hash, clip_count,
-                       brilliant_count, great_count, good_count, last_accessed_at,
-                       created_at, upload_status, duration, video_count, total_size)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       brilliant_count, good_count, interesting_count, mistake_count,
+                       blunder_count, aggregate_score, last_accessed_at, created_at,
+                       video_duration, video_width, video_height, video_size,
+                       opponent_name, game_date, game_type, tournament_name)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (game['name'], game['video_filename'], game['blake3_hash'],
-                     game['clip_count'], game['brilliant_count'], game['great_count'],
-                     game['good_count'], game['last_accessed_at'], game['created_at'],
-                     game['upload_status'], game['duration'], game['video_count'],
-                     game['total_size'])
+                     game['clip_count'], game['brilliant_count'], game['good_count'],
+                     game['interesting_count'], game['mistake_count'],
+                     game['blunder_count'], game['aggregate_score'],
+                     game['last_accessed_at'], game['created_at'],
+                     game['video_duration'], game['video_width'], game['video_height'],
+                     game['video_size'], game['opponent_name'], game['game_date'],
+                     game['game_type'], game['tournament_name'])
                 )
                 game_id_map[game['id']] = tc.lastrowid
                 merged_count += 1
@@ -252,10 +257,11 @@ def _merge_guest_into_profile(guest_db_path: Path, target_db_path: Path) -> int:
             if not existing_gv:
                 tc.execute(
                     """INSERT INTO game_videos (game_id, blake3_hash, sequence, duration,
-                       original_filename, video_size, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                       video_width, video_height, video_size, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                     (new_game_id, gv['blake3_hash'], gv['sequence'], gv['duration'],
-                     gv['original_filename'], gv['video_size'], gv['created_at'])
+                     gv['video_width'], gv['video_height'], gv['video_size'],
+                     gv['created_at'])
                 )
 
         # 3. Merge achievements — INSERT OR IGNORE keeps target's if both have same key
