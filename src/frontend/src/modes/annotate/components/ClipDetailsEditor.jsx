@@ -198,6 +198,7 @@ export function ClipDetailsEditor({
 
   return (
     <div
+      data-clip-details
       className="border-t-2"
       style={{
         backgroundColor: ratingColor,
