@@ -108,7 +108,7 @@ Gate GPU operations behind email verification. Google OAuth primary, Email OTP s
 | T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 7 | 3 | Single-session enforcement, expiry |
 | T430 | [Account Settings](tasks/user-auth/T430-account-settings.md) | DONE | 4 | 2 | Email display, linking, logout |
 | T435 | [Google One Tap Auto-Prompt](tasks/user-auth/T435-google-one-tap-auto-prompt.md) | DONE | 7 | 2 | Auto-show Google sign-in prompt for guests on page load |
-| T450 | [Remove DEFAULT_USER_ID Fallback](tasks/user-auth/T450-remove-default-user-id.md) | TESTING | 8 | 4 | Eliminate legacy `user=a`; 401 for unauthenticated non-auth requests |
+| T450 | [Remove DEFAULT_USER_ID Fallback](tasks/user-auth/T450-remove-default-user-id.md) | DONE | 8 | 4 | Eliminate legacy `user=a`; 401 for unauthenticated non-auth requests |
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | TODO | 6 | 3 | PWA install, manifest, service worker, landing page CTA |
 | T445 | [Business Cards](tasks/T445-business-cards.md) | TODO | 5 | 2 | Design + print cards with QR code for game-day distribution |
 
@@ -159,9 +159,9 @@ Deploy to production domains with proper scaling.
 | ID | Task | Status | Impact | Cmplx | Notes |
 |----|------|--------|--------|-------|-------|
 | **T590** | [**Prod Environment Launch**](tasks/T590-prod-environment-launch.md) | **DONE** | **10** | **5** | CF Pages + Fly.io prod deploy, custom domain, feature gates, analytics verify, v1.0.0 tag |
-| T105 | [Production Backend Scaling](tasks/deployment/T105-production-backend-scaling.md) | TODO | 6 | 7 | Capacity planning |
-| T115 | [Cloudflare Pages Production](tasks/deployment/T115-cloudflare-pages-production.md) | TODO | `app.reelballers.com` |
-| T120 | [DNS & SSL](tasks/deployment/T120-dns-ssl.md) | TODO | Custom domains |
+| T105 | [Production Backend Scaling](tasks/deployment/T105-production-backend-scaling.md) | SUPERSEDED | 6 | 7 | Covered by T590 |
+| T115 | [Cloudflare Pages Production](tasks/deployment/T115-cloudflare-pages-production.md) | SUPERSEDED | — | — | Covered by T590 |
+| T120 | [DNS & SSL](tasks/deployment/T120-dns-ssl.md) | SUPERSEDED | — | — | Covered by T590 |
 
 **Production URLs:**
 - Landing: `reelballers.com` (already live)
@@ -245,68 +245,68 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 | T330 | [Mobile Video Players](tasks/mobile-responsive/T330-mobile-video-players.md) | DONE | 7 | 4 | Touch controls, scrubbing, iOS/Android quirks |
 | T335 | [Mobile Annotate Clips](tasks/mobile-responsive/T335-mobile-annotate-clips.md) | DONE | 7 | 5 | Clips panel crushed to 0px, video wastes 60% screen, markers untappable |
 
-### Phase 4: Post-Launch Features
+### Epic: For Alpha (IN_PROGRESS)
+[tasks/for-alpha/EPIC.md](tasks/for-alpha/EPIC.md)
 
-| ID | Task | Status | Impact | Cmplx | Notes |
-|----|------|--------|--------|-------|-------|
-| T600 | [Auto-Generate Annotation Titles (TF-IDF)](tasks/T600-auto-generate-annotation-titles.md) | DONE | 5 | 4 | Extract keyword titles from notes using scikit-learn TfidfVectorizer; zero API cost |
-| T610 | [Track last_seen_at on Every Visit](tasks/T610-track-last-seen.md) | DONE | 6 | 1 | Update last_seen_at on /auth/me and /init-guest, not just Google login |
-| T620 | [Account Cleanup (Trigger: high R2 fees)](tasks/T620-account-cleanup.md) | TODO | 5 | 5 | Auto-delete abandoned guests (7d), dormant free (90d), warn paid (180d). Blocked by T610 |
-| T710 | [Play Annotations Mode](tasks/T710-play-annotations-mode.md) | DONE | 9 | 7 | Replace "Create Annotated Video" with frontend-only playback; virtual timeline, Phase 2 adds bridge segments |
-| T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 8 | 7 | Pen drawing on frozen clip frames; displayed during Play Annotations with configurable pause (1–10s). Depends on T710 |
+Goal: Get user feedback. Core functionality works, performance is acceptable, onboarding doesn't block users.
 
-### UX Feedback (NUF Tester — 2026-03-23)
+| ID | Task | Status | Pri | Description |
+|----|------|--------|-----|-------------|
+| T1040 | [Force Login on Add Game](tasks/for-alpha/T1040-force-login-add-game.md) | DONE | 3.5 | Guest clicks "Add Game" → auth gate appears first; ensures persistent identity before investing effort |
+| T1030 | [Quest UI Relocation](tasks/for-alpha/T1030-quest-ui-relocation.md) | TODO | 2.0 | Move quest panel out of floating overlay into dedicated area; currently covers controls user needs (e.g., playback button for Q1S3) |
+| T1020 | [Fast R2 Sync](tasks/T1020-fast-r2-sync.md) | TODO | 1.8 | Every save/export waits 1.7-3s for R2 upload to finish before responding; profile and speed up |
+| T1010 | [Slow fetchProgress Response](tasks/T1010-slow-fetchprogress.md) | TODO | 1.7 | Quest progress endpoint takes 1.2s (20+ individual SQLite queries); batch or cache |
+| T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | TODO | 1.3 | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
 
-User feedback from first NUF session. Two groups: game addition flow and clip creation flow.
+### Epic: For Launch (TODO)
+[tasks/for-launch/EPIC.md](tasks/for-launch/EPIC.md)
 
-#### Game Addition Flow
+Goal: Make money, virality, super polished. Most tasks here are yet to be generated based on alpha feedback.
 
-| ID | Task | Status | Impact | Cmplx | Notes |
-|----|------|--------|--------|-------|-------|
-| T640 | [Game Upload Drop Zone](tasks/T640-game-upload-drop-zone.md) | DONE | 4 | 2 | Drag-and-drop onto file upload area in GameDetailsModal |
-| T670 | [Consistent Game Terminology](tasks/T670-consistent-game-terminology.md) | DONE | 5 | 1 | Standardize "Add a Game" vs "Upload" across UI |
-| T680 | [Upload Progress Bar Visibility](tasks/T680-upload-progress-bar-visibility.md) | DONE | 4 | 2 | Investigate — progress bar exists but NUF user didn't notice it |
+| ID | Task | Status | Pri | Description |
+|----|------|--------|-----|-------------|
+| T445 | [Business Cards](tasks/T445-business-cards.md) | TODO | 2.5 | Design + print physical cards with QR code for handing out at games |
+| T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 2.3 | Expire sessions after inactivity, enforce single active session per user |
+| T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | TODO | 2.0 | "Install app" prompt, offline shell, home screen icon — feels native on phones |
+| T1070 | [Team & Profiles Quest](tasks/for-launch/T1070-team-profiles-quest.md) | TODO | 1.8 | New quest teaching profiles + team uploads; encourages inviting teammates for credits |
+| T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | TODO | 1.3 | "Upload Team" — invite teammates by email; inviter earns credits per signup (viral loop) |
+| T1060 | [Coaches View](tasks/for-launch/T1060-coaches-view.md) | TODO | 1.0 | Coach account type: roster uploads, assign annotations to players, track clip review status, own NUF flow. No "Projects" for coaches. |
 
-#### Clip Creation Flow
-
-| ID | Task | Status | Impact | Cmplx | Notes |
-|----|------|--------|--------|-------|-------|
-| T650 | [Clip Scrub Region UI](tasks/T650-clip-scrub-region-ui.md) | DONE | 8 | 5 | Visual scrub handles for clip start/end with real-time video preview; replaces time inputs |
-| T660 | [Clip Edit Button Clarity](tasks/T660-clip-edit-button-clarity.md) | DONE | 5 | 1 | "Add Clip" → "Edit Clip" (amber) when clip selected; depends on T650 |
-| T690 | [Clip Selection State Machine](tasks/T690-clip-selection-state-machine.md) | DONE | 7 | 5 | Redesign clip selection/edit mode as state machine; fix deselect races, fullscreen sync, overlay loading |
-
-#### UI Polish
-
-| ID | Task | Status | Impact | Cmplx | Notes |
-|----|------|--------|--------|-------|-------|
-| T700 | [Quest Panel Smart Positioning](tasks/T700-quest-panel-smart-positioning.md) | DONE | 4 | 3 | CSS-first positioning to avoid sidebar overlap; replace JS elementsFromPoint approach |
-
-#### Playback
-
-| ID | Task | Status | Impact | Cmplx | Notes |
-|----|------|--------|--------|-------|-------|
-| T980 | [Clip-Scoped Scrub Bar in Play Annotations](tasks/T980-clip-scoped-scrub-playback.md) | TODO | 5 | 4 | Per-clip scrub bar below main timeline; reuses existing onSeekWithinSegment prop |
-
-### Phase 4: Post-Launch Polish
+### Epic: Post Launch (TODO)
+[tasks/post-launch/EPIC.md](tasks/post-launch/EPIC.md)
 
 Improvements after real user traffic.
 
-| ID | Task | Status | Notes |
-|----|------|--------|-------|
-| T340 | [Keyframe Integrity Guards](tasks/T340-keyframe-integrity-guards.md) | DONE | Missing permanent keyframes, min spacing, selection disambiguation |
-| T630 | [Startup Request Optimization](tasks/T630-startup-optimization.md) | DONE | Parallelize post-auth fetches, dedup /games calls, gate achievements, combine auth endpoints |
-| T635 | [Startup Dedup — Remaining](tasks/T635-startup-dedup-remaining.md) | DONE | Dedup profiles/settings/downloads, gate pre-auth renders, fix duplicate achievement POST |
-| T1020 | [Profile R2 Sync and Make It Faster](tasks/T1020-fast-r2-sync.md) | TODO | R2 sync adds 1.7-3s per write request; profile HEAD vs upload, optimize |
-| T1010 | [Slow fetchProgress Response](tasks/T1010-slow-fetchprogress.md) | TODO | 1229ms for SQLite queries; profile + optimize quest step checks |
-| T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | TODO | Multi-tab conflict handling |
-| T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | Faster video loads (needs T415) |
-| T74 | [Incremental Framing Export](tasks/T74-incremental-framing-export.md) | TODO | Cache rendered clips |
-| T220 | [Future GPU Features](tasks/T220-future-gpu-features.md) | TODO | Advanced AI features |
-| T240 | [Consistent Logo Placement](tasks/T240-consistent-logo-placement.md) | DONE | Logo removed from editor modes; only on Projects screen |
-| T241 | [Annotate Arrow Key Seek](tasks/T241-annotate-arrow-key-seek.md) | DONE | Forward/backward arrows should seek 4s |
-| T242 | [Rename Project from Card](tasks/T242-rename-project-from-card.md) | DONE | Easy inline rename on project card |
-| T244 | [Game Card Clip Statistics](tasks/T244-game-card-clip-stats.md) | DONE | Display brilliant/good counts + composite score (frontend only, data already in API) |
-| T251 | [Game View Progress Tracking](tasks/T251-game-view-progress.md) | DONE | Track watched duration in annotate mode, show progress on game card |
+| ID | Task | Status | Pri | Description |
+|----|------|--------|-----|-------------|
+| T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | TODO | 1.3 | If two tabs edit the same data, second tab's save overwrites the first; detect and warn |
+| T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | 1.3 | Start downloading game videos from R2 as soon as user logs in, so they load instantly later |
+| T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 1.1 | Draw on frozen clip frames (like a telestrator); shown during Play Annotations with a pause |
+| T620 | [Account Cleanup](tasks/T620-account-cleanup.md) | TODO | 1.0 | Auto-delete abandoned guest accounts and dormant free accounts to reduce R2 storage costs |
+| T220 | [Future GPU Features](tasks/T220-future-gpu-features.md) | TODO | 0.6 | Advanced AI features (auto-crop, auto-highlight detection, etc.) |
+
+### Completed Features & Polish
+
+| ID | Task | Notes |
+|----|------|-------|
+| T600 | Auto-Generate Annotation Titles (TF-IDF) | Extract keyword titles from notes |
+| T610 | Track last_seen_at on Every Visit | Update on /auth/me and /init-guest |
+| T710 | Play Annotations Mode | Frontend-only playback; virtual timeline |
+| T640 | Game Upload Drop Zone | Drag-and-drop onto file upload |
+| T670 | Consistent Game Terminology | Standardize "Add a Game" vs "Upload" |
+| T680 | Upload Progress Bar Visibility | Progress bar exists but wasn't noticed |
+| T650 | Clip Scrub Region UI | Visual scrub handles for clip start/end |
+| T660 | Clip Edit Button Clarity | "Add Clip" → "Edit Clip" when selected |
+| T690 | Clip Selection State Machine | Fix deselect races, fullscreen sync |
+| T700 | Quest Panel Smart Positioning | CSS-first positioning |
+| T340 | Keyframe Integrity Guards | Min spacing, selection disambiguation |
+| T630 | Startup Request Optimization | Parallelize post-auth fetches |
+| T635 | Startup Dedup — Remaining | Dedup profiles/settings/downloads |
+| T240 | Consistent Logo Placement | Logo only on Projects screen |
+| T241 | Annotate Arrow Key Seek | Forward/backward arrows seek 4s |
+| T242 | Rename Project from Card | Inline rename on project card |
+| T244 | Game Card Clip Statistics | Brilliant/good counts + composite score |
+| T251 | Game View Progress Tracking | Watched duration, progress on game card |
 
 ---
 
