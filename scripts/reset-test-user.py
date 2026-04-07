@@ -8,11 +8,12 @@ all profile data locally and in R2.
 Usage (from project root):
     cd src/backend && .venv\\Scripts\\python.exe ..\\..\\scripts\\reset-test-user.py imankh@gmail.com --env dev
     cd src/backend && .venv\\Scripts\\python.exe ..\\..\\scripts\\reset-test-user.py imankh@gmail.com --env staging
+    cd src/backend && .venv\\Scripts\\python.exe ..\\..\\scripts\\reset-test-user.py imankh@gmail.com --env prod
 
 What it does:
 1. Loads R2 credentials from the appropriate .env file
 2. Looks up user_id by email in auth.sqlite
-3. Clears all tables in every profile database
+3. Clears all profile tables EXCEPT games in every profile database
 4. Deletes the user record, sessions, and credit_transactions from auth.sqlite
 5. Uploads cleared databases back to R2
 6. Next Google login with this email will link to the current guest session
@@ -29,7 +30,7 @@ USER_DATA = PROJECT_ROOT / "user_data"
 AUTH_DB = USER_DATA / "auth.sqlite"
 
 TABLES_TO_CLEAR = [
-    "games",
+    # "games" intentionally excluded — games are expensive to re-upload
     "raw_clips",
     "projects",
     "working_clips",
@@ -100,7 +101,7 @@ def checkpoint_and_upload(db_path, r2_client, bucket, r2_key):
 def main():
     parser = argparse.ArgumentParser(description="Reset a user for NUF testing")
     parser.add_argument("email", help="User email (e.g., imankh@gmail.com)")
-    parser.add_argument("--env", required=True, choices=["dev", "staging"],
+    parser.add_argument("--env", required=True, choices=["dev", "staging", "prod"],
                         help="Environment (determines R2 prefix and .env file)")
     args = parser.parse_args()
 
