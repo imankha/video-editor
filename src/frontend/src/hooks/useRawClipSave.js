@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { API_BASE } from '../config';
+import { useQuestStore } from '../stores/questStore';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -15,9 +16,7 @@ const API_BASE_URL = `${API_BASE}/api`;
  * future rating-based quest step auto-detects completion.
  */
 function refreshQuestProgress() {
-  import('../stores/questStore').then(({ useQuestStore }) =>
-    useQuestStore.getState().fetchProgress()
-  );
+  useQuestStore.getState().fetchProgress({ force: true });
 }
 
 /**

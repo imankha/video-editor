@@ -13,6 +13,7 @@
 
 import { API_BASE } from '../config';
 import { GameCreateStatus } from '../constants/gameConstants';
+import { useQuestStore } from '../stores/questStore';
 
 // Upload phases for progress tracking
 export const UPLOAD_PHASE = {
@@ -447,9 +448,7 @@ export async function uploadGame(file, onProgress, options = {}) {
     const gameResult = await createGame(options, []);
 
     // Refresh quest progress now that the game row exists
-    import('../stores/questStore').then(({ useQuestStore }) =>
-      useQuestStore.getState().fetchProgress({ force: true })
-    );
+    useQuestStore.getState().fetchProgress({ force: true });
     // Refresh games list so the game appears in the UI
     import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
       useGamesDataStore.getState().invalidateGames()
@@ -512,9 +511,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
     const gameResult = await createGame(options, []);
 
     // Refresh quest progress and games list
-    import('../stores/questStore').then(({ useQuestStore }) =>
-      useQuestStore.getState().fetchProgress({ force: true })
-    );
+    useQuestStore.getState().fetchProgress({ force: true });
     import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
       useGamesDataStore.getState().invalidateGames()
     );

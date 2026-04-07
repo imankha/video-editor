@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { uploadGame, uploadMultiVideoGame, UPLOAD_PHASE } from '../services/uploadManager';
 import { toast } from '../components/shared';
+import { useQuestStore } from './questStore';
 
 /**
  * Upload Store - Manages game video uploads that persist across page navigation
@@ -124,9 +125,7 @@ export const useUploadStore = create((set, get) => ({
           : `${gameName || 'Video'} uploaded successfully`,
       });
       // T540: Refresh quest progress after game upload
-      import('./questStore').then(({ useQuestStore }) =>
-        useQuestStore.getState().fetchProgress()
-      );
+      useQuestStore.getState().fetchProgress({ force: true });
     };
 
     const onUploadError = (error) => {

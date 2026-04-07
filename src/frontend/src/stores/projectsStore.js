@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import { useQuestStore } from './questStore';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -111,9 +112,7 @@ export const useProjectsStore = create((set, get) => ({
 
       await get().fetchProjects();
       // T540: Refresh quest progress after project creation
-      import('./questStore').then(({ useQuestStore }) =>
-        useQuestStore.getState().fetchProgress()
-      );
+      useQuestStore.getState().fetchProgress({ force: true });
       return project;
     } catch (err) {
       set({ error: err.message, loading: false });
