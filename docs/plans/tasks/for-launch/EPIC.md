@@ -18,6 +18,8 @@ Make money and drive virality. The app must be super polished, feel native (PWA)
 | T1060 | [Coaches View](T1060-coaches-view.md) | TODO |
 | T1070 | [Team & Profiles Quest](T1070-team-profiles-quest.md) | TODO |
 | T1080 | [Gallery Player Scrub Controls](T1080-gallery-player-scrub-controls.md) | TODO |
+| T1020 | [Fast R2 Sync](../T1020-fast-r2-sync.md) | TODO |
+| T1010 | [Slow fetchProgress Response](../T1010-slow-fetchprogress.md) | TODO |
 
 ## Completion Criteria
 
