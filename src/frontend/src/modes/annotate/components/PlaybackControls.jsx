@@ -190,7 +190,7 @@ export function PlaybackControls({
   };
 
   return (
-    <div className={`flex flex-col gap-1 ${
+    <div className={`flex flex-col ${
       isFullscreen ? 'bg-gray-900/90' : ''
     }`}>
       {/* Progress bar — supports click and drag */}
@@ -227,20 +227,25 @@ export function PlaybackControls({
 
       {/* Clip-scoped scrub bar — only when a segment is active */}
       {currentSegment && (
-        <div data-testid="clip-scrub-bar" className="flex items-center gap-2 px-1">
+        <div data-testid="clip-scrub-bar" className="flex items-center gap-2 px-2 pt-3 pb-1">
           <span className="text-gray-400 text-xs truncate max-w-[6rem]">{activeClipName}</span>
           <div
             ref={clipScrubRef}
             data-testid="clip-scrub-track"
-            className="flex-1 h-2 bg-gray-700 rounded-full cursor-pointer group"
+            className="relative flex-1 h-6 flex items-center cursor-pointer group"
             onMouseDown={handleClipScrubMouseDown}
           >
-            <div
-              className="h-full bg-green-500 rounded-full relative transition-[width] duration-75"
-              style={{ width: `${Math.min(100, clipProgress)}%` }}
-            >
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="w-full h-2 bg-gray-700 rounded-full relative overflow-hidden">
+              <div
+                className="h-full bg-green-500 rounded-full"
+                style={{ width: `${Math.min(100, clipProgress)}%` }}
+              />
             </div>
+            {/* Playhead knob — always visible on top of the track */}
+            <div
+              className="absolute h-3 w-3 bg-white rounded-full shadow pointer-events-none"
+              style={{ left: `calc(${Math.min(100, clipProgress)}% - 6px)` }}
+            />
           </div>
           <span className="text-gray-400 text-xs font-mono whitespace-nowrap">
             {formatVirtualTime(clipElapsed)} / {formatVirtualTime(currentSegment.duration)}
