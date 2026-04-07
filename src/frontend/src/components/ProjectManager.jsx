@@ -14,6 +14,7 @@ import { RATING_NOTATION, RATING_BADGE_COLORS } from './shared/clipConstants';
 import { getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
 import { ProfileDropdown } from './ProfileDropdown';
 import { CreditBalance } from './CreditBalance';
+import { useAuthStore } from '../stores/authStore';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -365,10 +366,13 @@ export function ProjectManager({
     resumeFileInputRef.current?.click();
   }, []);
 
-  // Open game details modal
+  // Auth gate — force login before creating persistent data
+  const requireAuth = useAuthStore((s) => s.requireAuth);
+
+  // Open game details modal (requires auth)
   const handleAddGameClick = useCallback(() => {
-    setShowGameDetailsModal(true);
-  }, []);
+    requireAuth(() => setShowGameDetailsModal(true));
+  }, [requireAuth]);
 
   // Handle game creation with details
   const handleCreateGame = useCallback(async (gameDetails) => {
