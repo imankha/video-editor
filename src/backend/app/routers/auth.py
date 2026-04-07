@@ -376,16 +376,23 @@ def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
         return
 
     # 5. Resolve target: recovered account's default profile
-    target_profile_id = get_selected_profile_id(recovered_user_id)
-    if not target_profile_id:
-        # Brand new or reset account — initialize it to create a default profile
-        user_session_init(recovered_user_id)
+    #    user_session_init reads get_current_user_id() internally, so we must
+    #    temporarily set the user context to the recovered account.
+    original_user_id = get_current_user_id()
+    set_current_user_id(recovered_user_id)
+    try:
         target_profile_id = get_selected_profile_id(recovered_user_id)
+        if not target_profile_id:
+            # Brand new or reset account — initialize it to create a default profile
+            user_session_init(recovered_user_id)
+            target_profile_id = get_selected_profile_id(recovered_user_id)
 
-    target_db_path = USER_DATA_BASE / recovered_user_id / "profiles" / target_profile_id / "profile.sqlite"
+        target_db_path = USER_DATA_BASE / recovered_user_id / "profiles" / target_profile_id / "profile.sqlite"
 
-    if not target_db_path.exists():
-        user_session_init(recovered_user_id)
+        if not target_db_path.exists():
+            user_session_init(recovered_user_id)
+    finally:
+        set_current_user_id(original_user_id)
 
     # 6. Merge guest data into target profile
     try:
