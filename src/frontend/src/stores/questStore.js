@@ -53,23 +53,20 @@ export const useQuestStore = create((set, get) => ({
     // Dedup: if a fetch is already in flight, return the existing promise
     if (_fetchProgressPromise && !force) return _fetchProgressPromise;
 
-    console.log(`[QuestDebug] fetchProgress called: force=${force}`);
+    const _tFetch = performance.now();
+    console.log(`[ExportTiming] fetchProgress START (force=${force})`);
     _fetchProgressPromise = (async () => {
       try {
         const res = await fetch(`${API_BASE}/api/quests/progress`, { credentials: 'include' });
+        console.log(`[ExportTiming] fetchProgress response in ${(performance.now()-_tFetch).toFixed(0)}ms (status=${res.status})`);
         if (!res.ok) {
-          console.warn(`[QuestDebug] fetchProgress HTTP error: ${res.status}`);
           return;
         }
         const data = await res.json();
 
-        // Log the full response for debugging
         const q2 = data.quests.find(q => q.id === 'quest_2');
         if (q2) {
-          console.log(`[QuestDebug] fetchProgress response - quest_2 steps:`, JSON.stringify(q2.steps));
-          console.log(`[QuestDebug] export_framing step = ${q2.steps.export_framing}`);
-        } else {
-          console.log(`[QuestDebug] fetchProgress response - quest_2 NOT found in response. Quests:`, data.quests.map(q => q.id));
+          console.log(`[ExportTiming] fetchProgress: export_framing=${q2.steps.export_framing}`);
         }
 
         let totalCompleted = 0;
@@ -86,7 +83,7 @@ export const useQuestStore = create((set, get) => ({
         if (q1?.reward_claimed && q2b?.reward_claimed) activeQuestId = 'quest_3';
         if (q1?.reward_claimed && q2b?.reward_claimed && q3?.reward_claimed) activeQuestId = 'quest_4';
 
-        console.log(`[QuestDebug] fetchProgress setting state: totalCompleted=${totalCompleted}, activeQuestId=${activeQuestId}`);
+        console.log(`[ExportTiming] fetchProgress DONE in ${(performance.now()-_tFetch).toFixed(0)}ms — completed=${totalCompleted}, activeQuest=${activeQuestId}`);
         set({
           quests: data.quests,
           loaded: true,
@@ -94,7 +91,7 @@ export const useQuestStore = create((set, get) => ({
           activeQuestId,
         });
       } catch (err) {
-        console.error('[QuestDebug] fetchProgress exception:', err);
+        console.error(`[ExportTiming] fetchProgress EXCEPTION after ${(performance.now()-_tFetch).toFixed(0)}ms:`, err);
       } finally {
         _fetchProgressPromise = null;
       }

@@ -654,6 +654,11 @@ async def render_project(request: RenderRequest, http_request: Request):
     4. Render using stored parameters
     5. Save working_video and update project
     """
+    import time as _time
+    _t0 = _time.monotonic()
+    def _elapsed():
+        return f"{(_time.monotonic() - _t0) * 1000:.0f}ms"
+
     project_id = request.project_id
     export_id = request.export_id
 
@@ -661,10 +666,7 @@ async def render_project(request: RenderRequest, http_request: Request):
     captured_user_id = get_current_user_id()
     captured_profile_id = get_current_profile_id()
 
-    from ...database import get_database_path
-    db_path = get_database_path()
-    logger.info(f"[QuestDebug] render_project: project_id={project_id}, user={captured_user_id}, profile={captured_profile_id}, db_path={db_path}")
-    logger.info(f"[Render] Starting backend-authoritative render for project {project_id}, user: {captured_user_id}")
+    logger.info(f"[RenderTiming] +{_elapsed()} START render project={project_id}, user={captured_user_id}")
 
     # Initialize progress tracking
     export_progress[export_id] = {
@@ -683,26 +685,14 @@ async def render_project(request: RenderRequest, http_request: Request):
                 VALUES (?, ?, 'framing', 'processing', '{}')
             """, (export_id, project_id))
             conn.commit()
-
-            # QuestDebug: Verify the record was committed
-            verify_row = cursor.execute(
-                "SELECT id, type, status FROM export_jobs WHERE id = ?", (export_id,)
-            ).fetchone()
-            logger.info(
-                f"[QuestDebug] export_jobs INSERT committed: export_id={export_id}, "
-                f"project_id={project_id}, verified={verify_row is not None}, "
-                f"row={dict(verify_row) if verify_row else 'MISSING'}"
-            )
-
-        logger.info(f"[Render] Regressed project {project_id} and created export_jobs record: {export_id}")
+        logger.info(f"[RenderTiming] +{_elapsed()} export_jobs INSERT committed")
     except Exception as e:
-        logger.warning(f"[Render] Failed to regress status / create export_jobs: {e}")
+        logger.warning(f"[RenderTiming] +{_elapsed()} export_jobs INSERT FAILED: {e}")
 
     # Step 1: Validate project and get working_clips
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get project info
         cursor.execute("""
             SELECT id, name, aspect_ratio
             FROM projects WHERE id = ?
@@ -712,13 +702,9 @@ async def render_project(request: RenderRequest, http_request: Request):
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Use shared helper to derive a better name if needed
         from app.services.export_helpers import derive_project_name
         project_name = derive_project_name(project_id, cursor) or project['name']
 
-        # NOTE: export_jobs record already created in the atomic transaction above
-
-        # Get working_clips with their rendering data + game video info
         cursor.execute(f"""
             SELECT
                 wc.id,
@@ -743,6 +729,7 @@ async def render_project(request: RenderRequest, http_request: Request):
             ORDER BY wc.sort_order
         """, (project_id, project_id))
         working_clips = cursor.fetchall()
+    logger.info(f"[RenderTiming] +{_elapsed()} project validated, {len(working_clips)} clip(s)")
 
     if not working_clips:
         from app.websocket import make_progress_data
@@ -810,6 +797,7 @@ async def render_project(request: RenderRequest, http_request: Request):
             release_reservation(captured_user_id, export_id)
             raise
         credits_deducted = credits_required
+    logger.info(f"[RenderTiming] +{_elapsed()} credits reserved ({credits_deducted})")
 
     # Step 2: Validate clip has required data
     if not clip['crop_data']:
@@ -844,11 +832,11 @@ async def render_project(request: RenderRequest, http_request: Request):
             detail={"error": "no_source_video", "message": error_msg}
         )
 
+    logger.info(f"[RenderTiming] +{_elapsed()} clip validation done")
+
     # Step 3: Parse rendering data from database
     try:
         crop_keyframes = json.loads(clip['crop_data'])
-        logger.info(f"[Render] Raw crop_data from DB: {clip['crop_data'][:500]}...")  # Log first 500 chars
-        logger.info(f"[Render] Parsed crop_keyframes: {crop_keyframes}")
     except (json.JSONDecodeError, TypeError) as e:
         raise HTTPException(status_code=500, detail=f"Invalid crop_data in database: {e}")
 
@@ -857,18 +845,13 @@ async def render_project(request: RenderRequest, http_request: Request):
     if clip['segments_data']:
         try:
             segment_data_raw = json.loads(clip['segments_data'])
-            logger.info(f"[Render] Parsed segment_data (raw): {segment_data_raw}")
-            # Convert from frontend format to encoder format
             segment_data = convert_segment_data_to_encoder_format(segment_data_raw)
-            logger.info(f"[Render] Converted segment_data (encoder): {segment_data}")
         except (json.JSONDecodeError, TypeError):
             logger.warning(f"[Render] Invalid segments_data, ignoring")
 
-    # Validate and convert keyframes to CropKeyframe objects (time-based for FFmpeg)
-    logger.info(f"[Render] Converting {len(crop_keyframes)} keyframes to CropKeyframe objects")
+    logger.info(f"[RenderTiming] +{_elapsed()} crop/segment data parsed ({len(crop_keyframes)} keyframes)")
 
     # Convert frame-based keyframes to time-based for FFmpeg
-    # Internal storage uses frame numbers for precision, FFmpeg needs time in seconds
     # Probe source video for actual framerate (ffprobe reads only the header, not the whole file)
     framerate = 30.0
     try:
@@ -880,9 +863,9 @@ async def render_project(request: RenderRequest, http_request: Request):
         if source_url:
             source_info = get_video_info(source_url)
             framerate = source_info.get('fps', 30.0)
-            logger.info(f"[Render] Source video framerate: {framerate}")
     except Exception as e:
         logger.warning(f"[Render] Failed to probe source video framerate, using default 30: {e}")
+    logger.info(f"[RenderTiming] +{_elapsed()} ffprobe done (fps={framerate})")
 
     if crop_keyframes and 'frame' in crop_keyframes[0] and 'time' not in crop_keyframes[0]:
         logger.info(f"[Render] Converting frame-based keyframes to time-based (framerate={framerate})")
@@ -945,6 +928,8 @@ async def render_project(request: RenderRequest, http_request: Request):
     # Check for E2E test mode - routes to fast FFmpeg crop+resize in call_modal_framing_ai
     is_test_mode = http_request.headers.get('X-Test-Mode', '').lower() == 'true'
 
+    logger.info(f"[RenderTiming] +{_elapsed()} ready to dispatch (modal={modal_enabled()}, test={is_test_mode})")
+
     # T760: When Modal is disabled, run processing in background to avoid blocking the server
     if not modal_enabled() and not is_test_mode:
         asyncio.create_task(
@@ -971,6 +956,7 @@ async def render_project(request: RenderRequest, http_request: Request):
                 video_seconds=video_seconds,
             )
         )
+        logger.info(f"[RenderTiming] +{_elapsed()} returning 202 (total request time)")
         return JSONResponse(
             status_code=202,
             content={"status": "accepted", "export_id": export_id}
