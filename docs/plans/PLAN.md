@@ -270,6 +270,7 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | TODO | 2.0 | "Install app" prompt, offline shell, home screen icon — feels native on phones |
 | T1070 | [Team & Profiles Quest](tasks/for-launch/T1070-team-profiles-quest.md) | TODO | 1.8 | New quest teaching profiles + team uploads; encourages inviting teammates for credits |
 | T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | TODO | 1.3 | "Upload Team" — invite teammates by email; inviter earns credits per signup (viral loop) |
+| T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | TODO | 2.0 | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
 | T1060 | [Coaches View](tasks/for-launch/T1060-coaches-view.md) | TODO | 1.0 | Coach account type: roster uploads, assign annotations to players, track clip review status, own NUF flow. No "Projects" for coaches. |
 
 ### Epic: Post Launch (TODO)
