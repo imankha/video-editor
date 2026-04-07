@@ -53,21 +53,14 @@ export const useQuestStore = create((set, get) => ({
     // Dedup: if a fetch is already in flight, return the existing promise
     if (_fetchProgressPromise && !force) return _fetchProgressPromise;
 
-    const _tFetch = performance.now();
-    console.log(`[ExportTiming] fetchProgress START (force=${force})`);
     _fetchProgressPromise = (async () => {
       try {
         const res = await fetch(`${API_BASE}/api/quests/progress`, { credentials: 'include' });
-        console.log(`[ExportTiming] fetchProgress response in ${(performance.now()-_tFetch).toFixed(0)}ms (status=${res.status})`);
         if (!res.ok) {
+          console.warn(`[Quests] fetchProgress failed: ${res.status}`);
           return;
         }
         const data = await res.json();
-
-        const q2 = data.quests.find(q => q.id === 'quest_2');
-        if (q2) {
-          console.log(`[ExportTiming] fetchProgress: export_framing=${q2.steps.export_framing}`);
-        }
 
         let totalCompleted = 0;
         for (const quest of data.quests) {
@@ -76,22 +69,21 @@ export const useQuestStore = create((set, get) => ({
 
         // Progressive disclosure: show first unclaimed quest
         const q1 = data.quests.find(q => q.id === 'quest_1');
-        const q2b = data.quests.find(q => q.id === 'quest_2');
+        const q2 = data.quests.find(q => q.id === 'quest_2');
         const q3 = data.quests.find(q => q.id === 'quest_3');
         let activeQuestId = 'quest_1';
         if (q1?.reward_claimed) activeQuestId = 'quest_2';
-        if (q1?.reward_claimed && q2b?.reward_claimed) activeQuestId = 'quest_3';
-        if (q1?.reward_claimed && q2b?.reward_claimed && q3?.reward_claimed) activeQuestId = 'quest_4';
+        if (q1?.reward_claimed && q2?.reward_claimed) activeQuestId = 'quest_3';
+        if (q1?.reward_claimed && q2?.reward_claimed && q3?.reward_claimed) activeQuestId = 'quest_4';
 
-        console.log(`[ExportTiming] fetchProgress DONE in ${(performance.now()-_tFetch).toFixed(0)}ms — completed=${totalCompleted}, activeQuest=${activeQuestId}`);
         set({
           quests: data.quests,
           loaded: true,
           totalCompleted,
           activeQuestId,
         });
-      } catch (err) {
-        console.error(`[ExportTiming] fetchProgress EXCEPTION after ${(performance.now()-_tFetch).toFixed(0)}ms:`, err);
+      } catch {
+        // Best-effort
       } finally {
         _fetchProgressPromise = null;
       }

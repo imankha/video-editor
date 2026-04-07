@@ -84,11 +84,7 @@ export function QuestPanel() {
 
   // Subscribe to export events to refresh quest progress
   useEffect(() => {
-    console.log('[QuestDebug] QuestPanel: subscribing to export WebSocket complete events');
-    const unsub = exportWebSocketManager.addEventListener('*', 'complete', () => {
-      console.log('[QuestDebug] QuestPanel: export WebSocket complete event received, calling fetchProgress');
-      fetchProgress({ force: true });
-    });
+    const unsub = exportWebSocketManager.addEventListener('*', 'complete', fetchProgress);
     return () => { unsub(); };
   }, [fetchProgress]);
 
@@ -98,13 +94,6 @@ export function QuestPanel() {
   const currentCompleted = questProgress
     ? Object.values(questProgress.steps).filter(Boolean).length
     : 0;
-
-  // Debug: log when quest data changes
-  useEffect(() => {
-    if (questProgress) {
-      console.log(`[QuestDebug] QuestPanel render: activeQuestId=${activeQuestId}, completedSteps=${currentCompleted}, steps=`, JSON.stringify(questProgress.steps));
-    }
-  }, [questProgress, activeQuestId, currentCompleted]);
 
   useEffect(() => {
     if (!questDef) return;

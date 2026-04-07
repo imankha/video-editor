@@ -438,11 +438,6 @@ async def _run_local_framing_export(
     Crop parsing, ffprobe (framerate), and keyframe conversion are done here
     (moved out of the synchronous request path for faster 202 response).
     """
-    import time as _time
-    _t0 = _time.monotonic()
-    def _elapsed():
-        return f"{(_time.monotonic() - _t0) * 1000:.0f}ms"
-
     temp_dir = tempfile.mkdtemp()
     output_key = f"working_videos/{working_filename}"
     output_path = os.path.join(temp_dir, working_filename)
@@ -451,7 +446,7 @@ async def _run_local_framing_export(
         from app.services.export_helpers import send_progress, create_progress_callback
         from app.services.modal_client import call_modal_framing_ai
 
-        logger.info(f"[Render Background] +{_elapsed()} Starting local export for project {project_id}")
+        logger.info(f"[Render Background] Starting local export for project {project_id}")
 
         # Restore user context for the background task
         set_current_user_id(captured_user_id)
@@ -480,7 +475,7 @@ async def _run_local_framing_export(
                 framerate = source_info.get('fps', 30.0)
         except Exception as e:
             logger.warning(f"[Render Background] Failed to probe framerate, using 30: {e}")
-        logger.info(f"[Render Background] +{_elapsed()} ffprobe done, fps={framerate}")
+        logger.info(f"[Render Background] ffprobe done, fps={framerate}")
 
         # --- Keyframe frame→time conversion ---
         if crop_keyframes and 'frame' in crop_keyframes[0] and 'time' not in crop_keyframes[0]:
@@ -500,7 +495,7 @@ async def _run_local_framing_export(
         else:
             input_key = f"raw_clips/{clip['raw_filename']}"
 
-        logger.info(f"[Render Background] +{_elapsed()} crop/keyframe parsing done, dispatching render")
+        logger.info(f"[Render Background] crop/keyframe parsing done, dispatching render")
 
         # Calculate effective output duration for progress estimation
         source_duration = clip.get('raw_duration') or 0
@@ -705,11 +700,6 @@ async def render_project(request: RenderRequest, http_request: Request):
     4. Render using stored parameters
     5. Save working_video and update project
     """
-    import time as _time
-    _t0 = _time.monotonic()
-    def _elapsed():
-        return f"{(_time.monotonic() - _t0) * 1000:.0f}ms"
-
     project_id = request.project_id
     export_id = request.export_id
 
@@ -717,7 +707,7 @@ async def render_project(request: RenderRequest, http_request: Request):
     captured_user_id = get_current_user_id()
     captured_profile_id = get_current_profile_id()
 
-    logger.info(f"[RenderTiming] +{_elapsed()} START render project={project_id}, user={captured_user_id}")
+    logger.info(f"[Render] START render project={project_id}, user={captured_user_id}")
 
     # Initialize progress tracking
     export_progress[export_id] = {
@@ -736,9 +726,9 @@ async def render_project(request: RenderRequest, http_request: Request):
                 VALUES (?, ?, 'framing', 'processing', '{}')
             """, (export_id, project_id))
             conn.commit()
-        logger.info(f"[RenderTiming] +{_elapsed()} export_jobs INSERT committed")
+        logger.info(f"[Render] export_jobs INSERT committed")
     except Exception as e:
-        logger.warning(f"[RenderTiming] +{_elapsed()} export_jobs INSERT FAILED: {e}")
+        logger.warning(f"[Render] export_jobs INSERT FAILED: {e}")
 
     # Step 1: Validate project and get working_clips
     with get_db_connection() as conn:
@@ -780,7 +770,7 @@ async def render_project(request: RenderRequest, http_request: Request):
             ORDER BY wc.sort_order
         """, (project_id, project_id))
         working_clips = cursor.fetchall()
-    logger.info(f"[RenderTiming] +{_elapsed()} project validated, {len(working_clips)} clip(s)")
+    logger.info(f"[Render] project validated, {len(working_clips)} clip(s)")
 
     if not working_clips:
         from app.websocket import make_progress_data
@@ -848,7 +838,7 @@ async def render_project(request: RenderRequest, http_request: Request):
             release_reservation(captured_user_id, export_id)
             raise
         credits_deducted = credits_required
-    logger.info(f"[RenderTiming] +{_elapsed()} credits reserved ({credits_deducted})")
+    logger.info(f"[Render] credits reserved ({credits_deducted})")
 
     # Step 2: Validate clip has required data (fast checks — keep synchronous)
     if not clip['crop_data']:
@@ -870,7 +860,7 @@ async def render_project(request: RenderRequest, http_request: Request):
     except (json.JSONDecodeError, TypeError) as e:
         raise HTTPException(status_code=500, detail=f"Invalid crop_data in database: {e}")
 
-    logger.info(f"[RenderTiming] +{_elapsed()} validation done, dispatching background task")
+    logger.info(f"[Render] validation done, dispatching background task")
 
     # Check for E2E test mode
     is_test_mode = http_request.headers.get('X-Test-Mode', '').lower() == 'true'
@@ -898,7 +888,7 @@ async def render_project(request: RenderRequest, http_request: Request):
                 video_seconds=video_seconds,
             )
         )
-        logger.info(f"[RenderTiming] +{_elapsed()} returning 202 (total request time)")
+        logger.info(f"[Render] returning 202")
         return JSONResponse(
             status_code=202,
             content={"status": "accepted", "export_id": export_id}

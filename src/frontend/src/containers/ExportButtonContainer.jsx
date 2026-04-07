@@ -387,8 +387,6 @@ export function ExportButtonContainer({
     const hasProjectClips = clips && clips.length > 0 && clips.some(c => c.id);
     const isBackendAuthoritative = (editorMode === EDITOR_MODES.OVERLAY && projectId) ||
                                    (editorMode === EDITOR_MODES.FRAMING && hasProjectClips);
-    const _t0 = performance.now();
-    console.log(`[ExportTiming] handleExport START: editorMode=${editorMode}, projectId=${projectId}, isBackendAuthoritative=${isBackendAuthoritative}, clipCount=${clips?.length || 0}`);
     if (!videoFile && !isBackendAuthoritative) {
       setError('No video file loaded');
       return;
@@ -544,13 +542,12 @@ export function ExportButtonContainer({
             throw new Error('Cannot export: Clip state manager not available. Please reload the page and try again.');
           }
 
-          console.log(`[ExportTiming] +${(performance.now()-_t0).toFixed(0)}ms backend-authoritative path`);
+          console.log('[ExportButtonContainer] Using backend-authoritative render');
           setProgressMessage('Saving edits...');
 
           try {
-            const _tSave = performance.now();
             await saveCurrentClipState();
-            console.log(`[ExportTiming] +${(performance.now()-_t0).toFixed(0)}ms saveClipState done (${(performance.now()-_tSave).toFixed(0)}ms)`);
+            console.log('[ExportButtonContainer] Clip state saved, requesting render');
           } catch (saveErr) {
             console.error('[ExportButtonContainer] Failed to save clip state:', saveErr);
             throw new Error('Failed to save clip edits before export. Please try again.');
@@ -559,12 +556,9 @@ export function ExportButtonContainer({
           endpoint = `${API_BASE}/api/export/render`;
 
           setProgressMessage('Connecting...');
-          const _tWs = performance.now();
           await connectWebSocket(exportId);
-          console.log(`[ExportTiming] +${(performance.now()-_t0).toFixed(0)}ms WebSocket connected (${(performance.now()-_tWs).toFixed(0)}ms)`);
 
           setProgressMessage('Starting render...');
-          const _tRender = performance.now();
           const renderResponse = await axios.post(endpoint, {
             project_id: projectId,
             export_id: exportId,
@@ -573,19 +567,13 @@ export function ExportButtonContainer({
             include_audio: includeAudio
           });
           renderRequestAccepted = true;
-          console.log(`[ExportTiming] +${(performance.now()-_t0).toFixed(0)}ms render POST returned ${renderResponse.status} (${(performance.now()-_tRender).toFixed(0)}ms)`);
 
           // Refresh quest progress now that export job exists in DB
-          const _tQuest = performance.now();
-          useQuestStore.getState().fetchProgress({ force: true }).then(() => {
-            console.log(`[ExportTiming] +${(performance.now()-_t0).toFixed(0)}ms fetchProgress resolved (${(performance.now()-_tQuest).toFixed(0)}ms)`);
-          }).catch((err) => {
-            console.error(`[ExportTiming] +${(performance.now()-_t0).toFixed(0)}ms fetchProgress FAILED:`, err);
-          });
+          useQuestStore.getState().fetchProgress({ force: true });
 
           // T760: 202 = background processing, completion comes via WebSocket
           if (renderResponse.status === 202) {
-            console.log(`[ExportTiming] +${(performance.now()-_t0).toFixed(0)}ms 202 accepted, waiting for WS completion`);
+            console.log('[ExportButtonContainer] Render accepted (202), waiting for WebSocket completion');
             backgroundExportRef.current = true;
             setProgressMessage('Processing...');
             return;
@@ -703,12 +691,7 @@ export function ExportButtonContainer({
       );
 
       // Refresh quest progress now that export job exists in DB
-      console.log('[QuestDebug] Multi-clip/legacy path: calling fetchProgress({ force: true }) after export response');
-      useQuestStore.getState().fetchProgress({ force: true }).then(() => {
-        console.log('[QuestDebug] fetchProgress resolved (multi-clip/legacy path)');
-      }).catch((err) => {
-        console.error('[QuestDebug] fetchProgress FAILED (multi-clip/legacy path):', err);
-      });
+      useQuestStore.getState().fetchProgress({ force: true });
 
       if (editorMode === EDITOR_MODES.FRAMING) {
         try {
