@@ -12,11 +12,12 @@ happen in the same context — before and after a single call_next() boundary.
 Flow:
 1. Resolve user_id: rb_session cookie → auth DB → user_id (T405)
    Fallback: X-User-ID header (backward compat for tests/dev)
-2. Set profile_id from header (or session init)
-3. Initialize write tracking context (mutable dict)
-4. call_next() — route handler runs, may write to DB
-5. Check mutable dict for writes, sync to R2 if needed
-6. Clean up context
+2. If no user_id and path is not allowlisted → 401
+3. Set profile_id from header (or session init)
+4. Initialize write tracking context (mutable dict)
+5. call_next() — route handler runs, may write to DB
+6. Check mutable dict for writes, sync to R2 if needed
+7. Clean up context
 
 Also tracks sync failure state per user and surfaces it via X-Sync-Status
 header so the frontend can show a warning indicator.
@@ -27,9 +28,8 @@ import re
 import time
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
-from ..constants import DEFAULT_USER_ID
 from ..database import (
     init_request_context,
     clear_request_context,
@@ -94,6 +94,24 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/static',
     )
 
+    # T450: Routes that work WITHOUT prior user context (they establish it).
+    # These get passed through even when no session cookie or X-User-ID is present.
+    AUTH_ALLOWLIST_PREFIXES = (
+        '/api/auth/',      # All auth sub-routes (init-guest, google, email/*, me, logout, retry-migration)
+        '/api/health',     # Health check
+        '/docs',           # API docs
+        '/redoc',          # API docs
+        '/openapi.json',   # OpenAPI spec
+    )
+
+    def _is_allowlisted(self, request: Request) -> bool:
+        """Check if this request can proceed without user context."""
+        # OPTIONS preflight never needs user context
+        if request.method == "OPTIONS":
+            return True
+        path = request.url.path
+        return any(path.startswith(prefix) for prefix in self.AUTH_ALLOWLIST_PREFIXES)
+
     async def dispatch(self, request: Request, call_next) -> Response:
         """Set user context, process request, sync DB if writes occurred."""
 
@@ -118,10 +136,26 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     user_id = sanitized
                     auth_source = "header"
 
-        # 3. Final fallback: default user
+        # 3. T450: No default fallback — if no user and not allowlisted, reject
         if not user_id:
-            user_id = DEFAULT_USER_ID
-            auth_source = "default"
+            if self._is_allowlisted(request):
+                # Auth/health endpoints proceed without user context
+                logger.info(
+                    f"[REQ] {request.method} {request.url.path} | "
+                    f"user=none (allowlisted) | "
+                    f"origin={request.headers.get('origin', '-')}"
+                )
+                return await call_next(request)
+            else:
+                logger.warning(
+                    f"[REQ] {request.method} {request.url.path} | "
+                    f"REJECTED — no session cookie or X-User-ID | "
+                    f"origin={request.headers.get('origin', '-')}"
+                )
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Authentication required. Please refresh the page to initialize a session."},
+                )
 
         logger.info(
             f"[REQ] {request.method} {request.url.path} | "

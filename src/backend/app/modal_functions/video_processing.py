@@ -194,7 +194,7 @@ def render_overlay(
 
     Args:
         job_id: Unique export job identifier
-        user_id: User folder in R2 (e.g., "a")
+        user_id: User folder in R2 (UUID from auth, e.g., "f47ac10b-...")
         input_key: R2 key for input video (relative to user folder)
         output_key: R2 key for output video (relative to user folder)
         highlight_regions: List of regions with keyframes
@@ -2454,7 +2454,7 @@ def create_annotated_compilation(
 
     Args:
         job_id: Unique job identifier for logging
-        user_id: User folder in R2 (e.g., "a")
+        user_id: User folder in R2 (UUID from auth, e.g., "f47ac10b-...")
         input_key: R2 key for source game video (e.g., "games/abc123.mp4")
             Used for single-video games. Ignored when input_keys is provided.
         output_key: R2 key for output compilation (e.g., "downloads/compilation.mp4")
@@ -2713,7 +2713,7 @@ def extract_clip_modal(
     Extract a clip from a video file on Modal (CPU-only, uses FFmpeg).
 
     Args:
-        user_id: User folder in R2 (e.g., "a")
+        user_id: User folder in R2 (UUID from auth, e.g., "f47ac10b-...")
         input_key: R2 key for source video (e.g., "games/abc123.mp4")
         output_key: R2 key for output clip (e.g., "clips/def456.mp4")
         start_time: Start time in seconds

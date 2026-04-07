@@ -7,17 +7,29 @@ for framing modifications (crop keyframes, segments, trim).
 
 import pytest
 import json
+import uuid
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import get_db_connection
+from app.user_context import set_current_user_id
+from app.profile_context import set_current_profile_id
+from app.session_init import _init_cache
 
+TEST_USER_ID = f"test_framing_{uuid.uuid4().hex[:8]}"
+TEST_PROFILE_ID = "testdefault"
 
-client = TestClient(app)
+# Pre-populate init cache so middleware uses the same profile as fixtures
+_init_cache[TEST_USER_ID] = {"profile_id": TEST_PROFILE_ID, "is_new_user": False}
+
+client = TestClient(app, headers={"X-User-ID": TEST_USER_ID})
 
 
 @pytest.fixture
 def test_project_with_clip():
     """Create a test project with a working clip for framing testing."""
+    # Ensure user+profile context is set (may have been changed by other tests' teardowns)
+    set_current_user_id(TEST_USER_ID)
+    set_current_profile_id(TEST_PROFILE_ID)
     with get_db_connection() as conn:
         cursor = conn.cursor()
 

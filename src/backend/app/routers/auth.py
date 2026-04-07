@@ -458,6 +458,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     5. Create session in central auth DB + set cookie
     """
     current_user_id = get_current_user_id()
+    logger.info(f"[Auth] Google login attempt — current user={current_user_id}")
 
     # Verify token with Google (10s timeout — fail fast if Google API is unreachable)
     try:
@@ -580,16 +581,20 @@ async def auth_me(request: Request):
     """
     session_id = request.cookies.get("rb_session")
     if not session_id:
+        logger.debug("[Auth] /me: no rb_session cookie")
         raise HTTPException(status_code=401, detail="No session")
 
     session = validate_session(session_id)
     if not session:
+        logger.info(f"[Auth] /me: invalid/expired session (cookie present but not in DB)")
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
     # T610: Track activity for account cleanup
     update_last_seen(session["user_id"])
 
     user_id = session["user_id"]
+    email = session.get("email")
+    logger.info(f"[Auth] /me: valid session — user={user_id}, email={email or 'guest'}")
 
     # T820: Check for pending/failed migrations
     migration_pending = False
@@ -607,7 +612,7 @@ async def auth_me(request: Request):
     picture_url = user_record["picture_url"] if user_record else None
 
     return {
-        "email": session.get("email"),
+        "email": email,
         "user_id": user_id,
         "is_authenticated": True,
         "migration_pending": migration_pending,
@@ -648,6 +653,7 @@ async def init_guest(request: Request):
         user_id = create_guest_user()
 
     session_id = create_session(user_id)
+    logger.info(f"[Auth] init-guest: created guest user={user_id}")
 
     # T610: Track activity for account cleanup
     update_last_seen(user_id)

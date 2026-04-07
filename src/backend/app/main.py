@@ -68,7 +68,6 @@ from app.websocket import websocket_export_progress
 from app.services.export_worker import recover_orphaned_jobs
 from app.user_context import set_current_user_id, get_current_user_id
 from app.session_init import user_session_init
-from app.constants import DEFAULT_USER_ID
 from app.middleware import RequestContextMiddleware
 
 # Environment detection

@@ -22,7 +22,8 @@ def _set_default_profile_context():
     from app.session_init import _init_cache
     set_current_profile_id("testdefault")
     # Pre-populate the init cache for common test user IDs so middleware
-    # auto-resolve doesn't create random profiles via R2
+    # auto-resolve doesn't create random profiles via R2.
+    # "a" kept for backward compat with tests that use X-User-ID: a
     for user_id in ("a", "testdefault"):
         _init_cache[user_id] = {"profile_id": "testdefault", "is_new_user": False}
     yield

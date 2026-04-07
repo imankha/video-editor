@@ -92,9 +92,11 @@ export function AuthGateModal() {
   // Google auth handler
   const handleGoogleResponse = useCallback(async (response) => {
     if (!response?.credential) {
+      console.error('[Auth:Modal] Google callback fired with no credential', response);
       setError('Google sign-in failed — no credential received. Please try again.');
       return;
     }
+    console.log('[Auth:Modal] Google credential received, verifying with backend...');
     setError(null);
     try {
       const res = await fetch(`${API_BASE}/api/auth/google`, {
@@ -106,12 +108,16 @@ export function AuthGateModal() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || data.message || 'Authentication failed');
+        const detail = data.detail || data.message || 'Authentication failed';
+        console.error(`[Auth:Modal] Backend rejected: ${res.status} — ${detail}`);
+        throw new Error(detail);
       }
 
       const data = await res.json();
+      console.log(`[Auth:Modal] Success: ${data.email} (user=${data.user_id})`);
       onAuthSuccess(data.email, data.user_id, data.picture_url);
     } catch (err) {
+      console.error('[Auth:Modal] Auth error:', err.message);
       setError(err.message);
     }
   }, [onAuthSuccess]);
@@ -119,14 +125,24 @@ export function AuthGateModal() {
   // Initialize Google Sign-In button when modal opens
   useEffect(() => {
     if (!showAuthModal || !googleButtonRef.current) return;
-    if (!window.google?.accounts?.id) return;
+    const gis = window.google?.accounts?.id;
+    if (!gis) {
+      console.error('[Auth:Modal] Google Identity Services not loaded — cannot render sign-in button');
+      return;
+    }
 
-    window.google.accounts.id.initialize({
+    // Re-initialize with this modal's callback. GIS only supports one callback
+    // at a time — this overwrites any GoogleOneTap callback, which is fine since
+    // OneTap is hidden while the modal is open.
+    console.log('[Auth:Modal] Initializing GIS for modal sign-in button');
+    gis.initialize({
       client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
       callback: handleGoogleResponse,
+      // Cancel any pending FedCM prompt before re-init to avoid stale state
+      cancel_on_tap_outside: false,
     });
 
-    window.google.accounts.id.renderButton(googleButtonRef.current, {
+    gis.renderButton(googleButtonRef.current, {
       type: 'standard',
       theme: 'filled_black',
       size: 'large',

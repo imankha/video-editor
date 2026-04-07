@@ -547,7 +547,7 @@ async def process_overlay_with_modal(
     Args:
         job_id: Export job ID for tracking
         project_id: Project ID
-        user_id: User folder in R2 (e.g., "a")
+        user_id: User folder in R2 (UUID from auth, e.g., "f47ac10b-58cc-4372-a567-0e02b2c3d479")
         input_r2_key: R2 key for input video (relative to user folder)
         output_r2_key: R2 key for output video (relative to user folder)
         highlight_regions: Highlight regions with keyframes

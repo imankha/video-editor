@@ -45,6 +45,7 @@ export const useAuthStore = create((set, get) => ({
       action();
       return;
     }
+    console.log('[Auth] requireAuth: user not authenticated, opening modal');
     // Cancel Google One Tap before opening modal (prevents overlap)
     window.google?.accounts?.id?.cancel();
     set({ showAuthModal: true, pendingAction: action });
@@ -54,11 +55,13 @@ export const useAuthStore = create((set, get) => ({
   // T405: Also receives user_id for cross-device recovery (may differ from current guest)
   onAuthSuccess: (email, userId, pictureUrl = null) => {
     const { pendingAction } = get();
+    console.log(`[Auth] onAuthSuccess: email=${email}, userId=${userId}, hasPendingAction=${!!pendingAction}`);
 
     // T405: If the server returned a different user_id (cross-device recovery),
     // update the session headers and reload to pick up the recovered user's data
     const currentUserId = getUserId();
     if (userId && userId !== currentUserId) {
+      console.log(`[Auth] Cross-device recovery: switching ${currentUserId} → ${userId}, reloading`);
       setUserId(userId);
       set({
         isAuthenticated: true,
@@ -89,6 +92,7 @@ export const useAuthStore = create((set, get) => ({
       return;
     }
 
+    console.log(`[Auth] Same-device login: ${email} (user=${userId || currentUserId})`);
     set({
       isAuthenticated: true,
       email,
@@ -103,6 +107,7 @@ export const useAuthStore = create((set, get) => ({
     get().checkAdmin();
     // Run the action that was blocked by the auth gate
     if (pendingAction) {
+      console.log('[Auth] Running pending action');
       pendingAction();
     }
   },
@@ -132,6 +137,7 @@ export const useAuthStore = create((set, get) => ({
 
   // Called on app load after session check
   setSessionState: (isAuthenticated, email = null, pictureUrl = null) => {
+    console.log(`[Auth] Session state: authenticated=${isAuthenticated}${email ? `, email=${email}` : ''}`);
     set({
       isAuthenticated,
       email,
