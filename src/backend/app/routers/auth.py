@@ -291,9 +291,14 @@ def _migrate_guest_profile(guest_user_id: str, recovered_user_id: str) -> None:
     if guest_user_id == recovered_user_id:
         return
 
-    # 1. Record migration intent in target's user.sqlite BEFORE attempting anything
+    # 1. Record migration intent in target's user.sqlite BEFORE attempting anything.
+    #    Clear any stale 'failed' records from previous attempts so a successful
+    #    re-login doesn't leave the banner showing forever.
     ensure_user_database(recovered_user_id)
     with get_user_db_connection(recovered_user_id) as conn:
+        conn.execute(
+            "UPDATE pending_migrations SET status='superseded' WHERE status='failed'"
+        )
         conn.execute(
             "INSERT INTO pending_migrations (guest_user_id, status) VALUES (?, 'pending')",
             (guest_user_id,)

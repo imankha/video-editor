@@ -101,27 +101,53 @@ function App() {
     // Wire guest-write callback: any successful mutating API call while guest marks activity
     setGuestWriteCallback(() => useAuthStore.getState().markGuestActivity());
 
+    // Update preloader progress bar
+    const updatePreloader = (percent, message) => {
+      if (window.__preloaderUpdate) window.__preloaderUpdate(percent, message);
+    };
+
     // Dismiss preloader overlay (added outside #root in index.html)
     const dismissPreloader = () => {
+      updatePreloader(100, 'Ready');
       const preloader = document.getElementById('preloader');
       if (preloader) {
-        preloader.classList.add('fade-out');
-        setTimeout(() => preloader.remove(), 300);
+        // Brief pause at 100% so user sees completion
+        setTimeout(() => {
+          preloader.classList.add('fade-out');
+          setTimeout(() => preloader.remove(), 300);
+        }, 150);
       }
     };
 
     initSession().then(() => {
-      dismissPreloader();
-
       // T630/T635: Fire all initial data fetches in parallel after auth resolves
       warmAllUserVideos();
-      useProfileStore.getState().fetchProfiles();
-      useProjectsStore.getState().fetchProjects();
-      useGamesDataStore.getState().fetchGames();
-      useQuestStore.getState().fetchDefinitions();
-      useQuestStore.getState().fetchProgress();
-      useSettingsStore.getState().loadSettings();
-      useGalleryStore.getState().fetchCount();
+      const dataFetches = [
+        useProfileStore.getState().fetchProfiles(),
+        useProjectsStore.getState().fetchProjects(),
+        useGamesDataStore.getState().fetchGames(),
+        useQuestStore.getState().fetchDefinitions(),
+        useQuestStore.getState().fetchProgress(),
+        useSettingsStore.getState().loadSettings(),
+        useGalleryStore.getState().fetchCount(),
+      ];
+
+      // Track data fetch progress: 40% → 90%, dismiss at 100%
+      let completed = 0;
+      let dismissed = false;
+      const total = dataFetches.length;
+      const tryDismiss = () => { if (!dismissed) { dismissed = true; dismissPreloader(); } };
+      dataFetches.forEach(p => {
+        const tick = () => {
+          completed++;
+          const pct = 40 + Math.round((completed / total) * 50);
+          updatePreloader(pct, 'Loading your data...');
+          if (completed >= total) tryDismiss();
+        };
+        Promise.resolve(p).then(tick, tick);
+      });
+      // Safety: dismiss after 8s even if a fetch hangs
+      setTimeout(tryDismiss, 8000);
 
       // Restore navigation state after auth-triggered reload (cross-device recovery)
       const authReturnMode = sessionStorage.getItem('authReturnMode');

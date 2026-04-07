@@ -23,6 +23,11 @@ let _axiosPatched = false;
 let _initPromise = null;
 let _onGuestWrite = null;
 
+/** Update the preloader progress bar (no-op if preloader already dismissed). */
+function updatePreloader(percent, message) {
+  if (window.__preloaderUpdate) window.__preloaderUpdate(percent, message);
+}
+
 /**
  * Retry a fetch call with exponential backoff.
  * Handles both server errors (5xx) and network failures (server unreachable).
@@ -38,6 +43,7 @@ async function fetchWithRetry(url, options, { retries = 3, baseDelay = 1000 } = 
       if (attempt < retries) {
         const delay = baseDelay * Math.pow(2, attempt); // 1s, 2s, 4s
         console.warn(`[sessionInit] ${url} returned ${response.status}, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+        updatePreloader(5 + attempt * 5, 'Waking up server...');
         await new Promise(r => setTimeout(r, delay));
       } else {
         console.error(`[sessionInit] ${url} returned ${response.status} after ${retries + 1} attempts`);
@@ -48,6 +54,7 @@ async function fetchWithRetry(url, options, { retries = 3, baseDelay = 1000 } = 
       if (attempt < retries) {
         const delay = baseDelay * Math.pow(2, attempt);
         console.warn(`[sessionInit] ${url} network error: ${err.message}, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+        updatePreloader(5 + attempt * 5, 'Waking up server...');
         await new Promise(r => setTimeout(r, delay));
       } else {
         console.error(`[sessionInit] ${url} network error after ${retries + 1} attempts: ${err.message}`);
@@ -166,6 +173,7 @@ export async function initSession() {
     let userId = null;
 
     // Step 1: Check for existing session via cookie
+    updatePreloader(10, 'Connecting to server...');
     const authExpected = sessionStorage.getItem('authExpected');
     if (authExpected) sessionStorage.removeItem('authExpected');
     try {
@@ -194,6 +202,7 @@ export async function initSession() {
 
     // Step 2: No valid session — create anonymous guest
     if (!userId) {
+      updatePreloader(25, 'Setting up session...');
       const guestResponse = await fetchWithRetry(`${API_BASE}/api/auth/init-guest`, {
         method: 'POST',
         credentials: 'include',
@@ -207,6 +216,7 @@ export async function initSession() {
       _profileId = guestData.profile_id;
       _currentProfileId = guestData.profile_id;
       useAuthStore.getState().setSessionState(false);
+      updatePreloader(40, 'Loading your data...');
 
       return {
         profileId: guestData.profile_id,
@@ -216,6 +226,7 @@ export async function initSession() {
     }
 
     // Step 3: Have a user_id (from session) — initialize profile
+    updatePreloader(25, 'Initializing profile...');
     const initResponse = await fetchWithRetry(`${API_BASE}/api/auth/init`, {
       method: 'POST',
     });
@@ -225,6 +236,7 @@ export async function initSession() {
     const initData = await initResponse.json();
     _profileId = initData.profile_id;
     _currentProfileId = initData.profile_id;
+    updatePreloader(40, 'Loading your data...');
 
     return {
       profileId: initData.profile_id,
