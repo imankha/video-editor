@@ -296,6 +296,7 @@ Improvements after real user traffic.
 | T340 | [Keyframe Integrity Guards](tasks/T340-keyframe-integrity-guards.md) | DONE | Missing permanent keyframes, min spacing, selection disambiguation |
 | T630 | [Startup Request Optimization](tasks/T630-startup-optimization.md) | DONE | Parallelize post-auth fetches, dedup /games calls, gate achievements, combine auth endpoints |
 | T635 | [Startup Dedup — Remaining](tasks/T635-startup-dedup-remaining.md) | DONE | Dedup profiles/settings/downloads, gate pre-auth renders, fix duplicate achievement POST |
+| T1020 | [Profile R2 Sync and Make It Faster](tasks/T1020-fast-r2-sync.md) | TODO | R2 sync adds 1.7-3s per write request; profile HEAD vs upload, optimize |
 | T1010 | [Slow fetchProgress Response](tasks/T1010-slow-fetchprogress.md) | TODO | 1229ms for SQLite queries; profile + optimize quest step checks |
 | T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | TODO | Multi-tab conflict handling |
 | T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | Faster video loads (needs T415) |
