@@ -79,9 +79,9 @@ def test_batch_detection_modal():
     print("TEST 2: detect_players_batch_modal (Modal GPU)")
     print("="*60)
 
-    # Use existing working video from dev user 'a'
+    # Use existing working video from a test user
     # This video should exist in R2 from previous exports
-    user_id = "a"
+    user_id = "test-experiment-user"
     input_key = "working_videos/working_42_4541b54e.mp4"  # 15s video from project 42
     timestamps = [0.0, 0.66, 1.33, 2.0]  # 4 frames in first 2 seconds
 

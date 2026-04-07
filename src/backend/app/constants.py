@@ -262,9 +262,5 @@ AI_UPSCALE_FACTOR: int = 4
 # =============================================================================
 # User/Database Constants
 # =============================================================================
-
-# Default user ID for single-user mode
-# This application is designed for single-user desktop use.
-# The user ID creates a namespace for user_data storage.
-# Future multi-user support would require authentication and dynamic user IDs.
-DEFAULT_USER_ID: str = "a"
+# All users get a UUID via /api/auth/init-guest. No default user ID —
+# missing user context is a hard error (see user_context.py).

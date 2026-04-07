@@ -8,9 +8,9 @@ The database and directories are auto-created on demand, so deleting
 the user_data/<user_id> folder will simply reset the app to a clean state.
 
 User Isolation:
-The current user ID is determined by the X-User-ID header on each request.
-This enables E2E tests to use isolated user namespaces without polluting
-the development database. If no header is provided, the default user 'a' is used.
+The current user ID is determined by the session cookie (or X-User-ID header
+in tests). Every visitor gets a UUID via /api/auth/init-guest. If no user
+context is set, get_current_user_id() raises RuntimeError.
 """
 
 import sqlite3

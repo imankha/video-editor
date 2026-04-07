@@ -17,7 +17,7 @@ Usage:
 
     result = await call_modal_overlay(
         job_id="...",
-        user_id="a",  # Raw user_id — R2 prefix conversion is handled internally
+        user_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",  # UUID from auth
         input_key="working_videos/input.mp4",
         output_key="working_videos/output.mp4",
         highlight_regions=[...],

@@ -18,6 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.middleware.db_sync import _sync_failed, is_sync_failed, set_sync_failed
 
+# Test user ID used for all client-based tests (sent via X-User-ID header)
+TEST_USER_ID = "test-sync-user"
+
 
 class TestSyncFailedTracking:
     """Unit tests for the in-memory sync failure tracking."""
@@ -65,7 +68,7 @@ class TestRetrySyncEndpoint:
     def client(self):
         from fastapi.testclient import TestClient
         from app.main import app
-        return TestClient(app)
+        return TestClient(app, headers={"X-User-ID": TEST_USER_ID})
 
     def setup_method(self):
         _sync_failed.clear()
@@ -82,14 +85,14 @@ class TestRetrySyncEndpoint:
     @patch("app.routers.health.R2_ENABLED", True)
     def test_retry_sync_success(self, mock_sync, client):
         """Successful sync should clear the failure flag."""
-        # Pre-set failure
-        set_sync_failed("a", True)
+        # Pre-set failure for the test user
+        set_sync_failed(TEST_USER_ID, True)
 
         response = client.post("/api/retry-sync")
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert is_sync_failed("a") is False
+        assert is_sync_failed(TEST_USER_ID) is False
         mock_sync.assert_called_once()
 
     @patch("app.routers.health.sync_db_to_cloud", return_value=False)
@@ -110,7 +113,7 @@ class TestSyncStatusHeader:
     def client(self):
         from fastapi.testclient import TestClient
         from app.main import app
-        return TestClient(app)
+        return TestClient(app, headers={"X-User-ID": TEST_USER_ID})
 
     def setup_method(self):
         _sync_failed.clear()
@@ -124,8 +127,8 @@ class TestSyncStatusHeader:
     @patch("app.middleware.db_sync.R2_ENABLED", True)
     def test_header_present_when_sync_failed(self, client):
         """X-Sync-Status: failed header should be present when sync has failed."""
-        # Pre-set failure for default user
-        set_sync_failed("a", True)
+        # Pre-set failure for the test user
+        set_sync_failed(TEST_USER_ID, True)
 
         response = client.get("/api/status")
         assert response.status_code == 200
