@@ -8,19 +8,26 @@
 
 ## Problem
 
-The quest panel is a fixed overlay in the bottom-left corner that sits on top of UI elements. When the user reaches Quest 1 Step 3 ("Watch Your Clips Back" — playback annotations), the panel covers the very controls the user needs to interact with. The panel auto-collapses when a clip is selected to avoid sidebar overlap, but this creates a hide/show dance that's confusing.
+The quest panel is a fixed overlay in the bottom-left corner that sits on top of UI elements. When the user reaches Quest 1 Step 3 ("Watch Your Clips Back" — playback annotations), the panel covers the very controls the user needs to interact with. The current workaround auto-collapses the panel when it detects overlap, but this creates a hide/show dance that's confusing — the user can't see their quest progress while doing the thing the quest asks them to do.
 
-The fundamental issue: the quest UI is an overlay that must constantly negotiate with other UI for space, rather than having its own dedicated area.
+The fundamental issue: collapsing is a fallback, not a solution. The panel should find empty screen space nearby instead of hiding.
 
 ## Solution
 
-Move the quest UI out of a floating overlay into a dedicated area that doesn't compete with other UI elements. Options:
+**Smart repositioning instead of collapsing.** When the quest panel would overlap interactive UI, find the nearest empty space (no UI underneath) close to the preferred position and place it there. Keep the panel open and visible.
 
-1. **Sidebar panel** — dedicated right or left sidebar section that coexists with the main content
-2. **Top banner / progress bar** — horizontal strip showing current quest progress, expandable for details
-3. **Dedicated onboarding screen section** — quest steps shown in context next to the relevant UI (e.g., step 3 shown near the playback button)
+### Concrete examples (see screenshots):
 
-The key requirement: the quest UI must be visible and accessible without obscuring the controls the user needs to complete the quest step.
+1. **Framing screen** (`screenshots/better_pos_1.png`) — The preferred position overlaps the timeline/scrub bar. Instead of collapsing, move the panel to the empty space in the bottom-left below the clip metadata form and above the "Export Highlights" button.
+
+2. **Annotate screen** (`screenshots/better_pos_2.png`) — The preferred position overlaps the clip controls. Instead of collapsing, move the panel to the empty space in the left panel below the clip details section.
+
+### Approach
+
+- Keep the floating overlay approach (don't restructure layout)
+- Instead of collapse-on-overlap, compute available empty regions near the preferred position
+- Place the panel in the best available spot per screen/mode
+- Each screen mode (annotate, framing, overlay, home) may have a different "fallback position" since empty space varies by layout
 
 ## Context
 
@@ -36,21 +43,23 @@ The key requirement: the quest UI must be visible and accessible without obscuri
 
 ### Technical Notes
 - Current position: `fixed z-50`, left 24px, bottom 40px (desktop)
-- Auto-collapses when clip selected in annotate mode
+- Auto-collapses when clip selected in annotate mode (this is the behavior to replace)
 - Panel width: 340px on desktop
 - Quest 1 Step 3 requires clicking "Playback Annotations" button which is in the annotate mode controls area
+- Screenshots showing preferred positions: `screenshots/better_pos_1.png` (framing), `screenshots/better_pos_2.png` (annotate)
 
 ## Implementation
 
 ### Steps
-1. [ ] Design new quest UI location (needs UI decision)
-2. [ ] Implement new layout
-3. [ ] Remove floating overlay positioning
-4. [ ] Test that quest steps are visible alongside the controls they reference
+1. [ ] Identify the preferred and fallback positions for each screen mode (home, annotate, framing, overlay)
+2. [ ] Replace collapse-on-overlap logic with position-switching logic
+3. [ ] Test each screen mode — panel should always be visible and not overlap interactive controls
+4. [ ] Remove the auto-collapse behavior (no longer needed)
 
 ## Acceptance Criteria
 
-- [ ] Quest UI does not overlap any interactive controls
+- [ ] Quest panel never collapses due to overlap — it repositions instead
+- [ ] Quest panel is always visible and open when there's an active quest
+- [ ] Panel does not overlap any interactive controls on any screen
 - [ ] Quest 1 Step 3 is visible while the playback button is also visible
-- [ ] Quest progress still clearly visible across all screens
 - [ ] No regression in quest step completion tracking

@@ -90,7 +90,9 @@ export function PlaybackControls({
 }) {
   const progress = totalVirtualDuration > 0 ? (virtualTime / totalVirtualDuration) * 100 : 0;
   const progressBarRef = useRef(null);
+  const clipScrubRef = useRef(null);
   const isDraggingRef = useRef(false);
+  const isClipDraggingRef = useRef(false);
 
   // Volume state
   const [volume, setVolume] = useState(1);
@@ -143,6 +145,43 @@ export function PlaybackControls({
     window.addEventListener('mouseup', handleMouseUp);
   }, [clientXToVirtualTime, onSeek, onStartScrub, onEndScrub]);
 
+  // --- Clip scrub bar ---
+
+  const clipElapsed = currentSegment
+    ? Math.max(0, Math.min(virtualTime - currentSegment.virtualStart, currentSegment.duration))
+    : 0;
+  const clipProgress = currentSegment && currentSegment.duration > 0
+    ? (clipElapsed / currentSegment.duration) * 100
+    : 0;
+
+  const clientXToClipActualTime = useCallback((clientX) => {
+    const rect = clipScrubRef.current?.getBoundingClientRect();
+    if (!rect || !currentSegment) return 0;
+    const fraction = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return currentSegment.startTime + fraction * currentSegment.duration;
+  }, [currentSegment]);
+
+  const handleClipScrubMouseDown = useCallback((e) => {
+    e.preventDefault();
+    isClipDraggingRef.current = true;
+    onStartScrub?.();
+    onSeekWithinSegment?.(clientXToClipActualTime(e.clientX));
+
+    const handleMouseMove = (e2) => {
+      if (!isClipDraggingRef.current) return;
+      onSeekWithinSegment?.(clientXToClipActualTime(e2.clientX));
+    };
+    const handleMouseUp = () => {
+      isClipDraggingRef.current = false;
+      onEndScrub?.();
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [clientXToClipActualTime, onSeekWithinSegment, onStartScrub, onEndScrub]);
+
   const formatVirtualTime = (seconds) => {
     if (isNaN(seconds) || seconds < 0) return '0:00';
     const m = Math.floor(seconds / 60);
@@ -151,7 +190,7 @@ export function PlaybackControls({
   };
 
   return (
-    <div className={`flex flex-col gap-1 ${
+    <div className={`flex flex-col ${
       isFullscreen ? 'bg-gray-900/90' : ''
     }`}>
       {/* Progress bar — supports click and drag */}
@@ -186,10 +225,9 @@ export function PlaybackControls({
         />
       </div>
 
-
       {/* Controls row — matches AnnotateControls layout */}
       <div className={`controls-container flex flex-wrap items-center justify-between gap-y-1 py-2 px-2 sm:px-4 ${
-        isFullscreen ? 'bg-gray-900/90' : 'bg-gray-800 rounded-b-lg'
+        isFullscreen ? 'bg-gray-900/90' : `bg-gray-800 ${currentSegment ? '' : 'rounded-b-lg'}`
       }`}>
         {/* Left: Back + Playback transport */}
         <div className="flex items-center gap-1">
@@ -282,6 +320,34 @@ export function PlaybackControls({
           )}
         </div>
       </div>
+
+      {/* Clip-scoped scrub bar — below controls, only when a segment is active */}
+      {currentSegment && (
+        <div data-testid="clip-scrub-bar" className="flex items-center gap-2 px-2 py-1.5 bg-gray-800/60 rounded-b-lg">
+          <span className="text-gray-400 text-xs truncate max-w-[6rem]">{activeClipName}</span>
+          <div
+            ref={clipScrubRef}
+            data-testid="clip-scrub-track"
+            className="relative flex-1 h-6 flex items-center cursor-pointer group"
+            onMouseDown={handleClipScrubMouseDown}
+          >
+            <div className="w-full h-2 bg-gray-700 rounded-full relative overflow-hidden">
+              <div
+                className="h-full bg-green-500 rounded-full"
+                style={{ width: `${Math.min(100, clipProgress)}%` }}
+              />
+            </div>
+            {/* Playhead knob */}
+            <div
+              className="absolute h-3 w-3 bg-white rounded-full shadow pointer-events-none"
+              style={{ left: `calc(${Math.min(100, clipProgress)}% - 6px)` }}
+            />
+          </div>
+          <span className="text-gray-400 text-xs font-mono whitespace-nowrap">
+            {formatVirtualTime(clipElapsed)} / {formatVirtualTime(currentSegment.duration)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

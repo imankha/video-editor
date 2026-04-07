@@ -12,9 +12,7 @@ Get the app ready for alpha testers. Core functionality works, performance is ac
 | ID | Task | Status |
 |----|------|--------|
 | T1030 | [Quest UI Relocation](T1030-quest-ui-relocation.md) | TODO |
-| T1040 | [Force Login on Add Game](T1040-force-login-add-game.md) | TODO |
-| T1020 | [Fast R2 Sync](../T1020-fast-r2-sync.md) | TODO |
-| T1010 | [Slow fetchProgress Response](../T1010-slow-fetchprogress.md) | TODO |
+| T1040 | [Force Login on Add Game](T1040-force-login-add-game.md) | DONE |
 | T980 | [Clip-Scoped Scrub Bar](../T980-clip-scoped-scrub-playback.md) | TODO |
 
 ## Completion Criteria
