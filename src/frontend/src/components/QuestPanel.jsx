@@ -8,6 +8,35 @@ import { toast } from './shared/Toast';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
 /**
+ * T1030: Per-mode position config for the quest panel.
+ * Instead of auto-collapsing when overlapping controls, the panel
+ * repositions to empty screen space depending on the current editor mode.
+ *
+ * - Home/Projects: default bottom-left (no overlap issues)
+ * - Annotate: anchored above the clip details section (measured dynamically)
+ * - Framing: moved up above the timeline/scrub bar region
+ * - Overlay: same as framing (similar bottom layout)
+ */
+const QUEST_PANEL_GAP = 8; // px gap between quest panel bottom and clip details top
+
+function getPositionForMode(editorMode, isSm, clipDetailsBottom) {
+  if (!isSm) return { left: 12, bottom: 12 }; // Mobile: always bottom-left, compact
+
+  switch (editorMode) {
+    case 'annotate':
+      // Anchor bottom of quest panel to top of clip details (with gap)
+      return { left: 24, bottom: clipDetailsBottom };
+    case 'framing':
+    case 'overlay':
+      // Bottom-left, raised above the timeline/scrub bar
+      return { left: 24, bottom: 220 };
+    default:
+      // Home / Project Manager — default bottom-left
+      return { left: 24, bottom: 40 };
+  }
+}
+
+/**
  * QuestPanel — self-contained floating overlay with collapsed/expanded states (T540).
  *
  * Collapsed: icon + quest title + progress (e.g., "Get Started  2/5")
@@ -33,16 +62,33 @@ export function QuestPanel() {
   const prevCompletedRef = useRef(null);  // Track step count to detect new completions
   const panelRef = useRef(null);
 
-  // Auto-collapse when a clip is selected in annotate mode (avoids sidebar overlap)
+  // T1030: Read editorMode for smart repositioning (replaces auto-collapse)
   const editorMode = useEditorStore((s) => s.editorMode);
-  const annotateHasSelectedClip = useEditorStore((s) => s.annotateHasSelectedClip);
-  const shouldAutoCollapse = editorMode === 'annotate' && annotateHasSelectedClip;
-  const [userOverride, setUserOverride] = useState(false);
-  // Reset override when auto-collapse condition goes away
+  const isExpanded = expanded;
+
+  // T1030: Measure clip details position for annotate mode anchoring
+  const [clipDetailsBottom, setClipDetailsBottom] = useState(340); // fallback
   useEffect(() => {
-    if (!shouldAutoCollapse) setUserOverride(false);
-  }, [shouldAutoCollapse]);
-  const isExpanded = expanded && (!shouldAutoCollapse || userOverride);
+    if (editorMode !== 'annotate') return;
+    const measure = () => {
+      const el = document.querySelector('[data-clip-details]');
+      if (el) {
+        const bottom = window.innerHeight - el.getBoundingClientRect().top + QUEST_PANEL_GAP;
+        setClipDetailsBottom(bottom);
+      }
+    };
+    // Measure after DOM settles (clip details may not be mounted yet)
+    const timer = setTimeout(measure, 100);
+    // Re-measure on resize
+    window.addEventListener('resize', measure);
+    // Re-measure periodically while in annotate mode (clip selection changes layout)
+    const interval = setInterval(measure, 500);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', measure);
+      clearInterval(interval);
+    };
+  }, [editorMode]);
 
   // Play sound effects
   const playSound = (type) => {
@@ -106,11 +152,9 @@ export function QuestPanel() {
       const questStepCount = questDef.step_ids.length;
       if (currentCompleted === questStepCount && !questProgress?.reward_claimed) {
         // All steps done — fanfare + celebration animation
-        // Auto-expand so user sees "Claim" CTA (override auto-collapse in annotate mode)
         playSound('fanfare');
         setCelebrating(true);
         setExpanded(true);
-        setUserOverride(true);
       } else {
         // Individual step completed
         playSound('check');
@@ -152,8 +196,9 @@ export function QuestPanel() {
     }
   };
 
+  // T1030: Smart repositioning — pick position per screen mode to avoid overlapping controls
   const isSm = window.innerWidth >= 640;
-  const positionStyle = { left: isSm ? 24 : 12, bottom: isSm ? 40 : 12 };
+  const positionStyle = getPositionForMode(editorMode, isSm, clipDetailsBottom);
 
   return (
     <>
@@ -192,13 +237,7 @@ export function QuestPanel() {
 
         {/* Collapsed / Header — always visible, clickable to toggle */}
         <button
-          onClick={(e) => {
-            const next = !expanded;
-            setExpanded(next);
-            // If user explicitly expands while auto-collapse is active, override it
-            if (next && shouldAutoCollapse) setUserOverride(true);
-            if (!next) setUserOverride(false);
-          }}
+          onClick={() => setExpanded(!expanded)}
           className={`w-full flex items-center text-left hover:bg-white/[0.02] transition-colors ${
             isExpanded ? 'gap-3 px-4 pt-4 pb-3' : 'gap-2 px-3 py-2.5'
           }`}
