@@ -161,7 +161,8 @@ function App() {
 
       if (authReturnMode) {
         if (authReturnMode === 'annotate' && (authReturnGameHash || authReturnGameName)) {
-          // T415: Restore annotation mode — wait for games to load, then select + navigate
+          // T415: Restore annotation mode — wait for games to load, then navigate
+          // AnnotateScreen loads games via pendingGameId in sessionStorage, not selectGame()
           const waitForGames = setInterval(() => {
             const games = useGamesDataStore.getState().games;
             if (games.length === 0) return;
@@ -170,7 +171,7 @@ function App() {
               : games.find(g => g.name === authReturnGameName);
             if (game) {
               clearInterval(waitForGames);
-              useGamesDataStore.getState().selectGame(game);
+              sessionStorage.setItem('pendingGameId', game.id.toString());
               useEditorStore.getState().setEditorMode('annotate');
             }
           }, 100);
