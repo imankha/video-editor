@@ -6,6 +6,7 @@ import { MediaPlayer } from './MediaPlayer';
 import { useDownloads } from '../hooks/useDownloads';
 import { useGalleryStore } from '../stores/galleryStore';
 import { SourceType, getSourceTypeLabel } from '../constants/sourceTypes';
+import { useQuestStore } from '../stores/questStore';
 
 // Filter options for gallery source types (icon-only with tooltips)
 const FILTER_OPTIONS = [
@@ -94,19 +95,15 @@ export function DownloadsPanel({
     setPlayingVideo(download);
     close();
     // T540: Record achievements for viewing gallery video
-    import('../stores/questStore').then(({ useQuestStore }) => {
-      useQuestStore.getState().recordAchievement('viewed_gallery_video');
-      // Custom project video gets a separate achievement for Quest 3
-      if (download.source_type === SourceType.CUSTOM_PROJECT) {
-        useQuestStore.getState().recordAchievement('viewed_custom_project_video');
-      }
-    });
+    useQuestStore.getState().recordAchievement('viewed_gallery_video');
+    // Custom project video gets a separate achievement for Quest 3
+    if (download.source_type === SourceType.CUSTOM_PROJECT) {
+      useQuestStore.getState().recordAchievement('viewed_custom_project_video');
+    }
     // T780: Record "watched 1s" achievement after 1 second of playback (autoPlay = true)
     clearTimeout(watchTimerRef.current);
     watchTimerRef.current = setTimeout(() => {
-      import('../stores/questStore').then(({ useQuestStore }) => {
-        useQuestStore.getState().recordAchievement('watched_gallery_video_1s');
-      });
+      useQuestStore.getState().recordAchievement('watched_gallery_video_1s');
     }, 1000);
   };
 

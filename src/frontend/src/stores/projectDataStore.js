@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import { useQuestStore } from './questStore';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -208,9 +209,7 @@ export const useProjectDataStore = create((set, get) => ({
 
       await get().fetchClips(projectId);
       // Refresh quest progress — adding clips to a project may complete create_reel step
-      import('./questStore').then(({ useQuestStore }) =>
-        useQuestStore.getState().fetchProgress()
-      );
+      useQuestStore.getState().fetchProgress({ force: true });
       return clip;
     } catch (err) {
       console.error('[projectDataStore] addClipFromLibrary error:', err);
@@ -261,9 +260,7 @@ export const useProjectDataStore = create((set, get) => ({
 
       await get().fetchClips(projectId);
       // Refresh quest progress — removing clips may un-complete create_reel step
-      import('./questStore').then(({ useQuestStore }) =>
-        useQuestStore.getState().fetchProgress()
-      );
+      useQuestStore.getState().fetchProgress({ force: true });
       return true;
     } catch (err) {
       console.error('[projectDataStore] removeClip error:', err);
