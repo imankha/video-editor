@@ -56,7 +56,10 @@ export const useQuestStore = create((set, get) => ({
     _fetchProgressPromise = (async () => {
       try {
         const res = await fetch(`${API_BASE}/api/quests/progress`, { credentials: 'include' });
-        if (!res.ok) return;
+        if (!res.ok) {
+          console.warn(`[Quests] fetchProgress failed: ${res.status}`);
+          return;
+        }
         const data = await res.json();
 
         let totalCompleted = 0;

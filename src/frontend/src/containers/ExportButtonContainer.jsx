@@ -9,6 +9,7 @@ import { API_BASE } from '../config';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { clipCropKeyframes } from '../utils/clipSelectors';
+import { useQuestStore } from '../stores/questStore';
 
 // Export configuration - centralized for easy A/B testing
 export const EXPORT_CONFIG = {
@@ -568,9 +569,7 @@ export function ExportButtonContainer({
           renderRequestAccepted = true;
 
           // Refresh quest progress now that export job exists in DB
-          import('../stores/questStore').then(({ useQuestStore }) => {
-            useQuestStore.getState().fetchProgress({ force: true });
-          }).catch(() => {});
+          useQuestStore.getState().fetchProgress({ force: true });
 
           // T760: 202 = background processing, completion comes via WebSocket
           if (renderResponse.status === 202) {
@@ -692,9 +691,7 @@ export function ExportButtonContainer({
       );
 
       // Refresh quest progress now that export job exists in DB
-      import('../stores/questStore').then(({ useQuestStore }) => {
-        useQuestStore.getState().fetchProgress({ force: true });
-      }).catch(() => {});
+      useQuestStore.getState().fetchProgress({ force: true });
 
       if (editorMode === EDITOR_MODES.FRAMING) {
         try {
