@@ -184,16 +184,22 @@ export async function initSession() {
         const meData = await meResponse.json();
         userId = meData.user_id;
         _currentUserId = userId;
+        const hasEmail = !!meData.email;
+        console.log(`[Auth:Init] /me OK: user=${userId}, authenticated=${hasEmail}${hasEmail ? `, email=${meData.email}` : ''}`);
         // Only authenticated if they have an email (Google sign-in).
         // A guest session has a user_id but no email — still not authenticated.
-        useAuthStore.getState().setSessionState(!!meData.email, meData.email || null, meData.picture_url || null);
+        useAuthStore.getState().setSessionState(hasEmail, meData.email || null, meData.picture_url || null);
         // T820: Track migration status from /me response
         if (meData.migration_pending) {
+          console.warn('[Auth:Init] Migration pending — guest data needs transfer');
           useAuthStore.getState().setMigrationPending(true);
         }
-      } else if (authExpected) {
-        console.error(`[Auth] Session cookie not received after sign-in for ${authExpected}. ` +
-          'Cross-origin cookie blocked? Check SameSite/Secure settings and CORS config.');
+      } else {
+        console.log(`[Auth:Init] /me returned ${meResponse.status} — no existing session`);
+        if (authExpected) {
+          console.error(`[Auth:Init] Session cookie lost after sign-in for ${authExpected}. ` +
+            'Cross-origin cookie blocked? Check SameSite/Secure settings and CORS config.');
+        }
       }
     } catch (err) {
       // Network error or server unreachable — log it, then fall through to guest init
@@ -202,12 +208,14 @@ export async function initSession() {
 
     // Step 2: No valid session — create anonymous guest
     if (!userId) {
+      console.log('[Auth:Init] No session — creating guest');
       updatePreloader(25, 'Setting up session...');
       const guestResponse = await fetchWithRetry(`${API_BASE}/api/auth/init-guest`, {
         method: 'POST',
         credentials: 'include',
       });
       if (!guestResponse.ok) {
+        console.error(`[Auth:Init] Guest init failed: ${guestResponse.status}`);
         throw new Error(`Guest init failed: ${guestResponse.status}`);
       }
       const guestData = await guestResponse.json();
@@ -215,6 +223,7 @@ export async function initSession() {
       _currentUserId = userId;
       _profileId = guestData.profile_id;
       _currentProfileId = guestData.profile_id;
+      console.log(`[Auth:Init] Guest created: user=${userId}, profile=${guestData.profile_id}`);
       useAuthStore.getState().setSessionState(false);
       updatePreloader(40, 'Loading your data...');
 
