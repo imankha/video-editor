@@ -420,18 +420,11 @@ async def _run_local_framing_export(
     captured_user_id: str,
     captured_profile_id: str,
     user_id: str,
-    input_key: str,
-    output_key: str,
-    keyframes_dict: list,
+    clip: dict,
     target_fps: int,
-    segment_data: dict,
-    segment_data_raw: dict,
     include_audio: bool,
     export_mode: str,
     working_filename: str,
-    temp_dir: str,
-    output_path: str,
-    clip: dict,
     credits_deducted: int,
     video_seconds: float,
 ):
@@ -441,17 +434,74 @@ async def _run_local_framing_export(
     This is the same processing logic as the Modal/test path in render_project(),
     but runs as an asyncio.create_task so the HTTP response returns immediately.
     All progress is reported via WebSocket. Errors refund credits and update export_jobs.
+
+    Crop parsing, ffprobe (framerate), and keyframe conversion are done here
+    (moved out of the synchronous request path for faster 202 response).
     """
+    temp_dir = tempfile.mkdtemp()
+    output_key = f"working_videos/{working_filename}"
+    output_path = os.path.join(temp_dir, working_filename)
+
     try:
         from app.services.export_helpers import send_progress, create_progress_callback
         from app.services.modal_client import call_modal_framing_ai
 
         logger.info(f"[Render Background] Starting local export for project {project_id}")
 
+        # Restore user context for the background task
+        set_current_user_id(captured_user_id)
+        set_current_profile_id(captured_profile_id)
+
+        # --- Crop parsing (moved from synchronous path) ---
+        crop_keyframes = json.loads(clip['crop_data'])
+        segment_data_raw = None
+        segment_data = None
+        if clip['segments_data']:
+            try:
+                segment_data_raw = json.loads(clip['segments_data'])
+                segment_data = convert_segment_data_to_encoder_format(segment_data_raw)
+            except (json.JSONDecodeError, TypeError):
+                logger.warning(f"[Render Background] Invalid segments_data, ignoring")
+
+        # --- ffprobe for framerate (the big bottleneck, ~4s on R2 URLs) ---
+        framerate = 30.0
+        try:
+            if clip['game_id']:
+                source_url = generate_presigned_url_global(f"games/{clip['game_blake3_hash']}.mp4")
+            else:
+                source_url = generate_presigned_url(user_id, f"raw_clips/{clip['raw_filename']}")
+            if source_url:
+                source_info = get_video_info(source_url)
+                framerate = source_info.get('fps', 30.0)
+        except Exception as e:
+            logger.warning(f"[Render Background] Failed to probe framerate, using 30: {e}")
+        logger.info(f"[Render Background] ffprobe done, fps={framerate}")
+
+        # --- Keyframe frame→time conversion ---
+        if crop_keyframes and 'frame' in crop_keyframes[0] and 'time' not in crop_keyframes[0]:
+            crop_keyframes = [
+                {'time': kf['frame'] / framerate, 'x': kf['x'], 'y': kf['y'], 'width': kf['width'], 'height': kf['height']}
+                for kf in crop_keyframes
+            ]
+
+        keyframes_dict = [
+            {'time': kf.get('time', 0), 'x': kf['x'], 'y': kf['y'], 'width': kf['width'], 'height': kf['height']}
+            for kf in crop_keyframes
+        ]
+
+        # --- Input/output keys ---
+        if clip['game_id']:
+            input_key = f"games/{clip['game_blake3_hash']}.mp4"
+        else:
+            input_key = f"raw_clips/{clip['raw_filename']}"
+
+        logger.info(f"[Render Background] crop/keyframe parsing done, dispatching render")
+
         # Calculate effective output duration for progress estimation
+        source_duration = clip.get('raw_duration') or 0
         effective_duration = 10.0
         if segment_data_raw:
-            effective_duration = get_output_duration(segment_data_raw)
+            effective_duration = get_output_duration(segment_data_raw, source_duration)
             logger.info(f"[Render Background] Calculated output duration: {effective_duration:.2f}s")
 
         await send_progress(
@@ -463,10 +513,6 @@ async def _run_local_framing_export(
             export_id, 'framing',
             project_id=project_id, project_name=project_name
         )
-
-        # Restore user context for the background task
-        set_current_user_id(captured_user_id)
-        set_current_profile_id(captured_profile_id)
 
         result = await call_modal_framing_ai(
             job_id=export_id,
@@ -661,7 +707,7 @@ async def render_project(request: RenderRequest, http_request: Request):
     captured_user_id = get_current_user_id()
     captured_profile_id = get_current_profile_id()
 
-    logger.info(f"[Render] Starting backend-authoritative render for project {project_id}, user: {captured_user_id}")
+    logger.info(f"[Render] START render project={project_id}, user={captured_user_id}")
 
     # Initialize progress tracking
     export_progress[export_id] = {
@@ -680,15 +726,14 @@ async def render_project(request: RenderRequest, http_request: Request):
                 VALUES (?, ?, 'framing', 'processing', '{}')
             """, (export_id, project_id))
             conn.commit()
-        logger.info(f"[Render] Regressed project {project_id} and created export_jobs record: {export_id}")
+        logger.info(f"[Render] export_jobs INSERT committed")
     except Exception as e:
-        logger.warning(f"[Render] Failed to regress status / create export_jobs: {e}")
+        logger.warning(f"[Render] export_jobs INSERT FAILED: {e}")
 
     # Step 1: Validate project and get working_clips
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get project info
         cursor.execute("""
             SELECT id, name, aspect_ratio
             FROM projects WHERE id = ?
@@ -698,13 +743,9 @@ async def render_project(request: RenderRequest, http_request: Request):
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Use shared helper to derive a better name if needed
         from app.services.export_helpers import derive_project_name
         project_name = derive_project_name(project_id, cursor) or project['name']
 
-        # NOTE: export_jobs record already created in the atomic transaction above
-
-        # Get working_clips with their rendering data + game video info
         cursor.execute(f"""
             SELECT
                 wc.id,
@@ -729,6 +770,7 @@ async def render_project(request: RenderRequest, http_request: Request):
             ORDER BY wc.sort_order
         """, (project_id, project_id))
         working_clips = cursor.fetchall()
+    logger.info(f"[Render] project validated, {len(working_clips)} clip(s)")
 
     if not working_clips:
         from app.websocket import make_progress_data
@@ -796,66 +838,76 @@ async def render_project(request: RenderRequest, http_request: Request):
             release_reservation(captured_user_id, export_id)
             raise
         credits_deducted = credits_required
+    logger.info(f"[Render] credits reserved ({credits_deducted})")
 
-    # Step 2: Validate clip has required data
+    # Step 2: Validate clip has required data (fast checks — keep synchronous)
     if not clip['crop_data']:
         error_msg = f"Clip '{clip['clip_name'] or 'Unknown'}' has no framing data. Open clip in Framing mode first."
-        error_data = {
-            "progress": 0,
-            "message": error_msg,
-            "status": "error",
-            "error": "missing_crop_data",
-            "clip_id": clip['id']
-        }
-        export_progress[export_id] = error_data
-        await manager.send_progress(export_id, error_data)
         raise HTTPException(
             status_code=400,
             detail={"error": "missing_crop_data", "message": error_msg, "clip_id": clip['id']}
         )
 
-    # Verify clip has a source: either game_id (game clip) or raw_filename (uploaded clip)
     if not clip['game_id'] and not clip['raw_filename']:
-        error_msg = "Clip has no source video (no game_id and no raw_filename)"
-        error_data = {
-            "progress": 0,
-            "message": error_msg,
-            "status": "error",
-            "error": "no_source_video"
-        }
-        export_progress[export_id] = error_data
-        await manager.send_progress(export_id, error_data)
         raise HTTPException(
             status_code=400,
-            detail={"error": "no_source_video", "message": error_msg}
+            detail={"error": "no_source_video", "message": "Clip has no source video (no game_id and no raw_filename)"}
         )
 
-    # Step 3: Parse rendering data from database
+    # Quick JSON parse check (no ffprobe, no keyframe conversion — that moves to background)
     try:
-        crop_keyframes = json.loads(clip['crop_data'])
-        logger.info(f"[Render] Raw crop_data from DB: {clip['crop_data'][:500]}...")  # Log first 500 chars
-        logger.info(f"[Render] Parsed crop_keyframes: {crop_keyframes}")
+        json.loads(clip['crop_data'])
     except (json.JSONDecodeError, TypeError) as e:
         raise HTTPException(status_code=500, detail=f"Invalid crop_data in database: {e}")
 
-    segment_data_raw = None  # Frontend format for get_output_duration
-    segment_data = None  # Encoder format for video processing
+    logger.info(f"[Render] validation done, dispatching background task")
+
+    # Check for E2E test mode
+    is_test_mode = http_request.headers.get('X-Test-Mode', '').lower() == 'true'
+
+    # Generate output filename
+    working_filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
+
+    # T760: When Modal is disabled, run processing in background to avoid blocking the server
+    # Crop parsing, ffprobe, and keyframe conversion all happen inside the background task.
+    if not modal_enabled() and not is_test_mode:
+        asyncio.create_task(
+            _run_local_framing_export(
+                export_id=export_id,
+                project_id=project_id,
+                project_name=project_name,
+                captured_user_id=captured_user_id,
+                captured_profile_id=captured_profile_id,
+                user_id=get_current_user_id(),
+                clip=dict(clip),
+                target_fps=request.target_fps,
+                include_audio=request.include_audio,
+                export_mode=request.export_mode,
+                working_filename=working_filename,
+                credits_deducted=credits_deducted,
+                video_seconds=video_seconds,
+            )
+        )
+        logger.info(f"[Render] returning 202")
+        return JSONResponse(
+            status_code=202,
+            content={"status": "accepted", "export_id": export_id}
+        )
+
+    # --- Modal or test-mode path: process synchronously (keeps existing behavior) ---
+
+    # Parse crop/segment data
+    crop_keyframes = json.loads(clip['crop_data'])
+    segment_data_raw = None
+    segment_data = None
     if clip['segments_data']:
         try:
             segment_data_raw = json.loads(clip['segments_data'])
-            logger.info(f"[Render] Parsed segment_data (raw): {segment_data_raw}")
-            # Convert from frontend format to encoder format
             segment_data = convert_segment_data_to_encoder_format(segment_data_raw)
-            logger.info(f"[Render] Converted segment_data (encoder): {segment_data}")
         except (json.JSONDecodeError, TypeError):
             logger.warning(f"[Render] Invalid segments_data, ignoring")
 
-    # Validate and convert keyframes to CropKeyframe objects (time-based for FFmpeg)
-    logger.info(f"[Render] Converting {len(crop_keyframes)} keyframes to CropKeyframe objects")
-
-    # Convert frame-based keyframes to time-based for FFmpeg
-    # Internal storage uses frame numbers for precision, FFmpeg needs time in seconds
-    # Probe source video for actual framerate (ffprobe reads only the header, not the whole file)
+    # ffprobe for framerate
     framerate = 30.0
     try:
         user_id = get_current_user_id()
@@ -866,34 +918,19 @@ async def render_project(request: RenderRequest, http_request: Request):
         if source_url:
             source_info = get_video_info(source_url)
             framerate = source_info.get('fps', 30.0)
-            logger.info(f"[Render] Source video framerate: {framerate}")
     except Exception as e:
         logger.warning(f"[Render] Failed to probe source video framerate, using default 30: {e}")
 
     if crop_keyframes and 'frame' in crop_keyframes[0] and 'time' not in crop_keyframes[0]:
-        logger.info(f"[Render] Converting frame-based keyframes to time-based (framerate={framerate})")
         crop_keyframes = [
-            {
-                'time': kf['frame'] / framerate,
-                'x': kf['x'],
-                'y': kf['y'],
-                'width': kf['width'],
-                'height': kf['height'],
-            }
+            {'time': kf['frame'] / framerate, 'x': kf['x'], 'y': kf['y'], 'width': kf['width'], 'height': kf['height']}
             for kf in crop_keyframes
         ]
-        logger.info(f"[Render] Converted keyframes: {crop_keyframes}")
 
     try:
         keyframes = [CropKeyframe(**kf) for kf in crop_keyframes]
     except Exception as e:
-        logger.error(f"[Render] Failed to parse crop keyframes: {e}")
-        logger.error(f"[Render] Keyframe data: {crop_keyframes}")
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "invalid_crop_format", "message": f"Invalid crop keyframe format: {e}"}
-        )
-
+        raise HTTPException(status_code=400, detail={"error": "invalid_crop_format", "message": f"Invalid crop keyframe format: {e}"})
     if len(keyframes) == 0:
         raise HTTPException(status_code=400, detail="No crop keyframes found in saved data")
 
@@ -902,65 +939,20 @@ async def render_project(request: RenderRequest, http_request: Request):
     export_progress[export_id] = progress_data
     await manager.send_progress(export_id, progress_data)
 
-    # Step 4: Process video (Modal cloud GPU or local)
     user_id = get_current_user_id()
-
-    # Determine source video: game clips use game video directly, uploaded clips use raw file
     if clip['game_id']:
         input_key = f"games/{clip['game_blake3_hash']}.mp4"
-        source_start_time = clip['raw_start_time']
-        source_end_time = clip['raw_end_time']
     else:
         input_key = f"raw_clips/{clip['raw_filename']}"
-        source_start_time = 0.0
-        source_end_time = clip['raw_duration']
 
-    # Convert keyframes to dict format
     keyframes_dict = [
         {'time': kf.time, 'x': kf.x, 'y': kf.y, 'width': kf.width, 'height': kf.height}
         for kf in keyframes
     ]
 
-    # Generate output filename
-    working_filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
     output_key = f"working_videos/{working_filename}"
-
     temp_dir = tempfile.mkdtemp()
     output_path = os.path.join(temp_dir, working_filename)
-
-    # Check for E2E test mode - routes to fast FFmpeg crop+resize in call_modal_framing_ai
-    is_test_mode = http_request.headers.get('X-Test-Mode', '').lower() == 'true'
-
-    # T760: When Modal is disabled, run processing in background to avoid blocking the server
-    if not modal_enabled() and not is_test_mode:
-        asyncio.create_task(
-            _run_local_framing_export(
-                export_id=export_id,
-                project_id=project_id,
-                project_name=project_name,
-                captured_user_id=captured_user_id,
-                captured_profile_id=captured_profile_id,
-                user_id=user_id,
-                input_key=input_key,
-                output_key=output_key,
-                keyframes_dict=keyframes_dict,
-                target_fps=request.target_fps,
-                segment_data=segment_data,
-                segment_data_raw=segment_data_raw,
-                include_audio=request.include_audio,
-                export_mode=request.export_mode,
-                working_filename=working_filename,
-                temp_dir=temp_dir,
-                output_path=output_path,
-                clip=clip,
-                credits_deducted=credits_deducted,
-                video_seconds=video_seconds,
-            )
-        )
-        return JSONResponse(
-            status_code=202,
-            content={"status": "accepted", "export_id": export_id}
-        )
 
     try:
         from app.services.export_helpers import send_progress, create_progress_callback
@@ -1003,8 +995,8 @@ async def render_project(request: RenderRequest, http_request: Request):
             include_audio=request.include_audio,
             export_mode=request.export_mode,
             test_mode=is_test_mode,
-            source_start_time=source_start_time,
-            source_end_time=source_end_time,
+            source_start_time=clip['raw_start_time'] if clip['game_id'] else 0.0,
+            source_end_time=clip['raw_end_time'] if clip['game_id'] else clip['raw_duration'],
         )
 
         if result.get("status") != "success":
