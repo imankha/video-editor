@@ -6,7 +6,7 @@
  * and rich JSX descriptions with inline icons that can't be serialized over API.
  */
 
-import { Home, Image, Play, Plus, Star, Crop, Film, Crosshair } from 'lucide-react';
+import { Home, Image, Play, Plus, Star, Crop, Film, Crosshair, Gamepad2 } from 'lucide-react';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
 function QIcon({ icon: IconComponent, className = 'text-gray-300' }) {
@@ -78,7 +78,7 @@ export const STEP_DESCRIPTIONS = {
   wait_for_export: 'Wait for the framing export to finish. We AI upscale your video to crisp 1080p.',
   export_overlay: <>Click each <GreenSquare /> green square on the timeline, and for each green square click on your player in the video if you can. If you can't, move the ellipse around your player manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
   view_gallery_video: <>Click <QIcon icon={Image} className="text-white" /> Gallery in the top bar to find your finished video.</>,
-  annotate_second_5_star: 'Every game has more than one highlight — find it!',
+  annotate_second_5_star: <>Go to <QIcon icon={Gamepad2} className="text-green-400" /> Games, click into your game and find and annotate another 5 star moment.</>,
   annotate_5_more: 'Annotate more clips, try to get every touch that could be a learning or celebration.',
   export_second_highlight: <>Pick a project, crop it along the timeline and then click <MiniButton icon={Film}>Frame Video</MiniButton> to frame it.</>,
   wait_for_export_2: 'Wait for the framing export to finish.',

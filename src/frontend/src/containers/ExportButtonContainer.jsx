@@ -666,11 +666,6 @@ export function ExportButtonContainer({
       // Connect WebSocket for real-time progress updates
       await connectWebSocket(exportId);
 
-      // T780: Refresh quest progress — export job is created immediately
-      import('../stores/questStore').then(({ useQuestStore }) => {
-        setTimeout(() => useQuestStore.getState().fetchProgress({ force: true }), 1000);
-      });
-
       // Send export request
       const response = await axios.post(
         endpoint,
@@ -695,6 +690,11 @@ export function ExportButtonContainer({
           }
         }
       );
+
+      // Refresh quest progress now that export job exists in DB
+      import('../stores/questStore').then(({ useQuestStore }) => {
+        useQuestStore.getState().fetchProgress({ force: true });
+      }).catch(() => {});
 
       if (editorMode === EDITOR_MODES.FRAMING) {
         try {
