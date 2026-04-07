@@ -225,37 +225,9 @@ export function PlaybackControls({
         />
       </div>
 
-      {/* Clip-scoped scrub bar — only when a segment is active */}
-      {currentSegment && (
-        <div data-testid="clip-scrub-bar" className="flex items-center gap-2 px-2 pt-3 pb-1">
-          <span className="text-gray-400 text-xs truncate max-w-[6rem]">{activeClipName}</span>
-          <div
-            ref={clipScrubRef}
-            data-testid="clip-scrub-track"
-            className="relative flex-1 h-6 flex items-center cursor-pointer group"
-            onMouseDown={handleClipScrubMouseDown}
-          >
-            <div className="w-full h-2 bg-gray-700 rounded-full relative overflow-hidden">
-              <div
-                className="h-full bg-green-500 rounded-full"
-                style={{ width: `${Math.min(100, clipProgress)}%` }}
-              />
-            </div>
-            {/* Playhead knob — always visible on top of the track */}
-            <div
-              className="absolute h-3 w-3 bg-white rounded-full shadow pointer-events-none"
-              style={{ left: `calc(${Math.min(100, clipProgress)}% - 6px)` }}
-            />
-          </div>
-          <span className="text-gray-400 text-xs font-mono whitespace-nowrap">
-            {formatVirtualTime(clipElapsed)} / {formatVirtualTime(currentSegment.duration)}
-          </span>
-        </div>
-      )}
-
       {/* Controls row — matches AnnotateControls layout */}
       <div className={`controls-container flex flex-wrap items-center justify-between gap-y-1 py-2 px-2 sm:px-4 ${
-        isFullscreen ? 'bg-gray-900/90' : 'bg-gray-800 rounded-b-lg'
+        isFullscreen ? 'bg-gray-900/90' : `bg-gray-800 ${currentSegment ? '' : 'rounded-b-lg'}`
       }`}>
         {/* Left: Back + Playback transport */}
         <div className="flex items-center gap-1">
@@ -348,6 +320,34 @@ export function PlaybackControls({
           )}
         </div>
       </div>
+
+      {/* Clip-scoped scrub bar — below controls, only when a segment is active */}
+      {currentSegment && (
+        <div data-testid="clip-scrub-bar" className="flex items-center gap-2 px-2 py-1.5 bg-gray-800/60 rounded-b-lg">
+          <span className="text-gray-400 text-xs truncate max-w-[6rem]">{activeClipName}</span>
+          <div
+            ref={clipScrubRef}
+            data-testid="clip-scrub-track"
+            className="relative flex-1 h-6 flex items-center cursor-pointer group"
+            onMouseDown={handleClipScrubMouseDown}
+          >
+            <div className="w-full h-2 bg-gray-700 rounded-full relative overflow-hidden">
+              <div
+                className="h-full bg-green-500 rounded-full"
+                style={{ width: `${Math.min(100, clipProgress)}%` }}
+              />
+            </div>
+            {/* Playhead knob */}
+            <div
+              className="absolute h-3 w-3 bg-white rounded-full shadow pointer-events-none"
+              style={{ left: `calc(${Math.min(100, clipProgress)}% - 6px)` }}
+            />
+          </div>
+          <span className="text-gray-400 text-xs font-mono whitespace-nowrap">
+            {formatVirtualTime(clipElapsed)} / {formatVirtualTime(currentSegment.duration)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
