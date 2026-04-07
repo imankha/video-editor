@@ -108,6 +108,7 @@ Gate GPU operations behind email verification. Google OAuth primary, Email OTP s
 | T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 7 | 3 | Single-session enforcement, expiry |
 | T430 | [Account Settings](tasks/user-auth/T430-account-settings.md) | DONE | 4 | 2 | Email display, linking, logout |
 | T435 | [Google One Tap Auto-Prompt](tasks/user-auth/T435-google-one-tap-auto-prompt.md) | DONE | 7 | 2 | Auto-show Google sign-in prompt for guests on page load |
+| T450 | [Remove DEFAULT_USER_ID Fallback](tasks/user-auth/T450-remove-default-user-id.md) | TODO | 8 | 4 | Eliminate legacy `user=a`; 401 for unauthenticated non-auth requests |
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | TODO | 6 | 3 | PWA install, manifest, service worker, landing page CTA |
 | T445 | [Business Cards](tasks/T445-business-cards.md) | TODO | 5 | 2 | Design + print cards with QR code for game-day distribution |
 
