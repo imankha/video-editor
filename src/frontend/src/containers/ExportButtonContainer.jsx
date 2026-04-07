@@ -387,6 +387,7 @@ export function ExportButtonContainer({
     const hasProjectClips = clips && clips.length > 0 && clips.some(c => c.id);
     const isBackendAuthoritative = (editorMode === EDITOR_MODES.OVERLAY && projectId) ||
                                    (editorMode === EDITOR_MODES.FRAMING && hasProjectClips);
+    console.log(`[QuestDebug] handleExport called: editorMode=${editorMode}, projectId=${projectId}, hasProjectClips=${hasProjectClips}, isBackendAuthoritative=${isBackendAuthoritative}, clipCount=${clips?.length || 0}`);
     if (!videoFile && !isBackendAuthoritative) {
       setError('No video file loaded');
       return;
@@ -559,6 +560,7 @@ export function ExportButtonContainer({
           await connectWebSocket(exportId);
 
           setProgressMessage('Starting render...');
+          console.log('[QuestDebug] Single-clip backend-authoritative path: POSTing to /api/export/render');
           const renderResponse = await axios.post(endpoint, {
             project_id: projectId,
             export_id: exportId,
@@ -567,13 +569,19 @@ export function ExportButtonContainer({
             include_audio: includeAudio
           });
           renderRequestAccepted = true;
+          console.log(`[QuestDebug] Render response status: ${renderResponse.status}`);
 
           // Refresh quest progress now that export job exists in DB
-          useQuestStore.getState().fetchProgress({ force: true });
+          console.log('[QuestDebug] Calling fetchProgress({ force: true }) after render POST');
+          useQuestStore.getState().fetchProgress({ force: true }).then(() => {
+            console.log('[QuestDebug] fetchProgress resolved after render POST');
+          }).catch((err) => {
+            console.error('[QuestDebug] fetchProgress FAILED after render POST:', err);
+          });
 
           // T760: 202 = background processing, completion comes via WebSocket
           if (renderResponse.status === 202) {
-            console.log('[ExportButtonContainer] Render accepted (202), waiting for WebSocket completion');
+            console.log('[QuestDebug] Render accepted (202), waiting for WebSocket completion');
             backgroundExportRef.current = true;
             setProgressMessage('Processing...');
             return;
@@ -691,7 +699,12 @@ export function ExportButtonContainer({
       );
 
       // Refresh quest progress now that export job exists in DB
-      useQuestStore.getState().fetchProgress({ force: true });
+      console.log('[QuestDebug] Multi-clip/legacy path: calling fetchProgress({ force: true }) after export response');
+      useQuestStore.getState().fetchProgress({ force: true }).then(() => {
+        console.log('[QuestDebug] fetchProgress resolved (multi-clip/legacy path)');
+      }).catch((err) => {
+        console.error('[QuestDebug] fetchProgress FAILED (multi-clip/legacy path):', err);
+      });
 
       if (editorMode === EDITOR_MODES.FRAMING) {
         try {

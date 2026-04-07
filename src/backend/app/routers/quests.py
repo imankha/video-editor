@@ -51,9 +51,21 @@ def _check_all_steps(user_id: str, conn) -> dict:
     ).fetchone() is not None
 
     # export_framing: user clicked "Frame Video" (export job exists, any status)
-    steps["export_framing"] = cursor.execute(
+    export_framing_row = cursor.execute(
         "SELECT 1 FROM export_jobs WHERE type = 'framing' LIMIT 1"
-    ).fetchone() is not None
+    ).fetchone()
+    steps["export_framing"] = export_framing_row is not None
+
+    # QuestDebug: Log export_framing check details
+    all_export_jobs = cursor.execute(
+        "SELECT id, type, status, created_at FROM export_jobs ORDER BY created_at DESC LIMIT 5"
+    ).fetchall()
+    logger.info(
+        f"[QuestDebug] _check_all_steps: user={user_id}, "
+        f"export_framing={steps['export_framing']}, "
+        f"export_jobs_count={len(all_export_jobs)}, "
+        f"recent_jobs={[dict(row) for row in all_export_jobs]}"
+    )
 
     # wait_for_export: framing export completed successfully
     steps["wait_for_export"] = cursor.execute(
@@ -203,6 +215,15 @@ async def get_progress():
     user_id = get_current_user_id()
     completed_quest_ids = get_completed_quest_ids(user_id)
 
+    from ..database import get_database_path
+    from ..profile_context import get_current_profile_id
+    db_path = get_database_path()
+    profile_id = get_current_profile_id()
+    logger.info(
+        f"[QuestDebug] get_progress: user={user_id}, profile={profile_id}, "
+        f"db_path={db_path}, db_exists={db_path.exists()}"
+    )
+
     with get_db_connection() as conn:
         all_steps = _check_all_steps(user_id, conn)
 
@@ -230,6 +251,14 @@ async def get_progress():
                 "completed": completed,
                 "reward_claimed": reward_claimed,
             })
+
+    # QuestDebug: Log the quest_2 steps being returned
+    q2 = next((q for q in quests if q["id"] == "quest_2"), None)
+    if q2:
+        logger.info(
+            f"[QuestDebug] get_progress response: quest_2 steps={q2['steps']}, "
+            f"export_framing={q2['steps'].get('export_framing')}"
+        )
 
     return {"quests": quests}
 

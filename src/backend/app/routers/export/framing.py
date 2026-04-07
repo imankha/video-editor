@@ -661,6 +661,9 @@ async def render_project(request: RenderRequest, http_request: Request):
     captured_user_id = get_current_user_id()
     captured_profile_id = get_current_profile_id()
 
+    from ...database import get_database_path
+    db_path = get_database_path()
+    logger.info(f"[QuestDebug] render_project: project_id={project_id}, user={captured_user_id}, profile={captured_profile_id}, db_path={db_path}")
     logger.info(f"[Render] Starting backend-authoritative render for project {project_id}, user: {captured_user_id}")
 
     # Initialize progress tracking
@@ -680,6 +683,17 @@ async def render_project(request: RenderRequest, http_request: Request):
                 VALUES (?, ?, 'framing', 'processing', '{}')
             """, (export_id, project_id))
             conn.commit()
+
+            # QuestDebug: Verify the record was committed
+            verify_row = cursor.execute(
+                "SELECT id, type, status FROM export_jobs WHERE id = ?", (export_id,)
+            ).fetchone()
+            logger.info(
+                f"[QuestDebug] export_jobs INSERT committed: export_id={export_id}, "
+                f"project_id={project_id}, verified={verify_row is not None}, "
+                f"row={dict(verify_row) if verify_row else 'MISSING'}"
+            )
+
         logger.info(f"[Render] Regressed project {project_id} and created export_jobs record: {export_id}")
     except Exception as e:
         logger.warning(f"[Render] Failed to regress status / create export_jobs: {e}")
