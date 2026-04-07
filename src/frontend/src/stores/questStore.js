@@ -5,6 +5,7 @@ import { track } from '../utils/analytics';
 
 // Module-level ref for fetch dedup
 let _fetchProgressPromise = null;
+let _fetchProgressGeneration = 0;
 let _fetchDefinitionsPromise = null;
 // Track achievements already recorded this session to prevent duplicate POSTs
 const _recordedAchievements = new Set();
@@ -53,6 +54,11 @@ export const useQuestStore = create((set, get) => ({
     // Dedup: if a fetch is already in flight, return the existing promise
     if (_fetchProgressPromise && !force) return _fetchProgressPromise;
 
+    // Generation counter prevents stale responses from overwriting newer data.
+    // Scenario: non-force fetch starts (gen 1), then force fetch starts (gen 2).
+    // If gen 1 resolves after gen 2, its result is discarded.
+    const generation = ++_fetchProgressGeneration;
+
     _fetchProgressPromise = (async () => {
       try {
         const res = await fetch(`${API_BASE}/api/quests/progress`, { credentials: 'include' });
@@ -61,6 +67,9 @@ export const useQuestStore = create((set, get) => ({
           return;
         }
         const data = await res.json();
+
+        // Stale response guard: a newer fetch was started while we were in flight
+        if (generation !== _fetchProgressGeneration) return;
 
         let totalCompleted = 0;
         for (const quest of data.quests) {
@@ -85,7 +94,9 @@ export const useQuestStore = create((set, get) => ({
       } catch {
         // Best-effort
       } finally {
-        _fetchProgressPromise = null;
+        if (generation === _fetchProgressGeneration) {
+          _fetchProgressPromise = null;
+        }
       }
     })();
     return _fetchProgressPromise;
