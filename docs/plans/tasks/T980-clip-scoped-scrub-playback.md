@@ -1,6 +1,6 @@
 # T980: Clip-Scoped Scrub Bar in Play Annotations
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-04-03

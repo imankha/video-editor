@@ -254,9 +254,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 |----|------|--------|-----|-------------|
 | T1040 | [Force Login on Add Game](tasks/for-alpha/T1040-force-login-add-game.md) | DONE | 3.5 | Guest clicks "Add Game" → auth gate appears first; ensures persistent identity before investing effort |
 | T1030 | [Quest UI Relocation](tasks/for-alpha/T1030-quest-ui-relocation.md) | TODO | 2.0 | Move quest panel out of floating overlay into dedicated area; currently covers controls user needs (e.g., playback button for Q1S3) |
-| T1020 | [Fast R2 Sync](tasks/T1020-fast-r2-sync.md) | TODO | 1.8 | Every save/export waits 1.7-3s for R2 upload to finish before responding; profile and speed up |
-| T1010 | [Slow fetchProgress Response](tasks/T1010-slow-fetchprogress.md) | TODO | 1.7 | Quest progress endpoint takes 1.2s (20+ individual SQLite queries); batch or cache |
-| T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | TODO | 1.3 | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
+| T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | TESTING | 1.3 | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
 
 ### Epic: For Launch (TODO)
 [tasks/for-launch/EPIC.md](tasks/for-launch/EPIC.md)
@@ -267,10 +265,12 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 |----|------|--------|-----|-------------|
 | T445 | [Business Cards](tasks/T445-business-cards.md) | TODO | 2.5 | Design + print physical cards with QR code for handing out at games |
 | T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 2.3 | Expire sessions after inactivity, enforce single active session per user |
-| T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | TODO | 2.0 | "Install app" prompt, offline shell, home screen icon — feels native on phones |
-| T1070 | [Team & Profiles Quest](tasks/for-launch/T1070-team-profiles-quest.md) | TODO | 1.8 | New quest teaching profiles + team uploads; encourages inviting teammates for credits |
-| T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | TODO | 1.3 | "Upload Team" — invite teammates by email; inviter earns credits per signup (viral loop) |
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | TODO | 2.0 | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
+| T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | TODO | 2.0 | "Install app" prompt, offline shell, home screen icon — feels native on phones |
+| T1020 | [Fast R2 Sync](tasks/T1020-fast-r2-sync.md) | TODO | 1.8 | Every save/export waits 1.7-3s for R2 upload to finish before responding; profile and speed up |
+| T1070 | [Team & Profiles Quest](tasks/for-launch/T1070-team-profiles-quest.md) | TODO | 1.8 | New quest teaching profiles + team uploads; encourages inviting teammates for credits |
+| T1010 | [Slow fetchProgress Response](tasks/T1010-slow-fetchprogress.md) | TODO | 1.7 | Quest progress endpoint takes 1.2s (20+ individual SQLite queries); batch or cache |
+| T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | TODO | 1.3 | "Upload Team" — invite teammates by email; inviter earns credits per signup (viral loop) |
 | T1060 | [Coaches View](tasks/for-launch/T1060-coaches-view.md) | TODO | 1.0 | Coach account type: roster uploads, assign annotations to players, track clip review status, own NUF flow. No "Projects" for coaches. |
 
 ### Epic: Post Launch (TODO)
