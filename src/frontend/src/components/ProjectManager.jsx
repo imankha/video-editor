@@ -15,6 +15,7 @@ import { getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayN
 import { ProfileDropdown } from './ProfileDropdown';
 import { CreditBalance } from './CreditBalance';
 import { useAuthStore } from '../stores/authStore';
+import { useQuestStore } from '../stores/questStore';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -412,6 +413,8 @@ export function ProjectManager({
     if (onRefreshProjects) {
       await onRefreshProjects();
     }
+    // Refresh quest progress — new project with multi-game clips may complete create_reel step
+    useQuestStore.getState().fetchProgress({ force: true });
   }, [onRefreshProjects]);
 
   return (
