@@ -20,6 +20,7 @@ Make money and drive virality. The app must be super polished, feel native (PWA)
 | T1080 | [Gallery Player Scrub Controls](T1080-gallery-player-scrub-controls.md) | TODO |
 | T1020 | [Fast R2 Sync](../T1020-fast-r2-sync.md) | TODO |
 | T1010 | [Slow fetchProgress Response](../T1010-slow-fetchprogress.md) | TODO |
+| T1090 | [Social Media Auto-Posting](T1090-social-media-auto-posting.md) | TODO |
 
 ## Completion Criteria
 
@@ -28,3 +29,4 @@ Make money and drive virality. The app must be super polished, feel native (PWA)
 - [ ] Coaches can manage rosters and assign annotations
 - [ ] PWA installable, feels native
 - [ ] Polished enough to charge money
+- [ ] Social media posting works for at least Instagram + TikTok
