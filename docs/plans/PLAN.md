@@ -68,6 +68,7 @@ Improvements after real user traffic.
 | T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | 1.3 | Start downloading game videos from R2 as soon as user logs in, so they load instantly later |
 | T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 1.1 | Draw on frozen clip frames (like a telestrator); shown during Play Annotations with a pause |
 | T620 | [Account Cleanup](tasks/T620-account-cleanup.md) | TODO | 1.0 | Auto-delete abandoned guest accounts and dormant free accounts to reduce R2 storage costs |
+| T1100 | [Remove Dead Overlay Debounce](tasks/T1100-remove-dead-overlay-debounce.md) | TODO | 1.5 | Dead `saveOverlayData` with 2s debounce in OverlayContainer; remove + audit overlay persistence |
 | T220 | [Future GPU Features](tasks/T220-future-gpu-features.md) | TODO | 0.6 | Advanced AI features (auto-crop, auto-highlight detection, etc.) |
 
 ---
