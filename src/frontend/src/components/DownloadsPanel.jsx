@@ -104,6 +104,11 @@ export function DownloadsPanel({
     clearTimeout(watchTimerRef.current);
     watchTimerRef.current = setTimeout(() => {
       useQuestStore.getState().recordAchievement('watched_gallery_video_1s');
+      // Quest 3: milestone achievement — only if overlay step already complete
+      const q3 = useQuestStore.getState().quests.find(q => q.id === 'quest_3');
+      if (q3?.steps?.overlay_second_highlight) {
+        useQuestStore.getState().recordAchievement('watched_gallery_video_after_2_overlays');
+      }
     }, 1000);
   };
 

@@ -101,9 +101,9 @@ def _check_all_steps(user_id: str, conn) -> dict:
     ).fetchone()
     steps["overlay_second_highlight"] = row["cnt"] >= 2
 
-    # Watch second highlight — 2+ overlay exports completed AND gallery video watched
-    steps["watch_second_highlight"] = row["cnt"] >= 2 and cursor.execute(
-        "SELECT 1 FROM achievements WHERE key = 'watched_gallery_video_1s'"
+    # Watch second highlight — gallery video watched AFTER 2+ overlay exports completed
+    steps["watch_second_highlight"] = cursor.execute(
+        "SELECT 1 FROM achievements WHERE key = 'watched_gallery_video_after_2_overlays'"
     ).fetchone() is not None
 
     # --- Quest 4: Highlight Reel (second game + custom project) ---
