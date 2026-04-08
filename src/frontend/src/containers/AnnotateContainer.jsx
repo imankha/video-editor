@@ -260,6 +260,14 @@ export function AnnotateContainer({
       // Mark that we initiated the upload here (prevents restore effect from firing)
       uploadInitiatedHereRef.current = true;
 
+      // Early callback: set game ID as soon as the game record is created (before upload finishes).
+      // This enables clip saves during the upload window — the game exists in the DB from step 1.
+      const onGameCreated = ({ game_id, name }) => {
+        annotateGameIdRef.current = game_id;
+        setAnnotateGameId(game_id);
+        setAnnotateGameName(name);
+      };
+
       // Start upload
       if (isMultiVideo) {
         uploadStore.startUpload(
@@ -267,9 +275,6 @@ export function AnnotateContainer({
           gameDetails,
           metadataList,
           (result) => {
-            annotateGameIdRef.current = result.game_id;
-            setAnnotateGameId(result.game_id);
-            setAnnotateGameName(result.name);
             // Update game_videos with presigned URLs from server
             if (result.videos) {
               setGameVideos(prev => prev?.map((v, i) => ({
@@ -278,21 +283,17 @@ export function AnnotateContainer({
               })));
             }
           },
-          { blobUrl: blobUrls[0], gameName: displayName }
+          { blobUrl: blobUrls[0], gameName: displayName },
+          onGameCreated
         );
       } else {
         uploadStore.startUpload(
           files[0],
           gameDetails,
           metadataList[0],
-          (result) => {
-            annotateGameIdRef.current = result.game_id;
-            setAnnotateGameId(result.game_id);
-            setAnnotateGameName(result.name);
-            if (result.deduplicated) {
-            }
-          },
-          { blobUrl: blobUrls[0], gameName: displayName }
+          null,
+          { blobUrl: blobUrls[0], gameName: displayName },
+          onGameCreated
         );
       }
 

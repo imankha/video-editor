@@ -447,6 +447,11 @@ export async function uploadGame(file, onProgress, options = {}) {
     // This makes the game visible in the DB right away for quest progress etc.
     const gameResult = await createGame(options, []);
 
+    // Notify caller of game_id immediately so clip saves work during upload
+    if (options.onGameCreated) {
+      options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
+    }
+
     // Refresh quest progress now that the game row exists
     useQuestStore.getState().fetchProgress({ force: true });
     // Refresh games list so the game appears in the UI
@@ -509,6 +514,11 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
   try {
     // Step 1: Create game immediately (no videos yet)
     const gameResult = await createGame(options, []);
+
+    // Notify caller of game_id immediately so clip saves work during upload
+    if (options.onGameCreated) {
+      options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
+    }
 
     // Refresh quest progress and games list
     useQuestStore.getState().fetchProgress({ force: true });

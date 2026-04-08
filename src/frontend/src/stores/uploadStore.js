@@ -25,9 +25,10 @@ export const useUploadStore = create((set, get) => ({
    * @param {Object|Object[]} videoMetadata - Single metadata or array for multi-video
    * @param {Function} onComplete - Callback when upload completes: (result) => void
    * @param {Object} displayInfo - { blobUrl, gameName } - Info for resuming annotation view
+   * @param {Function} onGameCreated - Callback when game record is created (before upload): ({ game_id, name }) => void
    * @returns {string} - Upload ID
    */
-  startUpload: (fileOrFiles, gameDetails = null, videoMetadata = null, onComplete = null, displayInfo = null) => {
+  startUpload: (fileOrFiles, gameDetails = null, videoMetadata = null, onComplete = null, displayInfo = null, onGameCreated = null) => {
     const state = get();
 
     // Don't start if already uploading
@@ -138,6 +139,11 @@ export const useUploadStore = create((set, get) => ({
         } : null,
       }));
     };
+
+    // Thread onGameCreated into upload options so clip saves work during upload
+    if (onGameCreated) {
+      options.onGameCreated = onGameCreated;
+    }
 
     if (isMultiVideo) {
       // Multi-video upload
