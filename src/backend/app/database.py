@@ -682,6 +682,10 @@ def ensure_database():
             CREATE INDEX IF NOT EXISTS idx_export_jobs_status
             ON export_jobs(status)
         """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_export_jobs_type_status
+            ON export_jobs(type, status)
+        """)
 
         # Before/After tracking - links final videos to their source footage
         # Used to generate before/after comparison videos
@@ -963,6 +967,11 @@ def ensure_database():
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_raw_clips_game_id
                 ON raw_clips(game_id)
+            """)
+            # Index for quest progress rating queries
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_raw_clips_rating
+                ON raw_clips(rating)
             """)
             # Composite index for natural key lookup (game_id + end_time + video_sequence)
             cursor.execute("""
