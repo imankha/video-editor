@@ -225,7 +225,7 @@ export async function initSession() {
       _currentProfileId = guestData.profile_id;
       console.log(`[Auth:Init] Guest created: user=${userId}, profile=${guestData.profile_id}`);
       useAuthStore.getState().setSessionState(false);
-      updatePreloader(40, 'Loading your data...');
+      updatePreloader(40, 'Getting things ready...');
 
       return {
         profileId: guestData.profile_id,
@@ -245,7 +245,7 @@ export async function initSession() {
     const initData = await initResponse.json();
     _profileId = initData.profile_id;
     _currentProfileId = initData.profile_id;
-    updatePreloader(40, 'Loading your data...');
+    updatePreloader(40, 'Getting things ready...');
 
     return {
       profileId: initData.profile_id,
