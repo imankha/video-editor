@@ -19,6 +19,7 @@ Usage:
 import argparse
 import shutil
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
@@ -162,12 +163,36 @@ def main():
     delete_r2_data(user_id, args.dry_run)
     print()
 
-    print("[4/4] Sync auth.sqlite to R2:")
+    print("[4/5] Sync auth.sqlite to R2:")
     if not args.dry_run:
         if sync_auth_db_to_r2():
             print("  Synced")
         else:
             print("  Sync failed or R2 not enabled")
+    else:
+        print("  (skipped in dry run)")
+
+    print()
+    print("[5/5] Restart staging server (so it re-reads from R2):")
+    if not args.dry_run:
+        try:
+            result = subprocess.run(
+                ["fly", "machines", "restart", "-a", "reel-ballers-api-staging", "--force"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode == 0:
+                print("  Staging server restarted")
+            else:
+                # Machine may be suspended — that's fine, it'll restore from R2 on next wake
+                stderr = result.stderr.strip()
+                if "suspended" in stderr.lower() or "stopped" in stderr.lower():
+                    print("  Machine is suspended — will restore from R2 on next request")
+                else:
+                    print(f"  Restart failed: {stderr or result.stdout.strip()}")
+        except FileNotFoundError:
+            print("  fly CLI not found — manually restart staging or wait for auto-suspend")
+        except subprocess.TimeoutExpired:
+            print("  Restart timed out — server may still be restarting")
     else:
         print("  (skipped in dry run)")
 

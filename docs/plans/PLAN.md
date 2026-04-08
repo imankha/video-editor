@@ -39,6 +39,12 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1030 | [Quest UI Relocation](tasks/for-alpha/T1030-quest-ui-relocation.md) | TESTING | 2.0 | Move quest panel out of floating overlay into dedicated area; currently covers controls user needs (e.g., playback button for Q1S3) |
 | T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | TESTING | 1.3 | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
 
+### Standalone Tasks
+
+| ID | Task | Status | Pri | Description |
+|----|------|--------|-----|-------------|
+| T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
+
 ### Epic: For Launch (TODO)
 [tasks/for-launch/EPIC.md](tasks/for-launch/EPIC.md)
 
