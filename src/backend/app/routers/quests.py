@@ -68,18 +68,17 @@ def _check_all_steps(user_id: str, conn) -> dict:
         "SELECT 1 FROM achievements WHERE key = 'viewed_gallery_video'"
     ).fetchone() is not None
 
-    # --- Quest 3: Annotate More Clips (first game only) ---
+    # --- Quest 3: Annotate More Clips (any game) ---
 
-    # 3+ total raw_clips on first game (at least 1 more beyond the 2 five-star clips)
+    # 3+ total raw_clips across all games
     row = cursor.execute(
-        "SELECT count(*) as cnt FROM raw_clips WHERE game_id = (SELECT MIN(id) FROM games)"
+        "SELECT count(*) as cnt FROM raw_clips"
     ).fetchone()
     steps["annotate_5_more"] = row["cnt"] >= 3
 
-    # 2+ clips rated 5 on first game
+    # 2+ clips rated 5 across all games
     row = cursor.execute(
-        """SELECT count(*) as cnt FROM raw_clips
-           WHERE rating = 5 AND game_id = (SELECT MIN(id) FROM games)"""
+        "SELECT count(*) as cnt FROM raw_clips WHERE rating = 5"
     ).fetchone()
     steps["annotate_second_5_star"] = row["cnt"] >= 2
 

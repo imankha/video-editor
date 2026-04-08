@@ -36,7 +36,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   // Fetch existing tournaments when modal opens
   useEffect(() => {
     if (isOpen) {
-      fetch(`${API_BASE}/api/games/tournaments`)
+      fetch(`${API_BASE}/api/games/tournaments`, { credentials: 'include' })
         .then(res => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
