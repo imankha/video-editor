@@ -37,7 +37,7 @@ from ...services.clip_pipeline import process_clip_with_pipeline
 from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR, ExportStatus
 from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
-from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2, download_from_r2_global
+from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2, download_from_r2_global, generate_presigned_url_global
 from ...queries import latest_working_clips_subquery
 from ...user_context import get_current_user_id, set_current_user_id
 from ...profile_context import get_current_profile_id, set_current_profile_id
@@ -1335,30 +1335,7 @@ async def export_multi_clip(
 
                 # Resolve video source
                 if db_clip['game_id'] and db_clip['game_blake3_hash']:
-                    # Game clip: download game video from R2, extract clip range
-                    game_key = f"games/{db_clip['game_blake3_hash']}.mp4"
-                    game_video_path = Path(resolve_temp_dir) / f"game_{db_clip['game_blake3_hash']}.mp4"
-
-                    # Reuse downloaded game video if multiple clips share the same game
-                    if not game_video_path.exists():
-                        # Send download progress (5-10% range)
-                        dl_progress = 5 + int(((i + 0.0) / resolve_total) * 5)
-                        progress_data = {
-                            "progress": dl_progress,
-                            "message": f"Downloading source video ({i + 1}/{resolve_total})...",
-                            "status": "processing",
-                            "projectId": project_id,
-                            "projectName": project_name,
-                            "type": "multi_clip"
-                        }
-                        export_progress[export_id] = progress_data
-                        await manager.send_progress(export_id, progress_data)
-
-                        logger.info(f"[Multi-Clip Export] Downloading game video: {game_key}")
-                        if not download_from_r2_global(game_key, game_video_path):
-                            raise HTTPException(status_code=500, detail=f"Failed to download game video for clip {i}")
-
-                    # Extract clip range with FFmpeg (stream copy, no re-encode)
+                    # Game clip: stream clip range from R2 via presigned URL (no full download)
                     extract_progress = 5 + int(((i + 0.5) / resolve_total) * 5)
                     progress_data = {
                         "progress": extract_progress,
@@ -1371,15 +1348,16 @@ async def export_multi_clip(
                     export_progress[export_id] = progress_data
                     await manager.send_progress(export_id, progress_data)
 
+                    source_url = generate_presigned_url_global(f"games/{db_clip['game_blake3_hash']}.mp4")
                     clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
                     start_time = db_clip['raw_start_time']
                     end_time = db_clip['raw_end_time']
-                    logger.info(f"[Multi-Clip Export] Extracting clip {i} range: {start_time}s - {end_time}s")
+                    logger.info(f"[Multi-Clip Export] Streaming clip {i} range: {start_time}s - {end_time}s")
 
                     try:
                         (
                             ffmpeg
-                            .input(str(game_video_path), ss=start_time, to=end_time)
+                            .input(source_url, ss=start_time, to=end_time)
                             .output(str(clip_path), c='copy')
                             .overwrite_output()
                             .run(quiet=True)
