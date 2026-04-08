@@ -212,7 +212,7 @@ def _graceful_shutdown(signum, frame):
 
                     # Sync to R2
                     version = get_local_db_version(user_id, profile_id)
-                    success, new_version = sync_database_to_r2_with_version(user_id, db_file, version)
+                    success, new_version = sync_database_to_r2_with_version(user_id, db_file, version, skip_version_check=True)
                     if success:
                         synced += 1
                     else:
