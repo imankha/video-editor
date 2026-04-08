@@ -17,8 +17,7 @@ import { create } from 'zustand';
 import { API_BASE } from '../config';
 import { uploadGame as uploadGameService } from '../services/uploadManager';
 
-// Module-level refs for debounced save and fetch cancellation
-let _saveTimeout = null;
+// Module-level refs for fetch cancellation
 let _fetchController = null;
 let _fetchPromise = null;
 
@@ -240,19 +239,6 @@ export const useGamesDataStore = create((set, get) => ({
   },
 
   /**
-   * Save annotations with debounce (500ms after last change)
-   */
-  saveAnnotationsDebounced: (gameId, annotations) => {
-    if (_saveTimeout) {
-      clearTimeout(_saveTimeout);
-    }
-    _saveTimeout = setTimeout(() => {
-      get().saveAnnotations(gameId, annotations);
-      _saveTimeout = null;
-    }, 500);
-  },
-
-  /**
    * Delete a game
    */
   deleteGame: async (gameId) => {
@@ -325,7 +311,6 @@ export const useGamesDataStore = create((set, get) => ({
    */
   reset: () => {
     if (_fetchController) { _fetchController.abort(); _fetchController = null; }
-    if (_saveTimeout) { clearTimeout(_saveTimeout); _saveTimeout = null; }
     _fetchPromise = null;
     set({
       games: [],

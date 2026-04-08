@@ -507,8 +507,8 @@ export function AnnotateContainer({
     if (newRegion) {
       seek(newRegion.startTime);
 
-      // Save to backend if we have a game ID and video is uploaded
-      if (annotateGameId && !isUploadingFromStore) {
+      // Save to backend if we have a game ID (game record exists in DB even during upload)
+      if (annotateGameId) {
         const result = await saveClip(annotateGameId, {
           start_time: newRegion.startTime,
           end_time: newRegion.endTime,
@@ -529,11 +529,10 @@ export function AnnotateContainer({
             });
           }
         }
-      } else if (isUploadingFromStore) {
       }
     }
     // Overlay closes automatically: addClipRegion calls onSelect → selectClip → CREATING→SELECTED
-  }, [addClipRegion, seek, annotateGameId, isUploadingFromStore, saveClip, setRawClipId, currentVideoSequence]);
+  }, [addClipRegion, seek, annotateGameId, saveClip, setRawClipId, currentVideoSequence]);
 
   /**
    * Update a clip region - syncs to backend
@@ -550,8 +549,8 @@ export function AnnotateContainer({
     // Update locally first
     updateClipRegion(regionId, updates);
 
-    // Skip backend sync if video is still uploading or no game ID
-    if (!annotateGameId || isUploadingFromStore) {
+    // Skip backend sync if no game ID
+    if (!annotateGameId) {
       return;
     }
 
@@ -608,7 +607,7 @@ export function AnnotateContainer({
         }
       }
     }
-  }, [clipRegions, updateClipRegion, annotateGameId, isUploadingFromStore, saveClip, updateClipRemote, setRawClipId, currentVideoSequence]);
+  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, currentVideoSequence]);
 
   /**
    * Handle updating an existing clip from fullscreen overlay
