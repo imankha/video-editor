@@ -24,8 +24,10 @@ header so the frontend can show a warning indicator.
 """
 
 import logging
+import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -35,19 +37,23 @@ from ..database import (
     clear_request_context,
     sync_db_to_cloud_if_writes,
     sync_user_db_to_cloud_if_writes,
+    sync_db_to_r2_explicit,
+    sync_user_db_to_r2_explicit,
     get_request_has_writes,
     get_request_has_user_db_writes,
     mark_sync_pending,
     clear_sync_pending,
     has_sync_pending,
 )
-from ..profile_context import set_current_profile_id
+from ..profile_context import set_current_profile_id, get_current_profile_id
 from ..session_init import user_session_init
 from ..services.auth_db import validate_session
 from ..storage import R2_ENABLED
-from ..user_context import set_current_user_id
+from ..user_context import set_current_user_id, get_current_user_id
 
 logger = logging.getLogger(__name__)
+
+PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
 
 # Thresholds for slow request warnings (in seconds)
 SLOW_SYNC_THRESHOLD = 0.5  # 500ms - warn if DB sync takes this long
@@ -217,8 +223,52 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 sync_start = time.perf_counter()
                 sync_status = "ok"
                 try:
-                    db_status = sync_db_to_cloud_if_writes()  # Returns "ok", "conflict", or "failed"
-                    user_sync_success = sync_user_db_to_cloud_if_writes()
+                    if had_writes and had_user_db_writes:
+                        # Both need syncing — run in parallel using explicit
+                        # functions that take args instead of relying on ContextVars
+                        _user_id = get_current_user_id()
+                        _profile_id = get_current_profile_id()
+                        timing = {}
+
+                        def _sync_profile():
+                            t0 = time.perf_counter()
+                            result = sync_db_to_r2_explicit(_user_id, _profile_id)
+                            timing['profile_ms'] = (time.perf_counter() - t0) * 1000
+                            return result
+
+                        def _sync_user():
+                            t0 = time.perf_counter()
+                            result = sync_user_db_to_r2_explicit(_user_id)
+                            timing['user_ms'] = (time.perf_counter() - t0) * 1000
+                            return result
+
+                        with ThreadPoolExecutor(max_workers=2) as executor:
+                            profile_future = executor.submit(_sync_profile)
+                            user_future = executor.submit(_sync_user)
+                            profile_ok = profile_future.result()
+                            user_ok = user_future.result()
+
+                        # Map explicit sync return values to middleware expectations
+                        db_status = "ok" if profile_ok else "failed"
+                        user_sync_success = user_ok
+
+                        if PROFILING_ENABLED:
+                            parallel_ms = (time.perf_counter() - sync_start) * 1000
+                            p_ms = timing.get('profile_ms', 0)
+                            u_ms = timing.get('user_ms', 0)
+                            logger.info(
+                                f"[PROFILE] R2 sync: {parallel_ms:.0f}ms parallel "
+                                f"(would be {p_ms + u_ms:.0f}ms sequential: "
+                                f"profile: {p_ms:.0f}ms + user: {u_ms:.0f}ms)"
+                            )
+                    elif had_writes:
+                        db_status = sync_db_to_cloud_if_writes()
+                        user_sync_success = True
+                    else:
+                        # had_user_db_writes only
+                        db_status = "ok"
+                        user_sync_success = sync_user_db_to_cloud_if_writes()
+
                     if db_status == "conflict":
                         sync_status = "conflict"
                     elif db_status == "failed" or not user_sync_success:

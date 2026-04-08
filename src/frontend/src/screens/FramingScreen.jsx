@@ -16,6 +16,7 @@ import { ConfirmationDialog } from '../components/shared';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
+import { warmVideoCache } from '../utils/cacheWarming';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore } from '../stores';
@@ -403,6 +404,7 @@ export function FramingScreen({
     const { url: clipUrl, clipRange } = getClipVideoConfig(targetClip);
     if (!clipUrl || clipUrl.startsWith('blob:')) return;
     const meta = clipMetadataCache[targetClip.id];
+    warmVideoCache(clipUrl);
     loadVideoFromStreamingUrl(clipUrl, meta?.metadata || null, clipRange);
     lastLoadedUrlRef.current = clipUrl;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only, mirrors initial load effect
@@ -452,6 +454,7 @@ export function FramingScreen({
 
     const loadFirstClipVideo = async () => {
       if (!clipUrl.startsWith('blob:')) {
+        warmVideoCache(clipUrl);
         loadVideoFromStreamingUrl(clipUrl, firstClipWithMeta?.metadata || null, clipRange);
       } else {
         const file = await loadVideoFromUrl(clipUrl, firstClip.filename || 'clip.mp4');
@@ -522,6 +525,7 @@ export function FramingScreen({
         const { url: newClipUrl, clipRange: newClipRange } = getClipVideoConfig(newClip);
         if (newClipUrl) {
           if (!newClipUrl.startsWith('blob:')) {
+            warmVideoCache(newClipUrl);
             loadVideoFromStreamingUrl(newClipUrl, newClipWithMeta?.metadata || null, newClipRange);
           } else {
             const file = await loadVideoFromUrl(newClipUrl, newClip.filename || 'clip.mp4');
@@ -728,6 +732,7 @@ export function FramingScreen({
       console.log('[FramingScreen] Got fresh URL:', freshUrl?.substring(0, 60));
 
       if (freshUrl && !freshUrl.startsWith('blob:')) {
+        warmVideoCache(freshUrl);
         loadVideoFromStreamingUrl(freshUrl, selectedClipWithMeta.metadata || null);
       } else {
         await loadVideoFromUrl(freshUrl || localFallbackUrl, filename);

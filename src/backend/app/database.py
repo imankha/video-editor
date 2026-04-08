@@ -1340,7 +1340,9 @@ def sync_db_to_cloud() -> str:
     check_database_size(db_path)
     current_version = get_local_db_version(user_id, profile_id)
 
-    success, new_version = sync_database_to_r2_with_version(user_id, db_path, current_version)
+    success, new_version = sync_database_to_r2_with_version(
+        user_id, db_path, current_version, skip_version_check=True
+    )
 
     if success and new_version is not None:
         set_local_db_version(user_id, profile_id, new_version)
@@ -1401,7 +1403,9 @@ def sync_db_to_r2_explicit(user_id: str, profile_id: str) -> bool:
     check_database_size(db_path)
     current_version = get_local_db_version(user_id, profile_id)
 
-    success, new_version = sync_database_to_r2_with_version(user_id, db_path, current_version)
+    success, new_version = sync_database_to_r2_with_version(
+        user_id, db_path, current_version, skip_version_check=True,
+    )
 
     if success and new_version is not None:
         set_local_db_version(user_id, profile_id, new_version)
@@ -1430,7 +1434,9 @@ def sync_user_db_to_r2_explicit(user_id: str) -> bool:
     from .storage import sync_user_db_to_r2_with_version
 
     local_version = get_local_user_db_version(user_id)
-    success, new_version = sync_user_db_to_r2_with_version(user_id, db_path, local_version)
+    success, new_version = sync_user_db_to_r2_with_version(
+        user_id, db_path, local_version, skip_version_check=True,
+    )
 
     if success and new_version is not None:
         set_local_user_db_version(user_id, new_version)
@@ -1495,7 +1501,9 @@ def sync_user_db_to_cloud_if_writes() -> bool:
     from .storage import sync_user_db_to_r2_with_version
 
     local_version = get_local_user_db_version(user_id)
-    success, new_version = sync_user_db_to_r2_with_version(user_id, db_path, local_version)
+    success, new_version = sync_user_db_to_r2_with_version(
+        user_id, db_path, local_version, skip_version_check=True
+    )
     if success and new_version is not None:
         set_local_user_db_version(user_id, new_version)
         logger.debug(f"user.sqlite synced to R2 for user: {user_id}, version: {new_version}")

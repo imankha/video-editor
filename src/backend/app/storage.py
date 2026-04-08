@@ -21,8 +21,11 @@ from pathlib import Path
 from typing import Optional, BinaryIO, Tuple, Union
 from functools import lru_cache
 import threading
+import time
 
 logger = logging.getLogger(__name__)
+
+PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
 
 
 class R2VersionResult(Enum):
@@ -549,6 +552,7 @@ def get_db_version_from_r2(user_id: str, client=None) -> Union[int, R2VersionRes
         return R2VersionResult.ERROR  # No client = can't check
 
     key = r2_key(user_id, "profile.sqlite")
+    t0 = time.perf_counter() if PROFILING_ENABLED else 0
     try:
         from .utils.retry import retry_r2_call, TIER_2
         response = retry_r2_call(
@@ -557,16 +561,23 @@ def get_db_version_from_r2(user_id: str, client=None) -> Union[int, R2VersionRes
         )
         metadata = response.get("Metadata", {})
         version_str = metadata.get("db-version")
-        if version_str:
-            return int(version_str)
-        # No version metadata - treat as version 0 (legacy upload)
-        return 0
+        result = int(version_str) if version_str else 0
+        if PROFILING_ENABLED:
+            elapsed = (time.perf_counter() - t0) * 1000
+            logger.info(f"[PROFILE] get_db_version_from_r2: {elapsed:.0f}ms")
+        return result
     except client.exceptions.ClientError as e:
+        if PROFILING_ENABLED:
+            elapsed = (time.perf_counter() - t0) * 1000
+            logger.info(f"[PROFILE] get_db_version_from_r2: {elapsed:.0f}ms (error)")
         if e.response['Error']['Code'] == '404':
             return R2VersionResult.NOT_FOUND
         logger.error(f"Failed to get DB version from R2: {e}")
         return R2VersionResult.ERROR
     except Exception as e:
+        if PROFILING_ENABLED:
+            elapsed = (time.perf_counter() - t0) * 1000
+            logger.info(f"[PROFILE] get_db_version_from_r2: {elapsed:.0f}ms (error)")
         logger.error(f"Failed to get DB version from R2: {e}")
         return R2VersionResult.ERROR
 
@@ -622,7 +633,8 @@ def sync_database_from_r2_if_newer(
 def sync_database_to_r2_with_version(
     user_id: str,
     local_db_path: Path,
-    current_version: Optional[int]
+    current_version: Optional[int],
+    skip_version_check: bool = False,
 ) -> Tuple[bool, Optional[int]]:
     """
     Upload the user's database to R2 with version metadata.
@@ -633,6 +645,8 @@ def sync_database_to_r2_with_version(
         user_id: User namespace
         local_db_path: Local path of the database file
         current_version: Version we loaded from (for conflict detection)
+        skip_version_check: If True, skip the HEAD call and use current_version directly.
+            Safe when version is tracked in-memory and no multi-device writes expected.
 
     Returns:
         Tuple of (success, new_version)
@@ -651,34 +665,45 @@ def sync_database_to_r2_with_version(
     if not client:
         return False, None
 
-    # Check for conflicts (another request may have written)
-    r2_result = get_db_version_from_r2(user_id, client=client)
+    t_total = time.perf_counter() if PROFILING_ENABLED else 0
+    head_ms = 0.0
 
-    # Extract int version, treating NOT_FOUND/ERROR as 0
-    if isinstance(r2_result, R2VersionResult):
-        r2_version = 0
+    if skip_version_check:
+        # Skip HEAD call — use in-memory version as base
+        new_version = (current_version or 0) + 1
     else:
-        r2_version = r2_result
+        # Check for conflicts (another request may have written)
+        t_head = time.perf_counter() if PROFILING_ENABLED else 0
+        r2_result = get_db_version_from_r2(user_id, client=client)
+        if PROFILING_ENABLED:
+            head_ms = (time.perf_counter() - t_head) * 1000
 
-    # If R2 has a newer version than what we loaded, we have a conflict
-    # T950: Fail instead of overwriting — re-download the newer version
-    if r2_version > 0 and current_version is not None and r2_version > current_version:
-        logger.error(
-            f"[SYNC] Version conflict for {user_id}: loaded v{current_version}, "
-            f"R2 has v{r2_version}. NOT uploading — would overwrite newer data."
-        )
-        # Re-download the newer version so next request uses fresh data
-        try:
-            if download_from_r2(user_id, "profile.sqlite", local_db_path):
-                logger.info(f"[SYNC] Re-downloaded v{r2_version} from R2 after conflict")
-        except Exception as e:
-            logger.warning(f"[SYNC] Failed to re-download after conflict: {e}")
-        return False, r2_version  # Return R2 version so caller can update local tracking
+        # Extract int version, treating NOT_FOUND/ERROR as 0
+        if isinstance(r2_result, R2VersionResult):
+            r2_version = 0
+        else:
+            r2_version = r2_result
 
-    # Calculate new version
-    new_version = (max(r2_version, current_version or 0)) + 1
+        # If R2 has a newer version than what we loaded, we have a conflict
+        # T950: Fail instead of overwriting — re-download the newer version
+        if r2_version > 0 and current_version is not None and r2_version > current_version:
+            logger.error(
+                f"[SYNC] Version conflict for {user_id}: loaded v{current_version}, "
+                f"R2 has v{r2_version}. NOT uploading — would overwrite newer data."
+            )
+            # Re-download the newer version so next request uses fresh data
+            try:
+                if download_from_r2(user_id, "profile.sqlite", local_db_path):
+                    logger.info(f"[SYNC] Re-downloaded v{r2_version} from R2 after conflict")
+            except Exception as e:
+                logger.warning(f"[SYNC] Failed to re-download after conflict: {e}")
+            return False, r2_version  # Return R2 version so caller can update local tracking
+
+        # Calculate new version
+        new_version = (max(r2_version, current_version or 0)) + 1
 
     key = r2_key(user_id, "profile.sqlite")
+    t_upload = time.perf_counter() if PROFILING_ENABLED else 0
     try:
         from .utils.retry import retry_r2_call, TIER_1
         retry_r2_call(
@@ -687,6 +712,13 @@ def sync_database_to_r2_with_version(
             ExtraArgs={"Metadata": {"db-version": str(new_version)}},
             operation=f"db_sync_upload {user_id}", **TIER_1,
         )
+        if PROFILING_ENABLED:
+            upload_ms = (time.perf_counter() - t_upload) * 1000
+            total_ms = (time.perf_counter() - t_total) * 1000
+            logger.info(
+                f"[PROFILE] sync_database_to_r2_with_version: {total_ms:.0f}ms "
+                f"(head: {'skipped' if skip_version_check else f'{head_ms:.0f}ms'}, upload: {upload_ms:.0f}ms)"
+            )
         logger.debug(f"Uploaded DB to R2: {user_id} version {new_version}")
         return True, new_version
     except Exception as e:
@@ -831,9 +863,14 @@ def sync_user_db_from_r2_if_newer(
 def sync_user_db_to_r2_with_version(
     user_id: str,
     local_db_path: Path,
-    current_version: Optional[int]
+    current_version: Optional[int],
+    skip_version_check: bool = False,
 ) -> Tuple[bool, Optional[int]]:
-    """Upload user.sqlite to R2 with version metadata. Same pattern as profile DB."""
+    """Upload user.sqlite to R2 with version metadata. Same pattern as profile DB.
+
+    Args:
+        skip_version_check: If True, skip the HEAD call and use current_version directly.
+    """
     if not R2_ENABLED:
         return False, None
 
@@ -844,37 +881,47 @@ def sync_user_db_to_r2_with_version(
     if not client:
         return False, None
 
-    r2_result = get_user_db_version_from_r2(user_id, client=client)
+    t_total = time.perf_counter() if PROFILING_ENABLED else 0
+    head_ms = 0.0
 
-    # Extract int version, treating NOT_FOUND/ERROR as 0
-    if isinstance(r2_result, R2VersionResult):
-        r2_version = 0
+    if skip_version_check:
+        # Skip HEAD call — use in-memory version as base
+        new_version = (current_version or 0) + 1
     else:
-        r2_version = r2_result
+        t_head = time.perf_counter() if PROFILING_ENABLED else 0
+        r2_result = get_user_db_version_from_r2(user_id, client=client)
+        if PROFILING_ENABLED:
+            head_ms = (time.perf_counter() - t_head) * 1000
 
-    # T950: Fail on conflict instead of overwriting
-    if r2_version > 0 and current_version is not None and r2_version > current_version:
-        logger.error(
-            f"[SYNC] user.sqlite version conflict for {user_id}: loaded v{current_version}, "
-            f"R2 has v{r2_version}. NOT uploading."
-        )
-        try:
-            user_db_relative = f"user.sqlite"
-            user_key = _user_db_r2_key(user_id)
-            # Re-download by fetching directly
-            from .utils.retry import retry_r2_call, TIER_1
-            retry_r2_call(
-                client.download_file, R2_BUCKET, user_key, str(local_db_path),
-                operation=f"user_db_conflict_redownload {user_id}", **TIER_1,
+        # Extract int version, treating NOT_FOUND/ERROR as 0
+        if isinstance(r2_result, R2VersionResult):
+            r2_version = 0
+        else:
+            r2_version = r2_result
+
+        # T950: Fail on conflict instead of overwriting
+        if r2_version > 0 and current_version is not None and r2_version > current_version:
+            logger.error(
+                f"[SYNC] user.sqlite version conflict for {user_id}: loaded v{current_version}, "
+                f"R2 has v{r2_version}. NOT uploading."
             )
-            logger.info(f"[SYNC] Re-downloaded user.sqlite v{r2_version} after conflict")
-        except Exception as e:
-            logger.warning(f"[SYNC] Failed to re-download user.sqlite after conflict: {e}")
-        return False, r2_version
+            try:
+                user_key = _user_db_r2_key(user_id)
+                # Re-download by fetching directly
+                from .utils.retry import retry_r2_call, TIER_1
+                retry_r2_call(
+                    client.download_file, R2_BUCKET, user_key, str(local_db_path),
+                    operation=f"user_db_conflict_redownload {user_id}", **TIER_1,
+                )
+                logger.info(f"[SYNC] Re-downloaded user.sqlite v{r2_version} after conflict")
+            except Exception as e:
+                logger.warning(f"[SYNC] Failed to re-download user.sqlite after conflict: {e}")
+            return False, r2_version
 
-    new_version = (max(r2_version, current_version or 0)) + 1
+        new_version = (max(r2_version, current_version or 0)) + 1
 
     key = _user_db_r2_key(user_id)
+    t_upload = time.perf_counter() if PROFILING_ENABLED else 0
     try:
         from .utils.retry import retry_r2_call, TIER_1
         retry_r2_call(
@@ -883,6 +930,13 @@ def sync_user_db_to_r2_with_version(
             ExtraArgs={"Metadata": {"db-version": str(new_version)}},
             operation=f"user_db_sync_upload {user_id}", **TIER_1,
         )
+        if PROFILING_ENABLED:
+            upload_ms = (time.perf_counter() - t_upload) * 1000
+            total_ms = (time.perf_counter() - t_total) * 1000
+            logger.info(
+                f"[PROFILE] sync_user_db_to_r2_with_version: {total_ms:.0f}ms "
+                f"(head: {'skipped' if skip_version_check else f'{head_ms:.0f}ms'}, upload: {upload_ms:.0f}ms)"
+            )
         logger.debug(f"Uploaded user.sqlite to R2: {user_id} version {new_version}")
         return True, new_version
     except Exception as e:
