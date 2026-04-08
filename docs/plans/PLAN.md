@@ -43,6 +43,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 
 | ID | Task | Status | Pri | Description |
 |----|------|--------|-----|-------------|
+| T1150 | [Fix Pending Sync Retry No-Op](tasks/T1150-fix-pending-sync-retry-noop.md) | TODO | 3.0 | T930 retry calls `_if_writes` before `init_request_context` — always short-circuits, never actually uploads |
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
 
 ### Epic: For Launch (TODO)
