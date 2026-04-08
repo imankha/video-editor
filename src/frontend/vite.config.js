@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { execSync } from 'child_process'
 
 // API port configuration
 // - Default: 8000 for manual development
@@ -7,8 +8,13 @@ import react from '@vitejs/plugin-react'
 const API_PORT = process.env.VITE_API_PORT || '8000';
 
 // https://vitejs.dev/config/
+const commitHash = execSync('git rev-parse --short HEAD').toString().trim();
+
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __COMMIT_HASH__: JSON.stringify(commitHash),
+  },
   // Strip console.log in production builds (keep console.error and console.warn for debugging)
   esbuild: {
     drop: process.env.NODE_ENV === 'production' ? ['debugger'] : [],
