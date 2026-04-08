@@ -37,7 +37,7 @@ from ...services.clip_pipeline import process_clip_with_pipeline
 from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR, ExportStatus
 from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
-from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2, download_from_r2_global, generate_presigned_url_global
+from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2, generate_presigned_url_global
 from ...queries import latest_working_clips_subquery
 from ...user_context import get_current_user_id, set_current_user_id
 from ...profile_context import get_current_profile_id, set_current_profile_id

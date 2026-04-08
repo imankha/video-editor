@@ -264,7 +264,8 @@ async def local_framing(
     Same interface as call_modal_framing_ai - takes R2 keys, returns same format.
     Downloads from R2, processes with local Real-ESRGAN/FFmpeg, uploads result to R2.
     """
-    from app.storage import download_from_r2, download_from_r2_global, upload_to_r2
+    from app.storage import download_from_r2, generate_presigned_url_global, generate_presigned_url, upload_to_r2
+    import ffmpeg as ffmpeg_lib
 
     logger.info(f"[LocalProcessor] Framing job {job_id} starting")
     logger.info(f"[LocalProcessor] User: {user_id}, Input: {input_key} -> Output: {output_key}")
@@ -291,16 +292,42 @@ async def local_framing(
             input_path = os.path.join(temp_dir, "input.mp4")
             output_path = os.path.join(temp_dir, "output.mp4")
 
-            # Download from R2 — game videos are global (no user prefix)
-            if input_key.startswith("games/"):
-                download_result = await asyncio.to_thread(download_from_r2_global, input_key, Path(input_path))
+            # Stream only the clip range via presigned URL + FFmpeg (no full game download)
+            if input_key.startswith("games/") and source_end_time:
+                source_url = generate_presigned_url_global(input_key)
+                logger.info(f"[LocalProcessor] Streaming clip range {source_start_time}s-{source_end_time}s via presigned URL")
+                try:
+                    (
+                        ffmpeg_lib
+                        .input(source_url, ss=source_start_time, to=source_end_time)
+                        .output(input_path, c='copy')
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
+                except ffmpeg_lib.Error as e:
+                    return {"status": "error", "error": f"Failed to extract clip range from R2: {e}"}
+            elif input_key.startswith("games/"):
+                # No range specified — fall back to presigned URL streaming full file
+                source_url = generate_presigned_url_global(input_key)
+                logger.info(f"[LocalProcessor] Streaming full game video via presigned URL (no range)")
+                try:
+                    (
+                        ffmpeg_lib
+                        .input(source_url)
+                        .output(input_path, c='copy')
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
+                except ffmpeg_lib.Error as e:
+                    return {"status": "error", "error": f"Failed to stream video from R2: {e}"}
             else:
+                # User's own clip — small file, download directly
                 download_result = await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path))
-            if not download_result:
-                return {"status": "error", "error": f"Failed to download {input_key} from R2"}
+                if not download_result:
+                    return {"status": "error", "error": f"Failed to download {input_key} from R2"}
 
             download_time = time.time() - start_time
-            logger.info(f"[LocalProcessor] Downloaded in {download_time:.1f}s")
+            logger.info(f"[LocalProcessor] Input ready in {download_time:.1f}s")
 
             if progress_callback:
                 try:
@@ -354,42 +381,45 @@ async def local_framing(
                     except Exception as e:
                         logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
-            # T740: Transform times from clip-relative (0-based) to absolute in source video.
-            # The upscaler sees the full game video file and uses trim_start/trim_end to determine
-            # which frames to process. Without offset, it processes from the start of the game.
-            clip_offset = source_start_time
+            # When input is a game clip, we already extracted the clip range via
+            # presigned URL + FFmpeg, so the input file starts at t=0 and keyframes
+            # are already clip-relative. No offset needed.
+            # For non-game clips, source_start_time is 0 anyway.
+            is_pre_extracted = input_key.startswith("games/") and source_end_time
+            clip_offset = 0 if is_pre_extracted else source_start_time
             clip_duration = (source_end_time - source_start_time) if source_end_time else None
 
-            # Offset keyframe times to absolute
+            # Offset keyframe times (only needed for non-pre-extracted full video files)
             adjusted_keyframes = [
                 {**kf, 'time': kf['time'] + clip_offset}
                 for kf in keyframes
             ]
 
-            # Offset segment_data trim/segment times to absolute
+            # Offset segment_data trim/segment times
             adjusted_segment_data = None
             if segment_data:
                 adjusted_segment_data = {**segment_data}
-                # Offset trim range
                 trim_start = segment_data.get('trim_start', 0)
                 trim_end = segment_data.get('trim_end', clip_duration or 0)
                 adjusted_segment_data['trim_start'] = trim_start + clip_offset
                 adjusted_segment_data['trim_end'] = trim_end + clip_offset
-                # Offset segment boundaries
                 if 'segments' in segment_data:
                     adjusted_segment_data['segments'] = [
                         {**seg, 'start': seg['start'] + clip_offset, 'end': seg['end'] + clip_offset}
                         for seg in segment_data['segments']
                     ]
             elif clip_offset > 0:
-                # No segment_data but we need trim to extract the right range
                 adjusted_segment_data = {
                     'trim_start': clip_offset,
                     'trim_end': clip_offset + (clip_duration or 0),
                 }
 
-            logger.info(f"[LocalProcessor] Clip offset: {clip_offset}s, adjusted trim: "
-                       f"{adjusted_segment_data.get('trim_start', 0):.2f}s - {adjusted_segment_data.get('trim_end', 0):.2f}s")
+            trim_msg = ""
+            if adjusted_segment_data:
+                ts = adjusted_segment_data.get('trim_start', 0)
+                te = adjusted_segment_data.get('trim_end', 0)
+                trim_msg = f", trim: {ts:.2f}s - {te:.2f}s"
+            logger.info(f"[LocalProcessor] Pre-extracted: {is_pre_extracted}, clip offset: {clip_offset}s{trim_msg}")
 
             # Process with Real-ESRGAN
             result = await asyncio.to_thread(
@@ -451,7 +481,7 @@ async def local_framing_mock(
     Same interface as local_framing but skips AI upscaling entirely.
     Uses fast FFmpeg crop+resize to produce a valid working video in seconds.
     """
-    from app.storage import download_from_r2, download_from_r2_global, upload_to_r2
+    from app.storage import download_from_r2, generate_presigned_url_global, generate_presigned_url, upload_to_r2
     import ffmpeg as ffmpeg_lib
 
     logger.info(f"[LocalProcessor] Mock framing job {job_id} starting (test mode)")
@@ -470,13 +500,37 @@ async def local_framing_mock(
             input_path = os.path.join(temp_dir, "input.mp4")
             output_path = os.path.join(temp_dir, "output.mp4")
 
-            # Download from R2 — game videos are global (no user prefix)
-            if input_key.startswith("games/"):
-                download_result = await asyncio.to_thread(download_from_r2_global, input_key, Path(input_path))
+            # Stream only the clip range via presigned URL + FFmpeg (no full game download)
+            if input_key.startswith("games/") and source_end_time:
+                source_url = generate_presigned_url_global(input_key)
+                logger.info(f"[LocalProcessor] Mock: streaming clip range {source_start_time}s-{source_end_time}s via presigned URL")
+                try:
+                    (
+                        ffmpeg_lib
+                        .input(source_url, ss=source_start_time, to=source_end_time)
+                        .output(input_path, c='copy')
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
+                except ffmpeg_lib.Error as e:
+                    return {"status": "error", "error": f"Failed to extract clip range from R2: {e}"}
+            elif input_key.startswith("games/"):
+                source_url = generate_presigned_url_global(input_key)
+                logger.info(f"[LocalProcessor] Mock: streaming full game video via presigned URL")
+                try:
+                    (
+                        ffmpeg_lib
+                        .input(source_url)
+                        .output(input_path, c='copy')
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
+                except ffmpeg_lib.Error as e:
+                    return {"status": "error", "error": f"Failed to stream video from R2: {e}"}
             else:
                 download_result = await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path))
-            if not download_result:
-                return {"status": "error", "error": f"Failed to download {input_key} from R2"}
+                if not download_result:
+                    return {"status": "error", "error": f"Failed to download {input_key} from R2"}
 
             if progress_callback:
                 try:
