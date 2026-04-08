@@ -2,8 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Upload, Gamepad2, Calendar, MapPin, Trophy, ChevronDown } from 'lucide-react';
 import { Button } from './shared/Button';
 import { GameType, VideoMode } from '../constants/gameConstants';
-
-const API_BASE = import.meta.env.VITE_API_URL || '';
+import { API_BASE } from '../config';
 
 /**
  * GameDetailsModal - Modal for entering game details before creating a game
