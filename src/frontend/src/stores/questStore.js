@@ -124,12 +124,18 @@ export const useQuestStore = create((set, get) => ({
     _recordedAchievements.add(key);
 
     try {
-      await fetch(`${API_BASE}/api/quests/achievements/${key}`, {
+      const res = await fetch(`${API_BASE}/api/quests/achievements/${key}`, {
         method: 'POST',
         credentials: 'include',
       });
+      if (!res.ok) {
+        console.error(`[Quests] Achievement POST failed for '${key}': ${res.status}`);
+        _recordedAchievements.delete(key);
+        return;
+      }
     } catch {
-      // Best-effort
+      _recordedAchievements.delete(key);
+      return;
     }
     get().fetchProgress({ force: true });
   },

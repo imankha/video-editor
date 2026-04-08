@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/quests", tags=["quests"])
 
 # Known achievement keys — only these can be recorded
-KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "viewed_custom_project_video", "played_annotations", "watched_gallery_video_1s"}
+KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "viewed_custom_project_video", "played_annotations", "watched_gallery_video_1s", "watched_gallery_video_after_2_overlays"}
 
 
 def _check_all_steps(user_id: str, conn) -> dict:
