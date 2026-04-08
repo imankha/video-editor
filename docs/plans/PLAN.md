@@ -55,13 +55,13 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 | T445 | [Business Cards](tasks/T445-business-cards.md) | TODO | 2.5 | Design + print physical cards with QR code for handing out at games |
 | T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 2.3 | Expire sessions after inactivity, enforce single active session per user |
 | T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | TODO | 1.8 | Export processing blocks single Fly.io instance for minutes; must return 202 immediately |
-| T1120 | [Framing Video Cold Cache](tasks/for-launch/T1120-framing-video-cold-cache.md) | TODO | 1.8 | Framing editor slow to load videos; warm R2 cache on Framing entry, not just app init |
+| T1120 | [Framing Video Cold Cache](tasks/for-launch/T1120-framing-video-cold-cache.md) | TESTING | 1.8 | Framing editor slow to load videos; warm R2 cache on Framing entry, not just app init |
 | T1130 | [Multi-Clip Stream Not Download](tasks/for-launch/T1130-multiclip-stream-not-download.md) | DONE | 1.6 | Multi-clip export downloads full 3GB game videos; should use presigned URLs + FFmpeg range requests like single-clip |
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | TODO | 2.0 | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | TODO | 2.0 | "Install app" prompt, offline shell, home screen icon — feels native on phones |
-| T1020 | [Fast R2 Sync](tasks/T1020-fast-r2-sync.md) | TODO | 1.8 | Every save/export waits 1.7-3s for R2 upload to finish before responding; profile and speed up |
+| T1020 | [Fast R2 Sync](tasks/T1020-fast-r2-sync.md) | TESTING | 1.8 | Every save/export waits 1.7-3s for R2 upload to finish before responding; profile and speed up |
 | T1070 | [Team & Profiles Quest](tasks/for-launch/T1070-team-profiles-quest.md) | TODO | 1.8 | New quest teaching profiles + team uploads; encourages inviting teammates for credits |
-| T1010 | [Slow fetchProgress Response](tasks/T1010-slow-fetchprogress.md) | TODO | 1.7 | Quest progress endpoint takes 1.2s (20+ individual SQLite queries); batch or cache |
+| T1010 | [Slow fetchProgress Response](tasks/T1010-slow-fetchprogress.md) | TESTING | 1.7 | Quest progress endpoint takes 1.2s (20+ individual SQLite queries); batch or cache |
 | T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | TODO | 1.3 | "Upload Team" — invite teammates by email; inviter earns credits per signup (viral loop) |
 | T1090 | [Social Media Auto-Posting](tasks/for-launch/T1090-social-media-auto-posting.md) | TODO | 1.1 | "Share to Social" from gallery — one form posts to IG, TikTok, YouTube, FB via aggregator API; AI adapts captions per platform |
 | T1060 | [Coaches View](tasks/for-launch/T1060-coaches-view.md) | TODO | 1.0 | Coach account type: roster uploads, assign annotations to players, track clip review status, own NUF flow. No "Projects" for coaches. |
