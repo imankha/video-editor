@@ -727,6 +727,12 @@ async def render_project(request: RenderRequest, http_request: Request):
             """, (export_id, project_id))
             conn.commit()
         logger.info(f"[Render] export_jobs INSERT committed")
+        # Notify frontend that export job exists so quest progress can refresh
+        await manager.send_progress(export_id, {
+            "progress": 5,
+            "message": "Starting export...",
+            "status": "processing"
+        })
     except Exception as e:
         logger.warning(f"[Render] export_jobs INSERT FAILED: {e}")
 

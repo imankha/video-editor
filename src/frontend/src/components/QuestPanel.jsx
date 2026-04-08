@@ -129,9 +129,11 @@ export function QuestPanel() {
   // No need to fetch on mount here — the store is already populated.
 
   // Subscribe to export events to refresh quest progress
+  // Listen for 'progress' (job created → export_reel step) and 'complete' (job done → wait_for_reel step)
   useEffect(() => {
-    const unsub = exportWebSocketManager.addEventListener('*', 'complete', fetchProgress);
-    return () => { unsub(); };
+    const unsubComplete = exportWebSocketManager.addEventListener('*', 'complete', fetchProgress);
+    const unsubProgress = exportWebSocketManager.addEventListener('*', 'progress', fetchProgress);
+    return () => { unsubComplete(); unsubProgress(); };
   }, [fetchProgress]);
 
   // Detect step completions and quest completions for audio/animation

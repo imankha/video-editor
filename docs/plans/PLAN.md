@@ -48,6 +48,7 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 |----|------|--------|-----|-------------|
 | T445 | [Business Cards](tasks/T445-business-cards.md) | TODO | 2.5 | Design + print physical cards with QR code for handing out at games |
 | T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 2.3 | Expire sessions after inactivity, enforce single active session per user |
+| T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | TODO | 1.8 | Export processing blocks single Fly.io instance for minutes; must return 202 immediately |
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | TODO | 2.0 | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | TODO | 2.0 | "Install app" prompt, offline shell, home screen icon — feels native on phones |
 | T1020 | [Fast R2 Sync](tasks/T1020-fast-r2-sync.md) | TODO | 1.8 | Every save/export waits 1.7-3s for R2 upload to finish before responding; profile and speed up |

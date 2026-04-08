@@ -1195,6 +1195,12 @@ async def export_multi_clip(
                 """, (export_id, project_id))
                 conn.commit()
             logger.info(f"[Multi-Clip Export] Regressed project {project_id} and created export_jobs record: {export_id}")
+            # Notify frontend that export job exists so quest progress can refresh
+            await manager.send_progress(export_id, {
+                "progress": 5,
+                "message": "Starting export...",
+                "status": "processing"
+            })
         except Exception as e:
             logger.warning(f"[Multi-Clip Export] Failed to regress status / create export_jobs: {e}")
 
