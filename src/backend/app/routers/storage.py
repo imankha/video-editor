@@ -306,6 +306,7 @@ async def get_warmup_urls(
                    g.video_duration,
                    g.video_size
             FROM projects p
+            LEFT JOIN working_videos wv ON p.working_video_id = wv.id
             JOIN working_clips wc ON wc.project_id = p.id
             JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             JOIN games g ON rc.game_id = g.id
