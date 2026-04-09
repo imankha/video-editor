@@ -43,6 +43,7 @@ let currentPriority = WARMUP_PRIORITY.GAMES;
 let workersRunning = false;
 let warmupInProgress = false;
 
+
 // Concurrency settings
 const CONCURRENCY = 5;
 
@@ -61,6 +62,7 @@ export function setWarmupPriority(priority) {
     currentPriority = priority;
   }
 }
+
 
 /**
  * Get the next item to warm based on current priority.

@@ -217,6 +217,7 @@ export function VideoPlayer({
               onWaiting={handlers.onWaiting}
               onPlaying={handlers.onPlaying}
               onCanPlay={handlers.onCanPlay}
+              onStalled={handlers.onStalled}
               onError={handlers.onError}
               playsInline
               preload={clipRange ? "metadata" : "auto"}
