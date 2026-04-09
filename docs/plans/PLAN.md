@@ -47,6 +47,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1160 | [Clean Up Unused DB Rows](tasks/T1160-cleanup-unused-db-rows.md) | TODO | 2.5 | Prune old working_clips versions, orphaned before_after_tracks, stale modal_tasks to keep DB small for R2 sync |
 | T1170 | [Size-Based VACUUM on Init](tasks/T1170-size-based-vacuum-on-init.md) | TODO | 2.5 | Only VACUUM profile.sqlite when size exceeds 400KB threshold; skip for small DBs |
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
+| T1200 | [Modal Job ID Logging & Retry](tasks/T1200-modal-job-logging-retry.md) | TESTING | 1.4 | Log Modal call IDs across all paths (framing/overlay); classify failures and retry transient ones only |
 
 ### Epic: For Launch (TODO)
 [tasks/for-launch/EPIC.md](tasks/for-launch/EPIC.md)
