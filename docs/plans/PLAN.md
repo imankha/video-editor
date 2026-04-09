@@ -38,6 +38,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1040 | [Force Login on Add Game](tasks/for-alpha/T1040-force-login-add-game.md) | DONE | 3.5 | Guest clicks "Add Game" -> auth gate appears first; ensures persistent identity before investing effort |
 | T1030 | [Quest UI Relocation](tasks/for-alpha/T1030-quest-ui-relocation.md) | DONE | 2.0 | Move quest panel out of floating overlay into dedicated area; currently covers controls user needs (e.g., playback button for Q1S3) |
 | T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | DONE | 1.3 | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
+| T1230 | [Mobile Annotate Clips](tasks/for-alpha/T1230-mobile-annotate-clips.md) | TODO | 1.6 | Compact mode for ClipDetailsEditor on mobile — collapse scrub region, reduce tag/spacing sizes |
 
 ### Standalone Tasks
 
@@ -48,6 +49,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1170 | [Size-Based VACUUM on Init](tasks/T1170-size-based-vacuum-on-init.md) | TODO | 2.5 | Only VACUUM profile.sqlite when size exceeds 400KB threshold; skip for small DBs |
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
 | T1200 | [Modal Job ID Logging & Retry](tasks/T1200-modal-job-logging-retry.md) | TESTING | 1.4 | Log Modal call IDs across all paths (framing/overlay); classify failures and retry transient ones only |
+| T1240 | [R2 Restore Retry Tests](tasks/T1240-r2-restore-retry-tests.md) | TODO | 2.3 | Test coverage for R2 restore retry/cooldown — NOT_FOUND vs ERROR handling, cooldown expiry |
 
 ### Epic: For Launch (TODO)
 [tasks/for-launch/EPIC.md](tasks/for-launch/EPIC.md)
