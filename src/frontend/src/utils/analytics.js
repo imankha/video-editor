@@ -43,5 +43,7 @@ export function track(event, props = {}) {
   }
 
   // CF Web Analytics custom event fallback
-  window.__cfBeacon?.send({ type: 'event', name: event, ...props });
+  if (typeof window.__cfBeacon?.send === 'function') {
+    window.__cfBeacon.send({ type: 'event', name: event, ...props });
+  }
 }
