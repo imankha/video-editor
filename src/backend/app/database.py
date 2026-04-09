@@ -682,6 +682,10 @@ def ensure_database():
             CREATE INDEX IF NOT EXISTS idx_export_jobs_status
             ON export_jobs(status)
         """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_export_jobs_type_status
+            ON export_jobs(type, status)
+        """)
 
         # Before/After tracking - links final videos to their source footage
         # Used to generate before/after comparison videos
@@ -963,6 +967,11 @@ def ensure_database():
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_raw_clips_game_id
                 ON raw_clips(game_id)
+            """)
+            # Index for quest progress rating queries
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_raw_clips_rating
+                ON raw_clips(rating)
             """)
             # Composite index for natural key lookup (game_id + end_time + video_sequence)
             cursor.execute("""
@@ -1340,7 +1349,9 @@ def sync_db_to_cloud() -> str:
     check_database_size(db_path)
     current_version = get_local_db_version(user_id, profile_id)
 
-    success, new_version = sync_database_to_r2_with_version(user_id, db_path, current_version)
+    success, new_version = sync_database_to_r2_with_version(
+        user_id, db_path, current_version, skip_version_check=True
+    )
 
     if success and new_version is not None:
         set_local_db_version(user_id, profile_id, new_version)
@@ -1401,7 +1412,9 @@ def sync_db_to_r2_explicit(user_id: str, profile_id: str) -> bool:
     check_database_size(db_path)
     current_version = get_local_db_version(user_id, profile_id)
 
-    success, new_version = sync_database_to_r2_with_version(user_id, db_path, current_version)
+    success, new_version = sync_database_to_r2_with_version(
+        user_id, db_path, current_version, skip_version_check=True,
+    )
 
     if success and new_version is not None:
         set_local_db_version(user_id, profile_id, new_version)
@@ -1430,7 +1443,9 @@ def sync_user_db_to_r2_explicit(user_id: str) -> bool:
     from .storage import sync_user_db_to_r2_with_version
 
     local_version = get_local_user_db_version(user_id)
-    success, new_version = sync_user_db_to_r2_with_version(user_id, db_path, local_version)
+    success, new_version = sync_user_db_to_r2_with_version(
+        user_id, db_path, local_version, skip_version_check=True,
+    )
 
     if success and new_version is not None:
         set_local_user_db_version(user_id, new_version)
@@ -1495,7 +1510,9 @@ def sync_user_db_to_cloud_if_writes() -> bool:
     from .storage import sync_user_db_to_r2_with_version
 
     local_version = get_local_user_db_version(user_id)
-    success, new_version = sync_user_db_to_r2_with_version(user_id, db_path, local_version)
+    success, new_version = sync_user_db_to_r2_with_version(
+        user_id, db_path, local_version, skip_version_check=True
+    )
     if success and new_version is not None:
         set_local_user_db_version(user_id, new_version)
         logger.debug(f"user.sqlite synced to R2 for user: {user_id}, version: {new_version}")

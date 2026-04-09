@@ -141,7 +141,7 @@ function App() {
         const tick = () => {
           completed++;
           const pct = 40 + Math.round((completed / total) * 50);
-          updatePreloader(pct, 'Loading your data...');
+          updatePreloader(pct, 'Getting things ready...');
           if (completed >= total) tryDismiss();
         };
         Promise.resolve(p).then(tick, tick);

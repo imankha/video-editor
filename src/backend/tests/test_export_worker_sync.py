@@ -48,7 +48,7 @@ class TestSyncDbToR2Explicit:
              _patch_path_exists(db_path):
             result = sync_db_to_r2_explicit("u1", "p1")
 
-        mock_sync.assert_called_once_with("u1", db_path, 5)
+        mock_sync.assert_called_once_with("u1", db_path, 5, skip_version_check=True)
         assert result is True
 
     @patch("app.database.R2_ENABLED", True)
@@ -122,7 +122,7 @@ class TestSyncUserDbToR2Explicit:
             mock_sync.return_value = (True, 3)
             result = sync_user_db_to_r2_explicit("u1")
 
-        mock_sync.assert_called_once_with("u1", db_path, 2)
+        mock_sync.assert_called_once_with("u1", db_path, 2, skip_version_check=True)
         assert result is True
 
     @patch("app.database.get_local_user_db_version", return_value=2)
