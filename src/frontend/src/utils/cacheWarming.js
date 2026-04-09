@@ -27,9 +27,11 @@ export const WARMUP_PRIORITY = Object.freeze({
 });
 
 // Track URLs that have been warmed this session
+// For clip ranges, key is "url|startByte-endByte" to allow multiple ranges per URL
 const warmedUrls = new Set();
 
-// Priority queues - games queue now contains {url, size, warmTail} objects
+// Priority queues - tier1 is project clips (highest), then games, gallery, working
+let tier1Queue = [];
 let gamesQueue = [];
 let galleryQueue = [];
 let workingQueue = [];
@@ -62,45 +64,44 @@ export function setWarmupPriority(priority) {
 
 /**
  * Get the next item to warm based on current priority.
- * Returns {url, size, warmTail} object or null if all queues are empty.
- * Games queue items have size info; other queues just have URL strings.
+ * Returns item object or null if all queues are empty.
+ * Tier 1 (project clips) always processes first, then games/gallery by priority.
  */
 function getNextItem() {
-  // Priority queue first
+  // Tier 1: project clips (highest priority)
+  while (tier1Queue.length > 0) {
+    const item = tier1Queue.shift();
+    const cacheKey = item.type === 'clipRange'
+      ? `${item.url}|${item.startTime}-${item.endTime}`
+      : item.url;
+    if (cacheKey && !warmedUrls.has(cacheKey)) {
+      return { ...item, _cacheKey: cacheKey };
+    }
+  }
+
+  // Tier 2/3: games and gallery by user navigation priority
   const priorityQueue = currentPriority === WARMUP_PRIORITY.GAMES ? gamesQueue : galleryQueue;
   const secondaryQueue = currentPriority === WARMUP_PRIORITY.GAMES ? galleryQueue : gamesQueue;
 
-  // Try priority queue
-  while (priorityQueue.length > 0) {
-    const item = priorityQueue.shift();
-    // Handle both object format (games) and string format (other queues)
-    const url = typeof item === 'object' ? item.url : item;
-    if (url && !warmedUrls.has(url)) {
-      if (typeof item === 'object') {
-        return { url, size: item.size, warmTail: true };
+  for (const queue of [priorityQueue, secondaryQueue]) {
+    while (queue.length > 0) {
+      const item = queue.shift();
+      const url = typeof item === 'object' ? item.url : item;
+      if (url && !warmedUrls.has(url)) {
+        if (typeof item === 'object') {
+          return { url, size: item.size, warmTail: true, _cacheKey: url };
+        }
+        return { url, _cacheKey: url };
       }
-      return { url };
     }
   }
 
-  // Try secondary queue
-  while (secondaryQueue.length > 0) {
-    const item = secondaryQueue.shift();
-    const url = typeof item === 'object' ? item.url : item;
-    if (url && !warmedUrls.has(url)) {
-      if (typeof item === 'object') {
-        return { url, size: item.size, warmTail: true };
-      }
-      return { url };
-    }
-  }
-
-  // Try working queue last
+  // Working queue last
   while (workingQueue.length > 0) {
     const item = workingQueue.shift();
     const url = typeof item === 'object' ? item.url : item;
     if (url && !warmedUrls.has(url)) {
-      return { url };
+      return { url, _cacheKey: url };
     }
   }
 
@@ -162,6 +163,41 @@ async function warmUrl(url, options = {}) {
 }
 
 /**
+ * Warm a clip's byte range using proportional estimation.
+ * Primes the Cloudflare edge cache for the clip's region of the game video.
+ */
+async function warmClipRange(url, startTime, endTime, videoDuration, videoSize) {
+  if (!url || !videoDuration || !videoSize) return false;
+
+  const startByte = Math.floor((startTime / videoDuration) * videoSize);
+  const endByte = Math.ceil((endTime / videoDuration) * videoSize);
+  const rangeSize = endByte - startByte;
+  const buffer = Math.ceil(rangeSize * 0.1); // 10% buffer each side
+
+  const warmStart = Math.max(0, startByte - buffer);
+  const warmEnd = Math.min(videoSize - 1, endByte + buffer);
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Range': `bytes=${warmStart}-${warmEnd}` },
+      mode: 'cors',
+      credentials: 'omit',
+    });
+
+    if (!response.ok && response.status !== 206) {
+      return false;
+    }
+
+    console.log(`[CacheWarming] Warmed clip range ${Math.round(warmStart / 1024 / 1024)}MB-${Math.round(warmEnd / 1024 / 1024)}MB of ${Math.round(videoSize / 1024 / 1024)}MB video`);
+    return true;
+  } catch {
+    // CORS errors still warm the cache
+    return true;
+  }
+}
+
+/**
  * Worker function that continuously pulls from queues.
  */
 async function worker(workerId) {
@@ -171,10 +207,16 @@ async function worker(workerId) {
     const item = getNextItem();
     if (!item) break;
 
-    const success = await warmUrl(item.url, {
-      size: item.size,
-      warmTail: item.warmTail
-    });
+    let success;
+    if (item.type === 'clipRange') {
+      success = await warmClipRange(item.url, item.startTime, item.endTime, item.videoDuration, item.videoSize);
+    } else {
+      success = await warmUrl(item.url, { size: item.size, warmTail: item.warmTail });
+    }
+
+    if (success && item._cacheKey) {
+      warmedUrls.add(item._cacheKey);
+    }
     if (success) warmed++;
   }
 
@@ -188,7 +230,7 @@ async function runWorkers() {
   if (workersRunning) return;
   workersRunning = true;
 
-  const totalBefore = gamesQueue.length + galleryQueue.length + workingQueue.length;
+  const totalBefore = tier1Queue.length + gamesQueue.length + galleryQueue.length + workingQueue.length;
   if (totalBefore === 0) {
     workersRunning = false;
     return;
@@ -214,6 +256,7 @@ async function runWorkers() {
  */
 export function clearWarmingCache() {
   warmedUrls.clear();
+  tier1Queue = [];
   gamesQueue = [];
   galleryQueue = [];
   workingQueue = [];
@@ -246,27 +289,46 @@ export async function warmAllUserVideos() {
       return { warmed: 0, total: 0 };
     }
 
-    // Populate queues (filter already-warmed URLs)
+    // Populate tier 1: project clips (highest priority)
+    tier1Queue = [];
+    for (const project of (data.project_clips || [])) {
+      if (project.has_working_video && project.working_video_url) {
+        // Framed project: warm the working video (user's next step is Overlay)
+        tier1Queue.push({ url: project.working_video_url, warmTail: true });
+      } else {
+        // Unframed project: warm clip byte ranges
+        for (const clip of (project.clips || [])) {
+          tier1Queue.push({
+            type: 'clipRange',
+            url: clip.game_url,
+            startTime: clip.start_time,
+            endTime: clip.end_time,
+            videoDuration: clip.video_duration,
+            videoSize: clip.video_size,
+          });
+        }
+      }
+    }
+
+    // Populate remaining queues (filter already-warmed URLs)
     galleryQueue = (data.gallery_urls || []).filter(url => url && !warmedUrls.has(url));
-    // game_urls is now an array of {url, size} objects for tail warming support
     gamesQueue = (data.game_urls || []).filter(item => {
       const url = typeof item === 'object' ? item.url : item;
       return url && !warmedUrls.has(url);
     });
     workingQueue = (data.working_urls || []).filter(url => url && !warmedUrls.has(url));
 
-    const total = galleryQueue.length + gamesQueue.length + workingQueue.length;
+    const total = tier1Queue.length + galleryQueue.length + gamesQueue.length + workingQueue.length;
 
     if (total === 0) {
       console.log('[CacheWarming] No videos to warm');
       return { warmed: 0, total: 0 };
     }
 
-    // Count large games that will have tail warming
     const largeGames = gamesQueue.filter(item =>
       typeof item === 'object' && item.size && item.size > TAIL_WARM_SIZE_THRESHOLD
     ).length;
-    console.log(`[CacheWarming] Queued: ${gamesQueue.length} games (${largeGames} large with tail warm), ${galleryQueue.length} gallery, ${workingQueue.length} working`);
+    console.log(`[CacheWarming] Queued: ${tier1Queue.length} project clips (tier 1), ${gamesQueue.length} games (${largeGames} large with tail warm), ${galleryQueue.length} gallery, ${workingQueue.length} working`);
 
     // Start workers (non-blocking)
     runWorkers();
@@ -277,6 +339,33 @@ export async function warmAllUserVideos() {
     return { warmed: 0, total: 0 };
   } finally {
     warmupInProgress = false;
+  }
+}
+
+/**
+ * Push clip ranges to the front of the warmup queue.
+ * Call this when a new project is created to immediately warm its clips.
+ * @param {Array<{url, startTime, endTime, videoDuration, videoSize}>} clipRanges
+ */
+export function pushClipRanges(clipRanges) {
+  if (!clipRanges?.length) return;
+
+  const items = clipRanges.map(clip => ({
+    type: 'clipRange',
+    url: clip.url,
+    startTime: clip.startTime,
+    endTime: clip.endTime,
+    videoDuration: clip.videoDuration,
+    videoSize: clip.videoSize,
+  }));
+
+  // Prepend to tier1 so these process next
+  tier1Queue = [...items, ...tier1Queue];
+  console.log(`[CacheWarming] Pushed ${items.length} clip ranges to tier 1 queue`);
+
+  // Restart workers if they've finished
+  if (!workersRunning) {
+    runWorkers();
   }
 }
 

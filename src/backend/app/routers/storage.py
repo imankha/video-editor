@@ -19,6 +19,7 @@ from ..storage import (
     generate_presigned_upload_url,
     file_exists_in_r2,
 )
+from ..queries import latest_working_clips_subquery
 
 router = APIRouter(prefix="/storage", tags=["storage"])
 
@@ -293,6 +294,76 @@ async def get_warmup_urls(
             if url:
                 working_urls.append(url)
 
+        # Project clips for tier-1 warmup: incomplete projects with their clip ranges
+        cursor.execute(f"""
+            SELECT p.id as project_id,
+                   p.working_video_id,
+                   wv.filename as working_video_filename,
+                   rc.start_time,
+                   rc.end_time,
+                   g.blake3_hash,
+                   g.video_filename,
+                   g.video_duration,
+                   g.video_size
+            FROM projects p
+            JOIN working_clips wc ON wc.project_id = p.id
+            JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            JOIN games g ON rc.game_id = g.id
+            WHERE p.final_video_id IS NULL
+              AND wc.id IN ({latest_working_clips_subquery(project_filter=False)})
+            ORDER BY p.id, wc.sort_order
+        """)
+
+        # Group rows by project
+        project_map = {}
+        for row in cursor.fetchall():
+            pid = row['project_id']
+            if pid not in project_map:
+                has_wv = row['working_video_id'] is not None
+                wv_url = None
+                if has_wv and row['working_video_filename']:
+                    wv_url = generate_presigned_url(
+                        user_id=user_id,
+                        relative_path=f"working_videos/{row['working_video_filename']}",
+                        expires_in=expires_in,
+                        content_type="video/mp4"
+                    )
+                project_map[pid] = {
+                    "project_id": pid,
+                    "has_working_video": has_wv,
+                    "working_video_url": wv_url,
+                    "clips": [],
+                }
+
+            # Only include clip ranges for projects without a working video
+            if not project_map[pid]["has_working_video"]:
+                # Generate presigned URL for the game video
+                if row['blake3_hash']:
+                    game_url = generate_presigned_url_global(
+                        f"games/{row['blake3_hash']}.mp4",
+                        expires_in=expires_in
+                    )
+                elif row['video_filename']:
+                    game_url = generate_presigned_url(
+                        user_id=user_id,
+                        relative_path=f"games/{row['video_filename']}",
+                        expires_in=expires_in,
+                        content_type="video/mp4"
+                    )
+                else:
+                    game_url = None
+
+                if game_url:
+                    project_map[pid]["clips"].append({
+                        "game_url": game_url,
+                        "start_time": row['start_time'],
+                        "end_time": row['end_time'],
+                        "video_duration": row['video_duration'],
+                        "video_size": row['video_size'],
+                    })
+
+        project_clips = list(project_map.values())
+
     # Combined list for backwards compatibility (flatten game_urls)
     flat_game_urls = [g['url'] if isinstance(g, dict) else g for g in game_urls]
     urls = gallery_urls + flat_game_urls + working_urls
@@ -301,6 +372,7 @@ async def get_warmup_urls(
         "urls": urls,
         "count": len(urls),
         "r2_enabled": True,
+        "project_clips": project_clips,
         "gallery_urls": gallery_urls,
         "game_urls": game_urls,  # Now includes {url, size} for tail warming
         "working_urls": working_urls,

@@ -116,6 +116,7 @@ export function FramingModeView({
   error,
   isUrlExpiredError = () => false,
   onRetryVideo,
+  clipRange = null,
   handlers,
 
   // Fullscreen
@@ -298,6 +299,7 @@ export function FramingModeView({
               videoRef={videoRef}
               videoUrl={videoUrl}
               handlers={handlers}
+              clipRange={clipRange}
               onFileSelect={isFullscreen ? undefined : onFileSelect}
               overlays={[
                 videoUrl && currentCropState && metadata && (

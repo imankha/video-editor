@@ -21,6 +21,7 @@ import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
  * @param {Function} props.onPanChange - Callback when pan changes (drag)
  * @param {boolean} props.isFullscreen - Whether the player is in fullscreen mode
  * @param {number|null} props.clipRating - Rating (1-5) of clip at current time, null if not in clip
+ * @param {Object|null} props.clipRange - Optional {clipOffset, clipDuration} for clip-scoped loading (uses preload=metadata + #t= fragment)
  * @param {boolean} props.isLoading - Whether hook is loading video URL (pre-element)
  * @param {boolean} props.isVideoElementLoading - Whether video element is buffering
  * @param {number|null} props.loadingProgress - Buffering progress 0-100, null when not loading
@@ -40,6 +41,7 @@ export function VideoPlayer({
   onPanChange,
   isFullscreen = false,
   clipRating = null,
+  clipRange = null,
   isLoading = false,
   isVideoElementLoading = false,
   loadingProgress = null,
@@ -199,7 +201,7 @@ export function VideoPlayer({
           >
             <video
               ref={videoRef}
-              src={videoUrl}
+              src={clipRange ? `${videoUrl}#t=${clipRange.clipOffset},${clipRange.clipOffset + clipRange.clipDuration}` : videoUrl}
               className={`object-contain ${
                 isFullscreen ? 'w-full h-full' : 'max-w-full max-h-full'
               }`}
@@ -217,7 +219,7 @@ export function VideoPlayer({
               onCanPlay={handlers.onCanPlay}
               onError={handlers.onError}
               playsInline
-              preload="auto"
+              preload={clipRange ? "metadata" : "auto"}
               style={{ pointerEvents: 'none' }}
             />
           </div>

@@ -387,6 +387,13 @@ export function FramingScreen({
     return { url, clipRange: null };
   }, [projectId]);
 
+  // Derive clip range for the currently selected clip (used by VideoPlayer for preload hints)
+  const currentClipRange = useMemo(() => {
+    if (!selectedClip) return null;
+    const { clipRange } = getClipVideoConfig(selectedClip);
+    return clipRange;
+  }, [selectedClip, getClipVideoConfig]);
+
   // Re-fetch clips on mount — picks up any changes made in annotate mode
   // (e.g., updated start_time/end_time, new clips, deleted clips)
   useEffect(() => {
@@ -1022,6 +1029,7 @@ export function FramingScreen({
       error={error}
       isUrlExpiredError={isUrlExpiredError}
       onRetryVideo={handleRetryVideo}
+      clipRange={currentClipRange}
       handlers={handlers}
       fullscreenContainerRef={fullscreenContainerRef}
       isFullscreen={isFullscreen}
