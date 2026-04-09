@@ -1,4 +1,4 @@
-# T1190: Session-to-Machine Pinning via Fly.io Replay Headers
+# T1190: Session & Machine Pinning via Fly.io Replay Headers
 
 **Status:** TODO
 **Impact:** 8
@@ -60,8 +60,8 @@ Implement session affinity using Fly.io's `fly-replay` response header so all re
 
 ### Related Tasks
 - Supersedes: Export-specific machine pinning hotfix (commit 9138359)
+- Absorbs: T420 (Session & Return Visits) — session expiry and single-session enforcement are tightly coupled with machine pinning (stale sessions pointing at dead machines)
 - Related: T1020 (Fast R2 Sync) — sync conflicts worsen without session pinning
-- Related: T420 (Session & Return Visits) — session management touches same middleware
 
 ### Technical Notes
 
@@ -77,9 +77,12 @@ Implement session affinity using Fly.io's `fly-replay` response header so all re
 2. [ ] Set `fly_machine_id` cookie on first response
 3. [ ] On mismatch: return `fly-replay: instance=<cookie_value>` header
 4. [ ] Handle unavailable target (clear cookie, proceed locally)
-5. [ ] Test with 2+ machines on staging
-6. [ ] Remove export-specific pinning hack (websocket machineId message, frontend fly-force-instance-id header)
-7. [ ] Verify WebSocket connections are pinned via cookie
+5. [ ] Add session TTL — expire sessions after inactivity (absorbs T420)
+6. [ ] Enforce single active session per user — new login invalidates old session (absorbs T420)
+7. [ ] Clean up stale session cookies pointing at dead/suspended machines
+8. [ ] Test with 2+ machines on staging
+9. [ ] Remove export-specific pinning hack (websocket machineId message, frontend fly-force-instance-id header)
+10. [ ] Verify WebSocket connections are pinned via cookie
 
 ## Acceptance Criteria
 
@@ -88,3 +91,5 @@ Implement session affinity using Fly.io's `fly-replay` response header so all re
 - [ ] No database version conflicts under normal operation
 - [ ] Graceful fallback when pinned machine is unavailable
 - [ ] Export-specific pinning code removed (clean up hotfix)
+- [ ] Sessions expire after inactivity period
+- [ ] Only one active session per user at a time

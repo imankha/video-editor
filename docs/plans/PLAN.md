@@ -48,33 +48,44 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1160 | [Clean Up Unused DB Rows](tasks/T1160-cleanup-unused-db-rows.md) | TODO | 2.5 | Prune old working_clips versions, orphaned before_after_tracks, stale modal_tasks to keep DB small for R2 sync |
 | T1170 | [Size-Based VACUUM on Init](tasks/T1170-size-based-vacuum-on-init.md) | TODO | 2.5 | Only VACUUM profile.sqlite when size exceeds 400KB threshold; skip for small DBs |
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
-| T1200 | [Modal Job ID Logging & Retry](tasks/T1200-modal-job-logging-retry.md) | TESTING | 1.4 | Log Modal call IDs across all paths (framing/overlay); classify failures and retry transient ones only |
+| T1200 | [Modal Job ID Logging & Retry](tasks/T1200-modal-job-logging-retry.md) | DONE | 1.4 | Log Modal call IDs across all paths (framing/overlay); classify failures and retry transient ones only |
 | T1240 | [R2 Restore Retry Tests](tasks/T1240-r2-restore-retry-tests.md) | TODO | 2.3 | Test coverage for R2 restore retry/cooldown — NOT_FOUND vs ERROR handling, cooldown expiry |
 
-### Epic: For Launch (TODO)
+### Epic: For Launch (IN_PROGRESS)
 [tasks/for-launch/EPIC.md](tasks/for-launch/EPIC.md)
 
 Goal: Make money, virality, super polished. Most tasks here are yet to be generated based on alpha feedback.
 
+#### Infrastructure (prioritized first)
+
+Scale, performance, and reliability — must be solid before feature work.
+
+| ID | Task | Status | Pri | Description |
+|----|------|--------|-----|-------------|
+| T1190 | [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | TODO | — | Pin sessions to machines via fly-replay; includes session expiry + single active session (absorbs T420) |
+| T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | TODO | — | Export blocks Fly.io instance for minutes; return 202 immediately |
+| T1210 | [Clip-Scoped Video Loading](tasks/for-launch/T1210-clip-scoped-video-loading.md) | TODO | — | Framing loads full 90-min video; preload on project creation, only buffer clip time ranges |
+| T1220 | [Modal Range Requests](tasks/for-launch/T1220-modal-range-requests.md) | TODO | — | Modal downloads full 3GB video for 10s clip; use presigned URLs + FFmpeg pre-input seek |
+| T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | TODO | — | Replace JSON columns with MessagePack for ~30-50% size reduction |
+
+#### Features
+
 | ID | Task | Status | Pri | Description |
 |----|------|--------|-----|-------------|
 | T445 | [Business Cards](tasks/T445-business-cards.md) | TODO | 2.5 | Design + print physical cards with QR code for handing out at games |
-| T420 | [Session & Return Visits](tasks/user-auth/T420-session-return-visits.md) | TODO | 2.3 | Expire sessions after inactivity, enforce single active session per user |
-| T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | TODO | 1.8 | Export processing blocks single Fly.io instance for minutes; must return 202 immediately |
-| T1120 | [Framing Video Cold Cache](tasks/for-launch/T1120-framing-video-cold-cache.md) | TESTING | 1.8 | Framing editor slow to load videos; warm R2 cache on Framing entry, not just app init |
-| T1130 | [Multi-Clip Stream Not Download](tasks/for-launch/T1130-multiclip-stream-not-download.md) | DONE | 1.6 | Multi-clip export downloads full 3GB game videos; should use presigned URLs + FFmpeg range requests like single-clip |
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | TODO | 2.0 | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | TODO | 2.0 | "Install app" prompt, offline shell, home screen icon — feels native on phones |
-| T1020 | [Fast R2 Sync](tasks/T1020-fast-r2-sync.md) | TESTING | 1.8 | Every save/export waits 1.7-3s for R2 upload to finish before responding; profile and speed up |
 | T1070 | [Team & Profiles Quest](tasks/for-launch/T1070-team-profiles-quest.md) | TODO | 1.8 | New quest teaching profiles + team uploads; encourages inviting teammates for credits |
-| T1010 | [Slow fetchProgress Response](tasks/T1010-slow-fetchprogress.md) | TESTING | 1.7 | Quest progress endpoint takes 1.2s (20+ individual SQLite queries); batch or cache |
 | T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | TODO | 1.3 | "Upload Team" — invite teammates by email; inviter earns credits per signup (viral loop) |
-| T1090 | [Social Media Auto-Posting](tasks/for-launch/T1090-social-media-auto-posting.md) | TODO | 1.1 | "Share to Social" from gallery — one form posts to IG, TikTok, YouTube, FB via aggregator API; AI adapts captions per platform |
-| T1060 | [Coaches View](tasks/for-launch/T1060-coaches-view.md) | TODO | 1.0 | Coach account type: roster uploads, assign annotations to players, track clip review status, own NUF flow. No "Projects" for coaches. |
-| T1190 | [Session-to-Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | TODO | 1.6 | Pin user sessions to a single Fly.io machine via fly-replay headers; prevents DB conflicts, lost WS progress, stale reads |
-| T1210 | [Clip-Scoped Video Loading](tasks/for-launch/T1210-clip-scoped-video-loading.md) | TODO | 1.6 | Framing loads full 90-min video; should preload on project creation and only buffer clip time ranges |
-| T1220 | [Modal Range Requests](tasks/for-launch/T1220-modal-range-requests.md) | TODO | 1.3 | Modal downloads full 3GB video for a 10s clip; use presigned URLs + FFmpeg pre-input seek for range requests |
-| T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | TODO | 0.8 | Replace JSON columns (crop_data, segments_data, etc.) with MessagePack for ~30-50% size reduction; both Python and TS parse these |
+| T1090 | [Social Media Auto-Posting](tasks/for-launch/T1090-social-media-auto-posting.md) | TODO | 1.1 | "Share to Social" from gallery — one form posts to IG, TikTok, YouTube, FB via aggregator API |
+| T1060 | [Coaches View](tasks/for-launch/T1060-coaches-view.md) | TODO | 1.0 | Coach account type: roster uploads, assign annotations to players, own NUF flow |
+
+#### Completed
+
+- T1130 Multi-Clip Stream Not Download — DONE
+- T1120 Framing Video Cold Cache — DONE
+- T1020 Fast R2 Sync — DONE
+- T1010 Slow fetchProgress Response — DONE
 
 ### Epic: Post Launch (TODO)
 [tasks/post-launch/EPIC.md](tasks/post-launch/EPIC.md)
