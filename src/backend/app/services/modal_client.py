@@ -38,6 +38,11 @@ NETWORK_RETRY_ATTEMPTS = 3
 NETWORK_RETRY_DELAY = 2.0  # seconds
 NETWORK_RETRY_BACKOFF = 2.0  # exponential backoff multiplier
 
+# Retry configuration for Modal job-level transient failures
+MODAL_JOB_RETRY_ATTEMPTS = 3  # total attempts (1 initial + 2 retries)
+MODAL_JOB_RETRY_DELAY = 3.0  # initial delay in seconds
+MODAL_JOB_RETRY_BACKOFF = 2.0  # exponential backoff multiplier
+
 
 def _is_transient_network_error(error: Exception) -> bool:
     """
@@ -76,6 +81,130 @@ def _is_transient_network_error(error: Exception) -> bool:
             return True
 
     return False
+
+
+def classify_modal_error(error: Exception) -> str:
+    """
+    Classify a Modal error as 'transient' or 'deterministic'.
+
+    Transient errors are worth retrying (network issues, cold starts, capacity).
+    Deterministic errors will fail again on retry (bad input, OOM, FFmpeg errors).
+
+    Returns:
+        'transient' or 'deterministic'
+    """
+    error_msg = str(error).lower()
+    error_type = type(error).__name__.lower()
+
+    # --- Transient patterns (should retry) ---
+    # Network / connection errors
+    if _is_transient_network_error(error):
+        return "transient"
+
+    # Modal infrastructure errors
+    transient_patterns = [
+        "503",
+        "capacity",
+        "input aborted",
+        "not reschedulable",
+        "cold start",
+        "cold_start",
+        "container startup",
+        "service unavailable",
+        "internal server error",
+        "rate limit",
+        "too many requests",
+    ]
+    for pattern in transient_patterns:
+        if pattern in error_msg:
+            return "transient"
+
+    # Modal-specific exception types that indicate infra issues
+    if "modal" in error_type and ("timeout" in error_msg or "unavailable" in error_msg):
+        return "transient"
+
+    # --- Deterministic patterns (should NOT retry) ---
+    deterministic_patterns = [
+        "ffmpeg",
+        "broken pipe",
+        "out of memory",
+        "oom",
+        "cuda out of memory",
+        "outofmemoryerror",
+        "invalid input",
+        "invalid crop",
+        "no such file",
+        "file not found",
+        "permission denied",
+        "keyerror",
+        "valueerror",
+        "typeerror",
+        "index out of range",
+    ]
+    for pattern in deterministic_patterns:
+        if pattern in error_msg or pattern in error_type:
+            return "deterministic"
+
+    # Default: treat unknown errors as deterministic (don't waste retries)
+    return "deterministic"
+
+
+def _log_modal_job_start(
+    job_type: str,
+    job_id: str,
+    user_id: str,
+    modal_app: str,
+    extra: dict = None,
+):
+    """Log structured context at Modal job start."""
+    parts = [
+        f"[Modal Job Start]",
+        f"type={job_type}",
+        f"job={job_id}",
+        f"user={user_id}",
+        f"app={modal_app}",
+    ]
+    if extra:
+        for k, v in extra.items():
+            parts.append(f"{k}={v}")
+    logger.info(" ".join(parts))
+
+
+def _log_modal_job_end(
+    job_type: str,
+    job_id: str,
+    user_id: str,
+    modal_app: str,
+    elapsed: float,
+    status: str,
+    error: Exception = None,
+    error_class: str = None,
+    attempt: int = None,
+    extra: dict = None,
+):
+    """Log structured context at Modal job completion or failure."""
+    parts = [
+        f"[Modal Job {'Error' if error else 'Done'}]",
+        f"type={job_type}",
+        f"job={job_id}",
+        f"user={user_id}",
+        f"app={modal_app}",
+        f"elapsed={elapsed:.2f}s",
+        f"status={status}",
+    ]
+    if attempt is not None:
+        parts.append(f"attempt={attempt}/{MODAL_JOB_RETRY_ATTEMPTS}")
+    if error_class:
+        parts.append(f"error_class={error_class}")
+    if error:
+        parts.append(f"error={str(error)[:100]}")
+    if extra:
+        for k, v in extra.items():
+            parts.append(f"{k}={v}")
+    if error:
+        logger.error(" ".join(parts))
+    else:
+        logger.info(" ".join(parts))
 
 
 def log_progress_event(job_id: str, phase: str, elapsed: float = None, extra: dict = None):
@@ -417,12 +546,23 @@ async def call_modal_framing_ai(
     effective_duration = video_duration or 10  # Default to 10s if unknown
     num_chunks, config_name = get_framing_ai_gpu_config(effective_duration)
 
-    logger.info(f"[Modal] Framing AI: {effective_duration:.1f}s video -> {config_name} ({num_chunks} GPU(s))")
-    logger.info(f"[Modal] User: {user_id}, Input: {input_key} -> Output: {output_key}")
-    logger.info(f"[Modal] Target: {output_width}x{output_height}")
-
     estimated_frames = int(effective_duration * fps)
-    logger.info(f"[Modal] Estimated {estimated_frames} frames")
+
+    _log_modal_job_start(
+        job_type="framing_ai",
+        job_id=job_id,
+        user_id=user_id,
+        modal_app=MODAL_APP_NAME,
+        extra={
+            "config": config_name,
+            "num_chunks": num_chunks,
+            "resolution": f"{output_width}x{output_height}",
+            "duration": f"{effective_duration:.1f}s",
+            "frames": estimated_frames,
+            "input": input_key,
+            "output": output_key,
+        },
+    )
 
     # Track timing for progress improvement
     job_start_time = time.time()
@@ -433,118 +573,176 @@ async def call_modal_framing_ai(
         "num_chunks": num_chunks,
     })
 
-    try:
-        # Use remote_gen() to stream real progress from Modal
-        # This iterates over yield statements in the Modal function
-        loop = asyncio.get_running_loop()
+    last_error = None
+    for attempt in range(1, MODAL_JOB_RETRY_ATTEMPTS + 1):
+        try:
+            # Use remote_gen() to stream real progress from Modal
+            # This iterates over yield statements in the Modal function
+            loop = asyncio.get_running_loop()
 
-        # Choose parallel or sequential processing
-        if num_chunks > 1 and segment_data is None:
-            # Use parallel processing (not supported with segment_data/speed changes yet)
-            process_fn = _get_process_framing_ai_parallel_fn()
-            logger.info(f"[Modal] Using parallel processing with {num_chunks} chunks")
+            # Choose parallel or sequential processing
+            if num_chunks > 1 and segment_data is None:
+                # Use parallel processing (not supported with segment_data/speed changes yet)
+                process_fn = _get_process_framing_ai_parallel_fn()
+                logger.info(f"[Modal] Using parallel processing with {num_chunks} chunks")
 
-            def get_generator():
-                return process_fn.remote_gen(
-                    job_id=job_id,
-                    user_id=user_id,
-                    input_key=input_key,
-                    output_key=output_key,
-                    keyframes=keyframes,
-                    output_width=output_width,
-                    output_height=output_height,
-                    fps=fps,
-                    num_chunks=num_chunks,
-                    include_audio=include_audio,
-                    source_start_time=source_start_time,
-                    source_end_time=source_end_time,
-                )
-        else:
-            # Use sequential processing
-            process_fn = _get_process_framing_ai_fn()
-            if segment_data:
-                logger.info(f"[Modal] Using sequential processing (segment_data present)")
+                def get_generator():
+                    return process_fn.remote_gen(
+                        job_id=job_id,
+                        user_id=user_id,
+                        input_key=input_key,
+                        output_key=output_key,
+                        keyframes=keyframes,
+                        output_width=output_width,
+                        output_height=output_height,
+                        fps=fps,
+                        num_chunks=num_chunks,
+                        include_audio=include_audio,
+                        source_start_time=source_start_time,
+                        source_end_time=source_end_time,
+                    )
             else:
-                logger.info(f"[Modal] Using sequential processing (short video)")
+                # Use sequential processing
+                process_fn = _get_process_framing_ai_fn()
+                if segment_data:
+                    logger.info(f"[Modal] Using sequential processing (segment_data present)")
+                else:
+                    logger.info(f"[Modal] Using sequential processing (short video)")
 
-            def get_generator():
-                return process_fn.remote_gen(
-                    job_id=job_id,
-                    user_id=user_id,
-                    input_key=input_key,
-                    output_key=output_key,
-                    keyframes=keyframes,
-                    output_width=output_width,
-                    output_height=output_height,
-                    fps=fps,
-                    segment_data=segment_data,
-                    include_audio=include_audio,
-                    source_start_time=source_start_time,
-                    source_end_time=source_end_time,
-                )
+                def get_generator():
+                    return process_fn.remote_gen(
+                        job_id=job_id,
+                        user_id=user_id,
+                        input_key=input_key,
+                        output_key=output_key,
+                        keyframes=keyframes,
+                        output_width=output_width,
+                        output_height=output_height,
+                        fps=fps,
+                        segment_data=segment_data,
+                        include_audio=include_audio,
+                        source_start_time=source_start_time,
+                        source_end_time=source_end_time,
+                    )
 
-        # Get the generator in executor (Modal API is sync)
-        gen = await loop.run_in_executor(None, get_generator)
+            # Get the generator in executor (Modal API is sync)
+            gen = await loop.run_in_executor(None, get_generator)
 
-        log_progress_event(job_id, "modal_streaming_started")
-        logger.info(f"[Modal] Streaming progress from Modal for job {job_id}")
-
-        result = None
-        last_progress = None
-
-        # Iterate over yielded progress updates
-        def next_item(generator):
+            # Capture Modal call ID for correlation
+            modal_call_id = None
             try:
-                return next(generator)
-            except StopIteration:
-                return None
+                if hasattr(gen, 'object_id'):
+                    modal_call_id = gen.object_id
+                    logger.info(f"[Modal] Framing AI call_id: {modal_call_id}")
+            except Exception:
+                pass
 
-        while True:
-            update = await loop.run_in_executor(None, next_item, gen)
-            if update is None:
-                break
+            log_progress_event(job_id, "modal_streaming_started")
+            logger.info(f"[Modal] Streaming progress from Modal for job {job_id}")
 
-            # Check if this is the final result (has "status" key)
-            if "status" in update:
-                result = update
-                logger.info(f"[Modal] Received final result: {result.get('status')}")
-                break
+            result = None
+            last_progress = None
 
-            # This is a progress update - forward to callback
-            progress = update.get("progress", 0)
-            message = update.get("message", "Processing...")
-            phase = update.get("phase", "processing")
-
-            # Only log significant progress changes
-            if last_progress is None or abs(progress - last_progress) >= 5:
-                logger.info(f"[Modal] Progress: {progress}% - {message}")
-                last_progress = progress
-
-            if progress_callback:
+            # Iterate over yielded progress updates
+            def next_item(generator):
                 try:
-                    await progress_callback(progress, message, phase)
-                except Exception as e:
-                    logger.warning(f"[Modal] Progress callback failed: {e}")
+                    return next(generator)
+                except StopIteration:
+                    return None
 
-        total_elapsed = time.time() - job_start_time
-        frames_processed = result.get("frames_processed", estimated_frames) if result else estimated_frames
+            while True:
+                update = await loop.run_in_executor(None, next_item, gen)
+                if update is None:
+                    break
 
-        log_progress_event(job_id, "modal_complete", elapsed=total_elapsed, extra={
-            "status": result.get("status", "unknown") if result else "no_result",
-            "frames": frames_processed,
-            "fps_actual": round(frames_processed / total_elapsed, 1) if total_elapsed > 0 else 0
-        })
-        logger.info(f"[Modal] AI framing job {job_id} completed: {result}")
-        final = result or {"status": "error", "error": "No result received from Modal"}
-        final["gpu_seconds"] = round(total_elapsed, 2)
-        final["modal_function"] = "framing"
-        return final
+                # Check if this is the final result (has "status" key)
+                if "status" in update:
+                    result = update
+                    logger.info(f"[Modal] Received final result: {result.get('status')}")
+                    break
 
-    except Exception as e:
-        total_elapsed = time.time() - job_start_time
-        log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(e)[:50]})
-        logger.error(f"[Modal] AI framing job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": _translate_modal_error(e)}
+                # This is a progress update - forward to callback
+                progress = update.get("progress", 0)
+                message = update.get("message", "Processing...")
+                phase = update.get("phase", "processing")
+
+                # Only log significant progress changes
+                if last_progress is None or abs(progress - last_progress) >= 5:
+                    logger.info(f"[Modal] Progress: {progress}% - {message}")
+                    last_progress = progress
+
+                if progress_callback:
+                    try:
+                        await progress_callback(progress, message, phase)
+                    except Exception as e:
+                        logger.warning(f"[Modal] Progress callback failed: {e}")
+
+            total_elapsed = time.time() - job_start_time
+            frames_processed = result.get("frames_processed", estimated_frames) if result else estimated_frames
+
+            log_progress_event(job_id, "modal_complete", elapsed=total_elapsed, extra={
+                "status": result.get("status", "unknown") if result else "no_result",
+                "frames": frames_processed,
+                "fps_actual": round(frames_processed / total_elapsed, 1) if total_elapsed > 0 else 0
+            })
+
+            _log_modal_job_end(
+                job_type="framing_ai",
+                job_id=job_id,
+                user_id=user_id,
+                modal_app=MODAL_APP_NAME,
+                elapsed=total_elapsed,
+                status=result.get("status", "unknown") if result else "no_result",
+                extra={"call_id": modal_call_id or "unknown", "frames": frames_processed},
+            )
+
+            final = result or {"status": "error", "error": "No result received from Modal"}
+            final["gpu_seconds"] = round(total_elapsed, 2)
+            final["modal_function"] = "framing"
+            return final
+
+        except Exception as e:
+            last_error = e
+            total_elapsed = time.time() - job_start_time
+            error_class = classify_modal_error(e)
+
+            _log_modal_job_end(
+                job_type="framing_ai",
+                job_id=job_id,
+                user_id=user_id,
+                modal_app=MODAL_APP_NAME,
+                elapsed=total_elapsed,
+                status="error",
+                error=e,
+                error_class=error_class,
+                attempt=attempt,
+            )
+
+            if error_class == "transient" and attempt < MODAL_JOB_RETRY_ATTEMPTS:
+                delay = MODAL_JOB_RETRY_DELAY * (MODAL_JOB_RETRY_BACKOFF ** (attempt - 1))
+                logger.warning(
+                    f"[Modal] Transient error on attempt {attempt}/{MODAL_JOB_RETRY_ATTEMPTS}, "
+                    f"retrying in {delay:.0f}s: {e}"
+                )
+                if progress_callback:
+                    try:
+                        await progress_callback(
+                            -1,
+                            f"Retrying... attempt {attempt + 1}/{MODAL_JOB_RETRY_ATTEMPTS}",
+                            "retry",
+                        )
+                    except Exception:
+                        pass
+                await asyncio.sleep(delay)
+                continue
+            else:
+                break
+
+    # All retries exhausted or deterministic error
+    total_elapsed = time.time() - job_start_time
+    log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(last_error)[:50]})
+    logger.error(f"[Modal] AI framing job {job_id} failed: {last_error}", exc_info=True)
+    return {"status": "error", "error": _translate_modal_error(last_error)}
 
 
 async def call_modal_clips_ai(
@@ -595,9 +793,19 @@ async def call_modal_clips_ai(
     user_id = _resolve_modal_user_id(user_id)
 
     total_clips = len(clips_data)
-    logger.info(f"[Modal] Calling process_clips_ai for job {job_id} ({total_clips} clip(s))")
-    logger.info(f"[Modal] User: {user_id}, Output: {output_key}")
-    logger.info(f"[Modal] Target: {target_width}x{target_height} @ {fps}fps")
+
+    _log_modal_job_start(
+        job_type="clips_ai",
+        job_id=job_id,
+        user_id=user_id,
+        modal_app=MODAL_APP_NAME,
+        extra={
+            "clips": total_clips,
+            "resolution": f"{target_width}x{target_height}",
+            "fps": fps,
+            "output": output_key,
+        },
+    )
 
     job_start_time = time.time()
     log_progress_event(job_id, "modal_start", extra={"type": "clips_ai", "clips": total_clips})
@@ -784,16 +992,25 @@ async def call_modal_multi_clip(
 
     process_multi_clip = _get_process_multi_clip_fn()
 
-    logger.info(f"[Modal] Calling process_multi_clip_modal for job {job_id}")
-    logger.info(f"[Modal] User: {user_id}, {len(source_keys)} clips -> Output: {output_key}")
-    logger.info(f"[Modal] Target: {target_width}x{target_height} @ {fps}fps")
-
     # Estimate processing time: ~1.0s per frame total on T4 GPU for Real-ESRGAN
     # Assume ~10s per clip at 30fps = 300 frames per clip
     estimated_frames_per_clip = 300
     total_frames = len(clips_data) * estimated_frames_per_clip
     estimated_time = total_frames * 1.0  # seconds total
-    logger.info(f"[Modal] Estimated ~{estimated_time:.0f}s for {len(clips_data)} clips")
+
+    _log_modal_job_start(
+        job_type="framing_ai_multiclip",
+        job_id=job_id,
+        user_id=user_id,
+        modal_app=MODAL_APP_NAME,
+        extra={
+            "clips": len(clips_data),
+            "resolution": f"{target_width}x{target_height}",
+            "estimated_frames": total_frames,
+            "estimated_time": f"{estimated_time:.0f}s",
+            "output": output_key,
+        },
+    )
 
     # Track timing for progress improvement
     job_start_time = time.time()
@@ -890,25 +1107,38 @@ async def call_modal_multi_clip(
             "frames": total_frames,
             "fps_actual": round(total_frames / total_elapsed, 1) if total_elapsed > 0 else 0
         })
-        logger.info(f"[Modal] Multi-clip job {job_id} completed: {result}")
+
+        _log_modal_job_end(
+            job_type="framing_ai_multiclip",
+            job_id=job_id,
+            user_id=user_id,
+            modal_app=MODAL_APP_NAME,
+            elapsed=total_elapsed,
+            status=result.get("status", "unknown"),
+            extra={"call_id": modal_call_id or "unknown", "clips": len(clips_data)},
+        )
+
         return result
 
     except Exception as e:
         total_elapsed = time.time() - job_start_time
+        error_class = classify_modal_error(e)
         log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(e)[:50]})
 
-        error_str = str(e).lower()
-        error_type = type(e).__name__
-
-        # Check if this is a connection/network error (DNS, socket, Modal connection, etc.)
-        is_connection_error = (
-            'connectionerror' in error_type.lower() or
-            'getaddrinfo' in error_str or
-            'connection' in error_str or
-            'network' in error_str or
-            'timeout' in error_str or
-            'socket' in error_str
+        _log_modal_job_end(
+            job_type="framing_ai_multiclip",
+            job_id=job_id,
+            user_id=user_id,
+            modal_app=MODAL_APP_NAME,
+            elapsed=total_elapsed,
+            status="error",
+            error=e,
+            error_class=error_class,
+            extra={"call_id": modal_call_id or "unknown"},
         )
+
+        # Check if this is a transient/connection error
+        is_connection_error = error_class == "transient" or _is_transient_network_error(e)
 
         if modal_call_id and is_connection_error:
             # Connection error while polling - job may still be running on Modal
@@ -973,92 +1203,160 @@ async def call_modal_overlay(
 
     render_overlay = _get_render_overlay_fn()
 
-    logger.info(f"[Modal] Calling render_overlay for job {job_id}")
-    logger.info(f"[Modal] User: {user_id}, Input: {input_key} -> Output: {output_key}")
-    logger.info(f"[Modal] Regions: {len(highlight_regions)}, Effect: {effect_type}")
-
     estimated_frames = int((video_duration or 10) * 30)  # Assume 30fps
-    logger.info(f"[Modal] Estimated {estimated_frames} frames")
+
+    _log_modal_job_start(
+        job_type="overlay",
+        job_id=job_id,
+        user_id=user_id,
+        modal_app=MODAL_APP_NAME,
+        extra={
+            "regions": len(highlight_regions),
+            "effect": effect_type,
+            "duration": f"{video_duration or 'unknown'}s",
+            "frames": estimated_frames,
+            "input": input_key,
+            "output": output_key,
+        },
+    )
 
     # Track timing for progress improvement
     job_start_time = time.time()
     log_progress_event(job_id, "modal_start", extra={"type": "overlay", "frames": estimated_frames})
 
-    try:
-        # Use remote_gen() to stream real progress from Modal
-        loop = asyncio.get_running_loop()
+    last_error = None
+    for attempt in range(1, MODAL_JOB_RETRY_ATTEMPTS + 1):
+        try:
+            # Use remote_gen() to stream real progress from Modal
+            loop = asyncio.get_running_loop()
 
-        def get_generator():
-            return render_overlay.remote_gen(
+            def get_generator():
+                return render_overlay.remote_gen(
+                    job_id=job_id,
+                    user_id=user_id,
+                    input_key=input_key,
+                    output_key=output_key,
+                    highlight_regions=highlight_regions,
+                    effect_type=effect_type,
+                )
+
+            # Get the generator in executor (Modal API is sync)
+            gen = await loop.run_in_executor(None, get_generator)
+
+            # Capture Modal call ID for correlation
+            modal_call_id = None
+            try:
+                if hasattr(gen, 'object_id'):
+                    modal_call_id = gen.object_id
+                    logger.info(f"[Modal] Overlay call_id: {modal_call_id}")
+            except Exception:
+                pass
+
+            log_progress_event(job_id, "modal_streaming_started")
+            logger.info(f"[Modal] Streaming progress from Modal for overlay job {job_id}")
+
+            result = None
+            last_progress = None
+
+            # Iterate over yielded progress updates
+            def next_item(generator):
+                try:
+                    return next(generator)
+                except StopIteration:
+                    return None
+
+            while True:
+                update = await loop.run_in_executor(None, next_item, gen)
+                if update is None:
+                    break
+
+                # Check if this is the final result (has "status" key)
+                if "status" in update:
+                    result = update
+                    logger.info(f"[Modal] Received final result: {result.get('status')}")
+                    break
+
+                # This is a progress update - forward to callback
+                progress = update.get("progress", 0)
+                message = update.get("message", "Processing...")
+                phase = update.get("phase", "processing")
+
+                # Only log significant progress changes
+                if last_progress is None or abs(progress - last_progress) >= 5:
+                    logger.info(f"[Modal] Progress: {progress}% - {message}")
+                    last_progress = progress
+
+                if progress_callback:
+                    try:
+                        await progress_callback(progress, message, phase)
+                    except Exception as e:
+                        logger.warning(f"[Modal] Progress callback failed: {e}")
+
+            total_elapsed = time.time() - job_start_time
+
+            log_progress_event(job_id, "modal_complete", elapsed=total_elapsed, extra={
+                "status": result.get("status", "unknown") if result else "no_result",
+                "frames": estimated_frames,
+                "fps_actual": round(estimated_frames / total_elapsed, 1) if total_elapsed > 0 else 0
+            })
+
+            _log_modal_job_end(
+                job_type="overlay",
                 job_id=job_id,
                 user_id=user_id,
-                input_key=input_key,
-                output_key=output_key,
-                highlight_regions=highlight_regions,
-                effect_type=effect_type,
+                modal_app=MODAL_APP_NAME,
+                elapsed=total_elapsed,
+                status=result.get("status", "unknown") if result else "no_result",
+                extra={"call_id": modal_call_id or "unknown", "frames": estimated_frames},
             )
 
-        # Get the generator in executor (Modal API is sync)
-        gen = await loop.run_in_executor(None, get_generator)
+            final = result or {"status": "error", "error": "No result received from Modal"}
+            final["gpu_seconds"] = round(total_elapsed, 2)
+            final["modal_function"] = "overlay"
+            return final
 
-        log_progress_event(job_id, "modal_streaming_started")
-        logger.info(f"[Modal] Streaming progress from Modal for overlay job {job_id}")
+        except Exception as e:
+            last_error = e
+            total_elapsed = time.time() - job_start_time
+            error_class = classify_modal_error(e)
 
-        result = None
-        last_progress = None
+            _log_modal_job_end(
+                job_type="overlay",
+                job_id=job_id,
+                user_id=user_id,
+                modal_app=MODAL_APP_NAME,
+                elapsed=total_elapsed,
+                status="error",
+                error=e,
+                error_class=error_class,
+                attempt=attempt,
+            )
 
-        # Iterate over yielded progress updates
-        def next_item(generator):
-            try:
-                return next(generator)
-            except StopIteration:
-                return None
-
-        while True:
-            update = await loop.run_in_executor(None, next_item, gen)
-            if update is None:
+            if error_class == "transient" and attempt < MODAL_JOB_RETRY_ATTEMPTS:
+                delay = MODAL_JOB_RETRY_DELAY * (MODAL_JOB_RETRY_BACKOFF ** (attempt - 1))
+                logger.warning(
+                    f"[Modal] Transient error on attempt {attempt}/{MODAL_JOB_RETRY_ATTEMPTS}, "
+                    f"retrying in {delay:.0f}s: {e}"
+                )
+                if progress_callback:
+                    try:
+                        await progress_callback(
+                            -1,
+                            f"Retrying... attempt {attempt + 1}/{MODAL_JOB_RETRY_ATTEMPTS}",
+                            "retry",
+                        )
+                    except Exception:
+                        pass
+                await asyncio.sleep(delay)
+                continue
+            else:
                 break
 
-            # Check if this is the final result (has "status" key)
-            if "status" in update:
-                result = update
-                logger.info(f"[Modal] Received final result: {result.get('status')}")
-                break
-
-            # This is a progress update - forward to callback
-            progress = update.get("progress", 0)
-            message = update.get("message", "Processing...")
-            phase = update.get("phase", "processing")
-
-            # Only log significant progress changes
-            if last_progress is None or abs(progress - last_progress) >= 5:
-                logger.info(f"[Modal] Progress: {progress}% - {message}")
-                last_progress = progress
-
-            if progress_callback:
-                try:
-                    await progress_callback(progress, message, phase)
-                except Exception as e:
-                    logger.warning(f"[Modal] Progress callback failed: {e}")
-
-        total_elapsed = time.time() - job_start_time
-
-        log_progress_event(job_id, "modal_complete", elapsed=total_elapsed, extra={
-            "status": result.get("status", "unknown") if result else "no_result",
-            "frames": estimated_frames,
-            "fps_actual": round(estimated_frames / total_elapsed, 1) if total_elapsed > 0 else 0
-        })
-        logger.info(f"[Modal] Overlay job {job_id} completed: {result}")
-        final = result or {"status": "error", "error": "No result received from Modal"}
-        final["gpu_seconds"] = round(total_elapsed, 2)
-        final["modal_function"] = "overlay"
-        return final
-
-    except Exception as e:
-        total_elapsed = time.time() - job_start_time
-        log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(e)[:50]})
-        logger.error(f"[Modal] Overlay job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": _translate_modal_error(e)}
+    # All retries exhausted or deterministic error
+    total_elapsed = time.time() - job_start_time
+    log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(last_error)[:50]})
+    logger.error(f"[Modal] Overlay job {job_id} failed: {last_error}", exc_info=True)
+    return {"status": "error", "error": _translate_modal_error(last_error)}
 
 
 async def call_modal_overlay_auto(
