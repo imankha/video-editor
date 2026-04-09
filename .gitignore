@@ -22,6 +22,7 @@ Thumbs.db
 # Environment variables (all .env files contain secrets — never commit)
 .env
 .env.staging
+.env.prod
 .env.production
 .env.local
 .env.development.local
