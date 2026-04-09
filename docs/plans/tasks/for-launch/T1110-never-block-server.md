@@ -1,7 +1,7 @@
 # T1110: Never Block Server on Export Processing
 
 **Status:** TODO
-**Impact:** 9
+**Impact:** 5
 **Complexity:** 5
 **Created:** 2026-04-08
 **Updated:** 2026-04-08
