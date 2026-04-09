@@ -70,6 +70,8 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 | T1090 | [Social Media Auto-Posting](tasks/for-launch/T1090-social-media-auto-posting.md) | TODO | 1.1 | "Share to Social" from gallery — one form posts to IG, TikTok, YouTube, FB via aggregator API; AI adapts captions per platform |
 | T1060 | [Coaches View](tasks/for-launch/T1060-coaches-view.md) | TODO | 1.0 | Coach account type: roster uploads, assign annotations to players, track clip review status, own NUF flow. No "Projects" for coaches. |
 | T1190 | [Session-to-Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | TODO | 1.6 | Pin user sessions to a single Fly.io machine via fly-replay headers; prevents DB conflicts, lost WS progress, stale reads |
+| T1210 | [Clip-Scoped Video Loading](tasks/for-launch/T1210-clip-scoped-video-loading.md) | TODO | 1.6 | Framing loads full 90-min video; should preload on project creation and only buffer clip time ranges |
+| T1220 | [Modal Range Requests](tasks/for-launch/T1220-modal-range-requests.md) | TODO | 1.3 | Modal downloads full 3GB video for a 10s clip; use presigned URLs + FFmpeg pre-input seek for range requests |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | TODO | 0.8 | Replace JSON columns (crop_data, segments_data, etc.) with MessagePack for ~30-50% size reduction; both Python and TS parse these |
 
 ### Epic: Post Launch (TODO)
