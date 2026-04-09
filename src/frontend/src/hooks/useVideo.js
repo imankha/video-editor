@@ -226,34 +226,17 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * Note: Check videoRef.current.src instead of videoUrl to support overlay mode
    * where the video src is set externally (not via loadVideo)
    */
-  // Helper: describe all buffered ranges (exposes gaps the old single-range log hid)
-  const describeBuffered = (video) => {
-    if (!video?.buffered?.length) return 'none';
-    const ranges = [];
-    for (let i = 0; i < video.buffered.length; i++) {
-      ranges.push(`${video.buffered.start(i).toFixed(1)}-${video.buffered.end(i).toFixed(1)}`);
-    }
-    return `[${ranges.join(', ')}] (${video.buffered.length} range${video.buffered.length > 1 ? 's' : ''})`;
-  };
-
   const play = async () => {
     if (videoRef.current && videoRef.current.src) {
-      const video = videoRef.current;
-      console.log(`[VIDEO] play() called — readyState: ${video.readyState}, networkState: ${video.networkState}, paused: ${video.paused}, currentTime: ${video.currentTime.toFixed(1)}, buffered: ${describeBuffered(video)}, preload: ${video.preload}, src fragment: ${video.src?.includes('#t=') ? video.src.split('#t=')[1] : 'none'}`);
       try {
         // video.play() returns a promise - must handle it
         await videoRef.current.play();
-        console.log(`[VIDEO] play() succeeded`);
       } catch (error) {
         // Ignore AbortError - happens when play() is interrupted by pause()
         if (error.name !== 'AbortError') {
-          console.error(`[VIDEO] play() FAILED: ${error.name}: ${error.message}`);
-        } else {
-          console.log(`[VIDEO] play() aborted (normal — interrupted by pause)`);
+          console.error('Video play error:', error);
         }
       }
-    } else {
-      console.warn(`[VIDEO] play() called but no video element or src`);
     }
   };
 
@@ -389,51 +372,24 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   };
 
   const handlePlay = () => {
-    console.log(`[VIDEO] Event: play — currentTime: ${videoRef.current?.currentTime?.toFixed(1)}`);
     setIsPlaying(true);
   };
 
   const handlePause = () => {
-    const stats = stallStatsRef.current;
-    console.log(`[VIDEO] Event: pause — currentTime: ${videoRef.current?.currentTime?.toFixed(1)} | SESSION STALL STATS: ${stats.count} stalls, ${stats.totalMs}ms total`);
     setIsPlaying(false);
   };
 
   // Buffering event handlers - pause time updates when video is waiting for data
-  // T1210 diagnostics: track stall count and total stall duration for A/B comparison
-  const stallStartRef = useRef(null);
-  const stallStatsRef = useRef({ count: 0, totalMs: 0 });
-
   const handleWaiting = () => {
-    const video = videoRef.current;
-    stallStartRef.current = performance.now();
-    stallStatsRef.current.count++;
-    console.warn(`[VIDEO] Event: waiting (stall #${stallStatsRef.current.count}) — currentTime: ${video?.currentTime?.toFixed(1)}, networkState: ${video?.networkState}, readyState: ${video?.readyState}, buffered: ${describeBuffered(video)}`);
     setIsBuffering(true);
   };
 
   const handlePlaying = () => {
-    let stallMsg = '';
-    if (stallStartRef.current) {
-      const stallMs = Math.round(performance.now() - stallStartRef.current);
-      stallStatsRef.current.totalMs += stallMs;
-      stallMsg = ` | stall lasted ${stallMs}ms | cumulative: ${stallStatsRef.current.count} stalls, ${stallStatsRef.current.totalMs}ms total`;
-      stallStartRef.current = null;
-    }
-    console.log(`[VIDEO] Event: playing (resumed)${stallMsg} — currentTime: ${videoRef.current?.currentTime?.toFixed(1)}`);
     setIsBuffering(false);
   };
 
   const handleCanPlay = () => {
     if (isBuffering) {
-      let stallMsg = '';
-      if (stallStartRef.current) {
-        const stallMs = Math.round(performance.now() - stallStartRef.current);
-        stallStatsRef.current.totalMs += stallMs;
-        stallMsg = ` | stall lasted ${stallMs}ms | cumulative: ${stallStatsRef.current.count} stalls, ${stallStatsRef.current.totalMs}ms total`;
-        stallStartRef.current = null;
-      }
-      console.log(`[VIDEO] Event: canplay (recovered)${stallMsg} — currentTime: ${videoRef.current?.currentTime?.toFixed(1)}`);
       setIsBuffering(false);
     }
   };
@@ -539,7 +495,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       const isBlob = video.src?.startsWith('blob:');
       const loadMode = isBlob ? 'BLOB (pre-downloaded)' : 'STREAMING (range requests)';
       console.log(`[VIDEO] Loading: ${urlPreview}`);
-      console.log(`[VIDEO] Mode: ${loadMode} | preload: ${video.preload} | fragment: ${video.src?.includes('#t=') ? '#t=' + video.src.split('#t=')[1] : 'none'}`);
+      console.log(`[VIDEO] Mode: ${loadMode}`);
       console.log(`[VIDEO] networkState: ${video.networkState}, readyState: ${video.readyState}`);
       // Set loading state - this catches cases where URL is set directly (e.g., Annotate mode)
       useVideoStore.getState().setIsVideoElementLoading(true);
@@ -754,10 +710,6 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       onWaiting: handleWaiting,
       onPlaying: handlePlaying,
       onCanPlay: handleCanPlay,
-      onStalled: () => {
-        const video = videoRef.current;
-        console.warn(`[VIDEO] Event: stalled (network not responding) — currentTime: ${video?.currentTime?.toFixed(1)}, networkState: ${video?.networkState}, readyState: ${video?.readyState}, buffered: ${describeBuffered(video)}`);
-      },
     }
   };
 }
