@@ -19,15 +19,10 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Environment variables (all .env files contain secrets — never commit)
+# Environment variables — 3 envs: dev (.env), staging (.env.staging), prod (.env.prod)
 .env
 .env.staging
 .env.prod
-.env.production
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
 # Temporary files
 *.tmp
