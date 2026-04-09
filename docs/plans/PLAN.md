@@ -39,6 +39,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1030 | [Quest UI Relocation](tasks/for-alpha/T1030-quest-ui-relocation.md) | DONE | 2.0 | Move quest panel out of floating overlay into dedicated area; currently covers controls user needs (e.g., playback button for Q1S3) |
 | T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | DONE | 1.3 | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
 | T1230 | [Mobile Annotate Clips](tasks/for-alpha/T1230-mobile-annotate-clips.md) | TODO | 1.6 | Compact mode for ClipDetailsEditor on mobile — collapse scrub region, reduce tag/spacing sizes |
+| T1250 | [Live Scrub in Annotate](tasks/for-alpha/T1250-annotate-live-scrub.md) | TODO | 2.0 | Video should update frame-by-frame during timeline/clip scrub drag, not just on release |
 
 ### Standalone Tasks
 
@@ -63,7 +64,7 @@ Scale, performance, and reliability — must be solid before feature work.
 | ID | Task | Impact | Cmplx | Pri | Status | Description |
 |----|------|--------|-------|-----|--------|-------------|
 | T1190 | [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | Pin sessions to machines via fly-replay; includes session expiry (absorbs T420) |
-| T1210 | [Clip-Scoped Video Loading](tasks/for-launch/T1210-clip-scoped-video-loading.md) | 7 | 4 | 1.8 | TODO | Framing loads full 90-min video; preload on project creation, only buffer clip time ranges |
+| T1210 | [Clip-Scoped Video Loading](tasks/for-launch/T1210-clip-scoped-video-loading.md) | 7 | 4 | 1.8 | TESTING | Framing loads full 90-min video; preload on project creation, only buffer clip time ranges |
 | T1220 | [Modal Range Requests](tasks/for-launch/T1220-modal-range-requests.md) | 7 | 5 | 1.4 | TODO | Modal downloads full 3GB video for 10s clip; use presigned URLs + FFmpeg pre-input seek |
 | T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | 5 | 5 | 1.0 | TODO | Modal path is synchronous (async but holds connection); return 202 + background task |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | Replace JSON columns with MessagePack for ~30-50% size reduction |
