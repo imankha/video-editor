@@ -39,6 +39,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1030 | [Quest UI Relocation](tasks/for-alpha/T1030-quest-ui-relocation.md) | DONE | 2.0 | Move quest panel out of floating overlay into dedicated area; currently covers controls user needs (e.g., playback button for Q1S3) |
 | T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | DONE | 1.3 | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
 | T1230 | [Mobile Annotate Clips](tasks/for-alpha/T1230-mobile-annotate-clips.md) | TODO | 1.6 | Compact mode for ClipDetailsEditor on mobile — collapse scrub region, reduce tag/spacing sizes |
+| T1250 | [Live Scrub in Annotate](tasks/for-alpha/T1250-annotate-live-scrub.md) | TODO | 2.0 | Video should update frame-by-frame during timeline/clip scrub drag, not just on release |
 
 ### Standalone Tasks
 
