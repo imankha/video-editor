@@ -9,7 +9,6 @@ import { useRawClipSave } from '../hooks/useRawClipSave';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { VideoMode, GameType } from '../constants/gameConstants';
-import { createVideoURL } from '../utils/videoUtils';
 
 /**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
@@ -361,19 +360,9 @@ export function AnnotateContainer({
       // Reset annotate state before loading new game
       resetAnnotate();
 
-      // Download full video as blob for instant seeks in Annotate mode.
-      // Streaming URLs cause stalls on every seek; blob URLs allow instant scrubbing.
-      const response = await fetch(videoUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch video: ${response.status}`);
-      }
-      const blob = await response.blob();
-      const file = new File([blob], gameData.name || 'game.mp4', { type: blob.type || 'video/mp4' });
-      const blobUrl = createVideoURL(file);
-
-      // Set annotate state with the blob video
-      setAnnotateVideoFile(file);
-      setAnnotateVideoUrl(blobUrl);
+      // Set annotate state with the game's video
+      setAnnotateVideoFile(null);
+      setAnnotateVideoUrl(videoUrl);
       setAnnotateVideoMetadata(videoMetadata);
       annotateGameIdRef.current = gameId;
       setAnnotateGameId(gameId);
@@ -882,42 +871,23 @@ export function AnnotateContainer({
 
   // T82: Simple tab-based video switching
   // Each video is independent with its own timeline (no virtual absolute timeline)
-  const handleVideoTabSwitch = useCallback(async (index) => {
+  const handleVideoTabSwitch = useCallback((index) => {
     if (!gameVideos || index < 0 || index >= gameVideos.length) return;
     if (index === activeVideoIndex) return;
 
     const video = gameVideos[index];
-    const streamingUrl = video.url || video.serverUrl;
+    const newUrl = video.url || video.serverUrl;
 
-    try {
-      // Revoke previous blob URL before switching
-      if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(annotateVideoUrl);
-      }
-
-      // Download full video as blob for instant seeks
-      const response = await fetch(streamingUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch video: ${response.status}`);
-      }
-      const blob = await response.blob();
-      const file = new File([blob], 'game_video.mp4', { type: blob.type || 'video/mp4' });
-      const blobUrl = createVideoURL(file);
-
-      setActiveVideoIndex(index);
-      setAnnotateVideoUrl(blobUrl);
-      // Update metadata to this video's duration
-      setAnnotateVideoMetadata(prev => ({
-        ...prev,
-        duration: video.duration,
-        width: video.width || prev?.width,
-        height: video.height || prev?.height,
-      }));
-    } catch (err) {
-      console.error('[AnnotateContainer] Failed to download video for tab switch:', err);
-      toast.error('Failed to load video');
-    }
-  }, [gameVideos, activeVideoIndex, annotateVideoUrl, setAnnotateVideoUrl, setAnnotateVideoMetadata]);
+    setActiveVideoIndex(index);
+    setAnnotateVideoUrl(newUrl);
+    // Update metadata to this video's duration
+    setAnnotateVideoMetadata(prev => ({
+      ...prev,
+      duration: video.duration,
+      width: video.width || prev?.width,
+      height: video.height || prev?.height,
+    }));
+  }, [gameVideos, activeVideoIndex, setAnnotateVideoUrl, setAnnotateVideoMetadata]);
 
   // Filter clip regions to only show clips for the current video
   const filteredClipRegions = useMemo(() => {
