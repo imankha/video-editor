@@ -15,8 +15,12 @@ Browser-based video editor: **Annotate** (clip extraction) → **Framing** (crop
 ## Data Safety Rules
 
 - Always confirm the exact scope of deletion with the user before executing
-- Use `scripts/reset_all_accounts.py` for full account resets (preserves games)
-- Use `scripts/reset_account.py --email <email>` for single account resets
+- Use `scripts/reset_all_accounts.py` for full account resets on dev/staging (preserves games)
+- Use `scripts/reset-test-user.py` for single account resets on any env (including prod):
+  ```bash
+  cd src/backend && .venv/Scripts/python.exe ../../scripts/reset-test-user.py <email> --env <dev|staging|prod>
+  ```
+  For prod: downloads DBs from R2, clears data, re-uploads, restarts Fly.io machines, warms server. Add `--no-restart` to skip the restart.
 
 ## Commands
 ```bash
