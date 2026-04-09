@@ -45,6 +45,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 |----|------|--------|-----|-------------|
 | T1150 | [Fix Pending Sync Retry No-Op](tasks/T1150-fix-pending-sync-retry-noop.md) | TODO | 3.0 | T930 retry calls `_if_writes` before `init_request_context` — always short-circuits, never actually uploads |
 | T1160 | [Clean Up Unused DB Rows](tasks/T1160-cleanup-unused-db-rows.md) | TODO | 2.5 | Prune old working_clips versions, orphaned before_after_tracks, stale modal_tasks to keep DB small for R2 sync |
+| T1170 | [Size-Based VACUUM on Init](tasks/T1170-size-based-vacuum-on-init.md) | TODO | 2.5 | Only VACUUM profile.sqlite when size exceeds 400KB threshold; skip for small DBs |
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
 
 ### Epic: For Launch (TODO)
@@ -67,6 +68,7 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 | T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | TODO | 1.3 | "Upload Team" — invite teammates by email; inviter earns credits per signup (viral loop) |
 | T1090 | [Social Media Auto-Posting](tasks/for-launch/T1090-social-media-auto-posting.md) | TODO | 1.1 | "Share to Social" from gallery — one form posts to IG, TikTok, YouTube, FB via aggregator API; AI adapts captions per platform |
 | T1060 | [Coaches View](tasks/for-launch/T1060-coaches-view.md) | TODO | 1.0 | Coach account type: roster uploads, assign annotations to players, track clip review status, own NUF flow. No "Projects" for coaches. |
+| T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | TODO | 0.8 | Replace JSON columns (crop_data, segments_data, etc.) with MessagePack for ~30-50% size reduction; both Python and TS parse these |
 
 ### Epic: Post Launch (TODO)
 [tasks/post-launch/EPIC.md](tasks/post-launch/EPIC.md)
