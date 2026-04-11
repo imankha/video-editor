@@ -28,6 +28,18 @@ See [DONE.md](DONE.md) for all completed, superseded, and won't-do tasks.
 
 ---
 
+### Epic: Auth Integrity (IN_PROGRESS) -- BUG FIX
+[tasks/auth-integrity/EPIC.md](tasks/auth-integrity/EPIC.md)
+
+Goal: Eliminate orphaned accounts by removing guest accounts entirely. Users must sign in (Google or OTP) before using the app.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Description |
+|----|------|--------|-------|-----|--------|-------------|
+| T1270 | [Cookie Path + SameSite Fix](tasks/auth-integrity/T1270-cookie-path-fix.md) | 9 | 1 | 9.0 | TODO | Add `path="/"` to cookies, fix SameSite to `lax` |
+| T1290 | [Auth DB Restore Must Succeed](tasks/auth-integrity/T1290-auth-db-restore-must-succeed.md) | 9 | 4 | 2.3 | TODO | Fail startup if auth.sqlite can't restore from R2 |
+| T1340 | [Auth-First Login Screen](tasks/auth-integrity/T1340-auth-first-login-screen.md) | 9 | 4 | 2.3 | TODO | Full-screen login page on first visit (blocks T1330) |
+| T1330 | [Remove Guest Accounts](tasks/auth-integrity/T1330-remove-guest-accounts.md) | 10 | 6 | 1.7 | TODO | Rip out init-guest, migration, guest banners — ~400 LOC removed |
+
 ### Epic: For Alpha (IN_PROGRESS)
 [tasks/for-alpha/EPIC.md](tasks/for-alpha/EPIC.md)
 
@@ -40,6 +52,16 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | DONE | 1.3 | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
 | T1230 | [Mobile Annotate Clips](tasks/for-alpha/T1230-mobile-annotate-clips.md) | TODO | 1.6 | Compact mode for ClipDetailsEditor on mobile — collapse scrub region, reduce tag/spacing sizes |
 | T1250 | [Live Scrub in Annotate](tasks/for-alpha/T1250-annotate-live-scrub.md) | TODO | 2.0 | Video should update frame-by-frame during timeline/clip scrub drag, not just on release |
+| T1390 | [Rename Projects to Reels](tasks/for-alpha/T1390-rename-projects-to-reels.md) | TODO | 3.0 | Users understood "Games" but not "Projects" — rename to "Reels" (UI labels only) |
+| T1400 | [Framing Keyframe Dedup](tasks/for-alpha/T1400-framing-keyframe-dedup.md) | TODO | 3.0 | Snap to nearby keyframe within MIN_KEYFRAME_SPACING instead of creating duplicates |
+
+### Bug Fix Sprint (from production logs 2026-04-10)
+
+| ID | Task | Status | Pri | Description |
+|----|------|--------|-----|-------------|
+| T1360 | [Stale Blob URL Video Error](tasks/T1360-blob-url-video-error.md) | TODO | 4.0 | Revoked blob URLs cause misleading "Video format not supported" error — detect and auto-recover |
+| T1350 | [Cache Warming CORS Errors](tasks/T1350-cache-warming-cors-errors.md) | TODO | 3.5 | `warmUrl()` uses `mode: 'cors'` on R2 presigned URLs — fails with console errors on every page load |
+| T1370 | [Blob Preload Size Gate](tasks/T1370-blob-preload-size-gate.md) | TODO | 3.0 | T1262 blob preload downloads entire video — impractical for 3GB files, needs size threshold |
 
 ### Standalone Tasks
 
@@ -65,7 +87,13 @@ Scale, performance, and reliability — must be solid before feature work.
 |----|------|--------|-------|-----|--------|-------------|
 | T1190 | [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | Pin sessions to machines via fly-replay; includes session expiry (absorbs T420) |
 | T1210 | [Clip-Scoped Video Loading](tasks/for-launch/T1210-clip-scoped-video-loading.md) | 7 | 4 | 1.8 | DONE | Framing loads full 90-min video; preload on project creation, only buffer clip time ranges |
-| T1260 | [Video Seek Optimization](tasks/for-launch/T1260-video-seek-optimization.md) | 8 | 5 | 1.6 | TODO | Service Worker video cache + moov atom parsing + predictive prefetch; $0/video, eliminates repeat seek stalls |
+| T1260 | [Video Seek Optimization](tasks/for-launch/T1260-video-seek-optimization.md) | 8 | 5 | 1.6 | TODO | Epic: SW video cache + moov parsing + predictive prefetch; $0/video |
+| T1261 | [↳ Seek Perf Instrumentation](tasks/for-launch/T1261-seek-perf-instrumentation.md) | 8 | 2 | 4.0 | TODO | Measure seek latency (baseline + ongoing). Gate for all subsequent subtasks. |
+| T1262 | [↳ Service Worker Video Cache](tasks/for-launch/T1262-service-worker-video-cache.md) | 8 | 4 | 2.0 | TODO | Cache range responses locally; repeat seeks <50ms. Biggest single impact. |
+| T1263 | [↳ SW Quota Management](tasks/for-launch/T1263-sw-quota-management.md) | 5 | 2 | 2.5 | TODO | LRU eviction so cache doesn't fill disk. |
+| T1264 | [↳ Moov Atom Parsing](tasks/for-launch/T1264-moov-atom-parsing.md) | 6 | 3 | 2.0 | TODO | Exact byte ranges for cache warming. Only if proportional error >20MB. |
+| T1265 | [↳ Predictive Prefetch](tasks/for-launch/T1265-predictive-prefetch.md) | 6 | 3 | 2.0 | TODO | Prefetch next 30s ahead of playhead. Only if forward seeks still slow after T1262. |
+| T1380 | [↳ Upload Moov Faststart](tasks/for-launch/T1380-upload-moov-faststart.md) | 7 | 3 | 2.3 | TODO | Client-side moov relocation on upload; $0/video, <1s, eliminates extra round-trip for Trace videos |
 | T1220 | [Modal Range Requests](tasks/for-launch/T1220-modal-range-requests.md) | 7 | 5 | 1.4 | TODO | Modal downloads full 3GB video for 10s clip; use presigned URLs + FFmpeg pre-input seek |
 | T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | 5 | 5 | 1.0 | TODO | Modal path is synchronous (async but holds connection); return 202 + background task |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | Replace JSON columns with MessagePack for ~30-50% size reduction |
