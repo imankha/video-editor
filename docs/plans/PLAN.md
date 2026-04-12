@@ -64,7 +64,7 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 |----|------|--------|-----|-------------|
 | T1360 | [Blob URL Error Recovery](tasks/video-load-reliability/T1360-blob-url-error-recovery.md) | AWAITING USER VERIFICATION | 4.0 | Stale blob URL auto-recovers to streaming URL; no misleading "Video format not supported" overlay |
 | T1370 | [Blob Preload Size Gate + Unmount Safety](tasks/video-load-reliability/T1370-blob-preload-size-gate.md) | OBSOLETE | 3.5 | 200MB gate on T1262 preload; AbortController + revoke on unmount — removes root cause of T1360 recurrence |
-| T1350 | [Cache Warming CORS Cleanup](tasks/video-load-reliability/T1350-cache-warming-cors-fix.md) | TODO | 3.0 | Switch warmUrl to `no-cors`; eliminates console spam on every page load |
+| T1350 | [Cache Warming CORS Cleanup](tasks/video-load-reliability/T1350-cache-warming-cors-fix.md) | AWAITING USER VERIFICATION | 3.0 | Switch warmUrl to `no-cors`; eliminates console spam on every page load |
 
 ### Standalone Tasks
 
