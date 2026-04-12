@@ -1,6 +1,6 @@
 # T1360: Blob URL Error Recovery
 
-**Status:** TESTING
+**Status:** AWAITING USER VERIFICATION
 **Epic:** [Video Load Reliability](EPIC.md)
 **Priority:** 1 of 3 (user-blocking)
 **Branch:** `feature/T1360-blob-url-error-recovery`
