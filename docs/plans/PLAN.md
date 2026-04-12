@@ -55,13 +55,16 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1390 | [Rename Projects to Reels](tasks/for-alpha/T1390-rename-projects-to-reels.md) | TODO | 3.0 | Users understood "Games" but not "Projects" — rename to "Reels" (UI labels only) |
 | T1400 | [Framing Keyframe Dedup](tasks/for-alpha/T1400-framing-keyframe-dedup.md) | TODO | 3.0 | Snap to nearby keyframe within MIN_KEYFRAME_SPACING instead of creating duplicates |
 
-### Bug Fix Sprint (from production logs 2026-04-10)
+### Epic: Video Load Reliability (IN_PROGRESS) -- BUG FIX
+[tasks/video-load-reliability/EPIC.md](tasks/video-load-reliability/EPIC.md)
+
+Goal: Robust video loading — no misleading format errors, no oversized preloads, no CORS spam. Ordered by severity to user experience. Orchestrator-driven; each task gets its own branch and merges only after its before/after test proves effectiveness.
 
 | ID | Task | Status | Pri | Description |
 |----|------|--------|-----|-------------|
-| T1360 | [Stale Blob URL Video Error](tasks/T1360-blob-url-video-error.md) | TODO | 4.0 | Revoked blob URLs cause misleading "Video format not supported" error — detect and auto-recover |
-| T1350 | [Cache Warming CORS Errors](tasks/T1350-cache-warming-cors-errors.md) | TODO | 3.5 | `warmUrl()` uses `mode: 'cors'` on R2 presigned URLs — fails with console errors on every page load |
-| T1370 | [Blob Preload Size Gate](tasks/T1370-blob-preload-size-gate.md) | TODO | 3.0 | T1262 blob preload downloads entire video — impractical for 3GB files, needs size threshold |
+| T1360 | [Blob URL Error Recovery](tasks/video-load-reliability/T1360-blob-url-error-recovery.md) | TODO | 4.0 | Stale blob URL auto-recovers to streaming URL; no misleading "Video format not supported" overlay |
+| T1370 | [Blob Preload Size Gate + Unmount Safety](tasks/video-load-reliability/T1370-blob-preload-size-gate.md) | TODO | 3.5 | 200MB gate on T1262 preload; AbortController + revoke on unmount — removes root cause of T1360 recurrence |
+| T1350 | [Cache Warming CORS Cleanup](tasks/video-load-reliability/T1350-cache-warming-cors-fix.md) | TODO | 3.0 | Switch warmUrl to `no-cors`; eliminates console spam on every page load |
 
 ### Standalone Tasks
 
@@ -87,14 +90,14 @@ Scale, performance, and reliability — must be solid before feature work.
 |----|------|--------|-------|-----|--------|-------------|
 | T1190 | [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | Pin sessions to machines via fly-replay; includes session expiry (absorbs T420) |
 | T1210 | [Clip-Scoped Video Loading](tasks/for-launch/T1210-clip-scoped-video-loading.md) | 7 | 4 | 1.8 | DONE | Framing loads full 90-min video; preload on project creation, only buffer clip time ranges |
-| T1260 | [Video Seek Optimization](tasks/for-launch/T1260-video-seek-optimization.md) | 8 | 5 | 1.6 | TODO | Epic: SW video cache + moov parsing + predictive prefetch; $0/video |
-| T1261 | [↳ Seek Perf Instrumentation](tasks/for-launch/T1261-seek-perf-instrumentation.md) | 8 | 2 | 4.0 | TODO | Measure seek latency (baseline + ongoing). Gate for all subsequent subtasks. |
-| T1262 | [↳ Service Worker Video Cache](tasks/for-launch/T1262-service-worker-video-cache.md) | 8 | 4 | 2.0 | TODO | Cache range responses locally; repeat seeks <50ms. Biggest single impact. |
-| T1263 | [↳ SW Quota Management](tasks/for-launch/T1263-sw-quota-management.md) | 5 | 2 | 2.5 | TODO | LRU eviction so cache doesn't fill disk. |
-| T1264 | [↳ Moov Atom Parsing](tasks/for-launch/T1264-moov-atom-parsing.md) | 6 | 3 | 2.0 | TODO | Exact byte ranges for cache warming. Only if proportional error >20MB. |
-| T1265 | [↳ Predictive Prefetch](tasks/for-launch/T1265-predictive-prefetch.md) | 6 | 3 | 2.0 | TODO | Prefetch next 30s ahead of playhead. Only if forward seeks still slow after T1262. |
+| T1260 | [Video Seek Optimization](tasks/for-launch/T1260-video-seek-optimization.md) | 8 | 5 | 1.6 | ICE | Epic on ice 2026-04-12 — T1380 shipped the big win (TTFP seconds→359ms). Revisit only if users report seek problems. |
+| T1261 | [↳ Seek Perf Instrumentation](tasks/for-launch/T1261-seek-perf-instrumentation.md) | 8 | 2 | 4.0 | ICE | Parent epic on ice. |
+| T1262 | [↳ Service Worker Video Cache](tasks/for-launch/T1262-service-worker-video-cache.md) | 8 | 4 | 2.0 | ICE | Parent epic on ice. |
+| T1263 | [↳ SW Quota Management](tasks/for-launch/T1263-sw-quota-management.md) | 5 | 2 | 2.5 | ICE | Parent epic on ice. |
+| T1264 | [↳ Moov Atom Parsing](tasks/for-launch/T1264-moov-atom-parsing.md) | 6 | 3 | 2.0 | ICE | Parent epic on ice. |
+| T1265 | [↳ Predictive Prefetch](tasks/for-launch/T1265-predictive-prefetch.md) | 6 | 3 | 2.0 | ICE | Parent epic on ice. |
 | T1380 | [↳ Upload Moov Faststart](tasks/for-launch/T1380-upload-moov-faststart.md) | 7 | 3 | 2.3 | DONE | Client-side moov relocation on upload; TTFP ~seconds→359ms, seek network 6–16ms (moov no longer bottleneck) |
-| T1385 | [↳ Decode-Phase Seek Optimization](tasks/for-launch/T1385-decode-phase-seek-optimization.md) | 6 | 5 | 1.2 | TODO | Post-T1380 bottleneck is decode (170–300ms). Explore keyframe density, decoded-frame cache, frame-accurate prefetch |
+| T1385 | [↳ Decode-Phase Seek Optimization](tasks/for-launch/T1385-decode-phase-seek-optimization.md) | 6 | 5 | 1.2 | ICE | Parent epic on ice. |
 | T1220 | [Modal Range Requests](tasks/for-launch/T1220-modal-range-requests.md) | 7 | 5 | 1.4 | TODO | Modal downloads full 3GB video for 10s clip; use presigned URLs + FFmpeg pre-input seek |
 | T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | 5 | 5 | 1.0 | TODO | Modal path is synchronous (async but holds connection); return 202 + background task |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | Replace JSON columns with MessagePack for ~30-50% size reduction |
