@@ -1,10 +1,20 @@
 # T1370: Blob Preload Size Gate + Unmount Safety
 
-**Status:** TODO
+**Status:** OBSOLETE (2026-04-12)
 **Epic:** [Video Load Reliability](EPIC.md)
 **Priority:** 2 of 3
-**Branch:** `feature/T1370-blob-preload-size-gate`
-**Depends on:** T1262 (merged)
+**Branch:** `feature/T1370-blob-preload-size-gate` (not created)
+**Depends on:** T1262 — **REVERTED** in commit `e4f5fec`
+
+## Why Obsolete
+
+T1262 (the blob preload this task was meant to gate) was reverted before this epic began. There is no `preloadVideoAsBlob` in the codebase — the 3GB-preload symptom cannot occur today. If T1262 is ever reintroduced, the size gate + AbortController design below becomes a day-1 requirement for that task.
+
+---
+
+*(Original spec retained below for reference if T1262 is resurrected.)*
+
+
 
 ## User Value
 

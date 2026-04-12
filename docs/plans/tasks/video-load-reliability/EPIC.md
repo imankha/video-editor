@@ -15,7 +15,7 @@ All three tasks touch the same code path (`useVideo.js` + `AnnotateContainer.jsx
 | # | ID | Task | User Value | Verifiable By |
 |---|----|------|------------|---------------|
 | 1 | T1360 | [Blob URL Error Recovery](T1360-blob-url-error-recovery.md) | User never sees the misleading "Video format not supported" error; video auto-recovers from revoked blob | E2E test that revokes a blob URL mid-playback and asserts no error overlay + video resumes from the streaming URL |
-| 2 | T1370 | [Blob Preload Size Gate + Unmount Safety](T1370-blob-preload-size-gate.md) | 3GB-video users don't pay minutes of bandwidth + GB of memory for a preload they can't use; reduces the recurrence of T1360 | Unit test: preload skipped for size ≥ threshold; Integration test: unmount during preload revokes blob and aborts fetch |
+| 2 | T1370 | [Blob Preload Size Gate + Unmount Safety](T1370-blob-preload-size-gate.md) | **OBSOLETE** — T1262 (the preload) was reverted in `e4f5fec` before epic start; symptom cannot occur | n/a (closed 2026-04-12 without implementation) |
 | 3 | T1350 | [Cache Warming CORS Cleanup](T1350-cache-warming-cors-fix.md) | Console is clean; real errors no longer buried under CORS spam on every page load | Playwright test that asserts zero CORS errors in `page.on('console')` during `warmAllUserVideos()` |
 
 ## Shared Context
