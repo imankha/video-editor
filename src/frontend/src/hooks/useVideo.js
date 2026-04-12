@@ -4,6 +4,7 @@ import { validateVideoFile } from '../utils/fileValidation';
 import { useVideoStore } from '../stores';
 import { invalidateUrl } from '../utils/storageUrls';
 import { probeVideoUrlMoovPosition } from '../utils/probeVideoUrl';
+import { classifyVideoError, VideoErrorKind } from '../utils/videoErrorClassifier';
 
 /**
  * Custom hook for managing video state and playback
@@ -24,6 +25,16 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // Track retry attempts to prevent infinite loops
   const retryAttemptRef = useRef(0);
   const MAX_RETRY_ATTEMPTS = 2;
+
+  // T1360: when loadVideoFromUrl creates a blob from a streaming URL, stash
+  // the original streaming URL so we can recover if the blob becomes stale.
+  // Memory-only — NOT persisted (gesture-based persistence rule).
+  const streamingFallbackUrlRef = useRef(null);
+
+  // T1360: true while swapping video.src back to the streaming URL after a
+  // stale-blob error. VideoPlayer uses this to suppress the error overlay
+  // during the swap so the user never sees "format not supported".
+  const isRecoveringRef = useRef(false);
 
   // Get state and setters from the store
   const {
@@ -143,6 +154,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       const blobUrl = createVideoURL(file);
       console.log('[useVideo] Created blob URL:', blobUrl);
 
+      // T1360: remember the original streaming URL so handleError can swap
+      // back if the blob is later revoked/GC'd out from under the <video>.
+      streamingFallbackUrlRef.current = url;
+
       // Batch update all video state
       setVideoLoaded({
         file,
@@ -200,6 +215,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     }
     setError(null);
     retryAttemptRef.current = 0; // Reset retry counter on new video load
+    // T1360: streaming load — no blob to recover, clear any previous stash.
+    streamingFallbackUrlRef.current = null;
+    isRecoveringRef.current = false;
 
     // Clean up previous blob URL (only if it's a blob URL we created)
     const prevUrl = useVideoStore.getState().videoUrl;
@@ -560,42 +578,77 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // Handle video load error
   // MediaError codes: 1=ABORTED, 2=NETWORK, 3=DECODE, 4=SRC_NOT_SUPPORTED
   const handleError = useCallback(() => {
-    if (videoRef.current) {
-      const video = videoRef.current;
-      const mediaError = video.error;
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const mediaError = video.error;
+    const errorCode = mediaError?.code;
+    const errorMessage = mediaError?.message || 'Unknown error';
 
-      // Detect network errors (often caused by expired presigned URLs)
-      const isNetworkError = mediaError?.code === MediaError.MEDIA_ERR_NETWORK;
-      const errorCode = mediaError?.code;
-      const errorMessage = mediaError?.message || 'Unknown error';
+    // T1360: classify before deciding whether to surface the error to the user.
+    // A revoked blob URL surfaces as MEDIA_ERR_SRC_NOT_SUPPORTED but is NOT a
+    // real format failure — recover in-memory by swapping to the stashed
+    // streaming URL.
+    const kind = classifyVideoError({ code: errorCode, videoSrc: video.src });
 
-      // Build user-friendly error message
-      let userMessage;
-      if (isNetworkError) {
-        userMessage = 'Video connection lost. The link may have expired.';
-        // Invalidate the URL cache so next load gets a fresh URL
-        if (videoUrl && !videoUrl.startsWith('blob:')) {
-          invalidateUrl(videoUrl);
-        }
-      } else if (errorCode === MediaError.MEDIA_ERR_DECODE) {
-        userMessage = 'Video could not be decoded. The file may be corrupted.';
-      } else if (errorCode === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
-        userMessage = 'Video format not supported.';
-      } else {
-        userMessage = `Failed to load video: ${errorMessage}`;
-      }
-
-      console.error(`[VIDEO] Error: ${userMessage}`, {
-        code: errorCode,
-        rawMessage: errorMessage,
-        url: videoUrl?.substring(0, 80),
-        isBlob: videoUrl?.startsWith('blob:'),
-        retryAttempt: retryAttemptRef.current,
+    if (kind === VideoErrorKind.STALE_BLOB && streamingFallbackUrlRef.current) {
+      const resumeAt = video.currentTime;
+      const fallback = streamingFallbackUrlRef.current;
+      console.warn('[VIDEO] Recovered from stale blob URL, swapping to streaming URL', {
+        resumeAt,
+        fallbackPreview: fallback.substring(0, 80),
       });
-      setError(userMessage);
-      retryAttemptRef.current += 1;
+      isRecoveringRef.current = true;
+      // Stash is one-shot — once we swap to streaming, there is no more blob.
+      streamingFallbackUrlRef.current = null;
+      // Update store so VideoPlayer renders the streaming URL as src.
+      setVideoUrl(fallback);
+      // Clear any transient error (shouldn't be one yet — we're recovering
+      // before surfacing — but be defensive against reordering).
+      setError(null);
+      // Resume position after the new src loads.
+      const restoreTime = () => {
+        if (videoRef.current && !Number.isNaN(resumeAt)) {
+          try {
+            videoRef.current.currentTime = resumeAt;
+          } catch (_) { /* readyState not ready yet; canplay will retry */ }
+        }
+        isRecoveringRef.current = false;
+      };
+      // Use loadeddata so we know the element has data for the new src.
+      videoRef.current.addEventListener('loadeddata', restoreTime, { once: true });
+      return;
     }
-  }, [videoUrl, setError]);
+
+    // Build user-friendly error message
+    let userMessage;
+    if (kind === VideoErrorKind.NETWORK_ERROR) {
+      userMessage = 'Video connection lost. The link may have expired.';
+      // Invalidate the URL cache so next load gets a fresh URL
+      if (videoUrl && !videoUrl.startsWith('blob:')) {
+        invalidateUrl(videoUrl);
+      }
+    } else if (kind === VideoErrorKind.DECODE_ERROR) {
+      userMessage = 'Video could not be decoded. The file may be corrupted.';
+    } else if (kind === VideoErrorKind.FORMAT_ERROR) {
+      userMessage = 'Video format not supported.';
+    } else if (kind === VideoErrorKind.STALE_BLOB) {
+      // Stale blob but no stashed streaming URL — nothing we can do.
+      userMessage = 'Video source expired. Please reload the page.';
+    } else {
+      userMessage = `Failed to load video: ${errorMessage}`;
+    }
+
+    console.error(`[VIDEO] Error: ${userMessage}`, {
+      code: errorCode,
+      kind,
+      rawMessage: errorMessage,
+      url: videoUrl?.substring(0, 80),
+      isBlob: videoUrl?.startsWith('blob:'),
+      retryAttempt: retryAttemptRef.current,
+    });
+    setError(userMessage);
+    retryAttemptRef.current += 1;
+  }, [videoUrl, setError, setVideoUrl]);
 
   /**
    * Clear the current error state
