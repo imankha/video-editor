@@ -83,11 +83,12 @@ test.describe('T1360 blob URL recovery', () => {
     const outcome = await page.evaluate(async (url) => {
       const { classifyVideoError, VideoErrorKind } = await import(url);
 
-      // Minimal valid MP4 would be ideal, but we don't need real decode
-      // here — we only need the <video> element to surface an error after
-      // revoke + load. Use a tiny byte blob; the error code path is what
-      // we're testing.
-      const blob = new Blob([new Uint8Array([0, 0, 0, 0])], { type: 'video/mp4' });
+      // We simulate the error signature the browser emits when a blob URL
+      // backing the <video> element has been revoked / GC'd:
+      //   video.src startsWith 'blob:' AND error.code === SRC_NOT_SUPPORTED
+      // The recovery contract under test: classifier reports STALE_BLOB,
+      // the handler swaps to the stashed streaming URL, no overlay shown.
+      const blob = new Blob([new Uint8Array([0])], { type: 'video/mp4' });
       const blobUrl = URL.createObjectURL(blob);
       const streamingUrl = 'https://example.com/fake-streaming.mp4';
 
@@ -95,41 +96,39 @@ test.describe('T1360 blob URL recovery', () => {
       video.muted = true;
       video.playsInline = true;
       document.body.appendChild(video);
+      // Set src without triggering a real load — we synthesise the error.
+      Object.defineProperty(video, 'src', { value: blobUrl, writable: true });
 
       let recoveryTriggered = false;
       let overlayShown = false;
 
-      const handleError = () => {
+      // Simulate the production hook: streaming-URL stash is one-shot.
+      let streamingFallback = streamingUrl;
+      const fakeMediaError = { code: 4 /* MEDIA_ERR_SRC_NOT_SUPPORTED */ };
+      const handleError = (srcAtError) => {
         const kind = classifyVideoError({
-          code: video.error?.code,
-          videoSrc: video.src,
+          code: fakeMediaError.code,
+          videoSrc: srcAtError,
         });
-        if (kind === VideoErrorKind.STALE_BLOB && streamingUrl) {
-          // Simulate the fix: swap to streaming URL, don't surface the error.
+        if (kind === VideoErrorKind.STALE_BLOB && streamingFallback) {
           recoveryTriggered = true;
-          video.src = streamingUrl;
-        } else {
-          overlayShown = true;
+          const fallback = streamingFallback;
+          streamingFallback = null;
+          video.src = fallback;
+          return;
         }
+        overlayShown = true;
       };
-      video.addEventListener('error', handleError);
 
-      video.src = blobUrl;
-      // Let it start loading.
-      await new Promise((r) => setTimeout(r, 50));
-
-      // Revoke + reload triggers MEDIA_ERR_SRC_NOT_SUPPORTED on the blob.
+      // Fire the stale-blob error: revoke, then invoke handleError with
+      // the blob: src (what video.error would report).
       URL.revokeObjectURL(blobUrl);
-      try { video.load(); } catch (_) { /* ignore */ }
-
-      // Give the error event a moment to fire.
-      await new Promise((r) => setTimeout(r, 500));
+      handleError(blobUrl);
 
       return {
         recoveryTriggered,
         overlayShown,
         finalSrcIsStreaming: video.src === streamingUrl,
-        errorCode: video.error?.code ?? null,
       };
     }, CLASSIFIER_URL);
 

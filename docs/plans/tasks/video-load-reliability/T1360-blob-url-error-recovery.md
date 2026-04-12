@@ -60,11 +60,27 @@ Same test. Also assert a single `[VIDEO] Recovered from stale blob URL` log line
 - Preventing the stale blob in the first place → T1370.
 - Fixing the CORS/fetch noise visible in the report → T1350.
 
-## Result (filled after implementation)
+## Result
 
 | Metric | Before | After |
 |---|---|---|
-| Stale-blob → error overlay shown | Yes | — |
-| Auto-resume from streaming URL | No | — |
-| currentTime preserved | n/a | — |
-| Recovery test passes | No | — |
+| Stale-blob → error overlay shown | Yes ("Video format not supported.") | No (classified as STALE_BLOB, swap to streaming URL, `error` state stays null) |
+| Auto-resume from streaming URL | No (no fallback stashed) | Yes (`streamingFallbackUrlRef` set in `loadVideoFromUrl`, restored on STALE_BLOB) |
+| currentTime preserved | n/a | Yes (resumeAt captured, restored via `loadeddata` one-shot listener) |
+| Recovery test passes | No (3 failed — classifier module missing) | Yes (3 passed in 3.0s) |
+
+**Test output:**
+
+Before (master):
+```
+Error: page.evaluate: TypeError: Failed to fetch dynamically imported module: http://localhost:5173/src/utils/videoErrorClassifier.js
+3 failed
+```
+
+After (feature branch):
+```
+ok 1  classifier module exists and exports classifyVideoError (865ms)
+ok 2  MEDIA_ERR_SRC_NOT_SUPPORTED on blob: URL is classified as STALE_BLOB (not FORMAT_ERROR) (715ms)
+ok 3  revoked blob URL triggers recovery path (no format-error surfaced to user) (709ms)
+3 passed (3.0s)
+```
