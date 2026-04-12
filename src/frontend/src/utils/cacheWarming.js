@@ -125,17 +125,20 @@ async function warmUrl(url, options = {}) {
   const { size, warmTail } = options;
 
   try {
-    // Always warm the start
-    const startResponse = await fetch(url, {
+    // Always warm the start.
+    // NOTE: mode: 'no-cors' is deliberate. R2 presigned URLs don't serve
+    // Access-Control-Allow-Origin, so 'cors' would be rejected by the
+    // browser (TypeError + noisy console CORS error). With 'no-cors' the
+    // edge cache is still warmed (Cloudflare sees the request) but the
+    // response returned to JS is opaque: status === 0, ok === false,
+    // headers are hidden. Any response reaching us without throwing means
+    // the network round-trip succeeded, so we treat it as warmed.
+    await fetch(url, {
       method: 'GET',
       headers: { 'Range': 'bytes=0-1023' },
-      mode: 'cors',
+      mode: 'no-cors',
       credentials: 'omit',
     });
-
-    if (!startResponse.ok && startResponse.status !== 206) {
-      return false;
-    }
 
     // For large videos, also warm the tail where moov atom often lives
     if (warmTail && size && size > TAIL_WARM_SIZE_THRESHOLD) {
@@ -145,22 +148,22 @@ async function warmUrl(url, options = {}) {
         await fetch(url, {
           method: 'GET',
           headers: { 'Range': `bytes=${tailStart}-${tailEnd}` },
-          mode: 'cors',
+          mode: 'no-cors',
           credentials: 'omit',
         });
         console.log(`[CacheWarming] Warmed tail of large video (${Math.round(size / 1024 / 1024)}MB)`);
       } catch (tailErr) {
-        // Tail warming failure is non-fatal
-        console.log(`[CacheWarming] Tail warm failed (CORS ok): ${tailErr.message}`);
+        // Tail warming failure is non-fatal (network error, not CORS —
+        // no-cors can't produce CORS failures).
+        console.log(`[CacheWarming] Tail warm failed: ${tailErr.message}`);
       }
     }
 
     warmedUrls.add(url);
     return true;
-  } catch (err) {
-    // CORS errors still warm the cache
-    warmedUrls.add(url);
-    return true;
+  } catch {
+    // Network error (DNS, offline, aborted). Not warmed.
+    return false;
   }
 }
 
@@ -180,22 +183,20 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize) 
   const warmEnd = Math.min(videoSize - 1, endByte + buffer);
 
   try {
-    const response = await fetch(url, {
+    // See warmUrl for the no-cors rationale. Opaque response (status 0,
+    // ok false) is expected and counts as a successful cache warm.
+    await fetch(url, {
       method: 'GET',
       headers: { 'Range': `bytes=${warmStart}-${warmEnd}` },
-      mode: 'cors',
+      mode: 'no-cors',
       credentials: 'omit',
     });
-
-    if (!response.ok && response.status !== 206) {
-      return false;
-    }
 
     console.log(`[CacheWarming] Warmed clip range ${Math.round(warmStart / 1024 / 1024)}MB-${Math.round(warmEnd / 1024 / 1024)}MB of ${Math.round(videoSize / 1024 / 1024)}MB video`);
     return true;
   } catch {
-    // CORS errors still warm the cache
-    return true;
+    // Network failure; clip range not warmed.
+    return false;
   }
 }
 

@@ -60,10 +60,34 @@ Same test. Plus: assert `[CacheWarming] warmed N videos` log fires with `N > 0` 
 - Backend CORS configuration on R2 bucket. (Out of scope for frontend-only epic.)
 - Any change to range-request / streaming fetches — those already work.
 
-## Result (filled after implementation)
+## Result
+
+**Option chosen:** A (switched `mode: 'cors'` → `mode: 'no-cors'` in `warmUrl` and `warmClipRange`). Opaque responses (status 0, ok false) count as warmed — documented inline with a comment explaining why opaque != failure for cache warming.
+
+**Test harness:** Light — Playwright + vite dev server + dynamic import of `cacheWarming.js`, monkey-patched `window.fetch` to simulate the browser's CORS rejection (TypeError + console.error with the real CORS message). Drives `warmMultipleVideos` against 3 fake R2 URLs. No auth, no project fixtures needed. Pattern mirrors T1360's classifier spec.
 
 | Metric | Before | After |
 |---|---|---|
-| CORS console errors per page load | >0 | — |
-| Warming still fires | Yes | — |
-| First-frame latency delta | baseline | — |
+| CORS console errors per warmup | 3 of 3 URLs (`Error: [...] blocked by CORS policy`) | 0 |
+| fetch `mode` | `'cors'` | `'no-cors'` |
+| Warming still fires | Yes (caught TypeError, but response unusable) | Yes (opaque response) |
+| `warmMultipleVideos` return | 0 (CORS threw, caught → treated as warmed) | 3 |
+| First-frame latency delta | n/a — not measured; Option A was sufficient | n/a |
+
+**Before output (<15 lines):**
+```
+Running 1 test using 1 worker
+  x  1 [chromium] › cache-warming-console.spec.js › warmUrl uses no-cors mode and produces no CORS console errors (3.6s)
+  Error: expect(received).toBe(expected)
+  Expected: "no-cors"
+  Received: "cors"
+    at e2e/cache-warming-console.spec.js:87:25
+  1 failed
+```
+
+**After output (<15 lines):**
+```
+Running 1 test using 1 worker
+  ok 1 [chromium] › cache-warming-console.spec.js › warmUrl uses no-cors mode and produces no CORS console errors (1.2s)
+  1 passed (2.0s)
+```
