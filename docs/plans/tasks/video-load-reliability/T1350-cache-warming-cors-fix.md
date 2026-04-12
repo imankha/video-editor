@@ -1,6 +1,6 @@
 # T1350: Cache Warming CORS Cleanup
 
-**Status:** AWAITING USER VERIFICATION
+**Status:** DONE
 **Epic:** [Video Load Reliability](EPIC.md)
 **Priority:** 3 of 3
 **Branch:** `feature/T1350-cache-warming-cors-fix`
