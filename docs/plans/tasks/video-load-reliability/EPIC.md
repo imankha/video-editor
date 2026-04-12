@@ -1,6 +1,6 @@
 # Epic: Video Load Reliability
 
-**Status:** IN_PROGRESS
+**Status:** DONE (2026-04-12)
 **Created:** 2026-04-12
 **Owner:** orchestrator agent (see [kickoff prompt](#orchestrator-kickoff) below)
 

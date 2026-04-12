@@ -21,3 +21,15 @@ Findings about `useVideo.js` that T1370 (blob preload size gate) should know:
 - **Gesture-persistence rule OK:** recovery is purely in-memory (`useRef` + `setVideoUrl`). No `useEffect` watching state → store/backend writes.
 - **Note for VideoPlayer overlay suppression:** Task originally suggested adding an `isRecovering` flag surfaced to VideoPlayer. Found unnecessary because the recovery path returns early before any `setError` call — `error` state stays `null` throughout the swap, so the overlay already doesn't render. Kept VideoPlayer.jsx untouched.
 - **Test harness pattern:** The Playwright spec runs against the vite dev server (requires :5173 up) and `page.evaluate`s with a dynamic import of the classifier module. T1370 can reuse this pattern for lightweight unit-ish checks; full-project E2E via file upload is too slow for a per-task loop.
+
+---
+
+## T1350 — Cache Warming CORS Cleanup
+
+Findings about `cacheWarming.js` for future cache-warming work:
+
+- **Opaque response semantics:** With `mode: 'no-cors'`, a successful fetch resolves with `response.ok === false`, `response.status === 0`, `response.type === 'opaque'`, and headers are hidden. `response.ok` / `response.status` are useless for success detection. The only signal is "did fetch throw?" — if it resolved at all, the network round-trip happened and Cloudflare edge cached it. Treat any non-thrown response as warmed; treat thrown TypeError as a real network failure (DNS, offline).
+- **Behavioral change vs before:** Previously the `cors` fetch threw a CORS TypeError, which was caught and silently marked the URL as warmed. Net effect was the same (URL got a round trip, just via the exception path) but with ~N console errors per warmup on R2-backed staging/prod. After the switch, the success/failure classification is now meaningful — a real network failure no longer gets counted as warmed.
+- **Reused light harness pattern:** Same as T1360 — dev server + `page.evaluate` dynamic import. For `cacheWarming.js` the extra step was monkey-patching `window.fetch` inside `page.evaluate` to simulate CORS rejection (emit a `console.error` matching `/blocked by CORS policy/` + throw TypeError when `mode === 'cors'`). Robust against future regressions: if anyone re-adds `mode: 'cors'`, the assertion on `call.mode === 'no-cors'` fails immediately.
+- **Scope kept tight:** Did not touch `App.jsx` call site, `warmupInProgress`/`workersRunning` bookkeeping, or backend `/storage/warmup`. Only the two `fetch()` call sites changed (`warmUrl`, `warmClipRange`) plus their post-fetch accounting (dropped the `response.ok`/`status !== 206` check that's meaningless for opaque responses).
+- **Option B (remove warming) not needed:** Option A worked on first try; no benchmark was required. If a future task ever needs to prove warming actually helps, the measurement protocol in the task spec still stands.
