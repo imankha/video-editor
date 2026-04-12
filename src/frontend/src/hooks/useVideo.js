@@ -3,6 +3,7 @@ import { extractVideoMetadata, createVideoURL, revokeVideoURL, getFramerate } fr
 import { validateVideoFile } from '../utils/fileValidation';
 import { useVideoStore } from '../stores';
 import { invalidateUrl } from '../utils/storageUrls';
+import { probeVideoUrlMoovPosition } from '../utils/probeVideoUrl';
 
 /**
  * Custom hook for managing video state and playback
@@ -497,6 +498,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       console.log(`[VIDEO] Loading: ${urlPreview}`);
       console.log(`[VIDEO] Mode: ${loadMode}`);
       console.log(`[VIDEO] networkState: ${video.networkState}, readyState: ${video.readyState}`);
+      // T1380: one-shot moov-position probe so logs confirm whether the
+      // currently-playing URL is faststart-ordered. Blob URLs skipped.
+      if (!isBlob && video.src) {
+        probeVideoUrlMoovPosition(video.src, 'on-load').catch(() => {});
+      }
       // Set loading state - this catches cases where URL is set directly (e.g., Annotate mode)
       useVideoStore.getState().setIsVideoElementLoading(true);
       useVideoStore.getState().setLoadingProgress(0);

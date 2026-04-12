@@ -1,6 +1,23 @@
 # T1380: Client-Side Moov Atom Faststart on Upload
 
-**Status:** TODO
+**Status:** DONE (verified 2026-04-12 on dev R2 with 3GB Trace re-upload)
+
+## Result
+
+| Metric | Before (Trace, moov-at-end) | After (T1380) |
+|---|---|---|
+| Time to first frame | seconds (multi-round-trip) | **359ms** |
+| Seek latency (warm edge, avg) | ~185ms | ~231ms |
+| Seek latency (warm edge, p95) | ~282ms | ~320ms |
+| Seek network component | unknown | 4–16ms |
+| Seek decode component | unknown | 170–320ms |
+| Upload wall-clock overhead | n/a | +22ms analysis, 0ms reorder |
+| R2 bytes | 3,211,485,488 | 3,211,485,488 (identical) |
+
+Verified on R2: `ftyp@0(32) moov@32(747,150)` — moov successfully relocated from offset 3,210,738,338 to byte 32 through the 31-part multipart upload, stco offsets patched correctly.
+
+**Conclusion:** Time-to-ready is the big user-visible win. Seek latency is now decode-bound, not network-bound — follow-up in T1385.
+
 **Impact:** 7 (eliminates extra round-trip on initial load for non-faststart videos)
 **Complexity:** 3 (well-documented algorithm, small code footprint, no backend changes)
 **Priority:** 2.3
