@@ -14,6 +14,7 @@
 import { API_BASE } from '../config';
 import { GameCreateStatus } from '../constants/gameConstants';
 import { useQuestStore } from '../stores/questStore';
+import { analyzeMp4Faststart, getReorderedSlice } from '../utils/mp4Faststart';
 
 // Upload phases for progress tracking
 export const UPLOAD_PHASE = {
@@ -102,9 +103,11 @@ export async function hashFile(file, onProgress) {
  * @param {function} onProgress - Progress callback: (loaded, total) => void
  * @returns {Promise<Object>} - { part_number, etag }
  */
-async function uploadPart(file, part, onProgress) {
+async function uploadPart(file, part, onProgress, faststartInfo = null) {
   const { part_number, presigned_url, start_byte, end_byte } = part;
-  const blob = file.slice(start_byte, end_byte + 1);
+  const blob = faststartInfo?.needsRelocation
+    ? getReorderedSlice(file, faststartInfo, start_byte, end_byte + 1)
+    : file.slice(start_byte, end_byte + 1);
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -170,7 +173,8 @@ async function uploadParts(
   sessionId = null,
   completedParts = [],
   totalBytes = null,
-  concurrency = 3
+  concurrency = 3,
+  faststartInfo = null
 ) {
   const results = [...completedParts]; // Start with already completed parts
   const partProgress = new Map(); // Track progress per part
@@ -218,7 +222,7 @@ async function uploadParts(
       const promise = uploadPart(file, part, (loaded) => {
         partProgress.set(part.part_number, loaded);
         updateTotalProgress();
-      })
+      }, faststartInfo)
         .then((result) => {
           results.push(result);
           partsToSave.push(result);
@@ -273,7 +277,18 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     }
   };
 
-  // Phase 1: Hash
+  // Phase 0: Analyze MP4 structure for faststart (T1380)
+  notify(UPLOAD_PHASE.HASHING, 0, 'Analyzing video...');
+  const faststartInfo = await analyzeMp4Faststart(file);
+  if (faststartInfo.needsRelocation) {
+    console.log(
+      `[Upload] Moov atom at end (offset ${faststartInfo.moovOffset}), ` +
+      `will relocate to front (${(faststartInfo.moovSize / 1024).toFixed(0)}KB moov, ` +
+      `analysis took ${faststartInfo.analysisTimeMs}ms)`
+    );
+  }
+
+  // Phase 1: Hash (uses original file bytes for dedup consistency)
   notify(UPLOAD_PHASE.HASHING, 0, 'Computing file hash...');
   const hash = await hashFile(file, (p) => {
     notify(UPLOAD_PHASE.HASHING, p, `Computing hash... ${p}%`);
@@ -281,10 +296,12 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   notify(UPLOAD_PHASE.HASHING, 100, 'Hash complete');
 
   // Phase 2: Prepare (check R2 for dedup, create multipart upload, generate URLs)
+  // Use the new file size if faststart relocation changes it
+  const uploadSize = faststartInfo.needsRelocation ? faststartInfo.newSize : file.size;
   notify(UPLOAD_PHASE.PREPARING, 0, 'Preparing upload...');
   const prepareBody = {
     blake3_hash: hash,
-    file_size: file.size,
+    file_size: uploadSize,
     original_filename: file.name,
   };
   if (options.label) {
@@ -339,7 +356,9 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     },
     prepareData.upload_session_id,
     completedParts,
-    file.size
+    uploadSize,
+    3,
+    faststartInfo
   );
   notify(UPLOAD_PHASE.UPLOADING, 100, 'Upload complete');
 

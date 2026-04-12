@@ -93,7 +93,8 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1263 | [↳ SW Quota Management](tasks/for-launch/T1263-sw-quota-management.md) | 5 | 2 | 2.5 | TODO | LRU eviction so cache doesn't fill disk. |
 | T1264 | [↳ Moov Atom Parsing](tasks/for-launch/T1264-moov-atom-parsing.md) | 6 | 3 | 2.0 | TODO | Exact byte ranges for cache warming. Only if proportional error >20MB. |
 | T1265 | [↳ Predictive Prefetch](tasks/for-launch/T1265-predictive-prefetch.md) | 6 | 3 | 2.0 | TODO | Prefetch next 30s ahead of playhead. Only if forward seeks still slow after T1262. |
-| T1380 | [↳ Upload Moov Faststart](tasks/for-launch/T1380-upload-moov-faststart.md) | 7 | 3 | 2.3 | TODO | Client-side moov relocation on upload; $0/video, <1s, eliminates extra round-trip for Trace videos |
+| T1380 | [↳ Upload Moov Faststart](tasks/for-launch/T1380-upload-moov-faststart.md) | 7 | 3 | 2.3 | DONE | Client-side moov relocation on upload; TTFP ~seconds→359ms, seek network 6–16ms (moov no longer bottleneck) |
+| T1385 | [↳ Decode-Phase Seek Optimization](tasks/for-launch/T1385-decode-phase-seek-optimization.md) | 6 | 5 | 1.2 | TODO | Post-T1380 bottleneck is decode (170–300ms). Explore keyframe density, decoded-frame cache, frame-accurate prefetch |
 | T1220 | [Modal Range Requests](tasks/for-launch/T1220-modal-range-requests.md) | 7 | 5 | 1.4 | TODO | Modal downloads full 3GB video for 10s clip; use presigned URLs + FFmpeg pre-input seek |
 | T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | 5 | 5 | 1.0 | TODO | Modal path is synchronous (async but holds connection); return 202 + background task |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | Replace JSON columns with MessagePack for ~30-50% size reduction |
