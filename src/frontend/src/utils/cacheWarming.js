@@ -24,6 +24,10 @@ import { API_BASE } from '../config';
 export const WARMUP_PRIORITY = Object.freeze({
   GAMES: 'games',
   GALLERY: 'gallery',
+  // T1410: while a foreground <video> is cold-loading, the warmer must stop
+  // racing it on the R2 origin. Setting this priority aborts all in-flight
+  // warm fetches and pauses the worker loop until priority is cleared.
+  FOREGROUND_ACTIVE: 'foreground_active',
 });
 
 // Track URLs that have been warmed this session
@@ -43,6 +47,14 @@ let currentPriority = WARMUP_PRIORITY.GAMES;
 let workersRunning = false;
 let warmupInProgress = false;
 
+// T1410: AbortControllers for every in-flight warm fetch. When the foreground
+// video starts loading we abort them all so the browser can dedicate bandwidth
+// and R2 connections to the user-visible <video> element.
+const inFlightControllers = new Set();
+
+// T1410: priority before FOREGROUND_ACTIVE, so we can restore it on clear.
+let priorityBeforeForeground = null;
+
 
 // Concurrency settings
 const CONCURRENCY = 5;
@@ -57,10 +69,51 @@ const TAIL_WARM_SIZE = 5 * 1024 * 1024;
  * @param {'games' | 'gallery'} priority
  */
 export function setWarmupPriority(priority) {
-  if (priority !== currentPriority) {
-    console.log(`[CacheWarming] Priority changed to: ${priority}`);
+  if (priority === currentPriority) return;
+  console.log(`[CacheWarming] Priority changed to: ${priority}`);
+
+  // T1410: entering FOREGROUND_ACTIVE aborts every in-flight warm fetch and
+  // pauses the worker loop (getNextItem returns null). Leaving it restarts
+  // workers against whatever is still queued.
+  if (priority === WARMUP_PRIORITY.FOREGROUND_ACTIVE) {
+    if (currentPriority !== WARMUP_PRIORITY.FOREGROUND_ACTIVE) {
+      priorityBeforeForeground = currentPriority;
+    }
     currentPriority = priority;
+    abortInFlightWarms();
+    return;
   }
+
+  // Leaving FOREGROUND_ACTIVE — restore prior priority if caller passed one,
+  // else honor their explicit choice.
+  currentPriority = priority;
+  // Resume workers if queues still have items and nothing is running.
+  if (!workersRunning) {
+    const remaining = tier1Queue.length + gamesQueue.length + galleryQueue.length + workingQueue.length;
+    if (remaining > 0) {
+      runWorkers();
+    }
+  }
+  priorityBeforeForeground = null;
+}
+
+/**
+ * T1410: clear FOREGROUND_ACTIVE without the caller needing to know the
+ * previous priority. No-op if not currently in foreground mode.
+ */
+export function clearForegroundActive() {
+  if (currentPriority !== WARMUP_PRIORITY.FOREGROUND_ACTIVE) return;
+  const restore = priorityBeforeForeground || WARMUP_PRIORITY.GAMES;
+  setWarmupPriority(restore);
+}
+
+function abortInFlightWarms() {
+  if (inFlightControllers.size === 0) return;
+  console.log(`[CacheWarming] Aborting ${inFlightControllers.size} in-flight warm fetches for foreground load`);
+  for (const ctrl of inFlightControllers) {
+    try { ctrl.abort(); } catch { /* ignore */ }
+  }
+  inFlightControllers.clear();
 }
 
 
@@ -70,6 +123,11 @@ export function setWarmupPriority(priority) {
  * Tier 1 (project clips) always processes first, then games/gallery by priority.
  */
 function getNextItem() {
+  // T1410: while foreground video is loading, don't pull new work. Workers
+  // will drain out and runWorkers() will restart them when priority clears.
+  if (currentPriority === WARMUP_PRIORITY.FOREGROUND_ACTIVE) {
+    return null;
+  }
   // Tier 1: project clips (highest priority)
   while (tier1Queue.length > 0) {
     const item = tier1Queue.shift();
@@ -123,6 +181,8 @@ async function warmUrl(url, options = {}) {
   }
 
   const { size, warmTail } = options;
+  const controller = new AbortController();
+  inFlightControllers.add(controller);
 
   try {
     // Always warm the start.
@@ -133,11 +193,13 @@ async function warmUrl(url, options = {}) {
     // response returned to JS is opaque: status === 0, ok === false,
     // headers are hidden. Any response reaching us without throwing means
     // the network round-trip succeeded, so we treat it as warmed.
+    // T1410: signal attached so foreground loads can abort us.
     await fetch(url, {
       method: 'GET',
       headers: { 'Range': 'bytes=0-1023' },
       mode: 'no-cors',
       credentials: 'omit',
+      signal: controller.signal,
     });
 
     // For large videos, also warm the tail where moov atom often lives
@@ -150,6 +212,7 @@ async function warmUrl(url, options = {}) {
           headers: { 'Range': `bytes=${tailStart}-${tailEnd}` },
           mode: 'no-cors',
           credentials: 'omit',
+          signal: controller.signal,
         });
         console.log(`[CacheWarming] Warmed tail of large video (${Math.round(size / 1024 / 1024)}MB)`);
       } catch (tailErr) {
@@ -164,6 +227,8 @@ async function warmUrl(url, options = {}) {
   } catch {
     // Network error (DNS, offline, aborted). Not warmed.
     return false;
+  } finally {
+    inFlightControllers.delete(controller);
   }
 }
 
@@ -182,21 +247,27 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize) 
   const warmStart = Math.max(0, startByte - buffer);
   const warmEnd = Math.min(videoSize - 1, endByte + buffer);
 
+  const controller = new AbortController();
+  inFlightControllers.add(controller);
   try {
     // See warmUrl for the no-cors rationale. Opaque response (status 0,
     // ok false) is expected and counts as a successful cache warm.
+    // T1410: signal attached so foreground loads can abort us.
     await fetch(url, {
       method: 'GET',
       headers: { 'Range': `bytes=${warmStart}-${warmEnd}` },
       mode: 'no-cors',
       credentials: 'omit',
+      signal: controller.signal,
     });
 
     console.log(`[CacheWarming] Warmed clip range ${Math.round(warmStart / 1024 / 1024)}MB-${Math.round(warmEnd / 1024 / 1024)}MB of ${Math.round(videoSize / 1024 / 1024)}MB video`);
     return true;
   } catch {
-    // Network failure; clip range not warmed.
+    // Network failure or aborted; clip range not warmed.
     return false;
+  } finally {
+    inFlightControllers.delete(controller);
   }
 }
 
@@ -270,6 +341,11 @@ export function clearWarmingCache() {
  * Fetches URLs from backend and starts priority-based warming.
  */
 export async function warmAllUserVideos() {
+  // T1330: guest accounts removed — pre-login there are no videos to warm.
+  const { useAuthStore } = await import('../stores/authStore');
+  if (!useAuthStore.getState().isAuthenticated) {
+    return { warmed: 0, total: 0 };
+  }
   if (warmupInProgress) {
     console.log('[CacheWarming] Warmup already in progress, skipping');
     return { warmed: 0, total: 0 };

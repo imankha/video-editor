@@ -79,8 +79,9 @@ def _module_string_constants() -> dict:
 
 def test_rb_session_calls_found():
     calls = _collect_rb_session_calls()
-    # 4 set_cookie + 1 delete_cookie = 5 call sites as of T1270.
-    assert len(calls) >= 4, f"expected >=4 rb_session cookie calls, got {len(calls)}"
+    # T1330: 1 set_cookie (shared `_issue_session_cookie` helper) +
+    # 1 delete_cookie (logout) = 2 call sites.
+    assert len(calls) >= 2, f"expected >=2 rb_session cookie calls, got {len(calls)}"
 
 
 def test_every_rb_session_call_has_path_root():

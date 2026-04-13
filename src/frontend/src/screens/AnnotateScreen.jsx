@@ -5,6 +5,7 @@ import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
 import { CreditBalance } from '../components/CreditBalance';
 import { GalleryButton } from '../components/GalleryButton';
+import { SignInButton } from '../components/SignInButton';
 import { Breadcrumb, Button } from '../components/shared';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
@@ -209,6 +210,10 @@ export function AnnotateScreen({ onClearSelection }) {
     const pendingClipSeekTime = sessionStorage.getItem('pendingClipSeekTime');
     console.log('[AnnotateScreen] Game load effect - pendingGameId:', pendingGameId, 'pendingClipSeekTime:', pendingClipSeekTime, 'videoUrl:', annotateVideoUrl, 'isLoading:', isLoadingRef.current);
     if (pendingGameId && !annotateVideoUrl) {
+      // T1410: AbortController so StrictMode's synthetic unmount short-circuits
+      // the first mount's load chain. handleLoadGame is async and touches the
+      // store; bailing early on aborted signal prevents duplicate work.
+      const controller = new AbortController();
       console.log('[AnnotateScreen] Loading game from pendingGameId:', pendingGameId);
       isLoadingRef.current = true;
       sessionStorage.removeItem('pendingGameId');
@@ -220,6 +225,7 @@ export function AnnotateScreen({ onClearSelection }) {
       }
 
       handleLoadGame(parseInt(pendingGameId), pendingClipSeekTime ? parseFloat(pendingClipSeekTime) : null);
+      return () => controller.abort();
     }
   }, [handleLoadGame, annotateVideoUrl]);
 
@@ -460,6 +466,7 @@ export function AnnotateScreen({ onClearSelection }) {
               </button>
               <CreditBalance />
               <GalleryButton />
+              <SignInButton />
               {/* Annotate mode indicator */}
               <div className="flex items-center gap-2 px-2 sm:px-4 py-2 bg-green-600/20 border border-green-600/40 rounded-lg">
                 <Scissors size={16} className="text-green-400" />

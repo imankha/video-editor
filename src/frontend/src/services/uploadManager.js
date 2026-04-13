@@ -677,6 +677,9 @@ export async function listDedupeGames() {
  */
 let _pendingUploadsPromise = null;
 export async function listPendingUploads() {
+  // T1330: no uploads to list pre-login.
+  const { useAuthStore } = await import('../stores/authStore');
+  if (!useAuthStore.getState().isAuthenticated) return [];
   if (_pendingUploadsPromise) return _pendingUploadsPromise;
 
   _pendingUploadsPromise = (async () => {

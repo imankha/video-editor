@@ -63,6 +63,12 @@ export const useQuestStore = create((set, get) => ({
       try {
         const res = await fetch(`${API_BASE}/api/quests/progress`, { credentials: 'include' });
         if (!res.ok) {
+          // T1330: unauthenticated — render the quest panel with zero progress
+          // so new visitors see the onboarding checklist pre-login.
+          if (res.status === 401 && generation === _fetchProgressGeneration) {
+            set({ quests: [], loaded: true, totalCompleted: 0, activeQuestId: 'quest_1' });
+            return;
+          }
           console.warn(`[Quests] fetchProgress failed: ${res.status}`);
           return;
         }

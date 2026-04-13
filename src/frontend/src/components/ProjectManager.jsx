@@ -14,6 +14,7 @@ import { RATING_NOTATION, RATING_BADGE_COLORS } from './shared/clipConstants';
 import { getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
 import { ProfileDropdown } from './ProfileDropdown';
 import { CreditBalance } from './CreditBalance';
+import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { useQuestStore } from '../stores/questStore';
 
@@ -455,6 +456,7 @@ export function ProjectManager({
             )}
           </Button>
         )}
+        <SignInButton />
         <ProfileDropdown />
       </div>
 

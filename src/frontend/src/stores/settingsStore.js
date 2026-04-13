@@ -44,6 +44,12 @@ export const useSettingsStore = create((set, get) => ({
 
   // Load settings from backend
   loadSettings: async () => {
+    // T1330: pre-login, stay on defaults — don't call backend.
+    const { useAuthStore } = await import('./authStore');
+    if (!useAuthStore.getState().isAuthenticated) {
+      set({ isLoading: false });
+      return get().settings;
+    }
     // Only load once
     if (get().isInitialized) return get().settings;
     // Dedup: if a load is already in flight, return the existing promise

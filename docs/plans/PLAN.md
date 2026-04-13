@@ -65,6 +65,9 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1360 | [Blob URL Error Recovery](tasks/video-load-reliability/T1360-blob-url-error-recovery.md) | AWAITING USER VERIFICATION | 4.0 | Stale blob URL auto-recovers to streaming URL; no misleading "Video format not supported" overlay |
 | T1370 | [Blob Preload Size Gate + Unmount Safety](tasks/video-load-reliability/T1370-blob-preload-size-gate.md) | OBSOLETE | 3.5 | 200MB gate on T1262 preload; AbortController + revoke on unmount — removes root cause of T1360 recurrence |
 | T1350 | [Cache Warming CORS Cleanup](tasks/video-load-reliability/T1350-cache-warming-cors-fix.md) | DONE | 3.0 | Switch warmUrl to `no-cors`; eliminates console spam on every page load |
+| T1400 | [Video Load Contention](tasks/video-load-reliability/T1400-video-load-contention.md) | TODO | 4.5 | Pause warmer on foreground load, warn on range-fallback, kill StrictMode double-mount — 55s → <10s cold load |
+| T1410 | [Video Load Regression Since 04-08](tasks/video-load-reliability/T1410-video-load-regression-since-0408.md) | DONE | 5.0 | Warmer aborts on foreground load, StrictMode dedup — 35–56s → ~400–950ms cold load |
+| T1420 | [Warmup Abort Polish](tasks/video-load-reliability/T1420-warmup-polish.md) | TODO | 2.0 | Silence AbortError-as-failure log; dedupe StrictMode double-invoke of init load |
 
 ### Standalone Tasks
 
@@ -76,6 +79,8 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
 | T1200 | [Modal Job ID Logging & Retry](tasks/T1200-modal-job-logging-retry.md) | DONE | 1.4 | Log Modal call IDs across all paths (framing/overlay); classify failures and retry transient ones only |
 | T1240 | [R2 Restore Retry Tests](tasks/T1240-r2-restore-retry-tests.md) | TODO | 2.3 | Test coverage for R2 restore retry/cooldown — NOT_FOUND vs ERROR handling, cooldown expiry |
+| T1380 | [Recover Orphaned Jobs Per-User at Startup](tasks/T1380-startup-recover-orphaned-jobs-per-user.md) | TODO | 1.7 | `recover_orphaned_jobs` runs without user context at boot → always fails; never actually recovers jobs |
+| T1390 | [Process Modal Queue Per-User at Startup](tasks/T1390-startup-modal-queue-per-user.md) | TODO | 1.7 | `process_modal_queue` runs without user context at boot → always fails; queued jobs never drain |
 
 ### Epic: For Launch (IN_PROGRESS)
 [tasks/for-launch/EPIC.md](tasks/for-launch/EPIC.md)
