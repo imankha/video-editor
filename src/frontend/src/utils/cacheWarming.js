@@ -270,6 +270,11 @@ export function clearWarmingCache() {
  * Fetches URLs from backend and starts priority-based warming.
  */
 export async function warmAllUserVideos() {
+  // T1330: guest accounts removed — pre-login there are no videos to warm.
+  const { useAuthStore } = await import('../stores/authStore');
+  if (!useAuthStore.getState().isAuthenticated) {
+    return { warmed: 0, total: 0 };
+  }
   if (warmupInProgress) {
     console.log('[CacheWarming] Warmup already in progress, skipping');
     return { warmed: 0, total: 0 };
