@@ -1,7 +1,12 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
-import { API_BASE } from '../config';
+import {
+  ensureGisInitialized,
+  getLastAuthError,
+  clearLastAuthError,
+  onAuthError,
+} from '../utils/googleAuth';
 import { OtpAuthForm } from './auth/OtpAuthForm';
 
 /**
@@ -12,68 +17,35 @@ import { OtpAuthForm } from './auth/OtpAuthForm';
  * (Add Game, Export, etc.). T1330 removes the guest path entirely; at that
  * point this modal becomes the primary login surface.
  *
- * OTP logic lives in the shared OtpAuthForm component.
+ * Google credential verification and GIS init live in utils/googleAuth —
+ * this modal only renders the button slot and subscribes to auth errors.
  */
 export function AuthGateModal() {
   const showAuthModal = useAuthStore((s) => s.showAuthModal);
   const closeAuthModal = useAuthStore((s) => s.closeAuthModal);
-  const onAuthSuccess = useAuthStore((s) => s.onAuthSuccess);
   const [error, setError] = useState(null);
   const googleButtonRef = useRef(null);
 
-  // Reset error state when modal opens/closes; OtpAuthForm resets itself via
-  // its resetKey prop.
   useEffect(() => {
-    if (!showAuthModal) setError(null);
-  }, [showAuthModal]);
-
-  const handleGoogleResponse = useCallback(async (response) => {
-    if (!response?.credential) {
-      console.error('[Auth:Modal] Google callback fired with no credential', response);
-      setError('Google sign-in failed — no credential received. Please try again.');
+    if (!showAuthModal) {
+      setError(null);
+      clearLastAuthError();
       return;
     }
-    console.log('[Auth:Modal] Google credential received, verifying with backend...');
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/google`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: response.credential }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        const detail = data.detail || data.message || 'Authentication failed';
-        console.error(`[Auth:Modal] Backend rejected: ${res.status} — ${detail}`);
-        throw new Error(detail);
-      }
-
-      const data = await res.json();
-      console.log(`[Auth:Modal] Success: ${data.email} (user=${data.user_id})`);
-      onAuthSuccess(data.email, data.user_id, data.picture_url);
-    } catch (err) {
-      console.error('[Auth:Modal] Auth error:', err.message);
-      setError(err.message);
-    }
-  }, [onAuthSuccess]);
+    // Show any error that occurred before the modal opened (e.g. a failed
+    // One Tap credential verification).
+    setError(getLastAuthError());
+    const unsub = onAuthError((msg) => setError(msg));
+    return unsub;
+  }, [showAuthModal]);
 
   useEffect(() => {
     if (!showAuthModal || !googleButtonRef.current) return;
-    const gis = window.google?.accounts?.id;
+    const gis = ensureGisInitialized();
     if (!gis) {
-      console.error('[Auth:Modal] Google Identity Services not loaded — cannot render sign-in button');
+      console.error('[Auth:Modal] Google Identity Services not loaded');
       return;
     }
-
-    console.log('[Auth:Modal] Initializing GIS for modal sign-in button');
-    gis.initialize({
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-      callback: handleGoogleResponse,
-      cancel_on_tap_outside: false,
-    });
-
     gis.renderButton(googleButtonRef.current, {
       type: 'standard',
       theme: 'filled_black',
@@ -81,7 +53,7 @@ export function AuthGateModal() {
       text: 'continue_with',
       width: 360,
     });
-  }, [showAuthModal, handleGoogleResponse]);
+  }, [showAuthModal]);
 
   if (!showAuthModal) return null;
 
