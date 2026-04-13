@@ -587,16 +587,30 @@ async def auth_me(request: Request):
         logger.debug("[Auth] /me: no rb_session cookie")
         raise HTTPException(status_code=401, detail="No session")
 
-    session = validate_session(session_id)
-    if not session:
-        logger.info(f"[Auth] /me: invalid/expired session (cookie present but not in DB)")
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    # Degrade to 401 on auth-DB transients. /me is the very first call on
+    # every page load — a 500 here bricks the whole app; a 401 lets the
+    # frontend fall through to the guest/login path. The underlying
+    # exception is logged for diagnosis.
+    try:
+        session = validate_session(session_id)
+    except Exception:
+        logger.exception("[Auth] /me: validate_session raised — degrading to 401")
+        raise HTTPException(status_code=401, detail="Session check failed")
 
-    # T610: Track activity for account cleanup
-    update_last_seen(session["user_id"])
+    if not session:
+        logger.info("[Auth] /me: invalid/expired session (cookie present but not in DB)")
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
 
     user_id = session["user_id"]
     email = session.get("email")
+
+    # T610: Track activity for account cleanup. Best-effort — telemetry
+    # must never 500 a valid auth check.
+    try:
+        update_last_seen(user_id)
+    except Exception:
+        logger.exception(f"[Auth] /me: update_last_seen failed for user={user_id} (ignored)")
+
     logger.info(f"[Auth] /me: valid session — user={user_id}, email={email or 'guest'}")
 
     # T820: Check for pending/failed migrations
@@ -610,9 +624,14 @@ async def auth_me(request: Request):
     except Exception:
         pass
 
-    # T430: Fetch picture_url from auth DB
-    user_record = get_user_by_id(user_id)
-    picture_url = user_record["picture_url"] if user_record else None
+    # T430: Fetch picture_url from auth DB. Best-effort — picture is
+    # cosmetic; don't 500 the session check if auth DB hiccups.
+    picture_url = None
+    try:
+        user_record = get_user_by_id(user_id)
+        picture_url = user_record["picture_url"] if user_record else None
+    except Exception:
+        logger.exception(f"[Auth] /me: get_user_by_id failed for user={user_id} (ignored)")
 
     return {
         "email": email,
