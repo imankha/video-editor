@@ -1,6 +1,6 @@
 # T1420: Warmup Abort Polish
 
-**Status:** TODO
+**Status:** TESTING
 **Epic:** [Video Load Reliability](EPIC.md)
 **Created:** 2026-04-13
 **Follows:** T1410 (merged; landed warmer pause + StrictMode AbortController)
