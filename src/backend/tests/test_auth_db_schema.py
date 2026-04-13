@@ -80,6 +80,41 @@ def test_init_enforces_not_null_email(temp_auth_db):
     conn.close()
 
 
+def test_init_preserves_unknown_columns(temp_auth_db):
+    """Legacy R2-restored DBs may carry extra columns (e.g. `credits`) that
+    aren't in the canonical CREATE TABLE. The rebuild must preserve them."""
+    conn = sqlite3.connect(str(temp_auth_db))
+    conn.executescript("""
+        CREATE TABLE users (
+            user_id TEXT PRIMARY KEY,
+            email TEXT UNIQUE,
+            google_id TEXT UNIQUE,
+            verified_at TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            last_seen_at TEXT,
+            credits INTEGER DEFAULT 0
+        );
+        CREATE TABLE sessions (
+            session_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(user_id),
+            expires_at TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+    """)
+    conn.execute("INSERT INTO users (user_id, email, credits) VALUES ('u1','a@b.c',42)")
+    conn.commit()
+    conn.close()
+
+    auth_db.init_auth_db()
+
+    conn = sqlite3.connect(str(temp_auth_db))
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+    credits = conn.execute("SELECT credits FROM users WHERE user_id='u1'").fetchone()[0]
+    conn.close()
+    assert "credits" in cols, "unknown legacy columns must be preserved"
+    assert credits == 42, "data in unknown columns must survive rebuild"
+
+
 def test_create_guest_user_removed():
     assert not hasattr(auth_db, "create_guest_user"), (
         "create_guest_user must be removed in T1330"

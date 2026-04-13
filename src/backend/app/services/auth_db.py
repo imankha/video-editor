@@ -178,19 +178,35 @@ def _migrate_users_email_not_null(db: sqlite3.Connection) -> None:
         return
 
     # 3. Rebuild users with email NOT NULL. SQLite can't add NOT NULL via ALTER.
+    #    Preserve whatever columns currently exist (historical columns like
+    #    `credits` may be present in R2-restored DBs even if not in the
+    #    canonical CREATE TABLE above). Only upgrade email to NOT NULL.
+    def _col_def(c) -> str:
+        name = c["name"]
+        ctype = c["type"] or ""
+        parts = [f'"{name}"']
+        if ctype:
+            parts.append(ctype)
+        if name == "user_id":
+            parts.append("PRIMARY KEY")
+        elif name == "email":
+            parts.append("NOT NULL UNIQUE")
+        elif name == "google_id":
+            parts.append("UNIQUE")
+        if c["dflt_value"] is not None:
+            dflt = c["dflt_value"]
+            # Wrap expressions (e.g. `datetime('now')`) in parens; leave
+            # literals (numbers, quoted strings) alone.
+            if "(" in dflt and not dflt.startswith("("):
+                dflt = f"({dflt})"
+            parts.append(f"DEFAULT {dflt}")
+        return " ".join(parts)
+
+    col_defs = ", ".join(_col_def(c) for c in cols)
     col_names = [c["name"] for c in cols]
-    col_list = ", ".join(col_names)
+    col_list = ", ".join(f'"{n}"' for n in col_names)
     db.executescript(f"""
-        CREATE TABLE users_new (
-            user_id TEXT PRIMARY KEY,
-            email TEXT NOT NULL UNIQUE,
-            google_id TEXT UNIQUE,
-            verified_at TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            last_seen_at TEXT,
-            credit_summary INTEGER DEFAULT 0,
-            picture_url TEXT
-        );
+        CREATE TABLE users_new ({col_defs});
         INSERT INTO users_new ({col_list}) SELECT {col_list} FROM users;
         DROP TABLE users;
         ALTER TABLE users_new RENAME TO users;
