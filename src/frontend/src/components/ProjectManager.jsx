@@ -441,7 +441,6 @@ export function ProjectManager({
       {/* Top right controls - Quests + Credits + Gallery + Profile switcher */}
       <div className="fixed top-4 right-4 z-30 flex items-center gap-2 sm:gap-4">
         <CreditBalance />
-        <SignInButton />
         {onOpenDownloads && (
           <Button
             variant="outline"
@@ -457,6 +456,7 @@ export function ProjectManager({
             )}
           </Button>
         )}
+        <SignInButton />
         <ProfileDropdown />
       </div>
 

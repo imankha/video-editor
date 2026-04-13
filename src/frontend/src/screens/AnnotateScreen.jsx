@@ -460,8 +460,8 @@ export function AnnotateScreen({ onClearSelection }) {
                 <span className="text-xs font-medium">{clipCountDisplay}</span>
               </button>
               <CreditBalance />
-              <SignInButton />
               <GalleryButton />
+              <SignInButton />
               {/* Annotate mode indicator */}
               <div className="flex items-center gap-2 px-2 sm:px-4 py-2 bg-green-600/20 border border-green-600/40 rounded-lg">
                 <Scissors size={16} className="text-green-400" />

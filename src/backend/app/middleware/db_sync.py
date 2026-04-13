@@ -103,11 +103,12 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     # T450: Routes that work WITHOUT prior user context (they establish it).
     # These get passed through even when no session cookie or X-User-ID is present.
     AUTH_ALLOWLIST_PREFIXES = (
-        '/api/auth/',      # All auth sub-routes (init-guest, google, email/*, me, logout, retry-migration)
-        '/api/health',     # Health check
-        '/docs',           # API docs
-        '/redoc',          # API docs
-        '/openapi.json',   # OpenAPI spec
+        '/api/auth/',               # All auth sub-routes (google, email/*, me, logout)
+        '/api/health',              # Health check
+        '/api/quests/definitions',  # T1330: quest catalog is public (onboarding checklist)
+        '/docs',                    # API docs
+        '/redoc',                   # API docs
+        '/openapi.json',            # OpenAPI spec
     )
 
     def _is_allowlisted(self, request: Request) -> bool:

@@ -38,7 +38,9 @@ export function useExportRecovery() {
     async function loadExportsFromBackend() {
       // T635: Wait for auth to complete before fetching exports
       // initSession() returns the cached promise if already resolved
-      await initSession();
+      const session = await initSession();
+      // T1330: no exports to recover pre-login.
+      if (!session.isAuthenticated) return;
       console.log('[ExportRecovery] Fetching active exports from backend...');
 
       try {

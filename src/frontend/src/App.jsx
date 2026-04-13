@@ -528,8 +528,8 @@ function App() {
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
               <CreditBalance />
-              <SignInButton />
               <GalleryButton />
+              <SignInButton />
               {isAdmin && <AdminButton onClick={() => setEditorMode(EDITOR_MODES.ADMIN)} />}
               {/* Combined mode switcher with Annotate button */}
               <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
