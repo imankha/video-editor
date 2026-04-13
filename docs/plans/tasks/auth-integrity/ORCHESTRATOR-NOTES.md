@@ -134,3 +134,45 @@ subagents working the Auth Integrity epic. Each task appends a section.
   - `c729751` — failing tests
   - `3f847a1` — implementation
   - (docs commit to follow)
+
+## T1340 — Scope collapse (2026-04-13)
+
+The full-screen LoginScreen + AppAuthGate were reverted after user feedback:
+
+> "I don't think we need to change the UI flow to accommodate no guest users,
+>  we just need to make sure there are no user actions that change persisted
+>  state before login."
+
+Key learnings for T1330:
+
+- **Don't gate render on auth.** The app's empty-state UX already works
+  correctly for "guest with user_id but no email". Gating render forces
+  every per-user fetch to be re-pathed; gating writes (which is the actual
+  requirement) is already handled by `requireAuth` → `AuthGateModal`.
+- **Stores do per-user fetches from many places, not just App.jsx.**
+  `ProjectsScreen.jsx:108-109`, `FramingScreen.jsx:124`, `profileStore.js:226-227`,
+  and `gamesDataStore.js:298` all fire fetches outside App.jsx's orchestration.
+  Any "don't fetch before login" strategy MUST live at the store level or
+  every call site has to be updated individually. Approach A (store-level
+  guard + subscribe to authStore) is the design T1330 should follow.
+- **Views must render empty-state identically for "unauthenticated" and
+  "authenticated but empty".** Current `ProjectsScreen` shows "Failed to
+  load games / Cannot connect to server" when fetches 401 — that error UI
+  is wrong for the pre-login case. T1330 must either (a) make stores
+  resolve with empty data pre-login, or (b) have views suppress error UI
+  when `!isAuthenticated`.
+- **One Tap / FedCM fixes are permanent wins** and stayed on the branch:
+  - Dedupe mounts — `<GoogleOneTap />` / `<AuthGateModal />` live in
+    `main.jsx`, not `App.jsx`.
+  - No cleanup `gis.cancel()` (StrictMode race).
+  - `use_fedcm_for_prompt: true`; no deprecated `isNotDisplayed`/`isSkippedMoment`.
+- **OtpAuthForm is reusable** — `src/frontend/src/components/auth/OtpAuthForm.jsx`.
+  T1330's login surface (modal or standalone page) should consume it.
+- **Deleted from the branch during revert** (resurrect from git if needed):
+  - `src/frontend/src/components/AppAuthGate.jsx`
+  - `src/frontend/src/components/LoginScreen.jsx`
+  - `src/frontend/src/__tests__/AppAuthGate.test.jsx`
+  - `src/frontend/src/__tests__/LoginScreen.test.jsx`
+- `sessionInit.js` `/api/auth/init-guest` fallback is back in place. T1330
+  removes it for real and must ship store-level auth gating in the same
+  change — otherwise the unauthenticated shell will 401-storm on load.

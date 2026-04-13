@@ -8,10 +8,9 @@ import { OtpAuthForm } from './auth/OtpAuthForm';
  * AuthGateModal — mid-session auth prompt shown when an authenticated-only
  * action (e.g. "Add Game") fires while the user is not authenticated.
  *
- * The full-screen LoginScreen (via AppAuthGate) handles first-visit auth; this
- * modal only appears after T1330 removes guests for flows that still expect
- * the user to authenticate mid-session. Today it's still used by `requireAuth`
- * for guest sessions; once T1330 lands, its role narrows further.
+ * Triggered via `requireAuth` from any gesture that must not run as a guest
+ * (Add Game, Export, etc.). T1330 removes the guest path entirely; at that
+ * point this modal becomes the primary login surface.
  *
  * OTP logic lives in the shared OtpAuthForm component.
  */

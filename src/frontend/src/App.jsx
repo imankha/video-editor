@@ -99,17 +99,14 @@ function App() {
     // Wire guest-write callback: any successful mutating API call while guest marks activity
     setGuestWriteCallback(() => useAuthStore.getState().markGuestActivity());
 
-    // Update preloader progress bar
     const updatePreloader = (percent, message) => {
       if (window.__preloaderUpdate) window.__preloaderUpdate(percent, message);
     };
 
-    // Dismiss preloader overlay (added outside #root in index.html)
     const dismissPreloader = () => {
       updatePreloader(100, 'Ready');
       const preloader = document.getElementById('preloader');
       if (preloader) {
-        // Brief pause at 100% so user sees completion
         setTimeout(() => {
           preloader.classList.add('fade-out');
           setTimeout(() => preloader.remove(), 300);
@@ -130,7 +127,6 @@ function App() {
         useGalleryStore.getState().fetchCount(),
       ];
 
-      // Track data fetch progress: 40% → 90%, dismiss at 100%
       let completed = 0;
       let dismissed = false;
       const total = dataFetches.length;
@@ -144,7 +140,6 @@ function App() {
         };
         Promise.resolve(p).then(tick, tick);
       });
-      // Safety: dismiss after 8s even if a fetch hangs
       setTimeout(tryDismiss, 8000);
 
       // Restore navigation state after auth-triggered reload (cross-device recovery)
@@ -238,7 +233,6 @@ function App() {
       }
     }).catch((err) => {
       console.error('[App] Session init failed after retries:', err);
-      // Clear isCheckingSession so the app renders instead of staying white
       useAuthStore.getState().setSessionState(false);
       dismissPreloader();
     });

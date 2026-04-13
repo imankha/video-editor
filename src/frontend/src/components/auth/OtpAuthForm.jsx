@@ -59,8 +59,9 @@ function OtpCodeInput({ value, onChange, disabled }) {
 }
 
 /**
- * OtpAuthForm — email → 6-digit-code → verify flow shared between
- * AuthGateModal (mid-session auth prompt) and LoginScreen (full-screen gate).
+ * OtpAuthForm — email → 6-digit-code → verify flow used by AuthGateModal.
+ * Extracted as a standalone component so T1330 can reuse it when the login
+ * surface moves out of the mid-session modal.
  *
  * Calls authStore.onAuthSuccess on successful verification. Optional `resetKey`
  * prop forces an internal state reset when it changes (e.g. modal open/close).

@@ -206,20 +206,23 @@ export async function initSession() {
       console.warn('[sessionInit] /me check failed:', err.message || err);
     }
 
-    // Step 2: No valid session — T1340: do NOT create a guest. The
-    // AppAuthGate renders LoginScreen when !isAuthenticated, so the user is
-    // prompted to sign in (Google or OTP) before the app mounts. The
-    // /api/auth/init-guest endpoint still exists (removed in T1330) but is no
-    // longer reachable from the frontend happy path.
+    // Step 2: No valid session — create a guest user. The guest has a
+    // user_id but no email; `isAuthenticated` stays false so `requireAuth`
+    // still prompts via AuthGateModal before any mutating action. T1330
+    // removes this fallback entirely (guest accounts deleted at that point).
     if (!userId) {
-      console.log('[Auth:Init] No session — LoginScreen will gate the app');
-      updatePreloader(40, 'Ready');
+      updatePreloader(15, 'Creating session...');
+      const guestResponse = await fetchWithRetry(`${API_BASE}/api/auth/init-guest`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!guestResponse.ok) {
+        throw new Error(`Guest init failed: ${guestResponse.status}`);
+      }
+      const guestData = await guestResponse.json();
+      userId = guestData.user_id;
+      _currentUserId = userId;
       useAuthStore.getState().setSessionState(false);
-      return {
-        profileId: null,
-        userId: null,
-        isNewUser: false,
-      };
     }
 
     // Step 3: Have a user_id (from session) — initialize profile

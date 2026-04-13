@@ -20,14 +20,15 @@ A production user (sarkarati@gmail.com) lost their email record and had data sca
 |---|----|------|--------------------------------|---------------|
 | 1 | T1270 | [Cookie Path + SameSite Fix](T1270-cookie-path-fix.md) | Session cookie survives cross-route navigation and reloads (root of multiple lost-session reports) | Backend test asserts every `set_cookie("rb_session", ...)` includes `path="/"` and `samesite="lax"`; E2E asserts cookie present after nav from `/` → `/annotate/:id` → reload |
 | 2 | T1290 | [Auth DB Restore Must Succeed](T1290-auth-db-restore-must-succeed.md) | A failed R2 restore on boot no longer silently creates an empty auth DB (root cause of sarkarati@ losing their email record) | Backend test: simulate R2 failure in startup → assert process raises fatal (does NOT fall through to `init_auth_db()`); assert 3 retry attempts logged |
-| 3 | T1340 | [Auth-First Login Screen](T1340-auth-first-login-screen.md) | First-time users see a real login page instead of silently getting a guest account; returning users go straight through | Frontend test: unauthenticated `/api/auth/me` → LoginScreen renders (no editor); authenticated `/api/auth/me` → editor renders (no login flash); E2E Google + OTP flows |
-| 4 | T1330 | [Remove Guest Accounts](T1330-remove-guest-accounts.md) | Orphaned accounts become structurally impossible (every `user_id` must have an email) | `grep -r "guest" src/` returns zero auth-related hits; schema migration asserts `users.email` NOT NULL; deleted `test_guest_migration.py`; full backend + frontend suites green |
+| 3 | T1340 | [Auth-First Login Screen](T1340-auth-first-login-screen.md) *(scope collapsed 2026-04-13)* | OtpAuthForm extraction + Google One Tap regression fix + FedCM migration. Full-screen login gate dropped — visual flow stays at parity with staging. | One Tap works; no FedCM deprecation warnings; AuthGateModal renders OtpAuthForm; manual verification |
+| 4 | T1330 | [Remove Guest Accounts](T1330-remove-guest-accounts.md) *(expanded)* | Orphaned accounts become structurally impossible (every `user_id` must have an email). Now also owns: store-level auth gating + login surface (header sign-in + modal). | `grep -r "guest" src/` returns zero auth-related hits; schema migration asserts `users.email` NOT NULL; deleted `test_guest_migration.py`; unauthenticated shell renders empty states (no 401 error UI); full backend + frontend suites green |
 
 **Why this order:**
 - T1270 is a 1-line-per-call fix and a prerequisite for everything else — if cookies don't persist, every downstream auth test is flaky.
 - T1290 prevents the restore-wipe failure mode that caused the original incident. Doing it before T1330 means if the DB still gets wiped mid-epic, we find out loudly instead of silently re-creating guest users.
-- T1340 ships the login screen BEFORE T1330 removes the guest fallback. If reversed, users would briefly have no entry path.
-- T1330 is the big rip-out (~400 LOC removed). Landing it last means every earlier change had the guest path still available as a safety net during testing.
+- T1340 scope was collapsed 2026-04-13 after user feedback ("don't change the UI flow, just block mutating state changes"). The full-screen LoginScreen was reverted; T1340 now ships only the One Tap fix + OtpAuthForm extraction.
+- T1330 inherits the login-surface work (header sign-in affordance + AuthGateModal as primary login) and the store-level auth gating that makes an unauthenticated shell render empty states without 401-ing.
+- T1330 is the big rip-out (~400 LOC removed, plus the new store gating). Landing it last means every earlier change had the guest path still available as a safety net during testing.
 
 ## Shared Context
 
