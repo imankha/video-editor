@@ -76,6 +76,8 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
 | T1200 | [Modal Job ID Logging & Retry](tasks/T1200-modal-job-logging-retry.md) | DONE | 1.4 | Log Modal call IDs across all paths (framing/overlay); classify failures and retry transient ones only |
 | T1240 | [R2 Restore Retry Tests](tasks/T1240-r2-restore-retry-tests.md) | TODO | 2.3 | Test coverage for R2 restore retry/cooldown — NOT_FOUND vs ERROR handling, cooldown expiry |
+| T1380 | [Recover Orphaned Jobs Per-User at Startup](tasks/T1380-startup-recover-orphaned-jobs-per-user.md) | TODO | 1.7 | `recover_orphaned_jobs` runs without user context at boot → always fails; never actually recovers jobs |
+| T1390 | [Process Modal Queue Per-User at Startup](tasks/T1390-startup-modal-queue-per-user.md) | TODO | 1.7 | `process_modal_queue` runs without user context at boot → always fails; queued jobs never drain |
 
 ### Epic: For Launch (IN_PROGRESS)
 [tasks/for-launch/EPIC.md](tasks/for-launch/EPIC.md)
