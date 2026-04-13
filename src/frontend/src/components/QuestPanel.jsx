@@ -167,7 +167,10 @@ export function QuestPanel() {
 
   // Don't render if hidden, not loaded, definitions not fetched, or all quests done
   const allQuestsDone = loaded && quests.length > 0 && quests.every(q => q.reward_claimed);
-  if ((hidden || !loaded || !definitions || !questDef || allQuestsDone) && !showCompletionModal) return null;
+  if ((hidden || !loaded || !definitions || !questDef || allQuestsDone) && !showCompletionModal) {
+    console.log('[QuestPanel] hidden gate', { hidden, loaded, hasDefs: !!definitions, defsLen: definitions?.length, activeQuestId, hasQuestDef: !!questDef, questsLen: quests.length, allQuestsDone });
+    return null;
+  }
   const steps = questProgress?.steps || {};
   const completedCount = Object.values(steps).filter(Boolean).length;
   const totalCount = questDef.step_ids.length;
