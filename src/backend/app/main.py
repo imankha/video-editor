@@ -267,11 +267,13 @@ async def startup_event():
     else:
         logger.info("[Startup] R2 disabled — using local database only")
 
-    # T405: Initialize central auth database
-    from app.services.auth_db import init_auth_db, sync_auth_db_from_r2
-    if _r2:
-        sync_auth_db_from_r2()
-    init_auth_db()
+    # T405: Initialize central auth database.
+    # T1290: Restore is mandatory when R2 is enabled — if the R2 fetch fails
+    # after 3 attempts we raise and let Fly.io restart the process rather
+    # than silently come up with an empty auth DB (which wipes every
+    # session and email→user_id record).
+    from app.services.auth_db import restore_auth_db_or_fail
+    restore_auth_db_or_fail()
     logger.info("[Startup] Central auth DB initialized")
 
     # Default user 'a' init removed — all users now go through auth.
