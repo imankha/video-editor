@@ -14,6 +14,7 @@ import { RATING_NOTATION, RATING_BADGE_COLORS } from './shared/clipConstants';
 import { getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
 import { ProfileDropdown } from './ProfileDropdown';
 import { CreditBalance } from './CreditBalance';
+import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { useQuestStore } from '../stores/questStore';
 
@@ -440,6 +441,7 @@ export function ProjectManager({
       {/* Top right controls - Quests + Credits + Gallery + Profile switcher */}
       <div className="fixed top-4 right-4 z-30 flex items-center gap-2 sm:gap-4">
         <CreditBalance />
+        <SignInButton />
         {onOpenDownloads && (
           <Button
             variant="outline"

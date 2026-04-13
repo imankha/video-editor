@@ -6,6 +6,7 @@ import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { CreditBalance } from './components/CreditBalance';
 import { GalleryButton } from './components/GalleryButton';
+import { SignInButton } from './components/SignInButton';
 import { QuestPanel } from './components/QuestPanel';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
@@ -115,6 +116,11 @@ function App() {
       // T1330: only fetch per-user data when authenticated. Pre-login we
       // show the empty app shell; per-user stores stay empty until login.
       if (!session.isAuthenticated) {
+        // T1330: show the new-user quest panel pre-login. Definitions are
+        // public; progress 401s harmlessly and the panel renders all steps
+        // as incomplete — that's the onboarding UI.
+        useQuestStore.getState().fetchDefinitions();
+        useQuestStore.getState().fetchProgress();
         dismissPreloader();
         return;
       }
@@ -522,6 +528,7 @@ function App() {
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
               <CreditBalance />
+              <SignInButton />
               <GalleryButton />
               {isAdmin && <AdminButton onClick={() => setEditorMode(EDITOR_MODES.ADMIN)} />}
               {/* Combined mode switcher with Annotate button */}
