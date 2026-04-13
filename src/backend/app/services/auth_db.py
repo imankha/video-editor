@@ -139,11 +139,33 @@ def init_auth_db():
 # R2 sync (backup/restore)
 # ---------------------------------------------------------------------------
 
-def sync_auth_db_from_r2() -> bool:
-    """Download auth.sqlite from R2 on startup. Returns True if downloaded."""
-    from ..storage import R2_ENABLED, get_r2_client, R2_BUCKET
+def _r2_enabled() -> bool:
+    """Testable seam for whether R2 backup is configured (module-local shim
+    so tests can patch this without touching the real storage module)."""
+    from ..storage import R2_ENABLED
+    return bool(R2_ENABLED)
 
-    if not R2_ENABLED:
+
+def sync_auth_db_from_r2() -> bool:
+    """Download auth.sqlite from R2 on startup.
+
+    Returns:
+        True  — successfully restored from R2.
+        False — R2 disabled, client unavailable, or object not found (404).
+                These are all "no backup to restore" cases; caller should
+                treat them as a legitimate fresh start and run init_auth_db().
+
+    Raises:
+        Any transient or unexpected error (network outage, 5xx, auth error).
+        T1290: we no longer swallow these into `return False` because the
+        caller (`restore_auth_db_or_fail`) must be able to distinguish
+        "no backup" from "R2 is broken" — the latter must be retried and
+        ultimately escalated to a fatal startup failure instead of
+        silently creating an empty auth DB.
+    """
+    from ..storage import get_r2_client, R2_BUCKET
+
+    if not _r2_enabled():
         return False
 
     client = get_r2_client()
@@ -164,11 +186,67 @@ def sync_auth_db_from_r2() -> bool:
         if e.response['Error']['Code'] == '404':
             logger.info("[AuthDB] No backup in R2 — starting fresh")
             return False
-        logger.error(f"[AuthDB] Failed to restore from R2: {e}")
-        return False
-    except Exception as e:
-        logger.error(f"[AuthDB] Failed to restore from R2: {e}")
-        return False
+        # Non-404 ClientError (403 auth, 5xx, etc.) — propagate.
+        logger.error(f"[AuthDB] R2 ClientError during restore: {e}")
+        raise
+
+
+def restore_auth_db_or_fail() -> None:
+    """Startup helper — guarantees the auth DB is either restored from R2
+    or cleanly initialized fresh. Never silently produces an empty DB on
+    top of a real R2 failure.
+
+    Semantics (T1290):
+      - R2 disabled → call init_auth_db() (local dev: empty DB is correct).
+      - R2 enabled, restore succeeds → call init_auth_db() to ensure any
+        new columns/tables are applied (idempotent).
+      - R2 enabled, restore returns False (404 / no backup) → call
+        init_auth_db() (legitimate first boot of a new environment).
+      - R2 enabled, restore raises → retry up to 3 attempts with
+        exponential backoff. If all 3 fail, raise RuntimeError so the
+        process crashes and Fly.io restarts it — DO NOT fall through to
+        init_auth_db() (that would wipe sessions + email→user_id records,
+        the root cause of the sarkarati@ incident).
+    """
+    if not _r2_enabled():
+        logger.info("[AuthDB] R2 disabled — skipping restore, using local DB")
+        init_auth_db()
+        return
+
+    max_attempts = 3
+    base_delay = 1.0
+    last_exc: Optional[BaseException] = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            sync_auth_db_from_r2()
+            # Either restored (True) or legitimate no-backup (False); both
+            # are fine — the DB file is either restored or absent, and
+            # init_auth_db is idempotent.
+            init_auth_db()
+            return
+        except Exception as e:
+            last_exc = e
+            if attempt < max_attempts:
+                delay = base_delay * (2 ** (attempt - 1))
+                logger.warning(
+                    f"[AuthDB] Restore attempt {attempt}/{max_attempts} "
+                    f"failed: {type(e).__name__}: {e} — retrying in {delay:.1f}s"
+                )
+                import time as _time
+                _time.sleep(delay)
+            else:
+                logger.error(
+                    f"[AuthDB] Restore attempt {attempt}/{max_attempts} "
+                    f"failed: {type(e).__name__}: {e} — giving up"
+                )
+
+    # All attempts exhausted — fatal. Do NOT fall through to init_auth_db.
+    raise RuntimeError(
+        f"auth DB restore from R2 failed after {max_attempts} attempts; "
+        f"refusing to start with an empty auth DB. Last error: "
+        f"{type(last_exc).__name__}: {last_exc}"
+    )
 
 
 def sync_auth_db_to_r2() -> bool:
