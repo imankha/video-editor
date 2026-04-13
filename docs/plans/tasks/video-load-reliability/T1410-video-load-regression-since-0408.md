@@ -1,6 +1,22 @@
-# T1410: Fix Video Load Regression Since 2026-04-08 Deploy
+# T1410: Warmer Contention Slow Cold Load (originally scoped as "regression since 2026-04-08")
 
-**Status:** TESTING
+**Status:** DONE
+
+## Correction (2026-04-13, post-merge)
+
+The original framing of this task was wrong. The `deploy/frontend/2026-04-08-5` tag is a **local git tag from 5 days ago**, not the last deploy. GitHub Actions (`.github/workflows/deploy-frontend.yml`) has been auto-deploying every push to master — staging was running T1210/T1350/T1360/T1380/T1290/T1340 the whole time. There was no "regression since 04-08".
+
+The actual difference between fast staging and slow local was **dev build vs prod build**:
+- Staging = Vite production bundle, no React.StrictMode, no HMR.
+- Local = Vite dev server + StrictMode → every `useEffect` runs twice, so `loadVideoFromStreamingUrl` fires two concurrent loads that race the cache warmer on the same R2 origin.
+
+The fix below is still correct and still additive — warmer-vs-foreground contention is a real problem in any build, and verification showed cold-load dropped to 400–950ms locally after the fix. But the bisect/regression framing below should be read as obsolete.
+
+---
+
+**Original problem statement (kept for history):**
+
+**Status (original):** TESTING
 **Epic:** [Video Load Reliability](EPIC.md)
 **Branch:** `feature/T1330-remove-guest-accounts` (must land here — blocks T1330 merge)
 **Created:** 2026-04-13
