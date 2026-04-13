@@ -128,8 +128,10 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Secure cookies require HTTPS — false for local dev, true for staging/production
 _SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
-# SameSite=none required for cross-origin (staging/prod) — strict for local dev
-_SAMESITE = "none" if _SECURE_COOKIES else "strict"
+# SameSite=lax is the correct default for our first-party auth flow in all
+# environments: the cookie is sent on top-level navigations (so the Google
+# OAuth redirect back to our origin works) but not on third-party subrequests.
+_SAMESITE = "lax"
 
 
 class InitResponse(BaseModel):
@@ -565,6 +567,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
         httponly=True,
         samesite=_SAMESITE,
         secure=_SECURE_COOKIES,
+        path="/",
     )
     return response
 
@@ -674,6 +677,7 @@ async def init_guest(request: Request):
         httponly=True,
         samesite=_SAMESITE,
         secure=_SECURE_COOKIES,
+        path="/",
     )
     return response
 
@@ -928,6 +932,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
         httponly=True,
         samesite=_SAMESITE,
         secure=_SECURE_COOKIES,
+        path="/",
     )
     return response
 
@@ -942,7 +947,12 @@ async def logout(request: Request):
         invalidate_session(session_id)
 
     response = JSONResponse(content={"logged_out": True})
-    response.delete_cookie("rb_session", samesite=_SAMESITE, secure=_SECURE_COOKIES)
+    response.delete_cookie(
+        "rb_session",
+        samesite=_SAMESITE,
+        secure=_SECURE_COOKIES,
+        path="/",
+    )
     return response
 
 
@@ -983,6 +993,7 @@ async def test_login(request: Request):
         httponly=True,
         samesite=_SAMESITE,
         secure=_SECURE_COOKIES,
+        path="/",
     )
     logger.info(f"[Auth] Test login for {user_id} ({email})")
     return response
