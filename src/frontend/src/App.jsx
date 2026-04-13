@@ -17,8 +17,6 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen, AdminScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
-import { AuthGateModal } from './components/AuthGateModal';
-import { GoogleOneTap } from './components/GoogleOneTap';
 import { AccountSettings } from './components/AccountSettings';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
@@ -471,10 +469,8 @@ function App() {
         <UploadProgressIndicator />
         {/* Sync Status Indicator - shows when R2 sync has failed */}
         <SyncStatusIndicator />
-        {/* T435: Google One Tap auto-prompt for guest users */}
-        <GoogleOneTap />
-        {/* Auth Gate Modal - shows when GPU action requires authentication */}
-        <AuthGateModal />
+        {/* GoogleOneTap + AuthGateModal are mounted once in main.jsx to avoid
+            the duplicate-mount race that caused FedCM AbortError / cancel_called. */}
         {/* T430: Account Settings panel */}
         <AccountSettings />
         {/* Toast Notifications */}
@@ -628,10 +624,7 @@ function App() {
       {/* Toast Notifications */}
       <ToastContainer />
 
-      {/* T435: Google One Tap auto-prompt for guest users */}
-      <GoogleOneTap />
-      {/* Auth Gate Modal - shows when GPU action requires authentication */}
-      <AuthGateModal />
+      {/* GoogleOneTap + AuthGateModal are mounted once in main.jsx. */}
       {/* T430: Account Settings panel */}
       <AccountSettings />
 

@@ -64,22 +64,15 @@ export function GoogleOneTap() {
     gis.initialize({
       client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
       callback: handleCredentialResponse,
+      use_fedcm_for_prompt: true,
     });
-    gis.prompt((notification) => {
-      // Log the prompt outcome for diagnostics
-      if (notification.isNotDisplayed()) {
-        console.log(`[Auth:OneTap] Prompt not displayed: ${notification.getNotDisplayedReason()}`);
-      } else if (notification.isSkippedMoment()) {
-        console.log(`[Auth:OneTap] Prompt skipped: ${notification.getSkippedReason()}`);
-      } else if (notification.isDismissedMoment()) {
-        console.log(`[Auth:OneTap] Prompt dismissed: ${notification.getDismissedReason()}`);
-      }
-    });
+    gis.prompt();
     promptShownRef.current = true;
 
-    return () => {
-      gis.cancel();
-    };
+    // No cleanup cancel — calling gis.cancel() in cleanup races with React
+    // StrictMode's mount/unmount/mount cycle and aborts the prompt before the
+    // user can interact. `requireAuth` cancels explicitly when opening the
+    // modal, which covers the only case we actually want to dismiss early.
   }, [isCheckingSession, isAuthenticated, showAuthModal, handleCredentialResponse]);
 
   return null;
