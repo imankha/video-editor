@@ -72,7 +72,14 @@ def get_auth_db():
 
 
 def init_auth_db():
-    """Create auth tables if they don't exist. Called on startup."""
+    """Create auth tables if they don't exist. Called on startup.
+
+    T1330: `users.email` is NOT NULL. On first boot after upgrading, any
+    pre-existing NULL-email (guest) rows are purged along with their
+    sessions/credit_transactions, then the users table is rebuilt with
+    the NOT NULL constraint. Idempotent — re-running is a no-op once
+    the new schema is in place.
+    """
     AUTH_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with get_auth_db() as db:
         db.executescript("""
@@ -130,9 +137,73 @@ def init_auth_db():
         )
         db.commit()
 
-        # Legacy credit_transactions removed — now in per-user user.sqlite (T920)
+        # T1330: drop any NULL-email (guest) rows + rebuild users with NOT NULL email.
+        _migrate_users_email_not_null(db)
 
     logger.info("[AuthDB] Tables initialized")
+
+
+def _migrate_users_email_not_null(db: sqlite3.Connection) -> None:
+    """T1330: purge NULL-email rows and enforce `email NOT NULL`.
+
+    Safe to run repeatedly. If the current users table already has
+    `email NOT NULL`, this is a no-op apart from an idempotent null scan
+    (which finds nothing).
+    """
+    # 1. Check current schema for NOT NULL on email
+    cols = db.execute("PRAGMA table_info(users)").fetchall()
+    email_col = next((c for c in cols if c["name"] == "email"), None)
+    already_not_null = bool(email_col and email_col["notnull"])
+
+    # 2. Purge guests + their dependents. credit_transactions has an FK to users
+    #    with no ON DELETE CASCADE, so delete dependents first. (sessions is the
+    #    same shape — done explicitly for clarity.)
+    null_rows = db.execute(
+        "SELECT COUNT(*) FROM users WHERE email IS NULL"
+    ).fetchone()[0]
+    if null_rows:
+        logger.warning(f"[AuthDB] T1330: purging {null_rows} NULL-email (guest) rows")
+        db.execute(
+            "DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM users WHERE email IS NULL)"
+        )
+        if _has_table(db, "credit_transactions"):
+            db.execute(
+                "DELETE FROM credit_transactions "
+                "WHERE user_id IN (SELECT user_id FROM users WHERE email IS NULL)"
+            )
+        db.execute("DELETE FROM users WHERE email IS NULL")
+        db.commit()
+
+    if already_not_null:
+        return
+
+    # 3. Rebuild users with email NOT NULL. SQLite can't add NOT NULL via ALTER.
+    col_names = [c["name"] for c in cols]
+    col_list = ", ".join(col_names)
+    db.executescript(f"""
+        CREATE TABLE users_new (
+            user_id TEXT PRIMARY KEY,
+            email TEXT NOT NULL UNIQUE,
+            google_id TEXT UNIQUE,
+            verified_at TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            last_seen_at TEXT,
+            credit_summary INTEGER DEFAULT 0,
+            picture_url TEXT
+        );
+        INSERT INTO users_new ({col_list}) SELECT {col_list} FROM users;
+        DROP TABLE users;
+        ALTER TABLE users_new RENAME TO users;
+    """)
+    db.commit()
+    logger.info("[AuthDB] T1330: users table rebuilt with email NOT NULL")
+
+
+def _has_table(db: sqlite3.Connection, name: str) -> bool:
+    row = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+    ).fetchone()
+    return row is not None
 
 
 # ---------------------------------------------------------------------------
@@ -515,28 +586,12 @@ def cleanup_expired_sessions() -> int:
 
 
 # ---------------------------------------------------------------------------
-# Guest user creation
+# User ID generation
 # ---------------------------------------------------------------------------
 
 def generate_user_id() -> str:
     """Generate a new UUID for a user folder."""
     return str(uuid.uuid4())
-
-
-def create_guest_user() -> str:
-    """
-    Create an anonymous guest user with a UUID.
-    Returns the user_id.
-    """
-    user_id = generate_user_id()
-    with get_auth_db() as db:
-        db.execute(
-            "INSERT INTO users (user_id) VALUES (?)",
-            (user_id,),
-        )
-        db.commit()
-    logger.info(f"[AuthDB] Created guest user: {user_id}")
-    return user_id
 
 
 # ---------------------------------------------------------------------------

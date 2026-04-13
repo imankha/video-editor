@@ -51,12 +51,6 @@ class TestNoSignupCredits:
         txns = get_credit_transactions("test-user-1")
         assert len(txns) == 0
 
-    def test_guest_user_starts_at_zero(self, isolated_user_db):
-        from app.services.auth_db import create_guest_user
-        from app.services.user_db import get_credit_balance
-        guest_id = create_guest_user()
-        balance = get_credit_balance(guest_id)
-        assert balance["balance"] == 0
 
 
 class TestGrantCredits:

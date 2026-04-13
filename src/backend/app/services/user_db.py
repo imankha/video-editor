@@ -8,7 +8,6 @@ It stores:
   - credit_transactions: full ledger of credit changes
   - credit_reservations: held credits for in-progress exports (T890)
   - stripe_customers: Stripe billing customer IDs
-  - pending_migrations: guest→authenticated migration tracking (T820)
 
 Sync strategy:
   - R2 sync via TrackedConnection write tracking (same as profile DB)
@@ -69,16 +68,6 @@ _USER_DB_SCHEMA = """
     CREATE TABLE IF NOT EXISTS stripe_customers (
         user_id TEXT PRIMARY KEY,
         customer_id TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS pending_migrations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        guest_user_id TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pending',
-        error TEXT,
-        attempts INTEGER DEFAULT 0,
-        created_at TEXT DEFAULT (datetime('now')),
-        completed_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS completed_quests (
