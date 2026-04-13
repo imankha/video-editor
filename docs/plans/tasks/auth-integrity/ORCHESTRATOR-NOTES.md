@@ -45,3 +45,47 @@ subagents working the Auth Integrity epic. Each task appends a section.
   - (docs commit to follow)
 - Do not push. Do not merge to master. Orchestrator will do both after
   user approval.
+
+## T1290 — Auth DB Restore
+
+- Branch: `feature/T1290-auth-db-restore-must-succeed` (NOT merged; awaiting
+  user approval and manual staging verification of the fatal-fail path).
+- Startup touch point is `app/main.py` ~lines 270–274 (now 270–275, a single
+  `restore_auth_db_or_fail()` call). The old `if _r2: sync_auth_db_from_r2(); init_auth_db()`
+  pattern is gone — T1340 should import the new helper instead if it needs to
+  re-trigger auth DB setup (it shouldn't, but heads up).
+- `sync_auth_db_from_r2` behaviour CHANGED: it now **raises** on transient /
+  non-404 errors instead of swallowing into `return False`. Any other code
+  path that calls this function (currently only startup) must treat a raised
+  exception as a real failure. Grep: only one call site today, in
+  `restore_auth_db_or_fail` itself.
+- New `_r2_enabled()` shim in `auth_db.py` wraps `storage.R2_ENABLED` — exists
+  purely as a patch target for tests. Don't inline it away.
+- Retry wrapper at startup is hand-rolled (not `retry_r2_call`) because the
+  retry util retries *transient* errors only — at startup level we want to
+  retry any failure from `sync_auth_db_from_r2` including RuntimeErrors, so
+  a dedicated 3-attempt loop with exponential backoff (1s → 2s → 4s) lives
+  inside `restore_auth_db_or_fail`. `sync_auth_db_from_r2` still uses
+  `retry_r2_call` internally for the network-level retries, so the worst case
+  is 3 × 4 = 12 download attempts before fatal — acceptable on boot.
+- Log conventions: all new lines use the `[AuthDB]` prefix (matches existing
+  style). Warnings for attempts 1–2 of 3 retries, error for the final
+  attempt, then a `RuntimeError` raise. No `print()`. T1340 should mirror
+  the `[AuthX]` bracketed-component prefix when adding startup-time logs.
+- Test pattern: `tests/test_auth_db_restore.py` patches `auth_db._r2_enabled`,
+  `auth_db.sync_auth_db_from_r2`, and `auth_db.init_auth_db` directly. This
+  is the cleanest way to exercise startup retry logic without hitting R2.
+  T1340/T1330 auth tests should follow the same "patch the module-level
+  seam, not the storage globals" pattern where possible.
+- Backend suite remains at 15 FAILED + 6 ERRORS, matching the T1270 baseline
+  exactly. Zero new failures from T1290. The earlier estimate of "15
+  pre-existing failures" was approximate; the actual count on master is
+  15 failures + 6 errors (same as now). If T1340/T1330 see the same number
+  they are clean.
+- Commits on the branch:
+  - `d4ce555` — failing tests
+  - `38c3b2e` — fix
+  - (docs commit to follow)
+- Fly auto-restart behaviour is assumed (standard Fly machine policy on
+  non-zero exit) — not re-verified under this task. Manual verification
+  steps live in the task file under "Manual Verification".
