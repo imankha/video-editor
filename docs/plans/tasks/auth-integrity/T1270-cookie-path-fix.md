@@ -1,6 +1,6 @@
 # T1270: Cookie Path + SameSite Fix
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 9
 **Complexity:** 1
 **Created:** 2026-04-10
