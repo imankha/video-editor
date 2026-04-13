@@ -73,7 +73,7 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 
 | ID | Task | Status | Pri | Description |
 |----|------|--------|-----|-------------|
-| T1150 | [Fix Pending Sync Retry No-Op](tasks/T1150-fix-pending-sync-retry-noop.md) | TODO | 3.0 | T930 retry calls `_if_writes` before `init_request_context` — always short-circuits, never actually uploads |
+| T1150 | [Fix Pending Sync Retry No-Op](tasks/T1150-fix-pending-sync-retry-noop.md) | TESTING | 3.0 | T930 retry calls `_if_writes` before `init_request_context` — always short-circuits, never actually uploads |
 | T1160 | [Clean Up Unused DB Rows](tasks/T1160-cleanup-unused-db-rows.md) | TODO | 2.5 | Prune old working_clips versions, orphaned before_after_tracks, stale modal_tasks to keep DB small for R2 sync |
 | T1170 | [Size-Based VACUUM on Init](tasks/T1170-size-based-vacuum-on-init.md) | TODO | 2.5 | Only VACUUM profile.sqlite when size exceeds 400KB threshold; skip for small DBs |
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |

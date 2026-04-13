@@ -1,6 +1,6 @@
 # T1150: Fix Pending Sync Retry (Currently a No-Op)
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-04-08
@@ -82,7 +82,7 @@ During conformity audit of the R2 sync strategy for T1020. Traced the retry code
 
 ## Acceptance Criteria
 
-- [ ] Pending sync retry actually uploads to R2
-- [ ] Retry uses explicit sync functions (no ContextVar dependency)
-- [ ] `.sync_pending` marker is only cleared on actual successful upload
-- [ ] Test: simulate failed sync → verify retry uploads on next request
+- [x] Pending sync retry actually uploads to R2
+- [x] Retry uses explicit sync functions (no ContextVar dependency)
+- [x] `.sync_pending` marker is only cleared on actual successful upload
+- [x] Test: simulate failed sync -> verify retry uploads on next request (tests/test_sync_retry.py TestRetryPendingSync)

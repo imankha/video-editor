@@ -82,6 +82,52 @@ def set_sync_failed(user_id: str, failed: bool) -> None:
             logger.info(f"[SYNC] User {user_id} recovered — R2 sync succeeded")
 
 
+def retry_pending_sync(user_id: str) -> bool:
+    """
+    Retry a previously-failed R2 sync using explicit sync functions.
+
+    Runs before init_request_context(), so it must NOT rely on request-scoped
+    ContextVars (which is why sync_db_to_cloud_if_writes — the original T930
+    implementation — was a no-op: has_writes was always False here). Uses the
+    explicit helpers that take user_id/profile_id directly.
+
+    Returns True iff both profile.sqlite and user.sqlite synced successfully.
+    """
+    from app import database as db_module
+    from app import storage as storage_module
+    from app.profile_context import get_current_profile_id
+
+    profile_id = get_current_profile_id()
+
+    profile_ok = True
+    db_path = db_module.get_database_path()
+    if db_path.exists() and profile_id:
+        current_version = db_module.get_local_db_version(user_id, profile_id)
+        success, new_version = storage_module.sync_database_to_r2_with_version(
+            user_id, db_path, current_version, skip_version_check=True,
+        )
+        if success and new_version is not None:
+            db_module.set_local_db_version(user_id, profile_id, new_version)
+            profile_ok = True
+        else:
+            profile_ok = False
+
+    user_ok = True
+    user_db_path = db_module.USER_DATA_BASE / user_id / "user.sqlite"
+    if user_db_path.exists():
+        local_version = db_module.get_local_user_db_version(user_id)
+        success, new_version = storage_module.sync_user_db_to_r2_with_version(
+            user_id, user_db_path, local_version, skip_version_check=True,
+        )
+        if success and new_version is not None:
+            db_module.set_local_user_db_version(user_id, new_version)
+            user_ok = True
+        else:
+            user_ok = False
+
+    return profile_ok and user_ok
+
+
 class RequestContextMiddleware(BaseHTTPMiddleware):
     """
     Combined middleware for user context setup and R2 database sync.
@@ -188,13 +234,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         if not should_sync:
             return await call_next(request)
 
-        # --- T930: Retry pending sync from previous failed request ---
+        # --- T930/T1150: Retry pending sync from previous failed request ---
         if has_sync_pending(user_id):
             logger.info(f"[SYNC] Retrying pending sync for user {user_id}")
             try:
-                retry_ok = sync_db_to_cloud_if_writes()
-                user_retry_ok = sync_user_db_to_cloud_if_writes()
-                if (retry_ok == "ok" or retry_ok is True) and user_retry_ok:
+                if retry_pending_sync(user_id):
                     clear_sync_pending(user_id)
                     set_sync_failed(user_id, False)
                     logger.info(f"[SYNC] Retry succeeded for user {user_id}")
