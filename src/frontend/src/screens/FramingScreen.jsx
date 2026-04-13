@@ -407,13 +407,21 @@ export function FramingScreen({
   // user never sees stale video or a "no video loaded" flash.
   useLayoutEffect(() => {
     if (clips.length === 0) return;
+    // T1410: AbortController lets StrictMode's synthetic unmount cancel the
+    // first mount's init work. loadVideoFromStreamingUrl only mutates store
+    // state (the <video> element does the actual network fetch), but we still
+    // guard so that any auxiliary async work scheduled off this effect can
+    // be cancelled cleanly.
+    const controller = new AbortController();
     const targetClip = (selectedClipId && clips.find(c => c.id === selectedClipId)) || clips[0];
     const { url: clipUrl, clipRange } = getClipVideoConfig(targetClip);
     if (!clipUrl || clipUrl.startsWith('blob:')) return;
     const meta = clipMetadataCache[targetClip.id];
     warmVideoCache(clipUrl);
+    if (controller.signal.aborted) return;
     loadVideoFromStreamingUrl(clipUrl, meta?.metadata || null, clipRange);
     lastLoadedUrlRef.current = clipUrl;
+    return () => controller.abort();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only, mirrors initial load effect
 
   // Initialize video playback when entering framing mode
@@ -459,12 +467,17 @@ export function FramingScreen({
     lastLoadedUrlRef.current = clipUrl;
     initialLoadDoneRef.current = true;
 
+    // T1410: AbortController so StrictMode's synthetic unmount can short-circuit
+    // the (blob-path) async download before it mutates store state.
+    const controller = new AbortController();
     const loadFirstClipVideo = async () => {
       if (!clipUrl.startsWith('blob:')) {
         warmVideoCache(clipUrl);
+        if (controller.signal.aborted) return;
         loadVideoFromStreamingUrl(clipUrl, firstClipWithMeta?.metadata || null, clipRange);
       } else {
         const file = await loadVideoFromUrl(clipUrl, firstClip.filename || 'clip.mp4');
+        if (controller.signal.aborted) return;
         if (file) {
           setVideoFile(file);
         }
@@ -472,6 +485,7 @@ export function FramingScreen({
     };
 
     loadFirstClipVideo();
+    return () => controller.abort();
   }, [clips, projectId, clipMetadataCache, loadVideoFromUrl, loadVideoFromStreamingUrl, restoreSegmentState, restoreCropState, getClipWithMeta]);
 
   // Set aspect ratio from project
